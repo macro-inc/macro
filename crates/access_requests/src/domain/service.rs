@@ -191,6 +191,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             affected_users,
             superseded: Vec::new(),
             trace_context: Default::default(),
+            stopped: None,
         }
     }
 
@@ -413,8 +414,23 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         if level.is_some() {
             self.require_teammate(&mut tx, entity, &recipient).await?;
         }
+        let stopped_before = tx.stopped_residents(&recipient).await?;
         tx.grant(&recipient, level, false).await?;
-        let event = self.event(entity, tx.facts(), &user, None, recipient);
+        // Only agents this change stopped: lowering a grant that never let
+        // them run tells nobody anything.
+        let agents: Vec<Resident> = tx
+            .stopped_residents(&recipient)
+            .await?
+            .into_iter()
+            .filter(|agent| !stopped_before.contains(agent))
+            .collect();
+        let mut event = self.event(entity, tx.facts(), &user, None, recipient.clone());
+        if !agents.is_empty() {
+            event.stopped = Some(StoppedResidents {
+                owner: recipient,
+                agents,
+            });
+        }
         tx.enqueue(event).await?;
         tx.commit().await
     }

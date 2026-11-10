@@ -198,7 +198,8 @@ pub trait HarnessRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// List active agents bound to a harness.
+    /// List active agents bound to a harness that may run there now: coding
+    /// agents, and residents whose owner still has User access.
     fn list_bound_agents(
         &self,
         harness_id: HarnessId,

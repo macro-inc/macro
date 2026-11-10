@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
@@ -28,7 +29,6 @@ import AutoIcon from '@icon/system/regular/sparkle.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { chooseAgentMode } from '@queries/agents/mode-choice';
 import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
-import { requestHarnessAccess } from '@queries/harnesses/harnesses';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -289,7 +289,7 @@ export function NewChatPage(props: {
   const connect = (agent: RosterAgent) => {
     if (agent.needsRuntimeAccess && agent.harnessId) {
       fireAndForget(
-        requestHarnessAccess(agent.harnessId),
+        requestRuntimeAccess(agent.harnessId),
         'runtime-sharing.request'
       );
       return;

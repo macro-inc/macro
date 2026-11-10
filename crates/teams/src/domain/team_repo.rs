@@ -90,15 +90,6 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         is_agent: bool,
     ) -> impl Future<Output = Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError>> + Send;
 
-    /// Offer runtimes the inviter owns with their new invites, to grant when each
-    /// is accepted. Runtimes the inviter does not own are ignored.
-    fn offer_harnesses_with_invites(
-        &self,
-        invite_ids: &[uuid::Uuid],
-        invited_by: &MacroUserIdStr<'_>,
-        harness_ids: &[uuid::Uuid],
-    ) -> impl Future<Output = Result<(), InviteUsersToTeamError>> + Send;
-
     /// Compares the list of users you are trying to invite to ones already invited
     /// to return a list of emails who will be newly invited
     fn get_new_invites(
@@ -423,15 +414,6 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<stripe::SubscriptionId>, TeamError>> + Send;
 
-    /// Offer runtimes the inviter owns with their new invites, to grant when each
-    /// is accepted. Runtimes the inviter does not own are ignored.
-    fn offer_harnesses_with_invites(
-        &self,
-        invite_ids: &[uuid::Uuid],
-        invited_by: &MacroUserIdStr<'_>,
-        harness_ids: &[uuid::Uuid],
-    ) -> impl Future<Output = Result<(), InviteUsersToTeamError>> + Send;
-
     /// Invites users to a team
     /// This will also handle the teams subscription.
     /// Any team member may invite by default; admins can restrict
@@ -496,7 +478,8 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, JoinTeamError>> + Send;
 
-    /// Revokes permissions for all team members (not owner)
+    /// Revokes team permissions for all team members, and the owner's personal
+    /// Pro role unless their Stripe customer still has a live subscription.
     /// This is used when a team subscription is canceled or frozen in some way.
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn revoke_permissions_for_team_members(

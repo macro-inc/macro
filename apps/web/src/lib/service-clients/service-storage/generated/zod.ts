@@ -391,6 +391,14 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -692,6 +700,14 @@ export const updateAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -917,6 +933,14 @@ export const patchAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -36737,9 +36761,29 @@ export const externalChatMessagesResponse = zod
               .array(
                 zod
                   .object({
-                    count: zod.number().describe('Number of reacting people.'),
                     emoji: zod.string().describe('Emoji.'),
                     mine: zod.boolean().describe('Caller has this reaction.'),
+                    reactors: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Display name, never authentication evidence.'
+                              ),
+                            userId: zod
+                              .string()
+                              .nullish()
+                              .describe('Verified Macro user, if any.'),
+                          })
+                          .describe(
+                            'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                          )
+                      )
+                      .describe(
+                        'The people who reacted with it, earliest first.'
+                      ),
                   })
                   .describe('Grouped reactions.')
               )
@@ -37247,9 +37291,25 @@ export const externalChatMessageResponse = zod
       .array(
         zod
           .object({
-            count: zod.number().describe('Number of reacting people.'),
             emoji: zod.string().describe('Emoji.'),
             mine: zod.boolean().describe('Caller has this reaction.'),
+            reactors: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe('Display name, never authentication evidence.'),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe('Verified Macro user, if any.'),
+                  })
+                  .describe(
+                    'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                  )
+              )
+              .describe('The people who reacted with it, earliest first.'),
           })
           .describe('Grouped reactions.')
       )

@@ -6,6 +6,28 @@ export default {
     one: 'Share, {{count}} access request',
     other: 'Share, {{count}} access requests',
   },
+  pendingRequests: {
+    one: '{{count}} request',
+    other: '{{count}} requests',
+  },
+  yourRuntimes: 'Your runtimes',
+  teammatesRuntimes: "Teammates' runtimes",
+  teammatesRuntimesHint:
+    'Machines your teammates own. Ask an owner for access to run agents on one.',
+  yourAccess: 'Your access: {{access}}',
+  accessNone: 'None',
+  private: 'Private',
+  options: 'Options',
+  optionsTitle: '{{name}} options',
+  dontAskBeforeActing: "Don't ask before acting",
+  dontAskBeforeActingHint:
+    'Agents set to Always bypass approve tool calls without asking, from their next turn.',
+  dontAskBeforeActingOwnerOnly: 'Only the owner can change this.',
+  dontAskConfirmTitle: "Don't ask before acting?",
+  dontAskConfirmBody:
+    'Agents set to bypass can run commands and edit files on this machine without approval. Only turn this on if you trust everyone who can create agents on this runtime.',
+  dontAskConfirm: 'Turn on',
+  dontAskFailed: 'Could not change this setting. Try again.',
   explain:
     'Users can run agents on this computer, using its files and credentials. Readers can see what is on it but cannot run agents. You can only share it with teammates.',
   teamMachine: 'Team machine',
@@ -40,17 +62,20 @@ export default {
       '{{names}} live on this computer and need this access to keep running. Removing it shuts these agents down until access is given back.',
   },
   shutDownConfirm: 'Shut down',
-  runtimes: 'Runtimes',
   online: 'Online',
   offline: 'Offline',
   runsOn: 'Runs on {{name}}',
   livesOn: 'Lives on {{name}}',
   requestAccess: 'Request access',
-  requestedRole: 'Asked to be: {{role}}',
+  requestedToUse: 'Requested to use {{name}}',
+  requestSent: 'Access requested. The owner will be notified.',
+  alreadyRequested:
+    'You already asked for access. The owner has been notified.',
+  requestFailed: 'Could not request access. Try again.',
+  stoppedNoAccess: 'Stopped: no access to {{name}}',
+  stoppedNoAccessHint:
+    'Its owner no longer has access to the computer it lives on. It runs again once access is given back.',
   requested: 'Requested',
   cancelRequest: 'Cancel request',
   requestDenied: 'Request denied',
-  inviteRuntimes: 'Share your runtimes',
-  inviteRuntimesHint:
-    'They can run agents on these computers as soon as they accept.',
 };

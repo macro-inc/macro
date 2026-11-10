@@ -23,7 +23,7 @@ import {
   ReviewNotesDock,
 } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import { AgentRuntime } from '@app/features/runtime-sharing/views/AgentRuntime';
+import { SessionAgentRuntime } from '@app/features/runtime-sharing/views/SessionAgentRuntime';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -309,7 +309,7 @@ function SessionContent(props: {
                       <LocalRuntimePrompt />
                       <Show when={session()?.botId}>
                         {(botId) => (
-                          <AgentRuntime botId={botId()} class="px-1" />
+                          <SessionAgentRuntime botId={botId()} class="px-1" />
                         )}
                       </Show>
                       <AgentComposer

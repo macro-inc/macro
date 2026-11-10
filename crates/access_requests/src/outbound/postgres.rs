@@ -229,6 +229,39 @@ impl RequestTransaction for PgRequestTransaction {
         .await
         .map_err(|error| RequestError::Internal(error.into_rootcause()))
     }
+    async fn stopped_residents(
+        &mut self,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Resident>, RequestError> {
+        if self.entity.entity_type != ShareEntityType::Harness {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query!(
+            r#"
+            SELECT b.id, b.name
+            FROM agent_configs ac
+            JOIN bots b ON b.id = ac.bot_id
+            WHERE ac.harness_id = $1
+              AND b.owner_user_id = $2
+              AND b.deleted_at IS NULL
+              AND b.has_agent
+              AND NOT ac.is_coding
+              AND NOT agent_owner_can_run(b.id)
+            ORDER BY b.created_at
+            "#,
+            self.entity.entity_id,
+            owner.as_ref(),
+        )
+        .fetch_all(self.tx.as_mut())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| Resident {
+                bot_id: row.id,
+                name: row.name,
+            })
+            .collect())
+    }
     async fn enqueue(&mut self, mut event: RequestEvent) -> Result<(), RequestError> {
         opentelemetry::global::get_text_map_propagator(|propagator| {
             propagator.inject_context(

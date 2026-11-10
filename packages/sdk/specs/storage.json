@@ -25852,6 +25852,17 @@
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
+          },
+          "stopped_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentStoppedReason",
+                "description": "Why the agent cannot run right now, or `None` while it can."
+              }
+            ]
           }
         }
       },
@@ -26189,6 +26200,11 @@
         "type": "string",
         "description": "Where an agent session is shown. The string form is the\n`agent_session.visibility` column's.",
         "enum": ["listed", "unlisted", "hidden"]
+      },
+      "AgentStoppedReason": {
+        "type": "string",
+        "description": "Why an agent cannot run right now.",
+        "enum": ["no_runtime_access"]
       },
       "AgentTyping": {
         "type": "object",
@@ -40748,13 +40764,8 @@
       "ExternalChatReaction": {
         "type": "object",
         "description": "Grouped reactions.",
-        "required": ["emoji", "count", "mine"],
+        "required": ["emoji", "reactors", "mine"],
         "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of reacting people."
-          },
           "emoji": {
             "type": "string",
             "description": "Emoji."
@@ -40762,6 +40773,13 @@
           "mine": {
             "type": "boolean",
             "description": "Caller has this reaction."
+          },
+          "reactors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "The people who reacted with it, earliest first."
           }
         }
       },
