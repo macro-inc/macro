@@ -1374,3 +1374,38 @@ async fn call_details_are_forgotten_on_disconnect_and_after_a_quiet_month(pool: 
     assert_eq!(stored(quiet.id, 1).await, 0);
     assert_eq!(stored(quiet.id, 2).await, 1, "a recent call is kept");
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn a_missed_call_does_not_clear_a_reconnect_prompt(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    service
+        .repo
+        .flag(&connection, SyncIssue::NeedsReauth)
+        .await
+        .unwrap();
+
+    // A missed call needs nothing from Dialpad, so it proves nothing about the grant.
+    let mut missed = call_event(9, "hangup", 2);
+    missed["date_connected"] = json!(null);
+    service
+        .repo
+        .enqueue(connection.id, serde_json::from_value(missed).unwrap(), None)
+        .await
+        .unwrap();
+    drain(&service).await;
+    assert!(calls.0.lock().unwrap().is_empty());
+    assert_eq!(
+        service.status(&user()).await.unwrap(),
+        SyncStatus::Connected {
+            last_synced_at: None,
+            issue: Some(SyncIssue::NeedsReauth),
+        }
+    );
+}

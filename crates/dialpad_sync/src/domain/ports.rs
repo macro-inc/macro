@@ -86,6 +86,10 @@ pub trait SyncRepository: Send + Sync {
     /// Complete the job's leased deliveries, schedule their retry with
     /// backoff, or park them until a new event for the call arrives.
     async fn finish(&self, job: &Job, outcome: JobOutcome) -> Result<()>;
+    /// A call just imported with the user's grant: record the sync, and
+    /// clear a reconnect prompt, which is stale. Call failures are read from
+    /// the events, so only a success writes here.
+    async fn synced(&self, connection: &Connection) -> Result<()>;
     /// Forget every call whose events are all done and that has been quiet
     /// for the retention period: events carry the caller's details.
     async fn forget_quiet_calls(&self) -> Result<()>;

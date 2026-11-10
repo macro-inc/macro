@@ -544,12 +544,10 @@ impl SyncRepository for PgSyncRepository {
     }
 
     async fn finish(&self, job: &Job, outcome: JobOutcome) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
         let retry_seconds = 5_i32
             .saturating_mul(2_i32.saturating_pow(job.attempts.min(10) as u32))
             .min(3600);
-        let done = outcome == JobOutcome::Done;
-        let changed = sqlx::query!(
+        sqlx::query!(
             r#"UPDATE dialpad_sync_events SET completed_at = CASE WHEN $4 THEN now() ELSE NULL END,
                 -- A call that gave up is never due again; a new event for it is.
                 available_at = CASE WHEN $6 THEN 'infinity'::timestamptz
@@ -559,25 +557,23 @@ impl SyncRepository for PgSyncRepository {
             job.connection.id,
             job.call_id.0,
             job.lease_id,
-            done,
+            outcome == JobOutcome::Done,
             f64::from(retry_seconds),
             outcome == JobOutcome::GiveUp
         )
-        .execute(tx.as_mut())
-        .await?
-        .rows_affected();
-        // Call failures are read from the events, so only a success writes
-        // here. It just used the grant, so a reconnect prompt is stale.
-        if changed > 0 && done {
-            sqlx::query!(
-                r#"UPDATE dialpad_sync_connections SET last_synced_at = now(), last_error = NULL
-                WHERE id = $1 AND enabled"#,
-                job.connection.id
-            )
-            .execute(tx.as_mut())
-            .await?;
-        }
-        tx.commit().await?;
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn synced(&self, connection: &Connection) -> Result<()> {
+        sqlx::query!(
+            r#"UPDATE dialpad_sync_connections SET last_synced_at = now(), last_error = NULL
+            WHERE id = $1 AND enabled"#,
+            connection.id
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 

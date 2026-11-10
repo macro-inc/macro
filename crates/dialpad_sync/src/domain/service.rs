@@ -326,6 +326,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> Service<R, G
             .ingest(call)
             .instrument(tracing::info_span!("dialpad.ingest"))
             .await?;
+        self.repo.synced(&job.connection).await?;
         span.record("imported", tracing::field::display(call_id));
         span.record("outcome", "imported");
         Ok(())
