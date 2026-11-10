@@ -181,7 +181,10 @@ export function SplitPermissionsBadge() {
 }
 
 export function BlockItemSplitLabel(props: {
-  /** The entity the label names, when it is not the block's own. */
+  /**
+   * The entity the label names, when it is not the block's own. Its header's
+   * registered rename decides who may rename it, not document ownership.
+   */
   id?: string;
   icon?: JSX.Element;
   fallbackName?: string;
@@ -203,6 +206,8 @@ export function BlockItemSplitLabel(props: {
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
+  const lockRename = () =>
+    (props.id === undefined && !isOwner()) || props.lockRename;
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -248,7 +253,7 @@ export function BlockItemSplitLabel(props: {
                   <SplitLabel
                     id={blockId()}
                     label={displayName() ?? ''}
-                    lockRename={!isOwner() || props.lockRename}
+                    lockRename={lockRename()}
                   />
                 }
               >
@@ -263,7 +268,7 @@ export function BlockItemSplitLabel(props: {
                     <SplitLabel
                       id={blockId()}
                       label={displayName() ?? ''}
-                      lockRename={!isOwner() || props.lockRename}
+                      lockRename={lockRename()}
                     />
                   </DocumentTitleHoverCard>
                 )}

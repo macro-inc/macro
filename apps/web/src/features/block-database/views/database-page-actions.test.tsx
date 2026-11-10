@@ -37,8 +37,9 @@ vi.mock('@core/block', () => ({
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/signal/load', () => ({ blockMetadataSignal: () => undefined }));
+const permissions = vi.hoisted(() => ({ isOwner: true }));
 vi.mock('@core/signal/permissions', () => ({
-  useIsDocumentOwner: () => () => true,
+  useIsDocumentOwner: () => () => permissions.isOwner,
 }));
 vi.mock('@core/util/currentBlockDocumentName', () => ({
   useBlockDocumentName: () => () => 'Customers',
@@ -79,6 +80,7 @@ vi.mock('../queries/transfer', () => ({
 
 let presenceStyles: HTMLStyleElement;
 beforeEach(() => {
+  permissions.isOwner = true;
   queryClient.clear();
   mocks.listWebhooks.mockReset().mockReturnValue(okAsync({ webhooks: [] }));
   mocks.createWebhook.mockReset().mockImplementation(({ tableId }) =>
@@ -179,6 +181,14 @@ describe('database page actions', () => {
     const title = await screen.findByRole('textbox', { name: 'Name' });
     await waitFor(() => expect(document.activeElement).toBe(title));
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+  it('lets an editor who is not the owner rename the title in place', async () => {
+    permissions.isOwner = false;
+    setup('edit');
+    await openMenu();
+    selectItem('Rename');
+    const title = await screen.findByRole('textbox', { name: 'Name' });
+    await waitFor(() => expect(document.activeElement).toBe(title));
   });
   it.each(['edit', 'view'] as const)(
     'gates mutations for %s access',
