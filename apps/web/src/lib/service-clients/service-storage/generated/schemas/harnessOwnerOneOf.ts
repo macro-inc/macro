@@ -7,7 +7,7 @@
 import type { HarnessOwnerOneOfType } from './harnessOwnerOneOfType';
 
 /**
- * The person whose runtime this is.
+ * The person whose machine this is.
  */
 export type HarnessOwnerOneOf = {
   type: HarnessOwnerOneOfType;

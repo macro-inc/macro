@@ -181,7 +181,7 @@ describe('TeammateRuntimesSection', () => {
     ));
 
     expect(
-      screen.queryByRole('heading', { name: "Teammates' runtimes" })
+      screen.queryByRole('heading', { name: "Teammates' machines" })
     ).toBeNull();
   });
 });
