@@ -4,7 +4,13 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
-import { createSignal, type JSX, Show, Suspense } from 'solid-js';
+import {
+  createSignal,
+  ErrorBoundary,
+  type JSX,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
 
@@ -80,9 +86,12 @@ export function ToastRegion() {
           <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
         <Show when={!isMobile()}>
-          <Suspense>
-            <ImportJobsTray />
-          </Suspense>
+          {/* A tray that fails to load leaves toasts and uploads alone. */}
+          <ErrorBoundary fallback={null}>
+            <Suspense>
+              <ImportJobsTray />
+            </Suspense>
+          </ErrorBoundary>
           <UploadProgressIndicator />
         </Show>
       </div>
