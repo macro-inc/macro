@@ -108,7 +108,7 @@ pub struct MakeHttpRequestSpan;
 const SECRET_PATH_PARAMETER: &str = "{token}";
 
 /// The path to record: the raw path, or the template when it holds a secret.
-fn recorded_path<'request, B>(request: &'request Request<B>) -> &'request str {
+fn recorded_path<B>(request: &Request<B>) -> &str {
     let route = request.extensions().get::<MatchedPath>();
     match route {
         Some(route)
