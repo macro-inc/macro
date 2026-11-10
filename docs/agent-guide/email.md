@@ -1098,6 +1098,10 @@ with either thread read transport, including when normalized-cache
 initialization has failed. Recipients, inbox, sender alias, body, displayed
 signature, and attachment references are frozen under one attempt ID. Completed
 uploads are required; adding files offline is unavailable.
+Send a reply, then reply again in the same thread at once, before the first is
+delivered, and send that too. The second waits on this device and goes out
+after the first; neither composer shows a sync failure or **Failed to save
+draft**, including when a save was still in flight as you pressed Send.
 
 **Send Later** schedules the saved draft through the schedule endpoint instead
 of the outbox. It shows **Email scheduled** with the send time, **Undo**, and

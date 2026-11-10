@@ -313,6 +313,10 @@ shown as a failure. **Retry discard** follows a server rejection or a delete the
 queue lost (`delete-failed`); every copy that starts needing a retry logs
 `email_draft.sync_failed` with its status, cause and error code.
 
+A save can still be on the wire when its draft is sent, and the server refuses
+it once the send is admitted. That send carries the draft's content, so the
+refusal is ignored: the working copy is not marked failed and nothing is shown.
+
 The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
 returned with the accepted attempt. A reply whose send fails, is cancelled, or is
@@ -580,6 +584,12 @@ recognizable draft reservations for recovery.
 GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
+A thread shows an approved send as sent before the provider confirms it, while
+the server still holds that message as a draft and refuses a reply to a draft.
+So a reply to a message this device is still delivering waits for it: the
+dispatcher submits the reply's send only once the target is delivered,
+cancelled or failed, and `draft-queue.ts` keeps the reply's latest save off the
+mutation queue until then.
 Cancellation requested before any submission claim stays local; after a claim it
 requires authoritative server cancellation. The exception is a definitive inbox-access
 rejection of the first exclusive submission: the journal records local cancellation

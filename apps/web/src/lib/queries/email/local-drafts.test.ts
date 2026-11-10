@@ -333,6 +333,46 @@ describe('draft queue recovery', () => {
     ).toBe(false);
     expect(await runtime.readLocalDraft('local')).toBeUndefined();
   });
+  it('does not fail a working copy whose save lost to its own send', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const saving = await runtime.beginDraftAttempt(draft, 'save');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.beforeMutationAttempt!(claimed(saving));
+    // The send is approved while that save is on the wire.
+    await runtime.persistLocalEmailSend(
+      {
+        uuid: 'send',
+        dispatchVersion: 2,
+        phase: 'pending',
+        locallyCancelled: false,
+        metadata: {
+          kind: 'email-send-v1',
+          payload: {
+            draft: {
+              draftId: 'local',
+              threadDbId: 'thread',
+              senderLinkId: 'inbox',
+              senderEmail: 'sender@example.test',
+              subject: 'Frozen',
+              optimisticBodyHtml: null,
+            },
+            input: {
+              attempt: { attemptId: 'send', linkId: 'inbox' },
+              message: { draftId: 'local', subject: 'Frozen' },
+              attachmentIds: [],
+              forwardedAttachmentIds: [],
+            },
+          },
+        },
+      },
+      true
+    );
+    await lifecycle.onMutationAttemptResult!(claimed(saving), failure, false);
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'queued',
+      errorCode: undefined,
+    });
+  });
   it('reports caught storage failures and recovery with lifecycle context, without draft content', async () => {
     const error = new DOMException('Storage unavailable', 'UnknownError');
     vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(

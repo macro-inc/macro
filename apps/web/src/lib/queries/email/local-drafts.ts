@@ -682,6 +682,39 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * Whether a send on this device has taken the draft. Its content travels
+ * with the send, so a queued save of it, and that save's outcome, no longer
+ * speak for the working copy.
+ */
+export async function emailSendOwnsDraft(
+  draftId: string,
+  attempt?: DraftAttempt
+): Promise<boolean> {
+  const intents = await readLocalEmailSends();
+  return intents.some((value) => {
+    const intent = object(value);
+    const metadata = object(intent.metadata);
+    if (metadata.kind !== 'email-send-v1') return false;
+    const payload = object(metadata.payload);
+    const response = object(intent.response);
+    const sent = object(
+      object(response.cancelEmailSend ?? response.sendEmailMessage).attempt
+    );
+    if (
+      (intent.locallyCancelled || sent.status === 'CANCELLED') &&
+      attempt &&
+      attempt.generation !== object(payload.workingCopy).generation
+    )
+      return false;
+    return [
+      object(payload.draft).draftId,
+      object(payload.workingCopy).key,
+      object(sent.message).id,
+    ].includes(draftId);
+  });
+}
+
 /** Replay bookkeeping runs even when no composer is mounted. */
 export function localDraftQueueLifecycle(
   host: CacheHost
@@ -701,29 +734,7 @@ export function localDraftQueueLifecycle(
       return false;
     const id = text(object(mutation.variables.input).draftId);
     if (!id) return false;
-    const intents = await readLocalEmailSends();
-    return intents.some((value) => {
-      const intent = object(value);
-      const metadata = object(intent.metadata);
-      if (metadata.kind !== 'email-send-v1') return false;
-      const payload = object(metadata.payload);
-      const response = object(intent.response);
-      const attempt = object(
-        object(response.cancelEmailSend ?? response.sendEmailMessage).attempt
-      );
-      const restoredAttempt = attemptOf(mutation);
-      if (
-        (intent.locallyCancelled || attempt.status === 'CANCELLED') &&
-        restoredAttempt &&
-        restoredAttempt.generation !== object(payload.workingCopy).generation
-      )
-        return false;
-      return [
-        object(payload.draft).draftId,
-        object(payload.workingCopy).key,
-        object(attempt.message).id,
-      ].includes(id);
-    });
+    return await emailSendOwnsDraft(id, attemptOf(mutation));
   }
   async function preserveLegacy(
     mutation: MutationInspection
@@ -999,6 +1010,10 @@ export function localDraftQueueLifecycle(
         initialized = undefined;
       const attempt = attemptOf(mutation) ?? legacy.get(mutation.transactionId);
       if (!attempt || retry) return;
+      // A save already on the wire when its draft was sent loses to that
+      // send; the server's refusal is not the working copy's failure.
+      const failed = !!result.error || result.data == null;
+      if (failed && (await ownedBySend(mutation))) return;
       await settleDraftAttempt(attempt, result, mutation.superseded);
     },
   };
