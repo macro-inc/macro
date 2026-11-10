@@ -14,12 +14,44 @@ import { databaseSyncKeys } from './keys';
 
 /** How often a list with a sync that has not run yet is read again. */
 const PENDING_POLL_MS = 3000;
+/** How long a list keeps reading after a run request without seeing it finish. */
+const RUN_WAIT_MS = 60_000;
 
-function pollWhilePending(query: { state: { data?: DatabaseSync[] } }) {
-  const pending = query.state.data?.some(
-    (sync) => sync.status.state === 'pending'
-  );
-  return pending ? PENDING_POLL_MS : false;
+/** A run asked for: the sync as it read before, and when to stop waiting. */
+export type AwaitedRun = { before: string; until: number };
+
+const awaitedRuns = new Map<string, AwaitedRun>();
+
+function runState(sync: DatabaseSync) {
+  return JSON.stringify([sync.lastSyncedAt, sync.status]);
+}
+
+/**
+ * How soon to read the list again: while a sync has not run yet, or a run was
+ * asked for and the sync still reads as it did before (until `RUN_WAIT_MS`).
+ * Runs that finished or timed out are dropped from `awaited`.
+ */
+export function syncListPollInterval(
+  syncs: DatabaseSync[] | undefined,
+  awaited: Map<string, AwaitedRun>,
+  now: number
+): number | false {
+  let waiting = false;
+  for (const sync of syncs ?? []) {
+    if (sync.status.state === 'pending') waiting = true;
+    const run = awaited.get(sync.id);
+    if (!run) continue;
+    if (runState(sync) !== run.before || now >= run.until) {
+      awaited.delete(sync.id);
+    } else {
+      waiting = true;
+    }
+  }
+  return waiting ? PENDING_POLL_MS : false;
+}
+
+function pollSyncList(query: { state: { data?: DatabaseSync[] } }) {
+  return syncListPollInterval(query.state.data, awaitedRuns, Date.now());
 }
 
 function databaseSyncSourcesQueryOptions() {
@@ -34,7 +66,7 @@ function databaseSyncsQueryOptions(databaseId: string) {
   return queryOptions({
     queryKey: databaseSyncKeys.list(databaseId).queryKey,
     refetchOnMount: 'always',
-    refetchInterval: pollWhilePending,
+    refetchInterval: pollSyncList,
     reconcile: 'id',
     queryFn: () => throwOnErr(() => databaseSyncsClient.list(databaseId)),
   });
@@ -98,12 +130,20 @@ export function createSyncedDatabase(
   });
 }
 
-/** Ask for a run now; the list shows its outcome once it reads again. */
+/** Ask for a run now; the list reads again until it shows the run's outcome. */
 export function runTableSync(databaseId: string, syncId: string) {
+  const listKey = databaseSyncKeys.list(databaseId).queryKey;
+  const before = queryClient
+    .getQueryData<DatabaseSync[]>(listKey)
+    ?.find((sync) => sync.id === syncId);
   return databaseSyncsClient.run(databaseId, syncId).map(() => {
-    queryClient.invalidateQueries({
-      queryKey: databaseSyncKeys.list(databaseId).queryKey,
-    });
+    if (before) {
+      awaitedRuns.set(syncId, {
+        before: runState(before),
+        until: Date.now() + RUN_WAIT_MS,
+      });
+    }
+    queryClient.invalidateQueries({ queryKey: listKey });
   });
 }
 

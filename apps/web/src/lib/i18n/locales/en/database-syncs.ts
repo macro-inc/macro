@@ -3,7 +3,7 @@ export default {
   syncFrom: 'Sync from…',
   dialogTitle: 'Synced tables',
   dialogDescription:
-    'A synced table mirrors its source. Edits made in Macro are overwritten on the next sync, and a row deleted in Macro comes back.',
+    'A synced table mirrors its source. Edits made in Macro are overwritten when the source row changes, and a row deleted in Macro comes back on the next sync.',
   loadFailed: "Could not load this database's synced tables.",
   empty: 'No tables here are synced yet.',
   addTable: 'Add a synced table',
@@ -55,7 +55,7 @@ export default {
   // The launcher's picker.
   pickerTitle: 'New synced database',
   pickerDescription:
-    'Creates a database whose table mirrors the source. Edits made in Macro are overwritten on the next sync.',
+    'Creates a database whose table mirrors the source. Edits made in Macro are overwritten when the source row changes.',
   createDatabaseFailed: 'Could not create the synced database.',
   cancel: 'Cancel',
 };
