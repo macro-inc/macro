@@ -629,6 +629,8 @@ rg -n 'useContacts\(|useContactsQuery\(|contactsQueryOptions\(|getContacts\(|use
   switches, cache resets, disposal, and superseded searches cannot publish stale results.
 - No full-directory compatibility path or hidden side cache remains. Report memory
   and latency separately: bounded memory alone does not guarantee fast searches.
+- Native delivery uses iOS 2.0.18 (build 199), so older native builds are prompted
+  to update from the App Store.
 
 Keep each phase incremental and update this checklist as work lands. Completed
 consumer migrations and storage tests do not by themselves establish whole-app
