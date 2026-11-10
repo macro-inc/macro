@@ -79,7 +79,10 @@ impl Screen {
         if screen.contains("Yes, I trust this folder") {
             return Self::TrustFolder;
         }
-        if screen.lines().any(|line| line.trim_start().starts_with('❯')) {
+        if screen
+            .lines()
+            .any(|line| line.trim_start().starts_with('❯'))
+        {
             return Self::Prompt;
         }
         Self::Unknown
@@ -89,7 +92,9 @@ impl Screen {
 /// The OAuth URL on the screen. Claude hard-wraps it to the pane's width,
 /// so its lines run up to the first blank line.
 pub(super) fn sign_in_url(screen: &str) -> Option<String> {
-    let mut lines = screen.lines().skip_while(|line| !line.trim_start().starts_with("https://"));
+    let mut lines = screen
+        .lines()
+        .skip_while(|line| !line.trim_start().starts_with("https://"));
     let mut url = lines.next()?.trim().to_owned();
     for line in lines {
         let line = line.trim();
@@ -182,8 +187,12 @@ impl SignIn {
     pub async fn complete(&mut self, pasted: &str) -> Result<ClaudeAuth, CompleteError> {
         let code = pasted_code(pasted)?;
         let pane = self.pane().map_err(CompleteError::Internal)?;
-        pane.type_text(code).await.map_err(CompleteError::Internal)?;
-        pane.press(&["enter"]).await.map_err(CompleteError::Internal)?;
+        pane.type_text(code)
+            .await
+            .map_err(CompleteError::Internal)?;
+        pane.press(&["enter"])
+            .await
+            .map_err(CompleteError::Internal)?;
         let outcome = tokio::time::timeout(COMPLETE_TIMEOUT, async {
             loop {
                 let screen = pane.screen().await.map_err(CompleteError::Internal)?;

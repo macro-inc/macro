@@ -184,7 +184,6 @@ fn computer_sessions_use_the_guest_workspace_and_egress_route() {
     assert_eq!(explicit["params"]["cwd"], "/home/macro/work");
 }
 
-
 #[cfg(unix)]
 mod sign_in_screens {
     use super::super::claude_sign_in::{Screen, pasted_code, sign_in_url};
@@ -229,11 +228,7 @@ mod sign_in_screens {
     fn the_wrapped_url_stops_at_the_blank_line() {
         assert_eq!(sign_in_url("no url here"), None);
         assert_eq!(sign_in_url("https://example.test/elsewhere\n"), None);
-        assert!(
-            sign_in_url(URL_SCREEN)
-                .unwrap()
-                .ends_with("&state=xS07")
-        );
+        assert!(sign_in_url(URL_SCREEN).unwrap().ends_with("&state=xS07"));
     }
 
     #[test]

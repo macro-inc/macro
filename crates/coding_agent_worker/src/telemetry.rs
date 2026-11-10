@@ -58,9 +58,10 @@ pub(crate) fn install() -> Telemetry {
     let enrolled_at = std::fs::metadata(crate::capabilities::ENROLLED_MARKER)
         .and_then(|metadata| metadata.modified())
         .ok();
-    let _ = SETUP_PARENT.set(parent.filter(|_| {
-        enrolled_at.is_some_and(|at| within_setup(at, std::time::SystemTime::now()))
-    }));
+    let _ =
+        SETUP_PARENT.set(parent.filter(|_| {
+            enrolled_at.is_some_and(|at| within_setup(at, std::time::SystemTime::now()))
+        }));
     let computer_id = std::fs::read_to_string("/var/lib/macrod/enrolled")
         .ok()
         .and_then(|value| uuid::Uuid::parse_str(value.trim()).ok());

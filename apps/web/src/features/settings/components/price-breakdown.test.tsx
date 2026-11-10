@@ -93,7 +93,7 @@ it('never hides actual subscription charges behind included item metadata', () =
         currency: 'usd',
         interval: 'month',
         humanSeats: { quantity: 1, amount: 2000 },
-            subscriptionTotal: 2000,
+        subscriptionTotal: 2000,
         lineItems: [
           {
             name: 'Included computer',

@@ -4,7 +4,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use harness_id::HarnessId;
 
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

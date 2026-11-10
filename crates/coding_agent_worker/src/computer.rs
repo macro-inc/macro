@@ -70,8 +70,12 @@ impl Computer {
             .map_or_else(|| PathBuf::from("claude"), PathBuf::from);
         let auth = claude_auth::status(&claude_program)
             .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "could not read the Claude sign-in"))
-            .unwrap_or(ClaudeAuth(harnesses::domain::models::ClaudeAccount::SignedOut));
+            .inspect_err(
+                |error| tracing::warn!(error = ?error, "could not read the Claude sign-in"),
+            )
+            .unwrap_or(ClaudeAuth(
+                harnesses::domain::models::ClaudeAccount::SignedOut,
+            ));
         Ok(Arc::new(Self {
             workspace: workspace.to_owned(),
             egress_url: macro_api.egress_url.clone(),
@@ -252,7 +256,9 @@ impl Computer {
     async fn sign_out(&self) -> rootcause::Result<ComputerControlResult> {
         self.cancel_sign_in().await?;
         claude_auth::sign_out(&self.claude_program).await?;
-        self.set_auth(ClaudeAuth(harnesses::domain::models::ClaudeAccount::SignedOut));
+        self.set_auth(ClaudeAuth(
+            harnesses::domain::models::ClaudeAccount::SignedOut,
+        ));
         tracing::info!("Claude account signed out");
         Ok(ComputerControlResult::SignedOut)
     }

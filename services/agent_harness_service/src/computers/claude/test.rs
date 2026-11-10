@@ -473,23 +473,30 @@ mod waking {
     }
 
     fn not_connected() -> Result<ComputerControlResult, ComputerRouteError> {
-        Err(ComputerRouteError::Conflict("the computer is not connected".to_owned()))
+        Err(ComputerRouteError::Conflict(
+            "the computer is not connected".to_owned(),
+        ))
     }
 
     #[tokio::test(start_paused = true)]
     async fn an_asleep_computer_is_woken_once_and_the_command_retried() {
         let waker = CountingWaker::default();
         let attempts = Arc::new(AtomicUsize::new(0));
-        let result = send_waking(Some(&waker), HarnessId::TEST_A, Duration::from_secs(90), || {
-            let attempts = Arc::clone(&attempts);
-            async move {
-                if attempts.fetch_add(1, Ordering::SeqCst) < 3 {
-                    not_connected()
-                } else {
-                    Ok(ComputerControlResult::SignedOut)
+        let result = send_waking(
+            Some(&waker),
+            HarnessId::TEST_A,
+            Duration::from_secs(90),
+            || {
+                let attempts = Arc::clone(&attempts);
+                async move {
+                    if attempts.fetch_add(1, Ordering::SeqCst) < 3 {
+                        not_connected()
+                    } else {
+                        Ok(ComputerControlResult::SignedOut)
+                    }
                 }
-            }
-        })
+            },
+        )
         .await;
         assert!(matches!(result, Ok(ComputerControlResult::SignedOut)));
         assert_eq!(waker.0.load(Ordering::SeqCst), 1);
@@ -499,9 +506,12 @@ mod waking {
     #[tokio::test(start_paused = true)]
     async fn a_computer_that_never_connects_times_out() {
         let waker = CountingWaker::default();
-        let result = send_waking(Some(&waker), HarnessId::TEST_A, Duration::from_secs(5), || async {
-            not_connected()
-        })
+        let result = send_waking(
+            Some(&waker),
+            HarnessId::TEST_A,
+            Duration::from_secs(5),
+            || async { not_connected() },
+        )
         .await;
         assert!(matches!(result, Err(ComputerRouteError::Timeout)));
     }
@@ -509,9 +519,12 @@ mod waking {
     #[tokio::test]
     async fn a_connected_computer_is_not_woken() {
         let waker = CountingWaker::default();
-        let result = send_waking(Some(&waker), HarnessId::TEST_A, Duration::from_secs(5), || async {
-            Ok(ComputerControlResult::SignedOut)
-        })
+        let result = send_waking(
+            Some(&waker),
+            HarnessId::TEST_A,
+            Duration::from_secs(5),
+            || async { Ok(ComputerControlResult::SignedOut) },
+        )
         .await;
         assert!(result.is_ok());
         assert_eq!(waker.0.load(Ordering::SeqCst), 0);

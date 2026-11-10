@@ -537,8 +537,10 @@ pub struct FixedDeployment;
 impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
     fn deployment(
         &self,
-    ) -> Result<crate::domain::enrollment::Deployment, crate::domain::enrollment::DeploymentUnavailable>
-    {
+    ) -> Result<
+        crate::domain::enrollment::Deployment,
+        crate::domain::enrollment::DeploymentUnavailable,
+    > {
         Ok(deployment())
     }
 }

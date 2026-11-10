@@ -73,8 +73,10 @@ fn deployment_urls_come_from_the_typed_deployment() {
     );
     // An enrollment from before typed deployments is refused, not guessed at.
     assert!(
-        serde_json::from_str::<Enrollment>(&ENROLLMENT_JSON.replace("\"deployment\"", "\"service_url_overrides\""))
-            .is_err()
+        serde_json::from_str::<Enrollment>(
+            &ENROLLMENT_JSON.replace("\"deployment\"", "\"service_url_overrides\"")
+        )
+        .is_err()
     );
 }
 

@@ -144,7 +144,9 @@ it('disables starting another sign-in until the paste form is cancelled', async 
   fireEvent.click(start);
   await screen.findByLabelText('Paste the code Claude showed you');
   expect(start).toHaveProperty('disabled', true);
-  fireEvent.click(screen.getByRole('button', { name: 'Skip, use Macro credits' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Skip, use Macro credits' })
+  );
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
   await waitFor(() => expect(start).not.toHaveProperty('disabled', true));
   expect(
@@ -198,7 +200,9 @@ it('can cancel a pending submit and ignores its late result', async () => {
   expect(
     screen.getByRole('button', { name: 'Sign in with Claude' })
   ).toHaveProperty('disabled', true);
-  const cancel = screen.getByRole('button', { name: 'Skip, use Macro credits' });
+  const cancel = screen.getByRole('button', {
+    name: 'Skip, use Macro credits',
+  });
   expect(cancel).not.toHaveProperty('disabled', true);
   fireEvent.click(cancel);
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
@@ -242,7 +246,9 @@ it('names the connected account and offers Macro credits instead', () => {
     />
   ));
   expect(screen.getByText('Connected as team@example.com')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Use Macro credits' })).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: 'Use Macro credits' })
+  ).toBeTruthy();
 });
 
 it('tells the signer the whole team shares the account and lets them skip', async () => {
@@ -255,6 +261,8 @@ it('tells the signer the whole team shares the account and lets them skip', asyn
       'Everyone on the team uses this Claude account on this computer.'
     )
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Skip, use Macro credits' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Skip, use Macro credits' })
+  );
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
 });
