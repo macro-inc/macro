@@ -1,5 +1,6 @@
 import {
   captureTaskTemplate,
+  TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -61,22 +62,22 @@ export function areTemplateFieldsDirty(
   baseline: TaskTemplateContents | undefined
 ): boolean {
   if (!baseline) return true;
+  // Compare reusable fields only; task prose and contextual links are not template edits.
   const available = new Set([...current.propertyIds, ...baseline.propertyIds]);
-  const excluded = new Set([SYSTEM_PROPERTY_IDS.SOURCE]);
   return isTemplateStateDirty(
     {
-      ...captureTaskTemplate(current, available, excluded),
+      ...captureTaskTemplate(current, available),
       title: '',
       propertyIds: current.propertyIds.filter(
-        (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
+        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
       ),
       descriptionMarkdown: '',
     },
     {
-      ...captureTaskTemplate(baseline, available, excluded),
+      ...captureTaskTemplate(baseline, available),
       title: '',
       propertyIds: baseline.propertyIds.filter(
-        (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
+        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
       ),
       descriptionMarkdown: '',
     }
@@ -87,17 +88,23 @@ export function restoreTemplateFields(
   current: TaskTemplateContents,
   baseline: TaskTemplateContents
 ): TaskTemplateContents {
+  // Restore applied defaults without replacing the current task's origin link.
   const propertyDefaults = structuredClone(baseline.propertyDefaults);
-  const source = current.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE];
-  if (source)
-    propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE] = structuredClone(source);
-  else delete propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE];
+  for (const id of TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS) {
+    const value = current.propertyDefaults[id];
+    if (value) propertyDefaults[id] = structuredClone(value);
+    else delete propertyDefaults[id];
+  }
   return {
     ...current,
     shareWithTeam: baseline.shareWithTeam ?? current.shareWithTeam,
     propertyIds: [
-      ...baseline.propertyIds.filter((id) => id !== SYSTEM_PROPERTY_IDS.SOURCE),
-      ...current.propertyIds.filter((id) => id === SYSTEM_PROPERTY_IDS.SOURCE),
+      ...baseline.propertyIds.filter(
+        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
+      ),
+      ...current.propertyIds.filter((id) =>
+        TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
+      ),
     ],
     propertyDefaults,
   };
@@ -108,7 +115,7 @@ export function templateContextualIds(
   props: ComposeTaskProps
 ): ReadonlySet<string> {
   return new Set([
-    SYSTEM_PROPERTY_IDS.SOURCE,
+    ...TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
     ...Object.keys(props.composerContext?.initialPropertyValues ?? {}),
     ...(props.initialAssigneeIds?.length
       ? [SYSTEM_PROPERTY_IDS.ASSIGNEES]

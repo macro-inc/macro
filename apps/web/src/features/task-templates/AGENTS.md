@@ -12,6 +12,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - `components/template-picker.tsx`: searchable desktop dropdown and touch picker sheet.
 - `task-template-controls.tsx`: template selection, draft-preserving template mode header, and scoped confirmation dialogs.
 - `../task-composer/primitives/template-workflow.ts`: isolated editing, durable creation identities, and field-only updates.
+- `../task-composer/property-defaults.ts`: default composer fields and creation-time pin selection.
 
 ## Scope
 
@@ -25,7 +26,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Treat zero and false as populated values; treat empty lists and text as blank.
 - Retain blank selected fields so creation can pin them below the task title.
 - Include host-controlled fields in template defaults and pins without duplicating their controls.
-- Keep Source references contextual; capture the Source field without its current value.
+- Keep Source references contextual through `TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS`; capture the field without its value.
 - Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
 - Unwrap reactive query defaults before decoding templates into cloneable draft values.
 - Preserve settings for unavailable fields when editing a template.
@@ -82,7 +83,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Keep composer visibility separate from global defaults and existing task pins.
 - Capture template application and task submission independently of later draft edits.
 - Exclude active submissions from recovery lists; keep their input durable until task creation is confirmed.
-- Persist template editing separately from the underlying task draft; retain creation identities across retries.
+- Persist template editing separately from the task draft; keep the immutable retry request only in `templateEditor.request`.
 - Persist the last applied task baseline so switching templates still confirms restored task edits.
 - Run local validation in this worktree's named stack without resetting seeded data.
 - Hand visual checks to the user; do not launch browser automation.

@@ -61,7 +61,6 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { initialTaskPinDefinitionIds } from '../core/initial-pins';
 import {
   freshTaskFromTemplate,
   type SavedTaskTemplate,
@@ -80,6 +79,7 @@ import {
   CUSTOMER_CONTACT_PROPERTY_IDS,
   customerContactEnabled,
 } from '../customer-contact';
+import { initialTaskPinDefinitionIds } from '../property-defaults';
 import { showTaskCreatedToast } from './taskCreatedToast';
 import {
   applyTemplateToEditor,
@@ -205,7 +205,6 @@ export function createTaskComposer(
           title: draft.title,
           shareWithTeam: draft.shareWithTeam,
           templateSelection: draft.templateSelection,
-          templateRequest: draft.templateRequest,
           templateEditor: draft.templateEditor,
           templateBaseline: draft.templateBaseline,
           content: draft.content,
@@ -222,7 +221,6 @@ export function createTaskComposer(
       title: props.initialTitle ?? '',
       shareWithTeam: undefined,
       templateSelection: undefined,
-      templateRequest: undefined,
       templateEditor: undefined,
       templateBaseline: undefined,
       content: props.initialContent ?? '',

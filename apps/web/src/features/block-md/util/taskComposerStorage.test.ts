@@ -315,31 +315,6 @@ it('restores the captured revision and edited name', () => {
   });
 });
 
-it('retains the admitted template request beside later composer edits', () => {
-  const request = {
-    creationId: '0195dbd0-7b5d-7000-8000-000000000001',
-    name: 'First',
-    teamId: null,
-    contents: {
-      propertyIds: ['due'],
-      propertyDefaults: {
-        due: {
-          valueType: 'DATE' as const,
-          value: new Date('2025-10-22T00:00:00Z'),
-        },
-      },
-      descriptionMarkdown: 'First',
-    },
-  };
-  const storage = taskComposerContextStorage('pending-template');
-  saveTaskComposerDraft(
-    { ...draft, templateRequest: request, content: 'Edited' },
-    storage
-  );
-  expect(loadTaskComposerDraft(storage)?.templateRequest).toEqual(request);
-  expect(loadTaskComposerDraft(storage)?.content).toBe('Edited');
-});
-
 it('restores the template baseline independently of edited draft values', () => {
   localStorage.clear();
   const baseline = {
@@ -970,7 +945,6 @@ it('captures the draft task title and applies saved text to fresh repeated tasks
       title: 'Review request',
       descriptionMarkdown: 'Review steps',
     },
-    new Set(),
     new Set()
   );
   const fresh = freshTaskFromTemplate(initial, captured, new Set(), new Set());
@@ -1117,7 +1091,6 @@ it.each([true, false])(
     };
     const captured = captureTaskTemplate(
       { ...initial, shareWithTeam: sharing },
-      new Set(),
       new Set()
     );
     expect(captured.shareWithTeam).toBe(sharing);

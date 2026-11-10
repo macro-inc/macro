@@ -29,6 +29,10 @@ Create More retains the selection and starts each fresh task's fields and text f
 
 Durable task submissions are not recovery candidates while their mutation is idle or pending. This prevents the unconfirmed-draft warning from appearing below the header during Create More. Unconfirmed settled attempts remain recoverable, including after restarting the app.
 
+Template saves retain their immutable creation request inside the separate editor
+buffer. Task submissions have no template-save checkpoint; saving a template and
+creating a task are independent operations.
+
 ## Markdown initialization
 
 Task creation passes optional pinned property definition IDs through the owned

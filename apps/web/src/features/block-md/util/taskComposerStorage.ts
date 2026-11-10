@@ -1,7 +1,6 @@
 import type {
   TaskTemplateEditorDraft,
   TaskTemplateSelection,
-  TemplateCreationRequest,
 } from '@app/features/task-composer/core/template-selection';
 import type { TaskTemplateContents } from '@app/features/task-templates/core/template';
 import { makePersistedState } from '@app/lib/persistence';
@@ -82,8 +81,6 @@ export interface TaskComposerDraft {
   templateEditor?: TaskTemplateEditorDraft;
   /** Last programmatically applied property and description state. */
   templateBaseline?: TaskTemplateContents;
-  /** Immutable first admitted template creation input. */
-  templateRequest?: TemplateCreationRequest;
   /** Serialized Lexical editor state (lossless — preserves images, dimensions, etc.) */
   editorState?: SerializedEditorState;
   /** Markdown text fallback (used by older drafts and for the createTask API) */

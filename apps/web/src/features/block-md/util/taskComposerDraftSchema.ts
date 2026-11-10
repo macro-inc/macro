@@ -115,14 +115,6 @@ export const taskComposerDraftSchema = z.object({
     })
     .optional(),
   templateBaseline: templateContents.optional(),
-  templateRequest: z
-    .object({
-      creationId: z.string().uuid(),
-      name: z.string(),
-      teamId: z.string().nullable(),
-      contents: templateContents,
-    })
-    .optional(),
   content: z.string(),
   editorState: editorState.optional().catch(undefined),
   propertyValues: z.record(z.string(), propertyValue),

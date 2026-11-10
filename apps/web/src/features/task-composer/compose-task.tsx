@@ -86,6 +86,7 @@ function createSplitTaskComposerHost(): TaskComposerHost {
         previous.configuration
       );
       const name = selection.name.trim();
+      let updated = previous;
       if (previous.revision !== selection.template.revision) {
         if (
           !isConfirmedTemplateUpdate(
@@ -97,25 +98,16 @@ function createSplitTaskComposerHost(): TaskComposerHost {
           )
         )
           throw new Error('Task template update conflict');
-        requireTemplates(viewerId);
         await queryClient.invalidateQueries({
           queryKey: ['task-templates', viewerId],
         });
-        requireTemplates(viewerId);
-        return {
-          id: previous.id,
-          revision: previous.revision,
-          name: previous.name,
-          teamId: previous.teamId ?? null,
-          contents: taskTemplateContents(previous.configuration, definitions),
-        };
+      } else {
+        updated = await updateTemplate.mutateAsync({
+          viewerId,
+          id: selection.template.id,
+          body: { name, revision: selection.template.revision, configuration },
+        });
       }
-      requireTemplates(viewerId);
-      const updated = await updateTemplate.mutateAsync({
-        viewerId,
-        id: selection.template.id,
-        body: { name, revision: selection.template.revision, configuration },
-      });
       requireTemplates(viewerId);
       return {
         id: updated.id,

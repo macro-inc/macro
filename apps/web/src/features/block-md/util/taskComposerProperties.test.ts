@@ -1,4 +1,4 @@
-import { initialTaskPinDefinitionIds } from '@app/features/task-composer/core/initial-pins';
+import { initialTaskPinDefinitionIds } from '@app/features/task-composer/property-defaults';
 import { captureTaskTemplate } from '@app/features/task-templates/core/template';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertySelection } from '@property/hooks/usePropertySelection';
@@ -222,8 +222,7 @@ it('captures and pins host-controlled fields without adding duplicate property p
         propertyDefaults: structuredClone(unwrap(composer.propertyValues)),
         descriptionMarkdown: '',
       },
-      available,
-      new Set()
+      available
     );
     expect(captured.propertyIds).toEqual(['status', 'companies', 'contacts']);
     expect(captured.propertyDefaults.companies).toEqual({

@@ -5,7 +5,6 @@ import {
 import { t } from '@app/lib/i18n';
 import type { TaskComposerDraft } from '@block-md/util/taskComposerStorage';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { type Accessor, batch, createSignal, onCleanup } from 'solid-js';
 import type {
@@ -161,8 +160,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
     options.stripAttachments();
     const contents = captureTaskTemplate(
       options.contents(),
-      new Set(definitions.map((definition) => definition.id)),
-      new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+      new Set(definitions.map((definition) => definition.id))
     );
     if (selection.kind === 'new') {
       const next = {
@@ -250,8 +248,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
         title: selection.template.contents.title,
         descriptionMarkdown: selection.template.contents.descriptionMarkdown,
       },
-      new Set(definitions.map((definition) => definition.id)),
-      new Set([SYSTEM_PROPERTY_IDS.SOURCE])
+      new Set(definitions.map((definition) => definition.id))
     );
     const teamId = options.teamId();
     const version = requestVersion;

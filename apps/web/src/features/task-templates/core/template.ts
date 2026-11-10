@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '../../property/types';
 
 /** Editable template content, separate from persistence and ownership metadata. */
@@ -8,6 +9,10 @@ export type TaskTemplateContents = {
   propertyDefaults: Record<string, PropertyApiValues>;
   descriptionMarkdown: string;
 };
+
+/** Keep the Source field reusable without copying a task's original item. */
+export const TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS: ReadonlySet<string> =
+  new Set([SYSTEM_PROPERTY_IDS.SOURCE]);
 
 /** Empty lists and text are blank; zero and false remain explicit values. */
 export function hasTemplatePropertyValue(
@@ -57,8 +62,7 @@ export function fillTaskTemplate(
 /** Capture selected fields while excluding contextual values from reusable defaults. */
 export function captureTaskTemplate(
   current: TaskTemplateContents,
-  availablePropertyIds: ReadonlySet<string>,
-  excludedDefaultIds: ReadonlySet<string>
+  availablePropertyIds: ReadonlySet<string>
 ): TaskTemplateContents {
   const propertyIds = [...new Set(current.propertyIds)].filter((id) =>
     availablePropertyIds.has(id)
@@ -66,7 +70,10 @@ export function captureTaskTemplate(
   const propertyDefaults: Record<string, PropertyApiValues> = {};
   for (const id of propertyIds) {
     const value = current.propertyDefaults[id];
-    if (!excludedDefaultIds.has(id) && hasTemplatePropertyValue(value)) {
+    if (
+      !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id) &&
+      hasTemplatePropertyValue(value)
+    ) {
       propertyDefaults[id] = structuredClone(value);
     }
   }

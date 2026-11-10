@@ -1,4 +1,3 @@
-import type { SavedTaskTemplate } from '@app/features/task-composer/core/template-selection';
 import { Telemetry } from '@macro-inc/observability';
 import type { QueryClient } from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
@@ -97,20 +96,11 @@ export function createTaskSubmissionList(
   return submissions;
 }
 
-export class TemplateCreationConflict extends Error {
-  constructor() {
-    super(
-      'Template creation input changed. Restore the original draft or start a new template after checking whether the first save succeeded.'
-    );
-  }
-}
-
 /** Persist before starting the request, and retire only the confirmed submission. */
 export async function submitTaskDraft<T extends { documentId: string }>(
   client: QueryClient,
   submission: TaskComposerSubmission,
-  create: (confirm: (created: T) => void) => Promise<T | null>,
-  options?: { templateOnly?: boolean }
+  create: (confirm: (created: T) => void) => Promise<T | null>
 ): Promise<T | null> {
   const mutationKey = taskSubmissionKey(submission.userId, submission.id);
   if (client.isMutating({ mutationKey })) return null;
@@ -118,19 +108,6 @@ export async function submitTaskDraft<T extends { documentId: string }>(
     span.setAttr('task.draft_id', submission.id);
     // Do not send when this fails: closing the app would otherwise lose the input.
     const key = storageKey(submission.userId, submission.id);
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const previous = taskSubmissionSchema.parse(JSON.parse(stored));
-      if (
-        previous.draft.templateRequest &&
-        previous.draft.templateSelection?.kind === 'new' &&
-        (submission.draft.templateSelection?.kind !== 'new' ||
-          JSON.stringify(previous.draft.templateRequest) !==
-            JSON.stringify(submission.draft.templateRequest))
-      ) {
-        throw new TemplateCreationConflict();
-      }
-    }
     localStorage.setItem(key, JSON.stringify(submission));
     let confirmed: T | undefined;
     const confirm = (created: T) => {
@@ -155,7 +132,7 @@ export async function submitTaskDraft<T extends { documentId: string }>(
             const result = await span.span('task.compose.create', () =>
               create(confirm)
             );
-            if (!result && !confirmed && !options?.templateOnly)
+            if (!result && !confirmed)
               span.error('Task creation was not confirmed');
             return confirmed ?? result;
           } catch (error) {
@@ -170,28 +147,4 @@ export async function submitTaskDraft<T extends { documentId: string }>(
       })
       .execute(undefined);
   });
-}
-
-/** Commit the template identity before task creation so a retry never duplicates it. */
-export function checkpointTaskTemplate(
-  submission: TaskComposerSubmission,
-  template: SavedTaskTemplate
-): void {
-  const key = storageKey(submission.userId, submission.id);
-  const stored = localStorage.getItem(key);
-  if (!stored) throw new Error('Pending task draft is unavailable');
-  const current = taskSubmissionSchema.parse(JSON.parse(stored));
-  if (current.userId !== submission.userId || current.id !== submission.id)
-    throw new Error('Pending task draft changed');
-  localStorage.setItem(
-    key,
-    JSON.stringify({
-      ...current,
-      draft: {
-        ...current.draft,
-        templateRequest: undefined,
-        templateSelection: { kind: 'saved', template },
-      },
-    })
-  );
 }
