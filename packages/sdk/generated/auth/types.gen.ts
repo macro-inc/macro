@@ -3575,7 +3575,7 @@ export type SsoLoginData = {
         /**
          * Require a fresh interactive login, preserving the original destination.
          */
-        reauthenticate: boolean;
+        reauthenticate?: boolean;
     };
     url: '/login/sso';
 };

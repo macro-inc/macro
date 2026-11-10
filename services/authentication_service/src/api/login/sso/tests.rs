@@ -299,3 +299,16 @@ fn it_should_read_the_agent_signup_flag() {
 
     assert!(query.is_agent);
 }
+
+#[test]
+fn sso_contract_preserves_the_optional_fresh_authentication_parameter() {
+    let operation = <super::__path_handler as utoipa::Path>::operation();
+    let schema = serde_json::to_value(operation).unwrap();
+    let parameter = schema["parameters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|parameter| parameter["name"] == "reauthenticate")
+        .unwrap();
+    assert_eq!(parameter["required"], false);
+}

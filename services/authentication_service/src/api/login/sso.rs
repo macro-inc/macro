@@ -102,7 +102,7 @@ pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
             ("is_mobile" = String, Query, description = "**OPTIONAL**. If the authentication request is from a mobile device."),
             ("referral_code" = String, Query, description = "**OPTIONAL**. If the user opened a link with a referral code."),
             ("is_agent" = bool, Query, description = "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent."),
-            ("reauthenticate" = bool, Query, description = "Require a fresh interactive login, preserving the original destination."),
+            ("reauthenticate" = Option<bool>, Query, description = "Require a fresh interactive login, preserving the original destination."),
         ),
         responses(
             (status = 200),

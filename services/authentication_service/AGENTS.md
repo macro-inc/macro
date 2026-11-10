@@ -113,6 +113,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - `/login/sso?reauthenticate=true` adds `prompt=login&max_age=0` to the
   identity-provider authorization request; token refresh is never fresh login.
+  Keep the query parameter optional in OpenAPI; omission defaults to false.
 
 - `/mobile-welcome-email` copies allowlisted ad parameters from the capture
   request onto the desktop signup link and always sets
