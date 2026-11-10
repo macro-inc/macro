@@ -131,6 +131,54 @@ async fn a_redial_loads_every_live_session_but_not_archived_or_unknown_ones() {
 }
 
 #[tokio::test]
+async fn a_redial_reopens_sessions_an_idle_teardown_closed() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let first = native_session(&service, &repo, bot_id).await;
+    let second = native_session(&service, &repo, bot_id).await;
+    for session in [first, second] {
+        service.inner.sessions.mark_disconnected(session).await.unwrap();
+    }
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    // One session runs the handshake; the other opens on its result.
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        agent.wait_for_requests(3).await;
+        for frame in agent.received_frames() {
+            if let RawJsonRpcMessage::Request(request) = frame
+                && request.method.as_ref() == "session/load"
+            {
+                agent.sends_reply(request.id, LoadSessionResponse::new());
+            }
+        }
+    };
+    tokio::join!(
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            vec![
+                SessionId::new(first.to_string()),
+                SessionId::new(second.to_string()),
+            ],
+            tracing::Span::none(),
+        ),
+        drive
+    );
+
+    // Egress and the internal MCP honor a session's token only while its row
+    // is open, so both must have reopened before their MCP servers are dialed.
+    for session in [first, second] {
+        let row = agent_session::domain::ports::AgentSessionRepo::get(&repo, session)
+            .await
+            .unwrap();
+        agent_session::domain::credentials::open_session(row)
+            .unwrap_or_else(|error| panic!("{session} stayed closed: {error}"));
+    }
+}
+
+#[tokio::test]
 async fn a_live_session_on_a_runtime_that_is_gone_is_left_for_the_next_dial() {
     let (service, repo, _containers, _announcer, _runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
