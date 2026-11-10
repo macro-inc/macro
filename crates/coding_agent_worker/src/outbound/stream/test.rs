@@ -162,3 +162,89 @@ async fn serve(
     });
     (format!("http://{addr}"), requests)
 }
+
+#[tokio::test]
+async fn workspace_settings_retry_a_service_blip() {
+    let (url, requests) = serve_by_path(vec![
+        ("/harnesses/me/agents", vec![UNAVAILABLE, NO_AGENTS]),
+        ("/harnesses/me", vec![UNAVAILABLE, TEAM_HARNESS]),
+    ])
+    .await;
+
+    let (agents, harness) = test_client(&url)
+        .workspace_settings()
+        .await
+        .expect("a 503 is retried");
+
+    assert!(agents.is_empty());
+    assert_eq!(harness.name, "desk");
+    assert_eq!(requests.lock().unwrap().len(), 4);
+}
+
+#[tokio::test]
+async fn workspace_settings_do_not_retry_a_refusal() {
+    let (url, requests) = serve_by_path(vec![
+        ("/harnesses/me/agents", vec![NO_AGENTS]),
+        ("/harnesses/me", vec![NOT_FOUND, TEAM_HARNESS]),
+    ])
+    .await;
+
+    assert!(test_client(&url).workspace_settings().await.is_err());
+    assert_eq!(requests.lock().unwrap().len(), 2);
+}
+
+const UNAVAILABLE: &str =
+    "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+const NOT_FOUND: &str = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+const NO_AGENTS: &str =
+    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n[]";
+
+/// Answer each request with the next response queued for its path, recording
+/// every request path.
+async fn serve_by_path(
+    routes: Vec<(&'static str, Vec<&'static str>)>,
+) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind test listener");
+    let addr = listener.local_addr().expect("listener address");
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = requests.clone();
+    let routes = std::sync::Arc::new(std::sync::Mutex::new(
+        routes
+            .into_iter()
+            .map(|(path, responses)| (path, std::collections::VecDeque::from(responses)))
+            .collect::<std::collections::HashMap<_, _>>(),
+    ));
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
+            };
+            let routes = routes.clone();
+            let recorded = recorded.clone();
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 4096];
+                let read = socket.read(&mut buf).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&buf[..read]);
+                let path = request
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .to_owned();
+                let response = routes
+                    .lock()
+                    .unwrap()
+                    .get_mut(path.as_str())
+                    .and_then(std::collections::VecDeque::pop_front)
+                    .unwrap_or(NOT_FOUND);
+                recorded.lock().unwrap().push(path);
+                let _ = socket.write_all(response.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            });
+        }
+    });
+    (format!("http://{addr}"), requests)
+}

@@ -27,7 +27,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/workspace.rs`: each new session's directory, read fresh from
-  `GET /harnesses/me` and `/harnesses/me/agents`: the agent's workspace, else
+  `GET /harnesses/me` and `/harnesses/me/agents` (5xx, 429 and unreachable
+  retried twice, since triggers are not redelivered): the agent's workspace, else
   the runtime's (both set on the web), else `workspace.path`. Canonicalized
   and refused outside `[workspace] allowed_roots` (default: `workspace.path`)
   with a `DispatchError::Workspace` (span `macrod.workspace.resolve`). Each

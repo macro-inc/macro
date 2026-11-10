@@ -102,9 +102,11 @@ impl Dispatcher {
         session: AgentSessionId,
         bot: BotId,
     ) -> Result<PathBuf, DispatchError> {
-        let (agents, harness) =
-            tokio::try_join!(self.settings.bound_agents(), self.settings.harness())
-                .map_err(DispatchError::Settings)?;
+        let (agents, harness) = self
+            .settings
+            .workspace_settings()
+            .await
+            .map_err(DispatchError::Settings)?;
         let agent_workspace = agents
             .into_iter()
             .find(|agent| agent.bot_id == bot)

@@ -33,6 +33,31 @@ const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// long-lived event stream.
 const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Retries of a settings read a session waits on, after the first attempt.
+const SETTINGS_READ_RETRIES: usize = 2;
+
+/// A failed read, and whether trying again may succeed.
+struct ReadFailure {
+    report: rootcause::Report,
+    transient: bool,
+}
+
+impl ReadFailure {
+    fn transient(report: impl Into<rootcause::Report>) -> Self {
+        Self {
+            report: report.into(),
+            transient: true,
+        }
+    }
+
+    fn permanent(report: impl Into<rootcause::Report>) -> Self {
+        Self {
+            report: report.into(),
+            transient: false,
+        }
+    }
+}
+
 /// Map the harness's ownership onto the stream query's workspace scope.
 pub fn stream_scope(owner: &HarnessOwner) -> WebhookScope {
     match owner {
@@ -69,26 +94,77 @@ impl EventStreamClient {
         what: &'static str,
         request: reqwest::RequestBuilder,
     ) -> rootcause::Result<T> {
+        self.read_once(what, request)
+            .await
+            .map_err(|failure| failure.report)
+    }
+
+    /// [`Self::read`], retried briefly while the service is unreachable or
+    /// answers 5xx or 429. Other refusals fail at once.
+    async fn read_retrying<T: DeserializeOwned>(
+        &self,
+        what: &'static str,
+        request: impl Fn() -> reqwest::RequestBuilder,
+    ) -> rootcause::Result<T> {
+        tokio_retry::RetryIf::start(
+            tokio_retry::strategy::ExponentialBackoff::from_millis(2)
+                .factor(100)
+                .take(SETTINGS_READ_RETRIES),
+            || self.read_once(what, request()),
+            |failure: &ReadFailure| failure.transient,
+        )
+        .await
+        .map_err(|failure| failure.report)
+    }
+
+    async fn read_once<T: DeserializeOwned>(
+        &self,
+        what: &'static str,
+        request: reqwest::RequestBuilder,
+    ) -> Result<T, ReadFailure> {
         let response = self
             .credentialed(request)
             .send()
             .await
-            .context(format!("could not reach the service to {what}"))?;
+            .context(format!("could not reach the service to {what}"))
+            .map_err(ReadFailure::transient)?;
         let status = response.status();
         if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-            rootcause::bail!(
+            return Err(ReadFailure::permanent(rootcause::report!(
                 "the service refused this harness's credentials ({status}) while trying to \
                  {what}; the harness was likely removed - press p to pair again"
-            );
+            )));
         }
         if !status.is_success() {
             let message = response.text().await.unwrap_or_default();
-            rootcause::bail!("the service answered {status} to {what}: {message}");
+            let report = rootcause::report!("the service answered {status} to {what}: {message}");
+            return Err(
+                if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    ReadFailure::transient(report)
+                } else {
+                    ReadFailure::permanent(report)
+                },
+            );
         }
-        Ok(response
+        response
             .json()
             .await
-            .context(format!("could not read the service's answer to {what}"))?)
+            .context(format!("could not read the service's answer to {what}"))
+            .map_err(|report| ReadFailure::permanent(report.into_dynamic()))
+    }
+
+    /// What a new session's workspace is chosen from: the agents bound to
+    /// this harness and its own settings. A trigger is not redelivered, so
+    /// transient failures are retried before the mention is given up.
+    pub async fn workspace_settings(&self) -> rootcause::Result<(Vec<HarnessAgent>, Harness)> {
+        tokio::try_join!(
+            self.read_retrying("list this harness's agents", || {
+                self.http.get(format!("{}/harnesses/me/agents", self.base))
+            }),
+            self.read_retrying("read this harness's settings", || {
+                self.http.get(format!("{}/harnesses/me", self.base))
+            }),
+        )
     }
 
     /// This harness's registration as the web last set it.
