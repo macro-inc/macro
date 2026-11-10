@@ -48,7 +48,7 @@ export type DesktopSnapshot = {
     | (Pick<BundleReloadDiagnostics, 'dispatches' | 'lastSource'> &
         Partial<BundleReloadDiagnostics>)
     | null;
-  /** Absent on older binaries; null when startup skipped the bundle cache. */
+  /** Absent on older binaries; null when startup skipped bundle storage. */
   bundleStartup?: BundleStartup | null;
   /** Absent on older native binaries; also gates the diagnostic write command. */
   recentEvents?: EventSnapshot;

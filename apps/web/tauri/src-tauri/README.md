@@ -115,8 +115,10 @@ held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_dirs_removed` (numbered bundle directories before and
 after startup cleanup). A user who was on an OTA bundle and starts a new launch
 on the embedded one without a reload dispatch lost it at startup: `none` with
-no directories means the cache was emptied, `unreadable` means the files were
-there but could not be read, and a rejection names the failed check. An older
+no directories means bundle storage was emptied, `unreadable` means the files
+were there but could not be read, and a rejection names the failed check. On
+iOS, the first launch of the release that moved bundles out of `Library/Caches`
+also reports `none`, because it ignores the old location. An older
 release's embedded bundle predates these fields, but the record lives for the
 whole launch, so the document an update reload brings up reports it. Missing
 fields mean an older binary or a build with automatic updates disabled.

@@ -80,7 +80,7 @@ pub fn bundle_reload_diagnostics<R: Runtime>(
 }
 
 /// Read how startup chose this launch's bundle. `None` when startup did not
-/// consult the bundle cache: automatic updates are disabled or the cache
+/// consult bundle storage: automatic updates are disabled or the storage
 /// directory is unavailable.
 pub fn bundle_startup<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<BundleStartup> {
     app.try_state::<BundleStartup>()

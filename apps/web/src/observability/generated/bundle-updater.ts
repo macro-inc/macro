@@ -44,7 +44,7 @@ export type BundleStartup = {
 
 /**  What the persisted bundle selection held at startup. */
 export type SavedSelection =
-/**  No selection was saved: a fresh install, or the cache was cleared. */
+/**  No selection was saved: a fresh install, or bundle storage was cleared. */
 "none" |
 /**  The selection exists but could not be read. */
 "unreadable" |

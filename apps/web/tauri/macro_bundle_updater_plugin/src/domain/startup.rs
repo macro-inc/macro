@@ -41,7 +41,7 @@ pub enum StartupSelection {
 #[cfg_attr(test, derive(specta::Type))]
 #[serde(rename_all = "snake_case")]
 pub enum SavedSelection {
-    /// No selection was saved: a fresh install, or the cache was cleared.
+    /// No selection was saved: a fresh install, or bundle storage was cleared.
     None,
     /// The selection exists but could not be read.
     Unreadable,
