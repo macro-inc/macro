@@ -11206,6 +11206,8 @@ export const ImportCompaniesCsvResponse = z.object({
         addedOptions: z.array(
           z.object({ field: z.string(), labels: z.array(z.string()) })
         ),
+        phonesSaved: z.number().int().gte(0),
+        invalidPhones: z.number().int().gte(0),
       }),
       z.null(),
     ])
@@ -11759,6 +11761,8 @@ export const ImportPipelineCsvResponse = z.object({
   addedOptions: z.array(
     z.object({ field: z.string(), labels: z.array(z.string()) })
   ),
+  phonesSaved: z.number().int().gte(0),
+  invalidPhones: z.number().int().gte(0),
   summary: z.string(),
 });
 

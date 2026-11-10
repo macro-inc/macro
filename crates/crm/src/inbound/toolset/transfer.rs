@@ -159,6 +159,10 @@ pub struct ToolPipelineImport {
     pub ignored_columns: Vec<String>,
     /// Options added to select fields so the CSV's values fit.
     pub added_options: Vec<ToolAddedOptions>,
+    /// Phone numbers from a contact CSV newly saved to contacts.
+    pub phones_saved: u64,
+    /// Phone values that were not numbers with a country code.
+    pub invalid_phones: usize,
 }
 
 impl From<&PipelineImportOutcome> for ToolPipelineImport {
@@ -184,6 +188,8 @@ impl From<&PipelineImportOutcome> for ToolPipelineImport {
                     labels: labels.clone(),
                 })
                 .collect(),
+            phones_saved: outcome.phones_saved,
+            invalid_phones: outcome.invalid_phones,
         }
     }
 }
@@ -235,7 +241,7 @@ fn pipeline_summary(outcome: &PipelineImportOutcome) -> String {
     }
     if outcome.invalid_phones > 0 {
         parts.push(format!(
-            "Skipped {} phone values without a country code (they must start with +).",
+            "Skipped {} phone values that are not numbers with a country code (they must start with +).",
             outcome.invalid_phones
         ));
     }
