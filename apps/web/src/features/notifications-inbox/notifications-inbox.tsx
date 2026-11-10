@@ -118,7 +118,7 @@ export function NotificationsInbox() {
             calendarPreview={{
               open: (entity, { shown, replace }) =>
                 calendarPreview.open(entity, {
-                  search: inboxSearchFor(shown, lane.lane()),
+                  search: inboxSearchFor(shown, lane.chosen()),
                   replace,
                 }),
               isOpen: calendarPreview.isOpen,

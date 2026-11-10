@@ -11,8 +11,10 @@ import type {
   InboxShownRowLocation,
 } from './primitives/inbox-selection';
 
-/** An empty lane is a visit where the reader has not chosen one. */
-type InboxSearch = InboxShownRow & { lane: InboxLane | '' };
+/** The lane a reader chose on a visit; empty when they have not chosen one. */
+export type InboxChosenLane = InboxLane | '';
+
+type InboxSearch = InboxShownRow & { lane: InboxChosenLane };
 
 const INBOX_SEARCH_DEFAULTS: InboxSearch = { row: '', item: '', lane: '' };
 
@@ -34,12 +36,13 @@ export const inboxSearch = {
 const inboxSearchCodec = createSearchParamsCodec(inboxSearch);
 
 /**
- * The search naming `shown` in `lane`, for a navigation that also leaves or
- * opens the Calendar.
+ * The search naming `shown`, for a navigation that also leaves or opens the
+ * Calendar. It carries the lane the reader chose, and none when they chose
+ * none, so a visit that never left Signal keeps the URL it always had.
  */
 export function inboxSearchFor(
   shown: InboxShownRow,
-  lane: InboxLane
+  lane: InboxChosenLane
 ): Record<string, SerializedSearchParams | undefined> {
   return {
     [inboxSearch.namespace]: inboxSearchCodec.serialize({ ...shown, lane }),
@@ -51,12 +54,16 @@ export function inboxSearchFor(
  * fresh visit opens in Signal, or in the lane of the row a link shows, and
  * Back from a row opened in Noise returns to Noise.
  */
-export function useInboxLaneLocation(): InboxLaneLocation {
+export function useInboxLaneLocation(): InboxLaneLocation & {
+  /** The lane as the URL holds it, to carry into another navigation. */
+  chosen: () => InboxChosenLane;
+} {
   const [search, setSearch] = createSearchParams(inboxSearch);
 
   return {
     lane: () => laneOfVisit(search.lane || undefined, search.row),
     setLane: (lane) => setSearch({ lane }, { history: 'replace' }),
+    chosen: () => search.lane,
   };
 }
 
@@ -78,10 +85,7 @@ export function useInboxShownRowLocation(calendar: {
     show: (next, { replace }) => {
       if (calendar.isOpen()) {
         calendar.close({
-          search: inboxSearchFor(
-            next,
-            laneOfVisit(search.lane || undefined, next.row)
-          ),
+          search: inboxSearchFor(next, search.lane),
           replace,
         });
         return;
