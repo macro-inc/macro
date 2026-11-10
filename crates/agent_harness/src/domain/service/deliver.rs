@@ -3,12 +3,13 @@
 
 use super::*;
 
-/// How long a session goes without user-visible activity before it is idle:
-/// a runtime's dial no longer restores it, and its live transport is released.
+/// How long a session goes without user-visible activity before a runtime's
+/// dial stops restoring it.
 const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 
 /// Whether nobody has touched `session` for [`IDLE_SESSION_AFTER`].
-/// `modified_at` moves with every turn start, stop and block.
+/// `modified_at` moves when a turn starts, runs, is stopped or blocks, never
+/// when it ends, so an open turn is read from the turn projection instead.
 fn is_idle(session: &AgentSession) -> bool {
     chrono::Utc::now() - session.modified_at >= IDLE_SESSION_AFTER
 }
@@ -19,7 +20,7 @@ pub(super) enum DialReattach {
     Eager,
     /// Leave it to bind on its next prompt or delivery.
     Lazy,
-    /// Already attached, archived, or not an external session.
+    /// Archived, or not an external session.
     Skip,
 }
 
@@ -135,17 +136,21 @@ where
     ///
     /// Safe to repeat: a session already attached here keeps its actor, and
     /// an archived or managed one is never started by a runtime's dial.
-    /// Answers whether this call attached the session.
+    /// Answers whether the session is attached here with its durable queue
+    /// loaded, so the caller can dispatch what it holds. That holds for a
+    /// session an earlier attempt attached before failing to load its queue,
+    /// so a retry finishes the job instead of stranding the queue.
     #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = false))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
-        if self.sessions.attached_mcp_servers(session_id).is_some() {
-            return Ok(false);
-        }
         let session = self.sessions.get_session(session_id).await?;
         if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
         {
             return Ok(false);
+        }
+        if self.sessions.attached_mcp_servers(session_id).is_some() {
+            self.ensure_hydrated(session_id).await?;
+            return Ok(true);
         }
         self.reconnect(session_id).await?;
         tracing::Span::current().record("agent.session.reattached", true);
@@ -154,23 +159,30 @@ where
 
     /// What a runtime's dial does with one of the sessions it listed.
     ///
-    /// Only work that would otherwise wait is restored at dial time: a
-    /// command in flight here, a durable queue nobody else dispatches, or a
-    /// session touched recently enough that its runtime may still be working
-    /// in it. Everything else binds on its next prompt or delivery, which
-    /// reconnects a detached session anyway; durable notifications and
-    /// conversation recovery reach theirs through their own sweeps.
-    pub(super) async fn dial_reattach(&self, session_id: AgentSessionId) -> Result<DialReattach> {
-        if self.sessions.attached_mcp_servers(session_id).is_some() {
-            return Ok(DialReattach::Skip);
-        }
+    /// Only work that would otherwise wait or go unseen is restored at dial
+    /// time: an agent that forwards turns typed outside Macro (`macrod
+    /// herdr-acp`), a command in flight here, a turn the durable projection
+    /// still shows open (on any replica, or one since restarted), a durable
+    /// queue nobody else dispatches, or a session touched in the last hour.
+    /// Everything else binds on its next prompt or delivery, which reconnects
+    /// a detached session anyway; durable notifications and conversation
+    /// recovery reach theirs through their own sweeps. Whether the session
+    /// is already attached is left to `reattach`, on the session's worker.
+    pub(super) async fn dial_reattach(
+        &self,
+        session_id: AgentSessionId,
+        forwards_local_turns: bool,
+    ) -> Result<DialReattach> {
         let session = self.sessions.get_session(session_id).await?;
         if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
         {
             return Ok(DialReattach::Skip);
         }
-        if self.busy.is_pending(session_id) || !is_idle(&session) {
+        if forwards_local_turns || self.busy.is_pending(session_id) || !is_idle(&session) {
+            return Ok(DialReattach::Eager);
+        }
+        if self.sessions.turn_is_open(session_id).await? {
             return Ok(DialReattach::Eager);
         }
         if !self

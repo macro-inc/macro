@@ -41,6 +41,9 @@ pub struct LiveRuntimeSessions {
     pub harness: HarnessId,
     /// Its agents' live ACP sessions.
     pub acp_sessions: Vec<SessionId>,
+    /// Whether its agent forwards turns nobody prompted from Macro, so every
+    /// listed session is worth loading now.
+    pub forwards_local_turns: bool,
     /// The span that asked, for reattaching to follow from.
     pub span: tracing::Span,
 }
@@ -270,9 +273,9 @@ async fn report_live_sessions<Sender>(
 ) where
     Sender: TransportSender<ToRuntimeMessage>,
 {
-    let acp_sessions =
+    let listed =
         match tokio::time::timeout(LIVE_SESSIONS_TIMEOUT, connection.list_sessions()).await {
-            Ok(Ok(acp_sessions)) => acp_sessions,
+            Ok(Ok(listed)) => listed,
             Ok(Err(error)) => {
                 tracing::debug!(error = %error, "the runtime listed no live sessions");
                 return;
@@ -282,13 +285,14 @@ async fn report_live_sessions<Sender>(
                 return;
             }
         };
-    tracing::Span::current().record("agent.runtime.live_sessions", acp_sessions.len());
-    if acp_sessions.is_empty() {
+    tracing::Span::current().record("agent.runtime.live_sessions", listed.sessions.len());
+    if listed.sessions.is_empty() {
         return;
     }
     let _ = live_sessions.send(LiveRuntimeSessions {
         harness,
-        acp_sessions,
+        acp_sessions: listed.sessions,
+        forwards_local_turns: listed.forwards_local_turns,
         span: tracing::Span::current(),
     });
 }

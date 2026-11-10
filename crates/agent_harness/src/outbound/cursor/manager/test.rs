@@ -81,6 +81,10 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never previews sessions")
     }
 
+    async fn turn_is_open(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
+    }
+
     async fn billing(
         &self,
         _id: AgentSessionId,

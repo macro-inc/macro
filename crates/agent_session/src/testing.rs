@@ -115,6 +115,15 @@ impl InMemoryAgentSessionRepo {
             .insert(session.id, session);
     }
 
+    /// Set the turn projection `session` last committed, as its log would.
+    pub fn set_turn_state(
+        &self,
+        session: AgentSessionId,
+        turn_state: agent_fold::domain::model::TurnState,
+    ) {
+        self.turn_states.lock().unwrap().insert(session, turn_state);
+    }
+
     /// Backdate `session`'s last user-visible activity, as if nobody had
     /// touched it since `at`.
     pub fn set_modified_at(&self, session: AgentSessionId, at: chrono::DateTime<chrono::Utc>) {
@@ -313,6 +322,26 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn turn_is_open(&self, id: AgentSessionId) -> Result<bool> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        Ok(matches!(
+            self.turn_states.lock().unwrap().get(&id),
+            Some(
+                agent_fold::domain::model::TurnState::Starting
+                    | agent_fold::domain::model::TurnState::Running
+                    | agent_fold::domain::model::TurnState::Stopping
+                    | agent_fold::domain::model::TurnState::Blocked
+            )
+        ))
     }
 
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {

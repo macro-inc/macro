@@ -393,7 +393,7 @@ where
     /// every session shares - or, when a session already claimed it, waits
     /// for that one. An agent that does not advertise
     /// `sessionCapabilities.list` lists nothing. The caller owns the deadline.
-    pub async fn list_sessions(&self) -> Result<Vec<SessionId>, ListSessionsError> {
+    pub async fn list_sessions(&self) -> Result<ListedSessions, ListSessionsError> {
         let mut ready = self.runtime_ready.subscribe();
         tokio::select! {
             ready = ready.wait_for(|ready| *ready) => {
@@ -418,8 +418,12 @@ where
             .list
             .is_none()
         {
-            return Ok(Vec::new());
+            return Ok(ListedSessions::default());
         }
+        let forwards_local_turns = initialized
+            .agent_info
+            .as_ref()
+            .is_some_and(|agent| agent.name == HERDR_AGENT_NAME);
         let mut sessions = Vec::new();
         let mut cursor = None;
         for _ in 0..MAX_SESSION_LIST_PAGES {
@@ -434,7 +438,12 @@ where
             sessions.extend(page.sessions.into_iter().map(|session| session.session_id));
             match page.next_cursor {
                 Some(next) => cursor = Some(next),
-                None => return Ok(sessions),
+                None => {
+                    return Ok(ListedSessions {
+                        sessions,
+                        forwards_local_turns,
+                    });
+                }
             }
         }
         Err(ListSessionsError::Runtime(
@@ -767,6 +776,21 @@ where
             }
         }
     }
+}
+
+/// The `agentInfo.name` macrod's `herdr-acp` reports. Its sessions are
+/// coding-agent TUIs a person can drive from the terminal; once a session is
+/// loaded, the agent forwards those local turns unprompted.
+const HERDR_AGENT_NAME: &str = "macrod-herdr";
+
+/// The sessions a runtime's agent listed on one connection.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ListedSessions {
+    /// Its live ACP sessions.
+    pub sessions: Vec<SessionId>,
+    /// Whether its agent forwards turns nobody prompted from Macro, so a
+    /// listed session left unloaded stops mirroring work done locally.
+    pub forwards_local_turns: bool,
 }
 
 /// Why a runtime could not list the sessions it serves.

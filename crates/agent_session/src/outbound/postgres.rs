@@ -607,6 +607,21 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
+    async fn turn_is_open(&self, id: AgentSessionId) -> Result<bool> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(turn_state IN ('starting', 'running', 'stopping', 'blocked'), false) AS "open!"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's turn state")?
+        .ok_or(AgentSessionError::NotFound(id))
+    }
+
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
         let billing = sqlx::query_scalar!(
             "SELECT billing FROM agent_session WHERE id = $1",

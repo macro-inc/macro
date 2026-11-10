@@ -446,6 +446,11 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's persisted turn projection says a turn is open:
+    /// starting, running, stopping, or blocked on an answer. Durable, so it
+    /// holds for a turn any replica, or a process since restarted, started.
+    fn turn_is_open(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
     /// Whether the session's in-process turns are billed to its owner.
     fn billing(
         &self,
