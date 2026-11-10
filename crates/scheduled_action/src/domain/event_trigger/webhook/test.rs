@@ -52,6 +52,15 @@ fn bodies_must_be_text_of_at_most_64_kib() {
 }
 
 #[test]
+fn a_body_with_a_nul_character_is_not_text() {
+    // Postgres can't keep U+0000 in the jsonb event context.
+    assert_eq!(
+        WebhookDelivery::new(routine(), b"deploy\0failed", None),
+        Err(WebhookBodyError::NotText)
+    );
+}
+
+#[test]
 fn a_json_body_reads_as_json_whatever_its_content_type() {
     let delivery = WebhookDelivery::new(
         routine(),

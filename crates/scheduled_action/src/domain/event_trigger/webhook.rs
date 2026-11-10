@@ -31,7 +31,7 @@ pub struct WebhookDelivery {
 pub enum WebhookBodyError {
     #[error("a webhook body can be at most 64 KiB")]
     TooLarge,
-    #[error("a webhook body must be UTF-8 text")]
+    #[error("a webhook body must be UTF-8 text without NUL characters")]
     NotText,
 }
 
@@ -46,6 +46,10 @@ impl WebhookDelivery {
             return Err(WebhookBodyError::TooLarge);
         }
         let body = std::str::from_utf8(body).map_err(|_| WebhookBodyError::NotText)?;
+        // Postgres can't keep U+0000 in the jsonb the body is stored in.
+        if body.contains('\0') {
+            return Err(WebhookBodyError::NotText);
+        }
         Ok(Self {
             routine_id,
             body: Some(body.to_owned()),
