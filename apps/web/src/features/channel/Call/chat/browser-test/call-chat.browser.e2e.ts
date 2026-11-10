@@ -11,6 +11,7 @@ type Stored = {
   thread_id: string | null;
   kind: 'message';
   sender_id: string;
+  guest_name?: string;
   mentions: unknown[];
   content: string;
   created_at: string;
@@ -20,8 +21,39 @@ type Stored = {
 };
 
 /** A call whose chat nobody has written in: the first post becomes its root. */
-async function open(page: Page) {
-  const messages: Stored[] = [];
+async function open(page: Page, guestThread = false) {
+  const createdAt = new Date().toISOString();
+  const messages: Stored[] = guestThread
+    ? [
+        {
+          id: CALL_ID,
+          parent: { type: 'call', id: CALL_ID },
+          thread_id: null,
+          kind: 'message',
+          sender_id: 'guest-1',
+          guest_name: 'Visitor',
+          mentions: [],
+          content: 'Hello from the guest',
+          created_at: createdAt,
+          updated_at: createdAt,
+          attachments: [],
+          reactions: [],
+        },
+        {
+          id: '00000000-0000-7000-8000-0000000ca111',
+          parent: { type: 'call', id: CALL_ID },
+          thread_id: CALL_ID,
+          kind: 'message',
+          sender_id: ME,
+          mentions: [],
+          content: 'Welcome to the call',
+          created_at: createdAt,
+          updated_at: createdAt,
+          attachments: [],
+          reactions: [],
+        },
+      ]
+    : [];
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/*', async (route) => {
@@ -100,5 +132,19 @@ test('the first message sent on a meeting page shows in the call chat', async ({
   await expect(chat.locator(`a[href="${LINK}"]`)).toBeVisible();
   await expect(chat.getByText('Loading chat…')).toHaveCount(0);
   // A message that throws while rendering leaves the panel on its last state.
+  expect(errors).toEqual([]);
+});
+
+test('a guest message renders on a signed-in meeting page', async ({
+  page,
+}) => {
+  const { errors } = await open(page, true);
+  const chat = page.getByTestId('call-chat');
+
+  await expect(chat.getByText('Hello from the guest')).toBeVisible();
+  await expect(chat.getByText('Visitor (Guest)')).toBeVisible();
+  await expect(chat.getByText('Welcome to the call')).toBeVisible();
+  await expect(chat.getByRole('alert')).toHaveCount(0);
+  await expect(chat.getByText(/GlobalAppStateContext/)).toHaveCount(0);
   expect(errors).toEqual([]);
 });
