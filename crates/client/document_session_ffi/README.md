@@ -72,7 +72,7 @@ iOS cannot link here. With an Android-capable Rust toolchain and `NDK_HOME` set,
 run `bun crates/client/document_session_ffi/scripts/build-android.ts
 x86_64-linux-android` (or `aarch64-linux-android`). This selects the API 24
 compiler/linker and limits Cargo to two jobs. Generated bindings stay in this
-crate; Android host integration lives in `apps/web/tauri/native_editor_plugin`.
+crate. Android native-app host integration is deferred to a separate release.
 
 Query `ShouldInsertText` before native insertion: a true result requires the
 model insertion command, including changed typing attributes and token boundaries.

@@ -128,53 +128,6 @@ calls apply native output and invoke completion before returning. Session-only
 factory bindings borrow host lifetime; unbinding a root does not close the host.
 
 
-`native-android.ts` is the typed Tauri client for Android accounts and surfaces.
-It requires the frozen Rust engine choice and Android runtime, serializes account
-creation, and invalidates callbacks as soon as an account is replaced or closed.
-Register the event sink before creating a surface; readiness events carry the
-actual native model generation used by actions and queries. Closing waits for
-in-flight creation and the native Stopped acknowledgement. Authorization uses the
-same `SessionAuthorization` source and `session-socket-url.ts` route as WASM;
-editor editability and content interaction remain independent permissions.
-This client does not change application surface admission. Native menus,
-decorators, draft handoff and fixture/device acceptance remain prerequisites.
-
-A native surface's `mount()` returns a separate view lease with `layout()`,
-`focus()` and `unmount()`. Each lease has a monotonic mount generation independent
-of the retained document session. Queued callbacks recheck both lifetimes;
-cleanup from an older mount cannot remove its replacement. Unmount also clears
-pending placement/focus configuration so late model readiness cannot recreate
-an abandoned view. Remount through the same surface to retain document/history.
-
-
-Native menu events include their mount/model/invocation/query identity and actual
-registered node types. Answer through `menuRows()` and `menuCommit()` on that
-surface; both discard replaced queries before queued IPC. A late close cannot
-clear a newer query. Source adapters retire the previous surface before admitting
-a query from its replacement, including when both signals change in one batch. Providers retain typed identity/payloads, loaded counts,
-loading/error state and pagination; native rows never carry executable callbacks.
-Menu selection IPC is traced without query text or row labels.
-`NativeMentionSources` mounts the actual `MentionsMenu` providers and controller
-without its DOM presentation or keyboard listeners. It retains source ranking,
-category expansion, pagination, loading/errors and typed insertion handlers.
-Replies must match the current query, surface and selection attempt after every
-async boundary; a rejected or unavailable row releases the native pending pick.
-The source label helper supplies native row text without reducing insertion
-payloads to labels. Complete source menu lifecycle parity and application mounting
-remain prerequisites for admission.
-
-`NativeEmojiSources` uses the same lazy Unicode catalog, ranking and usage store
-as the application emoji menu, with its 200 ms lowercase query debounce. Rows
-carry canonical Unicode choices through the typed menu bridge. Catalog failures,
-query/surface replacement and failed commits cannot leave an active stale pick.
-This adapter does not supply the model InlineSearch lifecycle or admit a surface.
-
-`NativeActionSources` reuses the source slash-action catalog, ordered ID
-overrides, availability filter, node dependencies, database flag and 60 ms
-lowercase fuzzy search. It offers only actions with a supported typed native
-choice: the built-in paragraph/heading/quote/code/list transforms or an explicit
-choice supplied for an additional/overridden action. It never serializes or
-executes source callbacks. Picker, creation and media workflows need separate
-typed adapters, and InlineSearch lifecycle/application admission remain pending.
+Android native-app editor integration is deferred; Android continues through the existing webview editor path. The shared Rust/FFI model and browser session paths remain available independently.
 
 The document host allocates its clipboard namespace through the same wrapper allocator as the source editor. Pass that exact value to both `view.namespace` and `EditorSession.createMacroWithNamespace`; cross-instance HTML fallback remains required when namespaces differ.
