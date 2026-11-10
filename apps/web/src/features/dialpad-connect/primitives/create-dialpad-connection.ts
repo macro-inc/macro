@@ -48,6 +48,7 @@ export function createDialpadConnection(enabled: Accessor<boolean>) {
         span.setAttr('dialpad.outcome', 'started');
       } catch {
         span.setAttr('dialpad.outcome', 'failed');
+        span.error('Dialpad connection failed');
         popup?.close();
         toast.failure(t('dialpad.connectFailed'));
       }
