@@ -95,17 +95,28 @@ export function invalidateHarnesses() {
   ]);
 }
 
+/** A new request for User access, or the one that was already waiting. */
+export type HarnessAccessRequestOutcome = 'sent' | 'already_requested';
+
 /**
- * Ask a runtime's owner for access, superseding any earlier request. A person
- * deciding to request is an explicit act; nothing calls this on its own.
+ * Ask a runtime's owner for User access, superseding an earlier request for
+ * less. A person deciding to request is an explicit act; nothing calls this on
+ * its own.
  */
-export async function requestHarnessAccess(harnessId: string) {
+export async function requestHarnessAccess(
+  harnessId: string
+): Promise<HarnessAccessRequestOutcome> {
   const entity = { entityType: 'harness', entityId: harnessId } as const;
   const state = await fetchAccessRequestState(entity);
+  const mine = state.mine;
+  if (mine?.status === 'pending' && mine.requestedLevel === 'edit') {
+    return 'already_requested';
+  }
   await throwOnErr(() =>
-    accessRequestsClient.submit(entity, 'edit', state.mine?.revision)
+    accessRequestsClient.submit(entity, 'edit', mine?.revision)
   );
   refreshSharedAccess(entity);
+  return 'sent';
 }
 
 export type SetHarnessTeamAccessParams = {

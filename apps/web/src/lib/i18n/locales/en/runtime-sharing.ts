@@ -68,6 +68,13 @@ export default {
   livesOn: 'Lives on {{name}}',
   requestAccess: 'Request access',
   requestedToUse: 'Requested to use {{name}}',
+  requestSent: 'Access requested. The owner will be notified.',
+  alreadyRequested:
+    'You already asked for access. The owner has been notified.',
+  requestFailed: 'Could not request access. Try again.',
+  stoppedNoAccess: 'Stopped: no access to {{name}}',
+  stoppedNoAccessHint:
+    'Its owner no longer has access to the computer it lives on. It runs again once access is given back.',
   requested: 'Requested',
   cancelRequest: 'Cancel request',
   requestDenied: 'Request denied',

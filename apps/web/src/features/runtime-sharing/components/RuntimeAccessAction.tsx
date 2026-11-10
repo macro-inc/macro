@@ -18,12 +18,18 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
     const until = mine()?.retryAfter;
     return !!until && new Date(until).getTime() > Date.now();
   };
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (
+    action: () => Promise<unknown>,
+    failed: string,
+    succeeded?: string
+  ) => {
     try {
       await action();
     } catch {
-      toast.failure(t('runtimeSharing.writeFailed'));
+      toast.failure(failed);
+      return;
     }
+    if (succeeded) toast.success(succeeded);
   };
   return (
     <Show
@@ -35,7 +41,11 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
           disabled={source.busy() || coolingDown() || !source.state()}
           onClick={() =>
             fireAndForget(
-              run(() => source.submit('edit', mine()?.revision ?? undefined)),
+              run(
+                () => source.submit('edit', mine()?.revision ?? undefined),
+                t('runtimeSharing.requestFailed'),
+                t('runtimeSharing.requestSent')
+              ),
               'runtime-sharing'
             )
           }
@@ -55,7 +65,10 @@ export function RuntimeAccessAction(props: { harnessId: string }) {
           const revision = mine()?.revision;
           if (revision !== undefined)
             fireAndForget(
-              run(() => source.cancel(revision)),
+              run(
+                () => source.cancel(revision),
+                t('runtimeSharing.writeFailed')
+              ),
               'runtime-sharing'
             );
         }}
