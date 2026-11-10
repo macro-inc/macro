@@ -325,7 +325,9 @@ beside a scrolling editor whose selection runs past its visible bottom
 
 The machine Share menu (teammates, team access, access requests, and the warning
 before shutting down a resident) and Settings → Machines' Teammates' machines
-section (Request access) have a backend-free desktop/phone regression:
+section (Request access), and its Pending requests section (one-click Approve
+with rows that stay mounted across refetches), have a backend-free
+desktop/phone regression:
 `bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
 It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
