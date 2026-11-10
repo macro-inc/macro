@@ -113,7 +113,8 @@
       documents,
       fresh: fresh.items.filter(isDocument).length,
       freshMore: fresh.hasMore,
-      owners: new Set(documents.map((doc) => doc.owner)).size,
+      owners: new Set(documents.filter((doc) => !doc.mine).map((doc) => doc.owner)).size,
+      mine: documents.filter((doc) => doc.mine).length,
     };
   }
 </script>
@@ -171,7 +172,8 @@
     const share = total ? Math.round((data.fresh / total) * 100) : 100;
     const stats = [
       [String(data.documents.length), 'stale documents'],
-      [String(data.owners), 'owners to ask'],
+      [String(data.mine), 'yours to review'],
+      [String(data.owners), 'other owners to ask'],
       [`${share}%${data.freshMore ? '+' : ''}`, 'of documents fresh'],
     ];
     summary.replaceChildren(...stats.map(([value, label]) => {

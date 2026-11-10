@@ -253,7 +253,9 @@
           button.disabled = true;
           try {
             const sent = await nudge({ projectId: project.id, channelId: channelSelect.value });
-            result.textContent = sent.posted ? `Posted ${sent.count} overdue tasks.` : 'Nothing overdue now.';
+            result.textContent = sent.posted
+              ? `Posted ${sent.count} overdue task${sent.count === 1 ? '' : 's'}.`
+              : 'Nothing overdue now.';
           } catch (error) {
             result.textContent = `Couldn't post: ${String(error)}`;
           }
