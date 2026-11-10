@@ -171,6 +171,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `FusionAuthClientError` whose `upstream()` is set with that error's
   `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
   route's `utoipa::path`.
+- Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
+
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
@@ -218,11 +220,24 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   works (`needs_reauth` false); the refusal stands either way. Mirrors
   Outlook's required-scope check in `src/domain/microsoft.rs`; Macro has no
   mailbox-less link for either provider.
-- `/oauth/redirect` without a code answers "Sign-in failed" and logs
-  `auth_handoff_failure=missing_code` with FusionAuth's error. `invalid_origin`
+- `/oauth/redirect` without a code logs `auth_handoff_failure=missing_code`
+  with FusionAuth's error. When the state names an allowed `original_url`, it
+  sends the browser back there with `sso_error` (`admin_consent_required`,
+  `cancelled`, `failed`), and the sign-in page opens on email-code sign-up;
+  otherwise it answers "Sign-in failed". `invalid_origin`
   ("Invalid origin uri <origin>") means the page that sent the browser to
   FusionAuth is missing from `infra/stacks/fusionauth-instance/origins.ts`;
-  these failures carry no user id.
+  these failures carry no user id. When the identity provider itself returns
+  an error (a declined consent) or a reconcile lambda refuses the sign-in,
+  FusionAuth 1.62 shows its own error page instead and never comes back here.
+- `/login/sso?idp_name=microsoft` adds `prompt=select_account` to FusionAuth's
+  authorize URL, which FusionAuth passes on to Microsoft: the `microsoft` IdP
+  discovers its endpoints from its issuer, so its own authorize URL can't
+  carry the prompt. That IdP's reconcile lambda
+  (`infra/stacks/fusionauth-instance/templates/reconcile_microsoft_signin.js`)
+  refuses any sign-in whose verified id_token lacks `xms_edov: true` (the
+  email's domain verified by Microsoft), so FusionAuth creates or links no
+  user on an unverified address.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`

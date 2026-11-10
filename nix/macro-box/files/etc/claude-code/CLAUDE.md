@@ -32,7 +32,9 @@ down.
 - User `macro` with passwordless sudo; work in `/home/macro/work`.
 - A real browser runs on display `:0`; drive it through the `chrome-devtools`
   MCP server (DevTools on `127.0.0.1:9222`). People in Macro can watch it.
-- Docker, git, Node, Python and a C toolchain are installed; `sudo apt
-  install` anything else.
+- This is NixOS: `apt` is not available. Docker, git, Node, Python, uv and a
+  C toolchain are installed; get anything else with `nix shell
+  nixpkgs#<package>` or `nix profile install nixpkgs#<package>`, or run it
+  in Docker. Downloaded Linux binaries run through nix-ld.
 - Skills in `~/.claude/skills` describe herdr, the browser, Macro's MCP and
   SDK, this machine, and the coding workflow.

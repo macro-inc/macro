@@ -1,32 +1,61 @@
-# Flake outputs for the Macro computer image; see AGENTS.md.
-{ inputs, ... }:
+# Flake outputs for the Macro computer guest, a NixOS configuration; see
+# AGENTS.md.
+{ inputs, withSystem, ... }:
+let
+  system = "x86_64-linux";
+  guest =
+    module:
+    withSystem system (
+      { self', ... }:
+      inputs.nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          module
+          { macro.box.macrod = self'.packages.macrod; }
+        ];
+      }
+    );
+  machine = guest ./_image.nix;
+  container = guest ./_container.nix;
+  box = machine.config.macro.box;
+in
 {
+  flake.nixosConfigurations.macro-box = machine;
+
   perSystem =
     {
       system,
       self',
       lib,
+      pkgs,
       ...
     }:
-    let
-      pkgs = import inputs.nixpkgs {
-        inherit system;
-        # Claude Code is unfree.
-        config.allowUnfree = true;
-      };
-      box = import ./_build.nix {
-        inherit pkgs;
-        inherit (self'.packages) macrod;
-      };
-    in
     {
       packages = lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-claude-code = box.claudeCode;
         macro-box-claude-agent-acp = box.claudeAgentAcp;
-        macro-box-rootfs = box.rootfs;
-        macro-box-config = box.config.artifacts;
-        macro-box-incus = box.incus;
-        macro-box-docker = box.docker;
+        # What `incus image import` takes.
+        macro-box-incus = pkgs.runCommand "macro-box-incus" { } ''
+          mkdir $out
+          ln -s ${machine.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
+          ln -s ${machine.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
+        '';
+        # `docker load < result` → macro-box:latest; run as DockerFleet does
+        # (AGENTS.md).
+        macro-box-docker = pkgs.dockerTools.buildLayeredImage {
+          name = "macro-box";
+          tag = "latest";
+          includeNixDB = true;
+          config = {
+            Entrypoint = [ "${container.config.system.build.toplevel}/init" ];
+            Env = [
+              "container=docker"
+              # For `docker exec <id> systemctl ...`, which DockerFleet runs.
+              "PATH=/run/wrappers/bin:/run/current-system/sw/bin"
+            ];
+            StopSignal = "SIGRTMIN+3";
+          };
+        };
       };
       checks = lib.optionalAttrs (system == "x86_64-linux") {
         # The baked adapter starts and answers ACP initialize offline.
@@ -40,6 +69,11 @@
                 | jq --exit-status '.result.agentInfo.version == "${box.claudeAgentAcp.version}"'
               touch $out
             '';
+        macro-box = import ./_vm-test.nix {
+          inherit pkgs;
+          guest = ./_guest.nix;
+          inherit (self'.packages) macrod;
+        };
       };
     };
 }

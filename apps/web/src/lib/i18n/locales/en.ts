@@ -17,6 +17,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
@@ -51,6 +52,7 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  routineSuggestions,
   settingsBilling,
   runtimeSharing,
   settingsLanguage,

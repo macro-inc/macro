@@ -16,6 +16,9 @@ pub enum InvalidName {
     /// A storage pool name must contain only safe resource-name characters.
     #[error("invalid Incus storage pool name")]
     StoragePoolName,
+    /// A storage volume name must contain only safe resource-name characters.
+    #[error("invalid Incus storage volume name")]
+    StorageVolumeName,
 }
 
 /// A computer instance name: `mc-` followed by a lowercase simple UUID.
@@ -181,6 +184,54 @@ impl TryFrom<String> for StoragePoolName {
 impl std::fmt::Display for StoragePoolName {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
+    }
+}
+
+/// An Incus custom storage volume name, e.g. a computer's data disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct StorageVolumeName(String);
+
+impl StorageVolumeName {
+    /// Validate the name before making an Incus request.
+    pub fn try_new(value: &str) -> Result<Self, InvalidName> {
+        if !(!value.is_empty()
+            && value != "."
+            && value != ".."
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.')))
+        {
+            return Err(InvalidName::StorageVolumeName);
+        }
+        Ok(Self(value.to_owned()))
+    }
+    /// Borrow the validated name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+    /// Take the validated name.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl TryFrom<String> for StorageVolumeName {
+    type Error = InvalidName;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_new(&value)
+    }
+}
+
+impl std::fmt::Display for StorageVolumeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for StorageVolumeName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
     }
 }
 

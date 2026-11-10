@@ -3867,6 +3867,61 @@ type GraphqlCommentedOnDocumentMetadata {
 }
 
 """
+One viewer's directory entry, not a globally shared user profile or CRM contact.
+"""
+type GraphqlContact {
+	"""
+	Stable identity of the viewer/person pair. Names do not affect this key.
+	"""
+	id: ID!
+	"""
+	Target user identifier, also used for people who have not joined Macro.
+	"""
+	userId: ID!
+	"""
+	Email address derived from the target user identifier.
+	"""
+	email: String!
+	"""
+	Macro profile name, then this viewer's address-book name; null means use email fallback.
+	"""
+	name: String
+}
+
+"""
+Optional exact matching stages for bounded reference-resolution fallback.
+Omission keeps ordinary subsequence search unchanged.
+"""
+enum GraphqlContactMatching {
+	"""
+	Whole name, address or user identity.
+	"""
+	EXACT
+	"""
+	First word of the resolved name (full address when no name exists).
+	"""
+	FIRST_NAME
+	"""
+	Whole and first names, addresses and identities at the same priority.
+	"""
+	ANY_NAME
+}
+
+"""
+A bounded contact-ID-ordered page; an empty page may still have a continuation.
+"""
+type GraphqlContactPage {
+	"""
+	Authorized contacts, including self in sorted position.
+	"""
+	nodes: [GraphqlContact!]!
+	"""
+	Opaque continuation, or null only when the source is exhausted.
+	"""
+	nextCursor: String
+}
+
+"""
 GraphQL input naming the CRM record an association filter restricts to.
 """
 input GraphqlCrmAssociation @oneOf {
@@ -10514,6 +10569,45 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	Resolve up to 500 exact target user IDs, omitting unrelated or unknown people.
+	"""
+	contactsByUserIds(
+		"""
+		Target user IDs, not GraphqlContact record IDs; empty input returns no contacts.
+		"""
+		userIds: [ID!]!
+	): [GraphqlContact!]!
+	"""
+	Resolve up to 500 exact email addresses, restricted to the viewer's contacts or self.
+	"""
+	contactsByEmails(
+		"""
+		Email addresses normalized by the user-ID parser; empty input returns no contacts.
+		"""
+		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
+	Read one page of the viewer's personal contacts with resolved names.
+	"""
+	contacts(
+		"""
+		Maximum contacts to read, from 1 to 500; defaults to 100.
+		"""
+		limit: Int,
+		"""
+		Opaque nextCursor from an earlier page in this directory.
+		"""
+		after: String,
+		"""
+		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
+		"""
+		search: String,
+		"""
+		Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply.
+		"""
+		matching: GraphqlContactMatching
+	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.

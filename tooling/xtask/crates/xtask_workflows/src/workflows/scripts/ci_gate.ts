@@ -2,7 +2,7 @@
 // commit that a requested `PR CI` run passed. `CI_GATE_MODE` picks the step:
 //
 //   remind  a new commit: pending "not run" with the command to run it, unless
-//           the commit already has a gate status
+//           the commit already has a gate status; a base change always resets it
 //   start   a requested run begins: remove the label, check the merge commit
 //           holds the PR head, set pending
 //   finish  the run ends: success when every job passed or was path-skipped
@@ -275,8 +275,9 @@ async function remind() {
   const head = env('HEAD_SHA');
   const pr = env('PR_NUMBER');
 
-  // A re-open or leaving draft keeps the head, so it may have a result already.
-  if (await gateStatus(head)) {
+  // A re-open keeps the head, so it may have a result already. A new base
+  // makes that result stale.
+  if (env('BASE_CHANGED') !== 'true' && (await gateStatus(head))) {
     console.log(`${head.slice(0, 10)} already has a ${context()} status`);
     return;
   }

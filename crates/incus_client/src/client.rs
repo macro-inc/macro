@@ -7,7 +7,12 @@ use crate::model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageReference, IncusEndpoint,
     InstanceInfo, InstanceKind, InstanceStatus, InstanceUsage, ServerAuth, ServerInfo,
 };
-use crate::{ImageAlias, IncusError, IncusTimeouts, InstanceName, tls};
+use crate::{
+    ImageAlias, IncusError, IncusTimeouts, InstanceName, StoragePoolName, StorageVolumeName, tls,
+};
+
+/// The storage volume type for volumes created through the API.
+const CUSTOM_VOLUME: &str = "custom";
 
 /// The recursion level list endpoints are generated for.
 const RECURSION_FULL_OBJECTS: i64 = 1;
@@ -340,6 +345,100 @@ impl IncusClient {
         let started = self
             .api
             .instance_put(name.as_str(), None, &etag, &body)
+            .await?
+            .into_inner();
+        self.run_operation(started).await?;
+        Ok(())
+    }
+
+    /// Creates an empty custom block volume of `size` (e.g. `20GiB`), for a
+    /// disk that outlives the instance's root disk.
+    #[tracing::instrument(name = "incus.create_block_volume", skip(self), err)]
+    pub async fn create_block_volume(
+        &self,
+        pool: &StoragePoolName,
+        volume: &StorageVolumeName,
+        size: &str,
+    ) -> Result<(), IncusError> {
+        let body = types::StorageVolumesPost {
+            name: Some(volume.as_str().to_owned()),
+            type_: Some(CUSTOM_VOLUME.to_owned()),
+            content_type: Some("block".to_owned()),
+            config: Some(types::ConfigMap(BTreeMap::from([(
+                "size".to_owned(),
+                size.to_owned(),
+            )]))),
+            ..Default::default()
+        };
+
+        self.api
+            .storage_pool_volumes_type_post(pool.as_str(), CUSTOM_VOLUME, None, None, &body)
+            .await?;
+        Ok(())
+    }
+
+    /// Deletes a custom volume. It must not be attached; deleting the
+    /// instance does not delete it.
+    #[tracing::instrument(name = "incus.delete_volume", skip(self), err)]
+    pub async fn delete_volume(
+        &self,
+        pool: &StoragePoolName,
+        volume: &StorageVolumeName,
+    ) -> Result<(), IncusError> {
+        self.api
+            .storage_pool_volume_type_delete(
+                pool.as_str(),
+                CUSTOM_VOLUME,
+                volume.as_str(),
+                None,
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Attaches a custom block volume to an instance as disk device `device`.
+    /// Incus's PATCH merges devices, so the others are left as they are.
+    #[tracing::instrument(name = "incus.attach_volume", skip(self), err)]
+    pub async fn attach_volume(
+        &self,
+        name: &InstanceName,
+        device: &str,
+        pool: &StoragePoolName,
+        volume: &StorageVolumeName,
+    ) -> Result<(), IncusError> {
+        let disk = BTreeMap::from([
+            ("type".to_owned(), "disk".to_owned()),
+            ("pool".to_owned(), pool.as_str().to_owned()),
+            ("source".to_owned(), volume.as_str().to_owned()),
+        ]);
+        let body = types::InstancePut {
+            devices: Some(types::DevicesMap(BTreeMap::from([(
+                device.to_owned(),
+                disk,
+            )]))),
+            ..Default::default()
+        };
+
+        self.api.instance_patch(name.as_str(), None, &body).await?;
+        Ok(())
+    }
+
+    /// Replaces a stopped instance's root disk with a fresh copy of `image`,
+    /// keeping its config, profiles and other devices (attached volumes).
+    #[tracing::instrument(name = "incus.rebuild", skip(self), err)]
+    pub async fn rebuild(&self, name: &InstanceName, image: &ImageAlias) -> Result<(), IncusError> {
+        let body = types::InstanceRebuildPost {
+            source: Some(types::InstanceSource {
+                type_: Some("image".to_owned()),
+                alias: Some(image.as_str().to_owned()),
+                ..Default::default()
+            }),
+        };
+
+        let started = self
+            .api
+            .instance_rebuild_post(name.as_str(), None, &body)
             .await?
             .into_inner();
         self.run_operation(started).await?;

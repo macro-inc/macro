@@ -13,6 +13,9 @@ use macro_uuid::Uuid;
 
 use secretsmanager_client::LocalOrRemoteSecret;
 
+#[cfg(test)]
+mod test;
+
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
     pub struct StaticStorageBucket;
@@ -44,6 +47,9 @@ macro_env_var::env_vars!(
     /// Dedicated KMS key the public MCP OAuth broker encrypts the upstream
     /// tokens behind its authorization codes with.
     pub struct McpOauthKmsKeyId;
+    /// The authentication service's internal key for billing settlement and
+    /// linked GitHub token lookups.
+    pub struct AuthenticationServiceSecretKey;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -59,10 +65,6 @@ macro_env_var::maybe_env_vars!(
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
-    /// The authentication service's own internal key, which settlement
-    /// requests for counted usage present. Required while
-    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
-    pub struct AuthenticationServiceSecretKey;
 );
 
 /// The Pipedream project environment matching this deployment: production in
@@ -129,8 +131,8 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Key settlement requests present to the authentication service.
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Required authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -312,45 +314,34 @@ impl Config {
     }
 
     /// Where this host's settlement requests go: the authentication service
-    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
-    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    /// while `ENABLE_AI_USAGE_BILLING` is true; nowhere otherwise.
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
         Ok(ai_billing::composition::SettlementRoute::from_policy(
             self.enable_ai_usage_billing,
-            self.auth_service_client()?.map(std::sync::Arc::new),
+            Some(std::sync::Arc::new(self.auth_service_client()?)),
         )?)
     }
 
-    /// The authentication service client, when
-    /// `AUTHENTICATION_SERVICE_SECRET_KEY` is set.
+    /// The authentication service client, using the required resolved key.
     pub fn auth_service_client(
         &self,
-    ) -> anyhow::Result<Option<authentication_service_client::AuthServiceClient>> {
-        self.authentication_service_secret_key
-            .value()
-            .filter(|key| !key.trim().is_empty())
-            .map(|key| {
-                anyhow::Ok(authentication_service_client::AuthServiceClient::new(
-                    key.to_owned(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                ))
-            })
-            .transpose()
+    ) -> anyhow::Result<authentication_service_client::AuthServiceClient> {
+        Ok(authentication_service_client::AuthServiceClient::new(
+            self.authentication_service_secret_key.as_ref().to_owned(),
+            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+        ))
     }
 
     /// Reads GitHub account-link tokens, so GitHub's MCP server needs no
-    /// separate authorization. `None` without the authentication service.
+    /// separate authorization.
     pub fn linked_github_tokens(
         &self,
-    ) -> anyhow::Result<Option<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>>
-    {
-        Ok(self.auth_service_client()?.map(|client| {
-            std::sync::Arc::new(
-                mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                    client,
-                ),
-            ) as std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>
-        }))
+    ) -> anyhow::Result<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>> {
+        Ok(std::sync::Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                self.auth_service_client()?,
+            ),
+        ))
     }
 
     /// Load the configuration from the environment.
