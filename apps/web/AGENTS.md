@@ -108,7 +108,7 @@ The mention/image/equation backend-free source interaction check is
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/decorator-host/browser-test/playwright.config.ts`.
 Compare its raw model and DOM captures before and after host refactors in all
 three engines; source results do not establish native binding acceptance.
-Bind native decorators through the initialized component registry and typed props projectors in `decorator-host/native-adapter.ts`; keep model nodes and observer lifetime metadata authoritative.
+Bind native decorators through the initialized component registry and typed props projectors in `decorator-host/native-adapter.ts`; supply only real host capabilities and reject incomplete full-host requests, keeping model nodes and observer lifetime metadata authoritative.
 Merge the actual horizontal-rule leaf into the complete `registerMacroViews`
 record; preserve its missing-component checks rather than supplying placeholders.
 Run `native-horizontal-rule.test.ts` against an own-source document-session WASM
