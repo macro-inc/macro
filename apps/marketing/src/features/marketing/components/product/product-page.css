@@ -5,9 +5,7 @@
 .product-page .homepage-section-break > span { display: none; }
 .product-page .homepage-section-break p { max-width: 100%; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
 .product-page .feature-page-visual { width: min(872px, calc(100% - 48px)); }
-.product-page .feature-page-jump-links { width: min(872px, calc(100% - 48px)); margin-inline: auto; border: 0; padding-block: 12px 32px; }
-.product-page .email-feature-graphic { width: 180px; height: 112px; color: var(--color-ink-muted); }
-.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: var(--color-ink-muted); font: 400 15px/1.85 'Inter Variable', Inter, sans-serif; }
+.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: var(--color-ink-muted); font: 370 15px/1.85 'Inter Variable', Inter, sans-serif; }
 .product-prose p + p { margin-top: 18px; }
 .product-page .feature-page-reading { width: min(var(--product-measure), 100%); }
 .product-page .feature-page-reading-rule { display: none; }
@@ -28,8 +26,7 @@
  .product-page { padding-inline: 18px; }
  .product-page .homepage-feature-heading, .product-prose { padding-inline: 0; }
  .product-page .homepage-section-break p { white-space: normal; text-wrap: pretty; }
- .product-page .feature-page-visual, .product-page .feature-page-jump-links, .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: 100%; }
- .product-page .email-feature-graphic { width: 130px; height: 94px; }
+ .product-page .feature-page-visual, .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: 100%; }
  .product-page .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); }
  .product-prose { font-size: 14px; }
  .product-page .product-demo { height: var(--demo-h-mobile, 620px); border-radius: 12px; }
@@ -50,3 +47,36 @@
 .product-page .email-desktop-content .product-demo { height:100%; border-radius:0; box-shadow:none; }
 
 
+
+.product-comparison-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-block: 8px;
+  color: var(--color-ink-muted);
+  font: 370 14px/1.5 'Inter Variable', Inter, sans-serif;
+  text-decoration: none;
+}
+.product-comparison-link:hover {
+  color: var(--color-ink);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.product-comparison-link:focus-visible {
+  outline: 2px solid var(--color-ink-muted);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+/* Keep comparisons attached to the video, with room before the next section. */
+.tutorial-video-embed:has(+ .product-comparison-links) { margin-bottom: 16px; }
+.product-comparison-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 24px 64px;
+  color: var(--color-ink-muted);
+  font: 370 14px/1.5 'Inter Variable', Inter, sans-serif;
+}

@@ -1,4 +1,4 @@
-import Sparkle from '@phosphor/sparkle.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { UserMessageBubble } from '@ui/components/UserMessageBubble';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
 import { meetingDraft } from '../../core/email-demo-story';

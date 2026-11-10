@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
+import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteLegal.css';
@@ -377,9 +377,7 @@ export const RoutePrivacy: Component = () => {
   return (
     <>
       <UtilPlainText content={content} />
-      <div class="legal-doc-footer">
-        <SectionMoreFeatures currentPath="/privacy" footerOnly />
-      </div>
+      <SitePageClosing />
     </>
   );
 };

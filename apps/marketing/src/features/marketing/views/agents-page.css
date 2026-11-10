@@ -1,7 +1,7 @@
 .agents-connections {
   width:min(640px, 100%);
   margin:40px auto 0;
-  font:400 15px/1.7 'Inter Variable', Inter, sans-serif;
+  font:370 15px/1.7 'Inter Variable', Inter, sans-serif;
 }
 .agents-connection-paths { display:grid; grid-template-columns:minmax(0, 1fr); gap:32px; }
 .agents-connection-path { display:flex; flex-direction:column; align-items:flex-start; border-top:1px solid #ffffff24; padding-top:24px; }
@@ -16,6 +16,7 @@
   text-decoration:none;
 }
 .agents-setup-link svg { width:16px; height:16px; }
+.agents-connection-path .tutorial-video-embed { width:100%; margin:24px 0 0; }
 .agents-connections .agents-setup-link:hover { text-decoration:underline; text-underline-offset:4px; }
 .agents-mcp-disclosure { margin-top:40px; border-block:1px solid #ffffff20; }
 .agents-mcp-disclosure > summary {
@@ -38,11 +39,4 @@
   .agents-connection-paths { grid-template-columns:1fr; gap:32px; }
   .agents-connection-path h3 { font-size:18px; }
   .agents-mcp-disclosure { margin-top:32px; }
-}
-
-/* Two intentional lines stay below the width of the hero’s second line. */
-.agents-hero .email-page-hero-description { white-space: nowrap; }
-.agents-hero .email-page-hero-break { display: block; }
-@media (max-width:699px) {
-  .agents-hero .email-page-hero > .email-page-hero-description { font-size:clamp(10px, 2.9vw, 14px); }
 }

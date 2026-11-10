@@ -1,9 +1,9 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
-import Database from '@phosphor/database.svg';
-import Funnel from '@phosphor/funnel.svg';
-import Plus from '@phosphor/plus.svg';
-import Table from '@phosphor/table.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
+import Database from '@icon/system/regular/database.svg';
+import Funnel from '@icon/system/regular/funnel.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Table from '@icon/system/regular/table.svg';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import { Badge } from '../../../../ui/components/Badge';

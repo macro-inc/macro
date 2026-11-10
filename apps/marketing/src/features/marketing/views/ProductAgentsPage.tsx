@@ -1,5 +1,5 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { AgentMcpSetup } from '../components/agents/AgentStories';
 import {
@@ -10,20 +10,14 @@ import {
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import {
-  ContextGraphic,
-  EditingGraphic,
-  LinkedWorkGraphic,
-  ThreadGraphic,
-} from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
+import { TutorialVideoEmbed } from '../components/TutorialVideoEmbed';
 import './agents-page.css';
 
 const agentsFaq = [
   {
     q: 'What can Macro’s agents do?',
-    a: 'Search workspace context, draft emails, edit documents, create tasks, and update customer records. Start a conversation in Agents or mention an available agent in a team channel.',
+    a: 'Search your workspace, draft emails, edit documents, create tasks, and update customer records. Start a conversation in Agents or mention an available agent in a channel.',
   },
   {
     q: 'Can I use my existing AI client?',
@@ -31,10 +25,10 @@ const agentsFaq = [
       <>
         Yes. Connect an MCP-compatible client to your Macro account so it can
         work with your workspace. Follow the{' '}
-        <a href="https://docs.macro.com/AI/mcp/overview">MCP setup guide</a>.
-        Running a local agent inside Macro is a separate feature; check the{' '}
-        <a href="https://docs.macro.com/AI/bring-your-own">local agent guide</a>{' '}
-        for availability.
+        <a href="/docs/AI/mcp/overview">MCP setup guide</a>. Running a local
+        agent inside Macro is a separate feature; check the{' '}
+        <a href="/docs/AI/bring-your-own">local agent guide</a> for
+        availability.
       </>
     ),
   },
@@ -73,77 +67,34 @@ const agentsFaq = [
 ];
 
 export function RouteAgents() {
-  // The router coalesces a click on the current hash. Still scroll back to it
-  // when the visitor has moved elsewhere on this long page.
-  const revisitSection = (
-    event: MouseEvent & { currentTarget: HTMLAnchorElement }
-  ) => {
-    if (
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.button !== 0
-    )
-      return;
-    const hash = event.currentTarget.hash;
-    if (hash !== window.location.hash) return;
-    event.preventDefault();
-    document.getElementById(hash.slice(1))?.scrollIntoView({
-      block: 'start',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
-    });
-  };
   setPageSeo({
-    title: 'Macro Agents | Agents That Know What Your Team Is Doing',
+    title: 'Macro Agents — Bring your favorite agents',
     description:
-      'Give agents native access to the context and tools behind your work. Use workspace permissions, choose a model, mention agents in chat, or bring your own agent.',
+      'Macro develops a shared understanding of what everyone on your team is working on. Unified memory and tools work across model providers.',
     path: '/agents',
   });
   return (
     <ProductPage>
       <div class="agents-hero">
         <ProductHero
+          tutorial="agents"
           product="Agents"
-          title={['Agents that know', 'what your team is doing.']}
-          description={[
-            'Shared memory across your team’s work.',
-            'Tools to do something with it.',
-          ]}
+          title="Agents with omniscient context."
+          description="Macro consolidates email, chats, docs, and CRM into one memory system, aggregated across your whole team."
           cta="agents_hero_get_started"
         />
       </div>
-      <WorkspaceDesktopDemo
-        heroFrame
-        view="messages"
-        agentShowcase
-        desktopWidth={1000}
-        label="Delegate work from a team conversation"
-      />
-      <nav class="feature-page-jump-links" aria-label="On this page">
-        <a onClick={revisitSection} href="#agent-sources">
-          <ContextGraphic />
-          <span>Shared memory</span>
-        </a>
-        <a onClick={revisitSection} href="#agent-actions">
-          <EditingGraphic />
-          <span>Tools to act</span>
-        </a>
-        <a onClick={revisitSection} href="#agent-collaboration">
-          <ThreadGraphic />
-          <span>Agents on your team</span>
-        </a>
-        <a onClick={revisitSection} href="#existing-agents">
-          <LinkedWorkGraphic />
-          <span>Bring your own agent</span>
-        </a>
-      </nav>
       <FeaturePageSection
         id="agent-sources"
-        title={['Memory beyond', 'your chat history.']}
-        description="Macro builds memory from email, docs, tasks, channels, and calls, including what your teammates are working on. Your agent can use that shared understanding to prepare for a meeting, find who owns a project, or work out who should handle a request."
+        demo={{
+          tone: 'agents',
+          message: {
+            person: 'jacob',
+            text: '@Macro get me ready for tomorrow’s meetings. Check the recent emails and calls.',
+          },
+        }}
+        title="Give agents your team’s context."
+        description="Macro builds memory from your files, email, tasks, team channels, and calls. It develops a shared understanding of what everyone on your team is working on and who is responsible for what."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -152,8 +103,15 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-actions"
-        title={['Good context needs', 'good tools.']}
-        description="We put the same care into the agent’s tools as the interface you use. It can search across the workspace, edit a doc, draft an email, or update a customer record. One set of tools, instead of stitching together searches from separate apps."
+        demo={{
+          tone: 'agents',
+          message: {
+            person: 'julia',
+            text: '@Macro update the document with what we agreed.',
+          },
+        }}
+        title="Search your workspace with an agent."
+        description="We put the same effort into our tools and MCP as the app itself. An agent can use one search tool across your files, email, tasks, messages, and calls."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -162,8 +120,15 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageSection
         id="agent-collaboration"
-        title={['Give your agent a task', 'in the conversation.']}
-        description="Ask Macro for a mockup, discuss it with your team, then mention Cursor to build it. Hosted agents keep working when you close the app; pick up the result on another device. The discussion and the work stay together."
+        demo={{
+          tone: 'agents',
+          message: {
+            person: 'jacob',
+            text: '@Cursor build this from the mockup and open a pull request.',
+          },
+        }}
+        title="Let agents work while you’re away."
+        description="Put your agents to work on a task in Macro Tasks. Hosted agents keep working after you close the app; pick up the same conversation on another device."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -172,8 +137,8 @@ export function RouteAgents() {
       </FeaturePageSection>
       <FeaturePageSection
         id="existing-agents"
-        title="Bring your own agent."
-        description="Choose among model providers in Macro without starting your workspace memory over. Or connect the agent you already use. We want the context and tools to work with your choice of model, not lock you into ours."
+        title="Bring your favorite agents."
+        description="Your team’s memory and Macro’s tools work across model providers. You’re not locked into any single one."
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">
@@ -184,12 +149,10 @@ export function RouteAgents() {
                 workspace. Connect through macrod and keep your agent running on
                 your machine.
               </p>
-              <a
-                class="agents-setup-link"
-                href="https://docs.macro.com/AI/bring-your-own"
-              >
+              <a class="agents-setup-link" href="/docs/AI/bring-your-own">
                 Connect your agent <ArrowUpRight aria-hidden="true" />
               </a>
+              <TutorialVideoEmbed tutorial="macrod" />
             </div>
             <div class="agents-connection-path">
               <h3>Macro, inside your agent</h3>
@@ -198,10 +161,7 @@ export function RouteAgents() {
                 Search your workspace and work with its documents and tasks from
                 there.
               </p>
-              <a
-                class="agents-setup-link"
-                href="https://docs.macro.com/AI/mcp/overview"
-              >
+              <a class="agents-setup-link" href="/docs/AI/mcp/overview">
                 Connect with MCP <ArrowUpRight aria-hidden="true" />
               </a>
             </div>
@@ -220,6 +180,7 @@ export function RouteAgents() {
         </div>
       </FeaturePageSection>
       <FeaturePageFaq
+        guide={{ href: '/agents#guide', label: 'agents' }}
         id="agents-faq-title"
         title="Questions about Macro Agents"
         items={agentsFaq}

@@ -1,5 +1,5 @@
-import Pause from '@phosphor/pause.svg';
-import Play from '@phosphor/play.svg';
+import Pause from '@icon/system/regular/pause.svg';
+import Play from '@icon/system/regular/play.svg';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import palette from '../../../../styles/dark-theme.css?inline';
 import uiStyles from '../../../../styles/site-ui.css?inline';
@@ -62,28 +62,27 @@ export default function HomepageProductPreview(props: {
       if (step === 6) call.seek(3);
     }
   };
-  const playback = createEmailWalkthrough({
-    root: () => canvas,
-    steps: stepDelays.length,
-    visibilityThreshold: 0.45,
-    delay: (step) =>
-      props.kind === 'crm' && step === 7
-        ? 6200
-        : props.kind === 'email' && step === 7
-          ? 3200
-          : stepDelays[step - 1],
-    loop: { hold: 14000 },
-    advance,
-    reset: () => {
-      setPhase(0);
-      setCycle((value) => value + 1);
-      call.seek(0);
-    },
-    reduced: () => {
-      setPhase(7);
-      call.seek(3);
-    },
-  });
+  const playback =
+    props.kind === 'email'
+      ? undefined
+      : createEmailWalkthrough({
+          root: () => canvas,
+          steps: stepDelays.length,
+          visibilityThreshold: 0.45,
+          delay: (step) =>
+            props.kind === 'crm' && step === 7 ? 6200 : stepDelays[step - 1],
+          loop: { hold: 14000 },
+          advance,
+          reset: () => {
+            setPhase(0);
+            setCycle((value) => value + 1);
+            call.seek(0);
+          },
+          reduced: () => {
+            setPhase(7);
+            call.seek(3);
+          },
+        });
   const target = () => {
     const step = phase();
     if (step === 0 || step >= 7) return undefined;
@@ -119,7 +118,7 @@ export default function HomepageProductPreview(props: {
   const pointer = createDemoPointer({
     frame: () => canvas,
     target,
-    active: () => playback.playing() && !playback.reducedMotion(),
+    active: () => !!playback && playback.playing() && !playback.reducedMotion(),
   });
   return (
     <div class="macro-product-preview">
@@ -130,14 +129,14 @@ export default function HomepageProductPreview(props: {
         class={`macro-product-canvas workspace-demo macro-product-${props.kind}`}
         data-theme-light={sitePalette() === 'cream'}
         data-phase={phase()}
-        data-paused={!playback.playing()}
+        data-paused={playback ? !playback?.playing() : false}
         data-cycle={cycle()}
         aria-hidden="true"
         inert
       >
         <Switch>
           <Match when={props.kind === 'email'}>
-            <EmailWorkflow phase={phase()} />
+            <EmailWorkflow />
           </Match>
           <Match when={props.kind === 'chat'}>
             <ChatWorkflow phase={phase()} />
@@ -160,7 +159,7 @@ export default function HomepageProductPreview(props: {
           <Match when={props.kind === 'crm'}>
             <div class="macro-preview-back">
               <Show when={cycle()} keyed>
-                {(_cycle) => <HomepageCrm paused={!playback.playing()} />}
+                {(_cycle) => <HomepageCrm paused={!playback?.playing()} />}
               </Show>
             </div>
             <Show when={phase() >= 6}>
@@ -201,15 +200,15 @@ export default function HomepageProductPreview(props: {
           )}
         </Show>
       </div>
-      <Show when={!playback.reducedMotion()}>
+      <Show when={playback && !playback.reducedMotion()}>
         <button
           type="button"
           class="macro-workflow-toggle"
-          onClick={playback.toggle}
-          aria-label={`${playback.playing() ? 'Pause' : 'Play'} ${props.kind} animation`}
-          aria-pressed={!playback.playing()}
+          onClick={() => playback?.toggle()}
+          aria-label={`${playback?.playing() ? 'Pause' : 'Play'} ${props.kind} animation`}
+          aria-pressed={!playback?.playing()}
         >
-          <Show when={playback.playing()} fallback={<Play />}>
+          <Show when={playback?.playing()} fallback={<Play />}>
             <Pause />
           </Show>
         </button>

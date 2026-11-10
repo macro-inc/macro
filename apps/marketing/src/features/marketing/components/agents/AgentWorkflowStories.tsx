@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import { Button } from '@ui';
 import {
   createSignal,

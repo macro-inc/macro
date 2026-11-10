@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import type { Plugin } from 'vite';
+import redirects from '../seo/page-redirects.json';
 import { resolveAppBaseUrl } from '../src/app/utils/appBaseUrl';
 
 /** The standalone website does not serve the authenticated application. */
@@ -12,6 +13,14 @@ function redirectAppRequest(
   appBaseUrl: string
 ) {
   const url = new URL(request.url ?? '/', 'http://localhost');
+  const destination = (redirects as Record<string, string>)[
+    url.pathname.replace(/\/$/, '')
+  ];
+  if (destination && ['GET', 'HEAD'].includes(request.method ?? '')) {
+    response.writeHead(308, { Location: `${destination}${url.search}` });
+    response.end();
+    return;
+  }
   if (
     !['GET', 'HEAD'].includes(request.method ?? '') ||
     (url.pathname !== '/app' && !url.pathname.startsWith('/app/'))

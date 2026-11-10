@@ -1,7 +1,6 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
   CallFollowupDemo,
-  CallHeroDemo,
   CallStartDemo,
 } from '../components/calls/CallStories';
 import { CallsComparison } from '../components/calls/CallsComparison';
@@ -9,11 +8,6 @@ import { CallTeamMemoryDemo } from '../components/calls/CallTeamMemoryDemo';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import {
-  CallGraphic,
-  ContextGraphic,
-  LinkedWorkGraphic,
-} from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import './calls-page.css';
 
@@ -24,7 +18,7 @@ const callsFaq = [
       <>
         Start from Calls, a channel, or a direct message. You can also create a
         meeting link for an instant or scheduled call. See the{' '}
-        <a href="https://docs.macro.com/product/calls">calls guide</a>.
+        <a href="/calls#guide">calls guide</a>.
       </>
     ),
   },
@@ -66,65 +60,33 @@ const callsFaq = [
 ];
 
 export function RouteCalls() {
-  // Repeated clicks on the same hash still need to revisit the section.
-  const revisitSection = (
-    event: MouseEvent & { currentTarget: HTMLAnchorElement }
-  ) => {
-    if (
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey ||
-      event.button !== 0
-    )
-      return;
-    const hash = event.currentTarget.hash;
-    if (hash !== window.location.hash) return;
-    event.preventDefault();
-    document.getElementById(hash.slice(1))?.scrollIntoView({
-      block: 'start',
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'auto'
-        : 'smooth',
-    });
-  };
   setPageSeo({
-    title: 'Macro Calls — Turn Conversations into Tasks and Updates',
+    title: 'Macro Calls — Team-level memory',
     description:
-      'Macro records and transcribes your calls so your agents can update tasks and docs from the conversation.',
+      'Calls right in your channels. Recordings, speaker-identified transcripts, and summaries give your agents team-level memory.',
     path: '/calls',
   });
   return (
     <ProductPage>
       <div class="calls-page">
         <ProductHero
+          tutorial="calls"
           cta="calls_hero_get_started"
           product="Calls"
-          title={['Calls your team and', 'agents can refer back to.']}
-          description={[
-            'Start a call from the conversation.',
-            'Give your team and agents a record of what was decided.',
-          ]}
+          title="Calls feed into team memory."
+          description="Call from any channel or DM. Give your team and agents context with recordings and transcripts."
         />
-        <DemoInteractionBoundary render={() => <CallHeroDemo />} />
-        <nav class="feature-page-jump-links" aria-label="On this page">
-          <a href="#call-start" onClick={revisitSection}>
-            <CallGraphic />
-            <span>Meet in a click</span>
-          </a>
-          <a href="#call-followup" onClick={revisitSection}>
-            <LinkedWorkGraphic />
-            <span>Act on decisions</span>
-          </a>
-          <a href="#call-default" onClick={revisitSection}>
-            <ContextGraphic />
-            <span>Catch up afterward</span>
-          </a>
-        </nav>
         <FeaturePageSection
           id="call-start"
-          title={['A quick call with the team.', 'A link for everyone else.']}
-          description="Start from a channel or DM, like a huddle. Send a meeting link when someone outside the team needs to join; it opens in their browser without an install. Use a booking link when you need to find a time first."
+          demo={{
+            tone: 'calls',
+            message: {
+              person: 'julia',
+              text: 'Can we jump on a call here for a minute?',
+            },
+          }}
+          title="Start a call from Macro Chat."
+          description="Call from a channel or DM, or share a standalone meeting link with someone outside your team. They can join in a browser without installing anything."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -133,8 +95,15 @@ export function RouteCalls() {
         </FeaturePageSection>
         <FeaturePageSection
           id="call-followup"
-          title={['Let your agent use', 'what you just agreed.']}
-          description="Ask your agent to turn the decisions into tasks, a follow-up email, or a CRM update. Transcripts distinguish speakers, and summaries give agents a shorter account to work from. You shouldn’t have to explain the meeting again in a prompt."
+          demo={{
+            tone: 'calls',
+            message: {
+              person: 'jacob',
+              text: '@Macro turn the decisions from this call into tasks.',
+            },
+          }}
+          title="Ask agents to work from transcripts."
+          description="Agents can read the full transcript and a summary of why the call matters and how it fits into the broader picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -143,8 +112,15 @@ export function RouteCalls() {
         </FeaturePageSection>
         <FeaturePageSection
           id="call-default"
-          title={['Remembering to share', 'shouldn’t be another task.']}
-          description="Macro records and transcribes calls. Channel calls share with the creator’s team by default, unless you turn that off. Revisit the recording, read the summary, or let an agent use the transcript. Standalone meetings stay with their participants unless shared."
+          demo={{
+            tone: 'calls',
+            message: {
+              person: 'julia',
+              text: 'The recording is shared with the team. The transcript is there too.',
+            },
+          }}
+          title="Share call recordings with your team."
+          description="Channel calls are recorded and shared with your team by default, so you don’t have to remember to share them afterward. You can turn off team sharing; standalone meetings stay with their participants unless shared."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -153,6 +129,7 @@ export function RouteCalls() {
         </FeaturePageSection>
         <CallsComparison />
         <FeaturePageFaq
+          guide={{ href: '/calls#guide', label: 'calls' }}
           id="calls-faq-title"
           title="Questions about Macro Calls"
           items={callsFaq}

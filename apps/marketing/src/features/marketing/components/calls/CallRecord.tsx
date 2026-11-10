@@ -1,13 +1,14 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import CornersOut from '@phosphor/corners-out.svg';
-import DotsThreeVertical from '@phosphor/dots-three-vertical.svg';
-import FileIcon from '@phosphor/file.svg';
-import LinkIcon from '@phosphor/link.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import SpeakerHigh from '@phosphor/speaker-high.svg';
-import Pause from '@phosphor-fill/pause-fill.svg';
-import Play from '@phosphor-fill/play-fill.svg';
+import ShareIcon from '@icon/share.svg';
+import Pause from '@icon/system/fill/pause-fill.svg';
+import Play from '@icon/system/fill/play-fill.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
+import DotsThreeVertical from '@icon/system/regular/dots-three-vertical.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import SpeakerHigh from '@icon/system/regular/speaker-high.svg';
 import { Button } from '@ui';
 import {
   createEffect,
@@ -81,24 +82,6 @@ export function createCallPlayback(duration: number) {
   };
 }
 export type CallPlayback = ReturnType<typeof createCallPlayback>;
-
-/** components/icon/share.svg */
-export function ShareIcon(props: { class?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class={props.class}
-      aria-hidden="true"
-    >
-      <path d="M4 13v4a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4M12 14V4m-4 4 4-4 4 4" />
-    </svg>
-  );
-}
 
 /** CallRecordingSplitHeader: label, Call Again, Ask Macro, Share. */
 export function CallRecordTopBar(props: {

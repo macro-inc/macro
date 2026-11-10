@@ -18,13 +18,11 @@
 .macro-product-email .macro-email-story .homepage-email-surface::after { display: block; }
 .macro-product-email .macro-email-story .homepage-email-row { display: flex; min-height: 48px; }
 .macro-product-email .macro-email-story .homepage-email-label { display: block; flex-basis: 56px; font-size: 14px; }
-.macro-product-email .macro-email-story .homepage-email-row input { padding: 12px 0; font-size: 14px; font-weight: 400; }
+.macro-product-email .macro-email-story .homepage-email-row input { padding: 12px 0; font-size: 14px; font-weight: 370; }
 .macro-product-email .macro-email-story .homepage-email-body-wrap { margin-top: 16px; }
 .macro-product-email .macro-email-story .homepage-email-body p { margin: 16px 0; font-size: 14px; line-height: 24px; }
 .macro-product-email .macro-email-story .homepage-email-body p:first-child { margin-top: 6px; }
 .macro-email-story .homepage-email-toolbar { margin-right: -6.625px; }
-.macro-email-step { opacity: 0; transform: translateY(6px); transition: opacity 700ms ease, transform 900ms cubic-bezier(.22,1,.36,1); }
-.macro-email-step[data-visible=true] { opacity: 1; transform: none; }
 @media (max-width: 700px) {
   .macro-tile-email .macro-product-preview { padding: 16px 0 36px; }
   .macro-email-conversation { gap: 24px; margin-bottom: 28px; }

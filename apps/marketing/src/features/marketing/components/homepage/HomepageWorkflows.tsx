@@ -23,7 +23,7 @@ import HomepagePullRequest from '../HomepagePullRequest';
 import HomepageSpreadsheet from '../HomepageSpreadsheet';
 
 /** The live homepage's open conversation leads into its full-size composer. */
-export function EmailWorkflow(props: { phase: number }) {
+export function EmailWorkflow() {
   return (
     <div class="macro-email-story">
       <div class="macro-email-conversation">
@@ -35,7 +35,7 @@ export function EmailWorkflow(props: { phase: number }) {
             },
           ]}
         />
-        <div class="macro-email-step" data-visible={props.phase >= 1}>
+        <div>
           <HomepageConversation
             messages={[
               {
@@ -58,51 +58,8 @@ export function EmailWorkflow(props: { phase: number }) {
           />
         </div>
       </div>
-      <div
-        class="macro-email-draft macro-email-step"
-        data-visible={props.phase >= 2}
-      >
-        <HomepageEmailCompose
-          animate={false}
-          draft={{
-            subject: 'Demo follow-up',
-            to: 'Valentina <valentina@coparse.com>',
-            cc: 'Julia <julia@macro.com>',
-            body: '',
-          }}
-          bodyContent={
-            <>
-              <p class="macro-email-step" data-visible={props.phase >= 3}>
-                Hi Valentina,
-              </p>
-              <p class="macro-email-step" data-visible={props.phase >= 4}>
-                Thanks for joining the demo on September 14. Great meeting your
-                team!
-              </p>
-              <p class="macro-email-step" data-visible={props.phase >= 5}>
-                Here’s our{' '}
-                <HomepageMention
-                  kind="pdf"
-                  label="Macro sales overview.pdf"
-                  description="Macro product overview"
-                  href="/documents"
-                />{' '}
-                and the{' '}
-                <HomepageMention
-                  kind="md"
-                  label="Team rollout plan"
-                  description="Setup steps and owners"
-                  href="/documents"
-                />
-                .
-              </p>
-              <div class="macro-email-step" data-visible={props.phase >= 6}>
-                <p>Best,</p>
-                <p>Jacob</p>
-              </div>
-            </>
-          }
-        />
+      <div class="macro-email-draft">
+        <HomepageEmailCompose />
       </div>
     </div>
   );

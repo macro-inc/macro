@@ -1,14 +1,7 @@
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
-import { EmailAccountsDemo } from '../../features/marketing/components/email/EmailAccountsDemo';
 import { EmailAgenticEditingDemo } from '../../features/marketing/components/email/EmailAgenticEditingDemo';
+import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
-import { EmailDesktopDemo } from '../../features/marketing/components/email/EmailDesktopDemo';
-import {
-  AgenticEditingGraphic,
-  AutoTagsGraphic,
-  EmailSharingGraphic,
-  KeyboardSpeedGraphic,
-} from '../../features/marketing/components/email/EmailFeatureGraphics';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
 import { EmailSharingDemo } from '../../features/marketing/components/email/EmailSharingDemo';
 import {
@@ -18,7 +11,14 @@ import {
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
-import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
+import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
+import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
+import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
+import { ProductHeroVideo } from '../../features/marketing/components/product/ProductHeroVideo';
+import {
+  ProductBrand,
+  ProductComparisonLink,
+} from '../../features/marketing/components/product/ProductPage';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/email/email-hero.css';
 
@@ -28,8 +28,10 @@ const faqItems = [
     a: (
       <>
         Macro supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail alongside Macro. See the{' '}
-        <a href="https://docs.macro.com/product/email">email setup guide</a>.
+        Settings and keep using Gmail or Superhuman alongside Macro. Macro
+        connects directly to your Gmail account, so you don’t need to stop using
+        another email client. See the{' '}
+        <a href="/email#guide">email setup guide</a>.
       </>
     ),
   },
@@ -47,9 +49,9 @@ const faqItems = [
     q: 'Can an agent draft replies for me?',
     a: (
       <>
-        Yes. Ask an agent to draft a reply using the email thread and relevant
-        workspace context. Review and edit the draft before sending. Learn more
-        about <a href="/agents">Macro Agents</a>.
+        Yes. Ask an agent to draft a reply using the thread, your docs, or a
+        call transcript. Edit the draft before sending. Learn more about{' '}
+        <a href="/agents">Macro Agents</a>.
       </>
     ),
   },
@@ -66,6 +68,10 @@ const faqItems = [
         <a href="/channels">sharing email in team chat</a>.
       </>
     ),
+  },
+  {
+    q: 'What happens when I mention a document in an email?',
+    a: 'Macro inserts a link and makes the document viewable by anyone with that link. Check the document before including it in an external email.',
   },
   {
     q: 'Does Macro get my Google password?',
@@ -96,8 +102,7 @@ const faqItems = [
     a: (
       <>
         Yes. Macro has a free plan with usage limits. See{' '}
-        <a href="/pricing">plans and limits</a> before choosing a plan for your
-        team.
+        <a href="/pricing">plans and limits</a> for details.
       </>
     ),
   },
@@ -105,63 +110,50 @@ const faqItems = [
 
 export function RouteEmail() {
   setPageSeo({
-    title: 'Macro Mail — The AI Email Client',
+    title: 'Macro Mail — Brilliantly fast email',
     description:
-      'Bring your email accounts into one inbox. Draft and edit with agents, separate signal from noise, and share email threads with your team in Macro.',
+      'Macro brings all of your email accounts into one inbox, with unified search. Share emails with internal channels and draft and send emails from the agent.',
     path: '/email',
   });
 
   return (
     <FeaturePage productSpacing>
-      <header class="feature-page-hero email-page-hero">
-        <ProductBrand product="Mail" />
-        <h1>
-          <span>Extremely fast email for</span>
-          <span>humans and agents.</span>
-        </h1>
+      <header class="feature-page-hero email-page-hero email-page-hero--mail">
+        <ProductBrand product="Email" />
+        <h1>Organized and prioritized email.</h1>
         <p class="email-page-hero-description">
-          We wanted a fast email client that could multitask, draft with agents,
-          and share the actual conversation with our team. So we built one into
-          the workspace.
+          Macro Mail tags and prioritizes email from all your accounts, with
+          Superhuman shortcuts and Opus intelligence.
         </p>
-        <FeaturePageCta name="email_hero_get_started" />
+        <div class="feature-page-hero-actions">
+          <FeaturePageCta name="email_hero_get_started" />
+        </div>
       </header>
-      <EmailDesktopDemo />
-      <nav
-        class="feature-page-jump-links email-feature-links"
-        aria-label="On this page"
+      <ProductHeroVideo tutorial="mail" />
+      <ProductComparisonLink product="Email" />
+      <FeaturePageSection
+        id="email-accounts"
+        title="See your accounts in one inbox."
+        description="Read, search, and triage your email accounts together. Signal shows your important emails; Noise keeps newsletters and promotions out of the way."
       >
-        <a href="#auto-tags">
-          <AutoTagsGraphic />
-          <span>All your inboxes</span>
-        </a>
-        <a href="#email-sharing">
-          <EmailSharingGraphic />
-          <span>Share to a channel</span>
-        </a>
-        <a href="#keyboard-speed">
-          <KeyboardSpeedGraphic />
-          <span>Keyboard-first</span>
-        </a>
-        <a href="#agentic-editing">
-          <AgenticEditingGraphic />
-          <span>Agentic editing</span>
-        </a>
-      </nav>
+        <PaperFeatureGraphic label="Switch between all inboxes, individual accounts, and email aliases.">
+          <PaperEmailAccounts />
+        </PaperFeatureGraphic>
+      </FeaturePageSection>
       <FeaturePageSection
         id="auto-tags"
-        title={['All your accounts.', 'One inbox to work through.']}
-        description="Bring your personal and work Gmail accounts into one inbox, with one search across them. Signal separates important conversations from newsletters and other Noise. Use tags to group the customers and projects you’re working on."
+        title="Tag incoming emails automatically."
+        description="Use an agent routine to tag incoming emails by customer, project, or topic. The same tags work across emails, docs, and tasks, so you can find the related work together."
       >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailAccountsDemo />}
-        />
+        <PaperFeatureGraphic label="Incoming emails tagged by an agent routine: Customers and Follow up on a customer thread, Launch on an announcement, and Product on an update.">
+          <EmailAutoTagDemo />
+        </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
-        title={['Share the email.', 'Skip the screenshot.']}
-        description="Paste an email into a channel and your team can read the entire thread, including future replies. They won’t have to ask what happened after the screenshot. Discuss it there, or turn the request into a linked task."
+        demo={{ tone: 'email' }}
+        title="Share email threads in Macro Chat."
+        description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -169,9 +161,30 @@ export function RouteEmail() {
         />
       </FeaturePageSection>
       <FeaturePageSection
+        id="email-crm"
+        title="Your Macro CRM, one click from any email."
+        description="Open a company or contact record from any email to see its CRM history. Catch up on the relationship without leaving your inbox."
+      />
+      <FeaturePageSection
+        id="email-to-task"
+        title="Turn email into Macro Tasks."
+        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away."
+      >
+        <PaperFeatureGraphic label="Create a task from an email, with the original thread linked as its source.">
+          <PaperEmailTask />
+        </PaperFeatureGraphic>
+      </FeaturePageSection>
+      <FeaturePageSection
         id="keyboard-speed"
-        title={['Fast to search.', 'Fast to get through.']}
-        description="Macro imports and indexes your mail instead of waiting on Gmail’s API for every search. Use J, K, and E to move through it. Open emails side by side when you need to compare a thread, check a detail, or draft more than one reply."
+        demo={{
+          tone: 'email',
+          message: {
+            person: 'jacob',
+            text: 'Found the thread. I’ll reply before the call.',
+          },
+        }}
+        title="Navigate with superhuman speed."
+        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -180,8 +193,15 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="agentic-editing"
-        title={['Draft emails in your', 'voice with agents.']}
-        description="A good reply needs context. Your agent can search past conversations and use your workspace memory, docs, and calls before it drafts. Work on the wording together, review it, and send from the agent conversation."
+        demo={{
+          tone: 'email',
+          message: {
+            person: 'jacob',
+            text: '@Macro draft the follow-up from our call. Link the rollout plan and cc Julia.',
+          },
+        }}
+        title="Draft and send from the agent."
+        description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -190,6 +210,7 @@ export function RouteEmail() {
       </FeaturePageSection>
       <EmailComparison />
       <FeaturePageFaq
+        guide={{ href: '/email#guide', label: 'email' }}
         id="email-faq-title"
         title="Questions about Macro Mail"
         items={faqItems}

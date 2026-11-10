@@ -1,7 +1,7 @@
-import Envelope from '@phosphor/envelope.svg';
-import Hash from '@phosphor/hash.svg';
-import PaperPlane from '@phosphor/paper-plane-tilt.svg';
-import X from '@phosphor/x.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import PaperPlane from '@icon/system/regular/paper-plane-tilt.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { meetingEmail, meetingReply } from '../../core/email-demo-story';

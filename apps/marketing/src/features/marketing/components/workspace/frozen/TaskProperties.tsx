@@ -1,4 +1,4 @@
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Dropdown } from '@ui';
 import { badgeTriggerClasses } from '@ui/components/Badge';
 import { For, type JSX, Show } from 'solid-js';

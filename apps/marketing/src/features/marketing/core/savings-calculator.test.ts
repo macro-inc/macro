@@ -72,3 +72,24 @@ describe('savings calculator', () => {
     expect(formatUsd(4689000)).toBe('$46,890');
   });
 });
+
+it('includes entered custom costs, skips unpriced and unselected tools, and preserves free plans', () => {
+  const base = summarizeSavings(choices({}), 3);
+  const result = summarizeSavings(choices({}), 3, [
+    { selected: true, monthlyCents: 1250 },
+    { selected: true },
+    { selected: true, monthlyCents: 0 },
+    { selected: false, monthlyCents: 9999 },
+  ]);
+  expect(result.toolsCents).toBe(base.toolsCents + 1250 * 12 * 3);
+  expect(result.macroCents).toBe(base.macroCents);
+});
+
+it('uses higher comparison plans without changing entry-plan defaults', () => {
+  expect(summarizeSavings(initialChoices('higher'), 5)).toEqual({
+    toolsCents:
+      (2000 + 1600 + 1454 + 2499 + 1200 + 9000 + 10000 + 1500 + 3300) * 12 * 5,
+    macroCents: 240000,
+  });
+  expect(initialChoices().notion.planId).toBe('plus');
+});

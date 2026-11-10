@@ -6,9 +6,9 @@ import LogoNyu from '../../assets/logos/nyu.svg';
 import LogoWaterloo from '../../assets/logos/waterloo.svg';
 import partnerAnnouncementVideo from '../../assets/partners/partnership-program-announcement.mp4';
 import partnerAnnouncementPoster from '../../assets/partners/partnership-program-poster.jpg';
+import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { type FaqItem, SectionFaq } from '../components/sections/SectionFaq';
-import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { demoHref } from '../utils/utilCta';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
@@ -97,11 +97,7 @@ const partnerFaq: FaqItem[] = [
         account, including your team&apos;s email, documents, messages, and
         other workspace content, remains private and secure. For more
         information on security in Macro please visit our{' '}
-        <a
-          href="https://docs.macro.com/security"
-          target="_blank"
-          rel="noreferrer"
-        >
+        <a href="/docs/security" target="_blank" rel="noreferrer">
           docs page
         </a>
         .
@@ -525,9 +521,7 @@ export const RoutePartners: Component = () => {
           </A>
         </section>
       </div>
-      <div class="posts-page-footer posts-shell">
-        <SectionMoreFeatures currentPath="/partners" footerOnly />
-      </div>
+      <SitePageClosing />
     </>
   );
 };

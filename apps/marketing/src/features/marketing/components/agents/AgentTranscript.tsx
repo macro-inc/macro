@@ -1,14 +1,14 @@
-import Calendar from '@phosphor/calendar-blank.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Envelope from '@phosphor/envelope.svg';
-import EnvelopeOpen from '@phosphor/envelope-open.svg';
-import Eye from '@phosphor/eye.svg';
-import File from '@phosphor/file.svg';
-import HashStraight from '@phosphor/hash-straight.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Newspaper from '@phosphor/newspaper.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import EnvelopeOpen from '@icon/system/regular/envelope-open.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import File from '@icon/system/regular/file.svg';
+import HashStraight from '@icon/system/regular/hash-straight.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Newspaper from '@icon/system/regular/newspaper.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
 import { Button, UserMessageBubble } from '@ui';
 import {
   type Component,

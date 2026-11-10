@@ -1,6 +1,6 @@
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import TextAa from '@phosphor/text-aa.svg';
+import ArrowUp from '@icon/system/bold/arrow-up-bold.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';

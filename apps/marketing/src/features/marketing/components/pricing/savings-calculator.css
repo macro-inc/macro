@@ -16,11 +16,11 @@
 .pricing-savings-plans button:hover { color: var(--ps-ink); }
 .pricing-savings-plans button[aria-pressed=true] { background: var(--ps-active); color: var(--ps-ink); }
 .pricing-savings-price { flex: none; min-width: 128px; color: var(--ps-ink); font: 500 16px/1.4 Inter, body; font-variant-numeric: tabular-nums; text-align: right; }
-.pricing-savings-price span { margin-left: 2px; color: var(--ps-ink-muted); font-size: 12px; font-weight: 400; }
+.pricing-savings-price span { margin-left: 2px; color: var(--ps-ink-muted); font-size: 12px; font-weight: 370; }
 .pricing-savings-summary { position: sticky; top: 96px; align-self: start; display: flex; flex-direction: column; gap: 28px; padding: 28px; border: 1px solid var(--ps-edge-muted); border-radius: 20px; background: var(--ps-panel); }
-.pricing-savings-result { display: flex; flex-direction: column; gap: 6px; margin: 0; color: var(--ps-ink-muted); font: 400 14px/1.6 Inter, body; text-wrap: balance; }
+.pricing-savings-result { display: flex; flex-direction: column; gap: 6px; margin: 0; color: var(--ps-ink-muted); font: 370 14px/1.6 Inter, body; text-wrap: balance; }
 .pricing-savings-result strong { margin: 4px 0 2px; overflow-wrap: anywhere; color: var(--ps-ink); font: calc(315 + var(--cream-slab-weight-increase, 0)) 52px/1.05 display; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
-.pricing-savings-seats { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 24px; border-bottom: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 400 14px/1.5 Inter, body; }
+.pricing-savings-seats { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 24px; border-bottom: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 370 14px/1.5 Inter, body; }
 .pricing-savings-stepper { display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--ps-edge-muted); border-radius: 999px; }
 .pricing-savings-stepper button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 50%; background: none; color: var(--ps-ink-muted); }
 .pricing-savings-stepper button:hover:not(:disabled) { background: var(--ps-hover); color: var(--ps-ink); }
@@ -28,10 +28,10 @@
 .pricing-savings-stepper svg { width: 14px; height: 14px; }
 .pricing-savings-stepper input { width: 56px; border: 0; background: none; color: var(--ps-ink); font: 500 15px/1.5 Inter, body; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .pricing-savings-stepper input::-webkit-inner-spin-button, .pricing-savings-stepper input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
-.pricing-savings-macro { display: flex; justify-content: space-between; gap: 16px; padding-top: 24px; border-top: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 400 14px/1.5 Inter, body; }
+.pricing-savings-macro { display: flex; justify-content: space-between; gap: 16px; padding-top: 24px; border-top: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 370 14px/1.5 Inter, body; }
 .pricing-savings-macro span:last-child { color: var(--ps-ink); font-variant-numeric: tabular-nums; }
 .pricing-savings-result span:last-child { color: var(--ps-ink-faint); }
-.pricing-savings-note { max-width: 560px; margin: 28px auto 0; color: var(--ps-ink-faint); font: 400 12px/1.7 Inter, body; text-align: center; text-wrap: balance; }
+.pricing-savings-note { max-width: 560px; margin: 28px auto 0; color: var(--ps-ink-faint); font: 370 12px/1.7 Inter, body; text-align: center; text-wrap: balance; }
 .pricing-savings :focus-visible { outline: 2px solid var(--ps-ink-muted); outline-offset: 2px; }
 @media (max-width: 767px) {
   .pricing-savings-body { grid-template-columns: minmax(0, 1fr); }

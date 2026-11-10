@@ -1,76 +1,51 @@
-import { HomepageBlog } from '../marketing/components/HomepageBlog';
-import { HomepageClosing } from '../marketing/components/HomepageClosing';
-import { HomepageTestimonials } from '../marketing/components/HomepageTestimonials';
-import { HomepageTiles } from '../marketing/components/homepage/HomepageTiles';
+import { lazy, Show, Suspense } from 'solid-js';
+import { setPageSeo } from '../../app/utils/utilSeo';
+import { FeatureUiStyles } from '../marketing/components/FeaturePage';
+import { HomepageUnification } from '../marketing/components/HomepageUnification';
 import { MacroHero } from '../marketing/components/homepage/MacroHero';
 import { SiteHeader } from '../marketing/components/SiteHeader';
-import { routePhoneToMobileSignup } from '../marketing/core/navigation';
+import { wallpapers } from '../marketing/components/TutorialWallpaper';
+import { ContextScene } from './components/WelcomeSteps';
 import '../marketing/components/homepage/macro-homepage.css';
+import '../marketing/components/page-aura.css';
+
+const HomepageSections = lazy(() =>
+  import('../marketing/components/HomepageSections').then((module) => ({
+    default: module.HomepageSections,
+  }))
+);
 
 /** Shared build-time and browser tree: hydration preserves the first-painted hero. */
-export function Homepage() {
-  let closingRoot!: HTMLDivElement;
+export function Homepage(props: { embedded?: boolean } = {}) {
+  setPageSeo({
+    title: 'Macro — The unified workspace for your company.',
+    description:
+      'Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email.',
+    path: '/',
+  });
   return (
     <div class="macro-homepage">
-      <SiteHeader />
+      <FeatureUiStyles scope=".macro-homepage" />
+      <Show when={!props.embedded}>
+        <SiteHeader currentPath="/" />
+      </Show>
       <main class="macro-home-scroll" data-onboarding-scroll>
-        <section class="macro-home-hero" aria-labelledby="macro-home-title">
-          <MacroHero />
-          <h1 id="macro-home-title" data-welcome-heading>
-            One workspace for your team and your agents.
-          </h1>
-          <p class="macro-home-tagline">
-            Email, chat, docs, tasks, CRM, calls, and sheets. <br />
-            Built together, so they actually work together.
-          </p>
-          <a
-            class="macro-home-button"
-            href="/app/signup"
-            onClick={routePhoneToMobileSignup}
-          >
-            Get started
-          </a>
-        </section>
-        <section
-          class="macro-letter-intro macro-letter-prose"
-          aria-label="Why Macro"
+        <div
+          class="page-aura"
+          style={{
+            '--page-aura-primary': wallpapers.home.colors[1],
+            '--page-aura-secondary': wallpapers.home.colors[2],
+            '--page-aura-deep': wallpapers.home.colors[3],
+          }}
         >
-          <p>
-            We built Macro so a small team can run the company without juggling
-            a dozen apps. Email, chat, docs, tasks, and customer records live
-            together. Turn a customer conversation into a task, share it with
-            your team, and keep the context attached.
-          </p>
-          <p>
-            Your agents work in that same system. Ask them to draft a reply,
-            update a document, or take on a task using what your team already
-            knows. Less copying, fewer status updates, and no explaining your
-            company from scratch in every AI chat.
-          </p>
-        </section>
-        <HomepageTiles />
-        <div class="macro-home-bottom" ref={closingRoot}>
-          <section
-            class="macro-letter-prose macro-letter-proof"
-            aria-labelledby="macro-open-source-title"
-          >
-            <h2 id="macro-open-source-title">Open source.</h2>
-            <p>
-              We’re asking you to trust Macro with your work. You should be able
-              to inspect how it works and build on it. We’d want that as users,
-              so we made the code open source.
-            </p>
-            <a
-              href="https://github.com/macro-inc/macro"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Explore the source ↗
-            </a>
+          <section class="macro-home-hero" aria-labelledby="macro-home-title">
+            <ContextScene />
+            <MacroHero />
           </section>
-          <HomepageTestimonials />
-          <HomepageBlog />
-          <HomepageClosing root={() => closingRoot} />
+          <HomepageUnification />
+          <Suspense>
+            <HomepageSections />
+          </Suspense>
         </div>
       </main>
     </div>

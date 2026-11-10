@@ -1,5 +1,6 @@
 /* Frozen website styling. Do not import application styles here. */
 @import "tailwindcss" source(none);
+@import "./site-icons.css";
 
 
 

@@ -33,7 +33,6 @@ export type ComparisonTableProps = {
   sortRows?: boolean;
   valueWrap?: 'normal' | 'nowrap';
   scrollLabel?: string;
-  presentation?: 'framed';
 };
 
 function isPriceRow(row: ComparisonRow) {
@@ -164,7 +163,7 @@ function PlaceholderLogo(props: { label: string }) {
   );
 }
 
-function ComparisonCell(props: {
+export function ComparisonCell(props: {
   value: ComparisonCellValue;
   macro: boolean;
   valueWrap: 'normal' | 'nowrap';
@@ -203,7 +202,7 @@ function ComparisonCell(props: {
               ? 'var(--comparison-accent, var(--a0))'
               : 'var(--c2)',
             'font-family': "'Inter', body",
-            'font-size': mobile() ? '10px' : '11px',
+            'font-size': `var(--comparison-value-size, ${mobile() ? '10px' : '11px'})`,
             'font-weight': '400',
             'letter-spacing': '0.02em',
             'line-height': 1.25,
@@ -310,7 +309,6 @@ export function ComparisonTable(props: ComparisonTableProps) {
   return (
     <div
       class="comparison-table-scroll"
-      data-presentation={props.presentation}
       tabIndex={props.scrollLabel ? 0 : undefined}
       role={props.scrollLabel ? 'region' : undefined}
       aria-label={props.scrollLabel}
@@ -331,7 +329,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
           'min-width': mobile()
             ? `${props.mobileMinWidth ?? Math.max(480, 132 + columns().length * (props.mobileCellWidth ?? 58))}px`
             : 'auto',
-          overflow: props.presentation === 'framed' ? 'visible' : 'hidden',
+          overflow: 'hidden',
         }}
       >
         <div
@@ -340,9 +338,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
             'border-bottom': `1px solid ${GRID_LINE}`,
           }}
           class="comparison-feature-label"
-        >
-          {props.presentation === 'framed' ? 'Features' : null}
-        </div>
+        />
         <For each={columns()}>
           {(column, index) => {
             const macro = () => isMacro(column, index());
@@ -353,19 +349,12 @@ export function ComparisonTable(props: ComparisonTableProps) {
                   'background-color':
                     'var(--comparison-header-bg, transparent)',
                   'border-bottom': `1px solid ${GRID_LINE}`,
-                  'border-left':
-                    props.presentation === 'framed'
-                      ? '0'
-                      : `1px solid ${GRID_LINE}`,
+                  'border-left': `1px solid ${GRID_LINE}`,
                   'border-right':
-                    props.presentation !== 'framed' &&
                     index() === columns().length - 1
                       ? `1px solid ${GRID_LINE}`
                       : '0',
-                  'border-top':
-                    props.presentation === 'framed'
-                      ? '0'
-                      : `1px solid ${GRID_LINE}`,
+                  'border-top': `1px solid ${GRID_LINE}`,
                   color: macro()
                     ? 'var(--comparison-accent, var(--a0))'
                     : 'var(--c2)',
@@ -383,17 +372,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
                     : 'none',
                 }}
               >
-                <Show
-                  when={props.presentation === 'framed'}
-                  fallback={
-                    <ComparisonHeader column={column} macro={macro()} />
-                  }
-                >
-                  <span class="comparison-inline-brand">
-                    {column.icon}
-                    {column.label}
-                  </span>
-                </Show>
+                <ComparisonHeader column={column} macro={macro()} />
               </div>
             );
           }}
@@ -407,10 +386,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
                   'background-color':
                     rowIndex() % 2 === 1 ? ROW_TINT : 'var(--b0)',
                   'border-bottom': `1px solid ${GRID_LINE}`,
-                  'border-left':
-                    props.presentation === 'framed'
-                      ? '0'
-                      : `1px solid ${GRID_LINE}`,
+                  'border-left': `1px solid ${GRID_LINE}`,
                   color: 'var(--c2)',
                   display: 'flex',
                   'font-size': `var(--comparison-row-size, ${mobile() ? '10px' : '12px'})`,
@@ -431,12 +407,8 @@ export function ComparisonTable(props: ComparisonTableProps) {
                       'background-color':
                         rowIndex() % 2 === 1 ? ROW_TINT : 'var(--b0)',
                       'border-bottom': `1px solid ${GRID_LINE}`,
-                      'border-left':
-                        props.presentation === 'framed'
-                          ? '0'
-                          : `1px solid ${GRID_LINE}`,
+                      'border-left': `1px solid ${GRID_LINE}`,
                       'border-right':
-                        props.presentation !== 'framed' &&
                         cellIndex() === row.cells.length - 1
                           ? `1px solid ${GRID_LINE}`
                           : '0',

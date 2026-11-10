@@ -1,3 +1,18 @@
+import IconShare from '@icon/share.svg';
+import IconArrowUp from '@icon/system/regular/arrow-up.svg';
+import IconCalendar from '@icon/system/regular/calendar-blank.svg';
+import IconChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import IconChannel from '@icon/system/regular/chats-circle.svg';
+import IconClock from '@icon/system/regular/clock.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconDoc from '@icon/system/regular/file.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import IconPalette from '@icon/system/regular/palette.svg';
+import IconPriorityMedium from '@icon/system/regular/priority-medium.svg';
+import IconStatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconTextAa from '@icon/system/regular/text-aa.svg';
+import IconX from '@icon/system/regular/x.svg';
 import {
   type Accessor,
   type Component,
@@ -13,21 +28,6 @@ import {
   untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconChannel from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconTask from '../../../assets/icons/icon-tasks.svg';
-import IconArrowUp from '../../../assets/icons/phosphor/arrow-up.svg';
-import IconCalendar from '../../../assets/icons/phosphor/calendar-blank.svg';
-import IconChatTeardrop from '../../../assets/icons/phosphor/chat-teardrop.svg';
-import IconClock from '../../../assets/icons/phosphor/clock.svg';
-import IconLink from '../../../assets/icons/phosphor/link.svg';
-import IconPalette from '../../../assets/icons/phosphor/palette.svg';
-import IconShare from '../../../assets/icons/phosphor/share.svg';
-import IconTextAa from '../../../assets/icons/phosphor/text-aa.svg';
-import IconX from '../../../assets/icons/phosphor/x.svg';
-import IconStatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconDoc from '../../../assets/icons/wide-file-md.svg';
-import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';

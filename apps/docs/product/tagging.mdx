@@ -1,16 +1,20 @@
 ---
-title: "Unified Tagging"
+title: "AI tagging"
 icon: "tags"
 description: "One set of colored tags that spans every block type: docs, email, tasks, chats, and calls."
 ---
+
+Use an agent routine to tag incoming emails by customer, project, or topic. The same tags work across emails, docs, and tasks, so you can find the related work together.
+
+Create a [routine](/product/routines#creating-a-routine) with the **New email received** trigger and tell the agent which tags to apply. You can also ask an agent to tag existing work.
+
+## One set of tags
 
 A tag is a [property](/concepts/properties), and because properties are shared across your whole workspace, a single tag namespace spans every block type. Tag an email `marketing` and a task `marketing` and it's the same `marketing`: one color, one filter, one click to see everything carrying it.
 
 Tags are for organizing your work by project, team, or area, like `marketing`, `hiring`, or `q3-launch`. They aren't for tracking status. Status, priority, and assignees are [properties](/concepts/properties) that describe a single item, while a tag is a property that ties related items together across the whole workspace.
 
-<Frame>
-  ![Filtering the whole workspace by a tag in search](/images/search_tags.png)
-</Frame>
+<GuideGraphic kind="tags" label="The Launch tag finds related documents, emails, tasks, and channels." />
 
 ## What you can tag
 
@@ -31,10 +35,6 @@ Everywhere else, use the tag panel in the properties window. Select one of your 
 An item can carry as many tags as you like, so the same email or task can sit under `marketing` and `q3-launch` at once.
 
 > If you would like to select or unselect multiple tags, hold <kbd>Shift</kbd> while clicking them.
-
-<Frame>
-  <img src="/images/create_tags.png" alt="Creating a tag inline with the tag menu" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
-</Frame>
 
 ## Personal and team tags
 
@@ -71,19 +71,11 @@ In any block, go to **Filter → Tags** to show only the items carrying a tag. T
 - **Any** — items that have any of the selected tags (the default)
 - **All** — items that have every selected tag, for example everything tagged both `marketing` and `q3-launch`
 
-<Frame>
-  <img src="/images/filter_tags.png" alt="Filtering a block's list by tag with Filter → Tags" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
-</Frame>
-
 Clicking a tag pill anywhere jumps straight to everything else carrying it.
 
 ## Managing your tags
 
 Curate the full set from **Settings → Tags**, which lists your **Personal** and **Team** tags with edit and delete actions and a **New tag** button. It's the place to rename, recolor, or clean up tags without hunting for an item that uses them.
-
-<Frame>
-  ![The Settings → Tags page, with Personal and Team sections](/images/settings_tags.png)
-</Frame>
 
 <Note>
   **Tags are not email labels.** Your Gmail labels (Inbox, Starred, Important, and any you've made) still sync and drive inbox actions like archive and star. Macro tags are a separate, cross-workspace layer that sits on top — an email thread can carry both.

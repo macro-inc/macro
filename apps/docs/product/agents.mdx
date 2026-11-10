@@ -4,11 +4,13 @@ icon: "wand-magic-sparkles"
 description: "Agents that live inside your workspace — with full context on your email, tasks, docs, calls, and channels."
 ---
 
-<Frame>
-  ![The Agents tab, with chat history and agents answering from workspace context](/images/agents_screenshot-1.png)
-</Frame>
+<GuideGraphic kind="agents" label="An agent works from the team conversation and returns its result." />
 
 Macro agents live inside your workspace and work from [unified memory](/product/unified-memory), so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
+
+Watch a 1:05 walkthrough of Macro Agents.
+
+<video src="https://macro.com/video/tutorials/agents.mp4" poster="https://macro.com/video/tutorials/agents-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
 > To start a new chat use shortcut <kbd>c</kbd> \+ <kbd>a</kbd>
 
@@ -17,10 +19,6 @@ Macro agents live inside your workspace and work from [unified memory](/product/
 The Agents module lists every chat you've had, named automatically from your first message, and you can pick any of them back up where you left off. Ask for summaries, clarifications, drafts, or a status check. Agents answer using everything in your workspace, not just the current thread.
 
 > Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents, and <kbd>j</kbd> and <kbd>k</kbd> to move up and down through chats.
-
-<Frame>
-  ![Agents answering a question using context from across the workspace](/images/Screenshot-2026-06-03-at-5.01.06-PM.png)
-</Frame>
 
 ### Full workspace context
 
@@ -45,8 +43,6 @@ Agents have a broad tool set and will reach for the right tools on their own. In
 - **Web** — search the web and fetch pages when the answer isn't in your workspace
 - **Import** — pull content in from Notion, Linear, and Slack when you migrate
 
-For copy-paste prompts that put these to work, see [Agent recipes](/AI/recipes).
-
 ### Agents in channels
 
 Mention **@Macro** in any [channel](/product/channels) to pull agents into the conversation with the whole channel as context. They show up in the normal @-mention typeahead, read the thread, and reply inline. Agents can also post their results back into a channel or a specific thread as part of a longer task.
@@ -54,10 +50,6 @@ Mention **@Macro** in any [channel](/product/channels) to pull agents into the c
 <Note>
   **@Macro** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
 </Note>
-
-<Frame>
-  ![An @Macro mention in a channel and the agents' reply in-thread](/images/macro_in_channel.png)
-</Frame>
 
 ### Automations
 
@@ -69,19 +61,11 @@ Agents can run on a schedule. An automation is a saved prompt that runs on its o
 - Fill out the form with your instructions and the schedule.
 - Hit **Create** and wait for your automation to run.
 
-<Frame>
-  ![An example automation with instructions and a schedule](/images/example_automation.png)
-</Frame>
-
 ### Choosing a model
 
 A model picker sits in the chat input. You can choose a model per chat depending on how difficult you deem the question. Your choice is remembered for that chat and carried forward when you start a new one from the composer.
 
 With Guest access you can only use Haiku, the fast model. Every paid plan (Premium and Max) unlocks the rest, including Opus 5, Fable 5.1 (Anthropic's most capable model), and GPT-6 Astra (OpenAI's). Heavier models draw down your included AI faster, and the picker shows by how much: Opus uses about 2.5×, and Fable and Astra about 5×, what Sonnet does for the same conversation.
-
-<Frame>
-  ![The model picker, showing the available models](/images/model_options.png)
-</Frame>
 
 ### MCP setup
 
@@ -91,7 +75,7 @@ Macro's MCP server lets AI clients like Claude Code, Codex, and Cursor work with
 https://mcp-server.macro.com/mcp
 ```
 
-See [MCP setup](/AI/mcp/overview) for client-by-client instructions and the full [MCP tool reference](/AI/mcp/tools/index).
+See [MCP setup](/AI/mcp/overview) for client-by-client instructions.
 
 ### @mentioning
 

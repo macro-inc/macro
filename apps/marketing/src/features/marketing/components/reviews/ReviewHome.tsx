@@ -1,19 +1,19 @@
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import Buildings from '@phosphor/buildings.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Chats from '@phosphor/chats-circle.svg';
-import Check from '@phosphor/check.svg';
-import Envelope from '@phosphor/envelope.svg';
-import Folder from '@phosphor/folder-simple.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Search from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import X from '@phosphor/x.svg';
-import HouseFill from '@phosphor-fill/house-fill.svg';
+import HouseFill from '@icon/system/fill/house-fill.svg';
+import Reply from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Chats from '@icon/system/regular/chats-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import Folder from '@icon/system/regular/folder-simple.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   batch,

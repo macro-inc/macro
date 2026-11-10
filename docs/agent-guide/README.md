@@ -64,7 +64,42 @@ Standalone marketing dev/preview servers hand `/app/*` navigation to
 `VITE_APP_BASE_URL` (`https://macro.com` by default); verify that signup leaves the local website instead of
 showing an empty header. Use an `apps/web` preview for local signup testing.
 
-For the homepage email illustration, verify the open conversation reveals a
-full-size draft with linked documents, keeps all recipient fields and the send
-button visible on mobile, and pauses before replaying. Reduced motion should
-show the completed draft. The illustration is inert and sends no email.
+For the homepage, verify the centered hero copy and signup action sit above the
+Home demo video on desktop and mobile. Play the video and check that native
+controls appear. Below it, check the deployed site's centered slab headings,
+small Inter descriptions, and side rules across all five product chapters.
+The email illustration must reveal its draft and show the completed result
+with reduced motion; it sends no email. Check the page has no horizontal overflow
+and Home navigation preserves the sidebar.
+
+
+
+## Public website documentation
+
+For the public website preview, open `/docs` to read the integrated guides. Navigate Home → Chat → Home and use browser Back/Forward: the desktop sidebar must stay mounted and visible without a document reload.
+Desktop navigation is always open with a search icon at the left of the pinned search field. Command/Control+K or Command/Control+F focuses search (and opens the drawer on phones). Search matches titles and content across feature pages, setup guides, comparisons, and customer stories, with at most eight results. Check that changelogs, Tool Reference, engineering posts, legal pages, and company pages are excluded, and each feature appears only once. Check a typo such as `calednar`, a blog such as `Linear`, and a guide such as `MCP Setup`; results show an icon, title, and location. Use arrow keys and Enter to open a result. The clear button or Escape clears the query; a second Escape closes the mobile drawer and restores focus. Use Top features and More features to open a product page. The current guide is highlighted. The desktop sidebar stays at a fixed 217px width with no collapse or resize controls. On phones, use the top-left menu button and close the full-screen drawer before reading. Escape closes the mobile drawer. Content is authored in `apps/docs`; rendering and navigation belong to `apps/marketing/src/features/documentation`.
+
+Feature links in the public website sidebar open the visual product overviews.
+Use the labeled documentation sections for standalone reference, or open Setup and reference
+below a feature page’s FAQ. Product guide URLs redirect to their feature page.
+
+For the docs-domain migration, build the website and run the marketing
+`check:docs-redirects` command (optionally with a static preview `--origin`).
+Verify `/docs/product/databases` redirects to `/databases`, then check its expandable
+reference and a legacy heading link. Verify a standalone guide as well. Only after an authorized website deploy should the redirect records
+in `apps/docs/docs.json` be published to Mintlify; check real old-host 308s then.
+
+## Public website feature navigation
+
+The website sidebar lists product overviews under Features, including
+`/spreadsheets`, `/databases`, `/canvas`, `/snippets`, `/calendar`, `/booking-links`,
+`/drive`, `/routines`, and `/skills`. Matching product guides are not
+repeated below: open a feature page and use its Read guide link, or search the
+sidebar for the detailed guide. Folders is covered by Drive and Reviews by GitHub;
+all original `/docs` URLs remain available.
+
+Projects are part of Tasks: `/projects` and the former Projects guide redirect to `/tasks`. Project setup, sharing, and agent assignment are in the Tasks reference.
+
+Main benefits starts with Replace 27+ apps (`/replace-apps`), followed by Company graph, AI tagging, Automatic permissions, Workspace events, and Unified search. The replacement page reuses the pricing savings calculator below a compact wall of app logos; check seat changes, tool toggles, and plan selection on desktop and mobile. The other benefit routes render centered feature-style overviews and annotated graphics on black with faint localized glow, without colored poster frames. Check all five on desktop and mobile, and confirm playing a demo replaces the diagram with a visible video. The original MDX remains available under Setup and reference. Verify the overview, expand the guide, and test a legacy heading fragment. Existing guide URLs remain valid; the event overview is at `/docs/concepts/event-system` and links to the routine trigger reference.
+
+On `/pricing`, verify Free ($0), Pro ($40), and Max ($200) prices, signup links, the expandable plan comparison, and shared FAQ keyboard toggles. Test calculator seats and tool selection on desktop and mobile. The customer story uses a native video with an accessible play button.

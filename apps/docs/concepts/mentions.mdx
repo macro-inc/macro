@@ -1,32 +1,20 @@
 ---
-title: "Mentions"
+title: "Company graph"
 icon: "at"
 description: "How blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
 ---
 
+Your email, team chat, docs, tasks, and calls live in one workspace. Company graph connects that work through @mentions, backlinks, and shared properties, so people and agents can follow the context from one item to the next.
+
+## Connect your work
+
 Mentions are how blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, a chat or [automation](/product/agents#automations) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.26.45-PM.png"
-    alt="The @mention autocomplete menu open in a rich-text editor"
-    title="Mention autocomplete"
-    className="mx-auto"
-    style={{ width:"57%" }}
-  />
-</Frame>
-
-<Frame>
-  ![A document @mentioned in a channel message, shared with channel members](/images/Screenshot-2026-06-09-at-3.59.41-PM.png)
-</Frame>
+<GuideGraphic kind="chat" label="A document mentioned in a channel stays linked to the conversation." />
 
 ## Mentions in Agents
 
 Mentioning entities to AI agents inserts a pointer so the AI can read the docs. In the case of markdown docs, the agent can also read images embedded in the doc. Your agents inherit the permissions you have. If you try and give an agent a doc/entity that you don't have access to, your agents won't have access either, and your agent will tell you as much.
-
-<Frame>
-  ![Mentioning a document in an agent chat to give the agent context](/images/Screenshot-2026-06-09-at-3.59.21-PM.png)
-</Frame>
 
 You don't _need to_ mention entities to agents. Since your agent has access to the search tool and list tool, it can find things in your workspace for itself. We recommend mentioning entities when you already know what the agent should look at. It skips a round of searching and guarantees the right context.
 
@@ -36,25 +24,11 @@ The primary benefit of using Macro instead of Slack is that it is deeply linked 
 
 **When people are added or removed from a channel, permissions to shared items flow through accordingly.** This is really helpful when somebody joins or leaves your company, so they already have access to everything they need. This is why we recommend using Channels for each team, so that permissions for all entities your team needs are handled automatically.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.00.02-PM.png"
-    alt="A channel's participants list, which controls access to everything shared in it"
-    title="Channel participants"
-    className="mx-auto"
-    style={{ width:"32%" }}
-  />
-</Frame>
-
 When you mention a document or file in a channel, a bidirectional link is created so you can always trace where something has been discussed. For example, on our "8 month roadmap document" members of our team can see that this document has been mentioned by several other documents, a canvas, in the `#engineers` channel, and I can see it's been mentioned in my private DMs with Teo and Nick (other members of the team would not see that last one unless they are in that channel).
 
 ## Mentions in Email
 
 Mentioning people causes them to be added to cc on the email thread.
-
-<Frame>
-  ![An @mentioned person being added as a recipient on an email](/images/Screenshot-2026-06-09-at-4.00.50-PM.png)
-</Frame>
 
 The auto-sharing that happens when you mention in channels doesn't happen in email: because email chains can be forwarded and people added, the list of people who might need access isn't known in advance or traceable over time. Thus, you'll need to manually ensure that the recipients of your mentions in email are able to access your link. When you hit send, the @mention will appear as a plain hyperlink in other email clients.
 
@@ -62,23 +36,9 @@ The auto-sharing that happens when you mention in channels doesn't happen in ema
 
 Mentioning documents in documents is one of the fundamental ways your workspace ties together, familiar to users of products like Notion, Coda, and Obsidian.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.02.53-PM.png"
-    alt="A document mentioning another document as an inline pill"
-    title="Document mentions"
-    className="mx-auto"
-    style={{ width:"85%" }}
-  />
-</Frame>
-
 ## Mentions in Canvas
 
 Use canvases to embed other entities on a 2D plane. This is useful for mind-mapping, technical diagrams linking to tasks, project management, or just storing/grouping files visually.
-
-<Frame>
-  ![A canvas with workspace blocks embedded and connected on a 2D plane](/images/Screenshot-2026-06-09-at-4.05.22-PM.png)
-</Frame>
 
 ## What happens when you mention...
 
@@ -93,3 +53,13 @@ In a document or chat, a mention is a navigable link and a source of context. In
 In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
 
 The agent leans on mentions heavily: anything you @mention into a chat is pulled in as context.
+
+## Previews
+
+Hover over an @mention to preview the linked task, document, or other work. The References panel on an item shows where it has been mentioned or embedded.
+
+## Embeds
+
+Create an @mention by typing **@** or dragging an item into a document. Hover over the mention and choose **Convert to embed**.
+
+Most items can be embedded read-only in a document, with editing and markup tools disabled. Embeds and mentions in documents do not grant access automatically. Share the original file with the people who need to read it; mentions in channels grant access to channel members.

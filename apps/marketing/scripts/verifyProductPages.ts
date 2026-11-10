@@ -66,6 +66,36 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         false
       );
       expect(errors, `${route}: no browser errors`).toEqual([]);
+      if (route === '/tasks') {
+        await page.setViewportSize({ width: 1000, height: 844 });
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        const scroller = page.locator('#app-scroll-root');
+        await scroller.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        const appLink = page.locator('.site-header a.site-nav-open');
+        await expect(appLink).toHaveCount(1);
+        await expect
+          .poll(() =>
+            page.locator('.site-nav-open-face').evaluate((element) => {
+              const textSize = Number.parseFloat(
+                getComputedStyle(element).fontSize
+              );
+              const matrix = new DOMMatrixReadOnly(
+                getComputedStyle(element.parentElement!).transform
+              );
+              return textSize > 24 && matrix.a === 1;
+            })
+          )
+          .toBe(true);
+        await scroller.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        await expect(appLink.locator('.site-nav-open-face')).toHaveCSS(
+          'font-size',
+          '14px'
+        );
+      }
       console.log(
         `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`
       );

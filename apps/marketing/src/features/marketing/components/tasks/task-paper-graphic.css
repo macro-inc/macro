@@ -1,0 +1,70 @@
+.task-paper-graphic {
+  --feature-glow: var(--color-ink);
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.task-paper-graphic .feature-demo-backdrop {
+  --workspace-dots-opacity: .06;
+  --workspace-grain-opacity: .11;
+}
+
+/* Half the shared glow, layered over the original 4% Paper glow. */
+.task-paper-graphic .feature-demo-backdrop::before {
+  opacity: .5;
+}
+
+/* Fade to the page itself, without the source artboard's solid panel. */
+.task-paper-graphic .task-paper-viewport.paper-task-art {
+  --color-ui-canvas: transparent;
+}
+
+.task-paper-canvas > div,
+.task-paper-canvas > div > div {
+  background-color: transparent;
+  border-radius: 0;
+}
+
+.task-paper-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.task-paper-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.task-paper-viewport[data-compact=true][data-view=views] {
+  --text-sm: 20px;
+  --leading-sm: 24px;
+}
+
+.task-paper-viewport[data-compact=true] .paper-task-layout-label {
+  left: 96px;
+  width: 220px;
+  white-space: nowrap;
+}
+
+
+.task-paper-graphic .paper-task-glass {
+  background-color: transparent;
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-ui-content-primary) 9%, transparent),
+    color-mix(in srgb, var(--color-ui-content-primary) 5%, transparent)
+  );
+  box-shadow: inset 0 1px 0 var(--color-ui-glass-highlight),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-ui-glass-edge) 50%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.task-paper-graphic .paper-task-glass-properties-mobile {
+  border-radius: 12px;
+}

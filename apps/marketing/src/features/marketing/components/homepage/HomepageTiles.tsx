@@ -1,14 +1,7 @@
-import Arrow from '@phosphor/arrow-up-right.svg';
-import {
-  createSignal,
-  createUniqueId,
-  For,
-  lazy,
-  onCleanup,
-  onMount,
-} from 'solid-js';
-import { WorkspaceTexture } from '../../../setup/components/WorkspaceTexture';
+import Arrow from '@icon/system/regular/arrow-up-right.svg';
+import { For, lazy } from 'solid-js';
 import { DeferredDemo, DemoPlaceholder } from '../DeferredDemo';
+import { FeatureDemoBackdrop } from '../FeatureDemoBackdrop';
 import type { HomepagePreviewKind } from './HomepageProductPreview';
 
 const loadPreview = () => import('./HomepageProductPreview');
@@ -21,7 +14,6 @@ function Tile(props: {
   links: { href: string; label: string }[];
   preview: HomepagePreviewKind;
 }) {
-  const textureId = createUniqueId();
   return (
     <section
       class={`macro-feature-tile macro-tile-${props.id}`}
@@ -43,9 +35,7 @@ function Tile(props: {
         </div>
       </div>
       <div class="macro-tile-art">
-        <div class="macro-tile-ambience" aria-hidden="true">
-          <WorkspaceTexture accent="var(--feature-glow)" filterId={textureId} />
-        </div>
+        <FeatureDemoBackdrop />
         <DeferredDemo
           preload={loadPreview}
           fallback={<DemoPlaceholder label={`${props.title} preview`} />}
@@ -57,83 +47,10 @@ function Tile(props: {
   );
 }
 
-function HomepageFeatureToc(props: { active?: string }) {
-  return (
-    <aside class="macro-feature-toc">
-      <nav aria-label="Key features">
-        <span>Features</span>
-        <For
-          each={[
-            { id: 'email', label: 'Email' },
-            { id: 'chat', label: 'Chat' },
-            { id: 'documents', label: 'Documents' },
-            { id: 'tasks', label: 'Tasks' },
-            { id: 'coding-agents', label: 'Agents' },
-            { id: 'spreadsheet', label: 'Sheets' },
-            { id: 'databases', label: 'Databases' },
-            { id: 'crm', label: 'CRM' },
-            { id: 'calls', label: 'Calls' },
-          ]}
-        >
-          {(feature) => (
-            <a
-              href={`#${feature.id}`}
-              aria-current={
-                props.active === feature.id ? 'location' : undefined
-              }
-            >
-              {feature.label}
-            </a>
-          )}
-        </For>
-      </nav>
-    </aside>
-  );
-}
-
 /** The same product UI used by the detailed demos, framed as compact previews. */
 export function HomepageTiles() {
-  let layout!: HTMLDivElement;
-  const [active, setActive] = createSignal<string>();
-  onMount(() => {
-    const scrollRoot = layout.closest<HTMLElement>('.macro-home-scroll');
-    if (!scrollRoot) return;
-    const sections = [
-      ...layout.querySelectorAll<HTMLElement>('.macro-feature-tile'),
-    ];
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      // Follow the section at the reading line below the fixed site header.
-      const line = scrollRoot.getBoundingClientRect().top + 112;
-      let current: string | undefined;
-      for (const section of sections) {
-        const rect = section.getBoundingClientRect();
-        if (rect.top > line) break;
-        current = section.id;
-      }
-      const last = sections[sections.length - 1];
-      if (last && last.getBoundingClientRect().bottom <= line)
-        current = undefined;
-      setActive(current);
-    };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update);
-    };
-    scrollRoot.addEventListener('scroll', schedule, { passive: true });
-    const resize = new ResizeObserver(schedule);
-    resize.observe(scrollRoot);
-    for (const section of sections) resize.observe(section);
-    update();
-    onCleanup(() => {
-      scrollRoot.removeEventListener('scroll', schedule);
-      resize.disconnect();
-      cancelAnimationFrame(frame);
-    });
-  });
   return (
-    <div class="macro-feature-layout" ref={layout}>
-      <HomepageFeatureToc active={active()} />
+    <div class="macro-feature-layout">
       <div class="macro-feature-grid">
         <Tile
           id="email"
@@ -145,14 +62,14 @@ export function HomepageTiles() {
         <Tile
           id="chat"
           title="Focused team chat with agents"
-          description="Keep conversations in channels, with threaded replies and the actual emails, docs, and tasks attached. Mention an agent just like a teammate."
+          description="Share emails, docs, and tasks in a channel, and discuss them in threads. Mention an agent just like a teammate."
           links={[{ href: '/channels', label: 'Chat' }]}
           preview="chat"
         />
         <Tile
           id="documents"
           title="Lightweight markdown docs"
-          description="Write in Markdown with your team and agents, in the same document. Link to the work you’re writing about and keep editing offline."
+          description="Write in plain Markdown with your team and agents editing the same document. Mention a customer email, task, or call, and keep writing if you go offline."
           links={[{ href: '/documents', label: 'Docs' }]}
           preview="documents"
         />
@@ -166,7 +83,7 @@ export function HomepageTiles() {
         <Tile
           id="coding-agents"
           title="Bring your favorite agents"
-          description="Use the models and coding agents you already like. Give them tasks or mention them in channels, with access to your team’s shared context."
+          description="Use the models and coding agents you already like. Assign them tasks or mention them in channels, with memory from your team’s work."
           links={[
             { href: '/agents', label: 'Agents' },
             { href: '/github', label: 'GitHub' },
@@ -176,14 +93,14 @@ export function HomepageTiles() {
         <Tile
           id="spreadsheet"
           title="Link work together with sheets"
-          description="Bring in your Google Sheets and edit them with your team and agents. Cells can link directly to people, companies, and docs."
+          description="Edit spreadsheets with your team and agents. Mention people and docs in cells, or ask an agent to calculate something and build a chart."
           links={[{ href: '/demo', label: 'Explore the workspace' }]}
           preview="spreadsheet"
         />
         <Tile
           id="databases"
           title="Migrate your Notion databases"
-          description="Bring your Notion databases into Macro. Keep your records alongside the conversations and documents they’re about."
+          description="Bring your Notion databases into Macro. Add custom fields and views, and link records to the emails, tasks, and docs they refer to."
           links={[{ href: '/demo', label: 'Explore the workspace' }]}
           preview="databases"
         />

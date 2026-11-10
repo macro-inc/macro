@@ -1,3 +1,19 @@
+import IconShareMacro from '@icon/share.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFileMd from '@icon/system/regular/file.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconChannelMacro from '@icon/system/regular/hash-straight.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconTaskMacro from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconAgentStar from '@icon/system/regular/star.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createEffect,
@@ -8,24 +24,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import StatusInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconChannelMacro from '../../../assets/icons/wide-channel.svg';
 import IconClaude from '../../../assets/icons/wide-claude.svg';
-import IconFileMd from '../../../assets/icons/wide-file-md.svg';
-import IconShareMacro from '../../../assets/icons/wide-share.svg';
-import IconAgentStar from '../../../assets/icons/wide-star.svg';
-import IconTaskMacro from '../../../assets/icons/wide-task.svg';
 import avatarJulia from '../../../assets/people/julia.webp';
 import { isMobileViewport } from '../../utils/utilBreakpoint';
 import {

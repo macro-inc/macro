@@ -1,0 +1,22 @@
+.feature-demo-backdrop {
+  --workspace-texture-mask: radial-gradient(ellipse 65% 70% at center, #000 12%, #0009 40%, transparent 80%);
+  --workspace-grain-opacity: .24;
+  --workspace-dots-opacity: .32;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  mask-image: radial-gradient(ellipse 60% 70% at center, #000 45%, transparent 80%);
+  pointer-events: none;
+}
+.feature-demo-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 80% at 45% 50%,
+    color-mix(in srgb, var(--feature-glow) 18%, transparent) 0%,
+    color-mix(in srgb, var(--feature-glow) 10%, transparent) 35%,
+    color-mix(in srgb, var(--feature-glow) 4%, transparent) 60%,
+    transparent 80%);
+  filter: blur(28px);
+}
+html[data-theme-light='true'] .feature-demo-backdrop { opacity: .6; }

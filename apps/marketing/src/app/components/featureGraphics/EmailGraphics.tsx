@@ -1,3 +1,26 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconCalendarRow from '@icon/system/regular/calendar-blank.svg';
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconDotsThree from '@icon/system/regular/dots-three-vertical.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconEmailRow from '@icon/system/regular/envelope.svg';
+import IconDocMd from '@icon/system/regular/file.svg';
+import IconFilePdf from '@icon/system/regular/file-pdf.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconPriorityHigh from '@icon/system/regular/priority-high.svg';
+import IconPriorityLow from '@icon/system/regular/priority-low.svg';
+import IconPriorityMedium from '@icon/system/regular/priority-medium.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconChat from '@icon/system/regular/sparkle.svg';
+import IconTaskDone from '@icon/system/regular/task-done.svg';
+import IconTaskInProgress from '@icon/system/regular/task-in-progress.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
+import IconX from '@icon/system/regular/x.svg';
 import {
   type Accessor,
   type Component,
@@ -11,30 +34,7 @@ import {
   untrack,
 } from 'solid-js';
 import inboxBgUrl from '../../../assets/graphics/inbox-bg.svg?url';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconCompany from '../../../assets/icons/icon-company.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import IconDotsThree from '../../../assets/icons/phosphor/dots-three-vertical.svg';
-import IconFilePdf from '../../../assets/icons/phosphor/file-pdf.svg';
 import IconSend from '../../../assets/icons/phosphor/paper-plane-tilt-fill.svg';
-import IconX from '../../../assets/icons/phosphor/x.svg';
-import IconTaskDone from '../../../assets/icons/square-task-done-circle.svg';
-import IconTaskInProgress from '../../../assets/icons/square-task-in-progress-circle.svg';
-import IconCalendarRow from '../../../assets/icons/wide-calendar.svg';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconEmailRow from '../../../assets/icons/wide-email.svg';
-import IconDocMd from '../../../assets/icons/wide-file-md.svg';
-import IconPriorityHigh from '../../../assets/icons/wide-priority-high.svg';
-import IconPriorityLow from '../../../assets/icons/wide-priority-low.svg';
-import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarJacobPersonal from '../../../assets/people/jacob-personal.webp';
 import avatarJacobVc from '../../../assets/people/jacob-vc.webp';
 import avatarJacobWork from '../../../assets/people/jacob-work.webp';

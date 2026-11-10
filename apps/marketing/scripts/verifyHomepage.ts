@@ -58,7 +58,11 @@ export async function verifyHomepage(directory: string): Promise<void> {
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => {
-        if (/hydration mismatch/i.test(message.text()))
+        if (
+          /hydration mismatch|Unable to initialize the public website/i.test(
+            message.text()
+          )
+        )
           errors.push(message.text());
       });
       try {
@@ -78,10 +82,10 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        await expect(page.locator('.macro-feature-tile')).toHaveCount(7);
-        await expect(page.locator('.macro-homepage')).toHaveCSS(
+        await expect(page.locator('.homepage-feature')).toHaveCount(5);
+        await expect(page.locator('#app-scroll-root')).toHaveCSS(
           'background-color',
-          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)'
+          'rgb(0, 0, 0)'
         );
 
         releaseScripts();
@@ -91,7 +95,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage hydration failed (${label}): ${errors.join('; ')}`
           );
         await page.waitForSelector(
-          '#root[data-public-ready="true"] .macro-feature-tile',
+          '#root[data-public-ready="true"] .homepage-feature',
           {
             state: 'attached',
             timeout: 10000,
@@ -124,15 +128,10 @@ export async function verifyHomepage(directory: string): Promise<void> {
           );
         await heading.dispose();
 
-        if (viewport.width >= 768)
-          await page
-            .locator('.site-header')
-            .getByRole('link', { name: 'Macro home', exact: true })
-            .hover();
-        else
+        if (viewport.width < 768)
           await page
             .getByRole('button', { name: 'Open navigation', exact: true })
-            .tap();
+            .click();
         await page
           .getByRole('navigation', { name: 'Main navigation' })
           .waitFor({ state: 'visible' });
@@ -141,63 +140,37 @@ export async function verifyHomepage(directory: string): Promise<void> {
           await page
             .getByRole('button', { name: 'Close navigation', exact: true })
             .tap();
-        // Reduced motion is complete and static, with no meaningless pause control.
-        await expect(
-          page.getByRole('button', { name: 'Pause animation' })
-        ).toBeHidden();
-        await expect(
-          page.locator('.macro-hero-after:visible .feature-flow-node').first()
-        ).toHaveCSS('opacity', '1');
-        await page.emulateMedia({ reducedMotion: 'no-preference' });
-        const pause = page.getByRole('button', { name: 'Pause animation' });
-        await pause.click();
-        await expect(
-          page.getByRole('button', { name: 'Play animation' })
-        ).toHaveAttribute('aria-pressed', 'true');
-        await expect(
-          page.locator('.macro-hero-before .ob-orbit-tile').first()
-        ).toHaveCSS('animation-play-state', 'paused');
-        await page.getByRole('button', { name: 'Play animation' }).click();
-        await expect(
-          page.locator('.macro-hero-before .ob-orbit-tile').first()
-        ).toHaveCSS('animation-play-state', 'running');
         await page.locator('#email').scrollIntoViewIfNeeded();
-        await expect(
-          page.locator('.macro-hero-before .ob-orbit-tile').first()
-        ).toHaveCSS('animation-play-state', 'paused');
-        // Native previews follow live system theme changes without remounting.
+        // Native previews stay dark across live system theme changes.
         await page.emulateMedia({ reducedMotion: 'reduce' });
         const previewBody = page
           .locator('#email .homepage-email-body p')
           .first();
         await expect(previewBody).toHaveCSS('opacity', '1');
         await expect(previewBody).toHaveText(/\S+/);
-        await expect(previewBody).toHaveCSS(
-          'color',
-          colorScheme === 'light' ? 'rgb(36, 36, 40)' : 'rgb(255, 255, 255)'
-        );
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
         await page.emulateMedia({
           colorScheme: colorScheme === 'light' ? 'dark' : 'light',
         });
-        await expect(previewBody).toHaveCSS(
-          'color',
-          colorScheme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(36, 36, 40)'
-        );
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
         await page.emulateMedia({ colorScheme });
-        const dimensions = await page
-          .locator('.macro-feature-grid')
-          .evaluate((grid) => ({
-            columns:
-              getComputedStyle(grid).gridTemplateColumns.split(' ').length,
-            overflow:
-              (document.querySelector('.macro-home-scroll')?.scrollWidth ?? 0) >
-              window.innerWidth,
-          }));
-        expect(dimensions.columns).toBe(1);
-        expect(dimensions.overflow).toBe(false);
+        const overflow = await page
+          .locator('.macro-home-scroll')
+          .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
+        expect(overflow).toBe(false);
+        const hero = await page.locator('.macro-home-hero').boundingBox();
+        const graphic = await page
+          .locator('.macro-home-hero [data-context-scene]')
+          .boundingBox();
+        expect(hero).not.toBeNull();
+        expect(graphic).not.toBeNull();
+        expect(graphic!.y).toBeGreaterThanOrEqual(hero!.y);
+        expect(graphic!.y + graphic!.height).toBeLessThanOrEqual(
+          hero!.y + hero!.height + 1
+        );
         await page
           .locator('#email')
-          .getByRole('link', { name: 'Email', exact: true })
+          .getByRole('link', { name: 'Learn more about Email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
         await page.goBack();

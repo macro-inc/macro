@@ -15,9 +15,9 @@
 
 /* The email page's shortcut legend, reused for Home. */
 .chat-shortcut-dock { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px; padding: 8px 0 0; color: #a3a3a3; }
-.chat-shortcut-dock > button { display: flex; align-items: center; gap: 8px; padding: 6px; font: 400 12px/1.5 'Inter Variable', Inter, sans-serif; color: #a3a3a3; transition: color 160ms ease; }
+.chat-shortcut-dock > button { display: flex; align-items: center; gap: 8px; padding: 6px; font: 370 12px/1.5 'Inter Variable', Inter, sans-serif; color: #a3a3a3; transition: color 160ms ease; }
 .chat-shortcut-dock > button:hover, .chat-shortcut-dock > button[data-active='true'] { color: #f0f0f0; }
-.chat-shortcut-dock kbd { display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 8px; background: linear-gradient(#242528, #191a1c); box-shadow: inset 0 1px #ffffff24, inset 0 0 0 1px #ffffff09, 0 3px 0 #080809; color: #b9bbc0; font: 400 12px Inter, sans-serif; transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
+.chat-shortcut-dock kbd { display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 6px; border-radius: 8px; background: linear-gradient(#242528, #191a1c); box-shadow: inset 0 1px #ffffff24, inset 0 0 0 1px #ffffff09, 0 3px 0 #080809; color: #b9bbc0; font: 370 12px Inter, sans-serif; transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease; }
 .chat-shortcut-dock > button[data-active='true'] kbd { background: #d8e0da; color: #151916; box-shadow: inset 0 1px #ffffff66, 0 1px 0 #080809; }
 
 @media (max-width: 699px) {

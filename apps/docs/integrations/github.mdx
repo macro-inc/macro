@@ -6,6 +6,10 @@ description: "Link pull requests to tasks and let task statuses update themselve
 
 Macro integrates with GitHub so your tasks stay in sync with the code that closes them. To connect, link your GitHub account in **Settings** under **Account**.
 
+Watch a 1:01 walkthrough of Macro with GitHub.
+
+<video src="https://macro.com/video/tutorials/github.mp4" poster="https://macro.com/video/tutorials/github-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
 ### Tasks that track your PRs
 
 Create a branch for a task and Macro keeps the task's status up to date automatically: **In Progress** when you create the branch, **In Review** when you open the pull request, and **Done** when it merges.
@@ -14,22 +18,28 @@ Create a branch for a task and Macro keeps the task's status up to date automati
 
 The linked pull request appears directly on the task with its title, PR number, and diff size, so anyone looking at the task can jump straight to the code:
 
-<Frame>
-  <img
-    src="/images/github-task-pr.png"
-    alt="A completed task showing its linked GitHub pull request with diff stats"
-  />
-</Frame>
+<GuideGraphic kind="agents" label="An agent returns a pull request to the team conversation." />
 
 Every linked PR is also listed in the **GitHub** section of the task's properties panel:
 
-<Frame>
-  <img
-    src="/images/github-task-properties.png"
-    alt="The GitHub section of a task's properties panel listing a linked pull request"
-    className="mx-auto"
-    style={{ width:"60%" }}
-  />
-</Frame>
-
 Pull requests are blocks like everything else in Macro: you can @mention them in channels and docs, and agents can read them for context. See [Tasks](/product/tasks) for more on how tasks work.
+
+## Reviews
+
+Reviews is where GitHub pull requests live in Macro. Open one to read its description and discussion, and open **Changes** to see the diff. The side panel shows **Checks** and **Linked work**, including the task the pull request belongs to.
+
+Connect your GitHub account first, as described above.
+
+> To go to Reviews use shortcut <kbd>g</kbd> \+ <kbd>v</kbd>.
+
+The sidebar groups them:
+
+- **Pull requests**
+- **Authored by me**
+- **Assigned to me**
+- **Involves me**
+- **Review requests**
+
+**Open**, **Closed**, and **All** switch which pull requests are shown. **List** shows them in a list. **Board** groups open pull requests into **Draft**, **In review**, **Checks failing**, **Conflicts**, **Ready to merge**, and **Merged**.
+
+**Filter** narrows by status, priority, what a pull request is linked to, where it was started, repository, author, assignee, label, and review. **Sort** orders by priority, recently updated, or newest.

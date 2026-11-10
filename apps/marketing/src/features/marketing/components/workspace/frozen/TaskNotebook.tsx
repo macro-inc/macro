@@ -1,8 +1,8 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Plus from '@phosphor/plus.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { WorkspaceTask } from '../../../core/dummy-workspace';

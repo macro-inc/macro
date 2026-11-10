@@ -28,9 +28,7 @@ import { HomepageOpenSource } from './HomepageOpenSource';
 import { HomepageSidebar } from './HomepageSidebar';
 import { HomepageTestimonials } from './HomepageTestimonials';
 import './workspace-story.css';
-
-// Retain the standalone sidebar breakdown for future use.
-const SHOW_SIDEBAR_BREAKDOWN = false;
+import './demo-glass.css';
 
 const loadPullRequest = () => import('./HomepagePullRequest');
 const loadEmailCompose = () => import('./HomepageEmailCompose');
@@ -176,7 +174,7 @@ export function HomepageSections() {
       <style>{definitions}</style>
       <style>{`@scope (.homepage-sections) to (.workspace-demo) { ${scopedStyles} }`}</style>
       <div class="homepage-sections-inner">
-        <HomepageOpenSource showSidebarBreakdown={SHOW_SIDEBAR_BREAKDOWN}>
+        <HomepageOpenSource>
           <HomepageSidebar showInteractiveDemo={false} />
         </HomepageOpenSource>
         <Feature

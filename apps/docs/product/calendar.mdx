@@ -4,13 +4,15 @@ icon: "calendar"
 description: "Your Google Calendar as a Macro block alongside the email it came from."
 ---
 
-<Frame>
-  ![A week view of the calendar, with recurring standups, meetings and today's column highlighted](/images/calendar_image.png)
-</Frame>
+<GuideGraphic kind="calendar" label="Calendar events and a related team conversation." />
 
 Calendar is a Macro block that syncs with Google Calendar. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to Google.
 
 Open it from **Calendar** in the sidebar, or press <kbd>g</kbd> \+ <kbd>r</kbd>.
+
+Watch a 0:54 walkthrough of Macro Calendar.
+
+<video src="https://macro.com/video/tutorials/calendar.mp4" poster="https://macro.com/video/tutorials/calendar-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
 ### Connecting your calendar
 
@@ -19,10 +21,6 @@ Connect your calendar by going to **Settings → Connections**, finding the acco
 Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to enable calendar for each account separately.** Every linked inbox in **Settings → Connections** carries its own **Enable calendar** button.
 
 Use the settings gear in the calendar topbar to toggle each calendar on or off, so you can view several at once or focus on just one.
-
-<Frame>
-  ![The Connections settings page, with an Enable calendar button beside a linked Gmail account](/images/connect_email.png)
-</Frame>
 
 ### Creating and editing events
 
@@ -48,10 +46,6 @@ Once an event exists, you can also drag it to a new time and drag its edges to c
 
 ### Copy availability
 
-<Frame>
-  ![Copied availability pasted into a message, listing free time ranges by day with the timezone noted](/images/availability.png)
-</Frame>
-
 Click **Copy availability** in the topbar to turn your open time into pasteable text, labeled with your timezone and ready to drop into a reply.
 
 Set your working hours from the settings control next to the button. By default they run 9:00 to 18:00 and skip weekends.
@@ -62,11 +56,11 @@ The [Macro agent](/product/agents) can read and change your calendar. Ask it to 
 
 You can use the same tools over Macro's MCP server:
 
-- [`ListCalendars`](/AI/mcp/tools/list-calendars)
-- [`ListCalendarEvents`](/AI/mcp/tools/list-calendar-events)
-- [`CreateCalendarEvent`](/AI/mcp/tools/create-calendar-event)
-- [`UpdateCalendarEvent`](/AI/mcp/tools/update-calendar-event)
-- [`DeleteCalendarEvent`](/AI/mcp/tools/delete-calendar-event)
+- `ListCalendars`
+- `ListCalendarEvents`
+- `CreateCalendarEvent`
+- `UpdateCalendarEvent`
+- `DeleteCalendarEvent`
 
 To connect it, go to **Settings → MCP server**.
 

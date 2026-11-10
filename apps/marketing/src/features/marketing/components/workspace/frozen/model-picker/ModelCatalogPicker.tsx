@@ -1,8 +1,8 @@
 // Frozen from the production ModelCatalogPicker; portals stay inside the website scope.
-import CaretDown from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import CaretDown from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import {

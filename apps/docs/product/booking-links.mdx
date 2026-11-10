@@ -1,0 +1,92 @@
+---
+title: "Booking links"
+icon: "calendar-check"
+description: "Public links for booking time with you or your team."
+---
+
+<div className="book-preview" role="img" aria-label="Booking page for Macro Demo. Thursday, November 5 is selected, with times from 11:00 AM.">
+  <div className="book-preview-brand"><span>Macro</span> / Scheduling</div>
+  <div className="book-preview-card">
+    <div className="book-preview-side">
+      <div className="book-preview-host">Macro</div>
+      <div className="book-preview-title">Macro Demo</div>
+      <div>30 minutes</div>
+      <div>Macro call</div>
+      <div className="book-preview-desc">Book a call with someone from our team to discuss how Macro can help your company.</div>
+      <div className="book-preview-label">Your time zone</div>
+      <div className="book-preview-zone">America/New York <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6.75 9.5 5.25 5 5.25-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+    </div>
+    <div className="book-preview-main">
+      <div className="book-preview-steps"><span className="is-current">1. Date & time</span><span>2. Your details</span></div>
+      <div className="book-preview-heading">Select a date & time</div>
+      <div className="book-preview-note">Times are shown in your time zone.</div>
+      <div className="book-preview-split">
+        <div>
+          <div className="book-preview-month"><span>November 2026</span><span className="book-preview-nav" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m14.5 6.75-5 5.25 5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+          <div className="book-dow" aria-hidden="true"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+          <div className="book-days" aria-hidden="true">
+            <span className="is-past">1</span><span className="is-past">2</span><span className="is-past">3</span><span>4</span><span className="is-picked">5</span><span>6</span><span>7</span>
+            <span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
+            <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span>
+            <span>22</span><span>23</span><span>24</span><span>25</span><span>26</span><span>27</span><span>28</span>
+            <span>29</span><span>30</span>
+          </div>
+        </div>
+        <div className="book-times">
+          <div className="book-times-head"><span>Available times</span><span>Refresh</span></div>
+          <div>11:00 AM</div>
+          <div>11:30 AM</div>
+          <div>12:30 PM</div>
+          <div>1:00 PM</div>
+          <div>1:30 PM</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+A booking link is a public page where guests book a meeting on your calendar. Guests do not need a Macro account. The calendar can be Google or Outlook. Bookings send a calendar invitation to all attendees, with a Google Meet link if that is configured.
+
+Booking links require a connected [calendar](/product/calendar).
+
+Watch a 0:44 walkthrough of booking links in Macro.
+
+<video src="https://macro.com/video/tutorials/scheduling.mp4" poster="https://macro.com/video/tutorials/scheduling-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
+## Creating a booking link
+
+1. Open **Settings → Booking links**, or click **Copy booking link** in the calendar topbar.
+2. Click **New booking link**. On a team, select personal or team ownership.
+3. Set the title, duration, and availability schedule.
+4. Optional: notice time, buffers, booking window, daily limit, and guest questions.
+5. Turn on **Accept bookings** and save. New links are paused until **Accept bookings** is on.
+
+Links can be paused, duplicated, previewed, and copied from the list.
+
+## Availability
+
+**Availability** contains weekly schedules. Each day has one or more time ranges. Schedules support date overrides and a time zone. One schedule is the default for new links.
+
+Times that are busy on your connected calendars are not offered.
+
+## Team booking links
+
+Team links are **collective**, which books all hosts, or **round-robin**, which books one host. Hosts are set in the link editor. Each host's default hours and calendar availability apply.
+
+Team owners and admins can edit team links. Other members can view them.
+
+## Booking page
+
+**Booking page** sets the name and description shown to guests. Guests select a time zone, date, and time, and answer your questions. Guests receive a private receipt link to reschedule or cancel.
+
+## Bookings
+
+**Bookings** lists upcoming, past, and cancelled meetings for a date range. Search by guest, title, or email. Filter by link. Bookings can be rescheduled or cancelled. Past bookings can be marked attended or no-show.
+
+## Insights
+
+**Insights** shows bookings over time, meeting hours, no-shows, and top links for the last 7, 30, or 90 days or a custom range. **Download** exports bookings as CSV.
+
+## Agents
+
+[Agents](/product/agents) can create and edit booking links. The agent shows the hosts, availability, and rules and waits for approval before saving. Agents and [MCP clients](/AI/mcp/overview) use `ListBookingLinks`, `CreateBookingLink`, and `EditBookingLink`.

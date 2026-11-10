@@ -19,6 +19,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-homepage .site-header {
   --nav-ink: light-dark(#1d1d1f, #fff);
   --nav-muted: light-dark(#6e6e73, #b8b8bd);
+  --nav-surface: light-dark(#f5f5f7, rgb(18 18 20 / 78%));
   --nav-menu-surface: light-dark(#fff, rgb(21 21 23 / 96%));
   --nav-mobile-surface: light-dark(#fff, #121214);
   --nav-edge: light-dark(#e8e8ed, #ffffff14);
@@ -28,19 +29,23 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   right: 0;
   height: 72px;
   padding: 12px 24px;
-  background: light-dark(rgb(255 255 255 / 94%), rgb(0 0 0 / 94%));
 
   font-family: inherit;
 }
 .macro-homepage .site-menu-trigger { width: 48px; height: 48px; }
+.macro-homepage .homepage-scroll-cue { color: var(--color-ink-muted); }
+html[data-homepage][data-theme-light='true'] .site-nav-demo {
+  color: var(--nav-ink);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 1px #00000006;
+}
+html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
+  background: linear-gradient(135deg, #ffffffcc 0%, #00000006 45%, #00000018 100%);
+}
 .macro-homepage .site-menu-mark { width: 27px; height: 27px; }
-.macro-homepage .site-header .site-nav-open { background: light-dark(#f5f5f7, #f5f3ee); color: #1d1d1f; border: 0; font-family: inherit; }
 .macro-homepage .site-header[data-menu-open=true]::before { background: light-dark(#fff, #121214); }
 .macro-homepage a:focus-visible, .macro-homepage button:focus-visible { outline: 3px solid #4384db; outline-offset: 5px; }
-.macro-home-hero { overflow-x: clip; display: flex; align-items: center; flex-direction: column; padding: 88px 24px 96px; text-align: center; }
-.macro-home-hero h1 { max-width: 760px; margin: 0; font-family: 'Roboto Slab Variable', serif; font-size: clamp(40px, 4.5vw, 58px); font-weight: 400; line-height: 1.13; letter-spacing: -.045em; text-wrap: balance; }
-.macro-homepage .macro-home-button { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 11px 37px; background: light-dark(#000, #f5f3ee); border-radius: 100px; color: light-dark(#fff, #1d1c1a); text-decoration: none; font-family: inherit; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.025em; transition: background 180ms ease, transform 180ms ease; }
-.macro-homepage .macro-home-button:hover { background: light-dark(#292929, #fff); transform: translateY(-1px); }
+.macro-home-hero { position: relative; overflow-x: clip; display: flex; align-items: center; flex-direction: column; padding: 88px 24px 128px; text-align: center; }
+.macro-home-hero h1 { max-width: 760px; margin: 0; font-family: 'Roboto Slab Variable', serif; font-size: 40px; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); line-height: 1.06; letter-spacing: -.04em; text-wrap: balance; }
 .macro-home-tagline { max-width: 580px; text-wrap: pretty; margin: 24px 0 30px; font-size: 20px; line-height: 1.55; color: var(--color-ink-muted); }
 .macro-home-hero > .macro-hero-art { margin: 0 0 32px; }
 .macro-motion-toggle { position: absolute; right: 0; bottom: 0; width: 36px; height: 36px; border: 0; border-radius: 50%; background: light-dark(#f5f5f7, #141414); color: light-dark(#86868b, #aaa); display: grid; place-items: center; transition: color 160ms; }
@@ -68,7 +73,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-tile-links a:hover { text-decoration: underline; }
 .macro-tile-links svg { width: 14px; height: 14px; }
 .macro-home-bottom { width: min(1000px, calc(100% - 48px)); margin: 88px auto 0; }
-.macro-home-bottom .homepage-testimonials blockquote { font-weight: 400; }
+.macro-home-bottom .homepage-testimonials blockquote { font-weight: 370; }
 .macro-home-bottom .homepage-blog h2 { font-family: 'Roboto Slab Variable', serif; font-weight: 400; }
 .macro-home-bottom .homepage-blog a { color: inherit; text-decoration: none; }
 .macro-home-bottom .homepage-blog a:hover { text-decoration: underline; }
@@ -81,8 +86,7 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-home-bottom .macro-letter-prose { width: min(640px, 100%); }
 .macro-home-bottom .homepage-testimonials { max-width: 880px; margin-inline: auto; }
 @media (max-width: 700px) {
-  .macro-home-hero { padding: 80px 24px 64px; }
-  .macro-home-hero h1 { font-size: 39px; }
+  .macro-home-hero { padding: 80px 24px 128px; }
   .macro-home-tagline { font-size: 18px; margin: 22px 0 26px; }
   .macro-home-tagline br { display: none; }
   .macro-home-hero > .macro-hero-art { margin-bottom: 24px; }
@@ -98,10 +102,9 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
   .macro-tile-links a { min-height: 44px; }
   .macro-home-bottom { width: calc(100% - 48px); margin-top: 64px; }
 }
-@media (max-width: 380px) { .macro-home-hero h1 { font-size: 36px; } }
+@media (max-width: 699px) { .macro-home-hero h1 { font-size: clamp(24px, 6vw, 40px); line-height: 1.1; letter-spacing: -.035em; } }
 @media (prefers-reduced-motion: reduce) {
   .macro-motion-toggle { display: none; }
-  .macro-homepage .macro-home-button { transition: none; }
 }
 
 .macro-feature-grid > .macro-feature-tile { padding: 0; }
@@ -109,17 +112,11 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-tile-art > [data-deferred-demo] { height: 100%; overflow: hidden; }
 .macro-tile-art .homepage-compose-loading { position: absolute; inset: 28px 20px 20px; height: auto; min-height: 0; opacity: .2; overflow: hidden; }
 
-.macro-homepage .site-nav-open-footer { background: light-dark(#000, #f5f3ee); color: light-dark(#fff, #1d1c1a); box-shadow: none; font-family: inherit; }
-.macro-homepage .site-nav-open-footer::after { display: none; }
 
 .macro-feature-tile#email .macro-tile-art { height: 520px; min-height: 520px; }
 @media (max-width: 700px) { .macro-feature-tile#email .macro-tile-art { height: 550px; min-height: 550px; } }
 
-.macro-homepage .site-header a.site-nav-open::before {
-  background: light-dark(#f5f5f7, #f5f3ee);
-  border-color: light-dark(#dedee3, #ffffff16);
-  box-shadow: inset 0 1px 0 light-dark(#fff, #ffffff0c), 0 1px 2px #00000014;
-}
+
 .macro-homepage .site-header a.site-nav-open:hover::before { background: light-dark(#fff, #fff); }
 
 .macro-feature-tile#documents .macro-tile-art { height: 510px; min-height: 510px; }
@@ -137,45 +134,25 @@ html[data-homepage][data-theme-light='true'] { color-scheme: light; }
 .macro-tile-spreadsheet { --feature-glow: #56c9c6; }
 .macro-tile-crm { --feature-glow: #f4c65c; }
 .macro-tile-calls { --feature-glow: #e99cbb; }
-.macro-tile-ambience {
-  --workspace-texture-mask: radial-gradient(ellipse 65% 70% at center, #000 12%, #0009 40%, transparent 80%);
-  --workspace-grain-opacity: .24;
-  --workspace-dots-opacity: .32;
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  mask-image: radial-gradient(ellipse 60% 70% at center, #000 45%, transparent 80%);
-  pointer-events: none;
-}
-.macro-tile-ambience::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse 80% 80% at 45% 50%,
-    color-mix(in srgb, var(--feature-glow) 18%, transparent) 0%,
-    color-mix(in srgb, var(--feature-glow) 10%, transparent) 35%,
-    color-mix(in srgb, var(--feature-glow) 4%, transparent) 60%,
-    transparent 80%);
-  filter: blur(28px);
-}
-html[data-theme-light='true'] .macro-tile-ambience { opacity: .6; }
 
-/* Keep the index alongside the feature sections; rejoin the flow on narrow screens. */
 .macro-feature-layout { position: relative; }
-.macro-feature-toc { position: absolute; z-index: 10; top: 0; bottom: 0; left: max(24px, calc(50% - 610px)); width: 150px; }
-.macro-feature-toc nav { position: sticky; top: 112px; display: flex; flex-direction: column; align-items: flex-start; font: 400 13px/1.5 'Inter Variable', Inter, sans-serif; }
-.macro-feature-toc nav > span { margin-bottom: 12px; color: var(--color-ink-extra-muted); font-size: 11px; }
-.macro-feature-toc a { position: relative; padding-block: 7px; color: var(--color-ink-muted); text-decoration: none; transition: color 160ms ease; }
-.macro-feature-toc a:hover, .macro-feature-toc a:focus-visible { color: var(--color-ink); }
-.macro-feature-toc a[aria-current='location'] { color: var(--color-ink); }
-.macro-feature-toc a[aria-current='location']::before { content: ''; position: absolute; left: -12px; top: calc(50% - 2px); width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
 .macro-feature-tile { scroll-margin-top: 104px; }
-@media (max-width: 1239px) {
-  .macro-feature-toc { position: static; width: min(640px, calc(100% - 48px)); margin: 0 auto 40px; }
-  .macro-feature-toc nav { position: static; flex-direction: row; flex-wrap: wrap; column-gap: 22px; row-gap: 2px; }
-  .macro-feature-toc nav > span { flex-basis: 100%; margin-bottom: 4px; }
-}
-@media (max-width: 700px) {
-  .macro-feature-toc { width: min(516px, calc(100% - 48px)); margin-bottom: 32px; }
-  .macro-feature-toc a { min-height: 44px; display: inline-flex; align-items: center; padding-block: 8px; }
+
+/* The shared router also loads legacy link colors. Keep the raised CTA legible. */
+.macro-homepage .site-nav-start { color: #000; }
+
+/* Keep the homepage hero on the same measure and rhythm as feature heroes. */
+.macro-homepage { min-width: 0; max-width: 100%; }
+.macro-homepage .page-aura { width: 100%; overflow-x: clip; }
+.macro-homepage .page-aura::before { inset-inline: 0; opacity: .25; }
+.macro-homepage .page-aura::after { inset-inline: 0; opacity: .012; }
+.macro-home-hero { padding: 132px 24px 64px; }
+.macro-home-intro { padding: 48px 24px 72px; text-align: center; }
+.macro-home-intro h2 { margin: 0 0 24px; font: 320 clamp(32px, 4vw, 48px)/1.15 'Roboto Slab Variable', serif; letter-spacing: -.04em; }
+.macro-home-intro p { margin: 0 auto; max-width: 600px; color: var(--color-ink-muted); font: 370 14px/1.7 'Inter Variable', Inter, sans-serif; text-wrap: balance; }
+.macro-homepage .homepage-sections { background: transparent; }
+@media (max-width: 699px) {
+  .macro-home-hero { padding: 114px 18px 44px; }
+  .macro-home-intro { padding: 32px 24px 48px; }
+  .macro-home-intro p br { display: none; }
 }

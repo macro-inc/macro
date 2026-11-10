@@ -1,7 +1,9 @@
-import * as fs from 'fs';
 import * as aws from '@pulumi/aws';
 import * as command from '@pulumi/command';
 import * as pulumi from '@pulumi/pulumi';
+import * as fs from 'fs';
+import * as path from 'path';
+import { compactEdgeRedirects } from '../../../apps/marketing/seo/edge-redirects';
 import { hasItems } from '../../packages/utils';
 
 const config = new pulumi.Config();
@@ -139,7 +141,21 @@ export const macroOidcBucketWebsiteEndpoint: string = config.require(
 
 const wwwRedirectCode = fs
   .readFileSync('./wwwRedirect/handler.js', 'utf-8')
-  .replace('__COOKIE_PREFIX__', stack === 'prod' ? '' : 'dev-');
+  .replace('__COOKIE_PREFIX__', stack === 'prod' ? '' : 'dev-')
+  .replace(
+    '__PAGE_REDIRECTS__',
+    JSON.stringify(
+      compactEdgeRedirects(JSON.parse(
+        fs.readFileSync(
+          path.resolve(
+            __dirname,
+            '../../../apps/marketing/seo/page-redirects.json'
+          ),
+          'utf-8'
+        )
+      ))
+    )
+  );
 
 const wwwRedirectFn = new aws.cloudfront.Function(
   `macro-wwww-redirect-fn-${stack}`,

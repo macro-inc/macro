@@ -1,5 +1,5 @@
 /* @refresh reload */
-import { render } from 'solid-js/web';
+import { hydrate, render } from 'solid-js/web';
 import './index.css';
 
 import { preserveHeroEntrance } from '../utils/utilHeroEntrance';
@@ -20,10 +20,15 @@ async function startWebsite() {
   await preloadProductRoute(window.location.pathname);
 
   // Solid render appends rather than hydrates product pages.
-  const finishHeroHandoff = preserveHeroEntrance(root!);
-  root!.textContent = '';
-  render(() => <App />, root!);
-  finishHeroHandoff();
+  if (root!.hasAttribute('data-hydrate-homepage')) {
+    hydrate(() => <App />, root!);
+  } else {
+    const finishHeroHandoff = preserveHeroEntrance(root!);
+    root!.textContent = '';
+    render(() => <App />, root!);
+    finishHeroHandoff();
+  }
+  root!.dataset.publicReady = 'true';
 }
 
 startWebsite().catch((error) => {

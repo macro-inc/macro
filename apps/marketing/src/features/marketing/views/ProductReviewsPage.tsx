@@ -2,20 +2,12 @@ import { setPageSeo } from '../../../app/utils/utilSeo';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import {
-  ContextGraphic,
-  EditingGraphic,
-  LinkedWorkGraphic,
-  ThreadGraphic,
-} from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import {
   GithubConversationDemo,
-  GithubPrHero,
   GithubTaskDemo,
 } from '../components/reviews/GithubWorkflow';
 import { ReviewInboxDemo } from '../components/reviews/ReviewStories';
-import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 
 const githubFaq = [
   {
@@ -60,8 +52,7 @@ const githubFaq = [
     a: (
       <>
         Yes. Macro has a free plan with usage limits. See{' '}
-        <a href="/pricing">plans and limits</a> before choosing a plan for your
-        team.
+        <a href="/pricing">plans and limits</a> for details.
       </>
     ),
   },
@@ -71,49 +62,30 @@ export function RouteGithub() {
   setPageSeo({
     title: 'GitHub in Macro | Pull Requests, Code Changes, and Tasks',
     description:
-      'Open GitHub pull requests from chat, inspect code changes, and keep linked tasks in sync. Work with coding agents and see review requests in your inbox.',
+      'Bring GitHub pull requests into your unified inbox alongside messages, tasks, and important emails. Open linked tasks and PRs in split screen.',
     path: '/github',
   });
   return (
     <ProductPage>
       <div class="github-page">
         <ProductHero
-          product="for GitHub"
-          title={['Your pull requests,', 'with the rest of your work.']}
-          description={[
-            'Keep GitHub. Bring PRs into your team’s',
-            'conversations, tasks, and inbox.',
-          ]}
+          tutorial="github"
+          product="GitHub"
+          title="Diffs and merge PRs from chat."
+          description="Review diffs and merge pull requests from team chat. Comments and @mentions come back to your inbox."
           cta="github_hero_get_started"
         />
-        <WorkspaceDesktopDemo
-          heroFrame
-          view="home"
-          label="Explore GitHub in Macro"
-          render={() => <GithubPrHero />}
-        />
-        <nav class="feature-page-jump-links" aria-label="On this page">
-          <a href="#pr-links">
-            <ContextGraphic />
-            <span>Pull requests in chat</span>
-          </a>
-          <a href="#pr-tasks">
-            <LinkedWorkGraphic />
-            <span>Linked tasks</span>
-          </a>
-          <a href="#coding-agents">
-            <EditingGraphic />
-            <span>Coding agents</span>
-          </a>
-          <a href="#review-inbox">
-            <ThreadGraphic />
-            <span>Review requests</span>
-          </a>
-        </nav>
         <FeaturePageSection
           id="pr-links"
-          title={['Open the PR', 'beside the conversation.']}
-          description="Paste a GitHub link into a channel or document and it becomes a live reference to the PR. See its status, open the diff, and read the discussion side by side. Your repositories and code stay on GitHub."
+          demo={{
+            tone: 'github',
+            message: {
+              person: 'julia',
+              text: 'Can you review the changes? The PR is linked in this thread.',
+            },
+          }}
+          title="Discuss pull requests in Macro Chat."
+          description="Paste a GitHub link in a document, channel, or anywhere you can write Markdown. Hover over it to see the pull request’s status."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -122,8 +94,15 @@ export function RouteGithub() {
         </FeaturePageSection>
         <FeaturePageSection
           id="pr-tasks"
-          title={['Link pull requests', 'to tasks.']}
-          description="The task explains why; the PR shows what changed. Link them in either direction. Opening the PR moves the task into review, merging marks it done, and closing without merging returns it to Not Started."
+          demo={{
+            tone: 'github',
+            message: {
+              person: 'jacob',
+              text: 'Link this PR to the task so its status follows the code.',
+            },
+          }}
+          title="Open pull requests beside tasks."
+          description="Click the GitHub pill to go right to the pull request from the task, or vice versa. It all opens in split-screen Macro blocks, so you don’t have to leave your workspace."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -132,17 +111,32 @@ export function RouteGithub() {
         </FeaturePageSection>
         <FeaturePageSection
           id="coding-agents"
-          title={['Turn bug reports and', 'feature requests into PRs.']}
-          description="Mention your coding agent where the bug is being discussed. Give it the conversation and linked work as context, then review the pull request it prepares. You shouldn’t have to write the same bug report in three places."
+          demo={{
+            tone: 'github',
+            message: {
+              person: 'julia',
+              text: '@Cursor fix the issue from this thread and open a PR.',
+            },
+          }}
+          title="Give coding agents a task."
+          description="Give a coding agent a task and follow its work through the linked pull request. The task and pull request link back to each other."
         >
-          <div class="feature-page-visual">
-            <GithubConversationDemo agent />
-          </div>
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <GithubConversationDemo agent />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="review-inbox"
-          title={['One inbox for', 'the work waiting on you.']}
-          description="PR comments, mentions, and review requests arrive alongside emails, messages, and task assignments. See what needs your attention without checking another notifications page."
+          demo={{
+            tone: 'github',
+            message: {
+              person: 'jacob',
+              text: 'Requested your review. It’s waiting in your inbox.',
+            },
+          }}
+          title="Read GitHub updates in your inbox."
+          description="When you receive a comment on a pull request you authored, or you’re mentioned in a pull request, it appears in your unified inbox alongside messages, tasks, and important emails."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -150,6 +144,7 @@ export function RouteGithub() {
           />
         </FeaturePageSection>
         <FeaturePageFaq
+          guide={{ href: '/github#guide', label: 'GitHub' }}
           id="github-faq"
           title="Questions about Macro for GitHub"
           items={githubFaq}

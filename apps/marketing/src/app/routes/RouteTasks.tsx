@@ -1,4 +1,3 @@
-import jacobPhoto from '../../assets/people/jacob.webp';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
 import {
   FeaturePageFaq,
@@ -9,11 +8,9 @@ import {
   ProductHero,
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
-import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
-import { TaskHeroDemo } from '../../features/marketing/components/tasks/TaskProjectView';
+import { TaskPaperGraphic } from '../../features/marketing/components/tasks/TaskPaperGraphic';
 import {
   TaskAgentChannelDemo,
-  TaskFromMessageDemo,
   TaskGithubDemo,
 } from '../../features/marketing/components/tasks/TaskStories';
 import { TasksComparison } from '../../features/marketing/components/tasks/TasksComparison';
@@ -23,6 +20,17 @@ import { setPageSeo } from '../utils/utilSeo';
 
 const tasksFaq = [
   {
+    q: 'Can I group tasks into projects?',
+    a: (
+      <>
+        Open the Projects tab in Tasks to group work with a shared description,
+        discussion, and assignees. A task belongs to one project at a time.
+        Deleting a project keeps its tasks. See{' '}
+        <a href="/tasks#guide-projects">project setup</a>.
+      </>
+    ),
+  },
+  {
     q: 'How do I create and assign a task?',
     a: 'Create a task in Tasks or from a message. Give it a title, assign a person or available agent, and set its status and priority. Keep relevant files and conversations linked to the task.',
   },
@@ -31,7 +39,7 @@ const tasksFaq = [
     a: (
       <>
         You can import Linear issues or task CSVs. See{' '}
-        <a href="/migrate">migration options</a>, or{' '}
+        <a href="/docs/switch-to-macro">migration options</a>, or{' '}
         <a href={DEMO_BOOKING_URL}>talk to our team</a> about moving your
         company’s work.
       </>
@@ -71,8 +79,7 @@ const tasksFaq = [
     a: (
       <>
         Yes. Macro has a free plan with usage limits. See{' '}
-        <a href="/pricing">plans and limits</a> before choosing a plan for your
-        team.
+        <a href="/pricing">plans and limits</a> for details.
       </>
     ),
   },
@@ -80,74 +87,40 @@ const tasksFaq = [
 
 export function RouteTasks() {
   setPageSeo({
-    title: 'Macro Tasks — Task management that keeps up with your team',
+    title: 'Macro Tasks — Automatic task management',
     description:
-      'Turn requests in chat, email, and docs into assigned tasks. Keep the source attached, follow progress, and get work done with your team and agents.',
+      'Create tasks from messages, email, or documents without leaving your work. Assign people or agents, keep the original context linked, and let GitHub pull requests update task status.',
     path: '/tasks',
   });
   return (
     <ProductPage>
       <div class="tasks-page">
         <ProductHero
+          tutorial="tasks"
+          tutorialBackdrop
           cta="tasks_hero_get_started"
           product="Tasks"
-          title={['Task tracking without', 'the busywork.']}
-          description={[
-            'Simple to create, assign, and close.',
-            'Linked to the conversation where the work started.',
-          ]}
+          title="Tasks create → complete themselves."
+          description="Macro Tasks plan themselves from your customer email, team chat and pull requests. Never create a task manually again."
         />
-        <TaskHeroDemo />
-        <section
-          class="tasks-founder-letter"
-          aria-labelledby="tasks-founder-title"
-        >
-          <a
-            class="tasks-founder-card"
-            href="/posts/linear-alternative"
-            aria-label="Read Jacob’s story: Macro vs. Linear"
-          >
-            <div class="tasks-founder-card-body">
-              <h2 id="tasks-founder-title">Why we built Macro Tasks.</h2>
-              <blockquote>
-                “Tracking tasks felt like busywork to our team.”
-              </blockquote>
-              <div class="tasks-founder-person">
-                <img
-                  src={jacobPhoto}
-                  alt="Jacob"
-                  width="52"
-                  height="52"
-                  loading="lazy"
-                />
-                <div>
-                  <strong>Jacob</strong>
-                  <span>CEO and founder of Macro</span>
-                </div>
-              </div>
-            </div>
-            <div class="tasks-founder-card-article">
-              <span>Macro vs. Linear</span>
-              <span>
-                Read the story <span aria-hidden="true">→</span>
-              </span>
-            </div>
-          </a>
-        </section>
         <FeaturePageSection
           id="from-a-message"
-          title={['Turn requests in chat', 'into tasks.']}
-          description="Click Create task on the message where the request came up. Set an owner and priority, and get back to the conversation. The task links to the message and the message links to the task. Paste it into a channel to show its current status."
+          title="Create and assign tasks."
+          description="Tasks are quick to create, assign, prioritize and close with keyboard shortcuts. Give it a title, assign a person or available agent, and set its status and priority. Hover any message and click Create task to spin one up, linked to that thread. Or use the shortcut C then T to create a task from wherever you are."
         >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <TaskFromMessageDemo />}
-          />
+          <TaskPaperGraphic kind="tasks" />
         </FeaturePageSection>
         <FeaturePageSection
           id="ask-macro"
-          title={['Keep your tasks', 'up to date with agents.']}
-          description="Mention Macro in the channel and ask it to create the tasks you just discussed. It can create several at once, assign people, update them as plans change, and check what’s still open. You can assign work to an agent, too."
+          demo={{
+            tone: 'tasks',
+            message: {
+              person: 'jacob',
+              text: '@Macro turn what we just agreed into tasks and assign the owners.',
+            },
+          }}
+          title="Ask Macro to create tasks."
+          description="Mention @Macro in Macro Chat and ask it to create tasks from what was just said. It assigns the work and links the tasks back to the conversation. You can also assign an available agent to a task and open its session to follow the work. Through Macro’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -156,18 +129,29 @@ export function RouteTasks() {
         </FeaturePageSection>
         <FeaturePageSection
           id="from-docs-and-email"
-          title={['Keep the source', 'with the task.']}
-          description="Create a task from an email, or select checklist items in a document to turn them into tasks. Each keeps a link to its source. Add the files and people involved so whoever picks it up has more than a title to go on."
+          title="Link tasks to the work behind them."
+          description="Every task is linked back to its source bidirectionally — the task remembers where it came from and the source knows the task exists. Create one from a customer email, or highlight to-do boxes in a document to create several at once. @mention a task in a doc, email, or channel: the live pill stays in sync with its title and status. Click it to jump straight to the task."
         >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <TaskContextDemo />}
-          />
+          <TaskPaperGraphic kind="properties" />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="task-views"
+          title="See your team’s tasks."
+          description="My Tasks shows your assignments. Created by me shows tasks you created, and All Tasks shows tasks you can access. Filter what shows, switch between a list, a board and a Gantt chart, and sort or group your tasks. You can also ask your agent to give you updates on your team’s tasks."
+        >
+          <TaskPaperGraphic kind="views" />
         </FeaturePageSection>
         <FeaturePageSection
           id="github"
-          title={['Keep tasks in sync', 'with your code.']}
-          description="Link the pull request and stop updating the same status twice. Opening it moves the task into review; merging completes it. Open the PR from the task, or the task from the PR, to see why the change was made."
+          demo={{
+            tone: 'tasks',
+            message: {
+              person: 'jacob',
+              text: 'The PR is ready for review. It’s linked to the task.',
+            },
+          }}
+          title="Update task status from GitHub."
+          description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. The task records which pull request is associated with it. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -176,6 +160,7 @@ export function RouteTasks() {
         </FeaturePageSection>
         <TasksComparison />
         <FeaturePageFaq
+          guide={{ href: '/tasks#guide', label: 'tasks' }}
           id="tasks-faq-title"
           title="Questions about Macro Tasks"
           items={tasksFaq}

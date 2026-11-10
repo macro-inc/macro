@@ -22,6 +22,39 @@ function handler(event) {
     };
   }
 
+  // One manifest also drives local serving and static redirect fallbacks.
+  var pageRedirects = __PAGE_REDIRECTS__;
+  var source = request.uri.replace(/\/index\.html$/, '').replace(/\/$/, '');
+  var destination = pageRedirects[source];
+  if (!destination && /^\/(?:docs\/)?AI\/mcp\/tools\/[^/]+$/.test(source)) {
+    destination = source.endsWith('.md')
+      ? '/docs/AI/mcp/overview.md'
+      : '/docs/AI/mcp/overview';
+  }
+  if (destination) {
+    let query = [];
+    for (let name in request.querystring) {
+      let item = request.querystring[name];
+      let values = item.multiValue || [item];
+      values.forEach(function (value) {
+        query.push(name + '=' + value.value);
+      });
+    }
+    return {
+      statusCode: 308,
+      statusDescription: 'Permanent Redirect',
+      headers: {
+        location: {
+          value:
+            'https://' +
+            host.replace(/^www\./, '') +
+            destination +
+            (query.length ? '?' + query.join('&') : ''),
+        },
+      },
+    };
+  }
+
   var cookies = request.cookies;
 
   // Check for auth tokens (HttpOnly cookies are accessible in CloudFront Functions)

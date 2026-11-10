@@ -1,3 +1,17 @@
+import IconArrowUp from '@icon/system/regular/arrow-up.svg';
+import IconCaretDown from '@icon/system/regular/caret-down.svg';
+import IconEye from '@icon/system/regular/eye.svg';
+import IconEyeSlash from '@icon/system/regular/eye-slash.svg';
+import IconHash from '@icon/system/regular/hash-straight.svg';
+import IconTaskGlyph from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconPaperclip from '@icon/system/regular/paperclip.svg';
+import IconCompose from '@icon/system/regular/pencil-simple.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconTaskPriority from '@icon/system/regular/priority-urgent.svg';
+import IconSortAscending from '@icon/system/regular/sort-ascending.svg';
+import IconTaskStatus from '@icon/system/regular/task-created.svg';
+import IconTextAa from '@icon/system/regular/text-aa.svg';
 import {
   type Component,
   createEffect,
@@ -10,21 +24,7 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconArrowUp from '../../../assets/icons/chat-scene/arrow-up.svg';
-import IconCall from '../../../assets/icons/chat-scene/call.svg';
-import IconHash from '../../../assets/icons/chat-scene/channel-hash.svg';
-import IconCompose from '../../../assets/icons/chat-scene/compose.svg';
-import IconEye from '../../../assets/icons/chat-scene/eye.svg';
-import IconEyeSlash from '../../../assets/icons/chat-scene/eye-slash.svg';
-import IconPaperclip from '../../../assets/icons/chat-scene/paperclip.svg';
-import IconSearch from '../../../assets/icons/chat-scene/search.svg';
-import IconSortAscending from '../../../assets/icons/chat-scene/sort-ascending.svg';
-import IconTaskGlyph from '../../../assets/icons/chat-scene/task-glyph.svg';
-import IconTaskPriority from '../../../assets/icons/chat-scene/task-priority.svg';
-import IconTaskStatus from '../../../assets/icons/chat-scene/task-status.svg';
-import IconTextAa from '../../../assets/icons/chat-scene/text-aa.svg';
 import ThreadElbow from '../../../assets/icons/chat-scene/thread-elbow.svg';
-import IconCaretDown from '../../../assets/icons/phosphor/caret-down.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';

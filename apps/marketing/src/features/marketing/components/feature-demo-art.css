@@ -1,0 +1,132 @@
+/* Two independent surfaces over the same quiet colour field as the homepage. */
+.feature-demo-art {
+  --feature-glow: #7abde5;
+  position: relative;
+  isolation: isolate;
+  padding: 36px 0 28px;
+}
+.feature-demo-art[data-tone=chat] { --feature-glow: #8d9de9; }
+.feature-demo-art[data-tone=documents] { --feature-glow: #b8a1ed; }
+.feature-demo-art[data-tone=tasks] { --feature-glow: #65d8ac; }
+.feature-demo-art[data-tone=agents], .feature-demo-art[data-tone=github] { --feature-glow: #f77d67; }
+.feature-demo-art[data-tone=calls] { --feature-glow: #e99cbb; }
+.feature-demo-art[data-tone=crm] { --feature-glow: #f4c65c; }
+.feature-demo-art > .feature-demo-backdrop { inset: -50px -80px; }
+.feature-demo-primary {
+  position: relative;
+  width: 88%;
+  margin-left: auto;
+  transform: rotate(1.2deg);
+  transform-origin: center;
+}
+.feature-page .feature-demo-primary .feature-page-visual { width: 100%; margin: 0; }
+.feature-demo-context {
+  position: relative;
+  z-index: 2;
+  width: 76%;
+  margin: -48px 0 0;
+  padding: 24px;
+  border-radius: 28px;
+  background: var(--color-panel);
+  box-shadow: var(--glass-shadow), 0 22px 54px -20px #0006;
+  transform: rotate(-1.5deg);
+  pointer-events: none;
+}
+.feature-demo-context .homepage-conversation { margin: 0; font-size: 16px; line-height: 1.65; }
+.feature-demo-context .homepage-message { max-width: 100%; width: 100%; }
+.feature-demo-context .homepage-enter { opacity: 1; transform: none; animation: none; }
+.feature-demo-context .homepage-message [data-user-message-bubble] { font-size: inherit; line-height: inherit; }
+.feature-page-section:nth-of-type(even) .feature-demo-primary { margin-left: 0; transform: rotate(-1.2deg); }
+.feature-page-section:nth-of-type(even) .feature-demo-context { margin-left: auto; transform: rotate(1.5deg); }
+
+/* The full surfaces have a raised edge, not a window that fades away. */
+.feature-page .feature-demo-art .product-demo {
+  --product-demo-fade-tail: 0px;
+  padding-bottom: 0;
+  border-radius: 28px;
+  mask-image: none;
+  -webkit-mask-image: none;
+  box-shadow: var(--glass-shadow), 0 22px 54px -20px #0006;
+}
+.feature-page .feature-demo-art .product-demo-stage::before,
+.feature-page .feature-demo-art .product-demo-stage::after { display: none; }
+.feature-demo-primary:has(.feature-page-visual[data-demo-active=true]) { z-index: 3; }
+
+/* The email and channel are already live panes: overlap those, not a third card. */
+.feature-demo-art .mail-sharing-stage .mail-app {
+  height: auto;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  mask-image: none;
+}
+.feature-demo-art .mail-sharing-splits { display: flex; flex-direction: column; height: auto; }
+.feature-demo-art .mail-sharing-splits > section {
+  display: block;
+  position: relative;
+  width: 88%;
+  border: 1px solid var(--color-edge-muted);
+  border-radius: 28px;
+  background: var(--color-panel);
+  box-shadow: var(--glass-shadow), 0 22px 54px -20px #0006;
+  overflow: hidden;
+}
+.feature-demo-art .mail-sharing-splits > .mail-sharing-email { height: 450px; margin-left: auto; transform: rotate(1.2deg); }
+.feature-demo-art .mail-sharing-splits > .mail-sharing-chat { z-index: 2; width: 76%; height: 340px; margin-top: -48px; transform: rotate(-1.5deg); }
+.feature-demo-art .mail-sharing-stage .mail-share-scrim { padding: 66px 24px 24px; z-index: 3; }
+.feature-demo-art .mail-sharing-stage .mail-share-form { border-radius: 22px; }
+.feature-demo-art .mail-sharing-stage .mail-channel-messages .homepage-conversation { font-size: 16px; }
+.feature-demo-art .mail-sharing-email .mail-thread-body { font-size: 16px; }
+
+/* This scene already has its own live conversation; use that as the foreground. */
+.feature-demo-art[data-native-context=true] .feature-demo-primary { width: 100%; transform: none; }
+.feature-demo-art .doc-agent-rebuilt { display: flex; flex-direction: column; }
+.feature-demo-art .doc-agent-rebuilt > .product-demo-stage { order: 0; width: 88%; margin-left: auto; transform: rotate(1.2deg); }
+.feature-demo-art .doc-agent-conversation {
+  position: relative;
+  z-index: 2;
+  order: 1;
+  width: 76%;
+  max-width: none;
+  margin: -48px 0 0;
+  padding: 22px 22px 12px;
+  border-radius: 28px 28px 0 0;
+  background: var(--color-panel);
+  border: 1px solid var(--color-edge-muted);
+  border-bottom: 0;
+  transform: rotate(-1.5deg);
+  transform-origin: bottom left;
+}
+.feature-demo-art .doc-agent-tools {
+  position: relative;
+  z-index: 2;
+  order: 2;
+  width: 76%;
+  max-width: none;
+  margin: 0;
+  padding: 0 22px 22px;
+  border: 1px solid var(--color-edge-muted);
+  border-top: 0;
+  border-radius: 0 0 28px 28px;
+  background: var(--color-panel);
+  box-shadow: 0 22px 54px -20px #0006;
+  transform: rotate(-1.5deg);
+  transform-origin: top left;
+}
+@media (max-width: 699px) {
+  .feature-demo-art { padding: 24px 0; }
+  .feature-demo-art > .feature-demo-backdrop { inset: -20px -12px; }
+  .feature-demo-primary { width: 96%; transform: rotate(.6deg); }
+  .feature-page-section:nth-of-type(even) .feature-demo-primary { transform: rotate(-.6deg); }
+  .feature-demo-context { width: 94%; margin-top: -24px; padding: 16px; border-radius: 22px; transform: rotate(-.8deg); }
+  .feature-page-section:nth-of-type(even) .feature-demo-context { transform: rotate(.8deg); }
+  .feature-demo-context .homepage-conversation { font-size: 15px; }
+  .feature-demo-art .doc-agent-rebuilt > .product-demo-stage { width: 96%; transform: rotate(.6deg); }
+  .feature-demo-art .doc-agent-conversation { width: 94%; margin-top: -24px; padding: 16px 16px 12px; }
+  .feature-demo-art .doc-agent-tools { width: 94%; padding: 0 16px 16px; }
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-email { display: block; width: 96%; height: 470px; }
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-chat { display: block; width: 94%; margin-top: -24px; height: 370px; }
+  .feature-demo-art .mail-sharing-stage .mail-share-scrim { padding: 58px 12px 12px; }
+}

@@ -12,7 +12,13 @@ export function HomepageUnification(
 
   onMount(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const scroller = section.parentElement!;
+    let scroller = section.parentElement!;
+    while (
+      scroller.parentElement &&
+      !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+    ) {
+      scroller = scroller.parentElement;
+    }
     const animations: {
       animation: Animation;
       start: number;
@@ -70,7 +76,7 @@ export function HomepageUnification(
       const origin = section.getBoundingClientRect();
       const coreRect = core.getBoundingClientRect();
       const hero = section
-        .closest('.onboarding-flow')
+        .closest('.onboarding-flow, .macro-homepage')
         ?.querySelector('[data-context-scene]');
       const sources = Array.from(
         hero?.querySelectorAll<HTMLElement>('[data-constellation-tool]') ?? []
@@ -280,7 +286,7 @@ export function HomepageUnification(
         section.getBoundingClientRect().top -
         scroller.getBoundingClientRect().top +
         scroller.scrollTop;
-      start = top - scroller.clientHeight * 0.82;
+      start = Math.max(0, top - scroller.clientHeight * 0.82);
       // Finish when the section reaches the upper fifth of the viewport,
       // before its heading and supporting copy are fully in view.
       distance = Math.max(1, scroller.clientHeight * 0.64);

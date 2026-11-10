@@ -1,0 +1,311 @@
+.wall-of-love {
+	--love-accent: #e4a8b9;
+	position: relative;
+	isolation: isolate;
+	padding: 100px 0 0;
+	color: var(--c1);
+}
+
+/* Fade both decorative layers before their box edges to avoid visible seams. */
+.wall-of-love::before,
+.wall-of-love::after {
+	mask-image:
+		linear-gradient(to right, transparent, #000 12%, #000 88%, transparent),
+		linear-gradient(transparent, #000 4%, #000 96%, transparent);
+	mask-composite: intersect;
+}
+
+.wall-of-love::before {
+	content: "";
+	opacity: 0.8;
+	position: absolute;
+	z-index: -1;
+	inset: 0 -15%;
+	pointer-events: none;
+	background:
+		radial-gradient(ellipse at 30% 10%, #a83d6529, transparent 32%),
+		radial-gradient(ellipse at 85% 38%, #6251a329, transparent 33%),
+		radial-gradient(ellipse at 15% 68%, #a83d651e, transparent 32%),
+		radial-gradient(ellipse at 65% 95%, #6251a321, transparent 30%);
+}
+
+.wall-of-love::after {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	inset: 0 -15%;
+	pointer-events: none;
+	opacity: 0.045;
+	background-size: 180px 180px;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
+}
+
+.love-hero {
+	text-align: left;
+	padding: 0 0 70px;
+}
+
+.love-title {
+	font-family: "Roboto Slab Variable", display, serif;
+	font-size: 40px;
+	font-weight: calc(320 + var(--cream-slab-weight-increase, 0));
+	line-height: 1.06;
+	letter-spacing: -0.04em;
+	color: var(--color-ink);
+	margin: 0 0 24px;
+}
+
+.love-intro {
+	font-family: "Inter Variable", Inter, sans-serif;
+	font-size: 17.5px;
+	line-height: 1.65;
+	color: #a8a8a8;
+	font-weight: 355;
+	letter-spacing: normal;
+	margin: 0;
+	text-wrap: pretty;
+}
+
+.love-wall {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	align-items: start;
+	gap: 16px;
+}
+
+.love-wall[data-masonry="true"] {
+	grid-auto-rows: 1px;
+	row-gap: 0;
+}
+
+.love-x {
+	margin-left: auto;
+	color: var(--c2);
+	font-size: 18px;
+}
+.love-original {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 24px;
+	color: var(--c3);
+	font-size: 11px;
+	line-height: 1.5;
+	text-decoration: none;
+}
+.love-original svg {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+}
+.love-original:hover {
+	color: var(--love-accent);
+}
+.love-original:focus-visible {
+	outline: 2px solid var(--love-accent);
+	outline-offset: 6px;
+	border-radius: 2px;
+}
+
+.love-card {
+	position: relative;
+	isolation: isolate;
+	break-inside: avoid;
+	display: inline-block;
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 25px;
+	border-radius: 22px;
+	border: 0;
+	background:
+		linear-gradient(155deg, #ffffff07, #ffffff02 65%), rgb(30 26 35 / 25%);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	box-shadow:
+		inset 0 1px 0 #ffffff05,
+		0 4px 12px -8px #0005;
+}
+
+.love-card::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	padding: 1px;
+	pointer-events: none;
+	background: linear-gradient(
+		135deg,
+		#ffffff26,
+		#ffffff12 24%,
+		#ffffff08 55%,
+		#ffffff0e
+	);
+	-webkit-mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	-webkit-mask-composite: xor;
+	mask:
+		linear-gradient(#000 0 0) content-box,
+		linear-gradient(#000 0 0);
+	mask-composite: exclude;
+}
+
+.love-card figcaption {
+	display: flex;
+	align-items: center;
+	gap: 11px;
+}
+/* Muted translucent monograms with a single fine edge. */
+.love-avatar {
+	--initial-top: #a59a9fa8;
+	--initial-bottom: #776e7580;
+	display: grid;
+	place-items: center;
+	flex: 0 0 40px;
+	width: 40px;
+	height: 40px;
+	aspect-ratio: 1;
+	box-sizing: border-box;
+	border: 0;
+	border-radius: 50%;
+	background:
+		radial-gradient(ellipse at 35% 0%, #ffffff14, transparent 70%),
+		linear-gradient(165deg, var(--initial-top), var(--initial-bottom));
+	color: #fff;
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	box-shadow:
+		inset 0 0 0 1px #ffffff20,
+		0 2px 6px #0002;
+	font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1;
+	text-shadow: 0 1px 2px #0003;
+}
+.love-card:nth-child(3n + 2) .love-avatar {
+	--initial-top: #939faab0;
+	--initial-bottom: #65717e80;
+}
+.love-card:nth-child(3n) .love-avatar {
+	--initial-top: #a0a497a8;
+	--initial-bottom: #71786a80;
+}
+.love-author {
+	display: grid;
+	gap: 3px;
+	font-size: 14px;
+	font-weight: 600;
+}
+.love-source {
+	color: var(--c3);
+	font-size: 10px;
+	font-weight: 370;
+}
+.love-card-heart {
+	flex: 0 0 15px;
+	height: 15px;
+	margin-left: auto;
+	color: var(--love-accent);
+	opacity: 0.65;
+}
+.love-redacted {
+	display: inline-block;
+	width: 3.2em;
+	height: 0.65em;
+	margin-inline: 0.15em;
+	border-radius: 0.2em;
+	background: currentColor;
+	opacity: 0.55;
+	filter: blur(4px);
+	vertical-align: baseline;
+}
+
+.love-card blockquote {
+	margin: 20px 0 0;
+	font-size: 16px;
+	line-height: 1.65;
+	color: #dedbdd;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
+}
+
+/* Keep signup below the wall; only the final outer cards extend further. */
+@media (min-width: 1051px) {
+  .love-wall > .love-card:nth-last-child(3),
+  .love-wall > .love-card:nth-last-child(2) { padding-bottom: 85px; }
+  .love-wall > .love-card:nth-last-child(3) { grid-column: 3; }
+  .love-wall > .love-card:nth-last-child(2) { grid-column: 1; }
+  .love-wall > .love-card:last-child { grid-column: 2; }
+}
+.love-page-closing .homepage-closing-rule { display: none; }
+.love-page-closing .feature-page[data-product-spacing=true] .homepage-feature-end {
+  margin-top: 0;
+  padding-top: 16px;
+}
+.love-page-closing .homepage-app-landing { height: 140px; }
+.love-page-closing .homepage-app-reassurance { font-size: 22px; }
+.love-page-closing .homepage-app-security { gap: 20px; }
+.love-page-closing .homepage-app-security svg { width: 44px; height: 44px; }
+.love-page-closing .homepage-app-reassurance .homepage-app-security-caption { font-size: 13px; }
+
+@media (max-width: 1050px) {
+	.love-wall {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@media (max-width: 699px) {
+	.love-title {
+		font-size: clamp(24px, 6vw, 40px);
+		letter-spacing: -0.035em;
+		line-height: 1.1;
+	}
+}
+@media (max-width: 600px) {
+	.wall-of-love {
+		padding-top: 76px;
+	}
+
+	.love-hero {
+		padding-bottom: 40px;
+	}
+	.love-wall {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.love-card {
+		padding: 23px;
+	}
+}
+
+.love-profile-photo {
+	width: 40px;
+	height: 40px;
+	flex: 0 0 40px;
+	border-radius: 50%;
+	object-fit: cover;
+	border: 0;
+}
+.love-engagement {
+	display: flex;
+	gap: 24px;
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px solid #ffffff0d;
+	color: var(--c2);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+.love-engagement > span {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+}
+.love-engagement svg {
+	width: 16px;
+	height: 16px;
+}
+.love-engagement + .love-original {
+	margin-top: 16px;
+}

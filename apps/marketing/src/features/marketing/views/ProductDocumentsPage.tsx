@@ -2,20 +2,13 @@ import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { DocumentOrganizationDemo } from '../components/documents/DocumentOrganizationDemo';
-import { DocumentProjectDemo } from '../components/documents/DocumentProjectDemo';
 import {
   DocumentAgentDemo,
   DocumentMentionsDemo,
 } from '../components/documents/DocumentStories';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import {
-  EditingGraphic,
-  LinkedWorkGraphic,
-  ThreadGraphic,
-} from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
-import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 import { documentComparisons } from '../core/feature-comparisons';
 
 const documentsFaq = [
@@ -28,8 +21,8 @@ const documentsFaq = [
     a: (
       <>
         Import Notion pages or upload files. Export native Macro documents as
-        Markdown. See <a href="/migrate">migration options</a> for your current
-        tools.
+        Markdown. See <a href="/docs/switch-to-macro">migration options</a> for
+        your current tools.
       </>
     ),
   },
@@ -49,7 +42,11 @@ const documentsFaq = [
   },
   {
     q: 'Can I share a document outside my team?',
-    a: 'Yes. Share by email address, or enable a public link for a document preview people can view without an account. Check the sharing settings before making private work public.',
+    a: 'Yes. Share by email address, or turn on a public link so anyone with the link can view a preview without an account.',
+  },
+  {
+    q: 'Does mentioning someone notify them?',
+    a: 'Mention them in a comment to send a notification. A mention in the document body does not notify them.',
   },
   {
     q: 'Can I keep writing offline?',
@@ -60,8 +57,7 @@ const documentsFaq = [
     a: (
       <>
         Yes. Macro has a free plan with usage limits. See{' '}
-        <a href="/pricing">plans and limits</a> before choosing a plan for your
-        team.
+        <a href="/pricing">plans and limits</a> for details.
       </>
     ),
   },
@@ -71,45 +67,24 @@ export function RouteDocuments() {
   setPageSeo({
     title: 'Macro Docs | Write With Your Team and Your Agents',
     description:
-      'Write in Markdown and collaborate live with people and agents. Link emails and tasks, open them beside your doc, and organize your work with folders and tags.',
+      'The local-first simplicity of Markdown, with mentioning and live collaboration with agents. Edit offline and sync your changes when you reconnect.',
     path: '/documents',
   });
   return (
     <ProductPage>
       <div class="docs-page">
         <ProductHero
+          tutorial="docs"
           product="Docs"
-          title={['Fast collaborative docs', 'for your team and agents.']}
-          description="The simplicity of Markdown, with live collaboration for people and agents. We didn’t want to choose between a plain text editor and a shared document."
+          title="High speed agentic documents."
+          description="Version-controlled markdown, @linked to your work. Edit alongside agents with live cursors."
           cta="documents_hero_get_started"
         />
-        <WorkspaceDesktopDemo
-          heroFrame
-          view="documents"
-          label="Explore Macro Docs"
-          render={() => <DocumentProjectDemo teamEditing />}
-        />
-        <nav
-          class="feature-page-jump-links docs-jump-links"
-          aria-label="On this page"
-        >
-          <a href="#document-agents">
-            <EditingGraphic />
-            <span>Write with agents</span>
-          </a>
-          <a href="#document-links">
-            <LinkedWorkGraphic />
-            <span>Link your work</span>
-          </a>
-          <a href="#document-organization">
-            <ThreadGraphic />
-            <span>Folders and tags</span>
-          </a>
-        </nav>
         <FeaturePageSection
           id="document-agents"
-          title={['Your agent has a cursor,', 'just like you.']}
-          description="Ask an agent to update a section while you keep writing. You can see its cursor and changes in the same document as your teammates. If your connection drops, keep editing; Macro merges your changes when you reconnect."
+          demo={{ tone: 'documents' }}
+          title="Edit documents alongside agents."
+          description="Agents have a live cursor in the document, instead of just editing the Markdown and giving you a diff or the next version. If you go offline and come back, your changes sync to your peers and conflicts resolve automatically."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -118,8 +93,15 @@ export function RouteDocuments() {
         </FeaturePageSection>
         <FeaturePageSection
           id="document-links"
-          title={['Mention the work', 'you’re writing about.']}
-          description="A document rarely tells the whole story. Mention the customer email, task, call, or conversation behind it. Each source links back to the doc, and you can open it alongside what you’re writing. Share the doc in a channel to give the channel access."
+          demo={{
+            tone: 'documents',
+            message: {
+              person: 'julia',
+              text: 'The pricing email is linked in the brief if you need the context.',
+            },
+          }}
+          title="Mention emails, tasks, and calls."
+          description="Link a customer email from Macro Mail or a task from Macro Tasks. Open the original right from your document."
         >
           <DemoInteractionBoundary
             class="feature-page-visual docs-wide-demo"
@@ -128,8 +110,15 @@ export function RouteDocuments() {
         </FeaturePageSection>
         <FeaturePageSection
           id="document-organization"
-          title={['Organize docs', 'with folders and tags.']}
-          description="Keep the files where you expect them. Use folders for structure and tags when a document belongs to several projects. Write in Markdown and export it as Markdown; the document is still yours."
+          demo={{
+            tone: 'documents',
+            message: {
+              person: 'jacob',
+              text: 'I put the brief in Launch and tagged it for the website project.',
+            },
+          }}
+          title="Follow links back to Macro Chat."
+          description="@mention a doc in a message and both know about each other. You can follow the link to the document or go back to the conversation that mentioned it."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -147,6 +136,7 @@ export function RouteDocuments() {
         </section>
         <div>
           <FeaturePageFaq
+            guide={{ href: '/documents#guide', label: 'documents' }}
             id="documents-faq-title"
             title="Questions about Macro Docs"
             items={documentsFaq}

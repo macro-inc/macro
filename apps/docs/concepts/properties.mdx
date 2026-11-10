@@ -6,21 +6,9 @@ description: "Attach structured fields to documents, tasks, emails, and CRM reco
 
 Macro uses properties to attach structured data to any *entity* (email, task, doc, CRM record, etc.). The properties system is unified across blocks, so you can organize different content types using the same fields, or create different fields for different content types. Tasks and CRM obviously have very different sensible properties, but the concepts are the same and the UI is shared, so teams can work together effectively.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-4.24.24-PM.png"
-    alt="The properties card on a task showing Status, Priority, and Assignees"
-    title="Task properties"
-    className="mx-auto"
-    style={{ width:"71%" }}
-  />
-</Frame>
+<GuideGraphic kind="tasks" label="A task keeps status, assignee, and its source conversation together." />
 
 On tasks, the default properties of Status, Priority, and Assignees are visible in this card to the right of the task. To add additional properties click `Add property`.
-
-<Frame>
-  ![The Add property menu listing available property types](/images/Screenshot-2026-06-09-at-4.25.31-PM.png)
-</Frame>
 
 ## Supported types
 
@@ -54,4 +42,4 @@ Some blocks ship with their own system properties:
 
 ## Agent access
 
-Agents read and write properties through the MCP entity tools: `GetEntityProperties` to read, `SetEntityProperty` to update (status, assignee, dates, custom fields), and `ListEntities` to browse. See the [tool reference](/AI/mcp/tools/index).
+Agents read and write properties through the MCP entity tools: `GetEntityProperties` to read, `SetEntityProperty` to update (status, assignee, dates, custom fields), and `ListEntities` to browse. See [MCP setup](/AI/mcp/overview) to connect your agent.

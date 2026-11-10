@@ -1,15 +1,10 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { isServer } from 'solid-js/web';
 
-/**
- * Product pages and `/start` render in the cream palette
- * (cream-preview.css) when the visitor's OS or browser prefers a light color
- * scheme, and in the dark palette otherwise. `?theme=cream` or `?theme=dark`
- * pins either one. The homepage uses neutral white or black instead of the cream palette.
- *
- * start.html and index.html apply the same choice in an inline <head> script
- * so prerendered pages paint in the right palette; keep them in sync.
- */
+/** Website-only kill switch. Keep the first-paint copies in index.html and start.html in sync. */
+export const WEBSITE_LIGHT_MODE_ENABLED = false;
+
+/** Retain the cream palette for when light mode is re-enabled. */
 export type SitePalette = 'cream' | 'dark';
 
 const LIGHT_SCHEME = '(prefers-color-scheme: light)';
@@ -20,6 +15,7 @@ const THEME_COLOR: Record<SitePalette, string> = {
 
 /** The palette `?theme=` pins, if any. */
 export function pinnedPalette(): SitePalette | undefined {
+  if (!WEBSITE_LIGHT_MODE_ENABLED) return 'dark';
   if (isServer) return undefined;
   const theme = new URLSearchParams(window.location.search).get('theme');
   return theme === 'cream' || theme === 'dark' ? theme : undefined;
@@ -34,9 +30,14 @@ export function preferredPalette(): SitePalette {
 }
 
 /** Marks <html> with the palette; light glass is keyed off `data-theme-light`. */
-export function applyPalette(palette: SitePalette) {
+export function applyPalette(
+  palette: SitePalette,
+  pathname = window.location.pathname
+) {
+  if (!WEBSITE_LIGHT_MODE_ENABLED) palette = 'dark';
   const root = document.documentElement;
-  const homepage = window.location.pathname === '/';
+  const homepage = pathname === '/';
+  root.style.colorScheme = palette === 'cream' ? 'light' : 'dark';
   root.toggleAttribute('data-homepage', homepage);
   const cream = !homepage && palette === 'cream';
   if (cream) root.dataset.palette = 'cream';

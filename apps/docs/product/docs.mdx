@@ -6,21 +6,17 @@ description: "Markdown-native, fast, collaborative, and @linked documents."
 
 Documents are markdown-native text files that are tied to the rest of your workspace with @mentions. They can be organized in folders like a traditional file system (see [Folders](/product/folders)) and enriched with tags to provide a Notion-like database experience with filters.
 
+Watch a 1:15 walkthrough of Macro Docs.
+
+<video src="https://macro.com/video/tutorials/docs.mp4" poster="https://macro.com/video/tutorials/docs-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
+
 Unlike Notion, Macro does not currently permit nesting of documents-within-documents-within-documents; all documents are stored _somewhere_, whether that be at the root-level (un-filtered) or in a folder. The primary way of sharing documents is by hitting `Share` or @linking them in a message. To see your documents and docs shared with you, go to "Files".
 
 <video src="/videos/Macro-Markdown-Demo.mp4" controls />
 
 > To create a new markdown document use shortcut <kbd>c</kbd> \+ <kbd>d</kbd>
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-11-at-5.13.34-PM.png"
-    alt="Screenshot 2026 06 11 At 5 13 34 PM"
-    title="Screenshot 2026 06 11 At 5 13 34 PM"
-    className="mx-auto"
-    style={{ width:"91%" }}
-  />
-</Frame>
+<GuideGraphic kind="documents" label="A shared document with linked sources and collaborative edits." />
 
 You'll notice collaboration in Macro docs is really fast. Edits from your teammates seem to appear almost instantly as if working locally on the same machine. Edits even to the same line resolve and do not thrash. This is all because Macro uses CRDTs \+ durable objects to ensure that multiple teammates can type in the same doc, task, or message simultaneously and so users can keep working with no network connection.
 
@@ -48,29 +44,9 @@ Comments are inline and thread-based, anchored to a text selection. You can repl
 
 @mentioning a person in a document's **body** does not notify them. For a person to receive notifications from a document, it must first be shared with them. On the other hand, if you @mention someone in a **comment**, they will be notified.
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-02-at-6.40.28-PM.png"
-    alt="An inline comment thread in a document with an @mention notifying a teammate"
-    title="Document comments"
-    className="mx-auto"
-    style={{ width:"51%" }}
-  />
-</Frame>
-
 ### Properties
 
 On the right-hand side of your document (or inside the Info panel, depending on your split size) you can see document details (owner, folder, created and updated) as well as properties. Properties let you assign the document, link it to a task, set urgency, and more. You can pin properties so their values render as pills under the title, toggle an optional YAML front-matter display, and see a live word and character count.
-
-<Frame>
-  <img
-    src="/images/properties_tab.png"
-    alt="Properties Tab"
-    title="Properties Tab"
-    className="mx-auto"
-    style={{ width:"56%" }}
-  />
-</Frame>
 
 ### Sharing & export
 

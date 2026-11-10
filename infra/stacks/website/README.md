@@ -58,3 +58,17 @@ if dev fails). To preview locally:
 cd apps/marketing && VITE_APP_BASE_URL=https://dev.macro.com bun run build
 cd ../../infra/stacks/website && bun run preview:dev
 ```
+
+## Consolidated website routes
+
+`apps/marketing/seo/page-redirects.json` is the shared permanent-redirect manifest.
+The stack injects it into `wwwRedirect/handler.js`; retired pages return 308
+responses before directory-index rewrites, retaining query parameters. Browsers
+retain existing fragments. Local serving uses the same map, and prerendering
+emits noindex redirect fallbacks for static hosts. Deploy this stack with the
+website when changing the manifest. The separate `apps/docs/docs.json` records
+cover the old docs hostname; publish those only after the destination site is live.
+
+Run the marketing documentation redirect tests and full build before changing
+these routes. They verify the edge handler, destination files, old sitemap URLs,
+Markdown exports, and link fragments. No deployment is needed for these checks.

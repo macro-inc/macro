@@ -5,9 +5,15 @@ export function animateHomepageCta(
   root: HTMLElement,
   destination: HTMLElement
 ) {
-  const button = root
-    .closest('.onboarding-flow, .macro-homepage, #app-scroll-root')
-    ?.querySelector<HTMLAnchorElement>('.site-header .site-nav-start');
+  // The routed homepage can be nested inside the shared header layout.
+  let scope: HTMLElement | null = root;
+  let button: HTMLAnchorElement | null = null;
+  while (scope && !button) {
+    button = scope.querySelector<HTMLAnchorElement>(
+      '.site-header .site-nav-open'
+    );
+    scope = scope.parentElement;
+  }
   if (!button) return () => {};
   let scroller = root.parentElement!;
   while (
@@ -22,8 +28,7 @@ export function animateHomepageCta(
   const originalOpacity = button.style.opacity;
   const originalTransition = button.style.transition;
   const originalWillChange = button.style.willChange;
-  const originalLanding = button.style.getPropertyValue('--cta-landing');
-  const originalFooter = button.hasAttribute('data-cta-footer');
+  const originalRestScale = button.style.getPropertyValue('--cta-rest-scale');
   const closing = destination.closest('footer') ?? destination;
   let maxScroll = 0;
   let startScroll = 0;
@@ -41,11 +46,30 @@ export function animateHomepageCta(
   let settling = false;
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
   let brake: ReturnType<typeof attachLandingBrake> | undefined;
+  let inwardPosition = 0;
+  let downwardPosition = 0;
+  const paintTransform = () => {
+    // Rerender settled text at its actual size instead of retaining a scaled
+    // compositor bitmap. Keep the same element, center, and visual bounds.
+    const nativeSize = lastRaw >= 0.999 && !settling;
+    button.style.setProperty(
+      '--cta-rest-scale',
+      nativeSize ? String(scale) : '1'
+    );
+    const snap = (value: number) =>
+      nativeSize
+        ? Math.round(value * cssScale * window.devicePixelRatio) /
+          (cssScale * window.devicePixelRatio)
+        : value;
+    const zoom = nativeSize ? 1 : 1 + (scale - 1) * inwardPosition;
+    button.style.transform = `translate(${snap(dx * inwardPosition)}px, ${snap(dy * downwardPosition)}px) scale(${zoom})`;
+  };
   const stopSettling = () => {
     clearTimeout(settleTimer);
     settling = false;
     button.style.transition = originalTransition;
     button.style.willChange = originalWillChange;
+    paintTransform();
   };
 
   const update = () => {
@@ -85,10 +109,10 @@ export function animateHomepageCta(
     // The arc descends along the right margin, then turns into the closing
     // space. Grow with the inward motion so the button stays small beside work.
     const inward = progress ** 6;
-    button.style.setProperty('--cta-landing', String(inward));
-    button.toggleAttribute('data-cta-footer', inward >= 0.98);
     const downward = 1 - (1 - progress) ** 3;
-    button.style.transform = `translate(${dx * inward}px, ${dy * downward}px) scale(${1 + (scale - 1) * inward})`;
+    inwardPosition = inward;
+    downwardPosition = downward;
+    paintTransform();
     let opacity = 1 - 0.55 * Math.sin(Math.PI * progress) ** 2;
     if (narrow && !reduced.matches) {
       // Phones have no outer margin to travel through. Fade out at the header
@@ -109,6 +133,7 @@ export function animateHomepageCta(
     stopSettling();
     lastRaw = -1;
     button.style.transform = originalTransform;
+    button.style.setProperty('--cta-rest-scale', '1');
     button.style.transformOrigin = 'center';
     const start = button.getBoundingClientRect();
     const end = destination.getBoundingClientRect();
@@ -135,11 +160,7 @@ export function animateHomepageCta(
     );
     startScroll = Math.min(startScroll, maxScroll - 1);
     travel = Math.max(1, maxScroll - startScroll);
-    const landingWidth =
-      Number.parseFloat(
-        getComputedStyle(button).getPropertyValue('--cta-footer-width')
-      ) || start.width;
-    scale = Math.min(3, (viewport.width - 48) / landingWidth);
+    scale = Math.min(3, (viewport.width - 48) / start.width);
     dx = (end.left + end.width / 2 - start.left - start.width / 2) / cssScale;
     dy =
       (end.top +
@@ -175,9 +196,8 @@ export function animateHomepageCta(
     button.style.transform = originalTransform;
     button.style.transformOrigin = originalOrigin;
     button.style.opacity = originalOpacity;
-    if (originalLanding)
-      button.style.setProperty('--cta-landing', originalLanding);
-    else button.style.removeProperty('--cta-landing');
-    button.toggleAttribute('data-cta-footer', originalFooter);
+    if (originalRestScale)
+      button.style.setProperty('--cta-rest-scale', originalRestScale);
+    else button.style.removeProperty('--cta-rest-scale');
   };
 }

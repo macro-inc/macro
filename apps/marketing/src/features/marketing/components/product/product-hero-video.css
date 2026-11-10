@@ -1,0 +1,31 @@
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/caveat-semibold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+.product-hero-video { width: min(100% - 48px, 1000px); margin: 0 auto 72px; }
+.product-hero-video > .tutorial-video-embed { width: 100%; margin: 0; }
+.product-hero-video:has(+ .product-comparison-links) { margin-bottom: 16px; }
+.product-replacements {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 16px 8px 0;
+  color: #b7b7bc;
+  font: 600 26px/1.2 'Caveat', cursive;
+  text-align: right;
+}
+.product-replacements-label { color: #e0e0e4; transform: rotate(-4deg); }
+.product-replacements ul { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px 12px; margin: 0; padding: 0; list-style: none; }
+.product-replacements li { position: relative; padding-inline: 2px; white-space: nowrap; transform: rotate(-2deg); }
+.product-replacements li:nth-child(even) { transform: rotate(2deg); }
+@media (max-width: 599px) {
+  .product-hero-video { width: calc(100% - 32px); margin-bottom: 48px; }
+  .product-replacements { font-size: 23px; gap: 4px 12px; padding-top: 14px; }
+  .product-replacements ul { gap: 4px 14px; }
+}

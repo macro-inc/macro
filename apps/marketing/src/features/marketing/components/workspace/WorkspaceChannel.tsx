@@ -1,8 +1,8 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import Hash from '@phosphor/hash.svg';
-import Phone from '@phosphor/phone.svg';
-import Plus from '@phosphor/plus.svg';
-import Sparkle from '@phosphor/sparkle.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import Phone from '@icon/system/regular/phone.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { Button } from '@ui';
 import {
   type Accessor,
