@@ -268,8 +268,7 @@ where
         .await?;
     let released = bus::AccountChangeRelease::watch(&state.redis, path.harness_id).await?;
     match state
-        .control
-        .send(path.harness_id, ComputerCommand::ClaudeSignInCancel)
+        .send_awake(path.harness_id, ComputerCommand::ClaudeSignInCancel)
         .await?
     {
         ComputerControlResult::SignInCancelled => {
@@ -372,14 +371,24 @@ where
         let cancellation = CancellationToken::new();
         let waiter = cancellation.clone().drop_guard();
         let control = self.control.clone();
+        let waker = self.waker.clone();
         let harnesses = Arc::clone(&self.harnesses);
         let (reply, received) = tokio::sync::oneshot::channel();
         self.cleanup.spawn(
             async move {
                 let completion = async {
-                    let result = match control
-                        .send(harness_id, ComputerCommand::ClaudeSignInComplete { code })
-                        .await?
+                    // An idle computer can fall asleep while the user signs in.
+                    let attempt = control.clone();
+                    let result = match send_waking(waker.as_deref(), harness_id, WAKE_TIMEOUT, || {
+                        let attempt = attempt.clone();
+                        let code = code.clone();
+                        async move {
+                            attempt
+                                .send(harness_id, ComputerCommand::ClaudeSignInComplete { code })
+                                .await
+                        }
+                    })
+                    .await?
                     {
                         ComputerControlResult::SignedIn { account } => {
                             harnesses

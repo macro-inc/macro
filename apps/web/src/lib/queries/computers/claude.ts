@@ -69,6 +69,9 @@ export function useClaudeSignInMutation() {
           )
         );
       }),
+    // Starting a sign-in wakes an asleep computer; show it awake.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: computerKeys.list.queryKey }),
   }));
 }
 
