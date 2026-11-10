@@ -23,6 +23,9 @@ import { createEmailComposer } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { ReplyInputView } from '../views/reply-input';
 
+/** Free plans add the "Sent with Macro" watermark below the message. */
+const freePlan = new URLSearchParams(location.search).has('free');
+
 const context: EmailComposeContext = {
   drafts: {
     saveDraft: async () => ({
@@ -96,7 +99,7 @@ const context: EmailComposeContext = {
   viewerEmail: () => 'me@example.com',
   recipients: () => [],
   recipientName: (id) => id,
-  hasPaidAccess: () => true,
+  hasPaidAccess: () => !freePlan,
   recordMention: () => {},
 };
 
