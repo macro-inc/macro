@@ -7,57 +7,57 @@
   {
     "id": "S2:lexical:BEFORE_INPUT_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5226"
+    "source": "S1:5232"
   },
   {
     "id": "S2:lexical:BLUR_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5227"
+    "source": "S1:5233"
   },
   {
     "id": "S2:lexical:CLICK_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5232"
+    "source": "S1:5238"
   },
   {
     "id": "S2:lexical:COPY_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5236"
+    "source": "S1:5242"
   },
   {
     "id": "S2:lexical:CUT_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5238"
+    "source": "S1:5244"
   },
   {
     "id": "S2:lexical:DRAGEND_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5242"
+    "source": "S1:5248"
   },
   {
     "id": "S2:lexical:DRAGOVER_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5243"
+    "source": "S1:5249"
   },
   {
     "id": "S2:lexical:DRAGSTART_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5244"
+    "source": "S1:5250"
   },
   {
     "id": "S2:lexical:DROP_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5245"
+    "source": "S1:5251"
   },
   {
     "id": "S2:lexical:FOCUS_COMMAND",
     "reason": "js-by-design",
-    "source": "S1:5246"
+    "source": "S1:5252"
   },
   {
     "id": "S2:lexical:INPUT_COMMAND",
     "reason": "not-ported",
-    "source": "S1:5250"
+    "source": "S1:5256"
   },
   {
     "id": "S2:lexical:DOMSlot",
@@ -77,12 +77,12 @@
   {
     "id": "S2:lexical:getTransformSetFromKlass",
     "reason": "not-ported",
-    "source": "S1:5345"
+    "source": "S1:5351"
   },
   {
     "id": "S2:lexical:$isEditorState",
     "reason": "not-ported",
-    "source": "S1:5354"
+    "source": "S1:5360"
   },
   {
     "id": "S2:lexical:stopLexicalPropagation",
@@ -92,12 +92,12 @@
   {
     "id": "S2:lexical:$isLexicalNode",
     "reason": "not-ported",
-    "source": "S1:5387"
+    "source": "S1:5393"
   },
   {
     "id": "S2:lexical:buildImportMap",
     "reason": "not-ported",
-    "source": "S1:5388"
+    "source": "S1:5394"
   },
   {
     "id": "S2:lexical:$createRangeSelectionFromDom",
@@ -112,12 +112,12 @@
   {
     "id": "S2:lexical:isCurrentlyReadOnlyMode",
     "reason": "js-by-design",
-    "source": "S1:5449"
+    "source": "S1:5455"
   },
   {
     "id": "S2:lexical:$applyNodeReplacement",
     "reason": "js-by-design",
-    "source": "S1:5456"
+    "source": "S1:5462"
   },
   {
     "id": "S2:lexical:$getDOMSlot",
@@ -132,7 +132,7 @@
   {
     "id": "S2:lexical:$getEditor",
     "reason": "js-by-design",
-    "source": "S1:5466"
+    "source": "S1:5472"
   },
   {
     "id": "S2:lexical:$getEditorDOMRenderConfig",
@@ -157,17 +157,17 @@
   {
     "id": "S2:lexical:$onUpdate",
     "reason": "not-ported",
-    "source": "S1:5483"
+    "source": "S1:5489"
   },
   {
     "id": "S2:lexical:$setDirectionFromDOM",
     "reason": "not-ported",
-    "source": "S1:5486"
+    "source": "S1:5492"
   },
   {
     "id": "S2:lexical:$setFormatFromDOM",
     "reason": "not-ported",
-    "source": "S1:5487"
+    "source": "S1:5493"
   },
   {
     "id": "S2:lexical:getDOMOwnerDocument",
@@ -202,7 +202,7 @@
   {
     "id": "S2:lexical:getStaticNodeConfig",
     "reason": "not-ported",
-    "source": "S1:5498"
+    "source": "S1:5504"
   },
   {
     "id": "S2:lexical:isBlockDomNode",
@@ -267,7 +267,7 @@
   {
     "id": "S2:lexical:isLexicalEditor",
     "reason": "not-ported",
-    "source": "S1:5513"
+    "source": "S1:5519"
   },
   {
     "id": "S2:lexical:isModifierMatch",
@@ -292,7 +292,7 @@
   {
     "id": "S2:lexical:setNodeIndentFromDOM",
     "reason": "not-ported",
-    "source": "S1:5520"
+    "source": "S1:5526"
   },
   {
     "id": "S2:lexical:CAN_USE_BEFORE_INPUT",
@@ -347,27 +347,27 @@
   {
     "id": "S2:lexical:configTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5616"
+    "source": "S1:5622"
   },
   {
     "id": "S2:lexical:declarePeerDependency",
     "reason": "not-ported",
-    "source": "S1:5617"
+    "source": "S1:5623"
   },
   {
     "id": "S2:lexical:initTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5625"
+    "source": "S1:5631"
   },
   {
     "id": "S2:lexical:outputTypeSymbol",
     "reason": "not-ported",
-    "source": "S1:5639"
+    "source": "S1:5645"
   },
   {
     "id": "S2:lexical:safeCast",
     "reason": "not-ported",
-    "source": "S1:5640"
+    "source": "S1:5646"
   },
   {
     "id": "S2:lexical:addClassNamesToElement",
@@ -387,7 +387,7 @@
   {
     "id": "S2:lexical:mergeRegister",
     "reason": "js-by-design",
-    "source": "S1:5650"
+    "source": "S1:5656"
   },
   {
     "id": "S2:lexical:setDOMStyleFromCSS",
@@ -547,37 +547,37 @@
   {
     "id": "S2:@lexical/extension:$isDecoratorTextNode",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:applyFormatFromStyle",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:applyFormatToDom",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:DecoratorTextExtension",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:DecoratorTextNode",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:EditorStateExtension",
     "reason": "not-ported",
-    "source": "S1:4549"
+    "source": "S1:4555"
   },
   {
     "id": "S2:@lexical/extension:HorizontalRuleExtension",
     "reason": "not-ported",
-    "source": "S1:4556"
+    "source": "S1:4562"
   },
   {
     "id": "S2:@lexical/extension:INSERT_HORIZONTAL_RULE_COMMAND",
@@ -587,7 +587,7 @@
   {
     "id": "S2:@lexical/extension:NestedEditorExtension",
     "reason": "not-ported",
-    "source": "S1:4551"
+    "source": "S1:4557"
   },
   {
     "id": "S2:@lexical/extension:NormalizeInlineElementsExtension",
@@ -617,7 +617,7 @@
   {
     "id": "S2:@lexical/history:SharedHistoryExtension",
     "reason": "not-ported",
-    "source": "S1:4018"
+    "source": "S1:4024"
   },
   {
     "id": "S2:@lexical/html:$generateNodesFromDOM",
