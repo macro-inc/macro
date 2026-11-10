@@ -282,13 +282,14 @@ blank slate, composer pinning, quote replies and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
-A call's own chat on a meeting page (the real `CallDiscussionContent` and
-`MeetingDiscussionHost` under only the providers `Root` gives every page) has a
+A call's own chat on a meeting page (the real `CallDiscussionContent` under
+only the providers `Root` gives every page) has a
 backend-free desktop and phone regression: the first message sent shows in the
 panel instead of leaving it on "Loading chat…":
 `bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
-A meeting page has none of `AppProviders`; anything rendering app messages there
-goes inside `MeetingDiscussionHost`, created by the host's render function.
+A meeting page has none of `AppProviders`; only `ChannelCallPanel` goes inside
+`MeetingDiscussionHost`, created by the host's render function. `CallChat`
+renders directly for both member and guest access.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.

@@ -231,6 +231,12 @@ anonymous access to saved transcripts and recordings. Guest names are preserved 
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
 
+Live call discussion follows the call's stored type: a channel thread opens the
+channel call panel, while `call_chat` opens the call's own chat. Quick and
+scheduled calls use `call_chat` for both signed-in participants and guests.
+Guests can send text, quote replies, react, and edit or delete their own
+messages in the same chat as signed-in participants.
+
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
 In-call participant tiles fill their grid cell but are never wider than 16:9,

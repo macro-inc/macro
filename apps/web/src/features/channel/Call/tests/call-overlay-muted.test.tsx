@@ -98,15 +98,18 @@ vi.mock('../CallControls/CallControls', () => ({
   CallControls: (props: { children?: JSX.Element }) => props.children,
 }));
 
-vi.mock('../chat/CallChat', () => ({
-  default: (props: { callId: string; open: boolean; onClose: () => void }) => (
-    <aside hidden={!props.open} aria-label="Call chat">
-      <p>{props.callId}</p>
+const discussionSlot = {
+  label: () => undefined,
+  opensByDefault: () => false,
+  hasUpdates: () => false,
+  render: (panel: { open: boolean; onClose: () => void }) => (
+    <aside hidden={!panel.open} aria-label="Call chat">
+      <p>call-id</p>
       <input aria-label="Message this call" />
-      <button onClick={props.onClose}>Close sidebar</button>
+      <button onClick={panel.onClose}>Close sidebar</button>
     </aside>
   ),
-}));
+};
 
 vi.mock('../TrackView', () => ({
   TrackView: (props: { track?: { sid?: string } }) => (
@@ -330,7 +333,11 @@ describe('CallOverlay muted microphone badges', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => (
-      <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
+      <CallOverlay
+        onLeave={() => undefined}
+        showTeamSharing={false}
+        discussion={discussionSlot}
+      />
     ));
     fireEvent.click(
       screen.getByRole('button', { name: 'Open chat and participants' })
@@ -340,6 +347,17 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeTruthy();
     expect(screen.getByText('call-id')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
+  });
+
+  it('renders no chat when the host supplies no discussion', () => {
+    setUpCallState();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
+    expect(
+      screen.queryByRole('textbox', { name: 'Message this call' })
+    ).toBeNull();
   });
 
   it('keeps the roster available without mounting unavailable message queries', () => {
@@ -361,7 +379,9 @@ describe('CallOverlay muted microphone badges', () => {
 
   it('opens the call thread without remounting video and restores focus when closed', async () => {
     setUpCallState();
-    render(() => <CallOverlay onLeave={() => undefined} />);
+    render(() => (
+      <CallOverlay onLeave={() => undefined} discussion={discussionSlot} />
+    ));
     const video = screen.getByTestId('track-local-camera');
     const toggle = screen.getByRole('button', {
       name: 'Open chat and participants',
