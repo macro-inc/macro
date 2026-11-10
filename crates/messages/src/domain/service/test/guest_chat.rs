@@ -65,7 +65,7 @@ async fn guest_reads_the_member_thread_and_posts_with_server_owned_attribution()
     let page = service.read(call, "active-session").await.unwrap();
     assert_eq!(page.messages.len(), 1);
     assert_eq!(page.messages[0].content, "root");
-    assert_eq!(page.messages[0].name, "author");
+    assert_eq!(page.messages[0].name, "Author Example");
     assert!(!page.messages[0].is_you);
     let message = service
         .post(
@@ -165,11 +165,88 @@ async fn guest_thread_is_empty_before_first_post_and_redacts_account_identity() 
     assert!(!json.contains("author@example.com"));
     let thread = page.thread.unwrap();
     assert!(thread.root.sender_id.as_ref().starts_with("participant:"));
-    assert_eq!(thread.root.imported_author.unwrap().name, "author");
+    assert_eq!(thread.root.imported_author.unwrap().name, "Author Example");
     assert_eq!(
         thread.root.reactions[0].names.as_ref().unwrap()[&thread.root.reactions[0].users[0]],
-        "author"
+        "Author Example"
     );
+}
+
+#[tokio::test]
+async fn guest_quotes_round_trip_through_real_member_sender_ids() {
+    let (mut repo, events, _, call, guest) = setup();
+    let member = repo.message.sender_id.as_ref().to_owned();
+    let opaque = format!("participant:{}", Uuid::new_v5(&call, member.as_bytes()));
+    let quote = |sender: &str| {
+        format!(
+            "<m-reply-target>{{\"parent\":{{\"type\":\"call\",\"id\":\"{call}\"}},\"targetMessageId\":\"{call}\",\"targetThreadId\":\"{call}\",\"displayText\":\"root\",\"senderId\":\"{sender}\"}}</m-reply-target>\n\nreply"
+        )
+    };
+    let mut guest_reply = repo.message.clone();
+    guest_reply.id = Uuid::now_v7();
+    guest_reply.thread_id = Some(call);
+    guest_reply.sender_id = ChannelSender::new_from_guest(guest);
+    guest_reply.guest_name = Some("Visitor".into());
+    guest_reply.content = quote(&member);
+    let guest_reply_id = guest_reply.id;
+    repo.replies = vec![guest_reply];
+    let service = GuestChatService::new(
+        Arc::new(MessageService::new(repo.clone(), events.clone())),
+        Arc::new(Authorizer { call, guest }),
+    );
+
+    let thread = service.read_thread(call, "active-session").await.unwrap();
+    let guest_quote = &thread.thread.unwrap().replies[0].content;
+    assert!(guest_quote.contains(&opaque));
+    assert!(!guest_quote.contains(&member));
+    let posted = service
+        .post_message(
+            call,
+            "active-session",
+            GuestChatPost {
+                id: Uuid::now_v7(),
+                content: quote(&opaque),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(posted.content.contains(&opaque));
+    assert!(!posted.content.contains(&member));
+    let writes = repo.creates.lock().unwrap();
+    assert!(writes[0].input.content.contains(&member));
+    assert!(!writes[0].input.content.contains(&opaque));
+    assert!(matches!(&events.0.lock().unwrap()[0].change,
+        MessageChange::Posted { message, .. } if message.content.contains(&member)));
+    let patched = service
+        .patch_message(
+            call,
+            "active-session",
+            guest_reply_id,
+            GuestChatPatch {
+                content: quote(&opaque),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(patched.content.contains(&opaque));
+    assert!(repo.edits.lock().unwrap()[0].content.contains(&member));
+}
+
+#[test]
+fn malformed_quotes_do_not_expose_account_ids_to_guests() {
+    let call = Uuid::now_v7();
+    let senders = HashMap::new();
+    let account = "macro|author@example.com";
+    for content in [
+        format!("before <m-reply-target>{{\"senderId\":\"{account}\""),
+        format!("before <m-reply-target>{{\"senderId\":\"{account}\"</m-reply-target> after"),
+    ] {
+        let redacted = rewrite_quote_content(&content, call, &senders, false);
+        assert!(!redacted.contains(account));
+        assert!(!redacted.contains("<m-reply-target>"));
+    }
+    let safe = "<m-reply-target>{\"senderId\":\"guest:123\"}</m-reply-target>";
+    assert_eq!(rewrite_quote_content(safe, call, &senders, false), safe);
 }
 
 #[tokio::test]

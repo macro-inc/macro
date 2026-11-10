@@ -141,9 +141,14 @@ impl<R, E> GuestChatService<R, E> {
     }
 }
 
-fn project(message: Message, actor: &ChannelSender<'_>) -> GuestChatMessage {
+fn project(
+    message: Message,
+    actor: &ChannelSender<'_>,
+    names: &HashMap<String, String>,
+) -> GuestChatMessage {
     let name = message
         .guest_name
+        .or_else(|| names.get(message.sender_id.as_ref()).cloned())
         .or_else(|| message.imported_author.map(|author| author.name))
         .or_else(|| message.bot_profile.map(|bot| bot.name))
         .or_else(|| {
@@ -170,13 +175,83 @@ fn opaque_id(call_id: Uuid, sender_id: &str) -> String {
     )
 }
 
-fn redact(mut message: Message, call_id: Uuid, names: &HashMap<String, String>) -> Message {
+pub(super) fn rewrite_quote_content(
+    content: &str,
+    call_id: Uuid,
+    senders: &HashMap<Uuid, String>,
+    guest_input: bool,
+) -> String {
+    const OPEN: &str = "<m-reply-target>";
+    const CLOSE: &str = "</m-reply-target>";
+    let mut output = String::with_capacity(content.len());
+    let mut remaining = content;
+    while let Some(start) = remaining.find(OPEN) {
+        output.push_str(&remaining[..start]);
+        remaining = &remaining[start + OPEN.len()..];
+        let Some(end) = remaining.find(CLOSE) else {
+            if guest_input {
+                output.push_str(OPEN);
+                output.push_str(remaining);
+            }
+            return output;
+        };
+        let payload = &remaining[..end];
+        let rewritten = serde_json::from_str::<serde_json::Value>(payload)
+            .ok()
+            .and_then(|mut value| {
+                let id = value.get("senderId")?.as_str()?;
+                let replacement = if guest_input {
+                    let parent = value.get("parent")?;
+                    if parent.get("type")?.as_str()? != "call"
+                        || parent.get("id")?.as_str()? != call_id.to_string()
+                    {
+                        return None;
+                    }
+                    let target = Uuid::parse_str(value.get("targetMessageId")?.as_str()?).ok()?;
+                    let sender = senders.get(&target)?;
+                    (id == opaque_id(call_id, sender)).then_some(sender.clone())
+                } else if id.starts_with("macro|") {
+                    Some(opaque_id(call_id, id))
+                } else {
+                    Some(id.to_owned())
+                }?;
+                value["senderId"] = replacement.into();
+                serde_json::to_string(&value).ok()
+            });
+        if let Some(rewritten) = rewritten.as_deref() {
+            output.push_str(OPEN);
+            output.push_str(rewritten);
+            output.push_str(CLOSE);
+        } else if guest_input {
+            output.push_str(OPEN);
+            output.push_str(payload);
+            output.push_str(CLOSE);
+        }
+        remaining = &remaining[end + CLOSE.len()..];
+    }
+    output.push_str(remaining);
+    output
+}
+
+fn redact(
+    mut message: Message,
+    call_id: Uuid,
+    names: &HashMap<String, String>,
+    senders: &HashMap<Uuid, String>,
+) -> Message {
+    message.content = rewrite_quote_content(&message.content, call_id, senders, false);
     if message.sender_id.as_user().is_some() {
         let original = message.sender_id.as_ref().to_owned();
         message.imported_author = Some(ImportedAuthor {
             name: names
                 .get(&original)
                 .cloned()
+                .or_else(|| {
+                    message
+                        .sender_id
+                        .as_user()
+                        .map(|user| user.email_part().local_part().to_owned())
+                })
                 .unwrap_or_else(|| "Participant".into()),
         });
         message.guest_name = None;
@@ -216,18 +291,12 @@ fn redact(mut message: Message, call_id: Uuid, names: &HashMap<String, String>) 
     message
 }
 
-fn redact_mutation(message: Message, call_id: Uuid) -> Message {
-    let name = project(message.clone(), &ChannelSender::new_from_guest(Uuid::nil())).name;
-    let names = HashMap::from([(message.sender_id.as_ref().to_owned(), name)]);
-    redact(message, call_id, &names)
-}
-
 impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
     async fn post_raw(
         &self,
         call_id: Uuid,
         token: &str,
-        input: GuestChatPost,
+        mut input: GuestChatPost,
     ) -> Result<Message, MessageError> {
         let access = self.access.authorize(call_id, token).await?;
         validate_client_id(input.id, Utc::now())?;
@@ -238,6 +307,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
         }
         let parent = MessageParent::Call(call_id);
         let actor = ChannelSender::new_from_guest(access.guest_id);
+        input.content = self.rewrite_guest_quotes(call_id, &input.content).await?;
         if let Some(message) = self
             .messages
             .repo
@@ -315,6 +385,62 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
         }
         Ok(ChannelSender::new_from_guest(access.guest_id))
     }
+
+    async fn thread_senders(&self, call_id: Uuid) -> Result<HashMap<Uuid, String>, MessageError> {
+        let parent = MessageParent::Call(call_id);
+        let root = self.messages.repo.get(&parent, call_id).await?;
+        let replies = self.messages.repo.replies(&parent, call_id).await?;
+        Ok(root
+            .iter()
+            .chain(replies.iter())
+            .map(|message| (message.id, message.sender_id.as_ref().to_owned()))
+            .collect())
+    }
+
+    async fn rewrite_guest_quotes(
+        &self,
+        call_id: Uuid,
+        content: &str,
+    ) -> Result<String, MessageError> {
+        let senders = self.thread_senders(call_id).await?;
+        Ok(rewrite_quote_content(content, call_id, &senders, true))
+    }
+
+    async fn redact_message(&self, call_id: Uuid, message: Message) -> Message {
+        let senders = self
+            .thread_senders(call_id)
+            .await
+            .inspect_err(|error| tracing::warn!(?error, %call_id, "guest quote names unavailable"))
+            .unwrap_or_default();
+        let ids: Vec<_> = senders.values().cloned().collect();
+        let profile_names = self
+            .messages
+            .repo
+            .account_display_names(&ids)
+            .await
+            .inspect_err(
+                |error| tracing::warn!(?error, %call_id, "guest profile names unavailable"),
+            )
+            .unwrap_or_default();
+        let names = senders
+            .values()
+            .map(|id| {
+                let sender = ChannelSender::try_from(id.clone()).ok();
+                let name = profile_names
+                    .get(id)
+                    .cloned()
+                    .or_else(|| {
+                        sender
+                            .as_ref()
+                            .and_then(|sender| sender.as_user())
+                            .map(|user| user.email_part().local_part().to_owned())
+                    })
+                    .unwrap_or_else(|| "Participant".into());
+                (id.clone(), name)
+            })
+            .collect();
+        redact(message, call_id, &names, &senders)
+    }
 }
 
 #[async_trait::async_trait]
@@ -332,12 +458,21 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         }
         let root = self.messages.repo.get(&parent, call_id).await?;
         let replies = self.messages.repo.replies(&parent, call_id).await?;
+        let messages: Vec<_> = root
+            .into_iter()
+            .chain(replies)
+            .filter(|message| message.deleted_at.is_none())
+            .collect();
+        let ids: Vec<_> = messages
+            .iter()
+            .filter(|message| message.sender_id.as_user().is_some())
+            .map(|message| message.sender_id.as_ref().to_owned())
+            .collect();
+        let names = self.messages.repo.account_display_names(&ids).await?;
         Ok(GuestChatPage {
-            messages: root
+            messages: messages
                 .into_iter()
-                .chain(replies)
-                .filter(|message| message.deleted_at.is_none())
-                .map(|message| project(message, &actor))
+                .map(|message| project(message, &actor, &names))
                 .collect(),
         })
     }
@@ -351,7 +486,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
     ) -> Result<GuestChatMessage, MessageError> {
         let actor =
             ChannelSender::new_from_guest(self.access.authorize(call_id, token).await?.guest_id);
-        Ok(project(self.post_raw(call_id, token, input).await?, &actor))
+        Ok(project(
+            self.post_raw(call_id, token, input).await?,
+            &actor,
+            &HashMap::new(),
+        ))
     }
 
     #[tracing::instrument(err, skip_all, fields(%call_id))]
@@ -384,19 +523,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
             root.sender_id.as_ref().to_owned()
         };
         state.anchor = None;
+        let ids: Vec<_> = std::iter::once(&root)
+            .chain(replies.iter())
+            .filter(|message| message.sender_id.as_user().is_some())
+            .map(|message| message.sender_id.as_ref().to_owned())
+            .collect();
+        let profile_names = self.messages.repo.account_display_names(&ids).await?;
         let names: HashMap<_, _> = std::iter::once(&root)
             .chain(replies.iter())
             .map(|message| {
                 (
                     message.sender_id.as_ref().to_owned(),
-                    project(message.clone(), &actor).name,
+                    project(message.clone(), &actor, &profile_names).name,
                 )
             })
             .collect();
-        let root = redact(root, call_id, &names);
+        let senders: HashMap<_, _> = std::iter::once(&root)
+            .chain(replies.iter())
+            .map(|message| (message.id, message.sender_id.as_ref().to_owned()))
+            .collect();
+        let root = redact(root, call_id, &names, &senders);
         let safe_replies = replies
             .into_iter()
-            .map(|reply| redact(reply, call_id, &names))
+            .map(|reply| redact(reply, call_id, &names, &senders))
             .collect();
         Ok(GuestChatThread {
             viewer_id: actor.as_ref().to_owned(),
@@ -416,10 +565,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         input: GuestChatPost,
     ) -> Result<Message, MessageError> {
         self.guest_actor(call_id, token).await?;
-        Ok(redact_mutation(
-            self.post_raw(call_id, token, input).await?,
-            call_id,
-        ))
+        Ok(self
+            .redact_message(call_id, self.post_raw(call_id, token, input).await?)
+            .await)
     }
 
     #[tracing::instrument(err, skip_all, fields(%call_id, %id))]
@@ -449,7 +597,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 &parent,
                 id,
                 EditMessage {
-                    content: input.content,
+                    content: self.rewrite_guest_quotes(call_id, &input.content).await?,
                     mentions: vec![],
                     attachments: Some(vec![]),
                     nonce: None,
@@ -470,7 +618,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 },
             })
             .await;
-        Ok(redact_mutation(message, call_id))
+        Ok(self.redact_message(call_id, message).await)
     }
 
     #[tracing::instrument(err, skip_all, fields(%call_id, %id))]
@@ -549,6 +697,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 )
                 .await;
         }
-        Ok(redact_mutation(message, call_id))
+        Ok(self.redact_message(call_id, message).await)
     }
 }

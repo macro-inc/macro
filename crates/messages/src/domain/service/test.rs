@@ -36,6 +36,15 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn account_display_names(
+        &self,
+        _: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        Ok(HashMap::from([(
+            "macro|author@example.com".into(),
+            "Author Example".into(),
+        )]))
+    }
     async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         Ok(self.call_thread.clone())
     }
@@ -1331,6 +1340,12 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn account_display_names(
+        &self,
+        ids: &[String],
+    ) -> Result<HashMap<String, String>, MessageError> {
+        self.inner.account_display_names(ids).await
+    }
     async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         self.inner.call_thread_facts(id).await
     }
