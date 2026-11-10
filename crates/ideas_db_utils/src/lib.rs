@@ -218,10 +218,12 @@ pub async fn close_routine_idea(
     Ok(closed.is_some())
 }
 
-/// The person saved routine `routine` from suggestion `suggestion`: its
-/// open routine idea is done, and produced the routine.
+/// `owner` saved routine `routine` from suggestion `suggestion`: their
+/// open routine idea for it is done, and produced the routine. Someone
+/// else's suggestion changes nothing.
 pub async fn complete_routine_idea(
     conn: &mut PgConnection,
+    owner: &str,
     suggestion: Uuid,
     routine: Uuid,
     at: DateTime<Utc>,
@@ -229,10 +231,12 @@ pub async fn complete_routine_idea(
     let done = sqlx::query_scalar!(
         r#"UPDATE idea SET state = 'done', state_reason = NULL, updated_at = $2, state_changed_at = $2
            WHERE id = (SELECT idea_id FROM idea_routine WHERE routine_suggestion_id = $1)
+             AND user_id = $3
              AND state IN ('proposed', 'accepted')
            RETURNING id"#,
         suggestion,
         at,
+        owner,
     )
     .fetch_optional(&mut *conn)
     .await?;

@@ -85,7 +85,7 @@ async fn a_routine_idea_closes_once(pool: PgPool) {
             .unwrap()
     );
     assert!(
-        !complete_routine_idea(&mut tx, suggestion, Uuid::now_v7(), Utc::now())
+        !complete_routine_idea(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
             .await
             .unwrap()
     );
@@ -113,4 +113,31 @@ async fn a_routine_idea_waits_for_room(pool: PgPool) {
             .unwrap(),
         Room::GenerationFull
     );
+}
+
+/// Saving a routine from someone else's suggestion leaves their idea open.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_the_owner_saving_a_routine_finishes_its_idea(pool: PgPool) {
+    let (generation, suggestion) = setup(&pool).await;
+    let mut tx = pool.begin().await.unwrap();
+    add_routine_idea(&mut tx, &idea(suggestion, generation), 30, 10)
+        .await
+        .unwrap();
+    assert!(
+        !complete_routine_idea(
+            &mut tx,
+            "macro|someone-else@macro.com",
+            suggestion,
+            Uuid::now_v7(),
+            Utc::now()
+        )
+        .await
+        .unwrap()
+    );
+    assert!(
+        complete_routine_idea(&mut tx, OWNER, suggestion, Uuid::now_v7(), Utc::now())
+            .await
+            .unwrap()
+    );
+    tx.commit().await.unwrap();
 }
