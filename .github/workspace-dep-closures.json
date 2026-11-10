@@ -985,11 +985,8 @@
       "crates/static_file",
       "crates/static_file_service_client",
       "crates/stream",
-<<<<<<< HEAD
       "crates/subsequence_match",
-=======
       "crates/suggestion_generation",
->>>>>>> 5194947c3f (feat(ideas): run ideas and routine suggestions in one generation, at onboarding and nightly)
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
@@ -14821,10 +14818,10 @@
       "crates/stream",
       "crates/workspace-hack"
     ],
-<<<<<<< HEAD
     "subsequence_match": [
       "crates/subsequence_match",
-=======
+      "crates/workspace-hack"
+    ],
     "suggestion_generation": [
       "crates/activity",
       "crates/agent",
@@ -14954,6 +14951,7 @@
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/static_file_service_client",
+      "crates/subsequence_match",
       "crates/suggestion_generation",
       "crates/sync_service",
       "crates/sync_service_client",
@@ -14965,7 +14963,6 @@
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
->>>>>>> 5194947c3f (feat(ideas): run ideas and routine suggestions in one generation, at onboarding and nightly)
       "crates/workspace-hack"
     ],
     "sync_router": [
