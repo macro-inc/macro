@@ -83,7 +83,7 @@ export type TeamInvite = { id: string; invitedBy: string };
 export type TeamDirectorySource = {
   teams: Accessor<Loadable<readonly Team[]>>;
   invites: Accessor<Loadable<readonly TeamInvite[]>>;
-  /** Contact email addresses, for same-domain invite suggestions. */
+  /** At most PREFILL_CAP same-domain invite suggestions, not a contact catalog. */
   contacts: Accessor<Loadable<readonly string[]>>;
   retry(): void;
 };
@@ -131,7 +131,10 @@ export type OnboardingContext = {
   connectTool(tool: Tool): Promise<void>;
   /** Opens the native GitHub App repository selection, after account linking. */
   configureGithubRepositories(): void;
-  createTeamDirectory(): TeamDirectorySource;
+  createTeamDirectory(input: {
+    domain: Accessor<string | undefined>;
+    ownEmail: Accessor<string | undefined>;
+  }): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
   /** `allowDomainJoin` lets people on the owner's work domain join.
    * `notifyDomain` also emails the owner's same-domain contacts that the team

@@ -25,9 +25,21 @@ export default defineConfig({
             '@core/component/Toast/Toast',
             '@queries/email/link',
             '@queries/client',
+            '@core/context/user',
             '@service-email/client',
             '@core/util/uploadFile',
           ].includes(source)
+        )
+          return boundary;
+        if (
+          source === '../client' &&
+          importer?.endsWith('/queries/auth/account-scope.ts')
+        )
+          return boundary;
+        if (
+          source === '@service-storage/client' &&
+          (importer?.endsWith('/queries/channel/channels.ts') ||
+            importer?.endsWith('/queries/channel/activity.ts'))
         )
           return boundary;
         if (
