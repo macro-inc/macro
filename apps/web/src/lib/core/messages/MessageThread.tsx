@@ -26,6 +26,10 @@ import type {
 } from '@service-storage/messages';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { MessageLoadError } from './MessageLoadError';
+import {
+  useMessageTransport,
+  useMessageViewerOverride,
+} from './message-transport';
 import type { MessageActionHandler, MessageData } from './types';
 
 export function threadListItem(thread: ThreadData): MessageListItem {
@@ -69,7 +73,9 @@ type ThreadOptions = {
 export function MessageThread(
   props: ThreadOptions & { data: MessageListItem }
 ) {
-  const userId = useUserId();
+  const accountUserId = useUserId();
+  const userId = useMessageViewerOverride() ?? accountUserId;
+  const transport = useMessageTransport();
   const [expanded, setExpanded] = createSignal(props.expanded ?? false);
   const [replying, setReplying] = createSignal(false);
   const [draft, setDraft] = createSignal<InputSnapshot>();
@@ -78,13 +84,35 @@ export function MessageThread(
   let scopeElement: HTMLDivElement | undefined;
   const focus = createFocusRequest();
   const remove = useDeleteMessageMutation();
-  const confirm = createDeleteMessageConfirmation(remove.mutate);
+  const confirm = createDeleteMessageConfirmation((input) => {
+    if (transport) {
+      fireAndForget(
+        transport.remove({ parent: input.parent, id: input.messageID }),
+        'message-thread'
+      );
+      return;
+    }
+    remove.mutate(input);
+  });
   const patch = usePatchMessageMutation();
   const addReaction = useAddReactionMutation();
   const removeReaction = useRemoveReactionMutation();
   const editor = createMessageEditor({
     parent: () => props.data.parent,
-    patchMessage: patch.mutate,
+    patchMessage: (input) => {
+      if (transport) {
+        fireAndForget(
+          transport.patch({
+            parent: input.parent,
+            id: input.messageID,
+            content: input.content,
+          }),
+          'message-thread'
+        );
+        return;
+      }
+      patch.mutate(input);
+    },
     onEditEnded: (message) => props.onEditingChange?.(message.id, false),
   });
   const startReply = () => {
@@ -109,8 +137,36 @@ export function MessageThread(
         ? buildMessageLink(message.parent.id, message.id, message.thread_id)
         : (props.buildLink?.(message) ?? window.location.href),
     deleteMessage: confirm.requestDelete,
-    addReaction: addReaction.mutate,
-    removeReaction: removeReaction.mutate,
+    addReaction: (input) => {
+      if (transport) {
+        fireAndForget(
+          transport.react({
+            parent: input.parent,
+            id: input.messageId,
+            emoji: input.emoji,
+            add: true,
+          }),
+          'message-thread'
+        );
+        return;
+      }
+      addReaction.mutate(input);
+    },
+    removeReaction: (input) => {
+      if (transport) {
+        fireAndForget(
+          transport.react({
+            parent: input.parent,
+            id: input.messageId,
+            emoji: input.emoji,
+            add: false,
+          }),
+          'message-thread'
+        );
+        return;
+      }
+      removeReaction.mutate(input);
+    },
     onEdit: ({ message }) => {
       editor.start(message);
       props.onEditingChange?.(message.id, true);

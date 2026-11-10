@@ -3,6 +3,7 @@ import { UserCardTrigger } from '@core/component/UserCardTrigger';
 import { UserIcon } from '@core/component/UserIcon';
 import type { UserCardTarget } from '@core/component/userCardActions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { tryMacroId } from '@core/user';
 import {
   getBotDisplayName,
   senderFromStorageId,
@@ -41,9 +42,8 @@ export function SenderIcon(props: SenderIconProps) {
   // Someone outside Macro, such as a WhatsApp participant, has no principal.
   const externalAuthor = () => {
     const name = message().imported_author?.name?.trim();
-    return !message().sender_id && name
-      ? { name, avatar_url: null }
-      : undefined;
+    if (sender().type === 'bot' || tryMacroId(message().sender_id)) return;
+    return { name: name || 'Participant', avatar_url: null };
   };
 
   // An agent's avatar hovers like a person's, with the card that leads to its
