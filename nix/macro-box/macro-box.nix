@@ -30,8 +30,8 @@ in
       pkgs,
       ...
     }:
-    lib.optionalAttrs (system == "x86_64-linux") {
-      packages = {
+    {
+      packages = lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-claude-code = box.claudeCode;
         macro-box-claude-agent-acp = box.claudeAgentAcp;
         # What `incus image import` takes.
@@ -48,12 +48,16 @@ in
           includeNixDB = true;
           config = {
             Entrypoint = [ "${container.config.system.build.toplevel}/init" ];
-            Env = [ "container=docker" ];
+            Env = [
+              "container=docker"
+              # For `docker exec <id> systemctl ...`, which DockerFleet runs.
+              "PATH=/run/wrappers/bin:/run/current-system/sw/bin"
+            ];
             StopSignal = "SIGRTMIN+3";
           };
         };
       };
-      checks = {
+      checks = lib.optionalAttrs (system == "x86_64-linux") {
         # The baked adapter starts and answers ACP initialize offline.
         macro-box-claude-agent-acp =
           pkgs.runCommand "macro-box-claude-agent-acp-initialize" { nativeBuildInputs = [ pkgs.jq ]; }
