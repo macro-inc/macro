@@ -1,5 +1,6 @@
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
 import FunctionIcon from '@icon/system/regular/function.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
@@ -11,6 +12,8 @@ import {
   type DatabaseColumnConversion,
   type DatabaseColumnKind,
   type DatabaseColumnTypeChange,
+  type DatabaseRelationTable,
+  type DatabaseRelationTargets,
 } from '../core/column-schema';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { PropertyIcon } from './property-icon';
@@ -42,7 +45,7 @@ export type DatabaseColumnConversionChoice = Omit<
 
 export function ColumnTypeMenu(props: {
   column: DatabaseViewColumn;
-  tables?: { id: string; name: string }[];
+  tables?: DatabaseRelationTargets;
   /** The dry run, read while the submenu is open. */
   loadCasts?: (
     open: Accessor<boolean>
@@ -64,7 +67,10 @@ export function ColumnTypeMenu(props: {
     casts ? castFor(casts(), to) : undefined;
   const selected = (to: DatabaseColumnKind) => {
     if (to.type === 'relation')
-      return props.column.relation?.tableId === to.table;
+      return (
+        props.column.relation?.databaseId === to.database &&
+        props.column.relation.tableId === to.table
+      );
     const target = castTargetOf(to);
     // Numeric options and tags use the same single/multiple choice controls.
     const dataType =
@@ -98,10 +104,32 @@ export function ColumnTypeMenu(props: {
     return !misfits(cast) || !!props.onConvertToNewColumn;
   };
   const checking = () => casts?.().status === 'loading';
-  const offeredTables = () =>
-    (props.tables ?? []).filter((table) =>
-      offered({ type: 'relation', table: table.id })
+  const relationTo = (table: DatabaseRelationTable): DatabaseColumnKind => ({
+    type: 'relation',
+    database: table.databaseId,
+    table: table.tableId,
+  });
+  const offeredTables = (tables: DatabaseRelationTable[]) =>
+    tables.filter((table) => offered(relationTo(table)));
+  const offeredDatabases = () =>
+    (props.tables?.elsewhere ?? [])
+      .map((database) => ({
+        ...database,
+        tables: offeredTables(database.tables),
+      }))
+      .filter((database) => database.tables.length > 0);
+  const relationItem = (table: DatabaseRelationTable) => {
+    const to = relationTo(table);
+    return (
+      <TypeItem
+        label={table.name}
+        cast={castOf(to)}
+        icon={<PropertyIcon type="ENTITY" relation />}
+        selected={selected(to)}
+        onSelect={() => choose(table.name, to)}
+      />
     );
+  };
   const choose = (label: string, to: DatabaseColumnKind) => {
     if (protectedType() || selected(to)) return;
     const cast = castOf(to);
@@ -169,25 +197,30 @@ export function ColumnTypeMenu(props: {
               </Dropdown.Group>
             )}
           </Show>
-          <Show when={offeredTables().length}>
+          <Show when={offeredTables(props.tables?.here ?? []).length}>
             <Dropdown.Group>
               <Dropdown.GroupLabel>Related table</Dropdown.GroupLabel>
-              <For each={offeredTables()}>
-                {(table) => {
-                  const to: DatabaseColumnKind = {
-                    type: 'relation',
-                    table: table.id,
-                  };
-                  return (
-                    <TypeItem
-                      label={table.name}
-                      cast={castOf(to)}
-                      icon={<PropertyIcon type="ENTITY" relation />}
-                      selected={selected(to)}
-                      onSelect={() => choose(table.name, to)}
-                    />
-                  );
-                }}
+              <For each={offeredTables(props.tables?.here ?? [])}>
+                {relationItem}
+              </For>
+            </Dropdown.Group>
+          </Show>
+          <Show when={offeredDatabases().length}>
+            <Dropdown.Group>
+              <Dropdown.GroupLabel>Other databases</Dropdown.GroupLabel>
+              <For each={offeredDatabases()}>
+                {(database) => (
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <DatabaseIcon class="size-3.5 shrink-0 text-ink-muted" />
+                      <span class="flex-1 truncate">{database.name}</span>
+                      <CaretRightIcon class="size-3" />
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent class="w-60 max-h-[min(28rem,80vh)] overflow-y-auto">
+                      <For each={database.tables}>{relationItem}</For>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                )}
               </For>
             </Dropdown.Group>
           </Show>

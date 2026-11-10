@@ -4,8 +4,8 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use super::super::test_support::TempDir;
 use super::*;
+use crate::local::test_support::TempDir;
 
 const REG: &str = "0123456789abcdef";
 const REG_BUILD: &str = "fedcba9876543210";

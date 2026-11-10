@@ -240,9 +240,10 @@ just seed-scenario apply --file seed/scenarios/team-perms.json
 ```
 
 `apply` creates a FusionAuth account for each persona. It prints a login link per
-persona, for example `http://alice.localhost:3000/app/login?email=alice@seed.macro.local`.
+persona, for example `https://alice.localhost:8090/app/login?email=alice@seed.macro.local`.
 Open each link in a plain browser tab. Each persona hostname has its own cookie
-jar. You can drive several personas side by side against one stack.
+jar. You can drive several personas side by side against one stack, whether it
+is attached or headless.
 
 Useful commands:
 
@@ -336,6 +337,7 @@ just run_local --instance <name>                # returns once ready; nonzero na
 just run_local status --instance <name> --json  # phase, health, URLs, last job, containers
 just run_local wait --instance <name>           # block until a running bring-up or rebuild ends
 just run_local rebuild --instance <name>        # the `r` hotkey: rebuild changed services and reload them
+just run_local rebuild --services contacts_service --instance <name>  # rebuild and reload only these
 just run_local restart-frontend --instance <name>  # the `f` hotkey
 just run_local logs --instance <name>           # the last job's log
 just run_local logs --service frontend --instance <name>  # Vite; any compose service name works
@@ -434,6 +436,31 @@ The generated files for an instance live here:
 infra/local/generated/<instance>
 ```
 
+Instances on one machine do not share sessions, even though browsers ignore the
+port when they scope cookies. The HTTPS proxy stores each instance's cookies
+under its own prefix, after any `__Host-` or `__Secure-`
+(`macro-<instance>--local-macro-access-token`,
+`__Host-macro-<instance>--macro_mcp_oauth`). It forwards a service only that
+instance's cookies, under their real names, so services and the app behave as
+usual on `localhost`, the machine hostname, a tailnet name, or a tunnel. Every
+other cookie stays in the browser: other instances' cookies, and unprefixed ones
+such as tokens from older stacks or a service's own host port, which no instance
+can claim, and cookies the app's JavaScript sets, which no service reads. That
+includes the SSO callback on the auth service's own port, so SSO against a local
+stack hands the app a session code, which it redeems through the proxy. `run_dev`
+keeps hosted-style cookies and the usual SSO return.
+localStorage and IndexedDB were already separate, since they key on the port.
+
+An existing stack keeps its data. `just stack update` recreates its proxy with
+these rules; sign in once more afterwards. A client that calls the proxy with a
+hard-coded cookie name should send `Authorization: Bearer` instead or use the
+prefixed name. FusionAuth's own cookies stay unprefixed, as its port is published
+directly; they only hold its hosted-login session, not your Macro session.
+
+After changing the cookie rules (`cookie_rewrites` in `xtask_local`'s
+`proxy.rs`), also run them in a real Caddy, which CI doesn't have: from
+`tooling/xtask`, `nix shell nixpkgs#caddy -c cargo test -p xtask_local -- --ignored real_caddy`.
+
 ### Access a remote dev server through one URL
 
 `just local` (the `run_local` alias) and `run_dev` call `hostname`, add that
@@ -513,7 +540,7 @@ just status_local --instance test
 The default instance (no `--instance`) always uses the fixed ports. If one is
 taken, its start fails before the build and names the ports.
 
-The seeded persona login links embed the frontend port. If an instance's window
+The seeded persona login links embed the proxy port. If an instance's window
 moves, run `just seed-scenario apply` again to get links that match.
 
 ## What the Stack Rebuilds
@@ -528,13 +555,24 @@ Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only servic
 whose binary is newer than their container restart, so a build that failed partway
 still gets its finished services reloaded next time.
 
-Three services have Docker-built images. They are not rebuilt by default:
+To rebuild only the services you are working on, pass `--services` with compose or
+binary names, comma-separated: `just run_local rebuild --services contacts_service`
+or `just stack update --services contacts_service,email_service`. An edit to a crate
+most services share then rebuilds in seconds instead of minutes, but the other
+services keep running the code they were last built from. `status`, `status --json`
+(`stale_services`) and the rebuild output list every service whose crates changed
+since its own last build, with the command that rebuilds them all. A full rebuild
+(`r`, or either command without `--services`) clears the list.
+
+Three services have Docker-built images:
 
 - `sync_service`
 - `lexical_service`
 - `websocket_service`
 
-If you change these services, the running stack can use a stale image. Force a rebuild with this flag:
+`sync_service` and `lexical_service`, like the local OpenSearch image, run under tags keyed by the content of what their build reads (the sync worker's cargo dependency closure; the JavaScript workspace manifests, lockfile, shared `packages/` and the lexical service). A start whose inputs changed builds the new image; otherwise every instance and worktree on the machine shares the one already built, so an unrelated edit no longer costs a new instance a minute or two of image builds. Tags over three days old that no container uses are removed.
+
+A running stack keeps the images it started with, and `websocket_service` is built once per instance. If you change these services, force a rebuild with this flag:
 
 ```bash
 just run_local --build-aux-services
@@ -558,6 +596,7 @@ just stack up                  # wipe, bring everything up with a static fronten
 just stack status --json      # same as `just run_local status --json`
 just stack update             # same rebuild as `just run_local rebuild`, without the background job
 just stack update --frontend  # also rebuild the frontend bundle
+just stack update --services contacts_service  # rebuild and reload only these; status lists the rest if stale
 just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```
@@ -566,7 +605,7 @@ The `run_local` start flags also apply to `stack up`. This includes `--instance`
 
 A static frontend (`stack up`, or `run_local --static-frontend`) is built once and served by the proxy at `<proxy>/app/`. The bundle counts as local, as the dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. It resolves its backend from the origin it is served on, so the same stack works on localhost or behind any hostname without a rebuild.
 
-Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
+Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`, in the background while the services build. A package whose sources match one any worktree on the machine has built is copied from `~/.cache/macro-local/wasm-pkgs` instead of compiled; later starts reuse the generated packages when they are current. The static bundle is cached in `~/.cache/macro-local/frontend-bundles`, keyed by the frontend sources as they are on disk (`apps/web`, `packages`, `static_assets`, the root manifests, uncommitted and untracked files included), the generated wasm packages and every `VITE_*` variable, so a stack whose frontend hasn't changed skips `vite build`. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 For Pipedream Connect on a machine hostname, include that HTTPS origin in
 `PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the static-frontend default names
@@ -582,7 +621,7 @@ only localhost. `run_local rebuild` reuses the recorded file; pass it again to
 - Waits for the FusionAuth kickstart
 - Creates the search indices
 
-It saves these volumes as an init snapshot, and clean starts restore it. A detached start over existing volumes keeps them and doesn't use a snapshot. The snapshot is content-addressed and stored under `infra/local/generated/.snapshots`. Later runs restore the snapshot and skip the initialization. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged.
+It saves these volumes as an init snapshot, and clean starts restore it. A detached start over existing volumes keeps them and doesn't use a snapshot. The snapshot is content-addressed and stored in `~/.cache/macro-local/stack-snapshots`, shared by every worktree and instance on the machine (`MACRO_STACK_SNAPSHOT_DIR` overrides it). Later runs restore the snapshot and skip the initialization. The key covers the migrations, compose files, search mappings and the FusionAuth kickstart, but not the instance's ports: each start writes its own redirect URLs into FusionAuth instead. An input change causes a cache miss and a normal full init — the key *is* the definition of clean state, so the full-delete/full-create guarantee is unchanged. Snapshots unused for 14 days are deleted when a new one is saved.
 
 Useful commands:
 
@@ -638,3 +677,43 @@ MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 ```
 
 For the default instance, omit `--instance`.
+
+### Sending timings to Grafana (opt-in)
+
+`run_local` can also send its timings to Loki and Tempo, as CI does, for the
+`Macro run_local` dashboard. It is off unless you create
+`~/.config/macro/local-telemetry.toml` (`$XDG_CONFIG_HOME/macro/` if set):
+
+```toml
+endpoint = "https://otlp.macro-internal.com"
+token = "<OTLP ingestion token>"
+# traces = false  # only Loki
+```
+
+```bash
+chmod 600 ~/.config/macro/local-telemetry.toml
+```
+
+The token is the bearer token of the OTLP ingest route: it can send telemetry
+but not read it. Ask an observability owner for it. It stays in this file: it is
+not read from Doppler or the environment, so it never reaches a generated env
+file or a container. `endpoint` must be `https://`, except for `localhost`, and a
+file with a token that others can read is refused with a one-line warning.
+Delete the file to turn telemetry off; without it nothing is written or sent.
+
+Each bring-up, `rebuild`, `restart-frontend`, `stop` and `r`/`f` hotkey sends one
+`run` line, plus a line per step, per service build (cargo units compiled,
+sccache hits) and per container's wait for its first passing health probe. Lines
+carry step and service names, timings, the instance name, branch and commit, and
+hashed host and worktree ids; never paths, env values, error text or the token.
+Fields and queries: [observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
+
+Sending never slows a run down or fails it. Events are written to
+`~/.local/state/macro/local-telemetry/` first and sent in the background every
+20 seconds and when the run is ready; `last-send.json` there shows the last
+attempt's HTTP status. A run killed before sending, a `stop`, or a send that
+failed is sent by your next run, and a killed bring-up shows up as
+`outcome="interrupted"` with the step it was in.
+
+To try it without the hosted stack, run a throwaway Loki and point the file at
+it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.

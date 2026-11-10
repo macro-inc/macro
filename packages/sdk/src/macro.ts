@@ -33,6 +33,7 @@ import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
 import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
+import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
@@ -218,6 +219,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Share the caller's referral link and email invites to join Macro. */
   readonly referrals: ReferralNamespace;
 
+  /** Saved views: named filter definitions shown in a surface's sidebar, such as Email. */
+  readonly savedViews: SavedViewsNamespace;
+
   readonly tasks: TaskNamespace;
 
   /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
@@ -283,6 +287,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.projects = new ProjectNamespace(client);
     this.properties = new PropertiesNamespace(client);
     this.referrals = new ReferralNamespace(client);
+    this.savedViews = new SavedViewsNamespace(client);
     this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
     this.teams = new TeamNamespace(client);
@@ -439,18 +444,13 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
-export type { FileContent } from './entities/documents/namespace';
 export {
-  RevisionConflictError,
-  Spreadsheet,
-  type SpreadsheetCalculateOptions,
-  type SpreadsheetCalculation,
-  type SpreadsheetEdited,
-  type SpreadsheetEditOptions,
-  type SpreadsheetRead,
-  type SpreadsheetReadOptions,
-  type SpreadsheetSheet,
-} from './entities/documents/spreadsheet';
+  DocumentChangedError,
+  type DocumentMarkdown,
+  type DocumentMarkdownWritten,
+  type SetContentOptions,
+} from './entities/documents/markdown';
+export type { FileContent } from './entities/documents/namespace';
 export {
   CommentQuoteNotPlacedError,
   type TextComment,
@@ -520,6 +520,10 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export {
+  SavedView,
+  type SavedViewConfig,
+} from './entities/saved-views/saved-view';
 export type { SearchOn, SearchOpts } from './entities/search/options';
 export type {
   SearchOptions,
@@ -530,6 +534,17 @@ export type {
 } from './entities/search/types';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export {
+  RevisionConflictError,
+  Spreadsheet,
+  type SpreadsheetCalculateOptions,
+  type SpreadsheetCalculation,
+  type SpreadsheetEdited,
+  type SpreadsheetEditOptions,
+  type SpreadsheetRead,
+  type SpreadsheetReadOptions,
+  type SpreadsheetSheet,
+} from './entities/spreadsheets/spreadsheet';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export type { ActivityReport } from './entities/users/user';

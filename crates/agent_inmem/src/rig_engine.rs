@@ -523,6 +523,7 @@ async fn drive_turn(
         session_id,
         awaiting,
         owner,
+        feature,
         model,
         reasoning_effort,
         speed,
@@ -570,7 +571,8 @@ async fn drive_turn(
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone())
+        .with_agent_session(Some(session_id.as_uuid()));
     let agent = identity.as_ref().map_or_else(
         || "Macro".to_owned(),
         |identity| format!("{} (@{})", identity.name, identity.handle),
@@ -693,9 +695,12 @@ async fn drive_turn(
             loaded_skills,
         )
     };
-    // Carry the feature on the context so tool-spawned subagents attribute to it.
+    // Carry the feature on the context so tool-spawned subagents attribute to it,
+    // and record whatever the tools spend as part of this session.
     let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
+    tool_context.recorder =
+        ai_usage::for_agent_session(base_context.recorder.clone(), session_id.as_uuid());
     // The tools act as the session's bot, delegated for the owner: its writes
     // are attributed to it and presented under its name, not Macro's.
     if let Some(identity) = &identity {

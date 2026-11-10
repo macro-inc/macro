@@ -90,7 +90,9 @@ Outlook (Microsoft Graph) outbound adapters.
   through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
-  through `request`/`conditional_request` rather than the raw client. Use
+  through `request`/`conditional_request` rather than the raw client. A GET
+  whose 404 means "there is none" (a contact without a photo) uses
+  `optional_request`, so the 404 is not a span error. Use
   `graph_request` only when a caller must branch on the Graph status, error
   code, or request id; the others drop them.
 - `outlook.graph_request` is the Graph telemetry contract the Outlook sync
@@ -131,6 +133,13 @@ Outlook (Microsoft Graph) outbound adapters.
   bundled chrono-tz lacks: Outlook writes send local times computed with
   them, so stale rules move an event. British Columbia, Alberta and Manitoba
   Standard Time are held out that way until current tz data ships.
+- Decode Graph JSON bodies with `transport::read_json`. `invalid_response`
+  takes the field or shape that failed (`read_json` gives the JSON path and a
+  missing field's name) and must never quote the response, which can carry
+  mail content.
+- An Outlook invitation whose `$value` read fails for anything but throttling
+  or credentials still reads, with `MailboxMessage::calendar_parts_unavailable`
+  set; mailbox sync decides whether to wait for the parts.
 - Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
   400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
   carries the same correlation and RFC reply headers.

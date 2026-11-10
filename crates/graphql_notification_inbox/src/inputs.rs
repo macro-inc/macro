@@ -50,6 +50,9 @@ pub enum GraphqlNotificationInboxRowType {
     AccessRequested,
     /// Access the viewer requested was granted.
     AccessGranted,
+    /// The viewer's access to a runtime was removed, and agents of theirs
+    /// living there stopped.
+    AccessRemoved,
 }
 
 impl From<GraphqlNotificationInboxRowType> for InboxRowType {
@@ -70,6 +73,7 @@ impl From<GraphqlNotificationInboxRowType> for InboxRowType {
             G::CalendarJoinRequest => Self::CalendarJoinRequest,
             G::AccessRequested => Self::AccessRequested,
             G::AccessGranted => Self::AccessGranted,
+            G::AccessRemoved => Self::AccessRemoved,
         }
     }
 }
@@ -92,6 +96,7 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
             D::CalendarJoinRequest => Self::CalendarJoinRequest,
             D::AccessRequested => Self::AccessRequested,
             D::AccessGranted => Self::AccessGranted,
+            D::AccessRemoved => Self::AccessRemoved,
         }
     }
 }

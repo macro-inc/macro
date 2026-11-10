@@ -13,9 +13,9 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         Some(_) if app.runtime_connected() => (
             "●",
             Style::new().fg(ERR),
-            "runtime connected, service reports offline",
+            "machine connected, service reports offline",
         ),
-        Some(_) => ("●", Style::new().fg(WARN), "paired, runtime not dialed in"),
+        Some(_) => ("●", Style::new().fg(WARN), "paired, machine not dialed in"),
         None if app.paired() => ("○", Style::new().fg(WARN), "paired, unreachable"),
         None => ("○", Style::new().fg(DIM), "not paired"),
     };
