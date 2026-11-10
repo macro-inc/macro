@@ -56,6 +56,18 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Treat `domain/events.rs` payloads as a public contract: the SDK types every
+  `EmailTopicEvent` variant through the webhook OpenAPI schema. The webhook's
+  `normalized_email_event` delivers selected `macro.email` events verbatim to
+  the owner's personal-workspace webhooks and user-scoped event stream. It skips
+  `ThreadBackfilled`, `ThreadsReindexRequested`, and `MessageReceived` when
+  `is_spam_or_trash` is true. Link events filter by `link_id`; other delivered
+  events filter by `thread_id`. Creating or patching webhook filters and opening
+  a stream with any `email.*` event requires a `UserOrInternal` credential;
+  bot and harness credentials receive 403 with the message
+  `email events require the inbox owner's own credential`. Decide delivery for
+  every new variant, and never add message bodies, snippets, or other message
+  content beyond header-level data to these payloads.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send

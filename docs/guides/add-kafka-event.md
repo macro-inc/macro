@@ -48,7 +48,7 @@ Put the types next to the domain that owns the fact
 (`src/domain/events.rs` or `src/broker.rs`):
 
 - A topic enum with `#[serde(tag = "event_type", content = "metadata")]` and
-  `#[serde(rename = "<entity>.<past_tense>")]` per variant, implementing
+  `#[serde(rename = "<entity>.<event_name>")]` per variant, implementing
   `TopicEvent { type Topic; const SCHEMA_VERSION: u8 }`.
 - A `XMacroEvent { key, event: Event<XTopicEvent> }` implementing `MacroEvent`,
   with one constructor per variant. Build envelopes with `Event::new` (UUIDv7
@@ -58,8 +58,9 @@ Put the types next to the domain that owns the fact
   session for agent sessions, the lowercased PR key for pull requests. Every
   variant on a topic must use the same keying.
 - Metadata carries ids and the committed state consumers need; consumers should
-  not have to read back the database to act. Never put secrets or header values
-  in metadata (see the webhook README's management events).
+  not have to read back the database to act. Never put secrets or message bodies
+  in metadata. Email events may carry subject and address headers, but not
+  snippets, bcc addresses, or attachment names (see the webhook README).
 - Domain crates depend on `macro_event_broker` with `default-features = false`.
   Only composition roots pull in the Kafka adapters; event types consumed by the
   self-hosted daemon once dragged `rdkafka` into its build.
@@ -75,8 +76,9 @@ Put the types next to the domain that owns the fact
 - Publish only after the transaction commits, from committed state (see
   `PropertiesServiceImpl` building update events "from committed persistence
   state"). A publish inside the transaction announces changes that may roll back.
-- A failed publish is logged, never surfaced: the change already committed.
-  There is no outbox; delivery is at most once relative to the write.
+- For direct, best-effort publication, a failed publish is logged, never
+  surfaced: the change already committed. Without an event outbox, an event
+  can be lost; publication retries can repeat delivery.
 - Tests: a recording `MacroEventBroker` that captures topic, key, and
   `serde_json::to_value(event.event())`, asserting the full JSON literal
   (`crates/messages/src/outbound/broker/test.rs`). That literal is the wire
@@ -184,11 +186,29 @@ payload change must be readable by both the deployed code and the new code.
   other than the consumer's compiled one, in both directions. Additive changes
   do not bump it.
 
-## 8. Public contract (webhook-delivered topics only)
+## 8. Public contract (`WebhookEvent` union)
 
-Variants on `macro.documents`, `macro.channels`, `macro.messages`, and
-`macro.agent_session_lifecycle` reach customers through `WebhookEvent`
-(`crates/webhook/src/domain/events.rs`), which is part of the storage OpenAPI spec.
+`WebhookEvent` (`crates/webhook/src/domain/events.rs`) embeds the topic enums
+from `macro.documents`, `macro.channels`, `macro.call_notifications`,
+`macro.messages`, `macro.agent_session_lifecycle`, and `macro.email`. It is part
+of the storage OpenAPI spec. The union includes variants that ingestion does not
+deliver, such as `document.purged`.
+
+For `macro.email`, deliver every variant except `email.thread_backfilled` and
+`email.threads_reindex_requested`. Also silently skip `email.message_received`
+when `is_spam_or_trash` is true. The three `email.link_*` events use
+`entity_type = "email_link"` with `link_id` as webhook entity and ordering key;
+every other delivered email event uses `entity_type = "email_thread"` with
+`thread_id` for both. Filter `ids` select links or threads, never messages.
+Only the inbox owner's personal webhook workspace and `scope=user` stream
+receive email events. Do not resolve entity access or expand to team workspaces.
+Deliver the broker envelope (`event_type` and all `metadata`) unchanged.
+Opening a stream, creating a webhook, or patching webhook filters that name any
+`email.*` event requires a principal admitted by `UserOrInternal` (a user's own
+credential or an internal service acting for a user). Bot and harness credentials,
+including bots acting as a user, receive HTTP 403 with
+`email events require the inbox owner's own credential`. Filters without
+`email.*` events retain their existing credential behavior.
 
 - Derive `utoipa::ToSchema` on the new metadata under the crate's `schema` or
   `inbound` feature, like `MessageTopicEvent`.
@@ -198,6 +218,13 @@ Variants on `macro.documents`, `macro.channels`, `macro.messages`, and
   `src/events/receiver.ts`); see the
   [add-sdk-endpoint skill](../../.agents/skills/add-sdk-endpoint/SKILL.md) for
   SDK conventions.
+  Email events expose `inbox: Link` from `link_id` and `owner: User` from
+  `owner`. Add `thread: EmailThread` when `thread_id` exists; add
+  `message: EmailMessage` when `message_id` exists, except for
+  `email.message_deleted` (no message handle) and `email.message_draft_synced`
+  (`draft: EmailDraft` instead). Metadata with `actor` adds
+  `actor: User | undefined`. Type `email.threads_reindex_requested` with
+  `threads: EmailThread[]` from `thread_ids`, even though it is not delivered.
 
 ## Verify locally
 

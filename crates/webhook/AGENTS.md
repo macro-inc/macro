@@ -15,8 +15,9 @@ before changing ingestion or delivery behavior.
 - `src/inbound/kafka_consumer.rs` / `kafka_stream_consumer.rs`: ingestion
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
-  and `macro.call_notifications`.
+  `macro.call_notifications`, and `macro.email`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
+- `src/inbound/email_event_access.rs`: credential gate for email subscriptions.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 
 ## Scope
@@ -27,7 +28,7 @@ before changing ingestion or delivery behavior.
 ## Boundaries
 
 - Depends on: `channels`, `documents`, `messages`, `agent_session`,
-  `agent_trigger`, `entity_access`, `macro_event_broker`, `kafka_util`,
+  `agent_trigger`, `email`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.
 - Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
 
@@ -35,8 +36,13 @@ before changing ingestion or delivery behavior.
 
 - Add a new ingestible event: `src/domain/ingestion.rs` (match rule) →
   `src/inbound/kafka_consumer.rs` and `kafka_stream_consumer.rs`
-  (subscribe/decode) → README's event table. Private call notifications
-  match only the named user's personal workspace and stream.
+  (subscribe/decode) → README's event table. Private call notifications match
+  only the recipient's personal workspace and stream; delivered email events
+  match only the inbox owner's personal workspace and user-scoped stream.
+- Email filters on stream opens, webhook creates, and webhook patches require a
+  `UserOrInternal` credential. Bot and harness credentials receive HTTP 403
+  (`email events require the inbox owner's own credential`); filters without
+  `email.*` events retain their existing access rules.
 - Change delivery retry behavior: `src/domain/delivery.rs` → README's retry
   schedule table (keep them in sync).
 
