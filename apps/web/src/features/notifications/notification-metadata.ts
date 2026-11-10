@@ -97,6 +97,13 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('routine_run_finished', () =>
         routineRunFailed(n) ? 'failed' : 'finished'
       )
+      // The computer is the actor: "<computer> Claude sign-in expired".
+      .with('claude_sign_in_expiry', () =>
+        match(claudeSignInStage(n))
+          .with('expires_today', () => 'Claude sign-in expires today')
+          .with('expired', () => 'Claude sign-in expired')
+          .otherwise(() => 'Claude sign-in expires soon')
+      )
       .exhaustive(() => 'notified you about')
   );
 }
@@ -160,6 +167,7 @@ export function getNotificationTargetName(
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
       .with({ tag: 'routine_run_finished' }, () => undefined)
+      .with({ tag: 'claude_sign_in_expiry' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -252,6 +260,25 @@ export function getNotificationContent(
       .with({ tag: 'routine_run_finished' }, (m) =>
         m.content.outcome === 'failed' ? 'Its run failed.' : 'Its run finished.'
       )
+      .with({ tag: 'claude_sign_in_expiry' }, (m) =>
+        match(m.content.stage)
+          .with(
+            'expires_soon',
+            () =>
+              'Its Claude sign-in expires soon. Sign in again in Settings → Runtimes.'
+          )
+          .with(
+            'expires_today',
+            () =>
+              'Its Claude sign-in expires today. Sign in again in Settings → Runtimes.'
+          )
+          .with(
+            'expired',
+            () =>
+              'Its Claude sign-in expired. Sign in again in Settings → Runtimes.'
+          )
+          .exhaustive()
+      )
       .exhaustive(() => undefined)
   );
 }
@@ -320,6 +347,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'calendar_event_join_request' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
+      .with({ tag: 'claude_sign_in_expiry' }, () => false)
       .with(
         {
           tag: P.union(
@@ -332,6 +360,11 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       )
       .exhaustive(() => true)
   );
+}
+
+function claudeSignInStage(n: UnifiedNotification) {
+  const meta = n.notification_metadata;
+  return meta.tag === 'claude_sign_in_expiry' ? meta.content.stage : undefined;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

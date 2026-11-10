@@ -4,6 +4,7 @@ import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
+import { harnessKeys } from '@queries/harnesses/keys';
 import { messageKeys } from '@queries/messages/keys';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import { refreshEmailFollowup } from '@queries/reminders/email-refresh';
@@ -178,6 +179,10 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
       queryClient.invalidateQueries({
         queryKey: scheduledActionKeys.list.queryKey,
       });
+    })
+    // The computer's row in Runtimes shows its Claude account.
+    .with({ tag: 'claude_sign_in_expiry' }, () => {
+      queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
     })
     .with({ tag: 'invite_to_team' }, () => {
       queryClient.invalidateQueries({

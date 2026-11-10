@@ -1507,6 +1507,23 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'routine_run_finished'>
     )
     .with(
+      { __typename: 'GraphqlClaudeSignInExpiryMetadata' },
+      (metadata) =>
+        ({
+          tag: 'claude_sign_in_expiry',
+          content: {
+            harnessId: metadata.claudeSignInExpiryHarnessId,
+            computerName: metadata.claudeSignInExpiryComputerName,
+            stage: match(metadata.claudeSignInExpiryStage)
+              .with('EXPIRES_SOON', () => 'expires_soon' as const)
+              .with('EXPIRES_TODAY', () => 'expires_today' as const)
+              .with('EXPIRED', () => 'expired' as const)
+              .exhaustive(),
+            expiresAt: metadata.claudeSignInExpiryExpiresAt,
+          },
+        }) satisfies NotifEventMember<'claude_sign_in_expiry'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({

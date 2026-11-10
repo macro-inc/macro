@@ -677,6 +677,26 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      // Signing in again happens on the computer's row in Settings → Runtimes.
+      .with(
+        'claude_sign_in_expiry',
+        () =>
+          async (lm: SplitManager, newSplit: boolean = false) =>
+            openContent(
+              lm,
+              {
+                type: 'component',
+                id: 'settings',
+                entryMetadata: {
+                  route: paneRoute({
+                    id: 'settings',
+                    params: { tab: 'runtimes' },
+                  }),
+                },
+              },
+              { newSplit, sourceHandle, onApplied }
+            )
+      )
       .exhaustive(() => null)
   );
 }

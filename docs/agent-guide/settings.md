@@ -896,6 +896,15 @@ sign-in** beside the field. Successful sign-in switches the label to your accoun
 failures appear inline. Members without management rights see the mode without
 account controls. This account is used by Claude on the shared computer.
 
+Whoever completed the sign-in, and the team's owner and admins, get a
+**Claude sign-in on <computer> expires soon** notification three days before
+the sign-in expires, **… expires today** within its last day, and **… expired**
+once it passes or as soon as macrod reports Claude signed out. Each goes out
+once per sign-in, a later stage replacing the earlier ones it overtook, and
+none arrive after **Use Macro credits**. Opening one lands on this section,
+where **Sign in with Claude** starts over. People can turn them off under
+**Settings → Notifications → Computer Claude sign-ins**.
+
 ### GitHub reconnect recovery
 
 When GitHub reports that reauthentication is required, reconnect starts OAuth

@@ -1721,6 +1721,36 @@
         "type": "string",
         "enum": ["public", "private", "directMessage", "team"]
       },
+      "ClaudeSignInExpiryMetadata": {
+        "type": "object",
+        "description": "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Runtimes.",
+        "required": ["harnessId", "computerName", "stage"],
+        "properties": {
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the sign-in expires or expired; absent when Claude rejected it."
+          },
+          "harnessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer's harness, whose runtime row holds the sign-in."
+          },
+          "stage": {
+            "$ref": "#/components/schemas/ClaudeSignInExpiryStage",
+            "description": "How close the sign-in is to no longer working."
+          }
+        }
+      },
+      "ClaudeSignInExpiryStage": {
+        "type": "string",
+        "description": "How close a computer's Claude sign-in is to no longer working.",
+        "enum": ["expires_soon", "expires_today", "expired"]
+      },
       "CommentRef": {
         "oneOf": [
           {
@@ -3164,6 +3194,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["routine_run_finished"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ClaudeSignInExpiryMetadata",
+                "description": "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["claude_sign_in_expiry"]
               }
             }
           }

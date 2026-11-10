@@ -198,6 +198,12 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Routine runs',
         description: 'When one of your routines finishes or fails a run',
       },
+      {
+        type: 'claude_sign_in_expiry',
+        label: 'Computer Claude sign-ins',
+        description:
+          "When a Claude sign-in on your team's computer is about to expire",
+      },
     ],
   },
   {
