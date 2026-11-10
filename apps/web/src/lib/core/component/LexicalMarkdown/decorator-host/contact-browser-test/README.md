@@ -33,3 +33,9 @@ its preserved captures. `contact.browser.e2e.ts` covers Source preservation;
 `native.browser.e2e.ts` covers the explicitly selected native input trace. Keep
 all prerequisite snapshots and execution-bound provenance in the owning external
 proof directory, rather than changing inputs or normalizing comparison output.
+
+The native document body adds the real Contact row alongside User mentions in
+its existing decorator registry. Its app-owned Contact context is released
+through the same listener scope before runtime close, including failed mounting.
+Leaf controls do not establish installed-app acceptance; validate this app mount
+with the coherent candidate's matched native package.

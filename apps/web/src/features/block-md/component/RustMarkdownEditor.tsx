@@ -1,6 +1,8 @@
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
+import { createNativeFastContactDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-contact-views';
+import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
@@ -60,6 +62,8 @@ export default function RustMarkdownEditor(props: {
   const userMentionContext = createNativeUserMentionContext(theme);
   const overlayLifecycle = createNativeListenerScope();
   overlayLifecycle.add(() => userMentionContext.dispose());
+  const contactContext = createNativeContactContext(theme);
+  overlayLifecycle.add(() => contactContext.dispose());
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -113,7 +117,10 @@ export default function RustMarkdownEditor(props: {
               root: element,
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry()),
-                createNativeUserMentionViews(userMentionContext)
+                {
+                  ...createNativeUserMentionViews(userMentionContext),
+                  ...createNativeFastContactDecoratorViews(contactContext),
+                }
               ),
               installOverlays(view) {
                 try {
