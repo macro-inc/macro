@@ -621,7 +621,7 @@ fn check_platform_rules() -> Step<Run> {
 
 fn run_session_tests() -> Step<Run> {
     Step::new("Check document session executor and storage")
-        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts")
+        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH -u BASH_ENV bunx playwright test --config src/session/browser-test/playwright.config.ts")
         .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
 }
 

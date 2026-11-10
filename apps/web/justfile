@@ -237,7 +237,7 @@ test-calendar-details-browser *ARGS:
 # Optimistic mutations through the real worker/WASM cache in Chromium. Same
 # LD_LIBRARY_PATH caveat as the sign-up browser tests above.
 test-functional *ARGS:
-    env -u LD_LIBRARY_PATH bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
+    env -u LD_LIBRARY_PATH -u BASH_ENV bunx playwright test --config tests/functional/playwright.config.ts {{ARGS}}
 
 test-email-rendering:
     bun run --cwd ../../packages/email-renderer test

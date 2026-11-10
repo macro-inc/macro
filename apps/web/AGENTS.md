@@ -5,6 +5,7 @@
 - Keep dev response middleware single-install per response across reloads, and parse terminal inline source-map comments without a regular expression over the complete generated module.
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
+- Clear both `LD_LIBRARY_PATH` and `BASH_ENV` when launching downloaded Playwright browsers from the Nix dev shell so host Chromium cannot load incompatible Nix libraries.
 - `bun run test`: run tests 
 - Keep generated Gradle/Tauri output directories out of Vite file watching to avoid exhausting host watchers.
 - Keep installs, dependency-cache cleanup, and additional Vite/Vitest instances out of a worktree with a live preview; use a disposable copy with independent node_modules and caches.

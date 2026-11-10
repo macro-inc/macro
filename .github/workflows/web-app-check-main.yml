@@ -786,7 +786,7 @@ jobs:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
     - name: Check document session executor and storage
-      run: git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && bunx playwright test --config src/session/browser-test/playwright.config.ts
+      run: git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH -u BASH_ENV bunx playwright test --config src/session/browser-test/playwright.config.ts
       working-directory: packages/collaboration
     - name: Functional Browser Tests
       run: bun run test:functional
