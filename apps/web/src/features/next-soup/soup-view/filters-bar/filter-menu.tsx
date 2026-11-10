@@ -385,6 +385,8 @@ export const SearchableFilterSubmenu = (props: {
   onOpenChange?: (v: boolean) => void;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
   footer?: JSX.Element;
 }) => {
   const submenu = createFilterSubmenuHover({
@@ -451,6 +453,7 @@ export const SearchableFilterSubmenu = (props: {
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
+            createOption={props.createOption}
             footer={props.footer}
           />
         </Dropdown.Group>
