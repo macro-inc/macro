@@ -20,6 +20,8 @@ const policies = {
     'authoritative: revision and sharing need server confirmation',
   DeleteSavedView:
     'authoritative: revision-checked deletion and collection revalidation',
+  ReorderSavedViews:
+    'authoritative: per-viewer order; revalidate the ordered cursor chain',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',

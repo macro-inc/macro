@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clause,
   combine,
+  compileClause,
   compileFacets,
   confine,
   type Facet,
@@ -192,5 +193,23 @@ describe('GitHub repository ID precision', () => {
     expect(() => compileRepository(id)).toThrow(
       'GitHub repository ID must be a positive safe integer'
     );
+  });
+});
+
+describe('email subject and domain fields', () => {
+  it('compile to the backend Subject and Domain literals', () => {
+    expect(compileClause({ ef: clause.eq('emailSubject', 'FYI') })).toEqual({
+      ef: { l: { Subject: 'FYI' } },
+    });
+    for (const [field, backend] of [
+      ['emailSenderDomain', 'Sender'],
+      ['emailRecipientDomain', 'Recipient'],
+      ['emailCcDomain', 'Cc'],
+      ['emailBccDomain', 'Bcc'],
+    ] as const) {
+      expect(compileClause({ ef: clause.eq(field, 'acme.com') })).toEqual({
+        ef: { l: { [backend]: { Domain: 'acme.com' } } },
+      });
+    }
   });
 });

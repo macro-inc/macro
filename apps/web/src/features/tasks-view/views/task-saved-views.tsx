@@ -387,7 +387,7 @@ function TaskSavedViewRows(props: {
     <Show when={savedViews && savedViewsList}>
       {(views) => (
         <>
-          <SavedViewList.Items>
+          <SavedViewList.Items label={t('viewMenus.savedTaskViews')}>
             <Show when={creating()}>
               <SavedViewList.Draft onSelect={() => run(closeTask)} />
             </Show>

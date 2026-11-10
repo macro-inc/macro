@@ -50,11 +50,14 @@ pub enum InboxRowType {
     AccessRequested,
     /// Access the viewer requested was granted.
     AccessGranted,
+    /// The viewer's access to a runtime was removed, and agents of theirs
+    /// living there stopped.
+    AccessRemoved,
 }
 
 impl InboxRowType {
     /// Every kind of row.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Agent,
         Self::Email,
         Self::ChannelMention,
@@ -69,6 +72,7 @@ impl InboxRowType {
         Self::CalendarJoinRequest,
         Self::AccessRequested,
         Self::AccessGranted,
+        Self::AccessRemoved,
     ];
 }
 
