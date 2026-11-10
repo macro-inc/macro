@@ -64,6 +64,14 @@ function ParticipantTileWrapper(props: {
   // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
   // grids) still fill, so portrait video keeps the space.
   // Cells can shrink to fit the screen-share strip and picture-in-picture grid.
+  const stageDimensions = () => {
+    if (!props.stage) return undefined;
+    const ratio = props.aspectRatio ?? 16 / 9;
+    return {
+      width: `min(100cqw,calc(100cqh * ${ratio}))`,
+      height: `min(100cqh,calc(100cqw / ${ratio}))`,
+    };
+  };
   return (
     <Popover
       open={menuOpen()}
@@ -101,14 +109,7 @@ function ParticipantTileWrapper(props: {
           }}
           data-call-tile=""
           data-call-stage={props.stage ? '' : undefined}
-          style={
-            props.stage
-              ? {
-                  width: `min(100cqw,calc(100cqh * ${props.aspectRatio ?? 16 / 9}))`,
-                  height: `min(100cqh,calc(100cqw / ${props.aspectRatio ?? 16 / 9}))`,
-                }
-              : undefined
-          }
+          style={stageDimensions()}
           data-call-participant={props.participantId}
           class={cn(
             'group/tile relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',

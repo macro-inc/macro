@@ -138,12 +138,9 @@ export function createCallAudioOutput(
         'plugin:call-kit|select_audio_output',
         { callId: active, id }
       );
-      if (
-        !disposed &&
-        callId() === active &&
-        revision === request &&
-        matchingAudioOutputState(active, result.state)
-      )
+      if (disposed || callId() !== active) return;
+      if (revision !== request) return;
+      if (matchingAudioOutputState(active, result.state))
         setState('output', result.state);
     } catch (error) {
       if (

@@ -66,6 +66,16 @@ export function CallChatPanel(props: {
     body.remove();
   });
 
+  const dockStyle = () => {
+    if (!props.sidebarMount) return undefined;
+    return {
+      left: 'auto',
+      right: '0px',
+      top: '8px',
+      bottom: '8px',
+      width: `${sidebarSize.width ?? 0}px`,
+    };
+  };
   return (
     <MobileDrawer
       open={sheetOpen()}
@@ -83,17 +93,7 @@ export function CallChatPanel(props: {
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
         class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out motion-reduce:transition-none"
-        style={
-          props.sidebarMount
-            ? {
-                left: 'auto',
-                right: '0px',
-                top: '8px',
-                bottom: '8px',
-                width: `${sidebarSize.width ?? 0}px`,
-              }
-            : undefined
-        }
+        style={dockStyle()}
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,

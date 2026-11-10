@@ -29,7 +29,9 @@ export function createHeldCallPreview<T extends CallPreviewParticipant>(
     on([desired, reducedMotion, present], ([next, reduced, currentPresent]) => {
       if (next === id()) return;
       const target = participants().find((person) => person.id === next);
-      if (!currentPresent || !target || target.sharing || reduced) {
+      const immediate = !currentPresent || !target;
+      const skipMotion = reduced || target?.sharing;
+      if (immediate || skipMotion) {
         setId(next);
         return;
       }

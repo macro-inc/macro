@@ -88,6 +88,11 @@ export function ThreadReplyList(props: {
 
   onCleanup(targetReplyScroller.dispose);
 
+  const displayMeta = (id: string) => {
+    const meta = listMetaByReplyId()[id];
+    if (!props.asRoots) return meta;
+    return { ...meta, isGroupedWithPrevious: false };
+  };
   return (
     <For each={[...repliesById().keys()]}>
       {(id) => {
@@ -143,14 +148,7 @@ export function ThreadReplyList(props: {
                 inputMode={props.inputMode}
                 message={replyMessage()}
                 actions={props.getMessageActions?.(replyMessage())}
-                listMeta={
-                  props.asRoots
-                    ? {
-                        ...listMetaByReplyId()[id],
-                        isGroupedWithPrevious: false,
-                      }
-                    : listMetaByReplyId()[id]
-                }
+                listMeta={displayMeta(id)}
                 messageEditor={props.messageEditor}
                 onClick={() => props.onSelectReply?.(id)}
                 selected={isReplySelected()}

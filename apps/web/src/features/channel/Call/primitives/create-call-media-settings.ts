@@ -121,12 +121,13 @@ export function createCallMediaSettings(call: CallMediaControlsState) {
       }
       if (!disposed) await call.setBackgroundEffect(next);
     });
-    const uploadedImage = effect instanceof File && next?.type === 'image';
-    if (applied && uploadedImage && !disposed && next?.type === 'image') {
-      fireAndForget(
-        rememberRecentBackgroundImage({ id: next.id, path: next.path }),
-        'recent-background-images'
-      );
+    if (applied && !disposed) {
+      if (effect instanceof File && next?.type === 'image') {
+        fireAndForget(
+          rememberRecentBackgroundImage({ id: next.id, path: next.path }),
+          'recent-background-images'
+        );
+      }
     }
     if (!disposed) setApplyingBackground(false);
     return applied && !disposed;

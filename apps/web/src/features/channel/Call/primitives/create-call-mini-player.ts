@@ -177,16 +177,17 @@ export function createCallMiniPlayer(options: {
   const finishDrag = (event: PointerEvent, cancelled = false) => {
     if (!drag || drag.pointer !== event.pointerId) return;
     const box = options.root().getBoundingClientRect();
-    const target = cancelled
-      ? undefined
-      : getCallPlayerSnapTarget(
-          box.x,
-          box.y,
-          box.width,
-          box.height,
-          window.innerWidth,
-          window.innerHeight
-        );
+    let target: ReturnType<typeof getCallPlayerSnapTarget>;
+    if (!cancelled) {
+      target = getCallPlayerSnapTarget(
+        box.x,
+        box.y,
+        box.width,
+        box.height,
+        window.innerWidth,
+        window.innerHeight
+      );
+    }
     if (target) {
       setPlacement({
         corner: target.corner,

@@ -238,6 +238,12 @@ export function CallMiniPlayer(props: {
                     const participant = () =>
                       candidates().find((person) => person.id === id) ??
                       initial;
+                    const shareLabel = () => {
+                      if (participant().local) return t('calls.youAreSharing');
+                      return t('calls.presenterSharing', {
+                        name: participant().name,
+                      });
+                    };
                     return (
                       <div
                         data-call-player-participant={id}
@@ -306,11 +312,7 @@ export function CallMiniPlayer(props: {
                             when={participant().sharing}
                             fallback={participant().name}
                           >
-                            {participant().local
-                              ? t('calls.youAreSharing')
-                              : t('calls.presenterSharing', {
-                                  name: participant().name,
-                                })}
+                            {shareLabel()}
                           </Show>
                         </span>
                         <Show

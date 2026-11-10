@@ -447,9 +447,17 @@ export function CallOverlay(props: {
         data-call-layout={layout()}
         data-call-fullscreen={isMobile() ? '' : undefined}
         onPointerDown={(event) => {
-          // A stage click owns Space; clicks in other panes keep their own scope.
+          // Only a desktop stage-background click claims Space. Interactive
+          // controls and touch popovers retain their own focus and dismissal flow.
           const root = event.currentTarget;
-          if (!root.contains(document.activeElement)) {
+          const target = event.target;
+          const interactive =
+            target instanceof Element &&
+            target.closest(
+              'button, input, textarea, select, a[href], [role="dialog"], [role^="menuitem"], [contenteditable]'
+            );
+          const claimStage = !isMobile() && !interactive;
+          if (claimStage && !root.contains(document.activeElement)) {
             root.focus({ preventScroll: true });
           }
           setKeyboardFocus(false);
