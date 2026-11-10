@@ -75,6 +75,12 @@ pub async fn router(
         .host_str()
         .context("public MCP URL has no host")?
         .to_owned();
+    // The harness's own sessions reach this server through the in-network
+    // service URL (the egress proxy's `macro` upstream), not the public one.
+    let mcp_service_host = url::Url::parse(macro_service_urls::McpServiceUrl::new()?.as_ref())?
+        .host_str()
+        .context("MCP service URL has no host")?
+        .to_owned();
     // Built once: the factory runs per request in stateless mode.
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
@@ -101,13 +107,8 @@ pub async fn router(
         },
         Arc::new(LocalSessionManager::default()),
         {
-            let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-                mcp_public_host.clone(),
-                "localhost".into(),
-                "127.0.0.1".into(),
-                "gateway.macro.com".into(),
-                "dev-gateway.macro.com".into(),
-            ]);
+            let mut config = StreamableHttpServerConfig::default()
+                .with_allowed_hosts(allowed_hosts(&mcp_public_host, &mcp_service_host));
             config.legacy_session_mode = false;
             config.json_response = true;
             config
@@ -282,4 +283,23 @@ fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
         None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
     }
+}
+
+/// The Host headers the public MCP server accepts: its public host, the
+/// in-network service host the harness's own sessions use, and loopback and
+/// gateway names. Anything else is refused as possible DNS rebinding.
+fn allowed_hosts(public: &str, service: &str) -> Vec<String> {
+    let mut hosts: Vec<String> = [
+        public,
+        service,
+        "localhost",
+        "127.0.0.1",
+        "gateway.macro.com",
+        "dev-gateway.macro.com",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    hosts.dedup();
+    hosts
 }
