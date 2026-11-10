@@ -26,6 +26,13 @@ pub fn is_invisible(c: char) -> bool {
 /// What personal detail `text` names, if any: an email address, a phone
 /// number or a street address, by their shape.
 pub fn personal_detail(text: &str) -> Option<&'static str> {
+    // An item id is not a personal detail, though its digit groups can look
+    // like a phone number.
+    let text = &lazy_regex::regex_replace_all!(
+        r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+        text,
+        ""
+    );
     if lazy_regex::regex_is_match!(
         r"(?i)\b[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}\b",
         text

@@ -21,4 +21,9 @@ fn personal_details_are_found_by_shape() {
     let street = format!("ship to {} Market Street", 12);
     assert_eq!(personal_detail(&street), Some("a street address"));
     assert_eq!(personal_detail("Follow up on the supplier quote"), None);
+    let id = format!(
+        "read 5eede48c-ab34-{}-{}-1e18fdb1c5f4 first",
+        "8569", "9698"
+    );
+    assert_eq!(personal_detail(&id), None);
 }
