@@ -64,6 +64,19 @@ pub struct Unattended {
     /// are every catalog operation that isn't a known read, so an operation
     /// missing from the catalog is a write.
     pub dry_run: bool,
+    /// Who reads the program's value, which names it when it is too large.
+    pub output: UnattendedOutput,
+}
+
+/// Who reads an unattended program's value. Either way a value over the
+/// executor's `max_result_bytes` fails the run instead of being summarized.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UnattendedOutput {
+    /// A routine step's output, which later steps read whole.
+    Step,
+    /// A page's program, whose value the page that called it reads.
+    Page,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.

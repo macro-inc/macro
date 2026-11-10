@@ -664,11 +664,15 @@ async fn run() -> anyhow::Result<()> {
             // Programs in HTML documents run for their viewers on a small pool
             // of their own, so a busy document can't take public MCP's slots.
             // Each viewer also waits for their own slots in `DocumentPrograms`.
+            // A page reads its program's value whole, so it may be larger than
+            // a tool result: up to `DOCUMENT_RESULT_BYTES`, in a frame of 1 MiB.
             let documents = code_execution::domain::ExecutionService::new(
                 Arc::clone(&runner),
                 code_execution::domain::Limits {
                     max_running: 4,
                     max_queued: 16,
+                    max_frame_bytes: 1024 * 1024,
+                    max_result_bytes: agent_code_mode::domain::DOCUMENT_RESULT_BYTES,
                     ..Default::default()
                 },
             )?;

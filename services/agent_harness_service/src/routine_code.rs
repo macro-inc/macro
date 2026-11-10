@@ -16,7 +16,7 @@ use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SdkEndpoints, SourceFile, Unattended, operations, sdk_declarations,
+    SdkEndpoints, SourceFile, Unattended, UnattendedOutput, operations, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -295,6 +295,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
             unattended: Some(Unattended {
                 arguments,
                 dry_run: run.dry_run,
+                output: UnattendedOutput::Step,
             }),
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);

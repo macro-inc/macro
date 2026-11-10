@@ -9,7 +9,7 @@ use super::{CodeModeError, UserCodeMode, UserExecutionReceipt};
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
 use code_execution::domain::{
-    CheckError, ExecuteRequest, ProgramBundler, ProgramChecker, Unattended,
+    CheckError, ExecuteRequest, ProgramBundler, ProgramChecker, Unattended, UnattendedOutput,
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -28,6 +28,11 @@ pub use viewer_runs::RUNS_PER_VIEWER;
 
 /// The per-user rollout flag, shared with the web app's `defineFlag` key.
 pub const DOCUMENT_PROGRAMS_FLAG: &str = "enable-html-code-mode";
+
+/// Largest value, as JSON, a page's program may return. The executor that
+/// runs document programs is given it; a larger value fails the run with a
+/// message naming it.
+pub const DOCUMENT_RESULT_BYTES: usize = 1000 * 1024;
 
 /// Builds kept, by source hash. A miss rebuilds, so this only bounds memory.
 const CACHED_BUILDS: NonZeroUsize = NonZeroUsize::MIN.saturating_add(31);
@@ -267,6 +272,7 @@ impl DocumentPrograms {
                 Some(Unattended {
                     arguments: request.arguments,
                     dry_run: false,
+                    output: UnattendedOutput::Page,
                 }),
                 cancel,
             )

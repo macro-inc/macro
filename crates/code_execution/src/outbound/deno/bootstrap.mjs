@@ -143,11 +143,16 @@ try {
     value = await main({...context, macro, session, execution});
   }
   if (unattended) {
-    // A step's output feeds later steps whole; one too large fails instead
-    // of being summarized.
+    // A step's output feeds later steps whole, and a page reads its
+    // program's value whole; one too large fails instead of being summarized.
     const bytes = encoder.encode(stringify(value ?? null) ?? "null").length;
     if (bytes > maxResultBytes) {
-      emit({type: "error", message: `The step's output is ${Math.ceil(bytes / 1024)} KB as JSON; a step's output can be at most ${Math.floor(maxResultBytes / 1024)} KB. Return only what later steps need.`});
+      const size = Math.ceil(bytes / 1024);
+      const limit = Math.floor(maxResultBytes / 1024);
+      const message = unattended.output === "page"
+        ? `The program returned ${size} KB as JSON; a page's program can return at most ${limit} KB. Return only what the page shows.`
+        : `The step's output is ${size} KB as JSON; a step's output can be at most ${limit} KB. Return only what later steps need.`;
+      emit({type: "error", message});
       exit(0);
     }
     emit({type: "result", value: value ?? null});
