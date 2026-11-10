@@ -66,7 +66,7 @@ logs:
       ],
       "message": "unable to commit transaction",
       "fields": {
-        "error": "Database(PgDatabaseError { severity: Error, code: \"P0001\", message: \"parity injected commit failure\", detail: None, hint: None, position: None, where: Some(\"PL/pgSQL function parity_commit_failure() line 1 at RAISE\"), schema: None, table: None, column: None, data_type: None, constraint: None, file: Some(\"pl_exec.c\"), line: Some(3923), routine: Some(\"exec_stmt_raise\") })"
+        "error": "Database(PgDatabaseError { severity: Error, code: \"P0001\", message: \"parity injected commit failure\", detail: None, hint: None, position: None, where: Some(\"PL/pgSQL function parity_commit_failure() line 1 at RAISE\"), schema: None, table: None, column: None, data_type: None, constraint: None, file: Some(\"pl_exec.c\"), line: Some(<postgres-source-line>), routine: Some(\"exec_stmt_raise\") })"
       }
     },
     {

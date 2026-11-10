@@ -56,6 +56,31 @@ fn error_backtraces_do_not_change_transcripts() {
 }
 
 #[test]
+fn postgres_source_lines_do_not_change_transcripts() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let mut normalizer = super::normalize::Normalizer::default();
+    let error = |line: u32| {
+        format!(
+            "Database(PgDatabaseError {{ code: \"P0001\", file: Some(\"pl_exec.c\"), line: Some({line}), routine: Some(\"exec_stmt_raise\") }})"
+        )
+    };
+    let expected = "Database(PgDatabaseError { code: \"P0001\", file: Some(\"pl_exec.c\"), line: Some(<postgres-source-line>), routine: Some(\"exec_stmt_raise\") })";
+    for line in [3857, 3923] {
+        assert_eq!(
+            normalizer.value("logs", serde_json::json!(error(line))),
+            serde_json::json!(expected)
+        );
+    }
+    // Only telemetry is normalized this way; a payload keeps its text.
+    assert_eq!(
+        normalizer.value("response", serde_json::json!(error(3857))),
+        serde_json::json!(error(3857))
+    );
+}
+
+#[test]
 fn no_orphan_goldens() {
     if !crate::parity::process_per_test() {
         return;

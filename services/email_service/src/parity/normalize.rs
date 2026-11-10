@@ -9,6 +9,13 @@ static UUID: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
         .expect("UUID expression")
 });
+/// A Postgres error's debug text names the server source file and line that
+/// raised it. The line differs between server versions; the file and routine
+/// are kept.
+static POSTGRES_SOURCE_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(file: Some\("[A-Za-z0-9_]+\.c"\), line: Some\()\d+(\))"#)
+        .expect("Postgres source line expression")
+});
 static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?")
         .expect("timestamp expression")
@@ -63,13 +70,15 @@ impl Normalizer {
             Value::String(text) => {
                 // Backtraces are telemetry, never an excuse to trim application content.
                 let text = if telemetry {
-                    text.split("\n\nStack backtrace:")
+                    let text = text
+                        .split("\n\nStack backtrace:")
                         .next()
-                        .expect("error prefix")
+                        .expect("error prefix");
+                    POSTGRES_SOURCE_LINE.replace_all(text, "${1}<postgres-source-line>${2}")
                 } else {
-                    &text
+                    std::borrow::Cow::Borrowed(text.as_str())
                 };
-                Value::String(self.text(text))
+                Value::String(self.text(&text))
             }
             Value::Array(values) => {
                 Value::Array(values.into_iter().map(|v| self.value(section, v)).collect())

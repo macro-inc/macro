@@ -63,6 +63,8 @@ its different inbox and message lookup scopes. The orphan check requires every
 snapshot to have a corresponding scenario function and every scenario to have a
 snapshot; pending `.snap.new` files fail the check too.
 
+The source line number inside a Postgres error's debug text is masked in telemetry
+(it differs between server versions; CI runs Postgres 14); the file and routine stay.
 Known IDs have symbolic names; other UUIDs are numbered in first-appearance
 order. Timestamps and endpoints are normalized throughout. Request IDs, durations,
 and ports are masked only in telemetry; SQS has a separate receipt-handle list.
