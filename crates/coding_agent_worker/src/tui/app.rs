@@ -9,7 +9,7 @@ use harnesses::domain::models::CreatedPairing;
 use tui_input::Input;
 
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
-use super::api::{HarnessSelfApi, Snapshot};
+use super::api::{HarnessSelfApi, Snapshot, dashboard_client};
 use super::config_form::{ConfigForm, Setting, settings};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
@@ -152,7 +152,7 @@ impl App {
             config,
             machine_name: machine_name(),
             credentials,
-            http: reqwest::Client::new(),
+            http: dashboard_client()?,
             snapshot: Snapshot::default(),
             pid: std::process::id(),
             harness_process: None,

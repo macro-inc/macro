@@ -134,6 +134,9 @@ external chat replies depend on it. Direct session controls still mint IDs.
   `malloc`, which cargo-zigbuild links otherwise, keeps memory freed on another
   thread, and tokio frees on any worker: resident memory grew by gigabytes over
   days with a flat live heap. Other targets use the system allocator.
+- The panel keeps one HTTP client for its lifetime (`tui/api.rs`
+  `dashboard_client`). It uses the system resolver (`no_hickory_dns`), because
+  hickory reads DNS servers once at build and would miss a VPN or network change.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
