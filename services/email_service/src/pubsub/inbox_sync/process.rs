@@ -1,134 +1,36 @@
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::error_handlers::prefix_error_source;
-use crate::pubsub::inbox_sync::operations::delete_message::delete_message;
-use crate::pubsub::inbox_sync::operations::gmail_message::gmail_message;
-use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
-use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
-use anyhow::{Context, Result, anyhow};
-use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
-use models_email::service::link::Link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use crate::pubsub::inbox_sync::error_handlers;
+use crate::pubsub::inbox_sync::worker::InboxSyncContext;
+use anyhow::{Context, Result};
+use email::domain::mailbox::inbox_sync::InboxSyncDisposition;
+use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use sqs_worker::cleanup_message;
-use std::result;
 
-#[cfg(test)]
-mod test;
-
-/// Processes a message from the gmail inbox sync queue.
-pub async fn process_message(
-    ctx: PubSubContext,
+/// Decode one delivery and perform only the domain-selected acknowledgement.
+pub(crate) async fn process_message(
+    ctx: InboxSyncContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> Result<()> {
-    // malformed json is not retryable
-    let data = match extract_inbox_sync_message(message) {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to extract message, this is non-retryable.");
-            if let Err(cleanup_err) = cleanup_message(&ctx.sqs_worker, message).await {
-                tracing::error!(error = %cleanup_err, "Failed to clean up message after extraction error");
-            }
-            return Err(e);
-        }
-    };
-
-    // wrapping logic in function makes error handling cleaner
-    let processing_result = inner_process_message(&ctx, &data).await;
-
-    match processing_result {
-        // Processing success. Clean up the message
-        Ok(()) => {
+    let disposition = ctx
+        .service
+        .process(extract_inbox_sync_message(message), &ctx.legacy)
+        .await;
+    match disposition {
+        InboxSyncDisposition::DoneDelete => {
             cleanup_message(&ctx.sqs_worker, message).await?;
             Ok(())
         }
-
-        // A permanent failure occurred. We clean up the message to prevent it from being retried
-        Err(ProcessingError::NonRetryable(e)) => {
-            crate::pubsub::inbox_sync::error_handlers::handle_non_retryable_error(
-                &ctx, message, &data, &e,
-            )
-            .await
+        InboxSyncDisposition::InvalidDelete(e) => {
+            if let Err(cleanup_err) = cleanup_message(&ctx.sqs_worker, message).await {
+                tracing::error!(error = %cleanup_err, "Failed to clean up message after extraction error");
+            }
+            Err(e)
         }
-
-        // A temporary failure occurred. We log it and don't clean up the message, so it gets retried
-        Err(ProcessingError::Retryable(e)) => {
-            crate::pubsub::inbox_sync::error_handlers::handle_retryable_error(&data, &e).await
+        InboxSyncDisposition::FailureDelete { data, error, log } => {
+            error_handlers::handle_non_retryable_error(&ctx, message, &data, &error, log).await
         }
-    }
-}
-
-#[tracing::instrument(skip(ctx))]
-async fn inner_process_message(
-    ctx: &PubSubContext,
-    data: &InboxSyncPubsubMessage,
-) -> result::Result<(), ProcessingError> {
-    let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id)
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch link from database"),
-            })
-        })?
-        .ok_or_else(|| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::LinkNotFound,
-                source: anyhow!("No link found for id {}", data.link_id),
-            })
-        })?;
-
-    if !should_process(&link, &data.operation) {
-        tracing::debug!(
-            link_id = %link.id,
-            is_sync_active = link.is_sync_active,
-            needs_reauth = link.needs_reauth,
-            "Skipping inbox sync operation for link"
-        );
-        return Ok(());
-    }
-
-    match &data.operation {
-        InboxSyncOperation::GmailMessage(payload) => {
-            gmail_message(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "gmail_message"))?;
-            tracing::debug!("Successfully processed gmail message operation");
+        InboxSyncDisposition::LeaveForRedelivery { data, error } => {
+            error_handlers::handle_retryable_error(&data, &error).await
         }
-        InboxSyncOperation::UpsertMessage(payload) => {
-            upsert_message(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "upsert_message"))?;
-            tracing::debug!("Successfully processed upsert message operation");
-        }
-        InboxSyncOperation::DeleteMessage(payload) => {
-            delete_message(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "delete_message"))?;
-            tracing::debug!("Successfully processed delete message operation");
-        }
-        InboxSyncOperation::UpdateLabels(payload) => {
-            update_labels(ctx, &link, payload)
-                .await
-                .map_err(|e| prefix_error_source(e, "remove_labels"))?;
-            tracing::debug!("Successfully processed update labels operation");
-        }
-    }
-
-    Ok(())
-}
-
-/// Whether inbox sync should process `operation` for `link`.
-///
-/// Gmail notifications for a link that needs reauth are skipped: listing their
-/// changes needs the dead grant, and the untouched sync cursor lets the first
-/// notification after the grant recovers catch up. Operations fanned out by an
-/// earlier notification still run because the cursor has already moved past
-/// them.
-fn should_process(link: &Link, operation: &InboxSyncOperation) -> bool {
-    match operation {
-        InboxSyncOperation::GmailMessage(_) => link.is_sync_active && !link.needs_reauth,
-        InboxSyncOperation::UpsertMessage(_)
-        | InboxSyncOperation::DeleteMessage(_)
-        | InboxSyncOperation::UpdateLabels(_) => link.is_sync_active,
     }
 }
 

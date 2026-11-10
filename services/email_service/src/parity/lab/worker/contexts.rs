@@ -2,14 +2,15 @@ use super::{super::Lab, Queue};
 use crate::pubsub;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
+use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub(in crate::parity::lab) struct WorkerContexts {
     ops: GmailOpsContext,
     ops_retry: GmailOpsContext,
-    sync: PubSubContext,
-    sync_retry: PubSubContext,
+    sync: InboxSyncContext,
+    sync_retry: InboxSyncContext,
     backfill: PubSubContext,
     links: pubsub::link_manager::context::LinkManagerContext,
     crm: pubsub::crm_cleanup::worker::CrmCleanupContext,
@@ -21,8 +22,8 @@ pub(in crate::parity::lab) struct WorkerContexts {
 
 impl WorkerContexts {
     pub fn inbox_notifications(&mut self, enabled: bool) {
-        self.sync.notifications_enabled = enabled;
-        self.sync_retry.notifications_enabled = enabled;
+        self.sync.set_notifications_enabled(enabled);
+        self.sync_retry.set_notifications_enabled(enabled);
     }
 
     pub async fn new(lab: &Lab) -> Self {

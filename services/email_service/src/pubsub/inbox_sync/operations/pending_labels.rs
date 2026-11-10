@@ -7,28 +7,7 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// A read of Gmail's labels for a message, with the labels that had a
-/// pending Macro write just before and just after it.
-pub(in crate::pubsub) struct PendingAroundRead<T> {
-    pub value: T,
-    before: Vec<String>,
-    after: Vec<String>,
-}
-
-impl<T> PendingAroundRead<T> {
-    /// Labels whose local state the read may not reflect: Gmail may have
-    /// answered before applying a write pending at either point.
-    pub fn untrusted_labels(&self) -> Vec<String> {
-        let mut labels = self.before.clone();
-        labels.extend(
-            self.after
-                .iter()
-                .filter(|label| !self.before.contains(label))
-                .cloned(),
-        );
-        labels
-    }
-}
+pub(in crate::pubsub) use email::domain::mailbox::inbox_sync::PendingAroundRead;
 
 /// Runs `read` between two reads of the message's pending label writes.
 ///

@@ -1,44 +1,42 @@
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{
-    cg_refresh_email, complete_transaction_with_processing_error, insert_crm_cleanup_candidates,
-    publish_email_event,
-};
-use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
-use email_db_client::messages::delete::MessageDeletion;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::email::service::link;
+use super::*;
+use crate::domain::events::MessageDeletedMetadata;
 use models_email::gmail::inbox_sync::DeleteMessagePayload;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::result;
+use models_email::service::link;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]
-pub async fn delete_message(
-    ctx: &PubSubContext,
+pub(super) async fn delete_message<L, R, G, Q, E>(
+    ctx: &InboxSyncService<L, R, G, Q, E>,
     link: &link::Link,
     payload: &DeleteMessagePayload,
-) -> result::Result<(), ProcessingError> {
-    let mut tx = ctx.db.begin().await.map_err(|e| {
+) -> result::Result<(), ProcessingError>
+where
+    L: GmailOpsLinks,
+    R: InboxSyncRepository,
+    G: InboxSyncGmail,
+    Q: InboxSyncQueue,
+    E: MacroEventBroker + InboxSyncRefresher,
+{
+    let mut tx = ctx.repository.begin_delete().await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
-            source: anyhow::Error::from(e).context("Failed to begin transaction"),
+            source: e.into_original().context("Failed to begin transaction"),
         })
     })?;
     // Keep the provider identity and draft lifetime stable through deletion.
     // A completion or Undo that wins the message lock is observed by this lookup;
     // one that loses waits until deletion has been applied or safely deferred.
-    let message = match email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link_for_update(
-        &mut tx,
-        &payload.provider_message_id,
-        &link.id,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to get simple message".to_string()),
-        })
-    })? {
+    let message = match tx
+        .message_for_update(link.id, &payload.provider_message_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to get simple message".to_string()),
+            })
+        })? {
         Some(msg) => msg,
         None => {
             tracing::debug!(provider_message_id = %payload.provider_message_id, link_id = %link.id,
@@ -55,16 +53,14 @@ pub async fn delete_message(
     let crm_emails: Vec<String> = if message.is_draft {
         Vec::new()
     } else if message.is_sent {
-        let recipients =
-            email_db_client::contacts::get::fetch_db_recipients(&mut *tx, message.db_id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e
-                            .context("Failed to fetch recipients for deleted message".to_string()),
-                    })
-                })?;
+        let recipients = tx.recipients(message.db_id).await.map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to fetch recipients for deleted message".to_string()),
+            })
+        })?;
         // No producer-side filtering — the crm crate decides what's
         // depopulatable. Filtering here would create drift with the
         // populate side, which is also unfiltered at the producer.
@@ -75,27 +71,26 @@ pub async fn delete_message(
     } else {
         // Received: the sender is the external party that may have a
         // CRM source row tied to this link.
-        let sender =
-            email_db_client::contacts::get::get_sender_by_message_id(&mut *tx, message.db_id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::Retryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to fetch sender for deleted message".to_string()),
-                    })
-                })?;
+        let sender = tx.sender(message.db_id).await.map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to fetch sender for deleted message".to_string()),
+            })
+        })?;
         sender.into_iter().filter_map(|c| c.email_address).collect()
     };
 
     let result = async {
-        let result = email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to delete message with transaction".to_string()),
-                })
-            })?;
+        let result = tx.delete(&message).await.map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to delete message with transaction".to_string()),
+            })
+        })?;
         // Commit CRM cleanup candidates with the deletion so neither can survive
         // a rollback alone. Deferred deletions retain the message; cleanup's
         // `link_has_any_message_with` pre-check keeps its contacts until removal.
@@ -103,13 +98,14 @@ pub async fn delete_message(
         // with the same contact waits on it.
         if !crm_emails.is_empty() {
             let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-            insert_crm_cleanup_candidates(&mut *tx, link.id, &self_email, crm_emails).await?;
+            tx.cleanup_contacts(link.id, &self_email, crm_emails)
+                .await?;
         }
         Ok::<MessageDeletion, ProcessingError>(result)
     }
     .await;
 
-    let deletion = complete_transaction_with_processing_error(tx, result).await?;
+    let deletion = tx.complete(result).await?;
     if deletion == MessageDeletion::Deferred {
         tracing::info!(event = "email_send.deletion_deferred", message_id = %message.db_id,
             link_id = %link.id, "retained message for accepted delivery");
@@ -125,7 +121,7 @@ pub async fn delete_message(
     }
 
     publish_email_event(
-        &ctx.macro_event_broker,
+        &ctx.effects,
         &EmailMacroEvent::message_deleted(MessageDeletedMetadata {
             link_id: link.id,
             owner: link.macro_id.clone(),
@@ -136,12 +132,12 @@ pub async fn delete_message(
     );
 
     // tell FE to refresh user's inbox
-    cg_refresh_email(
-        &ctx.connection_gateway_client,
-        link.macro_id.as_ref(),
-        RefreshEmailEvent::DeleteMessage { link_id: link.id },
-    )
-    .await;
+    ctx.effects
+        .refresh(
+            link.macro_id.as_ref(),
+            InboxSyncRefresh::DeleteMessage(link.id),
+        )
+        .await;
 
     Ok(())
 }

@@ -7,6 +7,20 @@ use models_email::gmail::inbox_sync::{
 use models_email::service::link::UserProvider;
 use uuid::Uuid;
 
+mod admission;
+mod deletion;
+mod events;
+mod fakes;
+mod labels;
+
+fn failure(outcome: InboxSyncDisposition) -> (bool, DetailedError) {
+    match outcome {
+        InboxSyncDisposition::FailureDelete { error, .. } => (true, error),
+        InboxSyncDisposition::LeaveForRedelivery { error, .. } => (false, error),
+        _ => panic!("expected a classified failure"),
+    }
+}
+
 fn link(is_sync_active: bool, needs_reauth: bool) -> Link {
     Link {
         id: Uuid::from_u128(1),
@@ -28,7 +42,7 @@ fn gmail_notification() -> InboxSyncOperation {
 }
 
 fn fanned_out_operations() -> Vec<InboxSyncOperation> {
-    let provider_message_id = "provider-message".to_string();
+    let provider_message_id = "message-1".to_string();
     vec![
         InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
             provider_message_id: provider_message_id.clone(),
