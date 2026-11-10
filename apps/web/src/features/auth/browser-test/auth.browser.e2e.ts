@@ -261,14 +261,14 @@ test('a failed provider sign-up falls back to the email form with the reason', a
   page,
 }) => {
   await openFixture(page, '/?page=signup&sso_error=admin_consent_required', {
-    ssoEmail: 'founder@acme.com',
+    ssoEmail: 'founder@example.com',
   });
   await expect(
     page.getByText(
       'Your organization needs an admin to approve Macro. Continue with your email instead.'
     )
   ).toBeVisible();
-  await expect(page.getByPlaceholder('you@company.com')).toBeVisible();
+  await expect(page.getByPlaceholder(/you@company\.com/)).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Continue with Microsoft' })
   ).toHaveCount(0);
@@ -278,7 +278,7 @@ test('with Microsoft sign-up off, the work step is Google only as before', async
   page,
 }) => {
   await openFixture(page, '/?page=signup&microsoft=off', {
-    ssoEmail: 'founder@acme.com',
+    ssoEmail: 'founder@example.com',
   });
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();

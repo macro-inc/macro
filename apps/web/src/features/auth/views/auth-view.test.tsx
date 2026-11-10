@@ -481,10 +481,10 @@ describe('after a failed provider sign-in', () => {
     expect(
       screen.queryByRole('button', { name: 'Continue with Microsoft' })
     ).toBeNull();
-    await typeEmail('ada@acme.com');
+    await typeEmail('ada@example.com');
     click('Continue');
     await waitFor(() =>
-      expect(fake.calls()).toContain('sendCode:ada@acme.com')
+      expect(fake.calls()).toContain('sendCode:ada@example.com')
     );
   });
 });
