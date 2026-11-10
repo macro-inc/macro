@@ -83,6 +83,55 @@ describe('GraphQL mutation retries', () => {
     ).toBe(false);
   });
 
+  describe('email draft writes', () => {
+    const fault = (code: string) =>
+      new CombinedError({
+        graphQLErrors: [{ message: 'failed', extensions: { code } }],
+      });
+
+    it.each(['SaveEmailDraft', 'DeleteEmailDraft'])(
+      'retries a server fault on %s',
+      (operationName) => {
+        expect(
+          shouldRetryGraphqlMutation(fault('INTERNAL'), {
+            operationName,
+            serverFailureCount: 1,
+          })
+        ).toBe(true);
+      }
+    );
+
+    it('gives up once the server has failed the write three times', () => {
+      expect(
+        shouldRetryGraphqlMutation(fault('INTERNAL'), {
+          operationName: 'SaveEmailDraft',
+          serverFailureCount: 2,
+        })
+      ).toBe(false);
+    });
+
+    it.each(['INVALID', 'DRAFT_VERSION_CONFLICT', 'DRAFT_ALREADY_SENT'])(
+      'does not retry a %s refusal',
+      (code) => {
+        expect(
+          shouldRetryGraphqlMutation(fault(code), {
+            operationName: 'SaveEmailDraft',
+            serverFailureCount: 0,
+          })
+        ).toBe(false);
+      }
+    );
+
+    it('does not retry a server fault on any other mutation', () => {
+      expect(
+        shouldRetryGraphqlMutation(fault('INTERNAL'), {
+          operationName: 'SetEmailThreadArchived',
+          serverFailureCount: 0,
+        })
+      ).toBe(false);
+    });
+  });
+
   it('does not retry a response that also contains a permanent rejection', () => {
     expect(
       shouldRetryGraphqlMutation(
