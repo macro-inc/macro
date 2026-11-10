@@ -146,7 +146,12 @@ fn selection_split_expands_the_current_cell_and_clears_the_selection() -> Result
             assert_eq!((data.row_span, data.col_span), (1, 1));
             assert_eq!(
                 view.text_content(cell),
-                if cell == anchor.key() { "keep" } else { "" }
+                if cell == anchor.key() {
+                    // The setup merges four paragraphs before empty-text normalization.
+                    "keep\n\n\n\n\n\n"
+                } else {
+                    ""
+                }
             );
         }
     }
