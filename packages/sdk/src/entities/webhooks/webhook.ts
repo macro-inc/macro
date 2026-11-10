@@ -151,7 +151,10 @@ export class Webhook extends MacroEntity<WebhookRecord> {
     await this.update({ endpoint_url: url });
   }
 
-  /** Replace the webhook's delivery filters (must be non-empty). */
+  /**
+   * Replace the webhook's delivery filters (must be non-empty). Filters naming
+   * `email.*` events need the inbox owner's own token or API key.
+   */
   async setFilters(filters: WebhookFilter[]): Promise<void> {
     await this.update({ filters });
   }

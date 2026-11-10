@@ -19,6 +19,9 @@ export class WebhooksNamespace {
    * workspace's webhooks (the endpoint returns 409 on a clash) and cannot be
    * changed later. `filters` must be non-empty (each entry matches event
    * names, optionally narrowed to entity ids); `scope` defaults to `'user'`.
+   * `email.*` events reach only the inbox owner's `'user'` scope webhooks, and
+   * filters naming them need the owner's own token or API key: bot and harness
+   * credentials get a 403.
    */
   create(opts: {
     url: string;
