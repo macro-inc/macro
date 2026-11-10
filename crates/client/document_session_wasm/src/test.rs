@@ -1,6 +1,7 @@
 mod click;
 mod decorator_actions;
 mod focus_end;
+mod mention_user;
 mod paste_intent;
 mod search;
 mod session_bop;

@@ -436,3 +436,26 @@ before activation.
 Full-catalog choice policy remains separate: preserve Source REMOVE admission
 followed by the actual action or host request, including IO/lifetime boundaries.
 The existing strict menu-select validation is retained as its own contract.
+
+
+## Native user mention action boundary
+
+`group-a.insert-user-mention` accepts `{userId: string, email: string,
+displayName?: string | null, mentionUuid?: string | null}` through the existing
+application envelope. A missing, null or empty display name uses the actual
+Source constructor email-local-part/full-email fallback. UUID missing, null and
+empty remain distinct. Other name shapes are unsupported typed inputs.
+
+The Normal handler uses the actual current selection and generation, creates the
+real user node, calls `insert_nodes_at_selection`, wraps an actual root/shadow
+parent in a configured paragraph when required, then calls `select_next(0, 0)`.
+It preserves Source next-text-zero/parent-end selection and current range format.
+No collapsed, composition, code-format, UI-editability or captured-range gate is
+added. Current Session admission remains authoritative.
+
+The host must first complete separate search removal, then invoke actual
+notification/tracking I/O, then insert at the current selection, generation and
+access. Closing the menu does not cancel an already submitted Source tracking
+operation. Installation disposal and unavailable providers require their own
+truthful lifetime boundary. This model action does not activate the native user
+picker or supply other catalog choices.
