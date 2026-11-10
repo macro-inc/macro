@@ -27,6 +27,8 @@ impl Headers {
 )]
 enum TableAction {
     Picker,
+    SelectionMerge,
+    SelectionSplit,
     ConvertList {
         key: u32,
     },
@@ -141,6 +143,24 @@ impl Plugin for Actions {
                     return Ok(Handled::No);
                 }
                 tx.emit(&PICKER, ());
+                true
+            }
+            TableAction::SelectionMerge => {
+                let Some(selection) = tx.selection().and_then(Selection::as_table) else {
+                    return Ok(Handled::No);
+                };
+                let cells = selection
+                    .get_nodes(tx.view())?
+                    .into_iter()
+                    .filter_map(|key| tx.view().cast::<TableCellNode>(key))
+                    .collect::<Vec<_>>();
+                merge_cells(tx, &cells)?;
+                tx.set_selection(None)?;
+                true
+            }
+            TableAction::SelectionSplit => {
+                unmerge_cell(tx)?;
+                tx.set_selection(None)?;
                 true
             }
             TableAction::ConvertList { key: index } => super::list_grid::convert(tx, key(*index))?,

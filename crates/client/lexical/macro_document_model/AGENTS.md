@@ -114,3 +114,5 @@ Read direct-root checklist metadata through checklist_controls::collect_checklis
 Expose initial/on-demand checklist plans through group-b.checklist-plan using only current collected metadata and explicit typed task/name/raw Date facts; preserve whole-result unsupported coverage and do not cache facts in a query.
 
 Read bulk table geometry through group-b.table-facts and the actual core table map; preserve ragged slots, unique cell origins and column-width presence, and keep table-resize as the sole measured baseline/revert policy.
+
+Apply group-b.table selection-merge and selection-split to the admitted current selection through the shared table operations, then clear selection only after success; keep clipboard completion policy separate.

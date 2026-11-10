@@ -5,6 +5,8 @@ mod mention_user;
 mod paste_intent;
 mod search;
 mod session_bop;
+#[cfg(test)]
+mod table_selection_actions;
 use super::*;
 use doc_sync_core::*;
 use document_session::*;
