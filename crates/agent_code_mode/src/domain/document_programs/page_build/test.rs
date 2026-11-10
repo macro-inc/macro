@@ -195,6 +195,97 @@ async fn refuses_a_program_bundle_a_run_would_refuse() {
     );
 }
 
+#[tokio::test]
+async fn refuses_a_program_over_the_module_limit_by_name_before_checking() {
+    let toolchain = Toolchain::default();
+    let html = format!(
+        r#"<script type="text/macro" id="big">export default async () => "{}";</script>"#,
+        "x".repeat(70 * 1024)
+    );
+
+    let BuildOutcome::Failed(problems) = build(&html, &toolchain, &toolchain).await.unwrap() else {
+        panic!("an oversized program must fail the build");
+    };
+
+    assert_eq!(problems[0].file.as_deref(), Some("program big"));
+    assert!(
+        problems[0].message.contains("71 KiB") && problems[0].message.contains("64 KiB"),
+        "{problems:?}"
+    );
+    assert_eq!(toolchain.checks.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_page_with_programs_refuses_what_its_policy_cannot_stop() {
+    let toolchain = Toolchain::default();
+    let refused = r#"<meta http-equiv="Refresh" content="0;url=https://example.com/?d=1">
+<link rel="stylesheet preconnect" href="https://example.com">
+<link rel="DNS-Prefetch" href="https://example.com">
+<link rel="stylesheet" href="data:text/css,">
+<meta http-equiv="content-type" content="text/html">
+<iframe srcdoc="<p>nested</p>"></iframe>"#;
+    let html = format!(
+        r#"{refused}<script type="text/macro" id="tasks">export default async () => 1;</script>"#
+    );
+
+    let BuildOutcome::Failed(problems) = build(&html, &toolchain, &toolchain).await.unwrap() else {
+        panic!("a refresh, connection hints and a nested frame must fail the build");
+    };
+
+    assert_eq!(problems.len(), 4, "{problems:?}");
+    assert!(problems[0].message.contains("http-equiv=\"refresh\""));
+    assert!(problems[1].message.contains("rel=\"preconnect\""));
+    assert!(problems[2].message.contains("rel=\"dns-prefetch\""));
+    assert!(problems[3].message.contains("`<iframe>`"));
+    assert_eq!(toolchain.checks.load(Ordering::SeqCst), 0);
+
+    // A plain page runs no programs and gets no policy, so it keeps them.
+    let plain = build(refused, &toolchain, &toolchain).await.unwrap();
+    assert_eq!(plain, BuildOutcome::Plain);
+}
+
+#[test]
+fn explains_shape_and_timer_problems_and_drops_generated_notes() {
+    let ids = [ProgramId::try_new("tasks".to_owned()).unwrap()];
+    let renamed = named(
+        vec![
+            Diagnostic {
+                file: Some(arguments_file(0)),
+                message: format!(
+                    "TS2322 [ERROR]: Type '\"{NOT_A_PROGRAM}\"' is not assignable to type '\"ok\"'."
+                ),
+            },
+            Diagnostic {
+                file: Some(PROGRAMS_FILE.to_owned()),
+                message:
+                    "TS6236 [ERROR]: Arguments for the rest parameter 'args' were not provided."
+                        .to_owned(),
+            },
+            Diagnostic {
+                file: Some(program_file(0)),
+                message: format!(
+                    "TS2349 [ERROR]: This expression is not callable.\n  Type '{TIMERS_MARKER}' has no call signatures."
+                ),
+            },
+        ],
+        &ids,
+    );
+
+    assert_eq!(renamed.len(), 2, "{renamed:?}");
+    assert_eq!(renamed[0].file.as_deref(), Some("program tasks"));
+    assert!(
+        renamed[0]
+            .message
+            .starts_with("Program `tasks` must take at most two parameters"),
+        "{renamed:?}"
+    );
+    assert_eq!(renamed[1].file.as_deref(), Some("program tasks"));
+    assert!(
+        renamed[1].message.contains("can't sleep or poll"),
+        "{renamed:?}"
+    );
+}
+
 #[test]
 fn names_the_macro_client_module_in_diagnostics() {
     let ids = [ProgramId::try_new("tasks".to_owned()).unwrap()];
@@ -402,6 +493,61 @@ mod with_deno {
         let outcome = build(html, &deno, &deno).await.unwrap();
 
         assert!(matches!(outcome, BuildOutcome::Built { .. }), "{outcome:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_program_that_takes_more_than_its_context_fails_by_name() {
+        let (_root, deno) = deno().await;
+        let html = r#"<script type="text/macro" id="pair" lang="ts">
+  export default async function (a: { x: number }, b: { y: number }, { macro }: ProgramContext) {
+    return a.x + b.y + Number(Boolean(macro));
+  }
+</script>"#;
+
+        let BuildOutcome::Failed(problems) = build(html, &deno, &deno).await.unwrap() else {
+            panic!("a program the runtime can't call must fail the build");
+        };
+
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert_eq!(problems[0].file.as_deref(), Some("program pair"));
+        assert!(
+            problems[0]
+                .message
+                .starts_with("Program `pair` must take at most two parameters"),
+            "{problems:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_program_that_sleeps_fails_the_build() {
+        let (_root, deno) = deno().await;
+        let html = r#"<script type="text/macro" id="slow" lang="ts">
+  export default async function () {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return 1;
+  }
+</script>"#;
+
+        let BuildOutcome::Failed(problems) = build(html, &deno, &deno).await.unwrap() else {
+            panic!("a timer call must fail the build");
+        };
+
+        assert_eq!(
+            problems[0].file.as_deref(),
+            Some("program slow"),
+            "{problems:?}"
+        );
+        assert!(problems[0].message.contains("TS2349"), "{problems:?}");
+        assert!(
+            problems[0].message.contains("at program slow:3:"),
+            "{problems:?}"
+        );
+        assert!(
+            problems[0].message.contains("can't sleep or poll"),
+            "{problems:?}"
+        );
     }
 
     /// The demo pages in `demos/` build against the current SDK, so an SDK

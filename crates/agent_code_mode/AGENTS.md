@@ -53,9 +53,14 @@ stacks. Process isolation belongs to
   check alone, then with the client; each bundles alone and the client
   bundles without program source. A page with neither builds `Plain`, which
   the preview shows as it is. The build also checks each program's first
-  parameter is an object (`program_<n>_args.ts`), refuses reserved words and
-  `run` as ids and a bundle over the runtime's 64 KiB, and types each
-  `macro:programs` result as its JSON form (`programs_prelude.ts`).
+  parameter is an object and that it takes nothing after its
+  `ProgramContext` (`program_<n>_args.ts`), refuses reserved words and
+  `run` as ids, a program or bundle over the runtime's 64 KiB, timer calls
+  (each program is checked with module-scope `setTimeout`/`setInterval`/
+  `setImmediate` declarations, `NO_TIMERS`), and, in a page with programs,
+  refresh metas, connection hints and nested frames, which its policy can't
+  stop; and it types each `macro:programs` result as its JSON form
+  (`programs_prelude.ts`).
   Diagnostics name blocks, not generated files. `demos/` holds pages that recreate built-in features, or combine
   several areas, this way; the ignored Deno test `every_demo_page_builds`
   builds each one, so keep them building when the SDK changes.

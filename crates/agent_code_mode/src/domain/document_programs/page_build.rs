@@ -92,6 +92,19 @@ const RESERVED_IDS: &[&str] = &[
 /// What a program's arguments check reports when its first parameter isn't
 /// an object; [`named`] replaces it with [`object_arguments_problem`].
 const NOT_AN_OBJECT: &str = "first parameter is not an object";
+/// What it reports when the program can't be called as `(args, context)`.
+const NOT_A_PROGRAM: &str = "not callable as a program";
+/// Appended to each program for its checks: the runtime refuses timers, so a
+/// call to one fails the build, not the run. A module-scope declaration
+/// shadows the global one; the bundle is built from the source as written.
+const NO_TIMERS: &str = "\ninterface TimersAreUnavailableInPrograms { readonly unavailable: never }\n\
+declare const setTimeout: TimersAreUnavailableInPrograms, setInterval: TimersAreUnavailableInPrograms, setImmediate: TimersAreUnavailableInPrograms;\n";
+/// The type a timer call's diagnostic names.
+const TIMERS_MARKER: &str = "TimersAreUnavailableInPrograms";
+/// Elements a page with programs may not have: the policy can't stop a
+/// refresh navigating the frame, a connection hint, or a nested frame, which
+/// gets globals of its own.
+const REFUSED_ELEMENTS: &str = "meta[http-equiv], link[rel], iframe, frame, object, embed";
 /// The client's check adds the browser's types.
 const DOM_REFERENCE: &str =
     "/// <reference lib=\"dom\" />\n/// <reference lib=\"dom.iterable\" />\n";
@@ -182,6 +195,9 @@ pub enum BuildOutcome {
 struct Extracted {
     programs: Vec<(ProgramId, String)>,
     client: Option<String>,
+    /// Problems with elements the frame refuses, reported only for a page
+    /// that runs programs; a plain page runs none and gets no policy.
+    refused: Vec<Diagnostic>,
 }
 
 /// Build `html`. `Err` is the toolchain failing, never the author's mistake.
@@ -197,6 +213,26 @@ pub async fn build(
     if extracted.programs.is_empty() && extracted.client.is_none() {
         return Ok(BuildOutcome::Plain);
     }
+    if !extracted.refused.is_empty() {
+        return Ok(BuildOutcome::Failed(extracted.refused));
+    }
+    let limit = Limits::default().max_source_bytes;
+    let oversized: Vec<Diagnostic> = extracted
+        .programs
+        .iter()
+        .filter(|(_, source)| source.len() + NO_TIMERS.len() > limit)
+        .map(|(id, source)| Diagnostic {
+            file: Some(format!("program {id}")),
+            message: format!(
+                "Program `{id}` is {} KiB; a program may be at most {} KiB. Move what the page can do itself into the client script, or split the program.",
+                source.len().div_ceil(1024),
+                limit / 1024
+            ),
+        })
+        .collect();
+    if !oversized.is_empty() {
+        return Ok(BuildOutcome::Failed(oversized));
+    }
     let ids: Vec<ProgramId> = extracted
         .programs
         .iter()
@@ -209,7 +245,7 @@ pub async fn build(
         .enumerate()
         .map(|(index, (_, source))| SourceFile {
             name: program_file(index),
-            source: source.clone(),
+            source: format!("{source}{NO_TIMERS}"),
         })
         .collect();
 
@@ -273,7 +309,6 @@ pub async fn build(
             };
         // A run refuses a bundle over the runtime's module limit, so the
         // build does too, where the author can see it.
-        let limit = Limits::default().max_source_bytes;
         if code.len() > limit {
             return Ok(BuildOutcome::Failed(vec![Diagnostic {
                 file: Some(format!("program {id}")),
@@ -337,13 +372,17 @@ fn bundle_verdict(result: Result<Bundle, CheckError>) -> Result<Bundle, CheckErr
 }
 
 fn oversized() -> Diagnostic {
-    problem("A program or the client script is larger than a module may be.")
+    problem(&format!(
+        "The client script is larger than a module may be ({} KiB); move code out of it.",
+        Limits::default().max_source_bytes / 1024
+    ))
 }
 
 /// Collect the blocks and refuse ones the build can't name.
 fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
     let blocks: RefCell<Vec<(Option<String>, String)>> = RefCell::default();
     let clients: RefCell<Vec<String>> = RefCell::default();
+    let refused: RefCell<Vec<Diagnostic>> = RefCell::default();
     let collected = rewrite_str(
         html,
         RewriteStrSettings {
@@ -362,6 +401,16 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
                 }),
                 element!(CLIENT_SELECTOR, |_| {
                     clients.borrow_mut().push(String::new());
+                    Ok(())
+                }),
+                element!(REFUSED_ELEMENTS, |element| {
+                    if let Some(problem) = refused_element(
+                        &element.tag_name(),
+                        element.get_attribute("http-equiv").as_deref(),
+                        element.get_attribute("rel").as_deref(),
+                    ) {
+                        refused.borrow_mut().push(problem);
+                    }
                     Ok(())
                 }),
                 text!(CLIENT_SELECTOR, |chunk| {
@@ -441,7 +490,33 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
     Ok(Extracted {
         programs,
         client: clients.pop(),
+        refused: refused.into_inner(),
     })
+}
+
+/// Why a page with programs can't have this element, if it can't.
+fn refused_element(tag: &str, http_equiv: Option<&str>, rel: Option<&str>) -> Option<Diagnostic> {
+    match tag.to_ascii_lowercase().as_str() {
+        "meta" => http_equiv
+            .is_some_and(|value| value.trim().eq_ignore_ascii_case("refresh"))
+            .then(|| problem(
+                "A page with programs can't use `<meta http-equiv=\"refresh\">`: it would navigate the frame away, so Macro would close it. Load or update content with the client script instead.",
+            )),
+        "link" => {
+            let hint = rel?.split_ascii_whitespace().find(|token| {
+                ["preconnect", "dns-prefetch", "prefetch", "prerender"]
+                    .iter()
+                    .any(|refused| token.eq_ignore_ascii_case(refused))
+            })?;
+            Some(problem(&format!(
+                "A page with programs can't use `<link rel=\"{}\">`: it would open a connection the page's policy can't stop. Remove it.",
+                hint.to_ascii_lowercase()
+            )))
+        }
+        other => Some(problem(&format!(
+            "A page with programs can't embed an `<{other}>`: a nested frame or plugin escapes the page's policy. Put its content in the page itself."
+        ))),
+    }
 }
 
 /// The page with program blocks removed and the client script replaced by
@@ -488,11 +563,14 @@ fn programs_module(ids: &[ProgramId]) -> String {
 }
 
 /// Checks that a program's first parameter, if it has one, is an object:
-/// the page always calls it with one.
+/// the page always calls it with one; and that it takes nothing after its
+/// `ProgramContext`, which the runtime passes second.
 fn arguments_module(index: usize) -> String {
     let file = program_file(index);
     format!(
         "import type program from './{file}';\n\
+         type Callable<P> = P extends (args: never, context: ProgramContext) => unknown ? 'ok' : '{NOT_A_PROGRAM}';\n\
+         export const callable: Callable<typeof program> = 'ok';\n\
          type Argument<P> = P extends (...args: infer A) => unknown\n  \
            ? A extends [] ? 'ok'\n  \
            : 0 extends 1 & A[0] ? 'ok'\n  \
@@ -507,6 +585,12 @@ fn arguments_module(index: usize) -> String {
 
 fn arguments_file(index: usize) -> String {
     format!("program_{index}_args.ts")
+}
+
+fn program_shape_problem(id: &ProgramId) -> String {
+    format!(
+        "Program `{id}` must take at most two parameters, its arguments object and `{{ macro }}: ProgramContext`: the page passes nothing else."
+    )
 }
 
 fn object_arguments_problem(id: &ProgramId) -> String {
@@ -535,7 +619,7 @@ fn program_file(index: usize) -> String {
 fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
     diagnostics
         .into_iter()
-        .map(|diagnostic| {
+        .filter_map(|diagnostic| {
             let arguments_of = diagnostic.file.as_deref().and_then(|file| {
                 ids.iter()
                     .enumerate()
@@ -545,10 +629,26 @@ fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
             if let Some(id) = arguments_of
                 && diagnostic.message.contains(NOT_AN_OBJECT)
             {
-                return Diagnostic {
+                return Some(Diagnostic {
                     file: Some(format!("program {id}")),
                     message: object_arguments_problem(id),
-                };
+                });
+            }
+            if let Some(id) = arguments_of
+                && diagnostic.message.contains(NOT_A_PROGRAM)
+            {
+                return Some(Diagnostic {
+                    file: Some(format!("program {id}")),
+                    message: program_shape_problem(id),
+                });
+            }
+            // Related information about the generated `macro:programs`
+            // (the rest parameter a call left out) repeats the caller's own
+            // diagnostic, which names the line the author wrote.
+            if diagnostic.file.as_deref() == Some(PROGRAMS_FILE)
+                && diagnostic.message.starts_with("TS6236")
+            {
+                return None;
             }
 
             let mut message = diagnostic.message;
@@ -563,6 +663,11 @@ fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
                 .replace(MACRO_CLIENT_FILE, "macro:client")
                 .replace(CLIENT_FILE, "client script")
                 .replace(PROGRAMS_FILE, "macro:programs");
+            if message.contains(TIMERS_MARKER) {
+                message.push_str(
+                    "\nA program runs once per call and can't sleep or poll: return what you have, and let the page call it again.",
+                );
+            }
             let file = diagnostic.file.map(|file| {
                 ids.iter()
                     .enumerate()
@@ -577,7 +682,7 @@ fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
                         _ => file,
                     })
             });
-            Diagnostic { file, message }
+            Some(Diagnostic { file, message })
         })
         .collect()
 }
