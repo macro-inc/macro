@@ -331,7 +331,7 @@ def local_transcript_jwt(finding: dict, staged: dict[str, list[str]]) -> bool:
     """Recognize only staged sync fixture tokens signed by the public test key."""
     path = finding["File"]
     if (finding["RuleID"] != "jwt" or finding.get("Tags")
-            or not re.fullmatch(r"crates/sync_server_sim/tests/transcripts/[^/]+/[^/]+\.jsonl", path)):
+            or not re.fullmatch(r"crates/sync_server_sim/tests/transcripts(?:-activated)?/[^/]+/[^/]+\.jsonl", path)):
         return False
     line = finding["StartLine"]
     if finding.get("EndLine") != line or line < 1:

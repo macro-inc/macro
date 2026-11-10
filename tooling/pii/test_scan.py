@@ -328,6 +328,14 @@ class GitleaksMergeTest(unittest.TestCase):
                 file.write_text(json.dumps({"token": valid}) + "\n")
                 self.assertEqual(self.run_tool([finding]), 0 if allowed else 1)
 
+        activated_path = "crates/sync_server_sim/tests/transcripts-activated/example.test/scenario.jsonl"
+        activated = self.root / activated_path
+        activated.parent.mkdir(parents=True)
+        for value, allowed in ((valid, True), (token(b"another-key"), False)):
+            activated.write_text(json.dumps({"token": value}) + "\n")
+            self.git("add", activated_path)
+            self.assertEqual(self.run_tool([{**finding, "File": activated_path}]), 0 if allowed else 1)
+
         file.write_text(json.dumps({"token": valid}) + "\n")
         self.git("add", path)
         for field in ({"RuleID": "generic-api-key"}, {"Tags": ["decoded:base64"]}, {"EndLine": 2}):

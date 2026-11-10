@@ -1,0 +1,91 @@
+{"in":"seed","room":"@harness","callback":0,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE TABLE peer_user_map (\n    document_id TEXT NOT NULL,\n    -- peer_id should be BIGINT, but d1 doesn't support this\n    peer_id     TEXT NOT NULL,\n    user_id     TEXT NOT NULL,\n    PRIMARY KEY (document_id, peer_id)\n)",[]],"unix_ms":1794270234238,"monotonic_ms":3822.018623}
+{"in":"seed","room":"@harness","callback":1,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE INDEX idx_peer_user_map_user_doc ON peer_user_map (document_id, user_id)",[]],"unix_ms":1794270234344,"monotonic_ms":3927.736393}
+{"in":"seed","room":"@harness","callback":2,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE INDEX idx_document_id ON peer_user_map (document_id)",[]],"unix_ms":1794270234531,"monotonic_ms":4114.693705}
+{"in":"seed","room":"@harness","callback":3,"binding":"USER_PEER_MAPPING","method":"run","args":["CREATE TABLE blame (\n    document_id  TEXT NOT NULL,\n    node_id      TEXT NOT NULL,\n    peer_id      TEXT NOT NULL,\n    timestamp_ms INTEGER NOT NULL,\n    PRIMARY KEY (document_id, node_id)\n)",[]],"unix_ms":1794270234635,"monotonic_ms":4218.467496}
+{"in":"seed","room":"@harness","callback":4,"binding":"USER_PEER_MAPPING","method":"run","args":["-- The signed agent actor (e.g. `bot|<uuid>`) a peer edited as, NULL for humans.\nALTER TABLE peer_user_map ADD COLUMN actor TEXT",[]],"unix_ms":1794270234647,"monotonic_ms":4230.868032}
+{"room":"@worker","callback":0,"in":"new","unix_ms":1794270234739,"monotonic_ms":1794270234739}
+{"room":"@worker","callback":1,"in":"fetch","boundary":"worker","method":"GET","path":"/document/hibernate-h1/connect","query":"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdC11c2VyIiwiZG9jdW1lbnRfaWQiOiJoaWJlcm5hdGUtaDEiLCJhY2Nlc3NfbGV2ZWwiOiJvd25lciIsImV4cCI6MTc5NDI3MDI5NCwiaWF0IjoxNzk0MjcwMjM0fQ.n4CdLAT_Y1C1EsXqlP_Kw-NsJjBO_bKkdly8GSzZsUI","headers":{},"body_b64":"","unix_ms":1794270234741,"monotonic_ms":1794270234741}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":0,"in":"new","unix_ms":1794270234830,"monotonic_ms":1794270234830}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"in":"fetch","method":"GET","path":"/document/hibernate-h1/connect","query":"?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoidGVzdC11c2VyIiwiZG9jdW1lbnRfaWQiOiJoaWJlcm5hdGUtaDEiLCJhY2Nlc3NfbGV2ZWwiOiJvd25lciIsImV4cCI6MTc5NDI3MDI5NCwiaWF0IjoxNzk0MjcwMjM0fQ.n4CdLAT_Y1C1EsXqlP_Kw-NsJjBO_bKkdly8GSzZsUI","headers":{},"body_b64":"","unix_ms":1794270234832,"monotonic_ms":1794270234832}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.get","args":["SURFACE_MIGRATION_SOURCE"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.get","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.put","args":["DOCUMENT_ID","hibernate-h1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"connections.list","args":[],"ws_ids":[]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"out":"accept","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.put","args":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1",{"user_id":"test-user","access_level":"owner","peer_ids":[],"session_kind":"document"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"sql.exec","args":["CREATE TABLE IF NOT EXISTS kv_store (\n                    id TEXT NOT NULL,\n                    chunk INTEGER NOT NULL,\n                    data BLOB,\n                    PRIMARY KEY (id, chunk)\n                )"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"sql.exec","args":["SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1","hibernate-h1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"SNAPSHOT_STORE_KV.get","args":["hibernate-h1/hibernate-h1.snapshot",{"type":"arrayBuffer"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"SNAPSHOT_STORE_KV.get","value":null}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"sql.exec","args":["DELETE FROM kv_store WHERE id = ?1","hibernate-h1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"sql.exec","args":["INSERT INTO kv_store (id, chunk, data) VALUES (?1, ?2, ?3)","hibernate-h1",0,{"bytes_b64":"bG9ybwAAAAAAAAAAAAAAAFMuDPwAAy8AAABMT1JPAAAAAgB2dgAAAAEAAgDnYslsAQAAAAUAAAACAGZyAAIAdnbb2MnIFgAAAAAAAAAAAAAA"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.put","args":["LAST_VERSION_VECTOR",[0]]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.put","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.get","args":["LAST_VERSION_VECTOR"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.get","value":[0]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.list","args":[{"prefix":"o/"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.list","value":[]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"clock":"presence","value":"1794270234944"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"out":"send","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","frame_b64":"AZIAAAABiQAAAGxvcm8AAAAAAAAAAAAAAACKrLicAAM/AAAATE9STwAAAAIAc2YAAAIAc3YAAAIAdnYAAAABAAcADQAEAKHrtekBAAAABQAAAAIAZnIAAgB2dtvYycgmAAAAAQAAAEUnAAAATE9STwAAAAABAExF2xMBAAAABQAAAAIAZnIAAgBmco4PJVAOAAAAAQAAAAA="}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"wait_until"}
+{"body_b64":"eyJyZWFzb24iOiJmaXJzdF9qb2luIn0=","callback":1,"out":"fetch_body","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74"}
+{"callback":1,"port":"fetch","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","url":"https://dss.test/internal/documents/hibernate-h1/interaction"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"out":"response","status":101,"headers":{"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"},"body_b64":""}
+{"room":"@worker","callback":1,"out":"response","status":101,"headers":{"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"},"body_b64":""}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","binary_b64":"AQgAAAAFM7dunQNai4E=","unix_ms":1794270235040,"monotonic_ms":1794270235040}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"connections.tags","tags":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"connections.tags","tags":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"connections.tags","tags":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"storage.put","args":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1",{"user_id":"test-user","access_level":"owner","peer_ids":["9334653624228165427"],"session_kind":"document"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"return":"storage.put","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"d1.run","sql":"INSERT INTO peer_user_map (document_id, peer_id, user_id, actor) VALUES (?, ?, ?, ?) ON CONFLICT(document_id, peer_id) DO UPDATE SET user_id = excluded.user_id, actor = excluded.actor WHERE peer_user_map.user_id = ?;","params":["hibernate-h1","9334653624228165427","test-user",null,"system"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"ping","unix_ms":1794270235048,"monotonic_ms":1794270235048}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"storage.getAlarm","args":[null]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"return":"storage.getAlarm","value":null}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"clock":"alarm_set_ms","value":"1794270235052"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"port":"storage.setAlarm","args":[{"date_ms":1794270240052},null]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"return":"storage.setAlarm","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"out":"send_text","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"pong"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"ping","unix_ms":1794270235057,"monotonic_ms":1794270235057}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"out":"send_text","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"pong"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":5,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"ping","unix_ms":1794270235058,"monotonic_ms":1794270235058}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":5,"out":"send_text","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"pong"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":0,"in":"new","unix_ms":1794270239367,"monotonic_ms":1794270239367}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"ping","unix_ms":1794270239367,"monotonic_ms":1794270239367}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.get","args":["SURFACE_MIGRATION_SOURCE"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.get","value":{"undefined":true}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"port":"storage.get","args":["DOCUMENT_ID"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"return":"storage.get","value":"hibernate-h1"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":1,"out":"send_text","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"pong"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"in":"message","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"ping","unix_ms":1794270239369,"monotonic_ms":1794270239369}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":2,"out":"send_text","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","text":"pong"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"in":"close","ws_id":"ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1","code":1000,"reason":"transcript scenario complete","clean":true,"unix_ms":1794270239371,"monotonic_ms":1794270239371}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"connections.tags","tags":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"storage.get","args":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"return":"storage.get","value":{"user_id":"test-user","access_level":"owner","peer_ids":["9334653624228165427"],"session_kind":"document"}}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"clock":"presence","value":"1794270239373"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"clock":"presence","value":"1794270239373"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"connections.list","args":[],"ws_ids":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"connections.list","args":[],"ws_ids":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"sql.exec","args":["CREATE TABLE IF NOT EXISTS kv_store (\n                    id TEXT NOT NULL,\n                    chunk INTEGER NOT NULL,\n                    data BLOB,\n                    PRIMARY KEY (id, chunk)\n                )"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"sql.exec","args":["SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1","hibernate-h1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"sql.exec","args":["SELECT chunk, data FROM kv_store WHERE id = ?1 ORDER BY chunk","hibernate-h1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"storage.get","args":["LAST_VERSION_VECTOR"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"return":"storage.get","value":[0]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"storage.list","args":[{"prefix":"o/"}]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"return":"storage.list","value":[]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"wait_until"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"connections.tags","tags":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"port":"storage.delete","args":["ws_idf68e0d04-c5b4-4835-9241-cc6bd5e7ebd1"]}
+{"body_b64":"bG9ybwAAAAAAAAAAAAAAAIqsuJwAAz8AAABMT1JPAAAAAgBzZgAAAgBzdgAAAgB2dgAAAAEABwANAAQAoeu16QEAAAAFAAAAAgBmcgACAHZ229jJyCYAAAABAAAARScAAABMT1JPAAAAAAEATEXbEwEAAAAFAAAAAgBmcgACAGZyjg8lUA4AAAA=","callback":3,"out":"fetch_body","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74"}
+{"callback":3,"port":"fetch","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","url":"https://dss.test/internal/documents/hibernate-h1/snapshot"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":3,"return":"storage.delete","value":true}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"in":"alarm","unix_ms":1794270239385,"monotonic_ms":1794270239385}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"port":"connections.list","args":[],"ws_ids":[]}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"out":"alarm","status":200,"body_b64":"b2s="}
+{"body":{},"callback":3,"port":"fetch","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","url":"https://dss.test/internal/documents/hibernate-h1/sync-content-updated"}
+{"body_b64":"eyJyZWFzb24iOiJsYXN0X2xlYXZlIn0=","callback":3,"out":"fetch_body","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74"}
+{"callback":3,"port":"fetch","room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","url":"https://dss.test/internal/documents/hibernate-h1/interaction"}
+{"room":"61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74","callback":4,"out":"dump","accepted":0,"kv":[["DOCUMENT_ID","hibernate-h1"],["LAST_VERSION_VECTOR",[0]]],"kv_bytes":[["DOCUMENT_ID",{"bytes_b64":""}],["LAST_VERSION_VECTOR",{"bytes_b64":"AA=="}]],"sql":[{"id":"hibernate-h1","chunk":0,"data":{"bytes_b64":"bG9ybwAAAAAAAAAAAAAAAFMuDPwAAy8AAABMT1JPAAAAAgB2dgAAAAEAAgDnYslsAQAAAAUAAAACAGZyAAIAdnbb2MnIFgAAAAAAAAAAAAAA"}}],"d1":{"peer_user_map":[{"document_id":"hibernate-h1","peer_id":"9334653624228165427","user_id":"test-user","actor":null}],"blame":[]},"snapshots":[],"alarm":null,"marker":"90:61da05106a1e8bc8ddfb01dcaa614e23b2fbfe05d4142d9f9c337df723ba5d74"}

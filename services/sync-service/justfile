@@ -73,3 +73,11 @@ record-transcripts directory="../../crates/sync_server_sim/tests/transcripts":
 # Compare the latest local recording to the committed corpus.
 diff-transcripts expected="git:HEAD" actual="../../crates/sync_server_sim/tests/transcripts":
   SYNC_TRANSCRIPT_EXPECTED={{expected}} SYNC_TRANSCRIPT_ACTUAL={{actual}} npx vitest run tests/transcript_diff.test.ts
+
+# Writer activation has a separate corpus; never deploy this capture feature.
+record-activated-transcripts directory="../../crates/sync_server_sim/tests/transcripts-activated":
+  worker-build --features create-default-state,owned,chunked-operation-writes,transcript
+  SYNC_CHUNK_WRITER=1 SYNC_RECORD=1 SYNC_TRANSCRIPT_DIR={{directory}} npx vitest run
+
+diff-activated-transcripts expected="git-activated:HEAD" actual="../../crates/sync_server_sim/tests/transcripts-activated":
+  SYNC_TRANSCRIPT_EXPECTED={{expected}} SYNC_TRANSCRIPT_ACTUAL={{actual}} npx vitest run tests/transcript_diff.test.ts

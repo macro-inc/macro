@@ -892,3 +892,24 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
         );
     });
 }
+
+#[test]
+fn activated_golden_fixtures_load_and_enabled_callbacks_replay() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts-activated");
+    let paths = fixtures(&root).unwrap();
+    assert_eq!(paths.len(), 155);
+    for path in paths {
+        let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
+        let name = name.strip_suffix(".gz").unwrap_or(name);
+        let transcript = Transcript::load(&path, name).unwrap();
+        assert!(!transcript.inputs().unwrap().is_empty(), "{name}");
+        if ENABLED.contains(&name) {
+            replay_activated(&transcript).unwrap();
+        } else {
+            assert!(matches!(
+                replay_activated(&transcript),
+                Err(ReplayError::NotEnabled(_))
+            ));
+        }
+    }
+}
