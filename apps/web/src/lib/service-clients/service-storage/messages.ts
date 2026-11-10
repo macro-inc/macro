@@ -31,7 +31,14 @@ export type MessageSender = {
   triggered_via?: string | null;
 };
 
-export type Message = StoredMessage & { sender?: MessageSender };
+export type Message = StoredMessage & {
+  sender?: MessageSender;
+  /**
+   * Set on the client when `link_previews` arrive on their own event: the
+   * message text they were computed from, which may be newer than `content`.
+   */
+  link_previews_content?: string;
+};
 export type MessageThread = Omit<StoredMessageThread, 'root' | 'replies'> & {
   root: Message;
   replies: Message[];
