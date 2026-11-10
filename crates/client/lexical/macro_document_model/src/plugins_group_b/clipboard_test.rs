@@ -60,8 +60,7 @@ fn file_request_preempts_markdown_without_mutating_document_text() -> Result<(),
         .insert("text/plain".into(), "# file content".into());
     payload.data.insert(
         "application/x-macro-paste-facts".into(),
-        json!({"request":23,"hasFileEntries":true,"mobileImageRecovery":false})
-            .to_string(),
+        json!({"request":23,"hasFileEntries":true,"mobileImageRecovery":false}).to_string(),
     );
     let (handled, commit) = editor.dispatch(&Command::Paste(payload))?;
     assert_eq!(handled, Handled::Yes);
