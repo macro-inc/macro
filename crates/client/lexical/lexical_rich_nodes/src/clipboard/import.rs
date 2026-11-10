@@ -7,7 +7,7 @@ pub const DEFAULT_IMPORT_MIME_TYPE_PRIORITY: &[(&str, u32)] = &[
     (MIME_PLAIN, 20),
     (MIME_URI_LIST, 30),
 ];
-/// Import each serialized node with a fresh model key through node replacement.
+/// Import fresh keys through the registered stored-JSON importers.
 pub fn generate_nodes_from_serialized_nodes(
     tx: &mut Transaction<'_>,
     nodes: &[Value],
@@ -140,10 +140,7 @@ pub fn insert_data_transfer_for_rich_text(
             MIME_HTML if Some(entry.data) != plain_text => {
                 if let Some(html_nodes) = html_nodes {
                     let imported = (|| -> Result<(), Error> {
-                        let nodes = html_nodes
-                            .iter()
-                            .map(|node| tx.import_node(node))
-                            .collect::<Result<Vec<_>, _>>()?;
+                        let nodes = generate_nodes_from_dom_drafts(tx, html_nodes)?;
                         insert_generated_nodes(tx, &nodes, selection)
                     })();
                     match imported {
