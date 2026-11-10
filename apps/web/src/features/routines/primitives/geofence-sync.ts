@@ -16,13 +16,12 @@ export type GeofencePhone = {
   setDevice: (device: GeofenceDevice) => Promise<void>;
   monitor: (fences: GeofenceFence[]) => Promise<void>;
   permission: () => Promise<GeofencePermission>;
-  requestPermission: () => Promise<GeofencePermission>;
 };
 
 /**
  * Hands the phone the places to watch. A phone gets a device token only once
- * its owner has a place, and is asked for location access only then, and only
- * if it never answered.
+ * its owner has a place. The sync never asks for location access: only the
+ * Allow button does, so the system prompt comes with its reason.
  */
 export async function syncRoutineGeofences(
   fences: GeofenceFence[],
@@ -43,13 +42,7 @@ export async function syncRoutineGeofences(
   );
   if (fences.length === 0) return;
 
-  let permission = await ports.phone.permission();
-  if (permission === 'not_determined') {
-    permission = await span.span('routines.geofence.request_permission', () =>
-      ports.phone.requestPermission()
-    );
-  }
-  span.setAttr('routines.geofence.permission', permission);
+  span.setAttr('routines.geofence.permission', await ports.phone.permission());
 }
 
 /**

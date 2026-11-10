@@ -32,11 +32,9 @@ function fakePhone(state: {
     monitor: async (fences) => {
       calls.push(`monitor ${fences.map((fence) => fence.id).join(',')}`);
     },
-    permission: async () => state.permission,
-    requestPermission: async () => {
-      calls.push('requestPermission');
-      state.permission = 'always';
-      return 'always';
+    permission: async () => {
+      calls.push('permission');
+      return state.permission;
     },
   };
   return { phone, calls };
@@ -51,7 +49,7 @@ const devices = {
 };
 
 describe('syncing routine places to the phone', () => {
-  it('registers the phone and asks for access once the user has a place', async () => {
+  it('registers the phone once the user has a place, without asking for access', async () => {
     const { phone, calls } = fakePhone({
       deviceId: null,
       permission: 'not_determined',
@@ -60,17 +58,17 @@ describe('syncing routine places to the phone', () => {
     expect(calls).toEqual([
       'setDevice device-1 https://gateway.example/scheduled-actions/location/reports',
       'monitor fence-office',
-      'requestPermission',
+      'permission',
     ]);
   });
 
-  it('keeps a registered phone and an answered permission', async () => {
+  it('keeps a registered phone', async () => {
     const { phone, calls } = fakePhone({
       deviceId: 'device-1',
       permission: 'when_in_use',
     });
     await syncRoutineGeofences([OFFICE], { devices, phone }, NOOP_SPAN);
-    expect(calls).toEqual(['monitor fence-office']);
+    expect(calls).toEqual(['monitor fence-office', 'permission']);
   });
 
   it('mints no token and asks nothing of a user without places', async () => {

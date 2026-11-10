@@ -2,7 +2,6 @@ import {
   geofenceDeviceId,
   geofenceStatus,
   isGeofenceSupported,
-  requestGeofencePermission,
   setGeofenceDevice,
   syncGeofences,
 } from '@core/mobile/native-geofence';
@@ -83,7 +82,6 @@ export function useRoutineGeofenceSync(userId: Accessor<string | undefined>) {
       if (signedIn()) await syncGeofences(fences);
     },
     permission: async () => (await geofenceStatus()).permission,
-    requestPermission: requestGeofencePermission,
   };
   const sync = createGeofenceSyncQueue(
     (fences) =>

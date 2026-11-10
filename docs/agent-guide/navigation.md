@@ -1261,8 +1261,9 @@ while the system can still ask. The signed-in phone app keeps the OS watching
 the places of the user's enabled routines (`GET
 /scheduled-actions/location/fences`) on start, on return to the foreground and
 whenever a routine changes; it registers the phone for reports (`POST
-/scheduled-actions/location/devices`) and asks for location access only once
-there is a place, and removes the device on sign-out. The span is
+/scheduled-actions/location/devices`) once there is a place, and removes the
+device on sign-out. Only **Allow location access** asks the system for access;
+the sync never does. The span is
 `routines.geofence_sync`. Runs it starts read **Arrived at Office** or **Left
 Office** in run history.
 
