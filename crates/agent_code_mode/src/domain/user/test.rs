@@ -80,7 +80,14 @@ async fn runs_as_the_authenticated_user_and_returns_data_with_activity() {
         0xA1,
     )));
     let receipt = service
-        .execute(&user(), &caller, None, request(), None, CancellationToken::new())
+        .execute(
+            &user(),
+            &caller,
+            None,
+            request(),
+            None,
+            CancellationToken::new(),
+        )
         .await
         .unwrap();
 
