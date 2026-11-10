@@ -223,3 +223,108 @@ fn final_custom_export_override_remains_authoritative() -> Result<(), Box<dyn st
     );
     Ok(())
 }
+
+static RETAINED: StateKey<std::sync::Arc<Value>> = StateKey::new("retained-root", |value| {
+    std::sync::Arc::new(value.map_or_else(
+        || json!({}),
+        |value| json!({"version": value["version"], "parsed": true}),
+    ))
+});
+
+#[test]
+fn retained_root_tracks_absent_storage_through_cow_and_explicit_write()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut editor = Editor::builder(EditorMode::Headless).build()?;
+    let original = std::sync::Arc::new(json!({"version":10}));
+    editor.update(|tx| tx.set_state(NodeKey::ROOT, &RETAINED, original.clone()))?;
+    let undo = json!({"type":"root","$":{"unrelated":true}});
+    editor.update(|tx| {
+        tx.apply_remote_fields_retaining_state(
+            NodeKey::ROOT,
+            undo.as_object().expect("literal root"),
+            &["retained-root"],
+        )
+    })?;
+    let view = editor.state().view();
+    assert!(std::sync::Arc::ptr_eq(
+        &view.get_state(NodeKey::ROOT, &RETAINED)?,
+        &original
+    ));
+    assert_eq!(
+        view.export_json(NodeKey::ROOT)?["$"]["retained-root"],
+        json!({"version":10})
+    );
+    assert_eq!(
+        view.export_stored_json(NodeKey::ROOT)?["$"],
+        json!({"unrelated":true})
+    );
+    editor.update(|tx| tx.set_state(NodeKey::ROOT, &OTHER, true))?;
+    assert!(
+        editor.state().view().export_stored_json(NodeKey::ROOT)?["$"]
+            .get("retained-root")
+            .is_none()
+    );
+
+    let redo = json!({"type":"root","$":{"retained-root":{"version":12},"other":true}});
+    editor.update(|tx| {
+        tx.apply_remote_fields_retaining_state(
+            NodeKey::ROOT,
+            redo.as_object().expect("literal root"),
+            &["retained-root"],
+        )
+    })?;
+    let view = editor.state().view();
+    assert!(std::sync::Arc::ptr_eq(
+        &view.get_state(NodeKey::ROOT, &RETAINED)?,
+        &original
+    ));
+    assert_eq!(
+        view.export_stored_json(NodeKey::ROOT)?["$"]["retained-root"],
+        json!({"version":12})
+    );
+    editor.update(|tx| {
+        tx.set_state(
+            NodeKey::ROOT,
+            &RETAINED,
+            std::sync::Arc::new(json!({"version":13})),
+        )
+    })?;
+    let view = editor.state().view();
+    assert_eq!(
+        view.export_stored_json(NodeKey::ROOT)?["$"]["retained-root"],
+        json!({"version":13})
+    );
+    assert_eq!(
+        view.export_json(NodeKey::ROOT)?["$"]["retained-root"],
+        json!({"version":13})
+    );
+    Ok(())
+}
+
+#[test]
+fn retained_root_can_be_absent_live_and_present_in_storage_until_cold_import()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut editor = Editor::builder(EditorMode::Headless).build()?;
+    let remote = json!({"type":"root","$":{"retained-root":{"version":10}}});
+    editor.update(|tx| {
+        tx.apply_remote_fields_retaining_state(
+            NodeKey::ROOT,
+            remote.as_object().expect("literal root"),
+            &["retained-root"],
+        )
+    })?;
+    let view = editor.state().view();
+    assert!(!view.export_json(NodeKey::ROOT)?.contains_key("$"));
+    let stored = view.export_stored_json(NodeKey::ROOT)?;
+    assert_eq!(stored["$"]["retained-root"], json!({"version":10}));
+    let reopened = editor.parse_editor_state_str(&json!({"root": stored}).to_string())?;
+    assert_eq!(
+        *reopened.view().get_state(NodeKey::ROOT, &RETAINED)?,
+        json!({"version":10,"parsed":true})
+    );
+    assert_eq!(
+        reopened.to_json()?.root["$"]["retained-root"],
+        json!({"version":10,"parsed":true})
+    );
+    Ok(())
+}

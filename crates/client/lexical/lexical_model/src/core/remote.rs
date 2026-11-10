@@ -20,6 +20,19 @@ impl Transaction<'_> {
         Ok(key)
     }
 }
+fn update_fields(
+    tx: &mut Transaction<'_>,
+    key: NodeKey,
+    json: &SerializedNode,
+    retain: &[&str],
+) -> Result<(), Error> {
+    if let Some(name) = json.get("type").and_then(serde_json::Value::as_str)
+        && tx.type_name(key)? != name
+    {
+        return Err(Error::NodeTypeMismatch(key));
+    }
+    tx.apply_remote_fields_retaining_state(key, json, retain)
+}
 pub(super) fn apply(
     tx: &mut Transaction<'_>,
     changes: &[NodeChange],
@@ -69,13 +82,10 @@ pub(super) fn apply(
                 }
             }
             NodeChange::Update { node, json } => {
-                let key = resolve(*node, &locals)?;
-                if let Some(name) = json.get("type").and_then(serde_json::Value::as_str)
-                    && tx.type_name(key)? != name
-                {
-                    return Err(Error::NodeTypeMismatch(key));
-                }
-                tx.apply_remote_fields(key, json)?;
+                update_fields(tx, resolve(*node, &locals)?, json, &[])?;
+            }
+            NodeChange::UpdateRootRetainingState { json, retain } => {
+                update_fields(tx, NodeKey::ROOT, json, retain)?;
             }
             NodeChange::SpliceText {
                 node,

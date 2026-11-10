@@ -13,6 +13,7 @@ mod read_memo;
 use read_memo::ReadMemo;
 
 type StoredValue = Arc<dyn Any + Send + Sync>;
+pub(crate) type ImportedSlots = IndexMap<String, Option<Arc<Value>>>;
 type KnownValues = Vec<(&'static dyn AnyStateKey, StoredValue)>;
 
 /// A state value with JavaScript-compatible equality.
@@ -301,7 +302,7 @@ pub struct NodeState {
     read_memo: ReadMemo,
     pub(crate) unknown: Option<IndexMap<String, Arc<Value>>>,
     // Imported storage survives read-only parsing and COW; explicit writes supersede a key.
-    imported_raw: Option<IndexMap<String, Arc<Value>>>,
+    imported_raw: Option<ImportedSlots>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign: crate::foreign::state::ForeignBindings,
 }
@@ -496,6 +497,7 @@ impl NodeState {
         previous: Option<&NodeState>,
         shared: Option<&IndexMap<&'static str, &'static dyn AnyStateKey>>,
         preserve_unchanged: bool,
+        retain_ordinary: &[&str],
     ) -> Option<Self> {
         let nested = json.get("$").and_then(Value::as_object);
         if previous.is_none()
@@ -519,11 +521,23 @@ impl NodeState {
                 unknown.insert(entry.key.name().to_owned(), Arc::new(v.clone()));
             }
         }
-        let imported_raw = (!unknown.is_empty()).then(|| unknown.clone());
+        let mut imported_raw: ImportedSlots = unknown
+            .iter()
+            .map(|(name, value)| (name.clone(), Some(value.clone())))
+            .collect();
+        for name in retain_ordinary {
+            imported_raw.entry((*name).to_owned()).or_insert(None);
+        }
         let previous_known: KnownValues =
             previous.into_iter().flat_map(Self::known_entries).collect();
         let mut known = vec![];
         let parse = |key: &'static dyn AnyStateKey, value: Option<Arc<Value>>| {
+            if retain_ordinary.contains(&key.name()) {
+                return previous_known
+                    .iter()
+                    .find(|(existing, _)| existing.identity() == key.identity())
+                    .map(|(_, value)| value.clone());
+            }
             if preserve_unchanged
                 && let Some((_, stored)) = previous_known
                     .iter()
@@ -540,16 +554,18 @@ impl NodeState {
             {
                 // Remote updates carry the whole node, including unchanged state.
                 // Reparsing an unchanged typed value can alter its serialized shape.
-                return stored.clone();
+                return Some(stored.clone());
             }
-            value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value)))
+            Some(value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value))))
         };
         for entry in &layout.entries {
             let Some(key) = entry.key.native() else {
                 continue;
             };
             let value = unknown.shift_remove(key.name());
-            known.push((key, parse(key, value)));
+            if let Some(value) = parse(key, value) {
+                known.push((key, value));
+            }
         }
         {
             for (key, _) in &previous_known {
@@ -560,7 +576,9 @@ impl NodeState {
                     continue;
                 }
                 let value = unknown.shift_remove(key.name());
-                known.push((*key, parse(*key, value)));
+                if let Some(value) = parse(*key, value) {
+                    known.push((*key, value));
+                }
             }
         }
         let learned: Vec<_> = unknown
@@ -572,15 +590,25 @@ impl NodeState {
             if !known
                 .iter()
                 .any(|(existing, _)| existing.identity() == key.identity())
+                && let Some(value) = parse(key, value)
             {
-                known.push((key, parse(key, value)));
+                known.push((key, value));
+            }
+        }
+        for name in retain_ordinary {
+            unknown.shift_remove(*name);
+            if let Some(value) = previous
+                .and_then(|state| state.unknown.as_ref())
+                .and_then(|values| values.get(*name))
+            {
+                unknown.insert((*name).to_owned(), value.clone());
             }
         }
         Some(Self {
             known,
             read_memo: ReadMemo::default(),
             unknown: Some(unknown),
-            imported_raw,
+            imported_raw: (!imported_raw.is_empty()).then_some(imported_raw),
             #[cfg(feature = "foreign-nodes")]
             foreign: previous
                 .map(|state| state.foreign.clone())
@@ -630,7 +658,11 @@ impl NodeState {
         }
         if stored {
             for (name, value) in self.imported_raw.iter().flat_map(|raw| raw.iter()) {
-                values.insert(name.clone(), value.as_ref().clone());
+                if let Some(value) = value {
+                    values.insert(name.clone(), value.as_ref().clone());
+                } else {
+                    values.shift_remove(name);
+                }
             }
         }
         #[cfg(feature = "foreign-nodes")]

@@ -65,6 +65,10 @@ impl SyncPolicy for MacroSyncPolicy {
         node.get("type").and_then(serde_json::Value::as_str) == Some("comment-mark")
             && node.get("isDraft") == Some(&serde_json::Value::Bool(true))
     }
+    fn retained_live_root_state(&self) -> &'static [&'static str] {
+        // Source's live reconciliation updates root children and leaves metadata alone.
+        &["documentMetadata"]
+    }
     fn local_state_keys(&self) -> &'static [&'static str] {
         &["local"]
     }

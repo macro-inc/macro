@@ -27,6 +27,11 @@ pub trait SyncPolicy: Send + Sync + 'static {
     /// Canonical editor serialization for application-specific transport aliases.
     /// The default preserves every field; this never changes the Loro document.
     fn canonicalize_node_json(&self, _node: &mut SerializedNode) {}
+    /// Synced nested root state keys whose live values survive an incoming update.
+    /// Their incoming storage slots still participate in strict projection checks.
+    fn retained_live_root_state(&self) -> &'static [&'static str] {
+        &[]
+    }
     /// NodeState keys never written or deleted and masked on read.
     fn local_state_keys(&self) -> &'static [&'static str];
     /// Fields which alone do not trigger remote reconciliation.

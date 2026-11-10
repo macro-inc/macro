@@ -1,5 +1,9 @@
 //! Runtime NodeState codecs over unparsed JSON slots.
-use crate::{collections::IndexMap, node_state::DeclaredStateKey, *};
+use crate::{
+    collections::IndexMap,
+    node_state::{DeclaredStateKey, ImportedSlots},
+    *,
+};
 use serde_json::Value;
 use std::{
     borrow::Cow,
@@ -126,7 +130,7 @@ impl ForeignBindings {
         values: &mut SerializedNode,
         layout: &StateLayout,
         json: &mut SerializedNode,
-        imported_raw: Option<&IndexMap<String, Arc<Value>>>,
+        imported_raw: Option<&ImportedSlots>,
     ) {
         let configs = self.configs();
         for (name, config) in configs {
