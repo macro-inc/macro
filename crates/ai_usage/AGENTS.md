@@ -60,9 +60,10 @@ flexible admin query API.
   for: it is stored with `agent_api_key_id` and never counted. Set it only
   on calls that actually authenticate with that key.
 - `UsageContext::with_agent_session` stores the agent session a call is part
-  of in `agent_session_id`. Tools and subagents inherit it from the turn's
-  context: build their usage from the inherited context, not a fresh one,
-  or the session's spend loses them.
+  of in `agent_session_id`. A session's tools get a recorder wrapped in
+  `for_agent_session`, which stamps the session on any event that names
+  none. A service that keeps the recorder it was built with (image
+  generation) gets no stamp and must carry the session in its request.
 
 ## Related
 

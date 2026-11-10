@@ -105,7 +105,6 @@ async fn search_passes_defaults_and_meters_credits_to_the_user() {
             WebCaller {
                 user: user(),
                 entity: Some(entity),
-                agent_session_id: None,
             },
             WebSearch {
                 query: "  macro docs  ".into(),

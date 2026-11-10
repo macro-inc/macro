@@ -53,10 +53,9 @@ fn user() -> MacroUserIdStr<'static> {
 }
 
 #[tokio::test]
-async fn fetch_is_attributed_to_the_requesting_user_and_turn_entity_and_session() {
+async fn fetch_is_attributed_to_the_requesting_user_and_turn_entity() {
     let recorder = Arc::new(Recorder::default());
     let entity = Uuid::new_v4();
-    let session = Uuid::new_v4();
     let context = ServiceContext(WebToolContext {
         service: Arc::new(WebSearchService::new(
             Arc::new(Unconfigured),
@@ -64,7 +63,6 @@ async fn fetch_is_attributed_to_the_requesting_user_and_turn_entity_and_session(
             recorder.clone(),
         )),
         entity: Some(entity),
-        agent_session_id: Some(session),
     });
 
     let page = WebFetch {
@@ -79,7 +77,6 @@ async fn fetch_is_attributed_to_the_requesting_user_and_turn_entity_and_session(
     let events = recorder.0.lock().unwrap();
     assert_eq!(events[0].user, user());
     assert_eq!(events[0].entity, Some(entity));
-    assert_eq!(events[0].agent_session_id, Some(session));
 }
 
 #[tokio::test]
@@ -91,7 +88,6 @@ async fn a_missing_key_reaches_the_model_as_a_clear_error() {
             Arc::new(Recorder::default()),
         )),
         entity: None,
-        agent_session_id: None,
     });
 
     let error = WebSearch {

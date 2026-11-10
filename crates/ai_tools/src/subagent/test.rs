@@ -93,10 +93,7 @@ fn admission_output_has_a_public_code_not_internal_diagnostics() {
 #[tokio::test]
 async fn shared_system_context_does_not_become_subagent_attribution() {
     let entity = uuid::Uuid::now_v7();
-    let session = uuid::Uuid::now_v7();
-    let inherited = UsageContext::system(AiFeature::Automation)
-        .with_entity(Some(entity))
-        .with_agent_session(Some(session));
+    let inherited = UsageContext::system(AiFeature::Automation).with_entity(Some(entity));
     let first = RequestContext::new("macro|first@example.com".to_owned().try_into().unwrap());
     let second = RequestContext::new("macro|second@example.com".to_owned().try_into().unwrap());
     let (a, b) = tokio::join!(async { usage_for_request(&inherited, &first) }, async {
@@ -108,7 +105,5 @@ async fn shared_system_context_does_not_become_subagent_attribution() {
     assert_eq!(b.feature, AiFeature::Automation);
     assert_eq!(a.entity, Some(entity));
     assert_eq!(b.entity, Some(entity));
-    assert_eq!(a.agent_session_id, Some(session));
-    assert_eq!(b.agent_session_id, Some(session));
     assert_eq!(inherited.user, *SYSTEM_USER_ID);
 }

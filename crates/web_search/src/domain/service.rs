@@ -25,18 +25,12 @@ pub struct WebCaller {
     pub user: MacroUserIdStr<'static>,
     /// The entity the request relates to (a chat or agent session), if any.
     pub entity: Option<Uuid>,
-    /// The agent session the request is part of, if any.
-    pub agent_session_id: Option<Uuid>,
 }
 
 impl WebCaller {
     /// A request attributed only to `user`.
     pub fn user(user: MacroUserIdStr<'static>) -> Self {
-        Self {
-            user,
-            entity: None,
-            agent_session_id: None,
-        }
+        Self { user, entity: None }
     }
 }
 
@@ -136,7 +130,6 @@ impl WebSearchService {
         self.recorder.record(
             UsageContext::new(AiFeature::WebSearch, caller.user)
                 .with_entity(caller.entity)
-                .with_agent_session(caller.agent_session_id)
                 .into_provider_credits_event(self.provider.pricing_model().to_owned(), credits),
         );
     }
