@@ -11,7 +11,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use model_notifications::NotifEvent;
-use notification::domain::models::{NotificationState, UserNotificationRow};
+use notification::domain::models::{NotificationLane, NotificationState, UserNotificationRow};
 use rootcause::Report;
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -74,6 +74,7 @@ pub fn notification(
         entity,
         sent: true,
         state,
+        lane: NotificationLane::Signal,
         created_at: at(minute),
         viewed_at: None,
         updated_at: at(minute),
@@ -291,6 +292,13 @@ pub fn with_state(notification: &FeedNotification, state: NotificationState) -> 
     Arc::new(row)
 }
 
+/// The same notification routed to noise.
+pub fn as_noise(notification: &FeedNotification) -> FeedNotification {
+    let mut row = (**notification).clone();
+    row.lane = NotificationLane::Noise;
+    Arc::new(row)
+}
+
 /// The notifications' ids, in order.
 pub fn ids(notifications: &[FeedNotification]) -> Vec<Uuid> {
     notifications.iter().map(|n| n.notification_id).collect()
@@ -449,6 +457,7 @@ impl FeedNotifications for FakeNotifications {
         &self,
         _user: MacroUserIdStr<'static>,
         entities: Vec<Entity<'static>>,
+        lane: NotificationLane,
     ) -> Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report> {
         self.loads.lock().unwrap().push(entities.clone());
         let by_entity = self.by_entity.lock().unwrap();
@@ -459,7 +468,7 @@ impl FeedNotifications for FakeNotifications {
                     .get(&entity)
                     .into_iter()
                     .flatten()
-                    .filter(|n| n.state != NotificationState::Done)
+                    .filter(|n| n.state != NotificationState::Done && n.lane == lane)
                     .cloned()
                     .collect();
                 (entity, active)

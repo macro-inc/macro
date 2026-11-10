@@ -4,7 +4,7 @@ use ::attention_feed::{
     domain::{
         models::{
             CandidateKeying, DoneReceipt, FeedError, FeedKey, FeedPosition, FeedRevision,
-            FeedTrigger, FeedViewer,
+            FeedTrigger, FeedViewer, NotificationLane,
         },
         ports::FeedTriggers,
     },
@@ -56,6 +56,7 @@ fn comment(id: u128, minute: u32) -> Arc<UserNotificationRow<NotifEvent>> {
         entity: doc_key().entity().clone(),
         sent: true,
         state: NotificationState::Unseen,
+        lane: NotificationLane::Signal,
         created_at: at(minute),
         viewed_at: None,
         updated_at: at(minute),
@@ -181,7 +182,16 @@ impl WorkFeedGraphqlService for Recording {
 #[derive(Default, Clone)]
 struct ManualTriggers {
     sender: Arc<Mutex<Option<tokio::sync::mpsc::Sender<FeedTrigger>>>>,
-    subscribed: Arc<Mutex<Vec<(MacroUserIdStr<'static>, CandidateKeying, bool)>>>,
+    subscribed: Arc<
+        Mutex<
+            Vec<(
+                MacroUserIdStr<'static>,
+                CandidateKeying,
+                NotificationLane,
+                bool,
+            )>,
+        >,
+    >,
 }
 
 impl FeedTriggers for ManualTriggers {
@@ -189,6 +199,7 @@ impl FeedTriggers for ManualTriggers {
         &self,
         user: MacroUserIdStr<'static>,
         keying: CandidateKeying,
+        lane: NotificationLane,
         own_work: bool,
     ) -> tokio::sync::mpsc::Receiver<FeedTrigger> {
         let (sender, receiver) = tokio::sync::mpsc::channel(8);
@@ -196,7 +207,7 @@ impl FeedTriggers for ManualTriggers {
         self.subscribed
             .lock()
             .unwrap()
-            .push((user, keying, own_work));
+            .push((user, keying, lane, own_work));
         receiver
     }
 }
@@ -500,6 +511,11 @@ async fn work_feed_updates_batch_recomputed_patches() {
     assert!(!response.errors.is_empty());
     assert_eq!(
         triggers.subscribed.lock().unwrap().as_slice(),
-        &[(viewer_id(), CandidateKeying::ThreadScoped, true)]
+        &[(
+            viewer_id(),
+            CandidateKeying::ThreadScoped,
+            NotificationLane::Signal,
+            true
+        )]
     );
 }

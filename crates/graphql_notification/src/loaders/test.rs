@@ -62,6 +62,7 @@ impl SoupNotificationEdgeReader for Reader {
                     sent: true, state, created_at: Utc::now(), updated_at: Utc::now(),
                     viewed_at: None, deleted_at: None, sender_id: None,
                     notification_metadata: serde_json::json!({"taskId":"task", "assignedBy":"macro|sender@example.com"}),
+                    lane: notification::domain::models::NotificationLane::Signal,
                 }.into_tagged().deserialize_metadata().unwrap()).collect();
             (key, rows)
         }).collect())

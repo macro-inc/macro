@@ -63,6 +63,7 @@ fn channel() -> FeedKey {
 fn row(group: &FeedKey, slot: &str) -> InboxRowId {
     InboxRowId {
         group: group.clone(),
+        lane: NotificationLane::Signal,
         slot: slot.to_string(),
     }
 }
@@ -894,4 +895,75 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
         panic!("the task is unread again");
     };
     assert!(entry.rows.iter().all(|row| row.unseen));
+}
+
+/// A channel with one signal message and one noise message.
+fn two_lanes() -> Harness {
+    harness(
+        vec![candidate("channel", channel().into_entity(), Some(3), None)],
+        vec![
+            channel_send(1, CHANNEL, 0x100, 2),
+            as_noise(&channel_send(2, CHANNEL, 0x101, 3)),
+        ],
+    )
+}
+
+#[tokio::test]
+async fn an_inbox_builds_rows_from_its_lane_alone() {
+    let harness = two_lanes();
+
+    let signal = harness.service.page(viewer(), query(vec![])).await.unwrap();
+    assert_eq!(signal.entries.len(), 1);
+    assert_eq!(ids(&signal.entries[0].rows[0].notifications), vec![uuid(1)]);
+
+    let noise = harness
+        .service
+        .page(
+            viewer(),
+            InboxQuery {
+                scope: InboxScope {
+                    lane: NotificationLane::Noise,
+                    ..Default::default()
+                },
+                limit: 50,
+                after: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(noise.entries.len(), 1);
+    assert_eq!(ids(&noise.entries[0].rows[0].notifications), vec![uuid(2)]);
+    // Unread inside the Noise view is the row's own state.
+    assert!(noise.entries[0].rows[0].unseen);
+}
+
+#[tokio::test]
+async fn done_reaches_only_the_lane_the_caller_saw() {
+    let harness = two_lanes();
+    // The channel's top-level row exists in both lanes, under two ids.
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: InboxRowId {
+                    group: channel(),
+                    lane: NotificationLane::Noise,
+                    slot: "top_level".to_string(),
+                },
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(2)]);
+    assert_eq!(
+        harness.notifications.state_of(uuid(2)),
+        NotificationState::Done
+    );
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Unseen
+    );
 }

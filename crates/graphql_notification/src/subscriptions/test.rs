@@ -74,6 +74,7 @@ fn task_assignment(
         entity: EntityType::Document.with_entity_string("task-1".to_string()),
         sent: true,
         state: notification::domain::models::NotificationState::Unseen,
+        lane: notification::domain::models::NotificationLane::Signal,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),
@@ -137,6 +138,62 @@ async fn notification_updates_streams_new_notifications() {
     assert_eq!(
         notification["metadata"]["assignedBy"],
         "macro|assigner@example.com"
+    );
+}
+
+#[tokio::test]
+async fn notification_updates_withholds_noise() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@example.com").unwrap();
+    let (sender, subscription) = subscription(WebSocketNotificationSubscriptionExit::Closed);
+    let service = TestSubscriptionService {
+        subscriptions: Mutex::new(VecDeque::from([subscription])),
+    };
+    let schema = Schema::new(
+        Query,
+        EmptyMutation,
+        NotificationSubscriptionRoot::new(service),
+    );
+    let mut responses = Box::pin(schema.execute_stream(
+        async_graphql::Request::new(
+            "subscription { notificationUpdates { __typename ... on GraphqlNewNotification { notification { id } } ... on GraphqlUpdatedNotification { notification { id } } } }",
+        )
+        .data(user_id.clone()),
+    ));
+
+    let noise = UserNotificationRow {
+        lane: notification::domain::models::NotificationLane::Noise,
+        ..task_assignment(user_id.clone(), uuid::Uuid::from_u128(1))
+    };
+    let signal_id = uuid::Uuid::from_u128(2);
+    // The subscription buffers one update, so the sends progress only as the
+    // stream is read.
+    let send = async {
+        for update in [
+            NotificationSubscriptionUpdate::New(Arc::new(noise.clone())),
+            NotificationSubscriptionUpdate::Updated(Arc::new(noise.clone())),
+            NotificationSubscriptionUpdate::New(Arc::new(task_assignment(
+                user_id.clone(),
+                signal_id,
+            ))),
+        ] {
+            sender
+                .send(update)
+                .await
+                .expect("subscription remains open");
+        }
+    };
+    let (_, response) = tokio::join!(send, futures::StreamExt::next(&mut responses));
+
+    let response = response.expect("subscription response");
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().expect("response data is JSON");
+    assert_eq!(
+        data["notificationUpdates"]["__typename"],
+        "GraphqlNewNotification"
+    );
+    assert_eq!(
+        data["notificationUpdates"]["notification"]["id"],
+        signal_id.to_string()
     );
 }
 

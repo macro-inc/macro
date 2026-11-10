@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use notification::domain::models::NotificationLane;
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -38,11 +39,13 @@ pub enum NotificationTransition {
 
 /// Reads and transitions the viewer's notifications.
 pub trait FeedNotifications: Send + Sync + 'static {
-    /// The viewer's active (unseen or seen) notifications about each entity.
+    /// The viewer's active (unseen or seen) notifications in `lane` about
+    /// each entity.
     fn active(
         &self,
         user: MacroUserIdStr<'static>,
         entities: Vec<Entity<'static>>,
+        lane: NotificationLane,
     ) -> impl Future<Output = Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report>> + Send;
 
     /// Move the viewer's notifications through `transition`. Returns the
@@ -80,13 +83,15 @@ pub trait FeedSignals: Send + Sync + 'static {
 /// Realtime changes that may affect a viewer's entries.
 pub trait FeedTriggers: Send + Sync + 'static {
     /// Subscribe to triggers for `user`, keyed the way `keying` keys
-    /// candidates. With `own_work`, the viewer's own actions trigger too.
+    /// candidates. A notification in another lane than `lane` never
+    /// triggers. With `own_work`, the viewer's own actions trigger too.
     /// The receiver closes when the underlying streams end; a subscriber that
     /// falls behind receives [`FeedTrigger::Invalidated`] first.
     fn subscribe(
         &self,
         user: MacroUserIdStr<'static>,
         keying: CandidateKeying,
+        lane: NotificationLane,
         own_work: bool,
     ) -> tokio::sync::mpsc::Receiver<FeedTrigger>;
 }

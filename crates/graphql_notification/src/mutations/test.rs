@@ -50,6 +50,7 @@ fn notification_row(
             NotificationStatus::Done(true) => notification::domain::models::NotificationState::Done,
             _ => notification::domain::models::NotificationState::Seen,
         },
+        lane: notification::domain::models::NotificationLane::Signal,
         created_at: now,
         viewed_at: matches!(status, NotificationStatus::Seen).then_some(now),
         updated_at: now,

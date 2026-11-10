@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use notification_inbox::domain::models::{
     InboxClearRequest, InboxQuery, InboxRowId, InboxRowTarget, InboxRowType, InboxScope,
 };
+use notification_state::graphql::GraphqlNotificationLane;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -105,6 +106,10 @@ impl From<InboxRowType> for GraphqlNotificationInboxRowType {
 /// undo for one inbox send the same scope.
 #[derive(InputObject, Default, Clone)]
 pub struct NotificationInboxScopeInput {
+    /// The lane the inbox reads; omitted means signal. Noise is the
+    /// notifications the viewer's stacks captured: stored, but never pushed
+    /// or counted as unread elsewhere.
+    pub lane: Option<GraphqlNotificationLane>,
     /// Row kinds to include; omitted or empty means every kind.
     pub row_types: Option<Vec<GraphqlNotificationInboxRowType>>,
     /// Only unread rows; pages, cursors and updates then cover unread rows
@@ -116,6 +121,7 @@ impl NotificationInboxScopeInput {
     /// Convert into the domain scope.
     pub(crate) fn into_scope(self) -> InboxScope {
         InboxScope {
+            lane: self.lane.map(Into::into).unwrap_or_default(),
             row_types: self
                 .row_types
                 .unwrap_or_default()

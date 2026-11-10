@@ -9,8 +9,8 @@ batches realtime changes into recomputes. Each feed keeps its own model on top.
 
 ## How it works
 
-A feed builds a `CandidateRequest` (viewer, keying, own work, types, membership
-filter) and hands `FeedReader::page` a closure that turns each `Loaded`
+A feed builds a `CandidateRequest` (viewer, keying, lane, own work, types,
+membership filter) and hands `FeedReader::page` a closure that turns each `Loaded`
 candidate into its own entry or drops it; the reader refills from later
 candidate pages. Done turns entries into `Acknowledgment`s for `Acknowledger`,
 whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
@@ -57,6 +57,10 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
   deploys; `models/test.rs` pins it.
 - Under `ThreadScoped`, a `channel_message` candidate reads its channel's
   notifications; the feed scopes them to the thread.
+- A feed reads one lane. The candidate source, the notification loader and the
+  triggers all take the request's lane, so a notification in another lane
+  neither places a candidate, nor is loaded for one, nor triggers a recompute.
+  Home's work feed is always signal; the inbox takes its lane from its scope.
 
 ## Related
 

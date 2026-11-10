@@ -1,7 +1,10 @@
 use item_filters::ast::EntityFilterAst;
 
 use super::*;
-use crate::{domain::models::FeedNotification, test_support::*};
+use crate::{
+    domain::models::{FeedNotification, NotificationLane},
+    test_support::*,
+};
 
 const CHANNEL: u128 = 0xC0;
 const THREAD: u128 = 0x70;
@@ -19,6 +22,7 @@ fn request(keying: CandidateKeying, limit: u16) -> CandidateRequest {
     CandidateRequest {
         viewer: viewer(),
         keying,
+        lane: NotificationLane::Signal,
         own_work: true,
         types: Vec::new(),
         filter: EntityFilterAst::default(),
@@ -210,4 +214,50 @@ async fn current_reads_large_key_sets_in_chunks() {
         .map(|request| request.only.as_ref().unwrap().len())
         .collect();
     assert_eq!(sizes, vec![200, 200, 50]);
+}
+
+#[tokio::test]
+async fn a_feed_loads_only_its_lanes_notifications() {
+    let signal = channel_send(1, CHANNEL, 0x100, 1);
+    let noise = as_noise(&channel_send(2, CHANNEL, 0x101, 2));
+    let source = FakeSource::with(vec![candidate(
+        1,
+        entity(EntityType::Channel, CHANNEL),
+        Some(2),
+        None,
+    )]);
+    let reader = FeedReader::new(
+        source.clone(),
+        FakeNotifications::with(vec![signal.clone(), noise.clone()]),
+    );
+
+    let page = reader
+        .page(request(CandidateKeying::FiledEntity, 10), |loaded| {
+            Some(ids(&loaded.notifications))
+        })
+        .await
+        .unwrap();
+    assert_eq!(page.entries, vec![vec![signal.notification_id]]);
+
+    let noise_request = CandidateRequest {
+        lane: NotificationLane::Noise,
+        ..request(CandidateKeying::FiledEntity, 10)
+    };
+    let page = reader
+        .page(noise_request, |loaded| Some(ids(&loaded.notifications)))
+        .await
+        .unwrap();
+    assert_eq!(page.entries, vec![vec![noise.notification_id]]);
+    // The candidate source is asked for the same lane the notifications are.
+    let requested: Vec<NotificationLane> = source
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|request| request.lane)
+        .collect();
+    assert_eq!(
+        requested,
+        vec![NotificationLane::Signal, NotificationLane::Noise]
+    );
 }

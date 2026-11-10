@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use async_graphql::{Context, Subscription};
 use attention_feed::domain::{
     live::{COALESCE_WINDOW, coalesce},
-    models::CandidateKeying,
+    models::{CandidateKeying, NotificationLane},
 };
 use futures::{Stream, StreamExt};
 use graphql_common::require_authenticated_user;
@@ -41,10 +41,12 @@ impl<E: SoupEntityEdges> WorkFeedSubscriptionRoot<E> {
         let context = ctx.data::<WorkFeedGraphqlContext>()?.clone();
         let scope = scope.unwrap_or_default().into_scope();
         let viewer = context.viewer(user.clone()).await?;
-        let triggers =
-            context
-                .triggers
-                .subscribe(user, CandidateKeying::ThreadScoped, scope.mode.own_work());
+        let triggers = context.triggers.subscribe(
+            user,
+            CandidateKeying::ThreadScoped,
+            NotificationLane::Signal,
+            scope.mode.own_work(),
+        );
 
         Ok(async_stream::stream! {
             let batches = coalesce(triggers, COALESCE_WINDOW);

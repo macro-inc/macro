@@ -27,6 +27,7 @@ fn raw_notification(metadata: serde_json::Value) -> UserNotificationRow<serde_js
         entity: EntityType::Document.with_entity_string("document-1".to_string()),
         sent: true,
         state: notification::domain::models::NotificationState::Unseen,
+        lane: notification::domain::models::NotificationLane::Signal,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

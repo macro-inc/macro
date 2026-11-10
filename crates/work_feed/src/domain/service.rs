@@ -9,7 +9,7 @@ use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
         Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, EntityFacts, FeedError,
-        FeedKey, FeedViewer, Loaded, counts_as_unseen,
+        FeedKey, FeedViewer, Loaded, NotificationLane, counts_as_unseen,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::FeedReader,
@@ -107,6 +107,8 @@ fn candidate_request(viewer: &FeedViewer, scope: &WorkFeedScope) -> CandidateReq
     CandidateRequest {
         viewer: viewer.clone(),
         keying: CandidateKeying::ThreadScoped,
+        // Home is a signal feed: noise never places or counts toward an item.
+        lane: NotificationLane::Signal,
         own_work: scope.mode.own_work(),
         types: policy::candidate_types(&scope.types),
         filter: policy::signal_filter(&viewer.user, scope),

@@ -7,10 +7,26 @@ use super::*;
 fn row_ids_round_trip() {
     let id = InboxRowId {
         group: FeedKey::new(EntityType::Channel.with_entity_string(uuid(1).to_string())),
+        lane: NotificationLane::Signal,
         slot: format!("thread:{}", uuid(2)),
     };
     let text = id.id();
     assert_eq!(text, format!("channel:{}#thread:{}", uuid(1), uuid(2)));
+    assert_eq!(InboxRowId::parse(&text).unwrap(), id);
+}
+
+#[test]
+fn a_noise_row_has_its_own_id() {
+    let id = InboxRowId {
+        group: FeedKey::new(EntityType::Channel.with_entity_string(uuid(1).to_string())),
+        lane: NotificationLane::Noise,
+        slot: format!("thread:{}", uuid(2)),
+    };
+    let text = id.id();
+    assert_eq!(
+        text,
+        format!("channel:{}#noise#thread:{}", uuid(1), uuid(2))
+    );
     assert_eq!(InboxRowId::parse(&text).unwrap(), id);
 }
 
@@ -22,6 +38,7 @@ fn malformed_row_ids_are_rejected() {
         "channel:x#",
         "#top_level",
         "not_a_type:x#top_level",
+        "channel:x#noise#",
     ] {
         assert!(InboxRowId::parse(id).is_err(), "{id} parsed");
     }
@@ -31,6 +48,7 @@ fn bare_row(row_type: InboxRowType, unseen: bool) -> InboxRow {
     InboxRow {
         id: InboxRowId {
             group: FeedKey::new(EntityType::Channel.with_entity_string(uuid(1).to_string())),
+            lane: NotificationLane::Signal,
             slot: "top_level".to_string(),
         },
         row_type,

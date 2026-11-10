@@ -43,9 +43,10 @@ impl<E: SoupEntityEdges> NotificationInboxSubscriptionRoot<E> {
         let context = ctx.data::<NotificationInboxGraphqlContext>()?.clone();
         let scope = scope.unwrap_or_default().into_scope();
         let viewer = context.viewer(user.clone()).await?;
-        let triggers = context
-            .triggers
-            .subscribe(user, CandidateKeying::FiledEntity, false);
+        let triggers =
+            context
+                .triggers
+                .subscribe(user, CandidateKeying::FiledEntity, scope.lane, false);
 
         Ok(async_stream::stream! {
             let batches = coalesce(triggers, COALESCE_WINDOW);

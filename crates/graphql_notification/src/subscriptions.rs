@@ -5,7 +5,7 @@ use async_graphql::{Context, ID, OutputType, SimpleObject, Subscription, Union};
 use graphql_common::{GraphqlCacheDeletion, require_authenticated_user};
 use model_notifications::NotifEvent;
 use notification::domain::{
-    models::NotificationSubscriptionUpdate,
+    models::{NotificationLane, NotificationSubscriptionUpdate},
     ports::{WebSocketNotificationSubscriptionExit, WebSocketNotificationSubscriptionService},
 };
 use tokio_stream::Stream;
@@ -61,7 +61,23 @@ impl From<NotificationSubscriptionUpdate<NotifEvent>> for GraphqlNotificationPat
     }
 }
 
-/// Subscribe to realtime notifications addressed to the authenticated user.
+/// Whether `update` carries a noise row. Deletions name no row and always pass.
+fn is_noise(update: &NotificationSubscriptionUpdate<NotifEvent>) -> bool {
+    match update {
+        NotificationSubscriptionUpdate::New(row) | NotificationSubscriptionUpdate::Updated(row) => {
+            row.lane == NotificationLane::Noise
+        }
+        NotificationSubscriptionUpdate::Deleted(_) => false,
+    }
+}
+
+/// Subscribe to realtime signal notifications addressed to the authenticated
+/// user.
+///
+/// Noise never reaches this stream. Clients play sounds, raise alerts and
+/// mark entities unread from it, including clients released before lanes
+/// existed, so the server withholds noise instead of trusting each client to
+/// skip it. The Noise view follows the notification inbox subscription.
 pub fn subscribe_to_notifications<S>(
     service: &S,
     ctx: &Context<'_>,
@@ -76,6 +92,9 @@ where
 
     Ok(async_stream::stream! {
         while let Some(update) = subscription.recv().await {
+            if is_noise(&update) {
+                continue;
+            }
             yield Ok(GraphqlNotificationPatch::from(update));
         }
 
@@ -113,7 +132,8 @@ impl<S> NotificationSubscriptionRoot<S>
 where
     S: WebSocketNotificationSubscriptionService<NotificationSubscriptionUpdate<NotifEvent>>,
 {
-    /// Subscribe to realtime notifications for the authenticated user.
+    /// Subscribe to realtime notifications for the authenticated user. Noise
+    /// is never sent here; the notification inbox subscription carries it.
     async fn notification_updates(
         &self,
         ctx: &Context<'_>,

@@ -10,6 +10,7 @@
 use std::collections::{HashMap, HashSet};
 
 use model_entity::{Entity, EntityType};
+use notification::domain::models::NotificationLane;
 use rootcause::Report;
 
 use super::{
@@ -70,11 +71,12 @@ where
         }
     }
 
-    /// Load each candidate's notifications, in candidate order.
+    /// Load each candidate's notifications in `lane`, in candidate order.
     async fn load(
         &self,
         viewer: &FeedViewer,
         keying: CandidateKeying,
+        lane: NotificationLane,
         candidates: Vec<Candidate<S::Entity>>,
     ) -> Result<Vec<Loaded<S::Entity>>, Report> {
         let mut sources = Vec::new();
@@ -91,7 +93,7 @@ where
             HashMap::new()
         } else {
             self.notifications
-                .active(viewer.user.clone(), sources)
+                .active(viewer.user.clone(), sources, lane)
                 .await?
         };
         Ok(candidates
@@ -145,7 +147,7 @@ where
                 })
                 .await?;
             let loaded = self
-                .load(&request.viewer, request.keying, page.items)
+                .load(&request.viewer, request.keying, request.lane, page.items)
                 .await?;
             let total = loaded.len();
             for (index, item) in loaded.into_iter().enumerate() {
@@ -200,7 +202,7 @@ where
                 })
                 .await?;
             for loaded in self
-                .load(&request.viewer, request.keying, page.items)
+                .load(&request.viewer, request.keying, request.lane, page.items)
                 .await?
             {
                 current.insert(FeedKey::new(loaded.candidate.key.clone()), loaded);

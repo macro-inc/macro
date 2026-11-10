@@ -14,6 +14,7 @@ mutations, and the realtime subscription.
   `GraphqlNotifEvent` payloads per source (CRM discussion, initiative
   discussion, ...) — add a new file here per event kind.
 - `src/subscriptions.rs`: `workFeedUpdates`-style realtime notification push.
+  It withholds noise rows: clients alert and mark entities unread from it.
 - `src/mutations.rs`: mark read/unread for an entity or explicit id set.
 
 ## Scope

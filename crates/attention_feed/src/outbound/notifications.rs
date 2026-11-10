@@ -7,6 +7,7 @@ use model_entity::Entity;
 use model_notifications::NotifEvent;
 use notification::domain::{
     models::{
+        NotificationLane,
         entity_query::EntityNotificationQuery,
         request::{NotificationStatus, UpdateNotificationsRequest},
     },
@@ -48,6 +49,7 @@ where
         &self,
         user: MacroUserIdStr<'static>,
         entities: Vec<Entity<'static>>,
+        lane: NotificationLane,
     ) -> Result<HashMap<Entity<'static>, Vec<FeedNotification>>, Report> {
         // The default query is the active (unseen and seen) edge, unlimited.
         Ok(self
@@ -55,7 +57,10 @@ where
             .get_entity_notifications_batch::<NotifEvent>(
                 user,
                 entities,
-                EntityNotificationQuery::default(),
+                EntityNotificationQuery {
+                    lane,
+                    ..Default::default()
+                },
             )
             .await?
             .into_iter()
