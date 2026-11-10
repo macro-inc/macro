@@ -460,6 +460,16 @@ impl SyncCore {
                 );
                 if matches!(origin, ImportOrigin::Live | ImportOrigin::Catchup) {
                     self.server_evidence(bytes, now, out);
+                    // Failed private recovery may precede the missing server
+                    // history. Even a duplicate in the private document can
+                    // make a fresh full-history request useful. Consume this
+                    // debt only on actual history, never on idle retry ticks.
+                    if self.rebase_waiting_history {
+                        self.rebase_waiting_history = false;
+                        if self.has_private_rows() {
+                            self.schedule_rebase(now, out);
+                        }
+                    }
                 }
                 if imported.pending && origin != ImportOrigin::Catchup {
                     self.request_since(1, now, doc, out);
@@ -777,6 +787,11 @@ impl SyncCore {
         self.reset = None;
         self.phase = Phase::Running;
         self.rebase_active = false;
+        if ok || !self.has_private_rows() {
+            self.rebase_waiting_history = false;
+        } else if rebase {
+            self.rebase_waiting_history = true;
+        }
         if let Some(span) = self.reset_span.take() {
             self.end_span(span, if ok { "replaced" } else { "failed" }, !ok, out);
         }

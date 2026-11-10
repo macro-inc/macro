@@ -121,6 +121,11 @@ failure; never substitute a shallow server snapshot before private rows replay.
 ReadOnly parking takes precedence over NeedsRebase; Poison and Gap retain their
 diagnostics. Regrant resumes the same retained bytes through the ordinary push.
 
+After failed private-history rebase, retry through the existing throttle when
+actual server history imports, including duplicate history already in the private
+document. Failed ordinary resets preserve this debt; successful replacement clears
+it. Idle ticks, empty replies and chatter never initiate that history retry.
+
 A Stop after automatic terminal revocation joins the existing terminal WAL barrier.
 Reply to every distinct pending request after that barrier, including Close before
 Start; repeated completed Stop remains idempotent and never restarts the core.

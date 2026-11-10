@@ -30,6 +30,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   actual local-update ranges cover rotating foreign editor peers.
 - `src/client/shortcuts.rs`: actual browser-only Markdown shortcut package calls in conditional model transactions.
 - `tests/stories/COVERAGE.md`: story/S7 map and pending editor producers.
+- `tests/stories/private_history.rs`: retained seed357 private-history recovery
+  literal; keep every action, policy, invariant and deterministic replay check.
 - `tests/KNOWN_FAILURES.md` + `tests/known_failures.rs`: exact source-confirmed production bugs; require the named strict failure and reject every additional failure, without waiving generated invariants.
 - `fixtures/`: shared exact native/TS Markdown inputs, including the incompressible large paste.
 - `SeedDocument::StoredEditor`: exact previously persisted JSON before client policy/initialization; render it as literal JSON in reproductions.

@@ -110,3 +110,6 @@ mod editor_replay_fixup;
 
 #[path = "stories/resolved_pending.rs"]
 mod resolved_pending;
+
+#[path = "stories/private_history.rs"]
+mod private_history;
