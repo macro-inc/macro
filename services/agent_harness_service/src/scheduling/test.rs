@@ -182,3 +182,14 @@ async fn health_is_served_at_gateway_prefix() {
         assert_eq!(response.status(), expected, "health at {uri}");
     }
 }
+
+/// The ideas brief names the SDK symbols a session reads in its one
+/// documentation call; a renamed symbol would leave the session guessing.
+#[test]
+fn the_ideas_brief_names_only_real_sdk_symbols() {
+    let missing: Vec<_> = ideas::domain::prompt::SYMBOLS
+        .iter()
+        .filter(|symbol| agent_code_mode::domain::symbol_reference(symbol).is_none())
+        .collect();
+    assert!(missing.is_empty(), "unknown SDK symbols: {missing:?}");
+}
