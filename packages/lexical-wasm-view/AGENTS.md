@@ -122,3 +122,5 @@ Use the configured HTML importer for foreign namespaces, malformed JSON or non-a
 Pair submitted DOM selections with their acknowledged model selection when deduplicating events; a programmatic model move must not suppress a returning DOM caret.
 
 Set HTML display at DOM creation and observe its actual owner-window selection anchors before the retained host display/class writes; preserve the approved publication order without changing other decorator paths.
+
+Apply each native Diff Remove to its named record. The subtree-root flag describes DOM detach; validate surviving children of removed parents after the full packet.
