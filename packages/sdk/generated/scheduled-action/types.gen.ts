@@ -165,6 +165,99 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * One of Macro's routines, ready to start a new routine from.
+ */
+export type CatalogEntry = {
+    /**
+     * What it does, in a few words, for the line beside its trigger.
+     */
+    action: string;
+    /**
+     * It changes or sends what other people see.
+     */
+    affectsOthers: boolean;
+    code?: null | RoutineStep;
+    /**
+     * What it does, in a short line.
+     */
+    description: string;
+    /**
+     * The Ask AI step's instructions: its only step without code, and the
+     * step to use where code can't be saved.
+     */
+    instructions: string;
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * The code step's text knobs whose value names one of the owner's
+     * items (a tag, channel or label), by knob name.
+     */
+    namedKnobs: {
+        [key: string]: NamedItemKind;
+    };
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * It may be switched on before its owner changes anything.
+     */
+    safeDefault: boolean;
+    /**
+     * Offered unpicked as a suggestion from Macro.
+     */
+    suggest: boolean;
+    /**
+     * Where it is offered, first the part of the app it belongs to most.
+     */
+    surfaces: Array<Surface>;
+    /**
+     * Offered among the templates when someone creates a routine.
+     */
+    template: boolean;
+    /**
+     * Its name once saved.
+     */
+    title: string;
+    /**
+     * When it runs; schedules are in the zone the catalog was asked for.
+     */
+    trigger: ActionTrigger;
+};
+
+/**
+ * A routine to check, as the create body takes it.
+ */
+export type CheckRoutineRequest = {
+    /**
+     * What a routine draft's session created for the routine to use, such as
+     * the database it writes to; kept with its draft for the person to see.
+     */
+    created?: Array<CreatedItem>;
+    routine: ActionConfiguration;
+};
+
+/**
+ * A code step that doesn't type-check.
+ */
+export type CheckedStepProblems = {
+    /**
+     * Its place among the routine's steps, from zero.
+     */
+    index: number;
+    /**
+     * What the type checker reports, first problems first.
+     */
+    problems: Array<string>;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
  * Who a routine's code steps write as.
  */
 export type CodeIdentity = 'agent' | 'owner';
@@ -247,6 +340,22 @@ export type ConditionResult = {
 };
 
 /**
+ * Something a routine draft's session created for the routine to use, such
+ * as the database it writes to: it exists whether or not the routine is
+ * saved.
+ */
+export type CreatedItem = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+};
+
+/**
  * What AI drafted, or why it couldn't.
  */
 export type Draft = (DraftedRoutine & {
@@ -254,12 +363,14 @@ export type Draft = (DraftedRoutine & {
 }) | (DraftedStep & {
     outcome: 'step';
 }) | {
+    created?: Array<DraftCreated>;
     message: string;
     outcome: 'failed';
 };
 
 /**
- * What the drafter may write, and the person's workspace by name and id.
+ * What the drafter may write. It looks up the items the person's words
+ * name itself, with their access.
  */
 export type DraftContext = {
     /**
@@ -280,7 +391,26 @@ export type DraftContext = {
      * IANA time zone schedules are written in, e.g. `America/New_York`.
      */
     timezone: string;
-    workspace?: Workspace;
+};
+
+/**
+ * Something a draft's session created. It exists whether or not the draft
+ * is saved.
+ */
+export type DraftCreated = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    /**
+     * Whether the drafted routine uses it. One it doesn't use was made for
+     * nothing, or is the routine's own work done early.
+     */
+    used: boolean;
 };
 
 /**
@@ -313,6 +443,11 @@ export type DraftRoutineRequest = {
  * A drafted routine.
  */
 export type DraftedRoutine = {
+    /**
+     * What AI created while drafting, such as the database the routine
+     * writes to. These exist whether or not the routine is saved.
+     */
+    created: Array<DraftCreated>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -330,6 +465,11 @@ export type DraftedRoutine = {
  * A drafted step.
  */
 export type DraftedStep = {
+    /**
+     * What AI created while drafting the step. These exist whether or not
+     * the step is saved.
+     */
+    created: Array<DraftCreated>;
     /**
      * What the type checker still finds in its code.
      */
@@ -425,6 +565,11 @@ export type ExecutionResult = {
 };
 
 /**
+ * Where a person's suggestions are in being generated.
+ */
+export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
+
+/**
  * Which GitHub deliveries match.
  */
 export type GithubSelector = {
@@ -461,12 +606,10 @@ export type InProgressExecution = {
 export type KnobName = string;
 
 /**
- * An item and its name.
+ * What a text knob's value names: one of its owner's items, which a client
+ * matches by name or lets them pick.
  */
-export type NamedItem = {
-    id: string;
-    name: string;
-};
+export type NamedItemKind = 'tag' | 'channel' | 'label';
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -516,6 +659,30 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * What saving a routine would find wrong, without saving it: the answer to
+ * `POST /scheduled-actions/check`.
+ */
+export type RoutineCheck = {
+    /**
+     * Whether saving it would succeed: no problems and no failing steps.
+     */
+    ok: boolean;
+    /**
+     * Why saving it would fail, other than its code, for its author.
+     */
+    problems: Array<string>;
+    /**
+     * The routine as saving would store it: code steps named and the SDK
+     * their code checks against stamped.
+     */
+    routine: ActionConfiguration;
+    /**
+     * Code steps that don't type-check against Macro's SDK.
+     */
+    steps: Array<CheckedStepProblems>;
 };
 
 /**
@@ -666,6 +833,55 @@ export type RoutineStep = (CodeStep & {
 }) | (AgentStep & {
     type: 'agent';
 });
+
+/**
+ * A routine offered to one person: one AI suggested for them, or one of
+ * Macro's catalog routines filling a surface.
+ */
+export type RoutineSuggestion = SuggestedPick & {
+    /**
+     * Who suggests it: AI, for this person, or Macro, as a template.
+     */
+    from: SuggestionFrom;
+    /**
+     * Saving a routine from it passes this as `suggestion_id`; dismissing
+     * it uses it too.
+     */
+    id: string;
+    /**
+     * AI's estimate, from 0 to 1, that the person keeps it on; absent on
+     * Macro's templates.
+     */
+    keepProbability?: number | null;
+    /**
+     * Onboarding shows it switched on: one of at most two catalog
+     * routines AI picked that are safe by default and likely kept. Never a
+     * drafted routine or a template.
+     */
+    onByDefault: boolean;
+    /**
+     * Why it fits this person, in a line; absent on Macro's templates.
+     */
+    reason?: string | null;
+    /**
+     * The sidebars it shows in, first the one it belongs to most.
+     * Dismissing it in one dismisses it everywhere.
+     */
+    surfaces: Array<Surface>;
+};
+
+/**
+ * A person's suggestions, and whether more are on the way.
+ */
+export type RoutineSuggestions = {
+    status: GenerationStatus;
+    /**
+     * Per surface, AI's first, best first, then Macro's templates, so each
+     * surface has at least one and ideally three. A suggestion with
+     * several surfaces appears once.
+     */
+    suggestions: Array<RoutineSuggestion>;
+};
 
 /**
  * A stored task's two forms, as the scheduler's API describes `task`:
@@ -821,6 +1037,11 @@ export type ScheduledAction = {
      * Whether the action's runs are listed in Home and the Agents list.
      */
     run_visibility: RunVisibility;
+    /**
+     * The routine suggestion it was saved from, if any: a plain pointer
+     * that stays after the suggestion is replaced.
+     */
+    suggestion_id?: string | null;
     task: RoutineTask;
     /**
      * The shared template this routine was activated from, if any.
@@ -893,25 +1114,6 @@ export type ShareRoutineTemplate = {
 };
 
 /**
- * A starter routine whose step is code: offered when a routine is created,
- * and shown to the drafter as a worked example.
- */
-export type StarterRoutine = {
-    /**
-     * Names it, e.g. `inbox`.
-     */
-    key: string;
-    /**
-     * What someone asks for, with when it runs.
-     */
-    request: string;
-    /**
-     * Its steps, in the shape a routine's task holds them.
-     */
-    steps: Array<RoutineStep>;
-};
-
-/**
  * Names a step's output: a lowercase letter, then up to 31 lowercase
  * letters, digits or underscores.
  */
@@ -932,6 +1134,80 @@ export type StepProblem = {
     index: number;
     problems: Array<string>;
 };
+
+/**
+ * What became of a suggestion handed back.
+ */
+export type SuggestOutcome = {
+    check?: null | RoutineCheck;
+    /**
+     * The kept suggestion's id.
+     */
+    id?: string | null;
+    /**
+     * Whether it was kept.
+     */
+    ok: boolean;
+    /**
+     * Why it wasn't, to fix and suggest again.
+     */
+    problems: Array<string>;
+};
+
+/**
+ * What a suggestion session hands back through `macro.routines.suggest`.
+ */
+export type SuggestRequest = {
+    keepProbability: number;
+    key: string;
+    kind: 'catalog';
+    knobs?: {
+        [key: string]: unknown;
+    };
+    reason: string;
+    surfaces: Array<Surface>;
+} | {
+    /**
+     * What the session created for it, as `macro.routines.check` takes.
+     */
+    created?: Array<CreatedItem>;
+    keepProbability: number;
+    kind: 'routine';
+    reason: string;
+    routine: ActionConfiguration;
+    surfaces: Array<Surface>;
+};
+
+/**
+ * What is suggested: a catalog routine with its knobs, or a routine AI
+ * drafted and checked.
+ */
+export type SuggestedPick = {
+    /**
+     * The catalog routine, e.g. `inbox`.
+     */
+    key: string;
+    kind: 'catalog';
+    /**
+     * Knob values by knob name; knobs left out keep the catalog's.
+     */
+    knobs: {
+        [key: string]: unknown;
+    };
+} | {
+    kind: 'routine';
+    routine: ActionConfiguration;
+};
+
+/**
+ * Who suggests a routine.
+ */
+export type SuggestionFrom = 'for_you' | 'macro';
+
+/**
+ * The part of the app a routine is about, where it is offered.
+ */
+export type Surface = 'email' | 'calendar' | 'tasks' | 'files' | 'crm' | 'chat' | 'calls' | 'reviews' | 'agents';
 
 /**
  * A user-specific part of a shared routine.
@@ -965,48 +1241,6 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  * How a variable is filled when someone activates the template.
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
-
-/**
- * The items AI may name in a draft. They are data for the model; saving
- * checks every id the draft uses.
- */
-export type Workspace = {
-    /**
-     * Agents a step may hand the run to.
-     */
-    agents?: Array<WorkspaceAgent>;
-    channels?: Array<NamedItem>;
-    /**
-     * Projects.
-     */
-    folders?: Array<NamedItem>;
-    /**
-     * Email label names.
-     */
-    labels?: Array<string>;
-    people?: Array<NamedItem>;
-    /**
-     * Tag options, by the property definition they belong to.
-     */
-    tags?: Array<WorkspaceTag>;
-};
-
-/**
- * An agent and its bot id.
- */
-export type WorkspaceAgent = {
-    botId: string;
-    name: string;
-};
-
-/**
- * A tag: one option of a property.
- */
-export type WorkspaceTag = {
-    definitionId: string;
-    label: string;
-    optionId: string;
-};
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -1053,7 +1287,12 @@ export type ListScheduledActionsResponse = ListScheduledActionsResponses[keyof L
 export type CreateScheduledActionData = {
     body: ActionConfiguration;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The routine suggestion it is saved from, recorded on the routine.
+         */
+        suggestion_id?: string;
+    };
     url: '/scheduled-actions';
 };
 
@@ -1072,27 +1311,59 @@ export type CreateScheduledActionResponses = {
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
 
-export type RoutineCodeStartersData = {
+export type RoutineCatalogData = {
     body?: never;
     path?: never;
-    query?: never;
-    url: '/scheduled-actions/code/starters';
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/catalog';
 };
 
-export type RoutineCodeStartersErrors = {
+export type RoutineCatalogErrors = {
+    /**
+     * Not a time zone
+     */
+    400: string;
     401: string;
 };
 
-export type RoutineCodeStartersError = RoutineCodeStartersErrors[keyof RoutineCodeStartersErrors];
+export type RoutineCatalogError = RoutineCatalogErrors[keyof RoutineCatalogErrors];
 
-export type RoutineCodeStartersResponses = {
+export type RoutineCatalogResponses = {
     /**
-     * Starter routines whose step is code; empty where code steps aren't available
+     * Macro's routines, with schedules in the given zone; code steps only where code can be saved
      */
-    200: Array<StarterRoutine>;
+    200: Array<CatalogEntry>;
 };
 
-export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
+export type RoutineCatalogResponse = RoutineCatalogResponses[keyof RoutineCatalogResponses];
+
+export type CheckScheduledActionData = {
+    body: CheckRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/check';
+};
+
+export type CheckScheduledActionErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+    503: string;
+};
+
+export type CheckScheduledActionError = CheckScheduledActionErrors[keyof CheckScheduledActionErrors];
+
+export type CheckScheduledActionResponses = {
+    200: RoutineCheck;
+};
+
+export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
 
 export type DraftRoutineData = {
     body: DraftRoutineRequest;
@@ -1125,6 +1396,130 @@ export type DraftRoutineResponses = {
 };
 
 export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
+
+export type ListRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only this surface's; every surface's when absent.
+         */
+        surface?: Surface;
+    };
+    url: '/scheduled-actions/suggestions';
+};
+
+export type ListRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type ListRoutineSuggestionsError = ListRoutineSuggestionsErrors[keyof ListRoutineSuggestionsErrors];
+
+export type ListRoutineSuggestionsResponses = {
+    /**
+     * Per surface, the routines AI suggested for the caller, then Macro's templates; reading never generates
+     */
+    200: RoutineSuggestions;
+};
+
+export type ListRoutineSuggestionsResponse = ListRoutineSuggestionsResponses[keyof ListRoutineSuggestionsResponses];
+
+export type SuggestRoutineData = {
+    body: SuggestRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/suggestions';
+};
+
+export type SuggestRoutineErrors = {
+    400: string;
+    401: string;
+    /**
+     * Only a routine suggestion session may suggest
+     */
+    403: string;
+    500: string;
+};
+
+export type SuggestRoutineError = SuggestRoutineErrors[keyof SuggestRoutineErrors];
+
+export type SuggestRoutineResponses = {
+    /**
+     * Whether the suggestion was kept, and what to fix when it wasn't
+     */
+    200: SuggestOutcome;
+};
+
+export type SuggestRoutineResponse = SuggestRoutineResponses[keyof SuggestRoutineResponses];
+
+export type GenerateRoutineSuggestionsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/scheduled-actions/suggestions/generate';
+};
+
+export type GenerateRoutineSuggestionsErrors = {
+    401: string;
+    /**
+     * Routine suggestions are off for the caller
+     */
+    404: string;
+    500: string;
+};
+
+export type GenerateRoutineSuggestionsError = GenerateRoutineSuggestionsErrors[keyof GenerateRoutineSuggestionsErrors];
+
+export type GenerateRoutineSuggestionsResponses = {
+    /**
+     * The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing
+     */
+    200: RoutineSuggestions;
+};
+
+export type GenerateRoutineSuggestionsResponse = GenerateRoutineSuggestionsResponses[keyof GenerateRoutineSuggestionsResponses];
+
+export type DismissRoutineSuggestionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the suggestion, AI's or a template's
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/suggestions/{id}/dismiss';
+};
+
+export type DismissRoutineSuggestionErrors = {
+    401: string;
+    /**
+     * No such suggestion for the caller, or suggestions are off
+     */
+    404: string;
+    500: string;
+};
+
+export type DismissRoutineSuggestionError = DismissRoutineSuggestionErrors[keyof DismissRoutineSuggestionErrors];
+
+export type DismissRoutineSuggestionResponses = {
+    /**
+     * Never suggested again, on any surface
+     */
+    204: void;
+};
+
+export type DismissRoutineSuggestionResponse = DismissRoutineSuggestionResponses[keyof DismissRoutineSuggestionResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;

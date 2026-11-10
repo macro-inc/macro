@@ -2,12 +2,14 @@ import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
+  disableCrmContactSearch,
   enableCrm,
   enableWhatsappLinked,
   isFeatureEnabled,
@@ -188,8 +190,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     : undefined;
   const sourceEnabled = (source: MentionBucketId) =>
     !props.sources || props.sources.includes(source);
+  const contactSearchDisabled = useFeatureFlag(disableCrmContactSearch);
   const contactsEnabled = () =>
-    props.includeContacts !== false && sourceEnabled('crm');
+    props.includeContacts !== false &&
+    sourceEnabled('crm') &&
+    !contactSearchDisabled().enabled;
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
       ? useEntityMentionFromList({

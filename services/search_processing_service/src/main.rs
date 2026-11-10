@@ -23,7 +23,7 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use rust_embed::RustEmbed;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -85,7 +85,7 @@ async fn resolve_readonly_pool(read_only_db_url: DatabaseUrlReadonly) -> Option<
     }
 }
 
-#[cfg(feature = "pdf")]
+#[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 #[allow(dead_code)]
 #[derive(RustEmbed)]
 #[folder = "pdfium-lib/linux/"]
@@ -267,7 +267,7 @@ async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "processing")]
     let consumer_supervisor = {
         // Ensures that pdfium binary exists so we can kill the container early on failure
-        #[cfg(feature = "pdf")]
+        #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
         if !std::fs::exists("./pdfium-lib/linux/libpdfium.so").expect("able to find file") {
             anyhow::bail!("libpdfium.so is missing");
         } else {

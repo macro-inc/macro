@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   mobile: false,
   requestedBuckets: [] as string[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
+  contactSourceEnabled: undefined as (() => boolean) | undefined,
+  setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
@@ -24,8 +26,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
-  useCrmContactMentionSource: () => {
+  useCrmContactMentionSource: (
+    _search: () => string,
+    enabled: () => boolean
+  ) => {
     mocks.requestedBuckets.push('crm_contact');
+    mocks.contactSourceEnabled = enabled;
     return {
       entities: () => mocks.contacts,
       totalCount: () => mocks.contacts.length,
@@ -53,19 +59,31 @@ vi.mock('@app/features/routines/routine-mentions', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@app/lib/analytics/posthog', async () => {
+  const { createSignal } = await import('solid-js');
+  const [disabled, setDisabled] = createSignal(false);
+  mocks.setContactSearchDisabled = setDisabled;
+  return {
+    useFeatureFlag: () => () => ({ enabled: disabled(), loading: false }),
+  };
+});
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => null }));
 vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
 vi.mock('@core/constant/featureFlags', () => {
+  const disableCrmContactSearch = { name: 'disable-crm-contact-search' };
   const enableCrm = { name: 'crm' };
   const enableWhatsappLinked = { name: 'whatsapp' };
   return {
+    disableCrmContactSearch,
     enableCrm,
     enableWhatsappLinked,
-    isFeatureEnabled: (flag: unknown) =>
-      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    isFeatureEnabled: (flag: unknown) => {
+      if (flag === enableWhatsappLinked) return mocks.whatsappEnabled;
+      return mocks.crmEnabled;
+    },
     ENABLE_BEARER_TOKEN_AUTH: false,
   };
 });
@@ -195,6 +213,8 @@ afterEach(() => {
   mocks.mobile = false;
   mocks.requestedBuckets = [];
   mocks.contacts = [];
+  mocks.contactSourceEnabled = undefined;
+  mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
   mocks.loadMoreContacts.mockClear();
   mocks.calendarEvents = [];
@@ -419,6 +439,51 @@ it('offers CRM companies and contacts', () => {
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
   expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('stops contact queries and results when the kill switch turns on while open', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mocks.crmEnabled = true;
+  mocks.contacts = [
+    {
+      kind: 'entity',
+      bucket: 'crm_contact',
+      id: 'contact-1',
+      searchText: 'Acme contact',
+      sortTimestamp: 0,
+      timestamps: {},
+      data: {
+        type: 'crm_contact',
+        id: 'contact-1',
+        ownerId: 'team',
+        companyId: 'company',
+        name: 'Acme contact',
+        email: 'contact@example.com',
+        hidden: false,
+        lastInteraction: '2026-01-01T00:00:00Z',
+      },
+    },
+  ];
+  mockNoEmails();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      sources={['crm']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Acme contact')).toBeTruthy();
+  expect(mocks.contactSourceEnabled?.()).toBe(true);
+
+  mocks.setContactSearchDisabled(true);
+
+  expect(menu.isOpen()).toBe(true);
+  expect(mocks.contactSourceEnabled?.()).toBe(false);
+  expect(screen.queryByText('Acme contact')).toBeNull();
 });
 
 it('offers calendar events and picks one', () => {

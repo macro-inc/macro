@@ -25,7 +25,6 @@ mod preview;
 mod public_mcp;
 mod pull_request_archive;
 mod routine_code;
-mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -736,7 +735,6 @@ async fn run() -> anyhow::Result<()> {
         scheduling::SchedulingDependencies {
             db: pool.clone(),
             code: routine_code,
-            drafter: routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
             notifications: Arc::clone(&notifications),
             lexical: lexical.clone(),
         },
@@ -768,17 +766,8 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // `ai-code-mode` decides, per user, whether agent sessions hide
-    // SDK-covered tools and whether the public MCP lists only code mode.
-    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        match (&code_runner, &feature_flags) {
-            (Some(_), Some(flags)) => Some(Arc::new(
-                agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags.clone()),
-            )),
-            _ => None,
-        };
-    let public_code_mode = match (&code_runner, &code_mode_selector) {
-        (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+    let public_code_mode = match &code_runner {
+        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -793,9 +782,8 @@ async fn run() -> anyhow::Result<()> {
                     endpoints: code_mode::sdk_endpoints()?,
                 }),
             )),
-            selector: Arc::clone(selector),
         }),
-        _ => None,
+        None => None,
     };
     let public_mcp_router = public_mcp::router(
         &config,
@@ -926,7 +914,7 @@ async fn run() -> anyhow::Result<()> {
             .to_owned(),
         internal_mcp::InternalTools {
             service: session_pull_requests.clone(),
-            tasks: session_tasks,
+            tasks: session_tasks.clone(),
             code_mode: code_mode_enabled.then(|| code_mode.clone()),
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
@@ -948,9 +936,6 @@ async fn run() -> anyhow::Result<()> {
 
     let mut inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
-    if let Some(selector) = &code_mode_selector {
-        inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
-    }
     // `auto-skills` decides, per user, whether a turn loads the user's skills
     // its request needs, and whether code-mode turns load the SDK areas a
     // request needs instead of carrying every area's guidance.
@@ -1785,6 +1770,20 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let session_task_links = agent_session::inbound::axum_router::task::agent_session_task_router(
+        AgentSessionRouterState::new(
+            session_tasks,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
+    let updates = agent_session::inbound::axum_router::updates::agent_session_updates_router(
+        AgentSessionRouterState::new(
+            session_repo.clone(),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let auto_archive = agent_session::inbound::axum_router::auto_archive::agent_auto_archive_router(
         AgentSessionRouterState::new(
             auto_archive_settings,
@@ -1897,6 +1896,8 @@ async fn run() -> anyhow::Result<()> {
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
+            .with_session_tasks(session_task_links)
+            .with_updates(updates)
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)

@@ -280,6 +280,13 @@ function registerDraggableBlock(
     const rootRect = root?.getBoundingClientRect();
     if (!root || !rootRect) return;
 
+    // An editor in an inert subtree (a parked desktop tab's layer) still
+    // reports its layout rect, which overlaps whatever is visible there.
+    if (root.closest('[inert]')) {
+      clearHover();
+      return;
+    }
+
     const inXRange =
       event.clientX >= rootRect.left - HORIZONTAL_BUFFER &&
       event.clientX <= rootRect.right;

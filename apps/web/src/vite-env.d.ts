@@ -11,6 +11,12 @@ interface ImportMetaEnv {
 
   /** `true` in bundles `just stack` builds, which count as local (`LOCAL_ONLY`). */
   readonly VITE_LOCAL_ONLY?: string;
+  /**
+   * `true` when `run_local` / `just stack` serves the app: the backend is a
+   * self-contained local stack whose proxy keeps each instance's cookies apart.
+   * Unset for `run_dev`, whose proxy shares cookies with the dev gateway.
+   */
+  readonly VITE_LOCAL_STACK?: string;
   readonly VITE_OTEL_EXPORTER_URL?: string;
   readonly VITE_OTEL_ENV?: string;
   readonly VITE_ENABLE_BROWSER_OTEL?: string;
@@ -20,8 +26,10 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
   readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
   readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;
+  readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_DISABLE_BROWSER_TURSO_CACHE?: string;
+  readonly VITE_DISABLE_CRM_CONTACT_SEARCH?: string;
   readonly VITE_ENABLE_WHATSAPP_LINKED?: string;
 }
 
