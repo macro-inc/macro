@@ -1,0 +1,526 @@
+apps/web/src/features/home/work-feed/home-scope.ts
+  s_c6a08203850d89::t_a052cfa9049d36 33
+apps/web/src/lib/queries/email/local-drafts.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 64-67,336-375,522,606-610,618,621-624,627,630-759
+apps/web/src/features/notifications/notification-navigation.ts
+  s_c6a08203850d89::t_a052cfa9049d36 697
+apps/web/src/lib/queries/email/send-intent.ts
+  s_c6a08203850d89::t_a052cfa9049d36 168-213
+services/authentication_service/README.md
+  s_c6a08203850d89::t_a052cfa9049d36 11-12,40,73-74,76,179
+.agents/rules/rust/code.md
+  s_c6a08203850d89::t_a052cfa9049d36 17-19
+packages/sdk/specs/storage.json
+  s_c6a08203850d89::t_a052cfa9049d36 55471-55500,55765-55777
+  s_a63b805e6ad894::t_a48444f90bb0fa 55778-55779
+crates/soup/src/domain/service.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1064-1065,1070
+apps/web/tauri/src-tauri/README.md
+  s_c6a08203850d89::t_a052cfa9049d36 130-148
+crates/incus_client/src/tls/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-34
+apps/web/src/features/property/utils/entityConversion.ts
+  s_c6a08203850d89::t_a052cfa9049d36 118-120
+apps/web/src/features/notifications-inbox/queries/decode.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 309-380
+apps/web/src/features/system-status/core/status.ts
+  s_c6a08203850d89::t_a052cfa9049d36 8-9,35-36
+apps/web/src/features/next-soup/utils.ts
+  s_c6a08203850d89::t_a052cfa9049d36 20,97,731-740,1024-1027
+  s_c6a08203850d89::t_b50d3ebcc246ff 1028
+nix/hosts/_nixos/keys/admin.pub
+  s_c6a08203850d89::t_a052cfa9049d36 1
+docs/agent-guide/settings.md
+  s_c6a08203850d89::t_a052cfa9049d36 758
+apps/web/src/features/onboarding/components/routine-suggestion-row.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 119
+nix/macro-box/_container.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-16
+nix/macro-box/files/etc/claude-code/CLAUDE.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-40
+crates/agent_harness/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 123-130
+apps/web/src/lib/queries/email/send-queue.ts
+  s_c6a08203850d89::t_a052cfa9049d36 29,31-36
+docs/agent-guide/ui-conventions.md
+  s_c6a08203850d89::t_a052cfa9049d36 329-330
+nix/swagger2openapi/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-18
+apps/web/src/components/app/split-layout/components/SplitHeader.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 82-83
+apps/web/src/features/routine-suggestions/components/routine-suggestions-card.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 13,51
+apps/web/src/lib/queries/email/local-drafts.ts
+  s_c6a08203850d89::t_a052cfa9049d36 19,463,562-584,589-590,597-600,604-607,610,613-652,685-717,737,885-905,909,913-918,920-921,992-1002,1013-1016,1030,1033,1035,1040-1056,1079-1103
+nix/cloud-storage.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1125
+packages/sdk/generated/auth/types.gen.ts
+  s_c6a08203850d89::t_a052cfa9049d36 473-476
+  s_b55b8af5a477ed::t_ab04665186a887 472
+apps/web/src/features/block-form/core/poll-card-layout.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 2,5-7,21
+apps/web/src/lib/queries/access-requests/requests.ts
+  s_c6a08203850d89::t_a052cfa9049d36 6,135-147
+  s_c6a08203850d89::t_34bb1a2f4150bd 148
+tooling/pii/exceptions
+  s_c6a08203850d89::t_a052cfa9049d36 11-13
+crates/incus_client/src/client/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-561
+apps/web/src/lib/graphql-cache/host/worker-host.ts
+  s_c6a08203850d89::t_a052cfa9049d36 327,421-428,448,1268
+nix/macro-box/macro-box.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-100
+apps/web/src/features/channel/Attachments/attachment-utils.ts
+  s_c6a08203850d89::t_a052cfa9049d36 79-81
+apps/web/src/lib/queries/system-status/status.ts
+  s_c6a08203850d89::t_a052cfa9049d36 24,27-31,35,41
+nix/macro-box/skills/macro/SKILL.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-18
+apps/web/src/components/icon/system/README.md
+  s_c6a08203850d89::t_a052cfa9049d36 134-140
+apps/web/src/lib/queries/email/draft-queue.ts
+  s_c6a08203850d89::t_a052cfa9049d36 46,51,54,56,114-115,293,297-353,359-363,386-390,444
+apps/web/src/features/email-compose/primitives/draft-sync-status.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 18,21,24,26-27,30,33-36,41-43,63
+apps/web/src/features/runtime-sharing/browser-test/vite.config.ts
+  s_c6a08203850d89::t_a052cfa9049d36 16
+apps/web/src/features/entity/extractors/entity-title.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 54
+apps/web/src/features/runtime-sharing/core/pending-requests.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-50
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentCard.test.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 233-234,236,238-239,242-247,267-269
+apps/web/src/lib/service-clients/service-storage/graphql-soup.ts
+  s_c6a08203850d89::t_a052cfa9049d36 2263-2278
+  s_c6a08203850d89::t_5200a72a161abd 2262
+crates/incus_client/src/generated.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-2386
+crates/models_soup/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 16-17
+crates/soup/src/outbound/pg_soup_repo/attention/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 512-543
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/DocumentCard.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 1,6,45,95-167,174,180,182-185,506-508,510,557-566,568-604,606-633,635-656,658-662,664-665,667-669,672-676,715-729,772
+crates/system_status/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 16-17
+nix/hosts/_nixos/certs/control-plane-dev.crt
+  s_c6a08203850d89::t_a052cfa9049d36 1-13
+services/authentication_service/src/config/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 310-374
+.github/workspace-dep-closures.json
+  s_c6a08203850d89::t_a052cfa9049d36 4519-4522,10325-10328,12422-12425
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_c6a08203850d89::t_a052cfa9049d36 8-11,38-40,43-52,54-57,59-84,87-99
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/fs/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 20
+nix/macro-box/_vm-test.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-125
+crates/pairing_id/Cargo.toml
+  s_c6a08203850d89::t_a052cfa9049d36 1-18
+nix/macro-box/skills/coding-workflow/SKILL.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-22
+static_assets/schema.graphql
+  s_c6a08203850d89::t_a052cfa9049d36 10000-10003,10086-10154,12670-12673
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service.rs
+  s_c6a08203850d89::t_a052cfa9049d36 9,574-575,577-600,602-604,606-609,611-614,616-624,626-642,644-647,649-650,652-653,655,958-961,970-974,977,980-985,987,989,994,997,999-1009,1109,1161,1186-1193,1296-1300,1597-1641,1652-1655,1678-1681,1704-1707,1727-1733,1754-1756,1773,1775,1793,1795,1812,1814
+crates/incus_client/spec/rest-api.yaml
+  s_c6a08203850d89::t_a052cfa9049d36 1-20335
+crates/incus_client/src/client/test/exec.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-45
+crates/notification_inbox/src/domain/policy.rs
+  s_c6a08203850d89::t_a052cfa9049d36 30,42
+docs/agent-guide/email.md
+  s_c6a08203850d89::t_a052cfa9049d36 913-914,978-981,985-987,989-990,1101-1104
+docs/agent-guide/navigation.md
+  s_c6a08203850d89::t_a052cfa9049d36 198
+crates/soup/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 22,59-62
+docs/architecture/email.md
+  s_c6a08203850d89::t_a052cfa9049d36 306-319,587-592
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/poll-card.browser.e2e.ts
+  s_c6a08203850d89::t_a052cfa9049d36 10-11,20-23,25-31,33
+nix/hosts/_nixos/runtime-dev-1.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-149
+nix/macro-box/_image.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-23
+nix/macro-box/claude-agent-acp/lock.sh
+  s_c6a08203850d89::t_a052cfa9049d36 1-23
+crates/incus_client/spec/openapi.json
+  s_c6a08203850d89::t_a052cfa9049d36 1-3196
+nix/macro-box/files/check-enrollment-source
+  s_c6a08203850d89::t_a052cfa9049d36 1-40
+apps/web/src/features/home/work-feed/core/work-feed.ts
+  s_c6a08203850d89::t_a052cfa9049d36 20-21
+apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts
+  s_c6a08203850d89::t_a052cfa9049d36 379-381
+apps/web/src/lib/core/internal/trackBlockOpened.ts
+  s_c6a08203850d89::t_a052cfa9049d36 39
+apps/web/src/features/notifications-inbox/views/notifications-view.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 179-181
+apps/web/src/lib/graphql-cache/exchange/mutation-queue-runner.ts
+  s_c6a08203850d89::t_a052cfa9049d36 18,82-85,375-376,508,524-535,539,657-660,669-676,1116
+apps/web/src/features/settings/components/pending-requests-section.test.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 1-200
+apps/web/src/lib/queries/email/local-draft-store.ts
+  s_c6a08203850d89::t_a052cfa9049d36 368-369
+crates/incus_client/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-83
+crates/incus_client/src/names.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-270
+crates/notification_inbox/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 7-8
+docs/agent-guide/ai-chat.md
+  s_c6a08203850d89::t_a052cfa9049d36 739-741
+nix/_swagger2openapi.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-31
+nix/macro-box/_claude-code.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-10
+nix/swagger2openapi/package.json
+  s_c6a08203850d89::t_a052cfa9049d36 1-8
+apps/web/src/features/notifications/tests/mark-message-notifications.test.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 19
+nix/macro-box/skills/browser/SKILL.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-20
+crates/incus_client/src/client.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-641
+apps/web/src/features/home/work-feed/queries/decode.ts
+  s_c6a08203850d89::t_a052cfa9049d36 106
+apps/web/src/features/settings/components/machines-request-badge.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 1-19
+crates/computer_id/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-23
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/startup.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-76
+crates/computer_id/Cargo.toml
+  s_c6a08203850d89::t_a052cfa9049d36 1-18
+apps/web/src/lib/queries/email/local-draft-entities.ts
+  s_c6a08203850d89::t_a052cfa9049d36 6
+crates/incus_client/Cargo.toml
+  s_c6a08203850d89::t_a052cfa9049d36 1-22
+apps/web/src/features/next-soup/filters/query-filters.ts
+  s_c6a08203850d89::t_a052cfa9049d36 198-206
+crates/agent_harness/src/inbound/runtime_gateway/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 2-3,84-87,101-107,125-128,130,135-143,179-307
+apps/web/src/features/runtime-sharing/queries/pending-requests.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-73
+crates/incus_client/src/tls.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-100
+apps/web/src/lib/queries/soup/recently-viewed.ts
+  s_c6a08203850d89::t_a052cfa9049d36 70-71
+crates/incus_client/testdata/server.crt
+  s_c6a08203850d89::t_a052cfa9049d36 1-11
+crates/soup_filter_projection/src/lib.rs
+  s_c6a08203850d89::t_a052cfa9049d36 373-374
+apps/web/src/features/system-status/primitives/use-banner-status.test.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 9,13-14,33-47,51-52,58-60,63-64,66,68-75,78-92
+apps/web/src/features/property/tags/entityTagging.ts
+  s_c6a08203850d89::t_a052cfa9049d36 47-48
+apps/web/src/features/property/side-panel/properties/EntityCollectionProperty.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 252,336
+apps/web/src/observability/native-lifecycle.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 145-152,154-164
+crates/coding_agent_worker/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 74-75,116-120,133-139
+apps/web/src/features/settings/Harness.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 29,172
+crates/incus_client/src/client/test/volumes.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-180
+crates/pairing_id/src/lib.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-113
+apps/web/tauri/macro_bundle_updater_plugin/src/domain.rs
+  s_c6a08203850d89::t_a052cfa9049d36 11-12
+apps/web/src/features/property/editors/selectors/entityUtils.ts
+  s_c6a08203850d89::t_a052cfa9049d36 214
+crates/coding_agent_worker/src/tui/api.rs
+  s_c6a08203850d89::t_a052cfa9049d36 3-5,20-43,64-66,68
+apps/web/src/lib/core/component/TopBar/linkShare.ts
+  s_c6a08203850d89::t_a052cfa9049d36 49
+crates/graphql_work_feed/src/inputs.rs
+  s_c6a08203850d89::t_a052cfa9049d36 66-67,84
+crates/soup/src/outbound/pg_soup_repo.rs
+  s_c6a08203850d89::t_a052cfa9049d36 31,271-280,305,487-488
+apps/web/src/features/email-compose/primitives/draft-sync-status.ts
+  s_c6a08203850d89::t_a052cfa9049d36 42-43,70,101,109-110,142
+apps/web/src/lib/queries/email/email-send-dispatcher.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 313-394
+apps/web/src/features/email-thread/queries/thread-source.ts
+  s_c6a08203850d89::t_a052cfa9049d36 2,160
+apps/web/src/lib/queries/email/email-send-dispatcher.ts
+  s_c6a08203850d89::t_a052cfa9049d36 8-13,45-57,178,185-186
+crates/soup/src/outbound/pg_soup_repo/attention.rs
+  s_c6a08203850d89::t_a052cfa9049d36 37,49,57-58,75-83,87,198
+apps/web/src/features/runtime-sharing/browser-test/share.browser.e2e.ts
+  s_c6a08203850d89::t_a052cfa9049d36 77,274-328
+  s_c6a08203850d89::t_f80ca96d78bd24 329
+crates/soup/src/outbound/pg_soup_repo/harness.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-102
+apps/web/src/features/runtime-sharing/core/pending-requests.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-81
+apps/web/src/features/settings/components/connected-runtimes-section.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 78-81,99,101
+crates/system_status/src/inbound/axum_router/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 121
+nix/macro-box/_chrome-devtools-mcp.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-18
+crates/agent_harness/src/inbound/runtime_gateway.rs
+  s_c6a08203850d89::t_a052cfa9049d36 19-23,25-28,35-37,39,43-44,58,62,70,73-78,87,109-119,129-152,155-164,167-271
+crates/graphql_common/src/entity_type.rs
+  s_c6a08203850d89::t_a052cfa9049d36 35-36,127,158
+services/authentication_service/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 48-50,143-145
+nix/macro-box/_claude-agent-acp.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-32
+crates/incus_client/testdata/other.crt
+  s_c6a08203850d89::t_a052cfa9049d36 1-11
+flake.nix
+  s_c6a08203850d89::t_a052cfa9049d36 10-11,13-18
+apps/web/src/observability/native-lifecycle.ts
+  s_c6a08203850d89::t_a052cfa9049d36 5,61,73-82
+  s_c6a08203850d89::t_82d88368798f13 83-84
+CODING.md
+  s_c6a08203850d89::t_a052cfa9049d36 69-71
+apps/web/src/lib/service-clients/service-storage/graphql/soup.graphql
+  s_c6a08203850d89::t_a052cfa9049d36 322-327
+apps/web/src/observability/desktop.ts
+  s_c6a08203850d89::t_a052cfa9049d36 10-13,51-52
+crates/system_status/src/domain/models.rs
+  s_c6a08203850d89::t_a052cfa9049d36 129-131,142,147
+crates/work_feed/src/domain/policy/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 21
+apps/web/src/features/settings/Harness.test.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 42-44,476,481,487-491
+crates/incus_client/src/model.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-237
+crates/models_soup/src/lib.rs
+  s_c6a08203850d89::t_a052cfa9049d36 27-28
+packages/sdk/generated/storage/types.gen.ts
+  s_c6a08203850d89::t_a052cfa9049d36 18810-18836,18959-18964
+  s_b55b8af5a477ed::t_3d953967b7a4d5 18809
+apps/web/src/features/next-soup/filters/inbox-filters.ts
+  s_c6a08203850d89::t_a052cfa9049d36 152-154
+crates/graphql_soup/src/objects.rs
+  s_c6a08203850d89::t_a052cfa9049d36 27,318,340-341,474-475,505,629-634,1183-1254,2766
+apps/web/src/lib/graphql-cache/generated/entity-resolver-schema.ts
+  s_c6a08203850d89::t_a052cfa9049d36 94,121
+crates/coding_agent_worker/src/main.rs
+  s_c6a08203850d89::t_a052cfa9049d36 40-48
+nix/hosts/_nixos/incus-host.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-255
+nix/hosts.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-14
+crates/incus_client/src/error.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-86
+nix/hosts/_nixos/gcp.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-29
+apps/web/src/features/system-status/primitives/use-banner-status.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-4,6-7,10-39,45-47,54-69,72,74
+apps/web/src/components/icon/system/IconSystemGallery.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 191
+nix/hosts/README.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-164
+apps/web/src/features/settings/components/pending-requests-section.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 1-155
+apps/web/src/lib/core/component/EntityIcon.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 739
+crates/incus_client/src/names/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-33
+docs/agent-guide/login.md
+  s_c6a08203850d89::t_a052cfa9049d36 89,91-97
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_c6a08203850d89::t_4fe079900e40dc 9,225-233,237-257,261-266
+  s_c6a08203850d89::t_2f7964f94ea5eb 234-236,258-260
+  s_42045962170103::t_87c360e145589c 267
+apps/web/src/features/entity/extractors-property/entity-key-properties.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 76-78,244
+apps/web/src/features/block-form/core/poll-card-layout.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-7,24
+apps/web/src/features/settings/components/settings-sidebar.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 9,107-109
+crates/soup/src/inbound/toolset/list_entities.rs
+  s_c6a08203850d89::t_a052cfa9049d36 360-362,415-416
+nix/macro-box/skills/this-machine/SKILL.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-27
+crates/soup/src/outbound/pg_soup_repo/attention/query.sql
+  s_c6a08203850d89::t_a052cfa9049d36 147-148
+apps/web/src/features/email-compose/core/local-draft.ts
+  s_c6a08203850d89::t_a052cfa9049d36 56-61
+crates/incus_client/src/lib.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-26
+crates/models_soup/src/item.rs
+  s_c6a08203850d89::t_a052cfa9049d36 10,60-61,110-112,138,259-260,305,567,659
+apps/web/src/lib/service-clients/service-storage/itemType.ts
+  s_c6a08203850d89::t_a052cfa9049d36 17
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.tsx
+  s_c6a08203850d89::t_e23316afae5509 15,19,21-23,72,76-77,79-101
+  s_c6a08203850d89::t_89d3d75fa068db 78
+  s_c6a08203850d89::t_546b981fc0e48d 73-75
+services/authentication_service/src/config.rs
+  s_c6a08203850d89::t_a052cfa9049d36 322
+crates/incus_client/spec/patch.py
+  s_c6a08203850d89::t_a052cfa9049d36 1-264
+nix/macro-box/claude-agent-acp/package.json
+  s_c6a08203850d89::t_a052cfa9049d36 1-8
+apps/web/src/lib/queries/soup/normalized-cache/operations.ts
+  s_c6a08203850d89::t_a052cfa9049d36 939-941
+apps/web/src/lib/graphql-cache/exchange/normalized-cache-exchange.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 3731,3760-3762,3764-3767,3785-3856
+apps/web/tauri/src-tauri/src/diagnostics.rs
+  s_c6a08203850d89::t_a052cfa9049d36 200,220
+crates/system_status/src/domain/service/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 30,47,138,144,151,155
+apps/web/AGENTS.md
+  s_c6a08203850d89::t_4983e316ceae47 286-289
+  s_c6a08203850d89::t_a052cfa9049d36 245-248,334-336,774-775,1345,1347
+crates/coding_agent_worker/e2e/memory_soak.py
+  s_c6a08203850d89::t_a052cfa9049d36 1-215
+apps/web/tauri/macro_bundle_updater_plugin/src/inbound/plugin.rs
+  s_c6a08203850d89::t_a052cfa9049d36 15,35-37,40,48,82-89,510,513-514
+Cargo.toml
+  s_c6a08203850d89::t_a052cfa9049d36 98-99,103,353,381
+apps/web/src/lib/i18n/locales/en/runtime-sharing.ts
+  s_c6a08203850d89::t_a052cfa9049d36 71-72
+apps/web/src/lib/queries/email/draft-queue.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 2,9-14,22,25,27,29,375-377,482-593
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service/interruption_test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 2,7,20-23,29-47,58
+crates/client/cache-core/src/meta/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 82-87
+apps/web/src/features/home/components/HomeList.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 236-240
+apps/web/src/features/notifications-inbox/open-notification-in-split.ts
+  s_c6a08203850d89::t_a052cfa9049d36 61-67,69-70
+apps/web/src/lib/graphql-cache/host/worker-host.test.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1231-1251
+apps/web/src/lib/queries/properties/entity.ts
+  s_c6a08203850d89::t_a052cfa9049d36 276
+apps/web/src/features/settings/MobileSettingsSheet.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 2,208-210
+apps/web/src/observability/generated/bundle-updater.ts
+  s_c6a08203850d89::t_a052cfa9049d36 1-63
+apps/web/src/features/system-status/components/StatusBanner.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 15-18
+apps/web/src/lib/queries/soup/transform-utils.ts
+  s_c6a08203850d89::t_a052cfa9049d36 29,99-100,987-994
+crates/coding_agent_worker/Cargo.toml
+  s_c6a08203850d89::t_a052cfa9049d36 76,78
+crates/computer_id/src/lib.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-113
+crates/incus_client/regen.sh
+  s_c6a08203850d89::t_a052cfa9049d36 1-110
+crates/models_soup/src/harness.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-28
+crates/pairing_id/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-23
+crates/soup/fixtures/attention_harnesses.sql
+  s_c6a08203850d89::t_a052cfa9049d36 1-39
+crates/work_feed/src/domain/models.rs
+  s_c6a08203850d89::t_a052cfa9049d36 55-56,61,73,89
+docs/agent-guide/home.md
+  s_c6a08203850d89::t_a052cfa9049d36 10-11
+crates/soup/src/outbound/pg_soup_repo/harness/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-51
+apps/web/src/features/entity/types/entity.ts
+  s_c6a08203850d89::t_a052cfa9049d36 465-472,538,558
+crates/coding_agent_worker/src/tui/app.rs
+  s_c6a08203850d89::t_a052cfa9049d36 12,108-111,155,238
+nix/macro-box/AGENTS.md
+  s_c6a08203850d89::t_a052cfa9049d36 1-190
+apps/web/src/features/entity/utils/shared.ts
+  s_c6a08203850d89::t_a052cfa9049d36 14
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/service/rollback_test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 2,40-43,63-66
+nix/macro-box/_guest.nix
+  s_c6a08203850d89::t_a052cfa9049d36 1-423
+apps/web/src/features/runtime-sharing/browser-test/fixture.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 9,33
+packages/sdk/specs/auth.json
+  s_c6a08203850d89::t_a052cfa9049d36 7093-7097
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/poll-card.tsx
+  s_c6a08203850d89::t_a052cfa9049d36 131,135,137-146,185-186
+crates/coding_agent_worker/src/tui/api/test.rs
+  s_c6a08203850d89::t_a052cfa9049d36 1-25
+Cargo.lock
+  s_c6a08203850d89::t_3b9f5d6f36a74f 4697,4936-4947,10945-10963,11850-11858,13148-13156,14973-14984,15882-15896
+apps/web/src/lib/service-clients/service-auth/generated/schemas/currentSystemStatusAllOf.ts
+  s_a63b805e6ad894::t_86171904d4f24c 7,11-13
+apps/web/src/lib/service-clients/service-auth/generated/schemas/currentSystemStatusAllOfId.ts
+  s_a63b805e6ad894::t_54b969d8369475 1-12
+apps/web/src/lib/service-clients/service-auth/generated/schemas/index.ts
+  s_a63b805e6ad894::t_a2495ac16a8255 61
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_a63b805e6ad894::t_01fbfbc5a9e2ce 7093-7097
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_a63b805e6ad894::t_9b156f14f6b66e 2724,2752-2753
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupHarness.ts
+  s_a63b805e6ad894::t_5ede7a1e441e55 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItem.ts
+  s_a63b805e6ad894::t_b941dd057f661e 18,40-41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItemOneOfTwonine.ts
+  s_a63b805e6ad894::t_0df8f21cd93b46 1-17
+apps/web/src/lib/service-clients/service-storage/generated/schemas/soupItemOneOfTwonineTag.ts
+  s_a63b805e6ad894::t_46478e4bc0019d 1-14
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_a63b805e6ad894::t_1a4e85195fea11 50074-50095,55072-55093,59511-59532,64533-64558,68943-68968
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_c6a08203850d89::t_0170032e44c64d 2165-2166,2893-2894,3202-3217,3495-3511,3576,3631,4440-4477,4712,4842-4843,4886,4949,4973,4998,5070,5095,5124,5186,5249,5288-5289,5309,6386-6423,7107-7144,7829-7866,8551-8588,9273-9310,9995-10032,10717-10754,11439-11476,12161-12198,12884-12921,13189-13198,13357-13366,13431,13501,14046-14083,14270,14840,14877-14929,15197,15355,15524,15694,15866,16031,16196,16374,16398,16427,16470,16519-16520,16540,16575-16576,16596,16626-16627,16647,16753,17295-17332,18016-18053,18733-18770,19454-19491,20170-20207,20886-20923,21074,21638-21676,21830,22381-22419,22573,22680-22681,22724,23198-23236,23367,23408-23409,23429,24218-24255,24840-24878,25009,25105,25263,25432,25602,25767,25853-25854,25865,25867,25870,25873-25875,25889-25890,25899,25903-25904,25925-25926,25947-25949,25952-25953,25956-25964,25974,25976,25983,25985,25987-25989,26006-26010,26014,26016-26017
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_a63b805e6ad894::t_eb7f0a679bfa09 55471-55500,55765-55779
+crates/computer_id/CLAUDE.md
+  s_c6a08203850d89::t_07a355200081e9 1
+crates/incus_client/CLAUDE.md
+  s_c6a08203850d89::t_304ca29f203bc7 1
+crates/pairing_id/CLAUDE.md
+  s_c6a08203850d89::t_9f5546a47de5f7 1
+flake.lock
+  s_c6a08203850d89::t_c282b888e12980 33-52,110-126,177,181
+nix/macro-box/CLAUDE.md
+  s_c6a08203850d89::t_defebd3a6b701c 1
+nix/macro-box/claude-agent-acp/package-lock.json
+  s_c6a08203850d89::t_224023ec36d389 1-1572
+nix/swagger2openapi/CLAUDE.md
+  s_c6a08203850d89::t_d6ba6dd6c16c12 1
+nix/swagger2openapi/package-lock.json
+  s_c6a08203850d89::t_7eab0d2f663ac0 1-454
+packages/sdk/generated/storage/index.ts
+  s_b55b8af5a477ed::t_958297306b82bf 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b009cf3d1b8813416f82f47d647bcbc941063128",
+  "prompts": {},
+  "sessions": {
+    "s_42045962170103": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9cc439f9-2fc1-4d74-8e41-4a4fa67bce66",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a63b805e6ad894": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e591c4ce-2d46-42f5-b550-cc482eb28893",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_b55b8af5a477ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a9292b3b-486d-442a-b43d-4d2129c90082",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
