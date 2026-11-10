@@ -18,7 +18,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::{CreatedAt, Query};
-use notification_state::NotificationState;
+use notification_state::{NotificationLane, NotificationState};
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -35,6 +35,7 @@ type UserNotificationListRow = (
     String,
     bool,
     NotificationState,
+    NotificationLane,
     DateTime<Utc>,
     Option<DateTime<Utc>>,
     DateTime<Utc>,
@@ -51,6 +52,7 @@ struct UpdatedUserNotificationRow {
     event_item_type: String,
     sent: bool,
     state: NotificationState,
+    lane: NotificationLane,
     created_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     updated_at: DateTime<Utc>,
@@ -82,6 +84,7 @@ impl UpdatedUserNotificationRow {
             entity,
             sent: self.sent,
             state: self.state,
+            lane: self.lane,
             created_at: self.created_at,
             viewed_at: self.viewed_at,
             updated_at: self.updated_at,
@@ -122,6 +125,7 @@ fn build_user_notifications_query<'a>(
                 n.event_item_type,
                 un.sent,
                 un.state,
+                un.lane,
                 un.created_at::timestamptz as created_at,
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as updated_at,
@@ -162,7 +166,8 @@ fn push_notification_status_filters(
     builder: &mut QueryBuilder<'_, Postgres>,
     filters: &NotificationListFilters,
 ) {
-    builder.push(" AND un.deleted_at IS NULL");
+    builder.push(" AND un.deleted_at IS NULL AND un.lane = ");
+    builder.push_bind(filters.lane);
 
     if !filters.states.is_empty() {
         builder.push(" AND un.state = ANY(");
@@ -660,6 +665,7 @@ impl NotificationDbOps for PgPool {
             }
             let recipients = sqlx::query!(
                 r#"SELECT user_id, sent, state AS "state: NotificationState",
+                    lane AS "lane: NotificationLane",
                     created_at::timestamptz AS "created_at!", seen_at::timestamptz AS viewed_at,
                     created_at::timestamptz AS "updated_at!", deleted_at::timestamptz AS deleted_at
                 FROM user_notification WHERE notification_id = $1"#,
@@ -678,6 +684,7 @@ impl NotificationDbOps for PgPool {
                         entity: request.notification_entity.clone().into_owned(),
                         sent: recipient.sent,
                         state: recipient.state,
+                        lane: recipient.lane,
                         created_at: recipient.created_at,
                         viewed_at: recipient.viewed_at,
                         updated_at: recipient.updated_at,
@@ -778,6 +785,7 @@ impl NotificationDbOps for PgPool {
                 entity: entity.clone(),
                 sent: false,
                 state: NotificationState::Unseen,
+                lane: NotificationLane::Signal,
                 created_at,
                 viewed_at: None,
                 updated_at: created_at,
@@ -847,6 +855,7 @@ impl NotificationDbOps for PgPool {
                     notification_id,
                     sent,
                     state,
+                    lane,
                     created_at,
                     seen_at,
                     deleted_at
@@ -858,6 +867,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 updated.sent,
                 updated.state as "state!: NotificationState",
+                updated.lane as "lane!: NotificationLane",
                 updated.created_at::timestamptz as "created_at!",
                 updated.seen_at::timestamptz as viewed_at,
                 NOW()::timestamptz as "updated_at!",
@@ -902,6 +912,7 @@ impl NotificationDbOps for PgPool {
                     notification_id,
                     sent,
                     state,
+                    lane,
                     created_at,
                     seen_at,
                     deleted_at
@@ -913,6 +924,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 updated.sent,
                 updated.state as "state!: NotificationState",
+                updated.lane as "lane!: NotificationLane",
                 updated.created_at::timestamptz as "created_at!",
                 updated.seen_at::timestamptz as viewed_at,
                 NOW()::timestamptz as "updated_at!",
@@ -960,6 +972,8 @@ impl NotificationDbOps for PgPool {
             -- The primary entity reads only the viewer's rows from
             -- idx_user_notification_viewer_entity; secondary entities and
             -- message ids match few notifications each.
+            -- No lane filter: opening an entity marks its noise seen too, so
+            -- the Noise view clears without a second action.
             SELECT matched.notification_id AS "notification_id!"
             FROM (
                 SELECT un.notification_id, un.created_at
@@ -1055,6 +1069,7 @@ impl NotificationDbOps for PgPool {
               AND un.notification_id = ANY($2)
               AND un.deleted_at IS NULL
               AND un.state = 'unseen'
+              AND un.lane = 'signal'
             "#,
             user_id_str,
             notification_ids
@@ -1096,6 +1111,7 @@ impl NotificationDbOps for PgPool {
                 event_item_type,
                 sent,
                 state,
+                lane,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1145,6 +1161,7 @@ impl NotificationDbOps for PgPool {
                 entity,
                 sent,
                 state,
+                lane,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1190,6 +1207,7 @@ impl NotificationDbOps for PgPool {
                 event_item_type,
                 sent,
                 state,
+                lane,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1239,6 +1257,7 @@ impl NotificationDbOps for PgPool {
                 entity,
                 sent,
                 state,
+                lane,
                 created_at,
                 viewed_at,
                 updated_at,
@@ -1277,6 +1296,7 @@ impl NotificationDbOps for PgPool {
                 n.event_item_type,
                 un.sent,
                 un.state as "state!: NotificationState",
+                un.lane as "lane!: NotificationLane",
                 un.created_at::timestamptz as "created_at!",
                 un.seen_at::timestamptz as viewed_at,
                 un.created_at::timestamptz as "updated_at!",
@@ -1326,6 +1346,7 @@ impl NotificationDbOps for PgPool {
             entity,
             sent: row.sent,
             state: row.state,
+            lane: row.lane,
             created_at: row.created_at,
             viewed_at: row.viewed_at,
             updated_at: row.updated_at,

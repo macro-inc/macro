@@ -65,6 +65,7 @@ async fn persisted_transitions_match_domain_policy(pool: Pool<Postgres>) -> Resu
                                 states: vec![filter_state],
                                 include_types: vec![],
                                 entities: vec![],
+                                lane: crate::domain::models::NotificationLane::Signal,
                             },
                         )
                         .await?;

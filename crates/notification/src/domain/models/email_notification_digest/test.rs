@@ -227,6 +227,7 @@ fn create_test_notification_row<T: Notification>(metadata: T) -> UserNotificatio
         entity: EntityType::Document.with_entity_str("doc_123"),
         sent: false,
         state: crate::domain::models::NotificationState::Unseen,
+        lane: crate::domain::models::NotificationLane::Signal,
         created_at: Utc::now(),
         viewed_at: None,
         updated_at: Utc::now(),

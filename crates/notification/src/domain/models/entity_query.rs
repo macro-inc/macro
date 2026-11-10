@@ -1,13 +1,16 @@
 //! Filters for an entity's notification edge.
 
-use super::NotificationState;
+use super::{NotificationLane, NotificationState};
 
 /// Selection applied independently to each entity before limiting its results.
-/// Defaults preserve the historical active-notification edge.
+/// Defaults preserve the historical active-notification edge, which is signal only.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EntityNotificationQuery {
     /// Exact lifecycle states to include; an empty list matches nothing.
     pub states: Vec<NotificationState>,
+    /// The one lane to read. Channel feed scoping reads the same lane, so a
+    /// noise reply never moves a signal message onto a thread row.
+    pub lane: NotificationLane,
     /// Event names to include; an empty list includes every event type.
     pub event_types: Vec<String>,
     /// Only notifications about channel messages outside a thread, including mentions
@@ -26,6 +29,7 @@ impl Default for EntityNotificationQuery {
     fn default() -> Self {
         Self {
             states: NotificationState::ACTIVE.to_vec(),
+            lane: NotificationLane::Signal,
             event_types: Vec::new(),
             top_level_messages_only: false,
             channel_feed_only: false,

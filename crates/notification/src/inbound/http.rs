@@ -141,6 +141,9 @@ pub struct Params {
         as = "Option<serde_with::StringWithSeparator<serde_with::formats::CommaSeparator, crate::domain::models::NotificationState>>"
     )]
     pub states: Option<Vec<crate::domain::models::NotificationState>>,
+    /// The lane to list. Omitted lists signal.
+    #[serde(default)]
+    pub lane: crate::domain::models::NotificationLane,
 }
 
 /// the response from listing the users notifications
@@ -160,7 +163,11 @@ pub async fn list_user_notifications<
 >(
     service: &NotificationRouterState<S, Auth>,
     user_id: MacroUserIdStr<'static>,
-    Query(Params { limit, states }): Query<Params>,
+    Query(Params {
+        limit,
+        states,
+        lane,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let query = cursor.into_query(CreatedAt, ());
@@ -175,6 +182,7 @@ pub async fn list_user_notifications<
                     .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
+                lane,
             },
         )
         .await
@@ -210,6 +218,7 @@ pub struct BulkGetByEventItemIdsRequest {
     params(
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
         ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
+        ("lane" = Option<crate::domain::models::NotificationLane>, Query, description = "The lane to list: signal or noise. Omitted lists signal."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     request_body = BulkGetByEventItemIdsRequest,
@@ -227,7 +236,11 @@ pub async fn bulk_get_by_event_item_ids<
 >(
     State(service): State<NotificationRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Query(Params { limit, states }): Query<Params>,
+    Query(Params {
+        limit,
+        states,
+        lane,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
     Json(req): Json<BulkGetByEventItemIdsRequest>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
@@ -243,6 +256,7 @@ pub async fn bulk_get_by_event_item_ids<
                     .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
+                lane,
             },
         })
         .await
@@ -387,6 +401,7 @@ async fn bulk_update<S: NotificationReader, Auth: MacroAuthorizationService>(
         ("event_item_id" = Uuid, Path, description = "The event item ID"),
         ("limit" = Option<u32>, Query, description = "Size limit per page. Default 20, max 500."),
         ("states" = Option<String>, Query, description = "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states."),
+        ("lane" = Option<crate::domain::models::NotificationLane>, Query, description = "The lane to list: signal or noise. Omitted lists signal."),
         ("cursor" = Option<String>, Query, description = "Cursor value. Base64 encoded timestamp and item id."),
     ),
     responses(
@@ -404,7 +419,11 @@ pub async fn get_by_event_item_id<
     State(service): State<NotificationRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(EventItemIdPath { event_item_id }): Path<EventItemIdPath>,
-    Query(Params { limit, states }): Query<Params>,
+    Query(Params {
+        limit,
+        states,
+        lane,
+    }): Query<Params>,
     cursor: Option<CursorWithValAndFilter<Uuid, CreatedAt, ()>>,
 ) -> Result<Json<GetAllUserNotificationsResponse<T>>, (StatusCode, Json<ErrorResponse<'static>>)> {
     let result = service
@@ -419,6 +438,7 @@ pub async fn get_by_event_item_id<
                     .unwrap_or_else(|| crate::domain::models::NotificationState::ACTIVE.to_vec()),
                 include_types: Vec::new(),
                 entities: Vec::new(),
+                lane,
             },
         })
         .await

@@ -77,6 +77,14 @@ through the same service.
   inserted without them never matches an entity read or mark-seen, and a
   migration that rewrites those `notification` columns must update
   `user_notification` too.
+- Every recipient row has a `lane` (`NotificationLane`, signal by default),
+  decided once at ingress. Noise is stored but never pushed, digested or counted
+  as unread. A reader of active rows names one lane: list filters and the entity
+  edge (`EntityNotificationQuery`) default to signal, and digest eligibility is
+  signal only. Marking an entity's notifications seen or done reads both lanes,
+  so opening an entity clears its noise. A new query over `user_notification`
+  that leaves the lane out leaks noise into unread state; add its case to
+  `outbound/repository/test/lane.rs`.
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,
   `schema`, and the default `kafka` for the Kafka publishers and consumer); building without the feature a caller needs silently drops the
   module instead of failing loudly — check `Cargo.toml` before assuming an

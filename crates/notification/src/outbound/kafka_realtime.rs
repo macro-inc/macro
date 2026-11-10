@@ -85,6 +85,7 @@ fn user_notification_row(
         entity: notification.entity.clone(),
         sent: notification.sent,
         state: notification.state,
+        lane: notification.lane,
         created_at: notification.created_at,
         viewed_at: notification.viewed_at,
         updated_at: notification.updated_at,
