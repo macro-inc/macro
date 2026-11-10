@@ -549,6 +549,30 @@ describe('createNotificationInboxSource', () => {
     expect(await cleared.finished).toBeUndefined();
   });
 
+  it('shows the rows at once when the undo of a clear at work finishes in its reply', async () => {
+    vi.useFakeTimers();
+    const { fake, feed, rowIds } = await loaded({
+      ClearNotificationInbox: {
+        clearNotificationInbox: { clear: wireClear('APPLYING') },
+      },
+      // The server stops the clear and finishes the undo before it replies.
+      UndoNotificationInboxClear: {
+        undoNotificationInboxClear: {
+          clear: wireClear('UNDONE', { revision: 3 }),
+        },
+      },
+    });
+    const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+    fake.queries.at(-1)?.resolve(inboxPage([docA, docB]));
+    await flush();
+    expect(rowIds()).not.toContain('document:doc-a#task');
+
+    await cleared.undo();
+
+    // Without waiting for a poll to notice the clear has ended.
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
   it('keeps a clear whose reply was lost: the server has it', async () => {
     vi.useFakeTimers();
     const { feed, rowIds } = await loaded({

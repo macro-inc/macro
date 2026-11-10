@@ -399,14 +399,17 @@ export function createNotificationInboxSource(
           setDone((current) => markRows(current, hidden));
           throw error;
         }
-        if (undone && isClearRunning(undone.status)) {
-          // The server finishes the undo; the inbox is read again then.
-          clears.observe(undone);
-          await clears.settled(clearId);
+        if (!undone) {
+          // The server no longer has the clear; show what it has now.
+          revalidate(client);
+          fireAndForget(live.refetch(), 'notifications-inbox');
           return;
         }
-        revalidate(client);
-        fireAndForget(live.refetch(), 'notifications-inbox');
+        // Every reply replaces the copy held while the clear was at work,
+        // so its rows stop being hidden now. A finished undo reads the
+        // inbox again; one still at work does when the server ends it.
+        clears.observe(undone);
+        if (isClearRunning(undone.status)) await clears.settled(clearId);
       },
     };
   };
