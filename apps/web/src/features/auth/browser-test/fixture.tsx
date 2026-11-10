@@ -1,3 +1,4 @@
+import { ssoFallbackNotice } from '../core/sso-fallback';
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
@@ -204,9 +205,12 @@ function Fixture() {
           <AuthView
             intent={page === 'signup' ? 'signup' : 'login'}
             showApple={params.apple !== undefined}
+            // On, as in dev builds; `?microsoft=off` is the production default.
+            showMicrosoft={params.microsoft !== 'off'}
             compact={false}
             initialEmail={params.email}
             token={sessionTokenParam(params.token)}
+            ssoFallbackNotice={ssoFallbackNotice(params.sso_error)}
             signupJourney={
               page === 'signup'
                 ? (slots) => <SignupJourney {...slots} />
