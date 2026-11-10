@@ -9,8 +9,7 @@ const monitors = [
   {
     name: 'oauth-linked-token-lookup-failing',
     title: 'OAuth linked-token lookup failing',
-    filter:
-      'env:prod @target:mcp_client* "failed to read linked GitHub token"',
+    filter: 'env:prod @target:mcp_client* "failed to read linked GitHub token"',
     window: '15m',
     threshold: 3,
     description: `At least three linked GitHub token lookups failed in fifteen minutes. OAuth may have succeeded while GitHub still appears disconnected: the MCP store suppresses these lookup errors.
