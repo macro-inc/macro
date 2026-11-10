@@ -24,6 +24,21 @@ pub async fn run_worker(
     .await;
 }
 
+/// Builds the production context shared by the worker loop and parity lab.
+pub(crate) fn context(
+    worker: &sqs_worker::SQSWorker,
+    db: PgPool,
+    sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
+) -> SFSUploaderContext {
+    SFSUploaderContext {
+        db,
+        sfs_client,
+        sqs_worker: worker.clone(),
+        connection_gateway_client,
+    }
+}
+
 /// Ingests SFS uploader messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -34,12 +49,7 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = SFSUploaderContext {
-        db,
-        sfs_client,
-        sqs_worker: worker.clone(),
-        connection_gateway_client,
-    };
+    let ctx = context(&worker, db, sfs_client, connection_gateway_client);
     loop {
         let worker_result = tokio::spawn({
             let ctx = ctx.clone();

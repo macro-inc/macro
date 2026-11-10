@@ -28,7 +28,10 @@ const VISIBILITY_EXTENSION_SECONDS: i32 = 300;
 const VISIBILITY_RENEWAL_INTERVAL: Duration = Duration::from_secs(60);
 
 /// method that ingests sqs messages and calls the process function for each
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
@@ -59,11 +62,12 @@ pub async fn run_worker(
     .await;
 }
 
-/// Ingests SQS messages until cancellation is requested.
-///
-/// A batch already returned by SQS is fully processed before shutdown.
-#[allow(clippy::too_many_arguments)]
-pub async fn run_worker_with_cancellation(
+/// Builds the production context after the existing cancellable provider initialization.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub(crate) async fn context(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
@@ -76,7 +80,7 @@ pub async fn run_worker_with_cancellation(
     macro_event_broker: PubSubEventBroker,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     cancellation_token: CancellationToken,
-) {
+) -> Option<LinkManagerContext> {
     let outlook = loop {
         let result = async {
             let connection = redis_client
@@ -97,6 +101,10 @@ pub async fn run_worker_with_cancellation(
                 "Inbox lifecycle client initialization failed; retrying"
             ),
         }
+        #[expect(
+            clippy::question_mark,
+            reason = "preserves the original cancellation branch for the code-motion audit"
+        )]
         if run_until_cancelled(
             &cancellation_token,
             tokio::time::sleep(std::time::Duration::from_secs(2)),
@@ -104,7 +112,7 @@ pub async fn run_worker_with_cancellation(
         .await
         .is_none()
         {
-            return;
+            return None;
         }
     };
     let ctx = LinkManagerContext {
@@ -133,6 +141,48 @@ pub async fn run_worker_with_cancellation(
         connection_gateway_client,
         notification_ingress_service,
         macro_event_broker,
+    };
+    Some(ctx)
+}
+
+/// Ingests SQS messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub async fn run_worker_with_cancellation(
+    worker: sqs_worker::SQSWorker,
+    db: PgPool,
+    email_api: GmailApi,
+    auth_service_client: AuthServiceClient,
+    redis_client: RedisClient,
+    sqs_client: SQS,
+    crm_service: CrmServiceType,
+    connection_gateway_client: ConnectionGatewayClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
+    macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    cancellation_token: CancellationToken,
+) {
+    let Some(ctx) = context(
+        worker.clone(),
+        db,
+        email_api,
+        auth_service_client,
+        redis_client,
+        sqs_client,
+        crm_service,
+        connection_gateway_client,
+        notification_ingress_service,
+        macro_event_broker,
+        contacts_ingress,
+        cancellation_token.clone(),
+    )
+    .await
+    else {
+        return;
     };
     loop {
         let worker_result = tokio::spawn({

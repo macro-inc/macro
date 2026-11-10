@@ -35,6 +35,23 @@ pub async fn run_worker(
     .await;
 }
 
+/// Builds the production context shared by the worker loop and parity lab.
+pub(crate) fn context(
+    db: PgPool,
+    worker: &sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    email_api: GmailApi,
+    retry_worker: bool,
+) -> GmailOpsContext {
+    GmailOpsContext {
+        db,
+        sqs_worker: worker.clone(),
+        sqs_client,
+        email_api,
+        retry_worker,
+    }
+}
+
 /// Ingests Gmail operations messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -46,13 +63,7 @@ pub async fn run_worker_with_cancellation(
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = GmailOpsContext {
-        db,
-        sqs_worker: worker.clone(),
-        sqs_client,
-        email_api,
-        retry_worker,
-    };
+    let ctx = context(db, &worker, sqs_client, email_api, retry_worker);
 
     loop {
         let worker_result = tokio::spawn({

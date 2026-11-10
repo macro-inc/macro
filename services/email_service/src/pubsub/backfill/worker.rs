@@ -53,13 +53,14 @@ pub async fn run_worker(
     .await;
 }
 
-/// Ingests SQS messages until cancellation is requested.
-///
-/// A batch already returned by SQS is fully processed before shutdown.
-#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-pub async fn run_worker_with_cancellation(
+/// Builds the production context shared by the worker loop and parity lab.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub(crate) fn context(
     db: sqlx::Pool<sqlx::Postgres>,
-    worker: sqs_worker::SQSWorker,
+    worker: &sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     email_api: GmailApi,
@@ -72,9 +73,8 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
-    cancellation_token: CancellationToken,
-) {
-    let ctx = PubSubContext {
+) -> PubSubContext {
+    PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -97,7 +97,46 @@ pub async fn run_worker_with_cancellation(
         macro_event_broker,
         notifications_enabled,
         retry_worker: false,
-    };
+    }
+}
+
+/// Ingests SQS messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
+pub async fn run_worker_with_cancellation(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    email_api: GmailApi,
+    redis_client: RedisClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
+    sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
+    dss_client: DocumentStorageServiceClient,
+    system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    crm_service: CrmServiceType,
+    macro_event_broker: PubSubEventBroker,
+    notifications_enabled: bool,
+    cancellation_token: CancellationToken,
+) {
+    let ctx = context(
+        db,
+        &worker,
+        sqs_client,
+        contacts_ingress,
+        email_api,
+        redis_client,
+        notification_ingress_service,
+        sfs_client,
+        connection_gateway_client,
+        dss_client,
+        system_properties_service,
+        crm_service,
+        macro_event_broker,
+        notifications_enabled,
+    );
 
     loop {
         let worker_result = tokio::spawn({

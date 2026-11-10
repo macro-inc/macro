@@ -6,7 +6,7 @@
 //! `max_candidate_id` snapshot is exhausted.
 
 mod list_candidates;
-mod process;
+pub(crate) mod process;
 mod process_candidate;
 mod start_job;
 pub mod worker;
