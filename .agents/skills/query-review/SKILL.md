@@ -1,6 +1,6 @@
 ---
 name: query-review
-description: Review new or changed SQL for what it costs on the production database, with evidence. Use when a diff adds or changes a sqlx query, assembled or QueryBuilder SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, or a caller that runs an existing query more often or over a wider scope.
+description: Review a finished diff's new or changed SQL for what it costs on the production database, with evidence. Use before pushing, or when asked to review a change, on a diff that adds or changes a sqlx query, assembled or QueryBuilder SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, or a caller that runs an existing query more often or over a wider scope. While writing the query, use query-writing instead.
 ---
 
 # Query review
@@ -14,18 +14,23 @@ one helper function, a scope widened from a user to a team.
 This review finds each changed query, works out how many rows it touches at
 production size, and records the evidence. It reviews cost only. Macro usage,
 the `.sqlx` cache, and injection are the
-[`sqlx-query-validator`](../sqlx-query-validator/SKILL.md)'s job.
+[`sqlx-query-validator`](../sqlx-query-validator/SKILL.md)'s job. How to write
+a query so it passes is the [`query-writing`](../query-writing/SKILL.md)
+skill, which the author follows before committing.
 
 Never connect to a hosted dev or production database for this. Use a local one.
 
 ## 1. List every changed query
 
 ```sh
-base=$(git merge-base HEAD origin/main)
-git diff --name-status "$base" -- .sqlx                      # static queries added or removed; each file holds the SQL text
-git diff "$base" -- '*.rs' | grep -nE '^[+-].*(QueryBuilder|push_bind|\.push\(|format!\(.*(SELECT|WHERE|JOIN))'
-git diff --name-only "$base" -- '**/migrations/**' '*.sql'   # functions, views, triggers, indexes
+base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+git diff --name-status "$base" HEAD -- .sqlx                      # static queries added or removed; each file holds the SQL text
+git diff "$base" HEAD -- '*.rs' | grep -nE '^[+-].*(QueryBuilder|push_bind|\.push\(|format!\(.*(SELECT|WHERE|JOIN))'
+git diff --name-only "$base" HEAD -- '**/migrations/**' '*.sql'   # functions, views, triggers, indexes
 ```
+
+Review commits, which are what a push sends. Commit or set aside uncommitted
+changes first.
 
 A query is "changed" when any of these changed:
 
@@ -76,11 +81,18 @@ the calling query.
 
 ## 3. Get evidence
 
-State the evidence level for each query:
+The author measures every query while writing it
+([`query-writing`](../query-writing/SKILL.md)) and records the plan in the PR
+body. Start from that record: check it against the diff, the seed sizes, and
+the questions above. A changed query with no recorded plan is a `fix`.
+
+Then state the level of your own check for each query:
 
 - **`index`**: an equality lookup on a primary key or unique index, or on a
-  named index whose leading columns match, returning a bounded number of rows.
-  Naming the index is enough.
+  named index whose leading columns cover every predicate, so the rows scanned
+  are the rows returned and that number is bounded. Naming the index is
+  enough. An index on only some of the predicates does not qualify: the rest
+  are filtered row by row.
 - **`measured`**: `EXPLAIN (ANALYZE, BUFFERS)` on a local database seeded to
   the size in question 2. Required when the query reads a
   [large table](table-sizes.md) and is not a plain `index` lookup, when the SQL
@@ -90,49 +102,9 @@ State the evidence level for each query:
 - **`reasoned`**: no local database was available. Say exactly what has to be
   measured and report the finding as open. `reasoned` never closes a `block`.
 
-To measure:
-
-1. Create a scratch database on the local server, migrate it, and drop it when
-   done. Don't seed the database the app or the tests use.
-
-   ```sh
-   createdb -h localhost query_review && sqlx migrate run --source crates/macro_db_client/migrations \
-     --database-url postgres://<local-user>@localhost/query_review
-   ```
-
-2. Get the exact SQL. For a `query!`, it is in the `.sqlx` entry. For
-   assembled SQL, run the test that executes the affected shape against a
-   server started with `log_statement = all` and copy the statement from the
-   log, or print `QueryBuilder::sql()` in the test. Don't retype it from the
-   builder code.
-3. Seed the tables the query reads with `INSERT ... SELECT FROM
-   generate_series(...)` at the largest tenant's size, keeping the skew that
-   matters: one mailbox with tens of thousands of threads, a domain that
-   matches a few hundred of them. Then `ANALYZE`.
-4. `SET` the hosted planner values from
-   [Checking query plans](../../../docs/development/database.md#checking-query-plans),
-   then run `EXPLAIN (ANALYZE, BUFFERS)` with a `statement_timeout`, cold and
-   again warm.
-5. Read actual rows, not estimates. Look for:
-   - `Seq Scan` on a large table, or an index scan whose `Rows Removed by
-     Filter` dwarfs the rows it returns;
-   - a `Filter:` line that holds a function call or `SubPlan` on a node that
-     processes many rows;
-   - estimated rows off from actual by more than ten times: the plan was
-     chosen for a query that does not exist, and can flip in production;
-   - `loops=` in the thousands on an inner node;
-   - sorts or hashes that spill to disk.
-6. Measure again with wrong estimates. Production statistics lag behind
-   imports and backfills, and a large tenant is invisible in a sample of a
-   table a thousand times its size, so the planner often expects a handful of
-   rows where there are tens of thousands. To reproduce that, load a small
-   fixture, `ANALYZE`, turn autovacuum off on the tables
-   (`ALTER TABLE t SET (autovacuum_enabled = false)`), then seed to size
-   without analyzing, and run the same `EXPLAIN`.
-7. A query passes only if both runs are acceptable. When the two plans differ
-   in where a per-row function or subquery runs, the good plan is luck: force
-   the order (an `OFFSET 0` fence around the narrowed set, a `MATERIALIZED`
-   CTE, a rewritten join) and measure both again.
+To measure, follow [Measuring a query plan](measuring-plans.md): scratch
+database, exact SQL, production-size seed, custom and generic plans, fresh and
+stale statistics, and how to read the result.
 
 ## 4. Report
 

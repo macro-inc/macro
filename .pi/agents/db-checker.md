@@ -25,7 +25,8 @@ That skill is the source of truth for:
 - The SQL security checklist.
 
 For query cost and migration safety, also load and follow
-`.agents/skills/query-review/SKILL.md` and
+`.agents/skills/query-review/SKILL.md` (it checks the plans that
+`.agents/skills/query-writing/SKILL.md` requires of the author) and
 `.agents/skills/migration-review/SKILL.md`, and include their report tables.
 
 ## PostgreSQL 14 Compatibility

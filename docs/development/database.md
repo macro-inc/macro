@@ -101,7 +101,13 @@ compatible with the service code currently deployed, not just the code in its PR
    prefixes. If SQLx is unavailable, use the pinned Nix shell or report the blocker;
    do not fabricate a migration filename.
 
-2. **Use compile-time checked queries** (`query!`, `query_as!`, `query_scalar!`,
+2. **Write the query with the
+   [query writing skill](../../.agents/skills/query-writing/SKILL.md)**, before
+   the first line: it covers bounded scope, keyset pagination, predicates the
+   indexes can use, and the `EXPLAIN (ANALYZE, BUFFERS)` every query needs on a
+   production-size local database before it is committed.
+
+   **Use compile-time checked queries** (`query!`, `query_as!`, `query_scalar!`,
    `query_file!`) by default. Dynamic SQL is only for genuinely dynamic queries;
    bind values and allowlist dynamic identifiers. Check macro use and
    access-control predicates with the [SQLx query validator](../../.agents/skills/sqlx-query-validator/SKILL.md).
@@ -136,8 +142,8 @@ compatible with the service code currently deployed, not just the code in its PR
 
 7. **Review the change for production risk** before pushing, with the
    [review skill](../../.agents/skills/review/SKILL.md): the
-   [query review](../../.agents/skills/query-review/SKILL.md) sizes every changed
-   query against production tables, and the
+   [query review](../../.agents/skills/query-review/SKILL.md) checks every changed
+   query's recorded plan against production table sizes, and the
    [migration review](../../.agents/skills/migration-review/SKILL.md) checks
    locks, rewrites, and compatibility with deployed code.
 
@@ -158,9 +164,9 @@ those values in your session before reading `EXPLAIN (ANALYZE, BUFFERS)`
 output. Seed data at realistic volume: an empty table hides missing indexes.
 Local and dev run Postgres 18, but production runs the `engine_version` in
 `infra/stacks/macrodb/Pulumi.prod.yaml`, which is older and lacks skip scans.
-Check that the plans you rely on also hold on that version. The
-[query review](../../.agents/skills/query-review/SKILL.md) says when a plan must
-be measured and what to look for in it.
+Check that the plans you rely on also hold on that version.
+[Measuring a query plan](../../.agents/skills/query-review/measuring-plans.md)
+has the steps: the seed, the runs, and what to look for in the plan.
 
 ## Troubleshooting
 

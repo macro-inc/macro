@@ -1,6 +1,6 @@
 ---
 name: sqlx-query-validator
-description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for security issues. Query cost is the query-review skill.
+description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for security issues. Writing a query and measuring its plan is the query-writing skill; reviewing a diff's query cost is query-review.
 allowed-tools: Bash Read Edit Glob Grep
 ---
 
@@ -71,11 +71,13 @@ just prepare_db
 
 If it fails, inspect the error. Fix in-scope query/cache issues and rerun `just prepare_db`. If it still fails for environmental reasons, stop and report the failure clearly.
 
-## Performance Review
+## Performance
 
-Run the [`query-review`](../query-review/SKILL.md) skill on the changed queries
-(through the [`review`](../review/SKILL.md) skill). It sizes each query against
-production tables and requires evidence; this skill does not repeat its checks.
+This skill does not check query cost. The author writes and measures each
+query with the [`query-writing`](../query-writing/SKILL.md) skill before
+committing it, and the [`query-review`](../query-review/SKILL.md) skill checks
+it before the push (through the [`review`](../review/SKILL.md) skill). If a
+changed query has no measured plan yet, run `query-writing` on it now.
 
 ## Security Review Checklist
 
@@ -96,4 +98,4 @@ Briefly summarize:
 - Whether all changed queries use SQLx macros, or why any direct function call remains justified.
 - Whether `just prepare_db` passed, failed, or was skipped because no SQLx queries changed.
 - Any security concerns found and fixed, or that none were found.
-- The `query-review` result for the changed queries.
+- Whether each changed query has a measured plan from `query-writing`.

@@ -16,10 +16,13 @@ matches the diff, not just the first.
 ## 1. Pick the reviews
 
 ```sh
-base=$(git merge-base HEAD origin/main)
-git diff --name-only "$base"
-git diff "$base" -- '*.rs' '*.sql' | grep -nE '^[+-].*(sqlx::query|query_as|query_scalar|query_file|QueryBuilder|push_bind|\.push\()' | head
+base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+git diff --name-only "$base" HEAD
+git diff "$base" HEAD -- '*.rs' '*.sql' | grep -nE '^[+-].*(sqlx::query|query_as|query_scalar|query_file|QueryBuilder|push_bind|\.push\()' | head
 ```
+
+Review commits, which are what a push sends; commit or set aside uncommitted
+changes first. Pass the same base to every review you run.
 
 | The diff changes | Run |
 | --- | --- |
@@ -29,6 +32,10 @@ git diff "$base" -- '*.rs' '*.sql' | grep -nE '^[+-].*(sqlx::query|query_as|quer
 | Nothing above | A general review of the diff by a reviewer that did not write it: [`qc`](../qc/SKILL.md), or the review your session already runs before a push |
 
 When a database row matches, the general review is optional.
+
+These reviews check finished work. The author of a query follows the
+[`query-writing`](../query-writing/SKILL.md) skill while writing it, and
+`query-review` checks the plan that skill records.
 
 ## 2. Run them
 
@@ -51,8 +58,9 @@ A finding is closed by a code change or by evidence, never by rewording.
 "It is fast locally" on an empty table is not evidence.
 
 Put the database reviews' result in the PR body under `## Database review`
-(see the `git` skill): each query or migration statement, the rows it touches,
-the index or lock it relies on, and how that was checked.
+(see the `git` skill) whenever one ran, including for a caller-only change:
+each query or migration statement, the rows it touches, the index or lock it
+relies on, and how that was checked.
 
 ## Not in this path yet
 

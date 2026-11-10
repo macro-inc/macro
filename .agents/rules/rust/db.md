@@ -14,6 +14,10 @@ alwaysApply: false
 
 Rust database rules: ids, keys, migrations, and SQLx.
 
+Before writing or changing a query, load the `query-writing` skill: it says how
+to keep a query bounded and index-backed, and requires its plan to be measured
+on a production-size local database before the commit.
+
 - **CS-01** Generate ids as UUIDv7 in application code — never
   `gen_random_uuid()` (UUIDv4); v7 ids sort by creation time.
 - **CS-02** Make seed/backfill inserts and anything that can race idempotent
@@ -40,5 +44,6 @@ Rust database rules: ids, keys, migrations, and SQLx.
   default, and changes to large tables set `lock_timeout` and use `NOT VALID` +
   `VALIDATE` or `CREATE INDEX CONCURRENTLY` instead of a full rewrite.
 
-Check: the `review` skill ran on the change: `query-review` for changed queries
+Check: each changed query has a measured plan from `query-writing`, and the
+`review` skill ran on the change: `query-review` for changed queries
 and SQL functions, `migration-review` for migrations, with no open `block`.

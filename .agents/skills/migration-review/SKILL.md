@@ -21,9 +21,12 @@ Never run a migration against a hosted dev or production database for this.
 ## 1. List what changed
 
 ```sh
-base=$(git merge-base HEAD origin/main)
-git diff --name-status "$base" -- '**/migrations/**'
+base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+git diff --name-status --no-renames "$base" HEAD -- '**/migrations/**'
 ```
+
+`--no-renames` reports a renamed file as a delete and an add, so a renamed
+deployed migration is caught below.
 
 - **`A`** new files: review every statement.
 - **`M`** or **`D`** on a file that exists on `main`: `block`. A deployed
@@ -45,7 +48,7 @@ On an existing table:
 
 | Statement | What it does | Safe form |
 | --- | --- | --- |
-| `CREATE INDEX` without `CONCURRENTLY` | Blocks writes for the whole build | `CREATE INDEX CONCURRENTLY` as the only statement of a `-- no-transaction` file. With `IF NOT EXISTS`, an interrupted build leaves an `INVALID` index that a retry keeps: the file's comment must say to drop it and re-run |
+| `CREATE INDEX` without `CONCURRENTLY` | Blocks writes for the whole build | `CREATE INDEX CONCURRENTLY` as the only statement of a `-- no-transaction` file. With `IF NOT EXISTS`, an interrupted build leaves an `INVALID` index, and a retry then skips the build and records the migration as applied: the file's comment must say to drop the invalid index before the migration is run again |
 | `CREATE UNIQUE INDEX`, `ADD PRIMARY KEY`, `ADD UNIQUE` | Builds an index under an exclusive lock | Build the unique index concurrently, then `ADD CONSTRAINT ... USING INDEX` in a later file. A primary key's columns must already be `NOT NULL`, or it scans under the lock |
 | `ADD CONSTRAINT ... CHECK` or `FOREIGN KEY` without `NOT VALID` | Scans the table under the lock; a foreign key blocks writes to both tables | Add it `NOT VALID`, then `VALIDATE CONSTRAINT` in a separate file |
 | `VALIDATE CONSTRAINT` in the same file as the `ALTER TABLE` that added it | The scan runs while the `ALTER`'s exclusive lock is still held | Its own file |
@@ -91,11 +94,13 @@ schema back. With the migration applied and the old code still running:
 
 ## 4. Get evidence
 
-- Apply the migration to a scratch database on the local server, created as in
-  `query-review`, not to the database the app or tests use. It must apply on
-  the production engine version, not only the local one.
-- To see the locks a transactional file takes, run it by hand and look before
-  rolling back:
+- Apply the migration to a scratch database on the local server, not to the
+  database the app or tests use. It must apply on the production engine
+  version, not only the local one.
+- To see the locks a transactional file takes, create a scratch database that
+  stops at the last migration on the base
+  (`sqlx migrate run --target-version <version> …`), then run the new file by
+  hand and look before rolling back:
 
   ```sql
   BEGIN;
