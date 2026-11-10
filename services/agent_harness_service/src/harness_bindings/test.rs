@@ -117,6 +117,31 @@ async fn a_deleted_harness_reattaches_nothing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_archived_session_is_not_reattached(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let bot = insert_bot(&pool, laptop).await;
+    let archived = insert_session(&pool, bot, "acp-archived").await;
+    let live = insert_session(&pool, bot, "acp-live").await;
+    sqlx::query!(
+        "UPDATE agent_session SET archived_by = 'user', archived_at = now() WHERE id = $1",
+        archived.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[SessionId::new("acp-archived"), SessionId::new("acp-live")],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(found, [live]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_resident_runs_on_its_owners_access_and_a_coding_agent_on_the_prompters(pool: PgPool) {
     let laptop = insert_harness(&pool).await;
     let coding = BotId::new_from_uuid(insert_bot(&pool, laptop).await);

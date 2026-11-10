@@ -112,6 +112,7 @@ impl HarnessBindings for PgHarnessBindings {
             WHERE ac.harness_id = $1
               AND h.deleted_at IS NULL
               AND s.acp_session_id = ANY($2)
+              AND s.archived_by IS NULL
             "#,
             harness.as_uuid(),
             &acp_sessions,

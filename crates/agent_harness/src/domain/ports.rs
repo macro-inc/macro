@@ -116,6 +116,8 @@ pub trait HarnessBindings: Send + Sync + 'static {
     /// The sessions holding one of `acp_sessions` whose bot is bound to
     /// `harness` now. Scoping by binding is the authorization: a runtime
     /// naming another harness's ACP sessions reattaches nothing.
+    /// Archived sessions are left out: a runtime that keeps listing them never
+    /// brings them back.
     fn sessions_on_harness(
         &self,
         harness: HarnessId,
