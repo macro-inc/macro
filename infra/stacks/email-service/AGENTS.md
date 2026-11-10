@@ -23,6 +23,20 @@ attachment storage, and Redis. Runtime code lives in `services/email_service`.
 - These tasks also consume inbox sync and Gmail operation queues. Changing task
   count scales their consumers and database connection pools as well.
 
+## CRM consent rollout ordering
+
+The automatic deploy-all workflow waits for this stack's pub/sub worker service
+and verifies its `crmBackfillConsumer` output before deploying DSS. Export the
+TaskDefinition resource created by this update and the immutable image URI, never
+the current live service revision (which can be an old circuit-breaker rollback).
+The verification includes actual termination of old tasks, not merely desired
+STOPPED status. Keep pub/sub `continueBeforeSteadyState: false`; other ECS defaults
+remain unchanged. Standalone stack deployments bypass this cross-service order.
+The expected container name must use the same map key as the AWSX task definition
+(`pubsubWorkers.containerName`); AWSX overrides a container's inner `name` field
+with that key. The waiter logs bounded, allowlisted readiness observations while
+waiting and at timeout; these are diagnostics, not a substitute for readiness.
+
 ## Checks
 
 - `bun run --cwd infra check` from the repository root.

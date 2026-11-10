@@ -91,7 +91,7 @@ pub struct RoutineTemplate {
     pub name: String,
     pub description: String,
     pub trigger: ActionTrigger,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
     /// Routines activated from this template, including stopped ones.

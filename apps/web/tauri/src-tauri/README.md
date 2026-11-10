@@ -20,6 +20,16 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## OTA bundle storage
+
+On iOS, the bundle updater stores downloads and their persistence markers in
+`Library/Application Support/<bundle-identifier>/bundle-updates`, not the
+purgeable `Library/Caches` directory. The directory is excluded from backup
+because the server can supply the bundles again. The updater deliberately
+ignores legacy cache contents: the first launch uses embedded assets and checks
+for a fresh download. Other platforms retain their existing cache location.
+This storage change requires a native app release.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web

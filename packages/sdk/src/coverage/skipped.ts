@@ -257,11 +257,9 @@ export const notificationExcluded = [
   'getUnsubscribes',
   'healthHandler',
   'removeUnsubscribeAll',
-  'removeUnsubscribeItem',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
-  'unsubscribeItem',
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
@@ -269,7 +267,6 @@ export const notificationBacklog =
   [] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
-  'ensureTagSet',
   'mergeTag',
   'promoteTag',
 ] as const satisfies readonly (keyof PropertiesSdk)[];
@@ -280,7 +277,10 @@ export const propertiesBacklog =
 export const scheduledActionExcluded = [
   'draftRoutine', // The routine editor's AI drafting; agents use CreateRoutine.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
-  'routineCodeStarters', // The new-routine flow's starter code steps.
+  'routineCatalog', // The new-routine flow's templates.
+  'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
+  'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
+  'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
@@ -305,6 +305,9 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Opening a host to a team takes its owner's own session: an agent can ask for
+  // access but never grant it.
+  'setHarnessTeamAccess',
   // Asking to join a channel-shared event, and its sharer's request list,
   // are web-app actions.
   'listJoinRequests',
@@ -409,8 +412,11 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // CRM privacy settings use the generated client.
+  'getCrmEmailPrivacy',
+  'updateCrmEmailPrivacy',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

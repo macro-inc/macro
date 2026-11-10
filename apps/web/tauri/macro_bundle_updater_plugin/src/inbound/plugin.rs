@@ -18,7 +18,7 @@ use crate::{
         api_client::BundleClient,
         fs::FileSystem,
         runtime::TauriTaskSpawner,
-        system_info::{SystemInfo, native_build},
+        system_info::{SystemInfo, bundle_storage_dir, native_build},
     },
 };
 
@@ -311,10 +311,7 @@ pub async fn apply_completed_update_from<R: Runtime>(
         .try_state::<Mutex<PluginService>>()
         .ok_or_else(|| "Bundle updater plugin not initialized".to_string())?;
 
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(app_handle).map_err(|e| e.to_string())?;
 
     // Keep application and reload dispatch in one critical section. Native
     // installation holds this same lock while shutting down the webview/cache.
@@ -390,10 +387,7 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     loaded_bundle_build: u64,
 ) -> Result<bool, String> {
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(&app_handle).map_err(|e| e.to_string())?;
     service
         .lock()
         .await
@@ -446,10 +440,7 @@ pub async fn clear_bundle<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(&app_handle).map_err(|e| e.to_string())?;
 
     let mut service = service.lock().await;
     let apply_result = {
@@ -515,7 +506,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let mut start_update_check = false;
         if !self.auto_update {
             tracing::info!("[bundle-update] automatic bundle updates are disabled in this build");
-        } else if let Ok(cache_dir) = app.path().app_cache_dir() {
+        } else if let Ok(cache_dir) = bundle_storage_dir(app) {
             let startup = tauri::async_runtime::block_on(async {
                 service.load_bundle_root(&cache_dir, native_build).await
             });
@@ -549,7 +540,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
             }
         } else {
             tracing::warn!(
-                "[bundle-update] failed to read app cache dir during plugin initialization"
+                "[bundle-update] failed to prepare bundle storage during plugin initialization"
             );
             start_update_check = true;
         }
@@ -569,7 +560,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 return Ok(());
             };
             if acknowledge_setup_apply {
-                match app.path().app_cache_dir() {
+                match bundle_storage_dir(app) {
                     Ok(cache_dir) => {
                         let loaded_bundle_build =
                             tauri::async_runtime::block_on(service.bundle_build())
@@ -583,7 +574,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                         }
                     }
                     Err(e) => tracing::warn!(
-                        "[bundle-update] failed to read cache dir for setup acknowledgement: {e}"
+                        "[bundle-update] failed to prepare bundle storage for setup acknowledgement: {e}"
                     ),
                 }
             } else if let Err(e) = service.start() {

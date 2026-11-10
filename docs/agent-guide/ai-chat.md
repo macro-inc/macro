@@ -27,6 +27,11 @@ in its channel or comment thread, the task, the email, the call, the routine,
 or the session that handed the work off. The context the agent was given stays
 hidden. A prompt still sending shows no line until the log confirms it.
 
+A finished agent reply shows when it was sent under its last line
+(`data-testid="reply-footer"`), in the same treatment as a prompt's time: the
+moment its turn ended. A reply still running, history a runtime replayed on
+load, and a turn stopped before the agent said anything show no time.
+
 ## Connecting an app from an agent session
 
 When existing tools cannot handle a request, agent sessions can use
@@ -596,12 +601,12 @@ the shimmer.
   model. Escape dismisses the picker and restores focus to its trigger.
   A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
-  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Machines.
   An agent whose paired machine is away is greyed out, carries an **Offline**
-  badge, and offers **Reconnect runtime** instead of a model submenu; the same
+  badge, and offers **Reconnect machine** instead of a model submenu; the same
   badge appears in the `@` menu, where offline agents cannot be mentioned at all
   (clicking or pressing Enter leaves the menu open and inserts nothing).
-  The built-in sandbox and paired macrod runtimes are not offered here.
+  The built-in sandbox and paired macrod machines are not offered here.
 - With the `enable-agent-updates` flag, the New conversation page shows a stack
   of pending updates from your coding sessions under the composer: one card per
   permission request, question, or tool approval of a blocked session, plus
@@ -713,15 +718,15 @@ the shimmer.
   and **Bring your own agent** (**Set up**, or **Paired** + **Manage** once a
   machine is paired). One **Your agents** list shows Macro, team agents, then
   private agents, each with a TEAM/PRIVATE pill and an "In Macro / In Cursor /
-  In your harness · model · channels" subtitle, plus Edit / Delete actions.
+  On your machine · model · channels" subtitle, plus Edit / Delete actions.
   **Add agent**, the setup strips, and Edit replace the list with full pages,
   not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
   The agent editor has Profile, Instructions, **Where it runs** (In Macro, In
-  Cursor, In your harness) and **Who can use it** (Private / Team). The selected
-  place opens its Model picker inside its card; In your harness adds a Harness
+  Cursor, On your machine) and **Who can use it** (Private / Team). The selected
+  place opens its Model picker inside its card; On your machine adds a Machine
   picker beside it. In Macro on an Anthropic or OpenAI model also shows an
   optional **Anthropic API key** / **OpenAI API key** field (see
-  [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired harness is disabled with
+  [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired machine is disabled with
   **Connect** / **Set up**, which open the setup guide in place and return to the
   editor with that option selected. Mention style, permission requests,
   connections, and channels sit in a collapsed **Advanced** section whose
@@ -730,32 +735,32 @@ the shimmer.
   Keys page with **Open API & SSH Keys** (cursor.com/dashboard/api), an API key
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
-  **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): **Connected runtimes** (shown only once a paired machine is connected;
-  it then lists every paired machine, connected ones first, each with
-  **Connected** or **Offline** and **Remove**), built-in providers, and
-  **New runtime**.
-  On the desktop app, **Runtimes** opens with a **This computer** card that sets
+  **Done**. **Manage** on a paired machine opens **Machines** (Back returns to
+  Agents): **Your machines** (shown only once a paired machine is connected;
+  it then lists every machine you own, connected ones first, each with
+  **Connected** or **Offline**, **Share**, **Options** and **Remove**),
+  **Teammates' machines**, **Built-in machines**, and **New machine**.
+  On the desktop app, **Machines** opens with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
   and starts it. Before this computer is paired, a dismissible **Run agents on
   this computer** invitation appears above the Home input and the Agents
-  new-conversation and active-session inputs. Clicking it opens Runtimes;
+  new-conversation and active-session inputs. Clicking it opens Machines;
   dismissing it affects only this desktop installation and signed-in user.
-  Runtimes is available on desktop even when the newer Agents view is still
-  rolling out. Each paired computer keeps its own runtime identity and appears
-  separately under Connected runtimes. The manual flow below remains for pairing
-  other machines. In the agent form, a runtime whose machine is away is labelled
+  Machines is available on desktop even when the newer Agents view is still
+  rolling out. Each paired computer keeps its own machine identity and appears
+  separately under Your machines. The manual flow below remains for pairing
+  other machines. In the agent form, a machine that is away is labelled
   **· Offline** but stays selectable: binding an agent to a sleeping computer is
   normal.
-  **New runtime** shows three steps: install macrod with the shown `curl … |
+  **New machine** shows three steps: install macrod with the shown `curl … |
   sh` (macOS, Linux) or `irm … | iex` (Windows) command, run `macrod` and
   configure your agent in Quickstart, then enter your pairing
   code and click **Look up**. Review the request and click **Approve** to connect.
   The setup guide contains configuration and pairing screenshots in that order.
   Enter the code from your own terminal, not the example screenshot.
   Run inside a herdr pane, macrod's Quickstart also offers **Claude Code in herdr**
-  and **Codex in herdr**: each session of an agent on that runtime opens a herdr
+  and **Codex in herdr**: each session of an agent on that machine opens a herdr
   tab in the directory macrod started from, running the real Claude Code or Codex
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
@@ -789,7 +794,7 @@ the shimmer.
   session starts on the first prompt, before its first reply; a startup screen
   that temporarily hides the footer is retried during the turn. The menu does not list
   installed native skills or session-switching commands such as `/resume`.
-  For a paired runtime configured as a **Chat agent**, mentioning it posts a
+  For a paired machine's agent configured as a **Chat agent**, mentioning it posts a
   pending reply in the channel thread. Once the turn completes, that same reply
   shows the answer (or a stopped/failed result), even if the session view was
   never opened. Follow-up messages get their own replies. This requires a macrod
@@ -858,15 +863,28 @@ behind `enable-routine-code-steps` (PostHog, on in development builds): with it
 off, Draft it, the add-step box and the built-in templates write Ask AI steps
 only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
-while the button shows **Drafting…**): it reads the same code-step guide
-CreateRoutine does, plus the SDK entities relevant to the description and the
-starter routines as worked examples; the model names the SDK symbols its code
-will use and reads their full reference before writing, then the scheduler
-type-checks the routine's code steps
-together (a step that misreads an earlier step's output fails) and asks the
-model to fix errors, three times at most. A step that still fails stays in the draft with its
-errors listed, and the routine can't be created until it is drafted again or
-the step is removed.
+while the button shows **Drafting…**, at most two minutes): the request carries
+only the description and settings (time zone, model, decisions, code steps).
+The draft runs in an ordinary hidden agent session of the in-process Macro
+agent, as the person, with its usual tools, on the model their Ask AI steps
+use, billed as agent session usage. It never appears in Home or the Agents list, notifies nobody,
+and is deleted when the draft comes back. It finds the channels, people,
+folders, labels, tags and agents the description names itself, paging and
+refining searches, and leaves out a name that matches nothing or several
+items, so the review shows the normal picker for it. It creates only what the
+routine must reference (such as a database "a new database called Bug log"
+asks for) and never does the routine's own work now ("every Monday make a
+task" makes no task). It hands the routine back by checking it with
+`macro.routines.check` (`POST /scheduled-actions/check`: saving's checks,
+including the type check of its code steps together, with nothing saved),
+naming what it created, and fixes what the check reports. The last check is
+the draft: the review lists what was created, from what the session named and
+from its recorded activity, under "Created for this routine" or "Created, not
+used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
+the routine can't be created until it is drafted again or the step is
+removed. Saving checks every id again. A request the gateway
+refuses as too large, a timeout and the AI usage limit each show their own
+message in the dialog instead of "Couldn’t draft that routine".
 
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,
@@ -1187,20 +1205,22 @@ and settlement tests still require the isolated backend fixtures above.
 When the harness has its local Deno runtime configured, the session's `macro_internal`
 server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-process agent sees
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
-For Macro's in-process agent, the backend evaluates the session owner's
-`ai-code-mode` flag once per conversational turn. Enabled users get a smaller
-direct toolset: SDK-supported searches, reads, listing, and data operations run
-through the SDK, including AI document and task edits
+For Macro's in-process agent, every conversation turn of a user's session runs
+code mode whenever those three tools are listed (otherwise the turn falls back
+to the direct tools and logs a warning). Code mode has a smaller direct toolset:
+SDK-supported searches, reads, listing, and data operations run through the SDK
+(`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
 `render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image),
+`RenderCanvas` stays direct so the model can see the image; a program's
+render or generated image shows in the reply through the image's
+`toMarkdown()` `<m-image>` line, since a document mention of a static file id
+reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
 native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
 and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 `EditSpreadsheet` are hidden in code mode), and
-results are presented with `execution.views.present`. Workspace feeds and
-mixed-entity name searches keep the direct `ListEntities` and `NameSearch` tools,
-including agent sessions. `ContentSearch` supports session history. The legacy
+results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
@@ -1208,11 +1228,10 @@ tools, `AskUser`, connector discovery, tool loading for connected apps, subagent
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-Disabled/missing flags, failed flag evaluation, unconfigured PostHog, or missing
-code-mode MCP tools retain the standard toolset. Summary/compaction calls do not
-load flags or advertise tools. Flag changes apply on the next conversational
-turn, without changing an in-flight turn's tools. The flag controls presentation,
-not authorization; SDK requests retain normal user permissions, and issuing the run credential requires execution approval.
+Sessions without a user owner, or whose turn lacks the code-mode MCP tools,
+keep the standard toolset. Summary/compaction calls advertise no tools. The mode
+controls presentation, not authorization; SDK requests retain normal user
+permissions, and issuing the run credential requires execution approval.
 External coding harnesses keep their own tool selection. A runner that fails
 after its tools were advertised still produces an execution failure, not an
 automatic retry through a direct tool.
@@ -1299,7 +1318,8 @@ that creates a saved review immediately emits a separate completed **PresentRevi
 ACP call.
 Its card can appear before the program finishes and stays editable afterwards.
 Presentation means “Presented to the user,” not approved or sent. After
-presenting, the agent asks “Should I kick it off?”; when the person whose
+presenting, the agent asks “Should I kick it off?”, unless the user said not
+to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. SDK operation
@@ -1318,8 +1338,8 @@ once the full call input arrives. Reopening a session may log historical code
 again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
-For local verification, enable backend `ai-code-mode` for the test owner with a
-configured Deno runner. Compare enabled and disabled owners' tools. Supported
+For local verification, run the harness with a configured Deno runner; without
+one, turns fall back to the direct tools. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1338,9 +1358,9 @@ provider usage and completed writes may remain after cancellation.
 
 ## Code mode on the public MCP
 
-The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
-`ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
-`tools/call`, cached per user for a minute. Enabled users see only
+The public workspace MCP (`mcp-server[-dev].macro.com`) runs code mode for every
+client but ChatGPT (whose plugin directory refuses generic executors) wherever
+the harness can run code. Those clients see only
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
 individual Macro tools — and the server instructions tell the client to call
 `DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
@@ -1350,8 +1370,7 @@ session, execution journal, review stack or `execution_id`; the receipt carries
 status, observed SDK activity, result and error. Runs act as the user with no
 agent attribution and no owner approval card: the MCP client asks before each
 tool call. SDK writes, including email sends, take effect immediately. Hidden
-native tools stay callable if a client already knows their names; MCP clients
-cache tool lists, so a flag change appears after reconnecting. Public runs use
+native tools stay callable if a client already knows their names. Public runs use
 their own Deno budget (four running, eight queued per replica) so external
 traffic cannot take agent sessions' slots. Agent-session code mode is
 unchanged: it still keeps a reduced direct toolset for search, document
@@ -1359,11 +1378,8 @@ editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints
-a local token for an existing user and passes only the Macro MCP. To control flag
-responses, override `POSTHOG_API_KEY` and `POSTHOG_HOST` in the instance's
-`local.generated.env` before services start, pointing at a stand-in `/flags/`
-server on the `macro-<name>_services` network, and compare a flagged and an
-unflagged user's `tools/list`.
+a local token for an existing user and passes only the Macro MCP; its
+`tools/list` should be the three code-mode tools.
 
 ## Start a doc-scoped chat
 
@@ -2169,19 +2185,20 @@ must stay hidden; subsequent live messages must still appear.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
-- **Runtime bypass setting.** Bypass is a setting on the runtime, decided only
-  on the web. Settings → Agents → Runtimes → New runtime offers
+- **Machine bypass setting.** Bypass is a setting on the machine, decided only
+  on the web. Settings → Agents → Machines → New machine offers
   `Allow bypassing permission requests`, off by default; enabling it warns that
   agents may run commands and edit files on the machine without approval. Each
-  paired runtime then shows the same switch (enabling asks for confirmation) and
-  a `Rename` action; a change reaches live sessions from their next turn, with
+  paired machine then has it as `Don't ask before acting` in its `Options` menu
+  (a sheet on touch; enabling asks for confirmation, and only the owner can
+  change it) and a `Rename` action; a change reaches live sessions from their next turn, with
   no re-pairing. macrod has no Full Access or scope setting; its Config tab shows
-  these values read-only and links to Runtimes.
+  these values read-only and links to Machines.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
   and `Always bypass` only for local macrod harnesses. The larger `Always bypass`
   choice is labeled `Suggested`; the label does not select it. Macrod defaults to
-  prompts; bypass requires both the runtime's setting and the agent's explicit
-  choice; otherwise the form says to allow bypass in the runtime's settings.
+  prompts; bypass requires both the machine's setting and the agent's explicit
+  choice; otherwise the form says to allow bypass in the machine's settings.
   Built-in Macro, in-memory, Cursor, and Codex runtimes always bypass and have no
   permission policy selector. The backend enforces these policies.
 
@@ -2478,7 +2495,7 @@ not wait for a response. Code and native tools use the same presentation path. T
 chat composer. Their status is read from the session's review API, not reconstructed
 from text claimed by the model.
 
-With `ai-code-mode` enabled, the blocking `SendEmail` and `CreateCalendarEvent`
+In code mode, the blocking `SendEmail` and `CreateCalendarEvent`
 tools are not advertised or available through lazy discovery. Email and calendar
 drafts use these saved reviews instead. Presenting a draft must not produce an
 `elicitation/create` request or leave the session blocked waiting for approval.

@@ -32,13 +32,9 @@ macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-model = { path = "../../crates/model" }
 rate_limit = { path = "../../crates/rate_limit", features = ["axum"] }
 redis = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
-serde = { workspace = true }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_worker = { path = "../../crates/sqs_worker" }
 tokio = { workspace = true }
@@ -59,3 +55,5 @@ mock = []
 [dev-dependencies]
 http-body-util = { workspace = true }
 tower = { workspace = true }
+macro_user_id = { path = "../../crates/macro_user_id" }
+serde_json = { workspace = true }

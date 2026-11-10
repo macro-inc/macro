@@ -733,7 +733,7 @@ export default {
     tabMobileApp: 'モバイルアプリ',
     tabTags: 'タグ',
     tabIntegrations: '連携',
-    tabRuntimes: 'ランタイム',
+    tabRuntimes: 'マシン',
     tabMcpServer: 'MCPサーバー',
     tabApiKeys: 'APIキー',
     tabBots: 'ボット',

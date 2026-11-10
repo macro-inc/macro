@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT b.id, b.name\n            FROM agent_configs ac\n            JOIN bots b ON b.id = ac.bot_id\n            WHERE ac.harness_id = $1\n              AND b.owner_user_id = $2\n              AND b.deleted_at IS NULL\n              AND b.has_agent\n              AND NOT ac.is_coding\n              AND NOT agent_owner_can_run(b.id)\n            ORDER BY b.created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e0324af2b65900b31e4d4c0b772de1288adc28c9f812938f96911e0ae4003343"
+}
