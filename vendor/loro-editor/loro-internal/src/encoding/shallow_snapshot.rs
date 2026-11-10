@@ -9,7 +9,7 @@ use crate::{
     container::{idx::ContainerIdx, list::list_op::InnerListOp},
     dag::DagUtils,
     encoding::export_fast_updates_in_range,
-    encoding::fast_snapshot::{_encode_snapshot, Snapshot},
+    encoding::fast_snapshot::{Snapshot, _encode_snapshot},
     state::{
         container_store::{ContainerWrapper, PrunedRootState, FRONTIERS_KEY},
         redact_dead_style_values, DocState,
@@ -277,6 +277,60 @@ fn forward_replay_gate(ops_num: usize, pre_root_ops: usize, pre_root_bytes: usiz
         && pre_root_bytes <= MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY
 }
 
+/// Seed a forward replay with the cached shallow state and only its retained prefix.
+/// The live document and its requested export frontier remain unchanged.
+fn cached_root_prefix_seed(
+    doc: &LoroDoc,
+    oplog: &crate::OpLog,
+    target: &Frontiers,
+    target_vv: &VersionVector,
+) -> Option<Vec<u8>> {
+    #[cfg(test)]
+    {
+        tests::CACHED_PREFIX_ATTEMPTS.with(|count| count.set(count.get() + 1));
+        if tests::LEGACY_CACHED_ROOT.with(std::cell::Cell::get) {
+            return None;
+        }
+    }
+    let (cached_bytes, cached_size) = {
+        let state = doc.app_state().lock();
+        let cached = state.store.shallow_root_store()?;
+        if &cached.shallow_root_frontiers != oplog.shallow_since_frontiers()
+            || cached.encoded_state_bytes.len() > MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY
+        {
+            return None;
+        }
+        let size = cached
+            .store
+            .lock()
+            .kv_content_bytes_capped(MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY);
+        if size > MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY {
+            return None;
+        }
+        (cached.encoded_state_bytes.clone(), size)
+    };
+    let remaining = MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY - cached_size;
+    let spans: Vec<_> = target_vv.sub_iter_im(oplog.shallow_since_vv()).collect();
+    if estimate_ops_content_bytes(oplog, &spans, remaining) > remaining {
+        return None;
+    }
+    let prefix = Snapshot {
+        oplog_bytes: oplog.export_change_store_in_range(
+            &oplog.shallow_since_vv().to_vv(),
+            oplog.shallow_since_frontiers(),
+            target_vv,
+            target,
+        ),
+        state_bytes: None,
+        shallow_root_state_bytes: cached_bytes,
+    };
+    crate::encoding::encode_with(crate::encoding::EncodeMode::FastSnapshot, &mut |out| {
+        _encode_snapshot(&prefix, out);
+        Ok(())
+    })
+    .ok()
+}
+
 #[tracing::instrument(skip_all)]
 pub(crate) fn export_shallow_snapshot<W: std::io::Write>(
     doc: &LoroDoc,
@@ -384,6 +438,18 @@ pub(crate) fn export_shallow_snapshot_inner(
         Some(export_fast_updates_in_range(&oplog, &spans))
     })
     .flatten();
+    // A cached shallow root replaces the unavailable trimmed history. Never
+    // prepare this copy for the existing exact-root path or small dirty tails.
+    let cached_prefix_ops: usize = root_vv
+        .sub_iter_im(oplog.shallow_since_vv())
+        .map(|span| span.atom_len())
+        .sum();
+    let cached_root_updates = (state_frontiers == latest_frontiers
+        && !oplog.shallow_since_vv().is_empty()
+        && &start_from != oplog.shallow_since_frontiers()
+        && forward_replay_gate(ops_num, cached_prefix_ops, 0))
+    .then(|| cached_root_prefix_seed(doc, &oplog, &start_from, &root_vv))
+    .flatten();
     if &start_from == oplog.shallow_since_frontiers() && state_frontiers == latest_frontiers {
         let mut state = doc.app_state().lock();
         if let Some(shallow_root) = state.store.shallow_root_store().cloned() {
@@ -469,7 +535,27 @@ pub(crate) fn export_shallow_snapshot_inner(
     }
     drop(oplog);
     let result = (|| -> Result<Snapshot, LoroEncodeError> {
-        if let Some(pre_root_updates) = pre_root_updates {
+        let cached_root_doc = cached_root_updates.and_then(|bytes| {
+            let root = LoroDoc::new();
+            let imported = root.import(&bytes).ok()?;
+            if imported.pending.is_some() || root.state_frontiers() != start_from {
+                return None;
+            }
+            #[cfg(test)]
+            tests::CACHED_PREFIX_SUCCESSES.with(|count| count.set(count.get() + 1));
+            Some(root)
+        });
+        let from_cached_root = cached_root_doc.is_some();
+        let forward_root = match (cached_root_doc, pre_root_updates) {
+            (Some(root), _) => Some(root),
+            (None, Some(updates)) => {
+                let root = LoroDoc::new();
+                root.import(&updates).map_err(LoroEncodeError::from)?;
+                Some(root)
+            }
+            (None, None) => None,
+        };
+        if let Some(root_doc) = forward_root {
             // The live state is already at the latest version: build the root
             // state by replaying pre-root history forward into a temporary doc
             // instead of checking the live doc out backwards. A reverse
@@ -480,10 +566,6 @@ pub(crate) fn export_shallow_snapshot_inner(
             // magnitude more than forward replay when the doc has many small
             // containers. Forward replay also leaves the live doc untouched,
             // so no state restore is needed.
-            let root_doc = LoroDoc::new();
-            root_doc
-                .import(&pre_root_updates)
-                .map_err(LoroEncodeError::from)?;
             let mut root_state = root_doc.app_state().lock();
             // The replay doc does not share the live doc's deleted-root set;
             // without it a root container deleted before the root would be
@@ -511,6 +593,31 @@ pub(crate) fn export_shallow_snapshot_inner(
                 return Err(LoroEncodeError::UnknownContainer);
             }
             let mut alive_c_bytes = alive_indices_to_bytes(&root_state, &alive_containers);
+            if from_cached_root {
+                // Reverse checkout retains empty placeholders for containers
+                // created after the requested root. Reproduce those headers,
+                // including their actual parent, without replaying the tail.
+                let mut live = doc.app_state().lock();
+                let future: Vec<_> = live
+                    .store
+                    .iter_all_container_ids()
+                    .filter(|cid| {
+                        matches!(cid, ContainerID::Normal { peer, counter, .. }
+                        if !root_vv.includes_id(ID::new(*peer, *counter)))
+                    })
+                    .collect();
+                for cid in future {
+                    let idx = live.arena.register_container(&cid);
+                    let parent = live
+                        .arena
+                        .get_parent(idx)
+                        .and_then(|parent| live.arena.get_container_id(parent))
+                        .map(|parent| root_state.arena.register_container(&parent));
+                    let idx = root_state.arena.register_container(&cid);
+                    root_state.arena.set_parent(idx, parent);
+                    root_state.store.ensure_container(&cid);
+                }
+            }
             root_state.store.flush();
             let shallow_root_state_kv = root_state.store.get_kv_clone();
             drop(root_state);
@@ -1154,6 +1261,300 @@ mod tests {
     use crate::HandlerTrait;
     use crate::LoroDoc;
     use loro_common::LoroValue;
+
+    std::thread_local! {
+        pub(super) static LEGACY_CACHED_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static CACHED_PREFIX_ATTEMPTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(super) static CACHED_PREFIX_SUCCESSES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    fn legacy_cached_export(doc: &LoroDoc, at: &Frontiers) -> Vec<u8> {
+        struct Restore(bool);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                LEGACY_CACHED_ROOT.with(|flag| flag.set(self.0));
+            }
+        }
+        let _restore = Restore(LEGACY_CACHED_ROOT.with(|flag| flag.replace(true)));
+        doc.export(ExportMode::shallow_snapshot(at)).unwrap()
+    }
+
+    fn cached_prefix_fixture(prefix: usize, paragraphs: usize) -> (LoroDoc, Frontiers) {
+        let seed = LoroDoc::new_auto_commit();
+        seed.set_peer_id(1).unwrap();
+        seed.get_text("text")
+            .insert(0, "cached", PosType::Unicode)
+            .unwrap();
+        seed.get_map("metadata").insert("version", 9i64).unwrap();
+        seed.commit_then_renew();
+        let bytes = seed
+            .export(ExportMode::shallow_snapshot(&seed.oplog_frontiers()))
+            .unwrap();
+        let doc = LoroDoc::new_auto_commit();
+        doc.set_peer_id(2).unwrap();
+        doc.import(&bytes).unwrap();
+        for i in 0..prefix {
+            doc.get_map("metadata")
+                .insert("version", (10 + i) as i64)
+                .unwrap();
+        }
+        doc.commit_then_renew();
+        let base = doc.oplog_frontiers();
+        let blocks = doc.get_list("blocks");
+        for i in 0..paragraphs {
+            let text = blocks
+                .insert_container(i, TextHandler::new_detached())
+                .unwrap();
+            text.insert(0, "paragraph with typography — “text”", PosType::Unicode)
+                .unwrap();
+        }
+        doc.commit_then_renew();
+        (doc, base)
+    }
+
+    #[test]
+    fn cached_prefix_forward_export_matches_replay_bytes() {
+        for prefix in [1, 8, 32] {
+            let (doc, base) = cached_prefix_fixture(prefix, 32);
+            let value = doc.get_deep_value();
+            let head = doc.oplog_frontiers();
+            let state = doc.state_frontiers();
+            CACHED_PREFIX_SUCCESSES.with(|count| count.set(0));
+            let forward = doc.export(ExportMode::shallow_snapshot(&base)).unwrap();
+            assert_eq!(
+                CACHED_PREFIX_SUCCESSES.with(std::cell::Cell::get),
+                1,
+                "must actually use the forward path"
+            );
+            let legacy = legacy_cached_export(&doc, &base);
+            assert!(forward == legacy, "prefix={prefix}: snapshot bytes differ");
+            assert_eq!(doc.get_deep_value(), value);
+            assert_eq!(doc.oplog_frontiers(), head);
+            assert_eq!(doc.state_frontiers(), state);
+            assert!(!doc.is_detached());
+        }
+    }
+
+    #[test]
+    fn cached_prefix_keeps_exact_root_and_small_tail_paths() {
+        let (doc, _) = cached_prefix_fixture(1, 32);
+        CACHED_PREFIX_ATTEMPTS.with(|count| count.set(0));
+        let cached = doc.shallow_since_frontiers();
+        let bytes = doc.export(ExportMode::shallow_snapshot(&cached)).unwrap();
+        assert_eq!(CACHED_PREFIX_ATTEMPTS.with(std::cell::Cell::get), 0);
+        assert_eq!(bytes, legacy_cached_export(&doc, &cached));
+        let tip = doc.oplog_frontiers();
+        CACHED_PREFIX_ATTEMPTS.with(|count| count.set(0));
+        let bytes = doc.export(ExportMode::shallow_snapshot(&tip)).unwrap();
+        assert_eq!(CACHED_PREFIX_ATTEMPTS.with(std::cell::Cell::get), 0);
+        assert_eq!(bytes, legacy_cached_export(&doc, &tip));
+    }
+
+    #[test]
+    fn cached_prefix_rich_nested_and_deleted_tail_matches_replay() {
+        for variant in 0..12 {
+            let (doc, base) = cached_prefix_fixture(variant + 1, 32);
+            let map = doc.get_map("nested");
+            let text = map
+                .insert_container("note", TextHandler::new_detached())
+                .unwrap();
+            text.insert(0, "styled — text", PosType::Unicode).unwrap();
+            text.mark(0, 6, "comment", "value".into(), PosType::Unicode)
+                .unwrap();
+            text.delete(0, variant % 6, PosType::Unicode).unwrap();
+            if variant % 2 == 0 {
+                map.delete("note").unwrap();
+            }
+            doc.get_list("blocks").delete(variant, 1).unwrap();
+            doc.commit_then_renew();
+            doc.set_peer_id(3).unwrap();
+            doc.get_map("metadata")
+                .insert("other", variant as i64)
+                .unwrap();
+            doc.commit_then_renew();
+            if variant % 3 == 0 {
+                doc.detach();
+            }
+            let value = doc.get_deep_value();
+            let state = doc.state_frontiers();
+            let head = doc.oplog_frontiers();
+            let detached = doc.is_detached();
+            CACHED_PREFIX_SUCCESSES.with(|count| count.set(0));
+            let forward = doc.export(ExportMode::shallow_snapshot(&base)).unwrap();
+            assert_eq!(CACHED_PREFIX_SUCCESSES.with(std::cell::Cell::get), 1);
+            let legacy = legacy_cached_export(&doc, &base);
+            assert!(
+                forward == legacy,
+                "variant={variant}: snapshot bytes differ"
+            );
+            assert_eq!(doc.get_deep_value(), value);
+            assert_eq!(doc.state_frontiers(), state);
+            assert_eq!(doc.oplog_frontiers(), head);
+            assert_eq!(doc.is_detached(), detached);
+            let imported = LoroDoc::new();
+            let forward_result = imported.import(&forward);
+            let baseline = LoroDoc::new();
+            let baseline_result = baseline.import(&legacy);
+            assert_eq!(
+                format!("{forward_result:?}"),
+                format!("{baseline_result:?}")
+            );
+            if forward_result.is_ok() {
+                assert_eq!(imported.get_deep_value(), value);
+            }
+        }
+    }
+
+    #[test]
+    fn cached_prefix_structural_style_and_deletion_edits_match_replay() {
+        let seed = LoroDoc::new_auto_commit();
+        seed.set_peer_id(1).unwrap();
+        let nested = seed
+            .get_map("parent")
+            .insert_container("child", TextHandler::new_detached())
+            .unwrap();
+        nested.insert(0, "cached child", PosType::Unicode).unwrap();
+        seed.get_text("text")
+            .insert(0, "styled text", PosType::Unicode)
+            .unwrap();
+        seed.get_movable_list("order").insert(0, "a").unwrap();
+        seed.get_movable_list("order").insert(1, "b").unwrap();
+        seed.get_text("deleted")
+            .insert(0, "old", PosType::Unicode)
+            .unwrap();
+        seed.commit_then_renew();
+        let snapshot = seed
+            .export(ExportMode::shallow_snapshot(&seed.oplog_frontiers()))
+            .unwrap();
+        let doc = LoroDoc::new_auto_commit();
+        doc.import(&snapshot).unwrap();
+        doc.set_peer_id(2).unwrap();
+        doc.get_movable_list("order").mov(0, 1).unwrap();
+        doc.get_map("parent").delete("child").unwrap();
+        doc.get_map("parent")
+            .insert_container("new", MapHandler::new_detached())
+            .unwrap()
+            .insert("value", 17)
+            .unwrap();
+        doc.get_text("text")
+            .mark(0, 6, "comment", "dead-style".into(), PosType::Unicode)
+            .unwrap();
+        doc.get_text("text").delete(0, 6, PosType::Unicode).unwrap();
+        doc.delete_root_container(ContainerID::new_root("deleted", ContainerType::Text));
+        doc.commit_then_renew();
+        doc.set_peer_id(3).unwrap();
+        doc.get_map("parent").insert("other-peer", true).unwrap();
+        doc.commit_then_renew();
+        let base = doc.oplog_frontiers();
+        let blocks = doc.get_list("blocks");
+        let value_at_base = doc.get_deep_value();
+        for i in 0..32 {
+            blocks
+                .insert_container(i, TextHandler::new_detached())
+                .unwrap()
+                .insert(0, "tail text", PosType::Unicode)
+                .unwrap();
+        }
+        doc.commit_then_renew();
+        let value = doc.get_deep_value();
+        let head = doc.oplog_frontiers();
+        CACHED_PREFIX_SUCCESSES.with(|count| count.set(0));
+        let forward = doc.export(ExportMode::shallow_snapshot(&base)).unwrap();
+        assert_eq!(CACHED_PREFIX_SUCCESSES.with(std::cell::Cell::get), 1);
+        assert!(forward == legacy_cached_export(&doc, &base));
+        assert_eq!(doc.get_deep_value(), value);
+        assert_eq!(doc.oplog_frontiers(), head);
+        doc.checkout(&base).unwrap();
+        assert_eq!(doc.get_deep_value(), value_at_base);
+        doc.checkout(&head).unwrap();
+        assert_eq!(doc.get_deep_value(), value);
+        let sections = shallow_sections(&forward);
+        let root = KvWrapper::new_mem();
+        root.import(sections.shallow_root_state_bytes).unwrap();
+        assert!(root
+            .get(&ContainerID::new_root("deleted", ContainerType::Text).to_bytes())
+            .is_none());
+        assert!(text_style_values(&root.export(), &root_text_cid())
+            .iter()
+            .all(|(_, value)| *value == LoroValue::Null));
+    }
+
+    #[test]
+    fn cached_prefix_compressed_root_decoded_cap_boundaries_fall_back() {
+        for extra in [0, 1] {
+            let target_size = MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY + extra;
+            let mut payload_len = target_size - 100;
+            let mut prepared = None;
+            for _ in 0..8 {
+                let seed = LoroDoc::new_auto_commit();
+                seed.set_peer_id(1).unwrap();
+                seed.get_map("payload")
+                    .insert("large", "v".repeat(payload_len).as_str())
+                    .unwrap();
+                seed.commit_then_renew();
+                let bytes = seed
+                    .export(ExportMode::shallow_snapshot(&seed.oplog_frontiers()))
+                    .unwrap();
+                let doc = LoroDoc::new_auto_commit();
+                doc.import(&bytes).unwrap();
+                let size = {
+                    let state = doc.app_state().lock();
+                    let cached = state.store.shallow_root_store().unwrap();
+                    let size = cached.store.lock().kv_content_bytes_capped(usize::MAX);
+                    size
+                };
+                if size == target_size {
+                    assert!(bytes.len() < MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY / 8);
+                    prepared = Some(doc);
+                    break;
+                }
+                payload_len = payload_len + target_size - size;
+            }
+            let doc = prepared.expect("construct exact decoded KV boundary");
+            doc.set_peer_id(2).unwrap();
+            doc.get_map("metadata").insert("version", 10).unwrap();
+            doc.commit_then_renew();
+            let base = doc.oplog_frontiers();
+            doc.get_text("tail")
+                .insert(
+                    0,
+                    &"t".repeat(MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE + 1),
+                    PosType::Unicode,
+                )
+                .unwrap();
+            doc.commit_then_renew();
+            CACHED_PREFIX_SUCCESSES.with(|count| count.set(0));
+            CACHED_PREFIX_ATTEMPTS.with(|count| count.set(0));
+            let bytes = doc.export(ExportMode::shallow_snapshot(&base)).unwrap();
+            assert_eq!(CACHED_PREFIX_ATTEMPTS.with(std::cell::Cell::get), 1);
+            assert_eq!(CACHED_PREFIX_SUCCESSES.with(std::cell::Cell::get), 0);
+            assert!(bytes == legacy_cached_export(&doc, &base));
+        }
+    }
+
+    #[test]
+    fn cached_prefix_byte_heavy_prefix_falls_back() {
+        let (doc, _) = cached_prefix_fixture(1, 0);
+        let big = "v".repeat(MAX_PRE_ROOT_BYTES_FOR_FORWARD_REPLAY + 1);
+        doc.get_map("metadata")
+            .insert("large", big.as_str())
+            .unwrap();
+        doc.get_map("metadata").insert("large", "small").unwrap();
+        doc.commit_then_renew();
+        let base = doc.oplog_frontiers();
+        doc.get_text("tail")
+            .insert(
+                0,
+                &"t".repeat(MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE + 1),
+                PosType::Unicode,
+            )
+            .unwrap();
+        doc.commit_then_renew();
+        CACHED_PREFIX_SUCCESSES.with(|count| count.set(0));
+        let bytes = doc.export(ExportMode::shallow_snapshot(&base)).unwrap();
+        assert_eq!(CACHED_PREFIX_SUCCESSES.with(std::cell::Cell::get), 0);
+        assert!(bytes == legacy_cached_export(&doc, &base));
+    }
 
     fn shallow_sections(blob: &[u8]) -> Snapshot {
         let parsed = crate::encoding::parse_header_and_body(blob, true).unwrap();

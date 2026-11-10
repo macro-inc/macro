@@ -1,0 +1,27 @@
+{
+  "scope": "Snapshot-count telemetry component checkpoint",
+  "base": "fdd74f122a235b464b126a6e7723388259e37c60",
+  "invariants": [
+    "No clock in SyncCore",
+    "Pure base/current/cached VV operation counts; unknown base remains unknown",
+    "Host native.tick.duration_ms measures only actual native tick call",
+    "doc.snapshot.save correlated by document.id and snapshot.sequence; buffered native phases are not export wall time",
+    "Snapshot trigger/frontier/covers/commit-before-prune unchanged"
+  ],
+  "validation": {
+    "coreTestsPassed": 177,
+    "hostTelemetryTestsPassed": 4,
+    "candidateSessionTestsPassed": 94,
+    "candidateSessionFiles": 7,
+    "collaborationTypes": "pass",
+    "scopedCheck": "pass on fdd postimage with cached cargo-shear",
+    "workspaceRustAndClippy": "deferred to next serialized heavy-build turn; fdd needs own coherent artifact/integration gates",
+    "tempoDatadogDelivery": "not verified",
+    "inheritedProofScope": "Core177/host4/session94/type results originally on9df component; only host telemetry4 and scoped checks rerun for fdd postimage, no native artifact proof rebound.",
+    "fddHostTelemetryTestsPassed": 4,
+    "fddScopedCheck": "pass"
+  },
+  "checksReceiptSHA256": "92f2cecc75196d4170081c31dc989682fd4847562b3941857e9538bcff668d24",
+  "originalComponentCommit": "662f1a05069345c67cce65fb9aa2ffa4a804738c",
+  "ownerPostimage": "Preserve exact settled entry identity and beforeConsume/afterDrain hooks; capture and clear successful tick sequence before hooks; actual native call alone owns duration span."
+}

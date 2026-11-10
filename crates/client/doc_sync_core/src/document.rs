@@ -29,6 +29,9 @@ pub trait SyncDoc {
     /// concurrent remote op made after the base imports without a rebase.
     fn export_shallow_snapshot(&self, at: &loro::Frontiers) -> Result<Vec<u8>, ExportFailure>;
 
+    /// Pure operation counts for the requested base and current cached shallow root.
+    fn snapshot_stats(&self, at: &loro::Frontiers) -> crate::SnapshotStats;
+
     /// Import `bytes` into a throwaway `LoroDoc` seeded from `snapshot`, peer from the supply
     /// and never committed. Used only by the W-11 poison proof.
     fn probe_import(
