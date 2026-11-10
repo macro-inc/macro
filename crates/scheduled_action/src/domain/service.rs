@@ -876,7 +876,13 @@ where
             .list_in(self.grants.as_ref(), &user_id, scope)
             .await?
             .into_iter()
-            .filter(|action| include_events || matches!(action.trigger, ActionTrigger::Cron { .. }))
+            // Only the plain list has clients that predate event and one-time
+            // triggers; the sub-routine scopes return every trigger type.
+            .filter(|action| {
+                include_events
+                    || scope != ListScope::TopLevel
+                    || matches!(action.trigger, ActionTrigger::Cron { .. })
+            })
             .collect();
 
         let ids: Vec<Uuid> = actions.iter().filter_map(|action| action.id).collect();

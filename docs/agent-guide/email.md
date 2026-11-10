@@ -20,6 +20,17 @@ An email snooze returns its original conversation to the inbox and adds a
 notification to that email row in Home. It has no separate reminder toast or
 detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
+## Account changes
+
+Channel and connected-inbox metadata belongs to the signed-in viewer. During a
+replacement login the shell may retain its previous identity, but these source
+lists wait for fresh authentication. A delayed list response, signature save, or
+inbox-removal rollback must not populate the replacement account. Check this on
+desktop and phone; the backend-free settings signature suite includes controlled
+old channel/link responses in `account-sources.browser.e2e.ts`. That fixture also
+runs the real context publisher over a stand-in cache: published DM labels and
+inbox exclusions must stay with the new account after old responses arrive.
+
 ## Email — `/app/component/mail`
 
 Newly fetched mail, including calendar invitations, stays visible while local
@@ -842,13 +853,23 @@ written message and these controls on desktop and mobile, where sending inserts
 the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
-as `teo+123456@macro.com`, whether or not it is a saved contact. That holds
+as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
-before suggestions loaded. A name or address word that starts with the query
-ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
-the list puts colleagues on the sending inbox's domain first. A chip shows the
-name followed by the address in muted ink.
+before suggestions loaded. Name-word prefixes outrank substring matches;
+`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+input, personal suggestions are recent-first rather than domain/brevity-weighted.
+A chip shows the name followed by the address in muted ink.
+Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
+local windows rather than retaining the address book or searching the server.
+Partial synchronization remains visibly incomplete. Each field owns its query; use
+**Next options** or PageDown for another window. Scoped thread addresses remain
+available, but the same address must not appear twice when the directory also
+finds it. Paging, closing, changing sender and searching must preserve selected
+custom/off-page chips. After selecting a custom address, search for a different
+person and wait for asynchronous results: Enter selects the matching person, never
+toggles the unrelated custom chip. On touch, Next keeps input focus. Automated mailboxes are
+excluded before native limiting, except for complete explicitly typed addresses.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,

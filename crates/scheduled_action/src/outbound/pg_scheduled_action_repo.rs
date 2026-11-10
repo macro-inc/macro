@@ -220,9 +220,9 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
                  run_visibility, template_id, suggestion_id, description,
-                 parent_id, created_by_run_id, child_key)
+                 parent_id, created_by_run_id, child_key, paused_by_parent)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                    $19, $20, $21)
+                    $19, $20, $21, $22)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
@@ -249,6 +249,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             link.map(|link| link.parent_id),
             link.map(|link| link.created_by_run_id),
             link.and_then(|link| link.key.as_ref()).map(SubRoutineKey::as_str),
+            link.is_some_and(|link| link.paused_by_parent),
         )
         .fetch_one(&mut *tx)
         .await

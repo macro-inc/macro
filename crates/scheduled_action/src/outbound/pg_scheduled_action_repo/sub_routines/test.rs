@@ -247,3 +247,27 @@ async fn a_run_in_progress_is_found_by_its_routine_and_by_its_session(pool: PgPo
         )]
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sub_routine_created_off_with_its_parent_keeps_that_mark(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let parent = repo
+        .create_action(sample_action(user_owner(USER_A), "parent"))
+        .await
+        .unwrap();
+    let mut waiting = child_of(&parent, "waits for its parent", None);
+    waiting.enabled = false;
+    waiting.sub_routine.as_mut().unwrap().paused_by_parent = true;
+
+    let created = repo.create_action(waiting).await.unwrap();
+
+    assert!(created.sub_routine.as_ref().unwrap().paused_by_parent);
+    let stored = repo
+        .get_action(&created.id.unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!stored.enabled);
+    assert!(stored.sub_routine.unwrap().paused_by_parent);
+}
