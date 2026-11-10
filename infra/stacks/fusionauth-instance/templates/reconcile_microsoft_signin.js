@@ -33,9 +33,17 @@ function reconcile(user, registration, jwt, id_token, tokens) {
   var linkedEmail = email(jwt && jwt.email) || tokenEmail;
   var verified = id_token ? id_token.xms_edov : undefined;
   var domainVerified =
-    verified === true || verified === 1 || verified === 'true' || verified === '1';
+    verified === true ||
+    verified === 1 ||
+    verified === 'true' ||
+    verified === '1';
 
-  if (!id_token || !tokenEmail || tokenEmail !== linkedEmail || !domainVerified) {
+  if (
+    !id_token ||
+    !tokenEmail ||
+    tokenEmail !== linkedEmail ||
+    !domainVerified
+  ) {
     throw new Error(
       'Microsoft did not verify that this account owns its email address. Sign in with your email instead.'
     );
