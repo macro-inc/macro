@@ -58,7 +58,8 @@
               "product/spreadsheets",
               "product/canvas",
               "product/snippets",
-              "product/databases"
+              "product/databases",
+              "product/forms"
             ]
           },
           "product/email",

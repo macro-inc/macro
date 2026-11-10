@@ -23,6 +23,8 @@ import docsVideo from './assets/docs.mp4';
 import docsPoster from './assets/docs-poster.jpg';
 import driveVideo from './assets/drive.mp4';
 import drivePoster from './assets/drive-poster.jpg';
+import formsVideo from './assets/forms.mp4';
+import formsPoster from './assets/forms-poster.jpg';
 import githubVideo from './assets/github.mp4';
 import githubPoster from './assets/github-poster.jpg';
 import homeVideo from './assets/home.mp4';
@@ -376,6 +378,23 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: skillsVideo,
     posterUrl: skillsPoster,
+  },
+  forms: {
+    id: 'forms',
+    get title() {
+      return t('tutorials.formsTitle');
+    },
+    get block() {
+      return t('tutorials.formsBlock');
+    },
+    get snippet() {
+      return t('tutorials.formsSnippet');
+    },
+    get length() {
+      return t('tutorials.formsLength');
+    },
+    videoUrl: formsVideo,
+    posterUrl: formsPoster,
   },
   drive: {
     id: 'drive',

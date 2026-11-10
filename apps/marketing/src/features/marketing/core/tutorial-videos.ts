@@ -15,6 +15,7 @@ export const TUTORIAL_VIDEOS = {
   macrod: { title: 'Learn how to use MacroD', length: '1:17' },
   routines: { title: 'Learn how to use Routines', length: '1:01' },
   skills: { title: 'Learn how to use Skills', length: '0:49' },
+  forms: { title: 'Learn how to use Forms', length: '0:49' },
   github: { title: 'Learn how to use Macro with GitHub', length: '1:01' },
   'company-graph': { title: 'Company graph', length: '0:47' },
   'ai-tagging': { title: 'AI tagging', length: '0:39' },

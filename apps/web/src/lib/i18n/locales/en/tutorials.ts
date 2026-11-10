@@ -98,6 +98,11 @@ export default {
   skillsBlock: 'Skills',
   skillsSnippet: 'Instructions your agents follow, shared with your whole team',
   skillsLength: '0:49',
+  formsTitle: 'Learn how to use Forms',
+  formsBlock: 'Forms',
+  formsSnippet:
+    'Every form is backed by a database, so there’s nothing to export',
+  formsLength: '0:49',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:

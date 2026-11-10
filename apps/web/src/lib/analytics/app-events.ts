@@ -284,6 +284,7 @@ export type AppEvents = {
       | 'macro-macrod'
       | 'macro-routines'
       | 'macro-skills'
+      | 'macro-forms'
       | 'macro-github'
       | 'macro-scheduling'
       | 'macro-whatsapp'

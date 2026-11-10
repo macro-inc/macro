@@ -21,6 +21,7 @@ export const TUTORIAL_IDS = [
   'macrod',
   'routines',
   'skills',
+  'forms',
   'github',
   'scheduling',
   'whatsapp',

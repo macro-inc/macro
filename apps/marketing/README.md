@@ -485,7 +485,7 @@ together.
 The videos and posters live once, in `public/video/tutorials/` (mp4s through
 Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
 them from there, including Blocks without a page here (Home, Drive, Calendar,
-Scheduling, Spreadsheets, Databases, Canvas, Routines, Skills).
+Scheduling, Spreadsheets, Databases, Forms, Canvas, Routines, Skills).
 `TUTORIAL_VIDEOS` also lists the videos about Macro as a whole (Company graph,
 AI tagging, Automatic permissions, Workspace events, Unified search), so pages
 built for them can open the same dialog. Replacing a video keeps its

@@ -7,6 +7,7 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import FormIcon from '@icon/system/regular/clipboard-text.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -77,6 +78,7 @@ const TILES: Record<TutorialId, Tile> = {
   macrod: { icon: LaptopIcon, from: '--color-cyan', to: '--color-violet' },
   routines: { icon: RoutineIcon, from: '--color-amber', to: '--color-yellow' },
   skills: { icon: SkillIcon, from: '--color-blue', to: '--color-teal' },
+  forms: { icon: FormIcon, from: '--color-pink', to: '--color-purple' },
   github: {
     icon: GitPullRequestIcon,
     from: '--color-purple',
