@@ -20,7 +20,8 @@ use super::check;
 use super::model::{
     Change, ChangeAction, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
     IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea,
-    RewriteIdea, RunMode, RunProgress, RunSettled, SessionKind, StoredRun, SuggestIdea, Target,
+    RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError, SessionKind, SessionState,
+    StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
     GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
@@ -71,6 +72,17 @@ struct Runs {
 
 /// Runs one settle pass checks at most.
 const SETTLE_BATCH: u16 = 50;
+
+/// How long a run's session may wait for its prompt before the run is
+/// given up as never started.
+const PROMPT_GRACE: chrono::Duration = chrono::Duration::minutes(10);
+
+/// Failed checks in a row, on a run at least [`UNREADABLE_AFTER`] old, that
+/// give it up as failed.
+const UNREADABLE_CHECKS: u16 = 10;
+
+/// How old a run must be before unreadable checks give it up.
+const UNREADABLE_AFTER: chrono::Duration = chrono::Duration::minutes(30);
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
 where
@@ -137,10 +149,10 @@ where
                 (Some(RunSettled::Failed), _) => RunProgress::Failed,
                 (None, Some(runs)) => runs
                     .sessions
-                    .progress(run)
+                    .state(run)
                     .await
                     .inspect_err(|error| tracing::warn!(?error, "could not read a run's session"))
-                    .unwrap_or(RunProgress::Unknown),
+                    .map_or(RunProgress::Unknown, SessionState::progress),
                 (None, None) => RunProgress::Unknown,
             };
             idea.run = Some(IdeaRun {
@@ -178,6 +190,7 @@ where
             action: Uuid::now_v7(),
             started_at: Utc::now(),
             settled: None,
+            failed_checks: 0,
         };
         span.record("agent.session.id", run.session.to_string());
         // The row first, so two accepts at once start one session.
@@ -190,17 +203,27 @@ where
             span.record("idea.run.outcome", "not_runnable");
             return Err(IdeaError::NotFound);
         }
-        if let Err(error) = runs.sessions.start(&run, prompt).await {
-            // The idea may be accepted again to retry.
-            let _ = self
-                .repo
-                .settle_run(run.session, RunSettled::Failed, &[], Utc::now())
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(?error, "could not settle a run that failed to start")
-                });
-            span.record("idea.run.outcome", "failed_to_start");
-            return Err(IdeaError::Internal(error));
+        match runs.sessions.start(&run, prompt).await {
+            Ok(()) => {}
+            Err(RunStartError::NotStarted(error)) => {
+                // Nothing runs: the idea may be accepted again to retry.
+                let _ = self
+                    .repo
+                    .settle_run(run.session, RunSettled::Failed, &[], Utc::now())
+                    .await
+                    .inspect_err(|error| {
+                        tracing::warn!(?error, "could not settle a run that failed to start")
+                    });
+                span.record("idea.run.outcome", "failed_to_start");
+                return Err(IdeaError::Internal(error));
+            }
+            Err(RunStartError::Uncertain(error)) => {
+                // The prompt may be running: the run stays unsettled, so no
+                // second session starts, and its session settles it.
+                tracing::warn!(?error, "a run's prompt may not have arrived");
+                span.record("idea.run.outcome", "uncertain");
+                return Ok(());
+            }
         }
         span.record("idea.run.outcome", "started");
         tracing::info!(event = "ideas.run_started");
@@ -465,15 +488,36 @@ where
             .map_err(IdeaError::internal)?;
         let mut settled = 0;
         for run in &unsettled {
-            let progress = match runs.sessions.progress(run).await {
-                Ok(progress) => progress,
+            let now = Utc::now();
+            let state = runs.sessions.state(run).await;
+            if let Err(error) = self.repo.checked_run(run.session, state.is_ok(), now).await {
+                tracing::warn!(?error, "could not record a run's check");
+            }
+            let (outcome, produced) = match state {
                 Err(error) => {
                     tracing::warn!(?error, "could not read a run's session");
-                    continue;
+                    // A session that never opened can't be read: after enough
+                    // failed checks on an old run, it is given up.
+                    if run.failed_checks + 1 < UNREADABLE_CHECKS
+                        || now - run.started_at < UNREADABLE_AFTER
+                    {
+                        continue;
+                    }
+                    tracing::warn!(event = "ideas.run_unreadable");
+                    (RunSettled::Failed, Vec::new())
                 }
-            };
-            let (outcome, produced) = match progress {
-                RunProgress::Finished => {
+                Ok(SessionState::AwaitingPrompt) => {
+                    if now - run.started_at < PROMPT_GRACE {
+                        continue;
+                    }
+                    // Its prompt never arrived: nothing ran, so the idea may
+                    // be tried again.
+                    if let Err(error) = runs.sessions.discard(run).await {
+                        tracing::warn!(?error, "could not delete a run's unprompted session");
+                    }
+                    (RunSettled::Failed, Vec::new())
+                }
+                Ok(SessionState::Finished) => {
                     // The session is the result; the items it made come with it.
                     let mut produced = vec![Target {
                         entity_type: model_entity::EntityType::AgentSession,
@@ -489,15 +533,14 @@ where
                     }
                     (RunSettled::Finished, produced)
                 }
-                RunProgress::Failed => (RunSettled::Failed, Vec::new()),
-                RunProgress::Running
-                | RunProgress::NeedsApproval
-                | RunProgress::NeedsInput
-                | RunProgress::Unknown => continue,
+                Ok(SessionState::Failed) => (RunSettled::Failed, Vec::new()),
+                Ok(
+                    SessionState::Running | SessionState::NeedsApproval | SessionState::NeedsInput,
+                ) => continue,
             };
             let moved = self
                 .repo
-                .settle_run(run.session, outcome, &produced, Utc::now())
+                .settle_run(run.session, outcome, &produced, now)
                 .await
                 .map_err(IdeaError::internal)?;
             settled += usize::from(moved);

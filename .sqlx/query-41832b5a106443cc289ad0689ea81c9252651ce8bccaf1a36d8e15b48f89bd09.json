@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea_run\n               SET checked_at = $2,\n                   failed_checks = CASE WHEN $3 THEN 0 ELSE LEAST(failed_checks + 1, 1000) END\n               WHERE session_id = $1 AND settled_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "41832b5a106443cc289ad0689ea81c9252651ce8bccaf1a36d8e15b48f89bd09"
+}

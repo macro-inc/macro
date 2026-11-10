@@ -168,31 +168,37 @@ impl PgIdeaRepo {
     }
 }
 
-fn run(
-    session: Uuid,
-    idea: Uuid,
+/// An `idea_run` row as the run queries select it.
+struct RunRow {
+    session_id: Uuid,
+    idea_id: Uuid,
     user_id: String,
-    agent: &str,
-    action: Uuid,
+    agent_id: String,
+    action_id: Uuid,
     started_at: DateTime<Utc>,
     outcome: Option<String>,
-) -> Result<StoredRun, PgIdeaRepoError> {
+    failed_checks: i16,
+}
+
+fn run(row: RunRow) -> Result<StoredRun, PgIdeaRepoError> {
     Ok(StoredRun {
-        session,
-        idea,
-        user: MacroUserIdStr::try_from(user_id)
+        session: row.session_id,
+        idea: row.idea_id,
+        user: MacroUserIdStr::try_from(row.user_id)
             .map_err(|_| PgIdeaRepoError::Decode("a run's user".to_owned()))?,
-        agent: agent
+        agent: row
+            .agent_id
             .parse()
             .map_err(|_| PgIdeaRepoError::Decode("a run's agent".to_owned()))?,
-        action,
-        started_at,
-        settled: match outcome.as_deref() {
+        action: row.action_id,
+        started_at: row.started_at,
+        settled: match row.outcome.as_deref() {
             None => None,
             Some("finished") => Some(RunSettled::Finished),
             Some("failed") => Some(RunSettled::Failed),
             Some(other) => return Err(PgIdeaRepoError::Decode(format!("run outcome `{other}`"))),
         },
+        failed_checks: u16::try_from(row.failed_checks).unwrap_or(0),
     })
 }
 
@@ -376,52 +382,51 @@ impl IdeaRepo for PgIdeaRepo {
     }
 
     async fn latest_runs(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<StoredRun>, Self::Err> {
-        let rows = sqlx::query!(
+        let rows = sqlx::query_as!(
+            RunRow,
             r#"SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,
-                      started_at, outcome
+                      started_at, outcome, failed_checks
                FROM idea_run WHERE user_id = $1
                ORDER BY idea_id, started_at DESC"#,
             user.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter()
-            .map(|row| {
-                run(
-                    row.session_id,
-                    row.idea_id,
-                    row.user_id,
-                    &row.agent_id,
-                    row.action_id,
-                    row.started_at,
-                    row.outcome,
-                )
-            })
-            .collect()
+        rows.into_iter().map(run).collect()
     }
 
     async fn unsettled_runs(&self, limit: u16) -> Result<Vec<StoredRun>, Self::Err> {
-        let rows = sqlx::query!(
-            r#"SELECT session_id, idea_id, user_id, agent_id, action_id, started_at, outcome
+        let rows = sqlx::query_as!(
+            RunRow,
+            r#"SELECT session_id, idea_id, user_id, agent_id, action_id, started_at, outcome,
+                      failed_checks
                FROM idea_run WHERE settled_at IS NULL
-               ORDER BY started_at LIMIT $1"#,
+               ORDER BY checked_at NULLS FIRST, started_at LIMIT $1"#,
             i64::from(limit),
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter()
-            .map(|row| {
-                run(
-                    row.session_id,
-                    row.idea_id,
-                    row.user_id,
-                    &row.agent_id,
-                    row.action_id,
-                    row.started_at,
-                    row.outcome,
-                )
-            })
-            .collect()
+        rows.into_iter().map(run).collect()
+    }
+
+    async fn checked_run(
+        &self,
+        session: Uuid,
+        read: bool,
+        at: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE idea_run
+               SET checked_at = $2,
+                   failed_checks = CASE WHEN $3 THEN 0 ELSE LEAST(failed_checks + 1, 1000) END
+               WHERE session_id = $1 AND settled_at IS NULL"#,
+            session,
+            at,
+            read,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn settle_run(

@@ -789,38 +789,60 @@ async fn a_routine_idea_follows_its_suggestion(pool: PgPool) {
     assert_eq!(*h.dismissal.0.lock().unwrap(), [suggestion]);
 }
 
-/// Run sessions whose progress the test sets, recording what they started.
+/// How the fake's next start goes.
+#[derive(Default, Clone, Copy, PartialEq)]
+enum StartsAs {
+    #[default]
+    Started,
+    NotStarted,
+    Uncertain,
+}
+
+/// Run sessions whose state the test sets, recording what they started and
+/// deleted. A session with no state set can't be read.
 #[derive(Default)]
 struct FakeRuns {
     started: Mutex<Vec<(Uuid, String)>>,
-    progress: Mutex<HashMap<Uuid, RunProgress>>,
-    fail_start: std::sync::atomic::AtomicBool,
+    state: Mutex<HashMap<Uuid, SessionState>>,
+    discarded: Mutex<Vec<Uuid>>,
+    starts_as: Mutex<StartsAs>,
+}
+
+impl FakeRuns {
+    fn set(&self, session: Uuid, state: SessionState) {
+        self.state.lock().unwrap().insert(session, state);
+    }
 }
 
 #[async_trait::async_trait]
 impl RunSessions for FakeRuns {
-    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), rootcause::Report> {
-        if self.fail_start.load(std::sync::atomic::Ordering::SeqCst) {
-            return Err(rootcause::report!("the session didn't open"));
+    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), RunStartError> {
+        let starts_as = *self.starts_as.lock().unwrap();
+        if starts_as == StartsAs::NotStarted {
+            return Err(RunStartError::NotStarted(rootcause::report!(
+                "the session didn't open"
+            )));
         }
         self.started
             .lock()
             .unwrap()
             .push((run.session, prompt.to_owned()));
-        self.progress
-            .lock()
-            .unwrap()
-            .insert(run.session, RunProgress::Running);
+        self.set(run.session, SessionState::Running);
+        if starts_as == StartsAs::Uncertain {
+            return Err(RunStartError::Uncertain(rootcause::report!(
+                "the prompt's answer was lost"
+            )));
+        }
         Ok(())
     }
 
-    async fn progress(&self, run: &StoredRun) -> Result<RunProgress, rootcause::Report> {
-        Ok(*self
-            .progress
+    async fn state(&self, run: &StoredRun) -> Result<SessionState, rootcause::Report> {
+        self.state
             .lock()
             .unwrap()
             .get(&run.session)
-            .unwrap_or(&RunProgress::Unknown))
+            .copied()
+            .ok_or_else(|| rootcause::report!("no such session"))
     }
 
     async fn produced(&self, _: &StoredRun) -> Result<Vec<Target>, rootcause::Report> {
@@ -829,6 +851,12 @@ impl RunSessions for FakeRuns {
             entity_id: "comparison-doc".to_owned(),
             part_id: None,
         }])
+    }
+
+    async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report> {
+        self.discarded.lock().unwrap().push(run.session);
+        self.state.lock().unwrap().remove(&run.session);
+        Ok(())
     }
 }
 
@@ -873,18 +901,12 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
     );
 
     // Waiting for an approval shows on the idea, for the person to answer.
-    runs.progress
-        .lock()
-        .unwrap()
-        .insert(run_session, RunProgress::NeedsApproval);
+    runs.set(run_session, SessionState::NeedsApproval);
     assert_eq!(h.first_run().await.progress, RunProgress::NeedsApproval);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
 
     // Once its session finished, the idea is done with what the run made.
-    runs.progress
-        .lock()
-        .unwrap()
-        .insert(run_session, RunProgress::Finished);
+    runs.set(run_session, SessionState::Finished);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     assert_eq!(h.service.settle_runs().await.unwrap(), 0);
     let done = PgIdeaRepo::new(h.pool.clone())
@@ -925,20 +947,15 @@ async fn a_failed_run_is_retried_by_accepting_again(pool: PgPool) {
         .idea
         .unwrap();
     // A session that never opened leaves the idea to try again.
-    runs.fail_start
-        .store(true, std::sync::atomic::Ordering::SeqCst);
+    *runs.starts_as.lock().unwrap() = StartsAs::NotStarted;
     assert!(matches!(
         h.service.accept(&user(OWNER), idea.id).await,
         Err(IdeaError::Internal(_))
     ));
-    runs.fail_start
-        .store(false, std::sync::atomic::Ordering::SeqCst);
+    *runs.starts_as.lock().unwrap() = StartsAs::Started;
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
-    runs.progress
-        .lock()
-        .unwrap()
-        .insert(run_session, RunProgress::Failed);
+    runs.set(run_session, SessionState::Failed);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     let feed = h.service.feed(&user(OWNER), None).await.unwrap();
     assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
@@ -976,6 +993,108 @@ async fn accepting_any_other_idea_starts_no_run(pool: PgPool) {
             .iter()
             .all(|idea| idea.run.is_none())
     );
+}
+
+/// Age every run of the test's ideas by `by`, as if started that long ago.
+async fn age_runs(pool: &PgPool, by: chrono::Duration) {
+    sqlx::query!(
+        "UPDATE idea_run SET started_at = started_at - $1::interval",
+        sqlx::postgres::types::PgInterval::try_from(by).unwrap(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// A prompt whose answer was lost may be running: the run stays, no second
+/// session starts, and the session settles it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_whose_prompt_may_have_arrived_is_never_started_twice(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
+        .await
+        .idea
+        .unwrap();
+    *runs.starts_as.lock().unwrap() = StartsAs::Uncertain;
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    *runs.starts_as.lock().unwrap() = StartsAs::Started;
+    assert!(matches!(
+        h.service.accept(&user(OWNER), idea.id).await,
+        Err(IdeaError::NotFound)
+    ));
+    assert_eq!(runs.started.lock().unwrap().len(), 1);
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.set(run_session, SessionState::Finished);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+}
+
+/// A session that never took its prompt is deleted after a while, and the
+/// idea may run again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_whose_prompt_never_arrived_is_given_up_and_runs_again(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
+        .await
+        .idea
+        .unwrap();
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.set(run_session, SessionState::AwaitingPrompt);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(runs.started.lock().unwrap().len(), 2);
+}
+
+/// A run whose session can't be read is given up only after many failed
+/// checks on an old run, never on a passing error.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_whose_session_cant_be_read_is_given_up_only_when_old(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
+        .await
+        .idea
+        .unwrap();
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.state.lock().unwrap().remove(&run_session);
+    for _ in 0..UNREADABLE_CHECKS {
+        assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    }
+    age_runs(&h.pool, chrono::Duration::minutes(31)).await;
+    // A read that works again starts the count over.
+    runs.set(run_session, SessionState::Running);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    runs.state.lock().unwrap().remove(&run_session);
+    for _ in 1..UNREADABLE_CHECKS {
+        assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    }
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

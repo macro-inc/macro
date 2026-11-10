@@ -235,3 +235,64 @@ async fn a_broken_row_about_an_item_is_skipped_and_the_rest_found(pool: PgPool) 
         vec![good]
     );
 }
+
+/// Unsettled runs come least recently checked first, so runs that keep
+/// waiting never hide the others from a small batch.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unsettled_runs_take_turns(pool: PgPool) {
+    use crate::domain::model::StoredRun;
+    insert_user(&pool, OWNER).await;
+    let generation = generation(&pool).await;
+    let repo = PgIdeaRepo::new(pool);
+    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let limits = Limits {
+        open: 30,
+        new_per_generation: 10,
+    };
+    let mut sessions = Vec::new();
+    for n in 0..2 {
+        let idea = Uuid::now_v7();
+        let change = Change {
+            session: Uuid::now_v7(),
+            generation,
+            action: ChangeAction::Created,
+            old: None,
+            new: None,
+            reason: None,
+            at: Utc::now(),
+        };
+        repo.create(
+            &user,
+            idea,
+            &NewKind::Prompt {
+                run_mode: RunMode::Background,
+            },
+            &content(&format!("idea:{n}")),
+            limits,
+            &change,
+        )
+        .await
+        .unwrap();
+        let run = StoredRun {
+            session: Uuid::now_v7(),
+            idea,
+            user: user.clone(),
+            agent: Uuid::now_v7(),
+            action: Uuid::now_v7(),
+            started_at: Utc::now() - chrono::Duration::minutes(10 - n),
+            settled: None,
+            failed_checks: 0,
+        };
+        assert!(repo.start_run(&run).await.unwrap());
+        sessions.push(run.session);
+    }
+    let first = repo.unsettled_runs(1).await.unwrap();
+    assert_eq!(first[0].session, sessions[0]);
+    repo.checked_run(sessions[0], false, Utc::now())
+        .await
+        .unwrap();
+    let next = repo.unsettled_runs(1).await.unwrap();
+    assert_eq!(next[0].session, sessions[1]);
+    let both = repo.unsettled_runs(2).await.unwrap();
+    assert_eq!(both[1].failed_checks, 1);
+}

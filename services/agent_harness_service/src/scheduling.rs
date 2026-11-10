@@ -207,11 +207,12 @@ impl ideas::domain::ports::RunSessions for IdeaRunSessions {
         &self,
         run: &ideas::domain::model::StoredRun,
         prompt: &str,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<(), ideas::domain::model::RunStartError> {
         use agent_session::domain::routines::{
-            PrepareRoutineSession, PromptRoutineSession, RoutineSessions as _,
+            PrepareRoutineSession, PromptRoutineSession, RoutineSessionError, RoutineSessions as _,
             ValidateRoutineSession,
         };
+        use ideas::domain::model::RunStartError;
         let action = Self::action(run);
         self.sessions
             .prepare(PrepareRoutineSession {
@@ -231,46 +232,71 @@ impl ideas::domain::ports::RunSessions for IdeaRunSessions {
                 billing: agent_session::domain::model::SessionBilling::Billable,
             })
             .await
-            .map_err(|error| rootcause::report!("{error:?}"))?;
-        self.sessions
+            .map_err(|error| RunStartError::NotStarted(rootcause::report!("{error:?}")))?;
+        match self
+            .sessions
             .prompt(PromptRoutineSession {
-                action,
+                action: action.clone(),
                 prompt: prompt.to_owned(),
                 context: None,
             })
             .await
-            .map_err(|error| rootcause::report!("{error:?}"))?;
-        Ok(())
+        {
+            Ok(_) => Ok(()),
+            // It may be running: never prompt it again.
+            Err(RoutineSessionError::PromptDeliveryUnknown) => Err(RunStartError::Uncertain(
+                rootcause::report!("{:?}", RoutineSessionError::PromptDeliveryUnknown),
+            )),
+            // Refused outright: nothing runs once the session is gone.
+            Err(error) => match self.sessions.delete(action).await {
+                Ok(()) => Err(RunStartError::NotStarted(rootcause::report!("{error:?}"))),
+                Err(delete) => Err(RunStartError::Uncertain(rootcause::report!(
+                    "prompt refused ({error:?}); its session wasn't deleted ({delete:?})"
+                ))),
+            },
+        }
     }
 
-    async fn progress(
+    async fn state(
         &self,
         run: &ideas::domain::model::StoredRun,
-    ) -> Result<ideas::domain::model::RunProgress, rootcause::Report> {
+    ) -> Result<ideas::domain::model::SessionState, rootcause::Report> {
         use agent_session::domain::routines::{
             RoutineActionStatus, RoutinePendingReason, RoutineSessions as _,
         };
-        use ideas::domain::model::RunProgress;
+        use ideas::domain::model::SessionState;
         let status = self
             .sessions
             .status(Self::action(run))
             .await
             .map_err(|error| rootcause::report!("{error:?}"))?;
         Ok(match status {
-            RoutineActionStatus::Succeeded => RunProgress::Finished,
-            RoutineActionStatus::Failed(_) => RunProgress::Failed,
+            RoutineActionStatus::Succeeded => SessionState::Finished,
+            RoutineActionStatus::Failed(_) => SessionState::Failed,
             RoutineActionStatus::Pending(RoutinePendingReason::Permission) => {
-                RunProgress::NeedsApproval
+                SessionState::NeedsApproval
             }
             RoutineActionStatus::Pending(RoutinePendingReason::Elicitation) => {
-                RunProgress::NeedsInput
+                SessionState::NeedsInput
+            }
+            RoutineActionStatus::Pending(RoutinePendingReason::AwaitingPrompt) => {
+                SessionState::AwaitingPrompt
             }
             RoutineActionStatus::Pending(
-                RoutinePendingReason::AwaitingPrompt
-                | RoutinePendingReason::Running
-                | RoutinePendingReason::Disconnected,
-            ) => RunProgress::Running,
+                RoutinePendingReason::Running | RoutinePendingReason::Disconnected,
+            ) => SessionState::Running,
         })
+    }
+
+    async fn discard(
+        &self,
+        run: &ideas::domain::model::StoredRun,
+    ) -> Result<(), rootcause::Report> {
+        use agent_session::domain::routines::RoutineSessions as _;
+        self.sessions
+            .delete(Self::action(run))
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
     }
 
     async fn produced(
