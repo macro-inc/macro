@@ -95,8 +95,7 @@ impl RedisDatabase {
     reason = "Explicit test Redis URL and nextest's exclusive group-slot assignment"
 )]
 fn configuration() -> (String, u8) {
-    let base =
-        std::env::var("REDIS_URI").expect("provider-global parity scenarios require REDIS_URI");
+    let base = std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
     let group = std::env::var("NEXTEST_TEST_GROUP").ok();
     let slot = std::env::var("NEXTEST_TEST_GROUP_SLOT").ok();
     (base, database_index(group.as_deref(), slot.as_deref()))
