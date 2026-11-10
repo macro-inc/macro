@@ -53,11 +53,11 @@ workspace-members = [
     "xtask_doppler_bins",
     "xtask_graphql_soup_schema",
     "xtask_graphql_schema_compat",
-    "xtask_cache_wasm",
     "xtask_kafka_topics",
     "xtask_workflows",
     "xtask_local",
     "xtask_ports",
+    "xtask_local_telemetry",
     "macro_sync_service_jwt",
     "sync_service",
     "sync_service_bebop_schema",
@@ -65,6 +65,8 @@ workspace-members = [
     # maybe_send: zero-dep marker traits used by cache-core; must stay
     # wasm-safe (workspace-hack pulls native-only deps like mio into wasm32).
     "maybe_send",
+    # Pure name matching shared by server reads and the WASM cache.
+    "subsequence_match",
     # agent_fold and the leaf crates its model is built from. The fold runs in
     # the browser (crates/client/agent-fold-wasm) as well as in services, so
     # the whole chain must stay wasm-safe; workspace-hack pulls tokio, and so

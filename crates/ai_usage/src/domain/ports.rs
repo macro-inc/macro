@@ -81,6 +81,9 @@ pub enum AiFeature {
     EmailFocus,
     /// Web search and page fetches for agents and the SDK.
     WebSearch,
+    /// An agent session its opener made non-billable: background work the
+    /// user didn't ask for turn by turn. Recorded, never billed.
+    NonBillableAgentSession,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id
@@ -261,6 +264,8 @@ pub struct CompletionUsage {
     /// The agent's own API key that paid for the completion, if Macro
     /// did not. Such usage is recorded but never counted toward a quota.
     pub agent_api_key_id: Option<Uuid>,
+    /// The agent session whose work made the completion, if any.
+    pub agent_session_id: Option<Uuid>,
     /// Token/audio/credit usage and cost.
     pub cost: Usage,
 }
@@ -314,6 +319,8 @@ pub struct UsageEvent {
     pub amount: UsageAmount,
     /// The agent's own API key that paid for the completion, if any.
     pub agent_api_key_id: Option<Uuid>,
+    /// The agent session whose work made the completion, if any.
+    pub agent_session_id: Option<Uuid>,
 }
 
 /// The constant attributes of a logical completion (everything except the model
@@ -332,6 +339,9 @@ pub struct UsageContext {
     /// The agent's own API key the completion runs on, when Macro is
     /// not paying for it.
     pub agent_api_key_id: Option<Uuid>,
+    /// The agent session whose work the completion is part of: its turns,
+    /// the tools and subagents they call, and its titles.
+    pub agent_session_id: Option<Uuid>,
 }
 
 impl UsageContext {
@@ -342,6 +352,7 @@ impl UsageContext {
             user,
             entity: None,
             agent_api_key_id: None,
+            agent_session_id: None,
         }
     }
 
@@ -352,12 +363,19 @@ impl UsageContext {
             user: SYSTEM_USER_ID.clone(),
             entity: None,
             agent_api_key_id: None,
+            agent_session_id: None,
         }
     }
 
     /// Set the related entity.
     pub fn with_entity(mut self, entity: Option<Uuid>) -> Self {
         self.entity = entity;
+        self
+    }
+
+    /// Set the agent session the completion is part of.
+    pub fn with_agent_session(mut self, agent_session_id: Option<Uuid>) -> Self {
+        self.agent_session_id = agent_session_id;
         self
     }
 
@@ -380,6 +398,7 @@ impl UsageContext {
             model,
             amount,
             agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
         }
     }
 
@@ -392,6 +411,7 @@ impl UsageContext {
             model,
             amount: UsageAmount::Audio { duration },
             agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
         }
     }
 
@@ -404,6 +424,7 @@ impl UsageContext {
             model,
             amount: UsageAmount::ProviderCredits { credits },
             agent_api_key_id: self.agent_api_key_id,
+            agent_session_id: self.agent_session_id,
         }
     }
 }

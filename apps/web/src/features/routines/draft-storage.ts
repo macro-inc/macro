@@ -26,6 +26,7 @@ const draftFields = {
   enabled: z.boolean().optional(),
   runVisibility: z.enum(['listed', 'unlisted']).optional(),
   description: z.string().optional(),
+  suggestionId: z.string().optional(),
   dangerouslyOperateAsUser: z.boolean().optional(),
   // What AI created while drafting; drafts from before have none.
   created: z

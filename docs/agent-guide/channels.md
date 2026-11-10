@@ -37,6 +37,34 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+## Composer focus and Esc
+
+Every way of opening a conversation follows one rule
+(`arrivalFocusesComposer` in `features/channel/composer-arrival-focus.ts`):
+a click, Enter or Cmd+K focuses its composer, whether it opens from the Chat
+sidebar, Home, the Notifications list, search, a link or mention, a
+notification, or in a new split. Arrow keys and `j` / `k` preview conversations
+and keep focus in the list. Back/Forward, switching to a view that restores its
+last conversation (the sidebar or a `g` shortcut), and taps leave focus where
+it is, so the on-screen keyboard stays down. A click or Enter on the
+conversation already open focuses its composer again.
+
+Esc steps back out. In the composer, the first Esc moves focus to the message
+list; anything in the composer that answers Esc first still does (mention and
+emoji menus, dictation, a message being edited, a thread reply). On the message
+list, a selected message or focused thread reply clears first, then Esc returns
+to the list the conversation was opened from, on its row: the Chat sidebar,
+Home, or the Notifications list. A conversation that arrived from elsewhere
+(Cmd+K, a link, search) returns to its row in the Chat sidebar of the same
+split, and a collapsed Chat sidebar opens for it. Without a list, including a
+narrow split that shows the conversation alone, Esc reaches the split as before
+(clearing a selection, leaving spotlight).
+
+To check this, arrow through several conversations (focus stays in the list),
+press Enter (the composer takes focus), press Esc twice (back on the same row),
+then click another conversation and type. Repeat from Home and from the
+Notifications list.
+
 ## Message links
 
 A channel search namespace with `threadId` and no `messageId` targets the thread
@@ -118,6 +146,13 @@ three-step flow:
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+The channel header's Invite dialog and Participants add controls use paged personal
+suggestions, not a complete address book. Next options (or PageDown) replaces the
+window; selected people and typed external addresses remain independent. Existing
+members are excluded, including anyone who joins while selected. A large roster
+can leave a short or empty page with more options available. Add all teammates
+uses the current team roster, never just the visible suggestion page.
 
 The first message in a DM to an unregistered recipient sends an email saying
 `<sender email> sent you a message on Macro`, with the message and a **View message**
@@ -682,7 +717,7 @@ channel participant. Custom agents keep their channel visibility rules
 regardless of which harness they use.
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor** or **Connect Codex** chip. Each chip
-opens Settings → Agents → Runtimes, where the connection cards in the reader's rollout are visible. The same
+opens Settings → Agents → Machines, where the connection cards in the reader's rollout are visible. The same
 chip reads **connected** after setup; mention the bot again to start a session.
 Codex also prompts for a cloud environment when ChatGPT is connected but no
 environment has been saved. New sessions use that environment on
@@ -696,7 +731,7 @@ a configured backend for end-to-end verification.
 Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
 no Cursor API key opens no session: the Cursor bot replies in the thread that
 `@cursor` runs on their own account and is not connected yet, followed by a
-**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Runtimes; once a key
+**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Machines; once a key
 is saved the same chip reads **Cursor connected** and stops navigating. The
 original mention is not replayed - mention `@cursor` again after connecting.
 

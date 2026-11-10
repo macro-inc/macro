@@ -21,20 +21,29 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useChannelsContext } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { recipientEntityMapper } from '@core/user/combinedRecipient';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
+import {
+  assertQueryAccount,
+  captureQueryAccount,
+} from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import {
+  useCombinedRecipientSource,
+  useContactRecipientSource,
+} from '@queries/contacts/recipient-source';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { useSendMessageMutation } from '@queries/messages/mutations';
 import type { LexicalEditor } from 'lexical';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { RosterAgent } from '../agents-view/core/roster';
 import {
@@ -47,10 +56,11 @@ import { searchNeedsKeywords } from '../next-soup/core/search-filters';
 import { compileSearchQuery } from '../next-soup/core/search-query';
 import { createGlobalSearchOpener } from '../next-soup/open-search';
 import type { InputCapabilities } from './context/capabilities';
-import type { InputFields, Submission } from './core/input';
+import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
 import { resolveSearchFilters } from './core/search';
+import { useInputPeople } from './queries/input-people';
 import { createTaskFieldSource } from './queries/task-field-source';
 
 /** Production adapters reuse each destination's mutation and permission boundary. */
@@ -59,6 +69,7 @@ export function createInputActions(
   userId: string,
   host: {
     navigate: (content: SplitContent) => void;
+    intent: Accessor<Intent | undefined>;
     onNoteTagsChange?: (value: string) => void;
     submitSurface?: PromptSubmitSurface;
     referredFrom?: ReferredFrom;
@@ -82,7 +93,24 @@ export function createInputActions(
   const group = useGetOrCreatePrivateChannelMutation();
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
-  const combined = useCombinedRecipients();
+  const channelContext = useChannelsContext();
+  const messageChannels = createMemo(() =>
+    channelContext
+      .channels()
+      .filter((channel) => channel.participants.length > 2)
+      .map(recipientEntityMapper('channel'))
+  );
+  const destinations = createMemo(() =>
+    messageChannels().map(
+      (channel): Recipient => ({
+        id: channel.id,
+        label: channel.data.name ?? 'Channel',
+        kind: 'channel',
+      })
+    )
+  );
+  const people = useInputPeople(fields, host.intent, destinations);
+  const person = people.lookup;
   const searchableChannels = useQuickAccess().useList('channel', 'dm');
   const searchChannels = (): Recipient[] =>
     searchableChannels.items().map((channel) => ({
@@ -90,7 +118,11 @@ export function createInputActions(
       label: channel.data.name,
       kind: 'channel',
     }));
-  const taskFields = createTaskFieldSource(userId);
+  const taskFields = createTaskFieldSource(
+    userId,
+    fields,
+    () => host.intent() === 'task'
+  );
   const noteTags = createDocumentComposerTags(
     {},
     {
@@ -98,26 +130,6 @@ export function createInputActions(
       onChange: (values) => host.onNoteTagsChange?.(JSON.stringify(values)),
     }
   );
-  const people = (): Recipient[] =>
-    combined.users().map((p) => ({
-      id: p.id,
-      label: p.data.name ?? p.data.email ?? p.id,
-      email: p.data.email ?? undefined,
-      kind: 'user',
-    }));
-  const messageRecipients = () => [
-    ...combined.users().filter((option) => option.kind === 'user'),
-    ...combined.channels(),
-  ];
-  const destinations = (): Recipient[] =>
-    messageRecipients().map((option) => ({
-      id: option.id,
-      label:
-        option.data.name ??
-        (option.kind === 'user' ? option.data.email : 'Channel'),
-      email: option.kind === 'user' ? option.data.email : undefined,
-      kind: option.kind,
-    }));
   const calendars = () =>
     calendarsQuery.isSuccess
       ? calendarsQuery.data.filter((c) => c.isWritable)
@@ -146,10 +158,10 @@ export function createInputActions(
       setConnectingGoogle(false);
     }
   };
-  const recipients = (f: InputFields, message = false) =>
+  const recipients = (f: Pick<InputFields, 'recipients'>, message = false) =>
     resolveRecipients(
       f.recipients,
-      message ? destinations() : people(),
+      message ? people.destinations : person,
       !message
     );
   const model = () => fields().model || (catalog.currentModel() ?? '');
@@ -164,8 +176,8 @@ export function createInputActions(
       return 'Connect or choose an email account';
     const unresolved = [
       ...recipients(input.fields).unresolved,
-      ...resolveRecipients(input.fields.cc, people(), true).unresolved,
-      ...resolveRecipients(input.fields.bcc, people(), true).unresolved,
+      ...resolveRecipients(input.fields.cc, person, true).unresolved,
+      ...resolveRecipients(input.fields.bcc, person, true).unresolved,
     ];
     if (unresolved.length)
       return `Choose a specific recipient for ${unresolved.join(', ')}`;
@@ -175,7 +187,7 @@ export function createInputActions(
       return 'Choose valid recurrence settings';
     if (!selectedCalendar(fields))
       return 'Connect or choose a writable calendar';
-    if (resolveRecipients(fields.guests, people(), true).unresolved.length)
+    if (resolveRecipients(fields.guests, person, true).unresolved.length)
       return 'Choose an email address for each guest';
   };
   const validateMessage = (fields: InputFields) => {
@@ -193,7 +205,7 @@ export function createInputActions(
     if (input.intent === 'search') {
       const filters = resolveSearchFilters(
         input.fields.searchFilters,
-        people(),
+        person,
         searchChannels(),
         email.accounts.inboxes()
       );
@@ -215,7 +227,7 @@ export function createInputActions(
       if (problem) return problem;
       if (
         ![input.fields.recipients, input.fields.cc, input.fields.bcc].some(
-          (value) => resolveRecipients(value, people(), true).recipients.length
+          (value) => resolveRecipients(value, person, true).recipients.length
         )
       )
         return 'Choose a recipient';
@@ -240,10 +252,10 @@ export function createInputActions(
         email: p.email!,
         name: p.label,
       })),
-      cc: resolveRecipients(input.fields.cc, people(), true).recipients.map(
+      cc: resolveRecipients(input.fields.cc, person, true).recipients.map(
         (p) => ({ email: p.email!, name: p.label })
       ),
-      bcc: resolveRecipients(input.fields.bcc, people(), true).recipients.map(
+      bcc: resolveRecipients(input.fields.bcc, person, true).recipients.map(
         (p) => ({ email: p.email!, name: p.label })
       ),
       body_text: body?.bodyText ?? input.fields.body,
@@ -258,11 +270,14 @@ export function createInputActions(
   const saveEmailDraft: InputCapabilities['saveEmailDraft'] = async (input) => {
     const problem = validateEmailDraft(input);
     if (problem) throw new Error(problem);
+    const account = captureQueryAccount(userId);
+    assertQueryAccount(account);
     const inboxId = selectedInbox(input.fields)!.id;
     const saved = await email.drafts.saveDraft({
       draft: emailMessage(input),
       inboxId,
     });
+    assertQueryAccount(account);
     emailDrafts.delete(input.id);
     return {
       message: 'Email draft saved',
@@ -275,6 +290,8 @@ export function createInputActions(
   const submit: InputCapabilities['submit'] = async (input) => {
     const problem = validate(input);
     if (problem) throw new Error(problem);
+    const account = captureQueryAccount(userId);
+    assertQueryAccount(account);
     const f = input.fields;
     return await match(input.intent)
       .with('ai', async () => {
@@ -282,6 +299,7 @@ export function createInputActions(
           content: input.text,
           attachments: chat.attachments.attached(),
         });
+        assertQueryAccount(account);
         const agent = selectedAgent();
         const id = startPendingSession({
           prompt,
@@ -307,7 +325,7 @@ export function createInputActions(
       .with('search', async () => {
         const { state } = resolveSearchFilters(
           f.searchFilters,
-          people(),
+          person,
           searchChannels(),
           email.accounts.inboxes()
         );
@@ -336,8 +354,11 @@ export function createInputActions(
         };
       })
       .with('task', async () => {
-        const definitions = await taskFields.createDefinitions();
+        // Snapshot resolved identities before yielding; a new inference request
+        // must not replace the submitted assignees with default values.
         const properties = taskFields.values(f).values;
+        const definitions = await taskFields.createDefinitions();
+        assertQueryAccount(account);
         const created = await createTaskWithProperties(
           f.title,
           f.body,
@@ -355,6 +376,7 @@ export function createInputActions(
         const inboxId = selectedInbox(f)!.id;
         const message = emailMessage(input);
         const saved = await email.drafts.saveDraft({ draft: message, inboxId });
+        assertQueryAccount(account);
         emailDrafts.set(input.id, saved);
         const sent = await email.delivery.sendMessage({
           inboxId,
@@ -397,7 +419,7 @@ export function createInputActions(
               )
             : undefined,
           location: f.location || undefined,
-          attendees: resolveRecipients(f.guests, people(), true).recipients.map(
+          attendees: resolveRecipients(f.guests, person, true).recipients.map(
             (p) => ({ email: p.email! })
           ),
         });
@@ -420,6 +442,7 @@ export function createInputActions(
                     recipients: targets.map((p) => p.id),
                   })
                 ).channel_id;
+        assertQueryAccount(account);
         await sendMessage.mutateAsync({
           parent: { type: 'channel', id: channelId },
           senderId: userId,
@@ -442,7 +465,9 @@ export function createInputActions(
     captureMessageMentions: (read: (() => ItemMention[]) | undefined) => {
       messageMentions = read;
     },
-    messageRecipients,
+    messageChannels,
+    createRecipientSource: useContactRecipientSource,
+    createMessageSource: useCombinedRecipientSource,
     captureCalendarEditor: (editor: LexicalEditor | undefined) => {
       calendarEditor = editor;
     },
@@ -455,8 +480,7 @@ export function createInputActions(
     saveEmailDraft,
     validate,
     validateEmailDraft,
-    people,
-    destinations,
+    person,
     recipients,
     calendars,
     selectedCalendar,

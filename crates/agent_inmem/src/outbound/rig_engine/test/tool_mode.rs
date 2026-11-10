@@ -46,6 +46,7 @@ async fn remote(
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: TurnPurpose::Conversation,
         session_id: AgentSessionId::new(),

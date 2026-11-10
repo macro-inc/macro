@@ -63,6 +63,8 @@ pub mod get_location;
 pub mod get_short_id;
 pub mod get_text;
 #[cfg(feature = "ai_tools")]
+pub mod markdown_body;
+#[cfg(feature = "ai_tools")]
 pub mod presentation;
 pub mod put_interaction;
 pub mod put_snapshot;
@@ -149,8 +151,25 @@ struct NameTooLongErrorResponse {
     message: &'static str,
 }
 
+#[derive(serde::Serialize)]
+struct CodedErrorResponse {
+    code: &'static str,
+    message: &'static str,
+}
+
 impl IntoResponse for DocumentError {
     fn into_response(self) -> axum::response::Response {
+        if let DocumentError::EmailAttachmentNotFound = &self {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(CodedErrorResponse {
+                    code: model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+                    message: "email attachment not found",
+                }),
+            )
+                .into_response();
+        }
+
         if let DocumentError::NameTooLong { max } = &self {
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -164,7 +183,9 @@ impl IntoResponse for DocumentError {
         }
 
         let status_code = match &self {
-            DocumentError::NotFound(_) => StatusCode::NOT_FOUND,
+            DocumentError::NotFound(_) | DocumentError::EmailAttachmentNotFound => {
+                StatusCode::NOT_FOUND
+            }
             DocumentError::Unauthorized => StatusCode::UNAUTHORIZED,
             DocumentError::Gone => StatusCode::GONE,
             DocumentError::Conflict(_) => StatusCode::CONFLICT,
@@ -223,7 +244,8 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
-    /// The editing worker that places comment marks in markdown documents.
+    /// The editing worker that places comment marks in markdown documents and
+    /// serves revision-checked markdown body reads and writes.
     #[cfg(feature = "ai_tools")]
     pub editing_worker: Arc<DefaultEditingWorker>,
     /// The shared message service comment threads are posted through.
@@ -492,6 +514,13 @@ where
             "/{document_id}/illustrator",
             axum::routing::get(design_files::read_illustrator_document_handler::<T, Svc, Auth>),
         );
+
+    #[cfg(feature = "ai_tools")]
+    let document_id_routes = document_id_routes.route(
+        "/{document_id}/markdown",
+        axum::routing::get(markdown_body::get_markdown_handler::<T, Svc, Auth>)
+            .put(markdown_body::write_markdown_handler::<T, Svc, Auth>),
+    );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),

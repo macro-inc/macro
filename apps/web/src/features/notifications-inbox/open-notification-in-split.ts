@@ -58,9 +58,16 @@ export function openNotificationInSplit(
   row: NotificationInboxRow,
   options: OpenOptions & { notification?: UnifiedNotification }
 ) {
+  // A runtime has no page of its own: its newest notification opens
+  // Settings → Machines at it, with Share open when a request waits there.
+  const notification =
+    options.notification ??
+    (row.content.entity.type === 'harness'
+      ? row.content.notifications[0]
+      : undefined);
   fireAndForget(
-    options.notification
-      ? openStackNotification(row, options.notification, options)
+    notification
+      ? openStackNotification(row, notification, options)
       : openEntityInSplitFromUnifiedList(rowEntity(row), {
           openInNewSplit: options.newSplit,
           splitHandle: options.splitHandle,

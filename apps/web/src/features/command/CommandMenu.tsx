@@ -507,6 +507,26 @@ function CommandSearchMenu(
     }
   });
 
+  let previousWindow: string | undefined;
+  let previousWindowQuery = '';
+  createEffect(
+    on(
+      () => pagination?.windowKey?.(),
+      (key) => {
+        if (key === undefined) return;
+        if (
+          previousWindow !== undefined &&
+          previousWindow !== key &&
+          previousWindowQuery === query()
+        ) {
+          listController.setSelectedIndex(0, { scrollIntoView: true });
+        }
+        previousWindow = key;
+        previousWindowQuery = query();
+      }
+    )
+  );
+
   // Skip past the search row only onto a real result — when the query has
   // no results the rows below are fallbacks (ask AI), and the search row
   // should stay the default.

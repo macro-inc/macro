@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
   ServiceTargetGroup,
 } from '../../packages/resources';
@@ -240,6 +241,7 @@ export class CalendarService extends pulumi.ComponentResource {
               memory: stack === 'prod' ? 1024 : 512,
               environment: [
                 ...containerEnvVars,
+                versionEnvironment(image.image.imageUri),
                 {
                   name: 'BASE_URL',
                   value: this.domain,
