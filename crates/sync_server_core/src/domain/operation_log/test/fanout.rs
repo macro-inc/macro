@@ -41,19 +41,20 @@ fn durable_fanout_survives_marker_parent_and_notification_crash_boundaries() {
             } else {
                 assert!(result.is_err(), "{boundary}");
             }
-            let events_guard = store.events.borrow();
-            let events = &events_guard[before_events..];
-            assert!(
-                events
-                    .iter()
-                    .position(|event| *event == "fanout-put")
-                    .unwrap()
-                    < events
+            {
+                let events_guard = store.events.borrow();
+                let events = &events_guard[before_events..];
+                assert!(
+                    events
                         .iter()
-                        .rposition(|event| *event == "pending")
-                        .unwrap_or(events.len())
-            );
-            drop(events_guard);
+                        .position(|event| *event == "fanout-put")
+                        .unwrap()
+                        < events
+                            .iter()
+                            .rposition(|event| *event == "pending")
+                            .unwrap_or(events.len())
+                );
+            }
             store.fail_pending.set(false);
             store.fail_archive.set(false);
             // The reader always understands activated debt, even with the writer

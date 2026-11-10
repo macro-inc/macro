@@ -243,7 +243,7 @@ deny = [
     "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only
     "lambda_runtime_api_client", # External crate allowed to use tracing-subscriber
-    "lexical_client",            # Route-span and content-redaction tests only (dev-dependency)
+    "lexical_client",            # Test helpers only (dev-dependency and optional test-utils)
     "loom",                      # External concurrency testing dependency
     "macro_entrypoint",
     "macro_authorization",      # Credential-redaction span tests only
