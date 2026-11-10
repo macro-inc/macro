@@ -810,6 +810,7 @@ export function ViewNavigationControls() {
   return (
     <Show when={ws?.aside.isCollapsed() || ws?.aside.isOverlay()}>
       <SplitPanel.ControlGroup
+        class="pointer-events-auto"
         inert={ws?.aside.isOverlay()}
         aria-hidden={ws?.aside.isOverlay()}
       >

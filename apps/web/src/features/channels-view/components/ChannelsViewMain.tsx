@@ -4,6 +4,7 @@ import { type JSX, Show } from 'solid-js';
 
 export function ChannelsViewMain(props: {
   mobileLayout: boolean;
+  hasDetail?: boolean;
   children: JSX.Element;
 }) {
   return (
@@ -17,7 +18,7 @@ export function ChannelsViewMain(props: {
           : undefined
       }
     >
-      <Show when={isTouchDevice() && !props.mobileLayout}>
+      <Show when={isTouchDevice() && !props.mobileLayout && !props.hasDetail}>
         <ViewShell.Header class="empty:hidden">
           <ViewSidebar.Toggle action="expand" presentation="pill" />
         </ViewShell.Header>

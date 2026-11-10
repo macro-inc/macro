@@ -1,17 +1,18 @@
-import {
-  useViewShell,
-  ViewShell,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
+import {
+  type ChannelPreviewSelection,
+  markChannelNotificationsSeenOnOpen,
+  navigateChannelEntityToTarget,
+} from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { TutorialPill } from '@app/features/video-tutorials';
 import { SplitRouter } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
+import { ChannelDetailLayout } from '@channel/Channel/ChannelDetailLayout';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { ChannelAccessDenied } from '@channel/ChannelAccessDenied';
@@ -19,14 +20,19 @@ import { ChannelUnavailable } from '@channel/components/ChannelUnavailable';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { isPendingDirectMessageId } from '@channel/primitives/pending-direct-messages';
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useIsAuthenticated } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ListEntityMetadataQueryProvider } from '@entity';
+import { type ChannelEntity, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import {
   createContext,
@@ -34,6 +40,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
   Show,
   useContext,
@@ -42,6 +49,7 @@ import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelDetailView } from './components/ChannelDetailView';
 import { MAX_PINNED_CHANNELS } from './components/ChannelPins';
 import { ChannelsMobileView } from './components/ChannelsMobileView';
+import { ChannelsTouchSidebar } from './components/ChannelsTouchSidebar';
 import { ChannelsViewMain } from './components/ChannelsViewMain';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
@@ -70,6 +78,56 @@ export type ChannelsViewProps = {
 
 // Mounted inside the mobile list's Suspense boundary.
 function MobileChannelsList(props: { sources: ChannelsSources }) {
+  const { mobileLayout, selectedChannel, setSelectedChannel } =
+    useChannelsView();
+  const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
+  const orchestrator = useGlobalBlockOrchestrator();
+  let activation = 0;
+  onCleanup(() => activation++);
+  const refreshSelection = async (
+    channel: ChannelEntity,
+    selection: ChannelPreviewSelection,
+    request: number,
+    reaim: boolean
+  ) => {
+    const hydrated = await hydrateChannelNotificationSelection(
+      channel,
+      notificationSource.withLocalOverrides
+    );
+    const current = selectedChannel();
+    if (
+      request !== activation ||
+      mobileLayout() ||
+      !panel.handle.isActive() ||
+      current?.id !== selection.id ||
+      current.target
+    )
+      return;
+    markChannelNotificationsSeenOnOpen(
+      withEntityNotifications(hydrated, notificationSource),
+      notificationSource,
+      { channelReadScope: 'top-level' }
+    );
+    if (reaim) await navigateChannelEntityToTarget(selection, orchestrator);
+  };
+  const openPreview = (channel: ChannelEntity) => {
+    const request = ++activation;
+    if (channel.isParticipant === false) return false;
+    const previous = selectedChannel();
+    const selection: ChannelPreviewSelection = {
+      type: 'channel',
+      id: channel.id,
+    };
+    if (!setSelectedChannel(selection)) return false;
+    if (previous?.id === selection.id) {
+      fireAndForget(
+        refreshSelection(channel, selection, request, !previous.target),
+        'channels-view'
+      );
+    }
+    return true;
+  };
   const listChannels = useChannelListSearchPool();
   const mobileSearchText = () => '';
   const mobileSearchSource = createChannelSearchSource({
@@ -98,6 +156,7 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
       pinned={pinned()}
       searchQuery={mobileSearchText()}
       onClearSearch={() => SearchState.setQuery('')}
+      openPreview={mobileLayout() ? undefined : openPreview}
     />
   );
 }
@@ -155,15 +214,14 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 }
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const shell = useViewShell();
-  const { state, tab, mobileLayout, sectionsLoading } = useChannelsView();
-  const threadsTab = () => !mobileLayout() && tab() === 'threads';
+  const { state, tab, mobileLayout, sectionsLoading, selectedChannel } =
+    useChannelsView();
+  const threadsTab = () => !isTouchDevice() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
     (scope) => {
-      if (mobileLayout() && scope === 'recents') return true;
-      if (mobileLayout() && shell.aside.isCollapsed()) return false;
+      if (isTouchDevice()) return scope === 'recents';
       if (sectionsLoading()) return false;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
@@ -173,13 +231,16 @@ function ChannelsViewRoot() {
     },
     (group) => state.sortBy[group]
   );
-  onMount(() => panel.handle.setDisplayName('Channels'));
+  onMount(() => {
+    panel.handle.setDisplayName('Channels');
+    panel.handle.updateMeta?.({ splitPanelLayout: 'composable' });
+  });
 
   return (
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Show
-          when={mobileLayout() || !sectionsLoading()}
+          when={isTouchDevice() || !sectionsLoading()}
           fallback={
             <div class="grid size-full place-items-center">
               <SpinnerIcon
@@ -202,15 +263,29 @@ function ChannelsViewRoot() {
                   />
                 }
               >
-                <DesktopChannelsRail
-                  sources={sources}
-                  searchOpen={railSearchOpen()}
-                  onSearchOpenChange={setRailSearchOpen}
-                />
+                <Show
+                  when={isTouchDevice()}
+                  fallback={
+                    <DesktopChannelsRail
+                      sources={sources}
+                      searchOpen={railSearchOpen()}
+                      onSearchOpenChange={setRailSearchOpen}
+                    />
+                  }
+                >
+                  <ChannelsTouchSidebar>
+                    <MaybeSoupEntityActionDrawerManager>
+                      <MobileChannelsList sources={sources} />
+                    </MaybeSoupEntityActionDrawerManager>
+                  </ChannelsTouchSidebar>
+                </Show>
               </DebugSuspense>
             </ViewShell.Aside>
           </Show>
-          <ChannelsViewMain mobileLayout={mobileLayout()}>
+          <ChannelsViewMain
+            mobileLayout={mobileLayout()}
+            hasDetail={!!selectedChannel()}
+          >
             <Show
               when={!mobileLayout()}
               fallback={
@@ -357,12 +432,16 @@ function ChannelDetailRouteContent() {
       <Show
         when={visibleChannel()}
         fallback={
-          <>
-            <ViewShell.TopBar>
-              <span class="truncate text-sm font-semibold">
-                {loaded()?.name ?? 'Conversation'}
-              </span>
-            </ViewShell.TopBar>
+          <ChannelDetailLayout
+            scrollBehindHeader={false}
+            header={
+              <ViewShell.TopBar class="touch:flex touch:h-10 touch:px-0 touch:py-0">
+                <span class="truncate text-sm font-semibold">
+                  {loaded()?.name ?? 'Conversation'}
+                </span>
+              </ViewShell.TopBar>
+            }
+          >
             <Show when={unavailable()} fallback={<ChannelLoading />}>
               <Show
                 when={deniedChannelId()}
@@ -383,7 +462,7 @@ function ChannelDetailRouteContent() {
                 )}
               </Show>
             </Show>
-          </>
+          </ChannelDetailLayout>
         }
       >
         {(channel) => (

@@ -240,6 +240,18 @@ describe('calendar layout registration', () => {
   });
 });
 
+describe('Chat layout registration', () => {
+  it('owns its pane chrome on touch as well as desktop', () => {
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+    state.touch = () => true;
+    expect(resolveComponent('channels').initialMeta).toMatchObject({
+      splitPanelLayout: 'composable',
+    });
+  });
+});
+
 describe('activity registration', () => {
   it('redirects a disabled feed to inbox without mounting or tracking it', async () => {
     await renderActivity();

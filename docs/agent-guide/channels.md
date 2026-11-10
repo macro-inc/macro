@@ -1025,7 +1025,7 @@ in place until the result arrives.
 
 ## Chat navigation rail
 
-With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list.
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; narrow touch layouts, which have no detail pane, show it in the empty conversation list.
 
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
@@ -1072,7 +1072,12 @@ collapsible with no conversation selected and while showing Threads. At 720px
 or narrower, touch shows only the full-frame Recent conversation list and
 full-screen navigation, with no sidebar, expand button, or reserved navigation
 row. Only the safe-area top inset precedes the list. Wider touch panes use the
-sidebar and inline conversation selection like desktop.
+same pinned Recent conversation feed as narrow touch, docked on the left
+with inline conversation selection on the right. The desktop sidebar groups,
+tabs, and rollout state do not change the touch feed. Open conversations keep the
+floating touch title/menu, call, and invite islands inside the preview pane;
+messages scroll behind that header with the same safe-area gutter as list views.
+Re-selecting the open conversation refreshes its read state and jumps to latest.
 
 ### Sidebar redesign rollout
 
@@ -1384,7 +1389,7 @@ From a custom-section heading in the middle of the list, use both `[` and `]`;
 each shortcut must move to the adjacent heading rather than the Team channels
 heading.
 
-On touch layouts, Channels shows only the Recent conversation feed, with channel
+At every touch width, Channels shows only the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
 rail, a 44px avatar, and a divider inset to the text column. The first six
 favorited channels (favorite order) are pinned in a three-across grid above the

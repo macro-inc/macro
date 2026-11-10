@@ -92,7 +92,10 @@ export function FloatRegionHost(props: {
           // Only the chrome pins itself — accessory contributions (compose /
           // reply bars) keep rem sizing.
           'pointer-events-none absolute inset-x-0 bottom-0 z-mobile-nav-bar flex flex-col gap-(--mobile-chrome-gutter) pb-(--mobile-chrome-gutter)',
-          isNativeMobilePlatform() && 'pb-[max(28px,var(--safe-bottom,0px))]',
+          isNativeMobilePlatform() &&
+            (props.navigationEdge === 'left' || props.navigationEdge === 'right'
+              ? 'pb-[max(var(--mobile-chrome-gutter),var(--safe-bottom,0px))]'
+              : 'pb-[max(28px,var(--safe-bottom,0px))]'),
           isPlatform('android') &&
             'pb-[calc(var(--safe-bottom,0px)+var(--mobile-chrome-gutter))]',
           virtualKeyboardVisible() && 'pb-(--mobile-chrome-gutter)'

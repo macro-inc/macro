@@ -117,6 +117,141 @@ test('phone Chat has no navigation row or extra gap and wide Chat retains sideba
   await expect(expand).toBeVisible();
 });
 
+test('wide touch Chat docks the phone feed beside its conversation preview', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?channels'
+  );
+  const navigation = page.getByRole('complementary', {
+    name: 'Chat navigation',
+  });
+  await expect(navigation).toBeVisible();
+  const list = navigation.getByRole('tree', { name: 'Recent conversations' });
+  await expect(list).toBeVisible();
+  await navigation
+    .getByRole('button', { name: 'Conversation 1', exact: true })
+    .tap();
+  const preview = page.getByTestId('channel-preview');
+  await expect(preview).toHaveText('Conversation 1 preview');
+  const bounds = await page.evaluate(() => ({
+    listRight: document
+      .querySelector('[data-testid="channel-scroll"]')!
+      .getBoundingClientRect().right,
+    previewLeft: document
+      .querySelector('[data-testid="channel-preview"]')!
+      .getBoundingClientRect().left,
+    rowTop: document
+      .querySelector('[data-channel-row="0"]')!
+      .getBoundingClientRect().top,
+    headerBottom: document
+      .querySelector('[data-mobile-list-header]')!
+      .getBoundingClientRect().bottom,
+  }));
+  expect(bounds.previewLeft).toBeGreaterThanOrEqual(bounds.listRight);
+  expect(bounds.rowTop).toBeGreaterThanOrEqual(bounds.headerBottom);
+  await list.evaluate((element) => {
+    element.scrollTop = 200;
+  });
+  const rowTop = await page
+    .locator('[data-channel-row="0"]')
+    .evaluate((element) => element.getBoundingClientRect().top);
+  expect(rowTop).toBeLessThan(bounds.headerBottom);
+  await navigation.getByRole('button', { name: 'Hide navigation' }).tap();
+  const expand = page.getByRole('button', { name: 'Show navigation' });
+  await expect(expand).toBeVisible();
+  await expand.tap();
+  await expect(list).toBeVisible();
+  await expect(preview).toHaveText('Conversation 1 preview');
+});
+
+test('wide touch conversation chrome floats inside its preview with the native side dock', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.route(
+    '**/src/components/app/mobile/float-regions/FloatRegionHost.tsx*',
+    async (route) => {
+      const response = await route.fetch();
+      const source = await response.text();
+      const body = source.replace(
+        /import \{ isNativeMobilePlatform \} from [^;]+;/,
+        'const isNativeMobilePlatform = () => true;'
+      );
+      if (body === source)
+        throw new Error('Native platform import was not found');
+      await route.fulfill({ response, body });
+    }
+  );
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?channels'
+  );
+  await page.locator('[data-channel-row="0"]').tap();
+  const header = page.locator('[data-channel-detail-header]');
+  const main = page.locator('[data-view-shell-main]');
+  const scroll = page.getByTestId('messages-scroll');
+  const reply = page.getByRole('textbox', { name: 'Channel reply' });
+  await expect(header).toBeVisible();
+  await expect(
+    header.getByRole('button', { name: 'Channel menu' })
+  ).toBeVisible();
+  await expect(
+    header.getByRole('button', { name: 'Call', exact: true })
+  ).toBeVisible();
+  await reply.fill('Keep this conversation draft');
+  const bounds = await main.boundingBox();
+  const headerBounds = await header.boundingBox();
+  const scrollBounds = await scroll.boundingBox();
+  expect(headerBounds!.x).toBe(bounds!.x);
+  expect(headerBounds!.width).toBe(bounds!.width);
+  expect(headerBounds!.y).toBe(bounds!.y);
+  expect(scrollBounds!.y).toBe(bounds!.y);
+  expect(scrollBounds!.height).toBe(bounds!.height);
+  const first = page.locator('[data-message="0"]');
+  expect((await first.boundingBox())!.y).toBeGreaterThanOrEqual(
+    headerBounds!.y + headerBounds!.height
+  );
+  expect(
+    (await header.getByRole('button', { name: 'Channel menu' }).boundingBox())!
+      .y
+  ).toBeGreaterThanOrEqual(bounds!.y + 24 + 8);
+  await expect(page.locator('[data-float-region="accessory"]')).toHaveCSS(
+    'margin-left',
+    `${bounds!.x}px`
+  );
+  await expect(
+    page.locator('[data-float-region="accessory"]').locator('..')
+  ).toHaveCSS('padding-bottom', '12px');
+  await page
+    .locator('[data-float-region="accessory"]')
+    .evaluate(async (slot) => {
+      await Promise.all(
+        slot
+          .getAnimations({ subtree: true })
+          .map((animation) => animation.finished)
+      );
+    });
+  const replyBounds = await reply.boundingBox();
+  expect(844 - replyBounds!.y - replyBounds!.height).toBe(12);
+  await scroll.evaluate((element) => {
+    element.scrollTop = 240;
+  });
+  expect((await first.boundingBox())!.y).toBeLessThan(
+    headerBounds!.y + headerBounds!.height
+  );
+  await page.getByRole('button', { name: 'Hide navigation' }).tap();
+  const expand = header.getByRole('button', { name: 'Show navigation' });
+  await expect(expand).toBeVisible();
+  await expand.tap();
+  await expect(
+    page.getByRole('button', { name: 'Hide navigation' })
+  ).toBeVisible();
+  await expect(reply).toHaveValue('Keep this conversation draft');
+});
+
 for (const { width, nested } of [
   { width: 390, nested: false },
   { width: 1000, nested: false },

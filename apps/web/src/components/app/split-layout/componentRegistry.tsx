@@ -376,7 +376,7 @@ registerComponent(
 registerComponent(
   'channels',
   () => <ChannelsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'calls',

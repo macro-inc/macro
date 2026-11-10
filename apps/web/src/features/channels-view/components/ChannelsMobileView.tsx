@@ -55,6 +55,8 @@ export function ChannelsMobileView(props: {
   pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
+  /** Admit a conversation into the host's inline preview when available. */
+  openPreview?: (channel: ChannelEntity) => boolean;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -141,7 +143,11 @@ export function ChannelsMobileView(props: {
     const request = ++opening;
     const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
     try {
+      if (!event.shiftKey && props.openPreview?.(channel)) return;
       await openEntityInSplitFromUnifiedList(channel, {
+        ...(event.shiftKey && props.openPreview
+          ? { openInNewSplit: true }
+          : {}),
         splitHandle: panel.handle,
         referredFrom: 'channels',
         notificationSource,

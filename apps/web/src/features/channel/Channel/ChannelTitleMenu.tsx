@@ -3,7 +3,7 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import { Show } from 'solid-js';
+import { type ComponentProps, type JSX, Show } from 'solid-js';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './channel-actions';
 import { useChannelEntity } from './channel-entity';
 
@@ -17,7 +17,14 @@ import { useChannelEntity } from './channel-entity';
  * resolves the conversation from its id, so a surface that opens a channel
  * cannot forget to offer it.
  */
-export function ChannelTitleMenu(props: { channelId: string }) {
+export function ChannelTitleMenu(props: {
+  channelId: string;
+  children?: JSX.Element;
+  extraItems?: JSX.Element;
+  triggerProps?: ComponentProps<
+    typeof SoupEntityActionsDropdown
+  >['triggerProps'];
+}) {
   const notificationSource = useGlobalNotificationSource();
   const channel = useChannelEntity(() => props.channelId);
   const entity = () => {
@@ -27,15 +34,21 @@ export function ChannelTitleMenu(props: { channelId: string }) {
   const list = toSingleEntityActionListState(entity);
 
   return (
-    <Show when={entity()}>
+    <Show when={entity()} fallback={props.children}>
       {(current) => (
         <SoupEntityActionsDropdown
           entity={current()}
           list={list}
           viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
-          triggerProps={{ size: 'icon-sm', 'aria-label': 'Channel actions' }}
+          triggerProps={
+            props.triggerProps ?? {
+              size: 'icon-sm',
+              'aria-label': 'Channel actions',
+            }
+          }
+          extraItems={props.extraItems}
         >
-          <DotsThreeIcon class="size-4 shrink-0" />
+          {props.children ?? <DotsThreeIcon class="size-4 shrink-0" />}
         </SoupEntityActionsDropdown>
       )}
     </Show>

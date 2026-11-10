@@ -188,9 +188,9 @@ multiline textboxes for TalkBack.
 With the keyboard closed, the Android dock sits above the measured system
 navigation inset with the usual 12px gutter. Check both gesture and three-button
 navigation, including after rotation and display-size changes. Opening the
-keyboard leaves only the usual gutter above it. iOS retains its existing 28px
-minimum bottom padding with the keyboard closed (or its larger safe-area inset)
-and 12px with it open.
+keyboard leaves only the usual gutter above it. With a bottom dock, iOS retains its 28px minimum bottom padding with the keyboard
+closed (or its larger safe-area inset). With side navigation, composers use a
+12px minimum bottom gutter instead; the keyboard-open gutter remains 12px.
 
 Sharing text, links, images, or documents from another Android app opens Share to
 Macro after login. A second incoming share waits behind the current one. Back or
@@ -408,7 +408,8 @@ below. Home's composer is desktop-only. Notifications docks its list beside an i
 preview above 720px on touch; at narrower widths it fills the pane and opens
 items as standalone pages. Chat is
 another touch exception: at 720px or narrower it shows its full-frame
-conversation list without a sidebar or expand button. **Hide navigation** sits to
+conversation list without a sidebar or expand button. Above that width, Chat
+docks the same pinned Recent feed beside its conversation preview. **Hide navigation** sits to
 the right of the sidebar title. After hiding,
 **Show navigation** is the first control in the touch filter row, or the main
 header when that view has no filter row. Each workspace retains its wide-layout

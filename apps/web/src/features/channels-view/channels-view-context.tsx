@@ -45,7 +45,7 @@ type ChannelsViewProviderProps = ContextProviderProps & {
 
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
-  /** The mobile list opens channels in the split; only desktop renders detail. */
+  /** Narrow touch opens channels full-screen; wider panes render inline detail. */
   mobileLayout: () => boolean;
   /** Whether the redesigned desktop sections are enabled. */
   sectionsEnabled: Accessor<boolean>;
