@@ -253,42 +253,97 @@ fn remote_utf16_splices_apply_without_echo_and_missing_created_binding_is_an_err
     Ok(())
 }
 
+fn assert_text_splice_matches_native_update(old: &str, new: &str) -> Result<()> {
+    let doc = new_doc(7)?;
+    doc.get_text("text").insert(0, old)?;
+    doc.commit_with(loro::CommitOptions::new().timestamp(0));
+    let peer = fork_doc(&doc, 9)?;
+    doc.set_peer_id(9)?;
+    let before = doc.oplog_vv();
+    let projected_events = Arc::new(Mutex::new(Vec::new()));
+    let native_events = Arc::new(Mutex::new(Vec::new()));
+    let events = projected_events.clone();
+    let _projected = doc.subscribe_root(Arc::new(move |event| {
+        events
+            .lock()
+            .expect("events")
+            .push(format!("{:?}", event.events));
+    }));
+    let events = native_events.clone();
+    let _native = peer.subscribe_root(Arc::new(move |event| {
+        events
+            .lock()
+            .expect("events")
+            .push(format!("{:?}", event.events));
+    }));
+    let mut stats = ProjectionStats::default();
+    schema::splice_text(&doc.get_text("text"), old, new, &mut stats)?;
+    doc.commit_with(loro::CommitOptions::new().timestamp(1));
+    peer.get_text("text").update(
+        new,
+        loro::UpdateOptions {
+            timeout_ms: None,
+            use_refined_diff: true,
+        },
+    )?;
+    peer.commit_with(loro::CommitOptions::new().timestamp(1));
+    assert_eq!(doc.get_text("text").to_string(), new);
+    assert_eq!(doc.get_deep_value(), peer.get_deep_value());
+    assert_eq!(doc.oplog_vv(), peer.oplog_vv());
+    assert_eq!(doc.oplog_frontiers(), peer.oplog_frontiers());
+    assert_eq!(
+        serde_json::to_value(doc.export_json_updates(&before, &doc.oplog_vv())?).expect("JSON ops"),
+        serde_json::to_value(peer.export_json_updates(&before, &peer.oplog_vv())?)
+            .expect("JSON ops")
+    );
+    assert_eq!(
+        *projected_events.lock().expect("events"),
+        *native_events.lock().expect("events")
+    );
+    let expected = if old == new { 0 } else { 1 };
+    assert_eq!(stats.text_splices, expected);
+    assert_eq!(stats.containers_written, expected);
+    Ok(())
+}
+
 #[test]
 fn text_splices_match_native_update_operations_for_single_and_multiple_regions() -> Result<()> {
     for (old, new) in [
+        ("", ""),
+        ("same😀", "same😀"),
         ("a😀b", "a😀éb"),
         ("abc😀xyz", "aBc😀xyZ"),
         ("a😀b", "ab"),
         ("old", "new"),
         ("", "😀"),
+        ("😀", ""),
+        ("aaaa", "aa"),
+        ("aa", "aaaa"),
+        ("é中😀", "éX中😀"),
+        ("é中😀", "é中X😀"),
+        ("é中😀", "é中😀X"),
+        ("é中😀", "中😀"),
+        ("e\u{301}👩‍💻\r\n中", "e\u{301}👩‍💻\n中"),
     ] {
-        let doc = new_doc(1)?;
-        doc.get_text("text").insert(0, old)?;
-        doc.commit_with(loro::CommitOptions::new().timestamp(0));
-        let peer = fork_doc(&doc, 1)?;
-        let mut stats = ProjectionStats::default();
-        schema::splice_text(&doc.get_text("text"), old, new, &mut stats)?;
-        doc.commit_with(loro::CommitOptions::new().timestamp(1));
-        peer.get_text("text").update(
-            new,
-            loro::UpdateOptions {
-                timeout_ms: None,
-                use_refined_diff: true,
-            },
-        )?;
-        peer.commit_with(loro::CommitOptions::new().timestamp(1));
-        assert_eq!(
-            serde_json::to_value(
-                doc.export_json_updates(&loro::VersionVector::default(), &doc.oplog_vv())?
-            )
-            .expect("JSON ops"),
-            serde_json::to_value(
-                peer.export_json_updates(&loro::VersionVector::default(), &peer.oplog_vv())?
-            )
-            .expect("JSON ops")
-        );
+        assert_text_splice_matches_native_update(old, new)?;
     }
     Ok(())
+}
+
+proptest::proptest! {
+    #[test]
+    fn generated_unicode_splices_preserve_native_operations_and_events(
+        prefix in proptest::collection::vec(proptest::prelude::any::<char>(), 0..24),
+        removed in proptest::collection::vec(proptest::prelude::any::<char>(), 0..16),
+        inserted in proptest::collection::vec(proptest::prelude::any::<char>(), 0..16),
+        suffix in proptest::collection::vec(proptest::prelude::any::<char>(), 0..24),
+    ) {
+        let prefix = prefix.into_iter().collect::<String>();
+        let suffix = suffix.into_iter().collect::<String>();
+        let old = format!("{prefix}{}{suffix}", removed.into_iter().collect::<String>());
+        let new = format!("{prefix}{}{suffix}", inserted.into_iter().collect::<String>());
+        assert_text_splice_matches_native_update(&old, &new).expect("valid Unicode update");
+    }
 }
 
 #[test]

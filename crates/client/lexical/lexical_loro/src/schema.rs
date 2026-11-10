@@ -292,24 +292,31 @@ pub(crate) fn splice_text(
     if old == new {
         return Ok(());
     }
-    let a: Vec<char> = old.chars().collect();
-    let b: Vec<char> = new.chars().collect();
-    let prefix = a.iter().zip(&b).take_while(|(a, b)| a == b).count();
-    let suffix = a
-        .iter()
-        .skip(prefix)
+    let mut prefix = 0;
+    let mut prefix_bytes = 0;
+    for (left, right) in old.chars().zip(new.chars()) {
+        if left != right {
+            break;
+        }
+        prefix += 1;
+        prefix_bytes += left.len_utf8();
+    }
+    // Equal scalar prefixes/suffixes have equal UTF-8 lengths on both sides.
+    // Slice only on those boundaries; Loro positions remain Unicode scalars.
+    let suffix_bytes = old[prefix_bytes..]
+        .chars()
         .rev()
-        .zip(b.iter().skip(prefix).rev())
-        .take_while(|(a, b)| a == b)
-        .count();
-    let removed = a.len() - prefix - suffix;
-    let inserted = b.len() - prefix - suffix;
-    if removed == 0 {
-        let insert: String = b.iter().skip(prefix).take(inserted).collect();
-        text.insert(prefix, &insert)?;
+        .zip(new[prefix_bytes..].chars().rev())
+        .take_while(|(left, right)| left == right)
+        .map(|(ch, _)| ch.len_utf8())
+        .sum::<usize>();
+    let before = &old[prefix_bytes..old.len() - suffix_bytes];
+    let after = &new[prefix_bytes..new.len() - suffix_bytes];
+    if before.is_empty() {
+        text.insert(prefix, after)?;
         stats.text_splices += 1;
-    } else if inserted == 0 {
-        text.delete(prefix, removed)?;
+    } else if after.is_empty() {
+        text.delete(prefix, before.chars().count())?;
         stats.text_splices += 1;
     } else {
         text.update(
