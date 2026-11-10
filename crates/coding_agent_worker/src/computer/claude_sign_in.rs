@@ -193,7 +193,7 @@ impl SignIn {
         pane.press(&["enter"])
             .await
             .map_err(CompleteError::Internal)?;
-        let outcome = tokio::time::timeout(COMPLETE_TIMEOUT, async {
+        tokio::time::timeout(COMPLETE_TIMEOUT, async {
             loop {
                 let screen = pane.screen().await.map_err(CompleteError::Internal)?;
                 match Screen::read(&screen) {
@@ -212,8 +212,7 @@ impl SignIn {
             }
         })
         .await
-        .map_err(|_| CompleteError::Timeout)?;
-        outcome
+        .map_err(|_| CompleteError::Timeout)?
     }
 
     /// Close the pane, ending Claude Code in it.

@@ -38,13 +38,6 @@ impl Host for FakeHost {
         ));
         Ok(())
     }
-
-    fn systemctl(&self, args: &[&str]) -> rootcause::Result<()> {
-        self.calls
-            .borrow_mut()
-            .push(format!("systemctl {}", args.join(" ")));
-        Ok(())
-    }
 }
 
 #[test]

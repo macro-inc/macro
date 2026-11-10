@@ -12,7 +12,6 @@ use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
-use rootcause::option_ext::OptionExt as _;
 use rootcause::prelude::ResultExt as _;
 
 use crate::capabilities::ENROLLED_MARKER;
@@ -97,11 +96,9 @@ pub struct Ownership {
 pub trait Host {
     /// Change a path's owner.
     fn chown(&self, path: &Path, owner: Ownership) -> rootcause::Result<()>;
-    /// Run `systemctl` with these arguments.
-    fn systemctl(&self, args: &[&str]) -> rootcause::Result<()>;
 }
 
-/// The real machine: `chown(2)`, `systemctl`.
+/// The real machine: `chown(2)`.
 pub struct SystemHost;
 
 impl Host for SystemHost {
@@ -110,26 +107,6 @@ impl Host for SystemHost {
             .context(format!("could not chown {}", path.display()))?;
         Ok(())
     }
-
-    fn systemctl(&self, args: &[&str]) -> rootcause::Result<()> {
-        run("systemctl", args)
-    }
-}
-
-fn run(program: &str, args: &[&str]) -> rootcause::Result<()> {
-    let output = std::process::Command::new(program)
-        .args(args)
-        .output()
-        .context(format!("could not run {program}"))?;
-    if !output.status.success() {
-        rootcause::bail!(
-            "{program} {} failed ({}): {}",
-            args.join(" "),
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    Ok(())
 }
 
 /// Enroll this computer, or refresh its token helper when already enrolled.
@@ -353,34 +330,6 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
             gid: metadata.gid(),
         },
     )
-}
-
-/// Write a file only its owner can read.
-pub(crate) fn write_private(path: &Path, contents: &str) -> rootcause::Result<()> {
-    use std::io::Write as _;
-
-    let parent = path
-        .parent()
-        .context("a private file needs a parent directory")?;
-    std::fs::create_dir_all(parent).context("could not create the private directory")?;
-    let temporary = parent.join(format!(".claude-token.{}", uuid::Uuid::now_v7()));
-    let result = (|| -> rootcause::Result<()> {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&temporary)
-            .context("could not create the private token file")?;
-        file.write_all(contents.as_bytes())
-            .context("could not write the token")?;
-        file.sync_all().context("could not sync the token")?;
-        std::fs::rename(&temporary, path).context("could not install the token")?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(temporary);
-    }
-    result
 }
 
 fn write_file(path: &Path, contents: &str, mode: u32) -> rootcause::Result<()> {
