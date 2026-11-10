@@ -197,8 +197,8 @@ pub enum EditDirection {
     Forward,
 }
 
-/// Native Diff; fields retain their domain meaning.
-#[uniffi::remote(Record)]
+/// Owned native patch; render policies remain private to the fact consumer.
+#[derive(Clone, uniffi::Record)]
 pub struct Diff {
     /// Node key generation.
     pub generation: u32,
@@ -208,8 +208,9 @@ pub struct Diff {
     pub view_text_matches: Option<NodeKey>,
     /// Ordered operations.
     pub ops: Vec<DiffOp>,
+    /// Decorators whose current facts must be consumed, including metadata-only changes.
+    pub decorator_keys: Vec<NodeKey>,
 }
-
 /// Native DiffOp; fields retain their domain meaning.
 #[uniffi::remote(Enum)]
 pub enum DiffOp {
@@ -301,6 +302,13 @@ pub enum DiffOp {
         key: NodeKey,
         /// Exported state fields, or no state.
         state: Option<SerializedNode>,
+    },
+    /// Set the consuming view's full-width decorator lifetime.
+    SetDecoratorRevision {
+        /// Generation-aware node identity.
+        key: NodeKey,
+        /// Exact unsigned 64-bit revision.
+        revision: u64,
     },
 }
 

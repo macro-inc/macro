@@ -1,6 +1,9 @@
 //! Copies domain output into owned typed native records.
 use crate::*;
-pub(crate) fn output(out: &SessionOutput) -> Result<FfiOutput, FfiSessionError> {
+pub(crate) fn output(
+    out: &SessionOutput,
+    pending: &mut native_diff::PendingDecorators,
+) -> Result<FfiOutput, FfiSessionError> {
     let view = out
         .view
         .iter()
@@ -8,7 +11,7 @@ pub(crate) fn output(out: &SessionOutput) -> Result<FfiOutput, FfiSessionError> 
             Ok(match effect {
                 ViewEffect::Initialize(InitialView::Editor { diff, state }) => {
                     FfiViewEffect::Initialize {
-                        diff: diff.clone(),
+                        diff: pending.project(diff.clone()),
                         root: state.root.clone(),
                     }
                 }
@@ -23,7 +26,9 @@ pub(crate) fn output(out: &SessionOutput) -> Result<FfiOutput, FfiSessionError> 
                             .collect(),
                     }
                 }
-                ViewEffect::Diff(diff) => FfiViewEffect::Diff { diff: diff.clone() },
+                ViewEffect::Diff(diff) => FfiViewEffect::Diff {
+                    diff: pending.project(diff.clone()),
+                },
                 ViewEffect::Status(status) => FfiViewEffect::Status {
                     status: status.clone(),
                 },

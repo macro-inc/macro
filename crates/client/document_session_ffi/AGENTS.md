@@ -44,3 +44,5 @@ Keep production native FFI dependencies on explicit default-features=false with 
 Enable model-segmentation explicitly for a feature-stable exhaustive ModifyTarget mirror; never substitute it for a missing required host layout answer.
 
 Observe live authorization through effective_access on either session object; never treat the returned Access as a token for a later input or infer it from construction config or UI locks.
+
+Project every core Diff field exhaustively; omit native decorator policies and signatures explicitly, transport only invalidation keys, and append full-u64 SetDecoratorRevision after existing UniFFI tags. A projection or mutation return does not grant consuming-view observation authority.

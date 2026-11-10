@@ -44,7 +44,7 @@ pub enum FfiViewEffect {
     /// Initial editor paint.
     Initialize {
         /// Structural view patch.
-        diff: Diff,
+        diff: FfiDiff,
         /// Serialized root as typed properties.
         root: SerializedNode,
     },
@@ -56,7 +56,7 @@ pub enum FfiViewEffect {
     /// Incremental native editor Diff.
     Diff {
         /// Ordered structured Diff operations.
-        diff: Diff,
+        diff: FfiDiff,
     },
     /// Install a complete resolved selection and typing style.
     SetSelection {
