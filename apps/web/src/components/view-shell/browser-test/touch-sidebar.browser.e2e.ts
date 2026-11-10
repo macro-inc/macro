@@ -18,7 +18,7 @@ test('collapses beside the view title and reopens before touch filters', async (
   });
   const collapse = page.getByRole('button', { name: 'Hide navigation' });
   await expect(navigation).toBeVisible();
-  await expect(navigation).toHaveCSS('width', '352px');
+  await expect(navigation).toHaveCSS('width', '368px');
   await expect(collapse).toBeVisible();
   const title = await navigation
     .getByRole('heading', { name: 'Drive' })

@@ -99,7 +99,7 @@ type ViewShellInternal = ViewShellLayout & {
 };
 
 const RESIZE_GUTTER = 1;
-const WIDE_TOUCH_ASIDE_SCALE = 1.375;
+const WIDE_TOUCH_ASIDE_SCALE = 1.4375;
 
 const ViewShellContext = createContext<ViewShellInternal>();
 

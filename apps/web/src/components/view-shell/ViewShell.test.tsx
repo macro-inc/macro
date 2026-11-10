@@ -176,9 +176,9 @@ describe('ViewShell aside resize preference', () => {
     const [touch, setTouch] = createSignal(true);
     measurement.touch = touch;
     const view = setup(false);
-    expect(view.asideWidth()).toBeCloseTo(352);
+    expect(view.asideWidth()).toBeCloseTo(368);
     view.setWidth(1000);
-    expect(view.asideWidth()).toBeCloseTo(352);
+    expect(view.asideWidth()).toBeCloseTo(368);
     view.setWidth(600);
     fireEvent.click(view.getByRole('button', { name: 'Show navigation' }));
     const overlay = view.container.querySelector<HTMLElement>(
@@ -186,7 +186,7 @@ describe('ViewShell aside resize preference', () => {
     )!;
     expect(Number.parseFloat(overlay.style.width)).toBeCloseTo(256);
     view.setWidth(1200);
-    expect(view.asideWidth()).toBeCloseTo(352);
+    expect(view.asideWidth()).toBeCloseTo(368);
     setTouch(false);
     expect(view.asideWidth()).toBeCloseTo(256);
     expect(view.savedWidth()).toBeNull();
@@ -197,15 +197,15 @@ describe('ViewShell aside resize preference', () => {
     measurement.touch = touch;
     const view = setup(false);
     await view.growAside();
-    expect(view.asideWidth()).toBeCloseTo(372);
-    expect(Number(view.savedWidth())).toBeCloseTo(372 / 1.375);
+    expect(view.asideWidth()).toBeCloseTo(388);
+    expect(Number(view.savedWidth())).toBeCloseTo(388 / 1.4375);
     view.unmount();
     setTouch(false);
     const restored = setup(false);
-    expect(restored.asideWidth()).toBeCloseTo(372 / 1.375);
+    expect(restored.asideWidth()).toBeCloseTo(388 / 1.4375);
     setTouch(true);
-    expect(restored.asideWidth()).toBeCloseTo(372);
-    expect(Number(restored.savedWidth())).toBeCloseTo(372 / 1.375);
+    expect(restored.asideWidth()).toBeCloseTo(388);
+    expect(Number(restored.savedWidth())).toBeCloseTo(388 / 1.4375);
   });
 
   it('keeps a pointer resize from the sidebar minimum stable as the split grows', () => {
