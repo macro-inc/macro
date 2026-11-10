@@ -68,6 +68,7 @@ SET statement_timeout = '60s';
 PREPARE q(uuid, timestamptz, int) AS
   SELECT ... WHERE link_id = $1 AND created_at < $2 ORDER BY created_at DESC LIMIT $3;
 
+SET plan_cache_mode = force_custom_plan;    -- planned for these parameter values
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE q('…', now(), 50);
 
 SET plan_cache_mode = force_generic_plan;   -- the plan a long-lived connection ends up with
@@ -101,9 +102,13 @@ table is known to be small:
   returns one page, or one that spills to disk.
 - `Buffers:` in the hundreds of thousands for one page of results.
 
-And one that makes the plan untrustworthy rather than slow: estimated rows off
-from actual by more than ten times. The plan was chosen for a query that does
-not exist, and can flip in production.
+A `Filter` on a node that fetches one row by key is fine.
+
+One more makes the plan untrustworthy rather than slow: estimated rows off
+from actual by more than ten times on the node that reads a large table (a
+`LIMIT` that stops a scan early does not count). It does not fail the query by
+itself, but the plan was chosen for a query that does not exist and can flip
+in production, which is what step 6 tests.
 
 The rows a query touches should be explainable from its request: the page
 size, the ids passed in, one parent's children. If the count grows with the
@@ -119,7 +124,9 @@ Reproduce that in a second scratch database: load a small fixture (the crate's
 test fixture, or a few rows per table), `ANALYZE`, turn autovacuum off on the
 tables (`ALTER TABLE t SET (autovacuum_enabled = false)`), then run the seed
 from step 3 without its `ANALYZE` and repeat step 4. Don't reuse the first
-database: its statistics already describe the full seed.
+database: its statistics already describe the full seed. Create any index the
+query needs before seeding, because `CREATE INDEX` refreshes the table's row
+count.
 
 ## 7. Pass or fail
 

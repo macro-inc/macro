@@ -32,8 +32,9 @@ The plan must show all four, judged against [table sizes](../query-review/table-
 2. **Every predicate that narrows is index-backed.** It appears under
    `Index Cond`, not `Filter`, on the node that reads the large table.
 3. **Rows touched are bounded by the request.** The actual rows read follow
-   from the page size, the ids passed in, or one parent's children. They do
-   not grow with the tenant, the team, or the table.
+   from the page size, the ids passed in, one parent's children, or an
+   explicit cap written into the query. They do not grow with the tenant, the
+   team, or the table.
 4. **A statement timeout covers it.** Any query whose cost depends on a
    tenant's data runs under `statement_timeout`: `SET LOCAL` in its
    transaction (`crates/notification/src/outbound/retention.rs`,
@@ -42,8 +43,9 @@ The plan must show all four, judged against [table sizes](../query-review/table-
    default, so a slow query otherwise runs until it finishes, long after the
    client gave up and retried. A repository that is handed its pool does not
    know that pool's settings: find where the service builds it, and if it sets
-   no timeout, set one in the query's transaction. A lookup of one row by
-   primary key needs none.
+   no timeout, set one in the query's transaction, a little above the
+   caller's own timeout (the email list uses 15 s against a 12 s client
+   limit). A lookup of one row by primary key needs none.
 
 If a local database is not available, say so and stop before committing the
 query; don't substitute reasoning for the plan.
@@ -108,6 +110,11 @@ reads the whole parent. Sort by the parent's column instead, or put the scope
 key on the child with an index; the second is a schema change to raise with
 the user.
 
+For the newest rows across several keys (`link_id = ANY($1)`), take a page per
+key with `unnest($1) CROSS JOIN LATERAL (… ORDER BY … LIMIT $2)` and sort the
+pages together, as `timeline.rs` does per action. A single `ORDER BY … LIMIT`
+over `= ANY` sorts every key's rows.
+
 `OFFSET` is acceptable only on a set that is small by construction, such as
 one entity's pending requests.
 
@@ -122,6 +129,9 @@ one entity's pending requests.
   `crates/email` writes that same expression.
 - A partial index is used only when the query repeats its `WHERE` predicate in
   a form the planner can prove.
+- An index without the tenant or parent key reads every tenant's matches and
+  filters them afterwards. Prefer the index that leads with the scope key, and
+  check `Rows Removed by Filter` when the planner picks another.
 - A composite index is used from its leading columns: `(link_id, created_at)`
   serves `link_id = $1 AND created_at < $2`, not `created_at < $2` alone.
 - `LIKE '%x'`, `ILIKE`, `OR` across different columns, and `<>` do not narrow
