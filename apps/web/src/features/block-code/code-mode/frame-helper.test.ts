@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   composeProgramDocument,
+  frameHelperScript,
   PROGRAM_DOCUMENT_CSP,
   readRunRequest,
   readSubscriptionMessage,
@@ -183,5 +184,70 @@ describe('readSubscriptionMessage', () => {
       readSubscriptionMessage({ ...subscribe, subscription: '1' }, 't')
     ).toBeUndefined();
     expect(readSubscriptionMessage(null, 't')).toBeUndefined();
+  });
+});
+
+describe('frameHelperScript', () => {
+  const scrolled = vi.fn();
+  beforeAll(() => {
+    // jsdom has no layout; record what the helper scrolls to.
+    Element.prototype.scrollIntoView = scrolled;
+    // jsdom has no WebRTC; stand in for the browser's.
+    Object.assign(window, { RTCPeerConnection: class {} });
+    // The script is the page's first; run it as the frame would.
+    new Function(frameHelperScript('token'))();
+  });
+
+  const click = (html: string) => {
+    document.body.innerHTML = html;
+    const link = document.querySelector('a, area');
+    if (!link) throw new Error('no link');
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(event);
+    return event;
+  };
+
+  it('scrolls a fragment link to its target instead of following it', () => {
+    scrolled.mockClear();
+    const event = click('<a href="#second">Second</a><h2 id="second">Two</h2>');
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(scrolled).toHaveBeenCalledOnce();
+    expect(scrolled.mock.contexts[0]).toBe(document.getElementById('second'));
+  });
+
+  it('refuses links that would leave the page', () => {
+    for (const html of [
+      '<a href="https://example.com/?d=secret">Out</a>',
+      '<a href="#second" download>Save</a>',
+      '<a href="https://example.com" ping="https://example.com/ping"><span>In</span></a>',
+    ]) {
+      expect(click(html).defaultPrevented).toBe(true);
+    }
+  });
+
+  it('removes WebRTC, which the policy cannot stop', () => {
+    expect(
+      (window as unknown as Record<string, unknown>).RTCPeerConnection
+    ).toBeUndefined();
+  });
+
+  it('removes nested frames and connection hints the page adds', async () => {
+    document.body.innerHTML = '<p>kept</p>';
+    const frame = document.createElement('iframe');
+    frame.srcdoc = '<p>fresh globals</p>';
+    const hint = document.createElement('link');
+    hint.rel = 'preconnect';
+    hint.href = 'https://example.com';
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = '<object data="x"></object>';
+    document.body.append(frame, wrapper);
+    document.head.append(hint);
+    await Promise.resolve();
+
+    expect(
+      document.querySelector('iframe, object, link[rel=preconnect]')
+    ).toBeNull();
+    expect(document.body.textContent).toContain('kept');
   });
 });

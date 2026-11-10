@@ -7,6 +7,12 @@
  * server as the viewer and sends only the outcome back.
  */
 
+/** The parts of a preview frame the hosts read, so tests can stand one in. */
+export type PreviewFrame = Pick<
+  HTMLIFrameElement,
+  'contentWindow' | 'addEventListener' | 'removeEventListener'
+>;
+
 /** Frame → host: run one program of the page's build. */
 export type RunRequestMessage = {
   type: 'macro:run';
@@ -174,6 +180,41 @@ export const frameHelperScript = (token: string) =>
     function leaving() { host.postMessage({ type: 'macro:leaving', token: token }, '*'); }
     addEventListener('beforeunload', leaving);
     addEventListener('pagehide', leaving);
+    // A link would take the page away, and its URL could carry what the page
+    // read: a fragment link scrolls to its target here (its URL resolves
+    // against the host's, not this page), and every other link, download or
+    // ping does nothing. A click the page dispatches on a link outside the
+    // document never reaches this listener; the host closes the page then.
+    addEventListener('click', function (event) {
+      var target = event.target;
+      var link = target && target.closest ? target.closest('a[href], area[href]') : null;
+      if (!link) return;
+      event.preventDefault();
+      var href = link.getAttribute('href') || '';
+      if (href.charAt(0) !== '#' || link.hasAttribute('download')) return;
+      var id = href.slice(1);
+      try { id = decodeURIComponent(id); } catch (error) {}
+      var anchor = id ? document.getElementById(id) || document.getElementsByName(id)[0] : null;
+      if (anchor) anchor.scrollIntoView();
+      else if (!id || id.toLowerCase() === 'top') scrollTo(0, 0);
+    }, true);
+    // Paths the policy doesn't cover: WebRTC reaches any host, a nested frame
+    // gets fresh globals of its own, and a preconnect or prefetch hint opens
+    // a connection. The build refuses them in the page's source; ones the
+    // page adds later are removed as they arrive, before a nested frame loads.
+    ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel', 'RTCIceCandidate', 'RTCSessionDescription', 'RTCRtpSender', 'RTCRtpReceiver', 'RTCRtpTransceiver'].forEach(function (name) {
+      try { Object.defineProperty(window, name, { value: undefined, writable: false, configurable: false }); } catch (error) {}
+    });
+    var refused = 'iframe, frame, object, embed, link[rel~="preconnect" i], link[rel~="dns-prefetch" i], link[rel~="prefetch" i], link[rel~="prerender" i]';
+    function prune(node) {
+      if (node.nodeType !== 1) return;
+      if (node.matches(refused)) { node.remove(); return; }
+      var inside = node.querySelectorAll(refused);
+      for (var index = 0; index < inside.length; index++) inside[index].remove();
+    }
+    new MutationObserver(function (records) {
+      for (var index = 0; index < records.length; index++) records[index].addedNodes.forEach(prune);
+    }).observe(document, { childList: true, subtree: true });
     Object.defineProperty(window, 'macro', { value: Object.freeze({ run: run, on: on }), writable: false, configurable: false });
   })(parent, ${JSON.stringify(token)});`;
 
@@ -181,8 +222,10 @@ export const frameHelperScript = (token: string) =>
  * The built page's content security policy. A page runs programs as the
  * viewer, so it may only run its own inline code and show inline media: no
  * fetch, beacon, remote script, stylesheet or image can carry what it read
- * out of the frame. It does not stop the frame navigating itself; the helper
- * reports that (`macro:leaving`) and the host closes the frame.
+ * out of the frame. It does not stop the frame navigating itself (the helper
+ * reports that, `macro:leaving`, and the host closes the frame, but the
+ * request has already left), nor WebRTC, nested frames or connection hints,
+ * which the build and the helper refuse instead.
  */
 export const PROGRAM_DOCUMENT_CSP = [
   "default-src 'none'",
@@ -206,8 +249,11 @@ export function composeProgramDocument(html: string, token: string): string {
   const policy = parsed.createElement('meta');
   policy.httpEquiv = 'Content-Security-Policy';
   policy.content = PROGRAM_DOCUMENT_CSP;
+  const noPrefetch = parsed.createElement('meta');
+  noPrefetch.httpEquiv = 'x-dns-prefetch-control';
+  noPrefetch.content = 'off';
   const helper = parsed.createElement('script');
   helper.textContent = frameHelperScript(token);
-  parsed.head.prepend(policy, helper);
+  parsed.head.prepend(policy, noPrefetch, helper);
   return `<!doctype html>${parsed.documentElement.outerHTML}`;
 }

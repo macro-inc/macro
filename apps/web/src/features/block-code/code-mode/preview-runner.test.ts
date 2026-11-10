@@ -183,6 +183,37 @@ describe('attachProgramHost', () => {
     expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
+  it('answers the window that asked, not one that replaced it', async () => {
+    const first = fakeFrame();
+    const moved = Object.assign(new EventTarget(), {
+      contentWindow: first.frame.contentWindow,
+    });
+    let finish = (_receipt: UserExecutionReceipt) => {};
+    const run = vi.fn(
+      () =>
+        new Promise<UserExecutionReceipt>((resolve) => {
+          finish = resolve;
+        })
+    );
+    detachers.push(attachProgramHost(moved, options(run)));
+
+    first.send({ type: 'macro:run', token: 't', id: 1, program: 'tasks' });
+    await flush();
+    // The frame moved: its page loads afresh in a new window, whose own
+    // call 1 must not get the old page's answer.
+    const second = fakeFrame();
+    moved.contentWindow = second.frame.contentWindow;
+    finish(succeeded('old'));
+    await flush();
+
+    expect(second.posted).toEqual([]);
+    expect(first.posted).toEqual([
+      expect.objectContaining({
+        message: expect.objectContaining({ id: 1, result: 'old' }),
+      }),
+    ]);
+  });
+
   it('stops answering once detached', async () => {
     const { frame, posted, send } = fakeFrame();
     const run = vi.fn(async () => succeeded(1));

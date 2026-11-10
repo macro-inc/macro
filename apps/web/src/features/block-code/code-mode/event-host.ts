@@ -9,6 +9,7 @@ import {
 import {
   type EventMessage,
   type FrameEvent,
+  type PreviewFrame,
   readSubscriptionMessage,
 } from './frame-helper';
 
@@ -113,10 +114,12 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
  * frame's first (a reconnect, a reopen for changed subscriptions, or a first
  * open after failed attempts) sends `macro.resync` to every subscription,
  * because events in the gap are lost. A stream the server refuses is not
- * retried: each subscription gets `macro.error`. Returns the detach function.
+ * retried: each subscription gets `macro.error`. A page loaded afresh in a
+ * new window (the frame moved in the document) starts with no
+ * subscriptions. Returns the detach function.
  */
 export function attachEventHost(
-  frame: HTMLIFrameElement,
+  frame: PreviewFrame,
   options: EventHostOptions
 ): () => void {
   const stream = options.stream ?? streamViewerEvents;
@@ -125,6 +128,9 @@ export function attachEventHost(
   // Until a stream has opened, or an attempt has failed, the frame has
   // missed nothing; every open after that may have.
   let missedNothing = true;
+  // The window whose page made these subscriptions. A frame moved in the
+  // document loads its page afresh in a new window, which starts over.
+  let owner: Window | null = null;
 
   const post = (subscription: number, event: FrameEvent) => {
     const message: EventMessage = {
@@ -224,10 +230,24 @@ export function attachEventHost(
     );
   };
 
+  const adopt = (page: Window) => {
+    if (page === owner) return;
+    owner = page;
+    subscriptions.clear();
+    missedNothing = true;
+    reconcile();
+  };
+
+  const onLoad = () => {
+    if (owner && frame.contentWindow && frame.contentWindow !== owner)
+      adopt(frame.contentWindow);
+  };
+
   const onMessage = (event: MessageEvent) => {
     if (!frame.contentWindow || event.source !== frame.contentWindow) return;
     const message = readSubscriptionMessage(event.data, options.token);
     if (!message) return;
+    adopt(frame.contentWindow);
     if (message.type === 'macro:unsubscribe') {
       if (subscriptions.delete(message.subscription)) reconcile();
       return;
@@ -254,8 +274,10 @@ export function attachEventHost(
   };
 
   window.addEventListener('message', onMessage);
+  frame.addEventListener('load', onLoad);
   return () => {
     window.removeEventListener('message', onMessage);
+    frame.removeEventListener('load', onLoad);
     subscriptions.clear();
     current?.controller.abort();
     current = undefined;

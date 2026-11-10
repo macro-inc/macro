@@ -1,7 +1,11 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { runDocumentProgram } from '../queries/document-programs';
-import { type RunReplyMessage, readRunRequest } from './frame-helper';
+import {
+  type PreviewFrame,
+  type RunReplyMessage,
+  readRunRequest,
+} from './frame-helper';
 
 export type ProgramHostOptions = {
   documentId: string;
@@ -22,26 +26,27 @@ export type ProgramHostOptions = {
  * back. Returns the detach function.
  */
 export function attachProgramHost(
-  frame: HTMLIFrameElement,
+  frame: PreviewFrame,
   options: ProgramHostOptions
 ): () => void {
   const run = options.run ?? runDocumentProgram;
   const controller = new AbortController();
 
-  const reply = (message: RunReplyMessage) => {
-    frame.contentWindow?.postMessage(message, '*');
-  };
-
-  const fail = (token: string, id: number, message: string) => {
-    reply({ type: 'macro:error', token, id, message });
-    options.onFailure(message);
-  };
-
   const onMessage = async (event: MessageEvent) => {
-    if (!frame.contentWindow || event.source !== frame.contentWindow) return;
+    const page = frame.contentWindow;
+    if (!page || event.source !== page) return;
     const request = readRunRequest(event.data, options.token);
     if (!request) return;
     const { id, token } = request;
+    // Answer the window that asked: a frame moved in the document loads its
+    // page afresh in a new window, whose own calls reuse these ids.
+    const reply = (message: RunReplyMessage) => {
+      page.postMessage(message, '*');
+    };
+    const fail = (message: string) => {
+      reply({ type: 'macro:error', token, id, message });
+      options.onFailure(message);
+    };
     try {
       // The server run's request joins this span through fetchWithToken's
       // captured context, so one trace covers the frame's call to its result.
@@ -77,15 +82,13 @@ export function attachProgramHost(
           result: programValue(receipt.result),
         });
       } else {
-        fail(token, id, receipt.error ?? `The program ${receipt.status}.`);
+        fail(receipt.error ?? `The program ${receipt.status}.`);
       }
     } catch (error) {
       if (controller.signal.aborted) return;
       if (thrownResultErrorHasCode(error, 'DOCUMENT_CHANGED'))
         options.onStale();
       fail(
-        token,
-        id,
         error instanceof Error ? error.message : 'The program could not run.'
       );
     }

@@ -389,6 +389,40 @@ describe('attachEventHost', () => {
     ]);
   });
 
+  it('starts over for a page loaded afresh in a new window', async () => {
+    const frame = new EventTarget();
+    const first = fakeFrame();
+    const moved = Object.assign(frame, {
+      contentWindow: first.frame.contentWindow,
+    });
+    const server = fakeStream();
+    detachers.push(
+      attachEventHost(moved, {
+        documentId: 'doc',
+        token: 't',
+        stream: server.stream,
+      })
+    );
+    first.send(subscribe(1, ['document.updated']));
+    await flush();
+    expect(server.opens).toHaveLength(1);
+
+    // The frame was detached and reattached: its page loads in a new window.
+    const second = fakeFrame();
+    moved.contentWindow = second.frame.contentWindow;
+    moved.dispatchEvent(new Event('load'));
+    await flush();
+    expect(server.opens[0]?.options.signal.aborted).toBe(true);
+
+    second.send(subscribe(1, ['message.posted']));
+    await flush();
+    expect(server.latest().options.filters).toEqual([
+      { events: ['message.posted'] },
+    ]);
+    server.latest().options.onEvent(documentEvent('document.updated', 'd1'));
+    expect(second.posted).toEqual([]);
+  });
+
   it('stops the stream when detached', async () => {
     const frame = fakeFrame();
     const server = fakeStream();

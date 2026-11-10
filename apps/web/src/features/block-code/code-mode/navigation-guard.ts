@@ -1,4 +1,4 @@
-import type { LeavingMessage } from './frame-helper';
+import type { LeavingMessage, PreviewFrame } from './frame-helper';
 
 export type NavigationGuardOptions = {
   token: string;
@@ -17,16 +17,23 @@ function isLeavingMessage(
 
 /**
  * Call `onLeave` once when a program frame starts to leave its page: its
- * helper reports the unload, and a second `load` (a navigation the helper
- * missed) confirms it. A page that runs programs as the viewer could
- * otherwise carry what it read out in the URL it navigates to, the one path
- * its policy leaves open. Returns the detach function.
+ * helper reports the unload, and a second `load` in the same window (a
+ * navigation the helper missed) confirms it. A page that runs programs as the
+ * viewer could otherwise carry what it read out in the URL it navigates to,
+ * the one path its policy leaves open.
+ *
+ * A frame moved in the document (its element detached and reattached, as a
+ * layout change can do) loads its page again, from the same `srcdoc`, in a
+ * new window. Only the host can do that, so a `load` in a new window is a
+ * fresh start, never a navigation, which keeps the frame's window; the hosts
+ * reset for the new window themselves. Returns the detach function.
  */
 export function attachNavigationGuard(
-  frame: HTMLIFrameElement,
+  frame: PreviewFrame,
   options: NavigationGuardOptions
 ): () => void {
-  let loads = 0;
+  // The window the frame's page loaded in; undefined before the first load.
+  let loadedIn: Window | null | undefined;
   let left = false;
   const leave = () => {
     if (left) return;
@@ -35,12 +42,18 @@ export function attachNavigationGuard(
   };
 
   const onMessage = (event: MessageEvent) => {
+    if (left) return;
     if (!frame.contentWindow || event.source !== frame.contentWindow) return;
     if (isLeavingMessage(event.data, options.token)) leave();
   };
   const onLoad = () => {
-    loads += 1;
-    if (loads > 1) leave();
+    if (left) return;
+    const current = frame.contentWindow;
+    if (current === loadedIn) {
+      leave();
+      return;
+    }
+    loadedIn = current;
   };
 
   window.addEventListener('message', onMessage);
