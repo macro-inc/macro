@@ -183,12 +183,15 @@ impl ideas::domain::ports::RequestSessions for CorrelationSessions {
 
 /// Background runs of ideas: hidden sessions of the person's, with the full
 /// toolset and approvals on, billed as their agent usage.
-struct IdeaRunSessions {
+struct IdeaRunSessions<Stored> {
     sessions: Arc<AgentSessionClient>,
     creations: ActivityCreations,
+    /// The stored sessions, to tell a missing session from one that can't
+    /// be read.
+    stored: Stored,
 }
 
-impl IdeaRunSessions {
+impl<Stored> IdeaRunSessions<Stored> {
     fn action(
         run: &ideas::domain::model::StoredRun,
     ) -> agent_session::domain::routines::RoutineSessionAction {
@@ -202,7 +205,10 @@ impl IdeaRunSessions {
 }
 
 #[async_trait::async_trait]
-impl ideas::domain::ports::RunSessions for IdeaRunSessions {
+impl<Stored> ideas::domain::ports::RunSessions for IdeaRunSessions<Stored>
+where
+    Stored: agent_session::domain::ports::AgentSessionRepo,
+{
     async fn start(
         &self,
         run: &ideas::domain::model::StoredRun,
@@ -260,16 +266,26 @@ impl ideas::domain::ports::RunSessions for IdeaRunSessions {
     async fn state(
         &self,
         run: &ideas::domain::model::StoredRun,
-    ) -> Result<ideas::domain::model::SessionState, rootcause::Report> {
+    ) -> Result<ideas::domain::model::SessionState, ideas::domain::model::SessionReadError> {
         use agent_session::domain::routines::{
             RoutineActionStatus, RoutinePendingReason, RoutineSessions as _,
         };
-        use ideas::domain::model::SessionState;
-        let status = self
-            .sessions
-            .status(Self::action(run))
-            .await
-            .map_err(|error| rootcause::report!("{error:?}"))?;
+        use ideas::domain::model::{SessionReadError, SessionState};
+        let status = match self.sessions.status(Self::action(run)).await {
+            Ok(status) => status,
+            // A failed read says nothing about whether the session exists:
+            // only the stored sessions do.
+            Err(error) => {
+                let id = agent_session::domain::model::AgentSessionId::new_from_uuid(run.session);
+                return Err(match self.stored.find(id).await {
+                    Ok(None) => SessionReadError::Missing,
+                    Ok(Some(_)) => SessionReadError::Unreadable(rootcause::report!("{error:?}")),
+                    Err(lookup) => SessionReadError::Unreadable(rootcause::report!(
+                        "{error:?}; looking the session up failed too: {lookup:?}"
+                    )),
+                });
+            }
+        };
         Ok(match status {
             RoutineActionStatus::Succeeded => SessionState::Finished,
             RoutineActionStatus::Failed(_) => SessionState::Failed,
@@ -706,6 +722,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 sessions: Arc::clone(&sessions),
                 creations: ActivityCreations(
                     activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+                ),
+                stored: agent_session::outbound::postgres::PgAgentSessionRepo::new(
+                    db.clone(),
+                    registrar.clone(),
                 ),
             }),
             bot_id::MACRO_NEW_BOT_ID.as_uuid(),

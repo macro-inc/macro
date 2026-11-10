@@ -20,8 +20,8 @@ use super::check;
 use super::model::{
     Change, ChangeAction, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
     IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea,
-    RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError, SessionKind, SessionState,
-    StoredRun, SuggestIdea, Target,
+    RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError, SessionKind, SessionReadError,
+    SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
     GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
@@ -73,16 +73,9 @@ struct Runs {
 /// Runs one settle pass checks at most.
 const SETTLE_BATCH: u16 = 50;
 
-/// How long a run's session may wait for its prompt before the run is
-/// given up as never started.
-const PROMPT_GRACE: chrono::Duration = chrono::Duration::minutes(10);
-
-/// Failed checks in a row, on a run at least [`UNREADABLE_AFTER`] old, that
-/// give it up as failed.
-const UNREADABLE_CHECKS: u16 = 10;
-
-/// How old a run must be before unreadable checks give it up.
-const UNREADABLE_AFTER: chrono::Duration = chrono::Duration::minutes(30);
+/// How long a run's session has to open and take its prompt. Past it, a
+/// session that is missing or still waiting for its prompt never started.
+const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
 where
@@ -190,7 +183,6 @@ where
             action: Uuid::now_v7(),
             started_at: Utc::now(),
             settled: None,
-            failed_checks: 0,
         };
         span.record("agent.session.id", run.session.to_string());
         // The row first, so two accepts at once start one session.
@@ -489,31 +481,34 @@ where
         let mut settled = 0;
         for run in &unsettled {
             let now = Utc::now();
-            let state = runs.sessions.state(run).await;
-            if let Err(error) = self.repo.checked_run(run.session, state.is_ok(), now).await {
+            if let Err(error) = self.repo.checked_run(run.session, now).await {
                 tracing::warn!(?error, "could not record a run's check");
             }
-            let (outcome, produced) = match state {
-                Err(error) => {
+            let started_long_ago = now - run.started_at >= START_WINDOW;
+            let (outcome, produced) = match runs.sessions.state(run).await {
+                // It may be running: a run is given up only on what is known.
+                Err(SessionReadError::Unreadable(error)) => {
                     tracing::warn!(?error, "could not read a run's session");
-                    // A session that never opened can't be read: after enough
-                    // failed checks on an old run, it is given up.
-                    if run.failed_checks + 1 < UNREADABLE_CHECKS
-                        || now - run.started_at < UNREADABLE_AFTER
-                    {
+                    continue;
+                }
+                // Its session never opened, or is gone: nothing runs. Within
+                // the start window it may still be opening.
+                Err(SessionReadError::Missing) => {
+                    if !started_long_ago {
                         continue;
                     }
-                    tracing::warn!(event = "ideas.run_unreadable");
+                    tracing::warn!(event = "ideas.run_session_missing");
                     (RunSettled::Failed, Vec::new())
                 }
                 Ok(SessionState::AwaitingPrompt) => {
-                    if now - run.started_at < PROMPT_GRACE {
+                    if !started_long_ago {
                         continue;
                     }
-                    // Its prompt never arrived: nothing ran, so the idea may
-                    // be tried again.
+                    // Its prompt never arrived: once its session is gone,
+                    // nothing ran and the idea may be tried again.
                     if let Err(error) = runs.sessions.discard(run).await {
                         tracing::warn!(?error, "could not delete a run's unprompted session");
+                        continue;
                     }
                     (RunSettled::Failed, Vec::new())
                 }

@@ -117,6 +117,15 @@ impl SessionState {
     }
 }
 
+/// Why a run's session couldn't be read.
+#[derive(Debug)]
+pub enum SessionReadError {
+    /// It doesn't exist: it never opened, or was deleted.
+    Missing,
+    /// It couldn't be read just now; it may well be running.
+    Unreadable(rootcause::Report),
+}
+
 /// Why a run's session didn't start.
 #[derive(Debug)]
 pub enum RunStartError {
@@ -144,8 +153,6 @@ pub struct StoredRun {
     pub started_at: DateTime<Utc>,
     /// Whether it was settled, and how.
     pub settled: Option<RunSettled>,
-    /// Checks in a row that couldn't read its session.
-    pub failed_checks: u16,
 }
 
 /// How a finished run was settled.

@@ -11,7 +11,8 @@ use model_owner::CreationPrincipal;
 use super::model::{
     Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
     IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
-    RewriteIdea, RunSettled, RunStartError, SessionState, StoredRun, SuggestIdea, Target,
+    RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun, SuggestIdea,
+    Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
@@ -87,12 +88,11 @@ pub trait IdeaRepo: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
 
-    /// Run `session` was checked at `at`, its session read or not: it goes
-    /// to the back of [`Self::unsettled_runs`], and a failed read counts.
+    /// Run `session` was checked at `at`: it goes to the back of
+    /// [`Self::unsettled_runs`].
     fn checked_run(
         &self,
         session: Uuid,
-        read: bool,
         at: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -230,8 +230,9 @@ pub trait RunSessions: Send + Sync + 'static {
     /// the session it opened.
     async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), RunStartError>;
 
-    /// Where `run`'s session is.
-    async fn state(&self, run: &StoredRun) -> Result<SessionState, rootcause::Report>;
+    /// Where `run`'s session is; [`SessionReadError::Missing`] only when it
+    /// is known not to exist.
+    async fn state(&self, run: &StoredRun) -> Result<SessionState, SessionReadError>;
 
     /// What `run`'s session made, besides the session itself.
     async fn produced(&self, run: &StoredRun) -> Result<Vec<Target>, rootcause::Report>;

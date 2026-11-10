@@ -83,9 +83,11 @@ person. Served by the harness under the scheduler's gateway prefix
 - A run is never started twice: a prompt whose answer was lost
   (`RunStartError::Uncertain`) leaves the run for its session to settle; only
   a definite refusal (the prompted session deleted) settles it failed at once.
-  `settle_runs` checks runs in turn (`checked_at`), gives up a session still
-  waiting for its prompt after 10 minutes (deleting it), and one that can't be
-  read only after 10 failed checks on a run at least 30 minutes old.
+  `settle_runs` checks runs in turn (`checked_at`) and gives a run up only on
+  what is known: past a 10 minute start window, a session confirmed missing
+  (`SessionReadError::Missing`, from the stored sessions) or one still waiting
+  for its prompt once it is deleted. A session that can't be read is never
+  given up.
 
 ## Gotchas
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,\n                      started_at, outcome, failed_checks\n               FROM idea_run WHERE user_id = $1\n               ORDER BY idea_id, started_at DESC",
+  "query": "SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,\n                      started_at, outcome\n               FROM idea_run WHERE user_id = $1\n               ORDER BY idea_id, started_at DESC",
   "describe": {
     "columns": [
       {
@@ -37,11 +37,6 @@
         "ordinal": 6,
         "name": "outcome",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 7,
-        "name": "failed_checks",
-        "type_info": "Int2"
       }
     ],
     "parameters": {
@@ -56,9 +51,8 @@
       false,
       false,
       false,
-      true,
-      false
+      true
     ]
   },
-  "hash": "5d36ba9f409262f748b4d64775bffb1ac320b0fca86141441e4df1b854fb8095"
+  "hash": "bb65c646d507f635fb8f50b9e6439de3e8b6ef4e2bec719f1a30427f9138d06e"
 }

@@ -281,18 +281,13 @@ async fn unsettled_runs_take_turns(pool: PgPool) {
             action: Uuid::now_v7(),
             started_at: Utc::now() - chrono::Duration::minutes(10 - n),
             settled: None,
-            failed_checks: 0,
         };
         assert!(repo.start_run(&run).await.unwrap());
         sessions.push(run.session);
     }
     let first = repo.unsettled_runs(1).await.unwrap();
     assert_eq!(first[0].session, sessions[0]);
-    repo.checked_run(sessions[0], false, Utc::now())
-        .await
-        .unwrap();
+    repo.checked_run(sessions[0], Utc::now()).await.unwrap();
     let next = repo.unsettled_runs(1).await.unwrap();
     assert_eq!(next[0].session, sessions[1]);
-    let both = repo.unsettled_runs(2).await.unwrap();
-    assert_eq!(both[1].failed_checks, 1);
 }

@@ -177,7 +177,6 @@ struct RunRow {
     action_id: Uuid,
     started_at: DateTime<Utc>,
     outcome: Option<String>,
-    failed_checks: i16,
 }
 
 fn run(row: RunRow) -> Result<StoredRun, PgIdeaRepoError> {
@@ -198,7 +197,6 @@ fn run(row: RunRow) -> Result<StoredRun, PgIdeaRepoError> {
             Some("failed") => Some(RunSettled::Failed),
             Some(other) => return Err(PgIdeaRepoError::Decode(format!("run outcome `{other}`"))),
         },
-        failed_checks: u16::try_from(row.failed_checks).unwrap_or(0),
     })
 }
 
@@ -385,7 +383,7 @@ impl IdeaRepo for PgIdeaRepo {
         let rows = sqlx::query_as!(
             RunRow,
             r#"SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,
-                      started_at, outcome, failed_checks
+                      started_at, outcome
                FROM idea_run WHERE user_id = $1
                ORDER BY idea_id, started_at DESC"#,
             user.as_ref(),
@@ -398,8 +396,7 @@ impl IdeaRepo for PgIdeaRepo {
     async fn unsettled_runs(&self, limit: u16) -> Result<Vec<StoredRun>, Self::Err> {
         let rows = sqlx::query_as!(
             RunRow,
-            r#"SELECT session_id, idea_id, user_id, agent_id, action_id, started_at, outcome,
-                      failed_checks
+            r#"SELECT session_id, idea_id, user_id, agent_id, action_id, started_at, outcome
                FROM idea_run WHERE settled_at IS NULL
                ORDER BY checked_at NULLS FIRST, started_at LIMIT $1"#,
             i64::from(limit),
@@ -409,20 +406,11 @@ impl IdeaRepo for PgIdeaRepo {
         rows.into_iter().map(run).collect()
     }
 
-    async fn checked_run(
-        &self,
-        session: Uuid,
-        read: bool,
-        at: DateTime<Utc>,
-    ) -> Result<(), Self::Err> {
+    async fn checked_run(&self, session: Uuid, at: DateTime<Utc>) -> Result<(), Self::Err> {
         sqlx::query!(
-            r#"UPDATE idea_run
-               SET checked_at = $2,
-                   failed_checks = CASE WHEN $3 THEN 0 ELSE LEAST(failed_checks + 1, 1000) END
-               WHERE session_id = $1 AND settled_at IS NULL"#,
+            r#"UPDATE idea_run SET checked_at = $2 WHERE session_id = $1 AND settled_at IS NULL"#,
             session,
             at,
-            read,
         )
         .execute(&self.pool)
         .await?;
