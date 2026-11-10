@@ -283,10 +283,10 @@ blank slate, composer pinning, quote replies and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
-A call's own chat on a meeting page (the real `CallDiscussionContent` and
-`MeetingDiscussionHost` under only the providers `Root` gives every page) has a
-backend-free desktop and phone regression: the first message sent shows in the
-panel instead of leaving it on "Loading chat…":
+A call's own chat on a meeting page (the real `CallChat` under only the providers
+`Root` gives every page) has a backend-free desktop and phone regression: the
+first message sent shows in the panel, and a guest's message renders without
+the app's notification state:
 `bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
 A meeting page has none of `AppProviders`; anything rendering app messages there
 goes inside `MeetingDiscussionHost`, created by the host's render function.
@@ -325,7 +325,9 @@ beside a scrolling editor whose selection runs past its visible bottom
 
 The machine Share menu (teammates, team access, access requests, and the warning
 before shutting down a resident) and Settings → Machines' Teammates' machines
-section (Request access) have a backend-free desktop/phone regression:
+section (Request access), and its Pending requests section (one-click Approve
+with rows that stay mounted across refetches), have a backend-free
+desktop/phone regression:
 `bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
 It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
@@ -1334,9 +1336,9 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
-- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
+- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
 - If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
-- Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.
+- Interface glyphs never animate on press or hover; do not add shared or per-button bounce, turn, or scale effects. Disclosure carets and loading spinners keep their state-driven motion. Preserve accessible control names.
 
 ### Creation choices and notifications
 
