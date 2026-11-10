@@ -8,6 +8,7 @@ import type { RoutineSuggestions } from '@service-scheduled-action/generated/sch
 import { createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import type {
+  DomainTeam,
   InviteOffer,
   Loadable,
   OnboardingContext,
@@ -43,6 +44,8 @@ export type FakeOnboardingWorld = {
   record: OnboardingRecord;
   teams: Team[];
   invites: TeamInvite[];
+  /** The team open to the viewer's email domain, if any. */
+  domainTeam: DomainTeam | null;
   contacts: string[];
   catalog: Tool[];
   connectedTools: string[];
@@ -74,6 +77,7 @@ export type FakeOnboardingWorld = {
       | 'emailAccounts'
       | 'record'
       | 'teams'
+      | 'domainTeam'
       | 'catalog'
       | 'createTeam'
       | 'joinTeam'
@@ -106,6 +110,7 @@ export function defaultFakeWorld(): FakeOnboardingWorld {
     record: { status: 'active', suggestedTeamDomain: 'acme.com' },
     teams: [],
     invites: [],
+    domainTeam: null,
     contacts: ['grace@acme.com', 'alan@acme.com', 'friend@gmail.com'],
     catalog: ['Linear', 'Notion', 'GitHub', 'Slack', 'Figma', 'HubSpot'].map(
       (name) => ({
@@ -335,6 +340,7 @@ export function createFakeOnboarding(
     createTeamDirectory: () => ({
       teams: () => loadable('teams', () => world.teams),
       invites: () => loadable('teams', () => world.invites),
+      domainTeam: () => loadable('domainTeam', () => world.domainTeam),
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
@@ -354,6 +360,14 @@ export function createFakeOnboarding(
         const invite = draft.invites.find((item) => item.id === inviteId);
         draft.invites = draft.invites.filter((item) => item.id !== inviteId);
         if (invite) draft.teams = [{ name: `${invite.invitedBy}'s team` }];
+      });
+    },
+    joinDomainTeam: async () => {
+      call('joinDomainTeam');
+      fail('joinTeam');
+      update((draft) => {
+        if (draft.domainTeam) draft.teams = [{ name: draft.domainTeam.name }];
+        draft.domainTeam = null;
       });
     },
     copyTeamInviteLink: async () => {

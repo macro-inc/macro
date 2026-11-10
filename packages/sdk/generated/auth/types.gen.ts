@@ -550,6 +550,28 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
+ * The team whose auto-join domain matches the user's email domain, offered
+ * to the user before they accept.
+ */
+export type DomainTeam = {
+    /**
+     * Id of the team.
+     */
+    team_id: string;
+    /**
+     * Name of the team.
+     */
+    team_name: string;
+};
+
+/**
+ * The team the caller may join because it claims their email domain.
+ */
+export type DomainTeamResponse = {
+    team?: null | DomainTeam;
+};
+
+/**
  * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
@@ -1262,6 +1284,20 @@ export type InviteToTeamRequest = {
 };
 
 /**
+ * The result of joining the team that claims the caller's email domain.
+ */
+export type JoinTeamByDomainResponse = {
+    /**
+     * True when the caller was already on the team and nothing changed.
+     */
+    already_member: boolean;
+    /**
+     * The team the caller joined.
+     */
+    team_id: string;
+};
+
+/**
  * The result of opening a team invite link.
  */
 export type JoinTeamByInviteLinkResponse = {
@@ -1890,8 +1926,8 @@ export type Team = {
      */
     allow_non_admin_invites: boolean;
     /**
-     * The email domain new users are automatically joined to this team
-     * with, when automatic domain joining is enabled (None otherwise).
+     * The email domain whose users may join this team without an invite,
+     * once they accept it (None when domain joining is off).
      */
     auto_join_domain?: string | null;
     /**
@@ -4062,6 +4098,26 @@ export type PatchTeamCrmSettingsResponses = {
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
 
+export type GetTeamByDomainData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain';
+};
+
+export type GetTeamByDomainErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamByDomainError = GetTeamByDomainErrors[keyof GetTeamByDomainErrors];
+
+export type GetTeamByDomainResponses = {
+    200: DomainTeamResponse;
+};
+
+export type GetTeamByDomainResponse = GetTeamByDomainResponses[keyof GetTeamByDomainResponses];
+
 export type SendTeamDomainNoticeData = {
     body?: never;
     path?: never;
@@ -4082,6 +4138,28 @@ export type SendTeamDomainNoticeResponses = {
 };
 
 export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
+
+export type JoinTeamByDomainData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain/join';
+};
+
+export type JoinTeamByDomainErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type JoinTeamByDomainError = JoinTeamByDomainErrors[keyof JoinTeamByDomainErrors];
+
+export type JoinTeamByDomainResponses = {
+    200: JoinTeamByDomainResponse;
+};
+
+export type JoinTeamByDomainResponse2 = JoinTeamByDomainResponses[keyof JoinTeamByDomainResponses];
 
 export type InviteToTeamData = {
     body: InviteToTeamRequest;

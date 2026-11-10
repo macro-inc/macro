@@ -6,6 +6,8 @@ pub mod create_team;
 pub mod delete_team;
 /// Delete a team invite.
 pub mod delete_team_invite;
+/// Read and join the team that claims the caller's email domain.
+pub mod domain_join;
 /// Email a new team's domain contacts that it exists.
 pub mod domain_notice;
 /// Get a team by ID.
@@ -143,6 +145,11 @@ where
             get(join_team::handler::<T, Eas, Auth>),
         )
         .route("/user", get(get_user_teams::handler::<T, Eas, Auth>))
+        .route("/domain", get(domain_join::get_handler::<T, Eas, Auth>))
+        .route(
+            "/domain/join",
+            post(domain_join::join_handler::<T, Eas, Auth>),
+        )
         .route(
             "/user/invites",
             get(get_user_invites::handler::<T, Eas, Auth>),

@@ -3,7 +3,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::{
     model::{
-        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
+        DirectJoinOutcome, JoinTeamByInviteLinkError, ManageTeamInviteLinkError,
         TeamInviteLinkTeam, TeamInviteLinkToken,
     },
     team_repo::TeamInviteLinkService,
@@ -199,7 +199,7 @@ async fn joining_by_link_adds_the_user_and_publishes_the_join_method() {
         .await
         .unwrap();
 
-    let JoinTeamByInviteLinkOutcome::Joined(member) = outcome else {
+    let DirectJoinOutcome::Joined(member) = outcome else {
         panic!("expected the user to join, got {outcome:?}");
     };
     assert_eq!(member.team_id, TEAM_ID);
@@ -277,7 +277,7 @@ async fn joining_a_team_you_are_on_is_a_no_op() {
 
     assert!(matches!(
         outcome,
-        JoinTeamByInviteLinkOutcome::AlreadyMember { team_id: TEAM_ID }
+        DirectJoinOutcome::AlreadyMember { team_id: TEAM_ID }
     ));
     assert_eq!(*team_repository.add_user_to_team_calls.lock().unwrap(), 0);
 }
@@ -292,7 +292,7 @@ async fn a_concurrent_join_to_the_same_team_is_a_no_op() {
 
     assert!(matches!(
         service.join_team_by_invite_link(&token, &joiner()).await,
-        Ok(JoinTeamByInviteLinkOutcome::AlreadyMember { team_id: TEAM_ID })
+        Ok(DirectJoinOutcome::AlreadyMember { team_id: TEAM_ID })
     ));
 }
 

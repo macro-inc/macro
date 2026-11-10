@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{JoinTeamDirectlyError, TeamError, TeamMember};
+use super::{JoinTeamDirectlyError, TeamError};
 
 /// The secret in a team's shareable invite link.
 ///
@@ -49,28 +49,6 @@ pub struct TeamInviteLinkTeam {
     pub team_id: uuid::Uuid,
     /// Name of the team the link joins.
     pub team_name: String,
-}
-
-/// What happened when a user opened a team's invite link.
-#[derive(Debug, Clone)]
-pub enum JoinTeamByInviteLinkOutcome {
-    /// The user joined the team.
-    Joined(TeamMember<'static>),
-    /// The user was already on the team, so nothing changed.
-    AlreadyMember {
-        /// The team the link joins.
-        team_id: uuid::Uuid,
-    },
-}
-
-impl JoinTeamByInviteLinkOutcome {
-    /// The team the link joins.
-    pub fn team_id(&self) -> uuid::Uuid {
-        match self {
-            Self::Joined(member) => member.team_id,
-            Self::AlreadyMember { team_id } => *team_id,
-        }
-    }
 }
 
 /// Errors for reading or changing a team's invite link.

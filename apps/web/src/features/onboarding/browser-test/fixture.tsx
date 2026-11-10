@@ -15,6 +15,8 @@ import { OnboardingFlowView } from '../views/onboarding-flow-view';
 import { SignupJourneyView } from '../views/signup-journey-view';
 import { FIXTURE_KEYS, type FixtureLanding } from './fixture-keys';
 
+const params = Object.fromEntries(new URLSearchParams(location.search));
+
 /**
  * The real onboarding views over a fake backend persisted in sessionStorage,
  * so OAuth and Stripe round-trips are real page loads. Tests seed the world
@@ -24,7 +26,13 @@ function loadWorld(): FakeOnboardingWorld {
   const saved = sessionStorage.getItem(FIXTURE_KEYS.world);
   if (saved) return JSON.parse(saved);
   const seed = sessionStorage.getItem(FIXTURE_KEYS.seed);
-  return { ...defaultFakeWorld(), ...(seed ? JSON.parse(seed) : {}) };
+  // `?domainTeam=Acme`: offer a team open to the viewer's email domain.
+  const domainTeam = params.domainTeam ? { name: params.domainTeam } : null;
+  return {
+    ...defaultFakeWorld(),
+    domainTeam,
+    ...(seed ? JSON.parse(seed) : {}),
+  };
 }
 const saveWorld = (world: FakeOnboardingWorld) =>
   sessionStorage.setItem(FIXTURE_KEYS.world, JSON.stringify(world));
@@ -33,7 +41,6 @@ const land = (landing: FixtureLanding) => {
   location.assign(`${location.pathname}?view=landed`);
 };
 
-const params = Object.fromEntries(new URLSearchParams(location.search));
 if (params.theme === 'cream' || params.theme === 'dark') {
   sessionStorage.setItem(FIXTURE_KEYS.theme, params.theme);
 }

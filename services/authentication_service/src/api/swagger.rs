@@ -16,10 +16,11 @@ use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use system_status::domain::models::{CurrentSystemStatus, StatusUpdate, SystemStatus};
 use system_status::inbound::axum_router::SystemStatusHistory;
 use teams::domain::model::{
-    PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
-    PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
-    TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
+    DomainTeam, PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse,
+    PatchTeamMemberPlanRequest, PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails,
+    TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
+use teams::inbound::axum_router::domain_join::{DomainTeamResponse, JoinTeamByDomainResponse};
 use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
@@ -208,6 +209,8 @@ use model::user::{
                 teams::inbound::axum_router::invite_link::delete_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::get_team_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::domain_join::get_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::domain_join::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /user/language
                 user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
@@ -374,6 +377,9 @@ use model::user::{
                         CreatedTeamInviteLinkResponse,
                         JoinTeamByInviteLinkResponse,
                         TeamInviteLinkTeam,
+                        DomainTeam,
+                        DomainTeamResponse,
+                        JoinTeamByDomainResponse,
                         TeamInviteLinkToken,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,

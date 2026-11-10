@@ -32,6 +32,7 @@ import type {
   CurrentSystemStatus,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  DomainTeamResponse,
   EmailConnectionProviders,
   EmailConnectionProvidersParams,
   EmptyResponse,
@@ -61,6 +62,7 @@ import type {
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
   InviteToTeamRequest,
+  JoinTeamByDomainResponse,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
   MacroApiTokenParams,
@@ -4874,6 +4876,61 @@ export const patchTeamCrmSettings = async (
 };
 
 /**
+ * @summary Gets the team whose auto-join domain matches the caller's email domain, so
+the caller can choose to join it.
+ */
+export type getTeamByDomainResponse200 = {
+  data: DomainTeamResponse;
+  status: 200;
+};
+
+export type getTeamByDomainResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamByDomainResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamByDomainResponseSuccess = getTeamByDomainResponse200 & {
+  headers: Headers;
+};
+export type getTeamByDomainResponseError = (
+  | getTeamByDomainResponse401
+  | getTeamByDomainResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamByDomainResponse =
+  | getTeamByDomainResponseSuccess
+  | getTeamByDomainResponseError;
+
+export const getGetTeamByDomainUrl = () => {
+  return `/team/domain`;
+};
+
+export const getTeamByDomain = async (
+  options?: RequestInit
+): Promise<getTeamByDomainResponse> => {
+  const res = await fetch(getGetTeamByDomainUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamByDomainResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamByDomainResponse;
+};
+
+/**
  * @summary Emails the caller's contacts on the team's auto-join domain that the team
 exists, so they can sign up and join. Contacts already on Macro, on the
 team, invited, or emailed before are skipped, and a team emails at most 25
@@ -4938,6 +4995,72 @@ export const sendTeamDomainNotice = async (
     status: res.status,
     headers: res.headers,
   } as sendTeamDomainNoticeResponse;
+};
+
+/**
+ * @summary Joins the team whose auto-join domain matches the caller's email domain.
+ */
+export type joinTeamByDomainResponse200 = {
+  data: JoinTeamByDomainResponse;
+  status: 200;
+};
+
+export type joinTeamByDomainResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type joinTeamByDomainResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type joinTeamByDomainResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type joinTeamByDomainResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type joinTeamByDomainResponseSuccess = joinTeamByDomainResponse200 & {
+  headers: Headers;
+};
+export type joinTeamByDomainResponseError = (
+  | joinTeamByDomainResponse401
+  | joinTeamByDomainResponse404
+  | joinTeamByDomainResponse409
+  | joinTeamByDomainResponse500
+) & {
+  headers: Headers;
+};
+
+export type joinTeamByDomainResponse =
+  | joinTeamByDomainResponseSuccess
+  | joinTeamByDomainResponseError;
+
+export const getJoinTeamByDomainUrl = () => {
+  return `/team/domain/join`;
+};
+
+export const joinTeamByDomain = async (
+  options?: RequestInit
+): Promise<joinTeamByDomainResponse> => {
+  const res = await fetch(getJoinTeamByDomainUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: joinTeamByDomainResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as joinTeamByDomainResponse;
 };
 
 /**

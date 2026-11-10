@@ -119,7 +119,7 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
-  // Someone who already joined a team (invite link or domain) has nothing to
+  // Someone who already joined a team (through an invite link) has nothing to
   // do on the team step, so the flow passes over it in both directions.
   const passesTeam = (target: OnboardingStep | undefined) => {
     const teams = teamDirectory.teams();

@@ -481,35 +481,6 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
         .in_current_span()
     });
 
-    // Automatically add the new user to a team whose auto-join domain
-    // matches their email domain. Fire-and-forget: a failed auto-join must
-    // never block user creation.
-    tokio::spawn({
-        let teams_service = ctx.teams_service.clone();
-        let user_id = user_id.clone();
-        async move {
-            let user_id = match MacroUserIdStr::parse_from_str(&user_id) {
-                Ok(user_id) => user_id,
-                Err(e) => {
-                    tracing::error!(error=?e, "unable to parse user id for team auto-join");
-                    return;
-                }
-            };
-            match teams_service.try_join_team_by_domain(&user_id).await {
-                Ok(Some(member)) => {
-                    tracing::info!(team_id=%member.team_id, "auto-joined user to team by email domain");
-                }
-                Ok(None) => {
-                    tracing::info!("no team auto-join domain matched the user's email domain");
-                }
-                Err(e) => {
-                    tracing::error!(error=?e, "failed to auto-join user to team by email domain");
-                }
-            }
-        }
-        .in_current_span()
-    });
-
     // Agents get an SDK token instead: no marketing sequence, sample content,
     // or support channel.
     if !is_agent {
