@@ -399,24 +399,26 @@ rows start below the controls and scroll behind them. Drive folder paths and
 stacked CRM activity controls contribute to that measured inset.
 
 The app views are referred to as **workspaces**. Desktop navigation sidebars
-start at 256px. Expanded touch panes use 1.57421875 times the base width and bounds,
-starting at 403px; narrow touch overlays retain the base sizing. Docked wide-touch
-navigation, lists, and inline details use the same thin dividers as desktop. Manual resizing
-and available space can change the displayed width. Navigation sidebars use the
-same container-width rule on desktop and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
-below. Home's composer is desktop-only. Notifications docks its list beside an inline
-preview above 720px on touch; at narrower widths it fills the pane and opens
-items as standalone pages. Chat is
-another touch exception: at 720px or narrower it shows its full-frame
-conversation list without a sidebar or expand button. Above that width, Chat
-docks the same pinned Recent feed beside its conversation preview. **Hide navigation** sits to
-the right of the sidebar title. After hiding,
-**Show navigation** is the first control in the touch filter row, or the main
-header when that view has no filter row. Each workspace retains its wide-layout
-choice across reloads and fold/unfold transitions; closing a narrow overlay does
-not change that preference. Workspaces on wide touch open selected items
-in the workspace's inline detail area, as desktop does; modifier actions can still request another
-split. The touch app shell and Duo's navigation strip use the same panel
+start at 256px and dock above the shared 720px container breakpoint, overlaying
+at narrower widths. On wide touch, list-aside views (Chat, Agents, Notifications)
+keep their list on the left and open selections in the right preview. Their
+initial list width is 403px, with thin desktop-style pane dividers.
+
+Mail, Drive, Tasks, CRM, Calls, and Reviews instead keep their main list on the
+left and reserve an empty preview on the right until selection. Their outer
+sub-view navigation takes no column: **Show sidebar**, first in the list's
+filter row, opens it in a sheet. Picking a destination closes the sheet; closing
+it restores focus to that button. Opening or closing it preserves the list's
+scroll, the selected detail, and its draft. Its temporary visibility does not
+change the saved desktop sidebar preference. Resizing a hosted detail preserves
+its mounted editor; existing narrow-touch standalone route transitions still
+apply. Ordinary wide-touch selections stay inline; modifier actions retain
+new-split behavior.
+
+At 720px or narrower, touch navigation keeps its existing single-pane behavior.
+Chat shows its full-frame conversation feed without a sidebar or expand button;
+Notifications fills its pane and opens items as standalone pages. Home's composer
+is desktop-only. The app shell and Duo navigation strip use the same panel
 background as the surrounding views. Workspace navigation uses shared 32px rows (44px on touch), 16px
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
@@ -662,6 +664,9 @@ the list. Check that reading that item keeps the dot lit if another loaded row
 is unread, and that completing the last one clears it. Query bounds and
 pagination are unchanged.
 
+Wide touch Agents keeps its conversation list left of the selected session or
+legacy chat; narrow touch opens the standalone conversation.
+
 The Agents sidebar opens with a **Work** / **Code** switch (radio group
 "Agents mode") under New, using the shared pill tabs on desktop; touch keeps
 its existing tabs. Work is the default and the choice is remembered
@@ -728,9 +733,8 @@ list in its history, preserving that list’s state; if there is no prior list, 
 opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
-Tasks, and other views using the shared inner
-sidebar layout default to 256px on desktop and 403px on wide touch. Each view type
-saves a manually resized width
+Tasks, and other desktop navigation sidebars default to 256px; wide touch list
+panes start at 403px. Each view type saves a manually resized navigation width
 (`asidePreferenceKey`) and restores it after reloads, view switches, and in
 other splits.
 

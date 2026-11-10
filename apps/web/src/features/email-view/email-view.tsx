@@ -5,6 +5,10 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
+import {
+  DEFAULT_ASIDE_LAYOUT,
+  WIDE_TOUCH_ASIDE_SCALE,
+} from '@app/components/view-shell/view-shell-layout';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -149,25 +153,29 @@ function EmailLayout(props: {
     'macro:pref:email:reading-pane-list-width',
     { default: LIST_WIDTH.default }
   );
-  // A stored width from an older layout still fits the current bounds.
+  // Keep the shared reading-pane preference in desktop units, as sidebar
+  // widths are, so device changes do not compound the touch sizing.
+  const listScale = () =>
+    isTouchDevice()
+      ? (DEFAULT_ASIDE_LAYOUT.width * WIDE_TOUCH_ASIDE_SCALE) /
+        LIST_WIDTH.default
+      : 1;
   const listWidth = () =>
-    Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth()));
+    Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth())) *
+    listScale();
 
   return (
     <ViewShell.Root
+      contentLayout="collection"
       asidePreferenceKey="email"
       resizable
       aside={{ preserveDuringResize: false }}
-      main={
-        readerBeside()
-          ? {
-              preferredWidth: 640,
-              width: listWidth(),
-              min: LIST_WIDTH.min,
-              max: LIST_WIDTH.max,
-            }
-          : { preferredWidth: 640 }
-      }
+      main={{
+        preferredWidth: 640,
+        width: listWidth(),
+        min: isTouchDevice() || !readerBeside() ? 320 : LIST_WIDTH.min,
+        max: LIST_WIDTH.max * listScale(),
+      }}
       detail={{
         width: 640,
         initialWidth: 'auto',
@@ -184,7 +192,7 @@ function EmailLayout(props: {
         list={props.list}
         focusList={props.focusList}
         setListPane={props.setListPane}
-        onListWidthChange={setListWidth}
+        onListWidthChange={(width) => setListWidth(width / listScale())}
       />
     </ViewShell.Root>
   );

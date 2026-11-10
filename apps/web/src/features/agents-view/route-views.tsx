@@ -1,3 +1,4 @@
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { useRoutineEntities } from '@app/features/routines/queries/entities';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -10,7 +11,6 @@ import {
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createRenderEffect, lazy, Show } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { routineContent } from '../routines/routine-navigation';
@@ -86,6 +86,7 @@ function LegacyAgentsView() {
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
   useViewRestoration();
   const route = () => {
     const content = panel.handle.content();
@@ -161,7 +162,7 @@ export const AgentsRouteView = withAuth(() => {
         }
       >
         <Show
-          when={isTouchDevice() && route()}
+          when={!inlinePreviewLayout() && route()}
           fallback={<AgentsView route={route()} />}
         >
           {(current) => (

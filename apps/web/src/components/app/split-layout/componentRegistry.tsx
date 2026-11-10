@@ -381,7 +381,7 @@ registerComponent(
 registerComponent(
   'calls',
   () => <CallsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent('companies', () => <CompaniesRouteView />, {
   ownsCollectionState: true,

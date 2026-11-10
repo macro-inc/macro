@@ -250,6 +250,8 @@ interface SoupViewProps {
   header?: JSX.Element;
   /** Compose a detail outlet while keeping the list's state initialized. */
   renderContent?: (list: () => JSX.Element) => JSX.Element;
+  /** Optional composed destination for ordinary row and keyboard activation. */
+  onOpenEntity?: SoupViewListProps['onOpenEntity'];
   /** Pinned above the list's rows, such as a block's tutorial row. */
   listStart?: JSX.Element;
 }
@@ -537,7 +539,10 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <SoupViewList listStart={props.listStart} />
+          <SoupViewList
+            listStart={props.listStart}
+            onOpenEntity={props.onOpenEntity}
+          />
         </Suspense>
       </div>
       <Suspense>

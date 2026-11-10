@@ -4,9 +4,11 @@ On touch, CRM lists fill their pane behind floating filter controls and a list-l
 
 ## Customers (CRM) — `/app/companies`
 
-The local sidebar uses the same width-based navigation as Email and Tasks on
-desktop and touch: docked above 720px, an overlay at narrower widths. Hide
-navigation sits beside Customers; Show navigation leads the touch filter pills.
+Desktop navigation docks above 720px and overlays at narrower widths. On wide
+touch, the selected list or pipeline stays left of the empty or selected record,
+item, or settings preview. Show sidebar leads the list's filter pills and opens
+sub-view navigation in a sheet; selecting a destination dismisses it. Narrow
+touch navigation is unchanged.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled). The new-pipeline dialog's type menu
 (**Companies**, **Contacts**, **Generic**) shows the same icon, title and

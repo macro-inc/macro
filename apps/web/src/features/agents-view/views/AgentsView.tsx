@@ -1,13 +1,11 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
-import { createFrameWidth } from '@app/components/view-shell/create-frame-width';
-import { DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS } from '@app/components/view-shell/view-shell-layout';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { TutorialPill } from '@app/features/video-tutorials';
-import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -22,7 +20,6 @@ import { ChatEmptyStateContext } from '@core/component/AI/component/message/Empt
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
@@ -107,14 +104,8 @@ function AgentsMobileList(props: { children: JSX.Element }) {
 
 function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
-  const [workspaceElement, setWorkspaceElement] =
-    createSignal<HTMLDivElement>();
-  const workspaceWidth = createFrameWidth(workspaceElement);
-  const breakpoints = createSizeBreakpoints(
-    workspaceWidth,
-    DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS
-  );
-  const mobileLayout = () => isTouchDevice() && breakpoints.narrow();
+  const inlinePreviewLayout = useInlinePreviewLayout();
+  const mobileLayout = () => !inlinePreviewLayout();
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
@@ -421,7 +412,6 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     <DataModeProvider value={dataMode}>
       <div
         class="agents-view"
-        ref={setWorkspaceElement}
         data-agents-workspace={panel.handle.id}
         data-mode={dataMode()}
         data-session={selected() ? '1' : undefined}

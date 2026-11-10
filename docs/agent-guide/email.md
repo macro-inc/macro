@@ -1,6 +1,6 @@
 # Email
 
-Email paints its touch top fade within the email-list pane only, leaving the sidebar title and collapse control clear.
+Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane; Show sidebar opens mailbox/sub-view navigation in a sheet. Desktop reading-pane preferences and narrow-touch navigation are unchanged.
 
 ## Thread motion
 

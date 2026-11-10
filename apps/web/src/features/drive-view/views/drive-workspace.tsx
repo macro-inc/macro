@@ -1,4 +1,8 @@
-import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import {
+  CollectionPanes,
+  useViewTabHotkeys,
+  ViewShell,
+} from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
@@ -75,6 +79,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
+            contentLayout="collection"
             asidePreferenceKey="documents"
             resizable
             aside={{ preserveDuringResize: false }}
@@ -83,37 +88,35 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
             <ViewShell.Aside>
               <DriveSidebar />
             </ViewShell.Aside>
-            <ViewShell.Main>
-              <Show
-                when={navigation.active() || navigation.activeCallId()}
-                fallback={
-                  <MobileListLayout
-                    header={
-                      <div class="flex min-w-0 flex-col gap-1">
-                        <DriveMobileTabs />
-                        <DriveFolderPath />
-                      </div>
-                    }
-                  >
-                    <DriveHeader />
-                    {props.tour}
-                    <ViewShell.Content>
-                      <Suspense fallback={<DriveLoading />}>
-                        <FolderDropZone folderId={state.projectId()}>
-                          <DriveFileDropzone onDrop={actions.dropFiles}>
-                            <DriveBrowser />
-                          </DriveFileDropzone>
-                        </FolderDropZone>
-                      </Suspense>
-                    </ViewShell.Content>
-                  </MobileListLayout>
-                }
-              >
-                <Suspense fallback={<DriveLoading />}>
-                  <SplitRouter.Outlet />
-                </Suspense>
-              </Show>
-            </ViewShell.Main>
+            <CollectionPanes
+              hasDetail={!!navigation.active() || !!navigation.activeCallId()}
+              list={
+                <MobileListLayout
+                  header={
+                    <div class="flex min-w-0 flex-col gap-1">
+                      <DriveMobileTabs />
+                      <DriveFolderPath />
+                    </div>
+                  }
+                >
+                  <DriveHeader />
+                  {props.tour}
+                  <ViewShell.Content>
+                    <Suspense fallback={<DriveLoading />}>
+                      <FolderDropZone folderId={state.projectId()}>
+                        <DriveFileDropzone onDrop={actions.dropFiles}>
+                          <DriveBrowser />
+                        </DriveFileDropzone>
+                      </FolderDropZone>
+                    </Suspense>
+                  </ViewShell.Content>
+                </MobileListLayout>
+              }
+            >
+              <Suspense fallback={<DriveLoading />}>
+                <SplitRouter.Outlet />
+              </Suspense>
+            </CollectionPanes>
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>

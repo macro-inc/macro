@@ -3,7 +3,10 @@
 ## Files — `/app/component/documents`
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
-tags, updated time. Clicking a row opens the doc.
+tags, updated time. Clicking a row opens the doc. Above 720px on touch, the file
+list stays on the left and the document opens in the right preview; before
+selection that preview is empty. Show sidebar opens folders and sub-views in
+a sheet without replacing the list.
 
 Shared always excludes files owned by you. Selecting **Created by → Me** therefore
 returns no files; selecting Me together with another creator returns only that

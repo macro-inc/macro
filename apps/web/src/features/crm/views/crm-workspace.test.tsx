@@ -26,6 +26,18 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => fixture.activityFlag(),
 }));
 vi.mock('@app/components/view-shell', () => ({
+  CollectionPanes: (props: {
+    hasDetail: boolean;
+    list: JSX.Element;
+    children: JSX.Element;
+  }) => (
+    <>
+      <Show when={(fixture.touch && fixture.width > 720) || !props.hasDetail}>
+        {props.list}
+      </Show>
+      <Show when={props.hasDetail}>{props.children}</Show>
+    </>
+  ),
   ViewShell: {
     Root: (props: ParentProps) => props.children,
     Aside: (props: ParentProps) => props.children,

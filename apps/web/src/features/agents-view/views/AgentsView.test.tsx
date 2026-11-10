@@ -1,5 +1,10 @@
+import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
+  type ComponentProps,
   createResource,
   createSignal,
   For,
@@ -9,7 +14,22 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { AgentsRoute } from '../core/route';
-import { AgentsView } from './AgentsView';
+import { AgentsView as Workspace } from './AgentsView';
+
+function AgentsView(props: ComponentProps<typeof Workspace>) {
+  const panel = {
+    panelSize: {
+      get width() {
+        return state.width();
+      },
+    },
+  } as SplitPanelContextType;
+  return (
+    <SplitPanelContext.Provider value={panel}>
+      <Workspace {...props} />
+    </SplitPanelContext.Provider>
+  );
+}
 
 const state = vi.hoisted(() => ({
   touch: false,
@@ -27,9 +47,6 @@ vi.mock('@app/components/view-shell', () => ({
     aside: { isOverlay: () => false },
   }),
   ViewShell: { Root: state.pass, Aside: state.pass, Main: state.pass },
-}));
-vi.mock('@app/components/view-shell/create-frame-width', () => ({
-  createFrameWidth: () => () => state.width(),
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: () => 'pending',

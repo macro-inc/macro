@@ -1,6 +1,6 @@
 # Tasks
 
-On touch, task pills float over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks.
+On touch, task pills float over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks. Above 720px on touch, the task or project list remains left of an empty or selected detail preview; Show sidebar opens navigation in a sheet.
 
 ## Surface
 
@@ -630,7 +630,7 @@ without exposing the previous viewer's data or repeatedly retrying a failed read
 With `enable-tasks-reviews` enabled (on by default in development),
 `Reviews` is available in desktop navigation and the mobile bottom dock's
 `More views` drawer (or directly in the dock after Customize dock), not the mobile Tasks tabs.
-It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
+It opens a separate `/app/reviews` shell. On wide touch its list stays beside the preview and Show sidebar opens navigation in a sheet; its desktop sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
 survives opening a PR and returning through the breadcrumb.

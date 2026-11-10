@@ -195,7 +195,8 @@ With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phon
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
 Narrow touch layouts have no docked conversation side panel. Above 720px,
-including unfolded Duo, the Agents sidebar docks beside the conversation and can
+including unfolded Duo, selecting a session or legacy chat opens it in the
+right preview instead of a standalone split. The Agents sidebar stays left and can
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
