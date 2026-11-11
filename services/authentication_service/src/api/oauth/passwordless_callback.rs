@@ -17,7 +17,6 @@ use crate::service::user::team_auto_join::join_team_by_email_domain;
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::user_id::MacroUserId;
 use referral::domain::{models::ReferralCode, ports::ReferralService};
-use tracing::Instrument;
 
 use model::response::{ErrorResponse, UserTokensResponse};
 
@@ -118,14 +117,12 @@ pub async fn handler(
     ));
 
     // The code proved the address: run the onboarding a passwordless signup
-    // deferred until now. Fire-and-forget, like the create-user webhook.
-    tokio::spawn(
-        complete_pending_passwordless_signup(
-            ctx.clone(),
-            passwordless_response.user.email.to_lowercase(),
-        )
-        .in_current_span(),
-    );
+    // deferred until now. Awaited so a shutdown can't drop it mid-flight.
+    complete_pending_passwordless_signup(
+        ctx.clone(),
+        passwordless_response.user.email.to_lowercase(),
+    )
+    .await;
 
     // remove the users passwordless login rate limits
     tokio::spawn({
