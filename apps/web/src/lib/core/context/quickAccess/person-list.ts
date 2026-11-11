@@ -5,7 +5,7 @@ import {
   type ContactWindowHost,
   createContactDirectoryWindow,
 } from '@queries/contacts/directory-query';
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
 import { contactUserItem } from './person-items';
 import type { EntityItem, QuickAccessList, UserItem } from './types';
 
@@ -21,15 +21,15 @@ export function createPersonList(options: {
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
 }): QuickAccessList<UserItem> {
-  const window = createContactDirectoryWindow(
-    options.scope,
-    undefined,
-    options.enabled,
-    {
+  // Window setup reads the search term and its own query state. A list built
+  // inside a memo must not subscribe that memo to them: every keystroke, cache
+  // change, or next page would rebuild the list at page one.
+  const window = untrack(() =>
+    createContactDirectoryWindow(options.scope, undefined, options.enabled, {
       search: options.search,
       policy: options.policy,
       resetKey: options.resetKey,
-    }
+    })
   );
   const [loadingMore, setLoadingMore] = createSignal(false);
   const items = createMemo(() => {

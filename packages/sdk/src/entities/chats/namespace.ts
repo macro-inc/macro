@@ -21,7 +21,11 @@ export class ChatNamespace {
     return Chat.byId(this.client, id);
   }
 
-  /** Search AI chats by name and content, most relevant first, auto-paginated. */
+  /**
+   * Search AI chats by name and content, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Chat> {
     return Chat.search(this.client, query, opts);
   }

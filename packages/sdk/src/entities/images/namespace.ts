@@ -50,6 +50,8 @@ export class ImagesNamespace {
    *   aspectRatio: 'widescreen',
    * });
    * await channel.send('Fresh off the press', { images: [image] });
+   *
+   * @write
    */
   async generate(options: GenerateImageOptions): Promise<GeneratedImage> {
     const image = unwrap(
