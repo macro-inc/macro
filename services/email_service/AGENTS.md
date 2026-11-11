@@ -13,6 +13,9 @@ the gateway `/email` prefix.
 - `src/composition/api.rs`: production API dependencies and service wiring.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
   read service; handlers retain only extraction and HTTP/error rendering.
+- `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
+  `calendar_disconnect.rs`, and `signature_settings.rs`: adapters for the five
+  inbox-scoped use cases; handlers delegate to their email-domain services.
 
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),

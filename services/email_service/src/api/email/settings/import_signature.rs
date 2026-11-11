@@ -1,15 +1,14 @@
 use crate::api::context::ApiContext;
 use crate::api::email::settings::patch::UnresolvedSignatureImagesError;
-use crate::util::process_pre_insert::sfs_map;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
-use email_utils::sanitize_html_fragment;
+use email::domain::signature_settings::SignatureImportError;
+use email_api_client::domain::models::EmailApiError;
 use model::response::ErrorResponse;
+use models_email::api;
 use models_email::service::link::Link;
-use models_email::{api, service};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -79,62 +78,22 @@ pub async fn import_signature_handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
 ) -> Result<Json<ImportSignatureResponse>, ImportSignatureError> {
-    let access_token = ctx
-        .email_api
-        .get_access_token(link.id, TokenFreshness::Fresh)
-        .await?;
-
-    let send_as_response = ctx
-        .gmail_client
-        .list_send_as(access_token.expose_secret())
-        .await?;
-
-    let aliases = send_as_response.send_as.unwrap_or_default();
-
-    // Prefer the alias for this inbox's own address; fall back to the primary.
-    let email_address = link.email_address.0.as_ref();
-    let alias = aliases
-        .iter()
-        .find(|alias| alias.send_as_email.eq_ignore_ascii_case(email_address))
-        .or_else(|| aliases.iter().find(|alias| alias.is_primary == Some(true)));
-
-    let signature = alias
-        .and_then(|alias| alias.signature.clone())
-        .filter(|sig| !sig.trim().is_empty())
-        .ok_or(ImportSignatureError::NoSignatureFound)?;
-
-    let mut sanitized_signature = sanitize_html_fragment(&signature);
-
-    // Move Gmail-hosted images onto SFS so they render for recipients, matching
-    // `patch_settings_handler`. A rehost *error* never blocks the import.
-    match sfs_map::rehost_html_images(&ctx.db, &ctx.sfs_client, &sanitized_signature).await {
-        Ok((rehosted, unresolved)) => {
-            if unresolved > 0 {
-                return Err(ImportSignatureError::UnresolvedSignatureImages(
-                    unresolved as u32,
-                ));
+    let updated_settings = ctx
+        .signature_settings
+        .import(link.id, link.email_address.0.as_ref())
+        .await
+        .map_err(|error| match error {
+            SignatureImportError::NoSignature => ImportSignatureError::NoSignatureFound,
+            SignatureImportError::Token(error) => ImportSignatureError::TokenError(error),
+            SignatureImportError::Provider(error) => ImportSignatureError::GmailApiError(error),
+            SignatureImportError::Database(error) => {
+                ImportSignatureError::DatabaseError(error.into_inner())
             }
-            sanitized_signature = rehosted;
-        }
-        Err(e) => {
-            tracing::warn!(error = ?e, "signature image rehost failed; importing signature unchanged");
-        }
-    }
-
-    let patch = service::settings::SettingsPatch::new(
-        api::settings::Settings {
-            signature: Some(sanitized_signature),
-            signature_on_replies_forwards: None,
-            read_receipts_enabled: None,
-        },
-        link.id,
-    );
-
-    let updated_settings = email_db_client::settings::patch_settings(&ctx.db, patch).await?;
-
-    let response_settings = api::settings::Settings::from(updated_settings);
-
+            SignatureImportError::UnresolvedImages(count) => {
+                ImportSignatureError::UnresolvedSignatureImages(count)
+            }
+        })?;
     Ok(Json(ImportSignatureResponse {
-        settings: response_settings,
+        settings: api::settings::Settings::from(updated_settings),
     }))
 }
