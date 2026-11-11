@@ -23,13 +23,16 @@ export function callMediaButtonVariant(off: boolean, disabled: boolean) {
   return off && !disabled ? 'danger' : 'secondary';
 }
 
-export function BlockedMediaBadge(props: { blocked: boolean }) {
+export function BlockedMediaBadge(props: { blocked: boolean; class?: string }) {
   return (
     <Show when={props.blocked}>
       <span
         aria-hidden="true"
         data-call-permission-badge
-        class="absolute top-1 right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink"
+        class={cn(
+          'pointer-events-none absolute top-1 right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink',
+          props.class
+        )}
       >
         <span class="grid size-full place-items-center rounded-full bg-warning-bg">
           <ExclamationMark class="size-3" />
@@ -133,6 +136,7 @@ function MediaSplitButton(props: SplitProps) {
   const variant = () =>
     callMediaButtonVariant(!!props.off, !!props.disabled || !!props.blocked);
   const toggleVariant = () => (props.pressed ? 'accent' : variant());
+  const showMenu = () => !isMobile() && !props.hideMenu;
   return (
     <CallSettingsMenu
       title={props.menuLabel}
@@ -167,9 +171,8 @@ function MediaSplitButton(props: SplitProps) {
               onClick={props.onToggle}
             >
               {props.icon}
-              <BlockedMediaBadge blocked={!!props.blocked} />
             </ButtonGroup.Button>
-            <Show when={!isMobile() && !props.hideMenu}>
+            <Show when={showMenu()}>
               <ButtonGroup.Divider />
               <ButtonGroup.Button
                 {...triggerProps}
@@ -191,6 +194,13 @@ function MediaSplitButton(props: SplitProps) {
               </ButtonGroup.Button>
             </Show>
           </ButtonGroup>
+          <BlockedMediaBadge
+            blocked={!!props.blocked}
+            class={cn(
+              showMenu() && '-top-1',
+              showMenu() && (bar.props.compact ? 'right-px' : 'right-1.25')
+            )}
+          />
         </div>
       )}
     >
