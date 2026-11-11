@@ -132,6 +132,14 @@ describe("document api tests", async () => {
     const userA = await connect("test-doc");
     const userB = await connect("test-doc");
 
+    // Metadata must observe completed registrations, not race a separate HTTP
+    // channel against newly sent websocket messages. Ping follows each real
+    // registration on its socket and is processed under the same room barrier.
+    for (const user of [userA, userB]) {
+      user.send("ping");
+      expect(await user.connection.waitForNextMessage()).toBe("pong");
+    }
+
     const peeridA = userA.doc.peerIdStr;
     const peeridB = userB.doc.peerIdStr;
 

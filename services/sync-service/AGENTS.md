@@ -66,6 +66,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   regardless of the retained `alarm-keep-alive` compatibility flag.
 - Use Node.js 22.12+/24.x/26+ for Vitest 5; install JS deps with `npm ci`
   (`package-lock.json` is authoritative, not `bun.lock`).
+- Await `Miniflare.dispose()` in per-test teardown (or `afterAll` for shared
+  fixtures) before Vitest tears down its console RPC channel.
+- Use a real socket ping/pong barrier before registered-peer metadata assertions;
+  a separate HTTP channel is not ordered after `socket.send()`.
 
 ## Gotchas
 

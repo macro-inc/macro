@@ -1,11 +1,16 @@
 import { Miniflare } from "miniflare";
-import { expect, test, describe, beforeEach } from "vitest";
+import { expect, test, describe, beforeEach, afterEach } from "vitest";
 import { createTestUser, setupMiniflare, createDocument, copyDocument } from "./utils";
 
 let mf: Miniflare;
 
 beforeEach(async () => {
   mf = await setupMiniflare();
+});
+
+// Drain the owned runtime before Vitest closes its console RPC channel.
+afterEach(async () => {
+  await mf.dispose();
 });
 
 // Helper functions
