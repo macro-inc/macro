@@ -205,7 +205,15 @@ impl Plugin for Actions {
                     return Ok(Handled::No);
                 }
                 tx.select_start(cell)?;
-                insert_table_row_at_selection(tx, *after)?.is_some()
+                let Some(row) = insert_table_row_at_selection(tx, *after)? else {
+                    return Ok(Handled::No);
+                };
+                if let Some(first) = tx.view().first_child(row)
+                    && tx.is::<TableCellNode>(first)
+                {
+                    tx.select_start(first)?;
+                }
+                true
             }
             TableAction::InsertColumn { cell, after } => {
                 let cell = key(*cell);
