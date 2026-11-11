@@ -121,6 +121,11 @@ export type AutoReloadSnapshot = {
 export type BillingInterval = 'month' | 'year';
 
 /**
+ * Where a computer's billing stands, as its team sees it.
+ */
+export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -295,9 +300,14 @@ export type ComputerStatus = {
      * included: the ones releasing it deletes.
      */
     agentCount: number;
+    billing?: null | BillingStatus;
     /**
-     * Whether a cancel at period end can still be undone; false once its
-     * billing item was removed ahead of the renewal.
+     * Whether the computer can be restored (`POST .../restore`): billing
+     * ended and the disk is still retained.
+     */
+    canRestore: boolean;
+    /**
+     * Whether a cancel at period end can still be undone (until `cancelsAt`).
      */
     canUndoCancel: boolean;
     /**
@@ -341,7 +351,10 @@ export type ComputerStatus = {
      * Display name.
      */
     name: string;
-    payment?: null | PaymentOutcome;
+    /**
+     * Since when the team subscription is past due.
+     */
+    pastDueSince?: string | null;
     /**
      * Whether validated state requests power on; false for quarantined records.
      */
@@ -352,7 +365,7 @@ export type ComputerStatus = {
      */
     purchasedBy: string;
     /**
-     * When the disk is destroyed, for a canceled computer.
+     * When the disk is destroyed, for a computer whose billing ended.
      */
     retainedUntil?: string | null;
     setup?: null | SetupProgress;
@@ -377,7 +390,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -1302,20 +1315,6 @@ export type GtmInviteOfferStatus = {
     offer?: null | GtmInviteOffer;
 };
 
-/**
- * An accepted image update.
- */
-export type ImageUpdate = {
-    /**
-     * The image the root disk is being rebuilt from.
-     */
-    image: string;
-    /**
-     * The image it ran before; `null` if creation never recorded one.
-     */
-    previousImage?: string | null;
-};
-
 export type InitGithubLinkResponse = {
     /**
      * The OAuth authorization URL to redirect the user to
@@ -1350,50 +1349,6 @@ export type InitOutlookLinkResponse = {
      * The link ID for tracking the OAuth flow.
      */
     link_id: string;
-};
-
-/**
- * Body of an internal purchase.
- */
-export type InternalPurchaseBody = {
-    /**
-     * Purchase funding or billing state.
-     */
-    billing: PurchaseBilling;
-    /**
-     * The team admin or owner the caller authorized.
-     */
-    createdBy: string;
-    /**
-     * Joined into the same subscription update, e.g. an agent seat.
-     */
-    extraItems?: Array<SubscriptionItem>;
-    /**
-     * Display name.
-     */
-    name?: string | null;
-    /**
-     * Purchased catalog size.
-     */
-    size: ComputerSize;
-    /**
-     * Team that owns the computer.
-     */
-    teamId: string;
-};
-
-/**
- * Body of an image update.
- */
-export type InternalUpdateImageBody = {
-    /**
-     * The versioned image to rebuild the root disk from, e.g. `macro-box/2026-11-10`.
-     */
-    image: string;
-    /**
-     * Team that owns the computer.
-     */
-    teamId: string;
 };
 
 /**
@@ -1654,11 +1609,6 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
-/**
- * The purchase outcome, latched after payment or comp confirmation.
- */
-export type PaymentOutcome = 'pending' | 'paid' | 'unbilled' | 'comped';
-
 export type Permission = {
     /**
      * The description of the permission
@@ -1789,19 +1739,6 @@ export type PublicGtmInviteLink = {
 };
 
 /**
- * Server-selected purchase funding. Team clients cannot select this value.
- */
-export type PurchaseBilling = {
-    kind: 'stripe';
-} | {
-    kind: 'comped';
-    /**
-     * Reason for this decision or failure.
-     */
-    reason: string;
-};
-
-/**
  * Body of a team purchase.
  */
 export type PurchaseBody = {
@@ -1810,10 +1747,20 @@ export type PurchaseBody = {
      */
     name?: string | null;
     /**
+     * The client's key for this purchase: one per Buy dialog, sent again
+     * when the purchase is retried, so a retry never charges twice.
+     */
+    purchaseKey: string;
+    /**
      * Purchased catalog size.
      */
     size: ComputerSize;
 };
+
+/**
+ * Where a purchase stands when its request returns.
+ */
+export type PurchaseState = 'ready' | 'confirming';
 
 /**
  * Answer of a purchase.
@@ -1823,6 +1770,10 @@ export type Purchased = {
      * Computer this operation addresses.
      */
     computerId: string;
+    /**
+     * Whether the computer exists yet.
+     */
+    state: PurchaseState;
 };
 
 /**
@@ -3644,120 +3595,6 @@ export type HealthHandlerResponses = {
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
 
-export type InternalPurchaseComputerData = {
-    body: InternalPurchaseBody;
-    path?: never;
-    query?: never;
-    url: '/internal/computers';
-};
-
-export type InternalPurchaseComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type InternalPurchaseComputerError = InternalPurchaseComputerErrors[keyof InternalPurchaseComputerErrors];
-
-export type InternalPurchaseComputerResponses = {
-    200: Purchased;
-};
-
-export type InternalPurchaseComputerResponse = InternalPurchaseComputerResponses[keyof InternalPurchaseComputerResponses];
-
-export type InternalQuoteComputerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Team that owns the computer.
-         */
-        teamId: string;
-        /**
-         * Purchased catalog size.
-         */
-        size: ComputerSize;
-    };
-    url: '/internal/computers/quote';
-};
-
-export type InternalQuoteComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type InternalQuoteComputerError = InternalQuoteComputerErrors[keyof InternalQuoteComputerErrors];
-
-export type InternalQuoteComputerResponses = {
-    200: Quote;
-};
-
-export type InternalQuoteComputerResponse = InternalQuoteComputerResponses[keyof InternalQuoteComputerResponses];
-
-export type InternalGetComputerData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query: {
-        /**
-         * Team that owns the computer.
-         */
-        teamId: string;
-    };
-    url: '/internal/computers/{computer_id}';
-};
-
-export type InternalGetComputerResponses = {
-    200: ComputerStatus;
-};
-
-export type InternalGetComputerResponse = InternalGetComputerResponses[keyof InternalGetComputerResponses];
-
-export type InternalUpdateComputerImageData = {
-    body: InternalUpdateImageBody;
-    path: {
-        computer_id: string;
-    };
-    query?: never;
-    url: '/internal/computers/{computer_id}/image';
-};
-
-export type InternalUpdateComputerImageErrors = {
-    409: ErrorResponse;
-};
-
-export type InternalUpdateComputerImageError = InternalUpdateComputerImageErrors[keyof InternalUpdateComputerImageErrors];
-
-export type InternalUpdateComputerImageResponses = {
-    200: ImageUpdate;
-};
-
-export type InternalUpdateComputerImageResponse = InternalUpdateComputerImageResponses[keyof InternalUpdateComputerImageResponses];
-
-export type InternalRollbackComputerImageData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query: {
-        /**
-         * Team that owns the computer.
-         */
-        teamId: string;
-    };
-    url: '/internal/computers/{computer_id}/image/rollback';
-};
-
-export type InternalRollbackComputerImageErrors = {
-    409: ErrorResponse;
-};
-
-export type InternalRollbackComputerImageError = InternalRollbackComputerImageErrors[keyof InternalRollbackComputerImageErrors];
-
-export type InternalRollbackComputerImageResponses = {
-    200: ImageUpdate;
-};
-
-export type InternalRollbackComputerImageResponse = InternalRollbackComputerImageResponses[keyof InternalRollbackComputerImageResponses];
-
 export type MacroApiTokenData = {
     body?: never;
     path?: never;
@@ -4626,6 +4463,7 @@ export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof Purchas
 
 export type PurchaseTeamComputerResponses = {
     200: Purchased;
+    202: Purchased;
 };
 
 export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
@@ -4772,6 +4610,28 @@ export type ReleaseTeamComputerResponses = {
 };
 
 export type ReleaseTeamComputerResponse = ReleaseTeamComputerResponses[keyof ReleaseTeamComputerResponses];
+
+export type RestoreTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/restore';
+};
+
+export type RestoreTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RestoreTeamComputerError = RestoreTeamComputerErrors[keyof RestoreTeamComputerErrors];
+
+export type RestoreTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RestoreTeamComputerResponse = RestoreTeamComputerResponses[keyof RestoreTeamComputerResponses];
 
 export type RetryTeamComputerData = {
     body?: never;

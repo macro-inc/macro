@@ -6,6 +6,6 @@
  */
 
 /**
- * When the disk is destroyed, for a canceled computer.
+ * When the disk is destroyed, for a computer whose billing ended.
  */
 export type ComputerStatusRetainedUntil = string | null;

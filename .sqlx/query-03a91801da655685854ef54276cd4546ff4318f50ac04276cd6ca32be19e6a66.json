@@ -6,7 +6,19 @@
     "parameters": {
       "Left": [
         "Text",
-        "Text"
+        {
+          "Custom": {
+            "name": "subscription_item_change_outcome",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "payment_failed",
+                "abandoned"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": []

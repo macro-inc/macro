@@ -161,6 +161,7 @@ export const authBacklog = [
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
+  'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
   'quoteTeamComputer', // Computer checkout belongs to the app.
   'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.

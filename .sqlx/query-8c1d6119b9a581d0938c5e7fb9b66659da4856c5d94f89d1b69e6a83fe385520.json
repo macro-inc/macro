@@ -21,7 +21,19 @@
       {
         "ordinal": 3,
         "name": "outcome: ItemChangeOutcome",
-        "type_info": "Text"
+        "type_info": {
+          "Custom": {
+            "name": "subscription_item_change_outcome",
+            "kind": {
+              "Enum": [
+                "pending",
+                "succeeded",
+                "payment_failed",
+                "abandoned"
+              ]
+            }
+          }
+        }
       }
     ],
     "parameters": {

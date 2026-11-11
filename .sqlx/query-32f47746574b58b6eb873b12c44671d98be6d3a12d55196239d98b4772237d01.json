@@ -6,7 +6,18 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
+        {
+          "Custom": {
+            "name": "account_notice_stage",
+            "kind": {
+              "Enum": [
+                "expires_soon",
+                "expires_today",
+                "expired"
+              ]
+            }
+          }
+        },
         "Timestamptz"
       ]
     },

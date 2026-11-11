@@ -6,7 +6,17 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing"
+              ]
+            }
+          }
+        },
         "Jsonb",
         "Timestamptz"
       ]
