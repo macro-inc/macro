@@ -1,11 +1,9 @@
 import type { Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import {
-  CHANNEL_ACCESS_LEVELS,
   type ChannelAccessError,
   type ChannelAccessLevel,
   type ItemKey,
-  isBelow,
   itemKey,
   type OwedGrant,
   owedGrant,
@@ -305,34 +303,16 @@ export function summarizeShare(
 export type ShareNotice =
   | { readonly t: 'left-out'; readonly items: readonly ShareItem[] }
   | { readonly t: 'not-owner'; readonly items: readonly ShareItem[] }
-  | {
-      readonly t: 'capped';
-      readonly items: readonly ShareItem[];
-      readonly level: ChannelAccessLevel;
-    }
   | { readonly t: 'split'; readonly messagesPerRecipient: number };
 
 export function shareNotices(
-  items: readonly ShareItem[],
-  level: ChannelAccessLevel
+  items: readonly ShareItem[]
 ): readonly ShareNotice[] {
   const leftOut = items.filter((item) => shareAccess(item).t === 'cannot-send');
   const sendable = items.filter(
     (item) => shareAccess(item).t !== 'cannot-send'
   );
   const notOwned = sendable.filter((item) => !item.canGrant);
-  const grantedLevel = (item: ShareItem) =>
-    owedGrant(item, level)?.level ?? 'view';
-  const capped = CHANNEL_ACCESS_LEVELS.filter((cap) =>
-    isBelow(cap, level)
-  ).flatMap((cap) => {
-    const atCap = sendable.filter(
-      (item) => item.canGrant && grantedLevel(item) === cap
-    );
-    return atCap.length > 0
-      ? [{ t: 'capped' as const, items: atCap, level: cap }]
-      : [];
-  });
   const messagesPerRecipient = Math.ceil(
     sendable.length / MAX_ATTACHMENTS_PER_MESSAGE
   );
@@ -342,7 +322,6 @@ export function shareNotices(
     ...(notOwned.length > 0
       ? [{ t: 'not-owner' as const, items: notOwned }]
       : []),
-    ...capped,
     ...(messagesPerRecipient > 1
       ? [{ t: 'split' as const, messagesPerRecipient }]
       : []),

@@ -45,7 +45,6 @@ describe('shareAccess', () => {
     expect(shareAccess(item())).toEqual({
       t: 'set-level',
       when: 'after-send',
-      maxLevel: 'edit',
     });
   });
 });
@@ -70,10 +69,10 @@ describe('owedGrant', () => {
     });
   });
 
-  it('caps email at view', () => {
+  it('grants email threads up to edit', () => {
     expect(owedGrant(item({ kind: 'email' }), 'edit')).toEqual({
       when: 'after-send',
-      level: 'view',
+      level: 'edit',
     });
   });
 
@@ -87,8 +86,7 @@ describe('owedGrant', () => {
 });
 
 describe('levelChoice', () => {
-  it('offers no control when nothing can be granted above view', () => {
-    expect(levelChoice([item({ kind: 'email' })], commentsOn)).toBeUndefined();
+  it('offers no control when nothing can be granted', () => {
     expect(
       levelChoice([item({ canGrant: false })], commentsOn)
     ).toBeUndefined();
@@ -133,12 +131,11 @@ describe('levelChoice', () => {
     expect(choice?.initial).toBe('view');
   });
 
-  it('does not let email pull a markdown batch down to view', () => {
-    const choice = levelChoice(
-      [item({ format: 'markdown' }), item({ kind: 'email', id: 'thread-1' })],
-      commentsOn
-    );
-    expect(choice?.initial).toBe('edit');
+  it('offers an email thread view and edit, with no comment', () => {
+    expect(levelChoice([item({ kind: 'email' })], commentsOn)).toEqual({
+      options: ['view', 'edit'],
+      initial: 'view',
+    });
   });
 
   it('seeds from the sole channel when every item already has that level there', () => {

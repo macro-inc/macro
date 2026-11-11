@@ -130,7 +130,7 @@ describe('planShare', () => {
     ]);
   });
 
-  it('grants native projects before the post and everything else after, capped per kind', () => {
+  it('grants native projects before the post and everything else after', () => {
     const project = item('initiative-1', { kind: 'initiative' });
     const thread = item('thread-1', { kind: 'email' });
     const call = item('call-1', { kind: 'call' });
@@ -146,7 +146,7 @@ describe('planShare', () => {
         grantFirst: [{ item: project, level: 'edit' }],
         grantAfter: [
           { item: item('doc-1'), level: 'edit' },
-          { item: thread, level: 'view' },
+          { item: thread, level: 'edit' },
         ],
       },
     ]);
@@ -421,22 +421,18 @@ describe('shareNotices', () => {
       canGrant: false,
     });
     const notOwned = item('doc-2', { canGrant: false });
-    const thread = item('thread-1', { kind: 'email' });
-    expect(
-      shareNotices([item('doc-1'), notOwned, thread, session], 'edit')
-    ).toEqual([
+    expect(shareNotices([item('doc-1'), notOwned, session])).toEqual([
       { t: 'left-out', items: [session] },
       { t: 'not-owner', items: [notOwned] },
-      { t: 'capped', items: [thread], level: 'view' },
     ]);
-    expect(shareNotices([item('doc-1'), thread], 'view')).toEqual([]);
+    expect(shareNotices([item('doc-1')])).toEqual([]);
   });
 
   it('warns when each recipient will get more than one message', () => {
-    expect(shareNotices(docs(11), 'view')).toEqual([
+    expect(shareNotices(docs(11))).toEqual([
       { t: 'split', messagesPerRecipient: 2 },
     ]);
-    expect(shareNotices(docs(10), 'view')).toEqual([]);
+    expect(shareNotices(docs(10))).toEqual([]);
   });
 });
 

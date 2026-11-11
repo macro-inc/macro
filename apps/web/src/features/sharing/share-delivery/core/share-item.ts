@@ -52,7 +52,6 @@ export type ChannelAccessError =
 
 type KindPolicy = {
   readonly grant: 'after-send' | 'before-send' | 'message-only';
-  readonly maxLevel: ChannelAccessLevel;
   /** `restricted`: only a sender who can grant access may send it. */
   readonly send: 'anyone' | 'restricted';
   /** Recipients cannot hold comment access. */
@@ -60,23 +59,19 @@ type KindPolicy = {
 };
 
 const KIND_POLICY = {
-  document: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
-  chat: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
-  project: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
-  database: { grant: 'after-send', maxLevel: 'edit', send: 'anyone' },
-  form: {
-    grant: 'after-send',
-    maxLevel: 'edit',
-    send: 'anyone',
-    comment: false,
-  },
-  email: { grant: 'after-send', maxLevel: 'view', send: 'anyone' },
-  agent_session: { grant: 'after-send', maxLevel: 'edit', send: 'restricted' },
-  initiative: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
-  crm_pipeline: { grant: 'before-send', maxLevel: 'edit', send: 'restricted' },
-  call: { grant: 'message-only', maxLevel: 'view', send: 'anyone' },
+  document: { grant: 'after-send', send: 'anyone' },
+  chat: { grant: 'after-send', send: 'anyone' },
+  project: { grant: 'after-send', send: 'anyone' },
+  database: { grant: 'after-send', send: 'anyone' },
+  form: { grant: 'after-send', send: 'anyone', comment: false },
+  // Edit on a shared thread lets the recipient reply from their own inbox.
+  email: { grant: 'after-send', send: 'anyone', comment: false },
+  agent_session: { grant: 'after-send', send: 'restricted' },
+  initiative: { grant: 'before-send', send: 'restricted' },
+  crm_pipeline: { grant: 'before-send', send: 'restricted' },
+  call: { grant: 'message-only', send: 'anyone' },
   // A pull request's access follows GitHub, so sharing one only sends it.
-  foreign: { grant: 'message-only', maxLevel: 'view', send: 'anyone' },
+  foreign: { grant: 'message-only', send: 'anyone' },
 } as const satisfies Record<ShareKind, KindPolicy>;
 
 export type RestrictedKind = {
@@ -92,11 +87,7 @@ export function isSendRestricted(kind: ShareKind): kind is RestrictedKind {
 export type ShareAccess =
   | { readonly t: 'cannot-send' }
   | { readonly t: 'view-via-message' }
-  | {
-      readonly t: 'set-level';
-      readonly when: 'after-send' | 'before-send';
-      readonly maxLevel: ChannelAccessLevel;
-    };
+  | { readonly t: 'set-level'; readonly when: 'after-send' | 'before-send' };
 
 export function shareAccess(item: ShareItem): ShareAccess {
   const policy = KIND_POLICY[item.kind];
@@ -104,7 +95,7 @@ export function shareAccess(item: ShareItem): ShareAccess {
     return { t: 'cannot-send' };
   if (policy.grant === 'message-only' || !item.canGrant)
     return { t: 'view-via-message' };
-  return { t: 'set-level', when: policy.grant, maxLevel: policy.maxLevel };
+  return { t: 'set-level', when: policy.grant };
 }
 
 export type OwedGrant = {
@@ -118,7 +109,7 @@ export function owedGrant(
 ): OwedGrant | undefined {
   const access = shareAccess(item);
   if (access.t !== 'set-level') return undefined;
-  return { when: access.when, level: lowerOf(chosen, access.maxLevel) };
+  return { when: access.when, level: chosen };
 }
 
 export type LevelChoice = {
@@ -135,38 +126,32 @@ export function levelChoice(
   items: readonly ShareItem[],
   { prefillChannelId, markdownComments }: LevelChoiceInput
 ): LevelChoice | undefined {
-  const settable = items.flatMap((item) => {
-    const access = shareAccess(item);
-    return access.t === 'set-level'
-      ? [{ item, maxLevel: access.maxLevel }]
-      : [];
-  });
-  const top = CHANNEL_ACCESS_LEVELS.findLast((level) =>
-    settable.some((entry) => entry.maxLevel === level)
-  );
-  if (top === undefined || top === 'view') return undefined;
+  const settable = items.filter((item) => shareAccess(item).t === 'set-level');
+  if (settable.length === 0) return undefined;
 
   const hideComment = settable.some(
-    (entry) => !takesComment(entry.item, markdownComments)
+    (item) => !takesComment(item, markdownComments)
   );
   const options = CHANNEL_ACCESS_LEVELS.filter(
-    (level) => !isBelow(top, level) && !(hideComment && level === 'comment')
+    (level) => !(hideComment && level === 'comment')
   );
 
   const existing =
     prefillChannelId === undefined
       ? []
-      : settable.map((entry) => entry.item.channelGrants.get(prefillChannelId));
+      : settable.map((item) => item.channelGrants.get(prefillChannelId));
   const [shared] = existing;
-  if (shared !== undefined && existing.every((level) => level === shared)) {
-    const seeded = lowerOf(shared, top);
-    if (options.includes(seeded)) return { options, initial: seeded };
+  if (
+    shared !== undefined &&
+    existing.every((level) => level === shared) &&
+    options.includes(shared)
+  ) {
+    return { options, initial: shared };
   }
 
   const initial = settable
-    .filter((entry) => entry.maxLevel !== 'view')
-    .map((entry) => DEFAULT_LEVEL[entry.item.format])
-    .reduce(lowerOf, top);
+    .map((item) => DEFAULT_LEVEL[item.format])
+    .reduce(lowerOf, 'edit');
   return {
     options,
     initial: hideComment && initial === 'comment' ? 'view' : initial,
@@ -192,7 +177,7 @@ export function parseChannelAccessLevel(
   return CHANNEL_ACCESS_LEVELS.find((known) => known === level);
 }
 
-export function isBelow(a: ChannelAccessLevel, b: ChannelAccessLevel): boolean {
+function isBelow(a: ChannelAccessLevel, b: ChannelAccessLevel): boolean {
   return CHANNEL_ACCESS_LEVELS.indexOf(a) < CHANNEL_ACCESS_LEVELS.indexOf(b);
 }
 

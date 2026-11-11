@@ -1864,11 +1864,10 @@ Focus starts in `To: Email or group`, which lists people and channels with more
 than two members. With two or more people and no channel,
 `Send As Group Message` is on and sends one group message; turned off, each
 person gets their own message. The access selector at the end of the To row
-(`can` and a level once a recipient is picked; the `Access:` row on phones)
-sets the access level for items you own. It starts at the lowest default among
-them: Edit for markdown documents, Comment for PDFs, and View for anything
-else, ignoring view-only items such as email threads. A selection that includes
-a form offers no Comment level. Each recipient gets a message with the optional
+(the `Access:` row on phones) sets the access level for items you own. It
+starts at the lowest default among them: Edit for markdown documents, Comment
+for PDFs, and View for anything else. A selection that includes a form or an
+email thread offers no Comment level. Each recipient gets a message with the optional
 text above the item chips, and the items also appear under the channel's
 Attachments tab. Sharing sends real messages.
 

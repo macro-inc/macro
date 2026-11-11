@@ -139,9 +139,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
     options.items().some((item) => shareAccess(item).t !== 'cannot-send')
   );
 
-  const notices = createMemo(() =>
-    shareNotices(options.items(), level()?.value ?? 'view')
-  );
+  const notices = createMemo(() => shareNotices(options.items()));
 
   async function grantAll(
     record: TargetRecord,

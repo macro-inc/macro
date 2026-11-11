@@ -63,11 +63,6 @@ function noticeText(notice: ShareNotice): string {
         : `You don't own ${itemNames(items)}, so recipients get view access through the message. Only their owners can grant more.`
     )
     .with(
-      { t: 'capped' },
-      ({ items, level }) =>
-        `${itemNames(items)} can be shared with ${level} access at most.`
-    )
-    .with(
       { t: 'split' },
       ({ messagesPerRecipient }) =>
         `Each recipient gets ${messagesPerRecipient} messages, because a message holds up to ${MAX_ATTACHMENTS_PER_MESSAGE} items. Your message goes in the first.`
