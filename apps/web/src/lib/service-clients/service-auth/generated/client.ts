@@ -7526,6 +7526,11 @@ export type putProfilePictureResponse401 = {
   status: 401;
 };
 
+export type putProfilePictureResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -7536,6 +7541,7 @@ export type putProfilePictureResponseSuccess = putProfilePictureResponse200 & {
 };
 export type putProfilePictureResponseError = (
   | putProfilePictureResponse401
+  | putProfilePictureResponse429
   | putProfilePictureResponse500
 ) & {
   headers: Headers;
@@ -7603,6 +7609,11 @@ export type putProfilePictureFileResponse404 = {
   status: 404;
 };
 
+export type putProfilePictureFileResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureFileResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -7616,6 +7627,7 @@ export type putProfilePictureFileResponseError = (
   | putProfilePictureFileResponse400
   | putProfilePictureFileResponse401
   | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse429
   | putProfilePictureFileResponse500
 ) & {
   headers: Headers;

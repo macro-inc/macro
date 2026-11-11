@@ -77,8 +77,14 @@ membership/context tokens, not previous result IDs or a scoring clock. Contact
 changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for their current window. Reset virtual focus/scroll on window
-replacement, not label updates. Keep explicit participant/team pools scoped and
+aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
+further pages of people and contact matches are listed below the earlier ones, up
+to a bound; property pickers keep a replaceable window with explicit paging. A
+window key names the page or growing list on screen, never a refresh of it. Reset
+virtual focus/scroll only on window replacement, not label updates or refreshes.
+Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
+results arrive; the highlight resets only when the query or category changes.
+The person list keeps its still-matching rows while the next read is pending. Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
 projects and calls delegate to the same bounded directory. In mention configuration,
 `users()` returning undefined selects that directory; [] remains an explicit empty
@@ -388,8 +394,11 @@ matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Personal contact rows instead preserve policy-5 source order; tune only
-ordinary entity relevance here.
+match. Among equally good name matches Cmd+K lists Macro users and DMs before
+other rows. Personal contact rows keep policy-5 source order among equally good
+name matches only, so a recent weaker match never takes a better match's slot.
+A row whose letters merely appear in order ranks below every row containing the
+typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
