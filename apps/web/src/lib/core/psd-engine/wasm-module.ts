@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-psd-engine-wasm
- * which runs wasm-pack over crates/engines/psd_engine into
+ * which runs wasm-pack over crates/engines/psd_engine_wasm into
  * src/lib/core/psd-engine/wasm/ (gitignored).
  */
 
