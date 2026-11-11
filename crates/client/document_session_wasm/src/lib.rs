@@ -27,11 +27,13 @@ mod telemetry;
 mod paste_init;
 pub use paste_init::prepare_macro_paste;
 
+mod view_command_scope;
 use bebop::Record;
 pub use document::DocSession;
 pub use editor::EditorSession;
 use generated::owned as wire;
 pub use router::SyncRouter;
+pub use view_command_scope::ViewCommandFailure;
 use wasm_bindgen::prelude::*;
 const _: () = assert!(lexical_model::DIFF_FORMAT_VERSION == generated::DIFF_FORMAT_VERSION);
 const _: () = assert!(

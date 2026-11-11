@@ -253,3 +253,30 @@ model default false; never infer intent from unknown branches or private MIME.
 Keep HTML/Lexical precedence and use this flag only for Markdown policy.
 
 Canonicalize transport-fixture JSON for freshness comparisons so Biome formatting cannot alter their result; retain exact packet byte arrays and call order, and format recorded files afterward. Stream-export JSON byte oracles remain byte-exact.
+
+Ordinary Enter listeners use view_command_scope and the model's actual ordered
+command list, without compatibility/foreign-node capability inference. Keep DOM
+events in the caller's synchronous JS stack; borrowed pending reads and writes
+require the exact current issued scope. Native programmatic=true comes only from
+Command::Key.event=None and establishes an explicit null payload, including
+nested/follow-up Enter. Rebind stable logical registrations from actual core
+presence, and preserve current-bucket callback leases through the outer call.
+
+When the JS dispatcher retained failure slots, collect takeViewCommandFailure()
+leases FIFO until undefined before consuming the same output. Every lease binds
+one original scope/invocation to only its tag-16 ordinals, counting cursor marker
+expansion. Validate all current=true ordinals and defer only their exact union;
+consume actual Diff and IO before resolving the first reported original cause.
+Keep other causes separately available; caught nested slots can yield no lease.
+No AggregateError, string matching, fabricated receipt or cause substitution.
+
+A real new Machine input invalidates prior leases through readonly current;
+retired causes retain their original ordinals for diagnosis and must never filter
+a newer packet. Pure getters/takeOutput/takeFailure do not invalidate leases.
+Pending metadata blocks local input and JS listeners until every FIFO record is
+taken; undefined proves metadata queue empty only, never IO or admission ACK.
+Keep the caller's runSync busy/queue guard through actual output consumption.
+Sticky encoding/identity faults retain original causes then throw on the getter,
+survive Reset, and require disposal plus a new real session. Canonical Sync,
+AddPeerIds, WAL and Stop remain live under that fault; do not recover by replaying
+a JS updater or initializing the broken session again.
