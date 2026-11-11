@@ -48,7 +48,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 axum = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
-serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-tower = { workspace = true }
