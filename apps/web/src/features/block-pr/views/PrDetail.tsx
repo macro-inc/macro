@@ -353,8 +353,9 @@ function PrMetadata(props: {
         )}
       </Show>
       <Layer depth={2}>
-        <Tooltip label={t('entityActions.openOnGitHub')}>
-          <a
+        <Tooltip.Root>
+          <Tooltip.Trigger
+            as="a"
             href={props.pullRequest?.url}
             target="_blank"
             rel="noreferrer"
@@ -362,8 +363,13 @@ function PrMetadata(props: {
           >
             {prDisplayName(props.prRef)}
             <ArrowSquareOut aria-hidden="true" class="size-3.5 shrink-0" />
-          </a>
-        </Tooltip>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content>
+              <div class="text-xs">{t('entityActions.openOnGitHub')}</div>
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
       </Layer>
       <Show
         when={

@@ -311,18 +311,24 @@ function PullRequestLinkActions(props: { url: string }) {
       >
         <LinkIcon class="size-4" />
       </CopyButton>
-      <Tooltip label={t('entityActions.openOnGitHub')}>
-        <a
+      <Tooltip.Root>
+        <Tooltip.Trigger
+          as="a"
           href={props.url}
           target="_blank"
           rel="noreferrer"
           aria-label={t('entityActions.openOnGitHub')}
           class={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e: MouseEvent) => e.stopPropagation()}
         >
           <ArrowSquareOut class="size-4" />
-        </a>
-      </Tooltip>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>
+            <div class="text-xs">{t('entityActions.openOnGitHub')}</div>
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
     </div>
   );
 }
