@@ -42,16 +42,25 @@ use crate::manual::{
 
 /// Sends per acting user per window; a routine reporting back stays far below it.
 const SENDS_PER_WINDOW: u64 = 60;
-/// Notifications one person receives per window, from every sender together,
-/// so no group of senders can flood someone's phone.
+/// Notifications one person receives from others per window, from every
+/// sender together, so no group of senders can flood someone's phone. Notes to
+/// oneself count only against one's own sender limit, so others cannot use up
+/// the bucket a person's own routines and agents report back through.
 const RECEIVES_PER_WINDOW: u64 = 60;
 const WINDOW: Duration = Duration::from_secs(60 * 60);
 
-/// The per-recipient limit's key: shared by every sender.
-fn per_recipient_key(recipient: &MacroUserIdStr<'_>) -> RateLimitKey {
-    RateLimitKey::builder(&"manual-notification-recipient")
-        .append(&recipient.as_ref())
-        .finish()
+/// The per-recipient limit for a send, shared by every sender; `None` for a
+/// note to oneself.
+fn per_recipient_limit(
+    sender: &MacroUserIdStr<'_>,
+    recipient: Option<&MacroUserIdStr<'_>>,
+) -> Option<RateLimitKey> {
+    let recipient = recipient.filter(|recipient| *recipient != sender)?;
+    Some(
+        RateLimitKey::builder(&"manual-notification-recipient")
+            .append(&recipient.as_ref())
+            .finish(),
+    )
 }
 
 fn per_recipient_config() -> RateLimitConfig {
@@ -218,34 +227,35 @@ pub(crate) async fn send_manual_notification(
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse<'static>>)> {
     let user = authorization.authorization.user;
 
-    let recipient = request
-        .recipient_id
-        .clone()
-        .unwrap_or_else(|| user.macro_user_id.clone());
-    let recipient_ticket = match state
-        .rate_limiter
-        .check_rate_limit(per_recipient_key(&recipient), per_recipient_config())
-        .await
-    {
-        Ok(Ok(ticket)) => ticket,
-        Ok(Err(_exceeded)) => {
-            return Err((
-                StatusCode::TOO_MANY_REQUESTS,
-                Json(ErrorResponse {
-                    message: "too many notifications to this recipient; try again later".into(),
-                }),
-            ));
-        }
-        Err(report) => {
-            tracing::error!(error = ?report, "could not check the recipient rate limit");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "could not send the notification".into(),
-                }),
-            ));
-        }
-    };
+    let recipient_ticket =
+        match per_recipient_limit(&user.macro_user_id, request.recipient_id.as_ref()) {
+            None => None,
+            Some(key) => match state
+                .rate_limiter
+                .check_rate_limit(key, per_recipient_config())
+                .await
+            {
+                Ok(Ok(ticket)) => Some(ticket),
+                Ok(Err(_exceeded)) => {
+                    return Err((
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(ErrorResponse {
+                            message: "too many notifications to this recipient; try again later"
+                                .into(),
+                        }),
+                    ));
+                }
+                Err(report) => {
+                    tracing::error!(error = ?report, "could not check the recipient rate limit");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            message: "could not send the notification".into(),
+                        }),
+                    ));
+                }
+            },
+        };
 
     let sent = state
         .notifications
@@ -267,7 +277,9 @@ pub(crate) async fn send_manual_notification(
         )
         .await;
     if let Err(error) = sent {
-        if let Err(report) = state.rate_limiter.rollback_ticket(recipient_ticket).await {
+        if let Some(ticket) = recipient_ticket
+            && let Err(report) = state.rate_limiter.rollback_ticket(ticket).await
+        {
             tracing::error!(error = ?report, "could not roll back the recipient rate limit");
         }
         return Err(error_response(error));
