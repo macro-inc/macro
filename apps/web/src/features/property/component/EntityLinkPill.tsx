@@ -87,7 +87,8 @@ export function EntityLinkPill(props: {
             aria-expanded={ctx.editorOpen()}
             onClick={(event) => {
               event.stopPropagation();
-              ctx.openEditor(event.currentTarget);
+              if (ctx.onEdit) ctx.onEdit(ctx.property(), event.currentTarget);
+              else ctx.openEditor(event.currentTarget);
             }}
           >
             <CaretDownIcon class="size-3 shrink-0" />

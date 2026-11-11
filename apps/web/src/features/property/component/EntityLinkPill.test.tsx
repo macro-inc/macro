@@ -42,9 +42,13 @@ function EditorState() {
   return <output>{ctx.editorOpen() ? 'Editing' : 'Not editing'}</output>;
 }
 
-function renderPill(canEdit = true, label?: string) {
+function renderPill(
+  canEdit = true,
+  label?: string,
+  onEdit?: (property: EntityProperty, anchor?: HTMLElement) => void
+) {
   render(() => (
-    <Root property={company} canEdit={canEdit}>
+    <Root property={company} canEdit={canEdit} onEdit={onEdit}>
       <EntityLinkPill
         property={company}
         label={label}
@@ -124,4 +128,16 @@ it('shows the property name before the value when labelled', () => {
   expect(
     screen.getByRole('button', { name: 'Open Acme' }).textContent
   ).toContain('Customer:');
+});
+
+it("hands the caret to the host's editor when the host supplies one", () => {
+  const onEdit = vi.fn();
+  renderPill(true, undefined, onEdit);
+  const caret = screen.getByRole('button', { name: 'Change company' });
+  fireEvent.click(caret);
+  expect(onEdit).toHaveBeenCalledWith(
+    expect.objectContaining({ propertyId: 'assignment' }),
+    caret
+  );
+  expect(screen.getByText('Not editing')).toBeTruthy();
 });
