@@ -139,7 +139,10 @@ async fn post(
     config: &PushConfig,
     body: &serde_json::Value,
 ) -> Result<u16, String> {
-    let key = emulator.signing_key().await.map_err(|error| error.to_string())?;
+    let key = emulator
+        .signing_key()
+        .await
+        .map_err(|error| error.to_string())?;
     let token = signed_token(key, &config.audience).map_err(|error| error.to_string())?;
     http.post(&config.endpoint)
         .bearer_auth(token)
@@ -152,7 +155,10 @@ async fn post(
 
 /// Delivers each queued notification to the push endpoint, retrying one the
 /// webhook does not acknowledge, and records the outcome.
-pub(crate) async fn deliver_jobs(emulator: GmailEmulator, mut jobs: mpsc::UnboundedReceiver<PushJob>) {
+pub(crate) async fn deliver_jobs(
+    emulator: GmailEmulator,
+    mut jobs: mpsc::UnboundedReceiver<PushJob>,
+) {
     let http = match reqwest::Client::builder().timeout(REQUEST_TIMEOUT).build() {
         Ok(http) => http,
         Err(error) => {

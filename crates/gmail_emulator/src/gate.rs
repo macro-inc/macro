@@ -106,7 +106,9 @@ pub(crate) async fn mailbox_request<T: IntoResponse>(
     };
 
     let (mailbox, delay, result) = emulator.with_state(|state| {
-        let Some(email) = state.token_owner(token).map(|(mailbox, _)| mailbox.email.clone())
+        let Some(email) = state
+            .token_owner(token)
+            .map(|(mailbox, _)| mailbox.email.clone())
         else {
             return (None, None, Err(ApiError::unauthenticated()));
         };
@@ -121,10 +123,9 @@ pub(crate) async fn mailbox_request<T: IntoResponse>(
         }
 
         let now_ms = state.now_ms();
-        let spent = state
-            .mailboxes
-            .get_mut(&email)
-            .map_or(Ok(()), |mailbox| mailbox.spend_quota(now_ms, route.quota_units()));
+        let spent = state.mailboxes.get_mut(&email).map_or(Ok(()), |mailbox| {
+            mailbox.spend_quota(now_ms, route.quota_units())
+        });
         if let Err(retry_after_seconds) = spent {
             let limited = ApiError::rate_limited(
                 "User-rate limit exceeded.  Retry later.",

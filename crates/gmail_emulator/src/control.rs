@@ -102,18 +102,27 @@ pub(crate) fn router() -> Router<GmailEmulator> {
         .route("/mailboxes", get(mailboxes).post(add_mailbox))
         .route("/mailboxes/{email}/messages", get(messages).post(deliver))
         .route("/mailboxes/{email}/messages/{id}", delete(delete_message))
-        .route("/mailboxes/{email}/messages/{id}/labels", post(modify_labels))
+        .route(
+            "/mailboxes/{email}/messages/{id}/labels",
+            post(modify_labels),
+        )
         .route("/mailboxes/{email}/access-tokens", post(access_token))
         .route("/mailboxes/{email}/revoke", post(revoke_grant))
         .route("/mailboxes/{email}/history/expire", post(expire_history))
         .route("/mailboxes/{email}/push", post(push_now))
         .route("/mailboxes/{email}/contacts", post(upsert_contact))
-        .route("/mailboxes/{email}/contacts/{contact}", delete(remove_contact))
+        .route(
+            "/mailboxes/{email}/contacts/{contact}",
+            delete(remove_contact),
+        )
         .route(
             "/mailboxes/{email}/contacts/expire-sync-tokens",
             post(expire_contact_sync_tokens),
         )
-        .route("/faults", get(faults).post(inject_fault).delete(clear_faults))
+        .route(
+            "/faults",
+            get(faults).post(inject_fault).delete(clear_faults),
+        )
         .route("/faults/{id}", delete(remove_fault))
         .route("/clock", get(clock))
         .route("/clock/advance", post(advance_clock))
@@ -172,10 +181,7 @@ async fn mailboxes(AxumState(emulator): Emulator) -> Response {
     Json(emulator.mailboxes()).into_response()
 }
 
-async fn add_mailbox(
-    AxumState(emulator): Emulator,
-    Json(mailbox): Json<SeedMailbox>,
-) -> Response {
+async fn add_mailbox(AxumState(emulator): Emulator, Json(mailbox): Json<SeedMailbox>) -> Response {
     done(emulator.add_mailbox(&mailbox))
 }
 
@@ -307,10 +313,7 @@ struct Advance {
     seconds: u64,
 }
 
-async fn advance_clock(
-    AxumState(emulator): Emulator,
-    Json(advance): Json<Advance>,
-) -> Json<Value> {
+async fn advance_clock(AxumState(emulator): Emulator, Json(advance): Json<Advance>) -> Json<Value> {
     emulator.advance_clock(Duration::from_secs(advance.seconds));
     Json(json!({ "now": emulator.now() }))
 }

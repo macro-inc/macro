@@ -245,8 +245,8 @@ impl State {
     ) -> Result<(String, String), ApiError> {
         let now_ms = self.now_ms();
         let raw = self.with_required_headers(raw, now_ms);
-        let parsed = mime::parse(&raw)
-            .map_err(|error| ApiError::invalid_argument(&error.to_string()))?;
+        let parsed =
+            mime::parse(&raw).map_err(|error| ApiError::invalid_argument(&error.to_string()))?;
         let recipients = parsed.recipients();
         if recipients.is_empty() {
             return Err(ApiError::invalid_argument("Recipient address required"));
@@ -343,7 +343,9 @@ impl State {
             FaultError::DailyLimit => {
                 ApiError::quota_exceeded("dailyLimitExceeded", "Daily Limit Exceeded")
             }
-            FaultError::Internal => ApiError::backend(500, "INTERNAL", "Internal error encountered."),
+            FaultError::Internal => {
+                ApiError::backend(500, "INTERNAL", "Internal error encountered.")
+            }
             FaultError::Unavailable => ApiError {
                 retry_after_seconds: retry_after,
                 ..ApiError::backend(503, "UNAVAILABLE", "The service is currently unavailable.")

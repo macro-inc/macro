@@ -41,7 +41,14 @@ async fn a_refresh_token_mints_access_tokens_until_the_grant_is_revoked() {
         .unwrap();
     let access = granted["access_token"].as_str().unwrap();
     assert_eq!(granted["expires_in"], 3599);
-    assert_eq!(client(&emulator).get_profile(access).await.unwrap().email_address, ADA);
+    assert_eq!(
+        client(&emulator)
+            .get_profile(access)
+            .await
+            .unwrap()
+            .email_address,
+        ADA
+    );
 
     let info: serde_json::Value = http
         .post(format!("{}/oauth2/v3/tokeninfo", emulator.base_url()))
@@ -56,7 +63,12 @@ async fn a_refresh_token_mints_access_tokens_until_the_grant_is_revoked() {
     assert!(info["scope"].as_str().unwrap().contains("gmail.modify"));
 
     emulator.revoke_grant(ADA).unwrap();
-    let refused = http.post(emulator.token_url()).form(&refresh).send().await.unwrap();
+    let refused = http
+        .post(emulator.token_url())
+        .form(&refresh)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(refused.status().as_u16(), 400);
     let body: serde_json::Value = refused.json().await.unwrap();
     assert_eq!(body["error"], "invalid_grant");

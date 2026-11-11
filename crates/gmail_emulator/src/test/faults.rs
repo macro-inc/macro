@@ -25,10 +25,16 @@ async fn a_fault_applies_to_its_mailbox_and_route_for_its_count() {
         retry_after: Some(Duration::from_secs(7)),
         origin: RateLimitOrigin::Provider { concurrency: false },
     };
-    assert_eq!(repository.get_thread_count(&ada).await.unwrap_err(), limited);
+    assert_eq!(
+        repository.get_thread_count(&ada).await.unwrap_err(),
+        limited
+    );
     assert!(repository.get_thread_count(&bob).await.is_ok());
     assert!(repository.list_labels(&ada, Uuid::now_v7()).await.is_ok());
-    assert_eq!(repository.get_thread_count(&ada).await.unwrap_err(), limited);
+    assert_eq!(
+        repository.get_thread_count(&ada).await.unwrap_err(),
+        limited
+    );
     assert!(repository.get_thread_count(&ada).await.is_ok());
     assert!(emulator.faults().is_empty());
 }
@@ -56,7 +62,10 @@ async fn each_provider_failure_maps_to_the_error_our_code_handles() {
     emulator.inject_fault(once(FaultError::QuotaExceeded));
     assert!(matches!(
         repository.get_thread_count(&ada).await.unwrap_err(),
-        EmailApiError::RateLimited { origin: RateLimitOrigin::Provider { concurrency: false }, .. }
+        EmailApiError::RateLimited {
+            origin: RateLimitOrigin::Provider { concurrency: false },
+            ..
+        }
     ));
 
     emulator.inject_fault(once(FaultError::Unavailable));
@@ -66,10 +75,16 @@ async fn each_provider_failure_maps_to_the_error_our_code_handles() {
     ));
 
     emulator.inject_fault(once(FaultError::Unauthorized));
-    assert_eq!(repository.get_thread_count(&ada).await.unwrap_err(), EmailApiError::AuthRequired);
+    assert_eq!(
+        repository.get_thread_count(&ada).await.unwrap_err(),
+        EmailApiError::AuthRequired
+    );
 
     emulator.inject_fault(once(FaultError::Forbidden));
-    assert_eq!(repository.get_thread_count(&ada).await.unwrap_err(), EmailApiError::Forbidden);
+    assert_eq!(
+        repository.get_thread_count(&ada).await.unwrap_err(),
+        EmailApiError::Forbidden
+    );
 
     assert!(repository.get_thread_count(&ada).await.is_ok());
 }

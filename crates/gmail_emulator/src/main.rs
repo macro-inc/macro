@@ -5,7 +5,9 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
-use gmail_emulator::{DEFAULT_PUSH_AUDIENCE, GmailEmulator, PushConfig, Seed, SeedError, StartError};
+use gmail_emulator::{
+    DEFAULT_PUSH_AUDIENCE, GmailEmulator, PushConfig, Seed, SeedError, StartError,
+};
 
 /// A stateful fake of the Google APIs Macro's email code calls.
 #[derive(Parser)]

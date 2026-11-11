@@ -64,7 +64,10 @@ pub(crate) fn router() -> Router<GmailEmulator> {
 }
 
 pub(crate) fn mailbox<'a>(state: &'a mut State, email: &str) -> Result<&'a mut Mailbox, ApiError> {
-    state.mailboxes.get_mut(email).ok_or_else(ApiError::not_found)
+    state
+        .mailboxes
+        .get_mut(email)
+        .ok_or_else(ApiError::not_found)
 }
 
 fn format(params: &Params) -> Result<Format, ApiError> {
@@ -107,15 +110,21 @@ async fn profile(
     headers: HeaderMap,
     Path(user): Path<String>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::GetProfile, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        Ok(Json(json!({
-            "emailAddress": mailbox.email,
-            "messagesTotal": mailbox.messages.len(),
-            "threadsTotal": mailbox.thread_count(),
-            "historyId": mailbox.history_id.to_string(),
-        })))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::GetProfile,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            Ok(Json(json!({
+                "emailAddress": mailbox.email,
+                "messagesTotal": mailbox.messages.len(),
+                "threadsTotal": mailbox.thread_count(),
+                "historyId": mailbox.history_id.to_string(),
+            })))
+        },
+    )
     .await
 }
 
@@ -153,14 +162,20 @@ async fn list_messages(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesList, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let items = selected(mailbox, &params)
-            .iter()
-            .map(|message| json!({ "id": message.id, "threadId": message.thread_id }))
-            .collect();
-        page("messages", items, &params)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesList,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let items = selected(mailbox, &params)
+                .iter()
+                .map(|message| json!({ "id": message.id, "threadId": message.thread_id }))
+                .collect();
+            page("messages", items, &params)
+        },
+    )
     .await
 }
 
@@ -171,30 +186,36 @@ async fn list_threads(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::ThreadsList, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let mut thread_ids: Vec<&str> = Vec::new();
-        for message in selected(mailbox, &params) {
-            if !thread_ids.contains(&message.thread_id.as_str()) {
-                thread_ids.push(&message.thread_id);
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::ThreadsList,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let mut thread_ids: Vec<&str> = Vec::new();
+            for message in selected(mailbox, &params) {
+                if !thread_ids.contains(&message.thread_id.as_str()) {
+                    thread_ids.push(&message.thread_id);
+                }
             }
-        }
 
-        let items = thread_ids
-            .iter()
-            .filter_map(|thread_id| {
-                let messages = mailbox.thread(thread_id);
-                let newest = messages.last()?;
-                let history_id = messages.iter().map(|message| message.history_id).max()?;
-                Some(json!({
-                    "id": thread_id,
-                    "snippet": newest.parsed.snippet,
-                    "historyId": history_id.to_string(),
-                }))
-            })
-            .collect();
-        page("threads", items, &params)
-    })
+            let items = thread_ids
+                .iter()
+                .filter_map(|thread_id| {
+                    let messages = mailbox.thread(thread_id);
+                    let newest = messages.last()?;
+                    let history_id = messages.iter().map(|message| message.history_id).max()?;
+                    Some(json!({
+                        "id": thread_id,
+                        "snippet": newest.parsed.snippet,
+                        "historyId": history_id.to_string(),
+                    }))
+                })
+                .collect();
+            page("threads", items, &params)
+        },
+    )
     .await
 }
 
@@ -205,15 +226,21 @@ async fn get_message(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesGet, |state, email| {
-        let format = format(&params)?;
-        let nonce = state.ids.nonce();
-        let message = mailbox(state, email)?
-            .messages
-            .get(&id)
-            .ok_or_else(ApiError::not_found)?;
-        Ok(Json(message_json(message, format, nonce)))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesGet,
+        |state, email| {
+            let format = format(&params)?;
+            let nonce = state.ids.nonce();
+            let message = mailbox(state, email)?
+                .messages
+                .get(&id)
+                .ok_or_else(ApiError::not_found)?;
+            Ok(Json(message_json(message, format, nonce)))
+        },
+    )
     .await
 }
 
@@ -224,25 +251,31 @@ async fn get_thread(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::ThreadsGet, |state, email| {
-        let format = format(&params)?;
-        let nonce = state.ids.nonce();
-        let messages = mailbox(state, email)?.thread(&id);
-        let history_id = messages
-            .iter()
-            .map(|message| message.history_id)
-            .max()
-            .ok_or_else(ApiError::not_found)?;
-        let messages: Vec<Value> = messages
-            .iter()
-            .map(|message| message_json(message, format, nonce))
-            .collect();
-        Ok(Json(json!({
-            "id": id,
-            "historyId": history_id.to_string(),
-            "messages": messages,
-        })))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::ThreadsGet,
+        |state, email| {
+            let format = format(&params)?;
+            let nonce = state.ids.nonce();
+            let messages = mailbox(state, email)?.thread(&id);
+            let history_id = messages
+                .iter()
+                .map(|message| message.history_id)
+                .max()
+                .ok_or_else(ApiError::not_found)?;
+            let messages: Vec<Value> = messages
+                .iter()
+                .map(|message| message_json(message, format, nonce))
+                .collect();
+            Ok(Json(json!({
+                "id": id,
+                "historyId": history_id.to_string(),
+                "messages": messages,
+            })))
+        },
+    )
     .await
 }
 
@@ -251,20 +284,26 @@ async fn get_attachment(
     headers: HeaderMap,
     Path((user, id, attachment)): Path<(String, String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::AttachmentsGet, |state, email| {
-        let message = mailbox(state, email)?
-            .messages
-            .get(&id)
-            .ok_or_else(ApiError::not_found)?;
-        let part = mime::attachment_part_id(&attachment)
-            .and_then(|part_id| mime::find_part(&message.parsed.payload, &part_id))
-            .filter(|part| part.is_attachment)
-            .ok_or_else(|| ApiError::invalid_argument("Invalid attachment token"))?;
-        Ok(Json(json!({
-            "size": part.body.len(),
-            "data": mime::encode_body(&part.body),
-        })))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::AttachmentsGet,
+        |state, email| {
+            let message = mailbox(state, email)?
+                .messages
+                .get(&id)
+                .ok_or_else(ApiError::not_found)?;
+            let part = mime::attachment_part_id(&attachment)
+                .and_then(|part_id| mime::find_part(&message.parsed.payload, &part_id))
+                .filter(|part| part.is_attachment)
+                .ok_or_else(|| ApiError::invalid_argument("Invalid attachment token"))?;
+            Ok(Json(json!({
+                "size": part.body.len(),
+                "data": mime::encode_body(&part.body),
+            })))
+        },
+    )
     .await
 }
 
@@ -274,11 +313,17 @@ async fn send_message(
     Path(user): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesSend, |state, email| {
-        let raw = raw_bytes(&body)?;
-        let (id, _) = state.send(email, raw, body["threadId"].as_str())?;
-        written(mailbox(state, email)?, &id)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesSend,
+        |state, email| {
+            let raw = raw_bytes(&body)?;
+            let (id, _) = state.send(email, raw, body["threadId"].as_str())?;
+            written(mailbox(state, email)?, &id)
+        },
+    )
     .await
 }
 
@@ -290,27 +335,36 @@ async fn import_message(
     Json(body): Json<Value>,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesImport, |state, email| {
-        let raw = raw_bytes(&body)?;
-        let internal_date_ms = match params.get("internalDateSource") {
-            Some("dateHeader") => mime::parse(&raw)
-                .ok()
-                .and_then(|parsed| mailparse::dateparse(parsed.header("Date")?).ok())
-                .map(|seconds| seconds * 1000),
-            _ => None,
-        };
-        let now_ms = state.now_ms();
-        let mailbox = state.mailboxes.get_mut(email).ok_or_else(ApiError::not_found)?;
-        let (id, _) = mailbox.insert(
-            &mut state.ids,
-            now_ms,
-            raw,
-            &strings(&body["labelIds"]),
-            body["threadId"].as_str(),
-            internal_date_ms,
-        )?;
-        written(mailbox, &id)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesImport,
+        |state, email| {
+            let raw = raw_bytes(&body)?;
+            let internal_date_ms = match params.get("internalDateSource") {
+                Some("dateHeader") => mime::parse(&raw)
+                    .ok()
+                    .and_then(|parsed| mailparse::dateparse(parsed.header("Date")?).ok())
+                    .map(|seconds| seconds * 1000),
+                _ => None,
+            };
+            let now_ms = state.now_ms();
+            let mailbox = state
+                .mailboxes
+                .get_mut(email)
+                .ok_or_else(ApiError::not_found)?;
+            let (id, _) = mailbox.insert(
+                &mut state.ids,
+                now_ms,
+                raw,
+                &strings(&body["labelIds"]),
+                body["threadId"].as_str(),
+                internal_date_ms,
+            )?;
+            written(mailbox, &id)
+        },
+    )
     .await
 }
 
@@ -320,17 +374,23 @@ async fn modify_message(
     Path((user, id)): Path<(String, String)>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesModify, |state, email| {
-        let now_ms = state.now_ms();
-        let mailbox = mailbox(state, email)?;
-        mailbox.modify(
-            now_ms,
-            &id,
-            &strings(&body["addLabelIds"]),
-            &strings(&body["removeLabelIds"]),
-        )?;
-        written(mailbox, &id)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesModify,
+        |state, email| {
+            let now_ms = state.now_ms();
+            let mailbox = mailbox(state, email)?;
+            mailbox.modify(
+                now_ms,
+                &id,
+                &strings(&body["addLabelIds"]),
+                &strings(&body["removeLabelIds"]),
+            )?;
+            written(mailbox, &id)
+        },
+    )
     .await
 }
 
@@ -384,11 +444,17 @@ async fn delete_message(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesDelete, |state, email| {
-        let now_ms = state.now_ms();
-        mailbox(state, email)?.delete(now_ms, &id)?;
-        Ok(StatusCode::NO_CONTENT)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesDelete,
+        |state, email| {
+            let now_ms = state.now_ms();
+            mailbox(state, email)?.delete(now_ms, &id)?;
+            Ok(StatusCode::NO_CONTENT)
+        },
+    )
     .await
 }
 
@@ -397,12 +463,18 @@ async fn trash_message(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesTrash, |state, email| {
-        let now_ms = state.now_ms();
-        let mailbox = mailbox(state, email)?;
-        mailbox.modify(now_ms, &id, &[TRASH.to_string()], &["INBOX".to_string()])?;
-        written(mailbox, &id)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesTrash,
+        |state, email| {
+            let now_ms = state.now_ms();
+            let mailbox = mailbox(state, email)?;
+            mailbox.modify(now_ms, &id, &[TRASH.to_string()], &["INBOX".to_string()])?;
+            written(mailbox, &id)
+        },
+    )
     .await
 }
 
@@ -411,12 +483,18 @@ async fn untrash_message(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::MessagesUntrash, |state, email| {
-        let now_ms = state.now_ms();
-        let mailbox = mailbox(state, email)?;
-        mailbox.modify(now_ms, &id, &[], &[TRASH.to_string()])?;
-        written(mailbox, &id)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::MessagesUntrash,
+        |state, email| {
+            let now_ms = state.now_ms();
+            let mailbox = mailbox(state, email)?;
+            mailbox.modify(now_ms, &id, &[], &[TRASH.to_string()])?;
+            written(mailbox, &id)
+        },
+    )
     .await
 }
 
@@ -425,10 +503,20 @@ async fn list_labels(
     headers: HeaderMap,
     Path(user): Path<String>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::LabelsList, |state, email| {
-        let labels: Vec<Value> = mailbox(state, email)?.labels.iter().map(label_json).collect();
-        Ok(Json(json!({ "labels": labels })))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::LabelsList,
+        |state, email| {
+            let labels: Vec<Value> = mailbox(state, email)?
+                .labels
+                .iter()
+                .map(label_json)
+                .collect();
+            Ok(Json(json!({ "labels": labels })))
+        },
+    )
     .await
 }
 
@@ -437,11 +525,17 @@ async fn get_label(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::LabelsGet, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let label = mailbox.label(&id).ok_or_else(ApiError::not_found)?;
-        Ok(Json(label_json(label)))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::LabelsGet,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let label = mailbox.label(&id).ok_or_else(ApiError::not_found)?;
+            Ok(Json(label_json(label)))
+        },
+    )
     .await
 }
 
@@ -451,11 +545,17 @@ async fn create_label(
     Path(user): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::LabelsCreate, |state, email| {
-        let name = body["name"].as_str().unwrap_or_default();
-        let label = mailbox(state, email)?.create_label(name)?;
-        Ok(Json(label_json(&label)))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::LabelsCreate,
+        |state, email| {
+            let name = body["name"].as_str().unwrap_or_default();
+            let label = mailbox(state, email)?.create_label(name)?;
+            Ok(Json(label_json(&label)))
+        },
+    )
     .await
 }
 
@@ -465,13 +565,19 @@ async fn update_label(
     Path((user, id)): Path<(String, String)>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::LabelsUpdate, |state, email| {
-        let name = body["name"]
-            .as_str()
-            .ok_or_else(|| ApiError::invalid_argument("Invalid label name"))?;
-        let label = mailbox(state, email)?.rename_label(&id, name)?;
-        Ok(Json(label_json(&label)))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::LabelsUpdate,
+        |state, email| {
+            let name = body["name"]
+                .as_str()
+                .ok_or_else(|| ApiError::invalid_argument("Invalid label name"))?;
+            let label = mailbox(state, email)?.rename_label(&id, name)?;
+            Ok(Json(label_json(&label)))
+        },
+    )
     .await
 }
 
@@ -480,10 +586,16 @@ async fn delete_label(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::LabelsDelete, |state, email| {
-        mailbox(state, email)?.delete_label(&id)?;
-        Ok(StatusCode::NO_CONTENT)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::LabelsDelete,
+        |state, email| {
+            mailbox(state, email)?.delete_label(&id)?;
+            Ok(StatusCode::NO_CONTENT)
+        },
+    )
     .await
 }
 
@@ -494,23 +606,29 @@ async fn list_history(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, Some(&user), Route::HistoryList, |state, email| {
-        let start = params
-            .get("startHistoryId")
-            .and_then(|start| start.parse::<u64>().ok())
-            .ok_or_else(|| ApiError::invalid_argument("Invalid startHistoryId"))?;
-        let now_ms = state.now_ms();
-        mailbox(state, email)?
-            .list_history(
-                now_ms,
-                start,
-                &params.all("historyTypes"),
-                params.get("labelId"),
-                params.page_size("maxResults", LIST_DEFAULT, LIST_MAX),
-                params.offset()?,
-            )
-            .map(Json)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::HistoryList,
+        |state, email| {
+            let start = params
+                .get("startHistoryId")
+                .and_then(|start| start.parse::<u64>().ok())
+                .ok_or_else(|| ApiError::invalid_argument("Invalid startHistoryId"))?;
+            let now_ms = state.now_ms();
+            mailbox(state, email)?
+                .list_history(
+                    now_ms,
+                    start,
+                    &params.all("historyTypes"),
+                    params.get("labelId"),
+                    params.page_size("maxResults", LIST_DEFAULT, LIST_MAX),
+                    params.offset()?,
+                )
+                .map(Json)
+        },
+    )
     .await
 }
 
@@ -520,19 +638,25 @@ async fn watch(
     Path(user): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::Watch, |state, email| {
-        let topic = body["topicName"]
-            .as_str()
-            .filter(|topic| !topic.is_empty())
-            .ok_or_else(|| ApiError::invalid_argument("Invalid topicName does not match"))?;
-        let now_ms = state.now_ms();
-        let mailbox = mailbox(state, email)?;
-        let expiration_ms = mailbox.start_watch(now_ms, topic);
-        Ok(Json(json!({
-            "historyId": mailbox.history_id.to_string(),
-            "expiration": expiration_ms.to_string(),
-        })))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::Watch,
+        |state, email| {
+            let topic = body["topicName"]
+                .as_str()
+                .filter(|topic| !topic.is_empty())
+                .ok_or_else(|| ApiError::invalid_argument("Invalid topicName does not match"))?;
+            let now_ms = state.now_ms();
+            let mailbox = mailbox(state, email)?;
+            let expiration_ms = mailbox.start_watch(now_ms, topic);
+            Ok(Json(json!({
+                "historyId": mailbox.history_id.to_string(),
+                "expiration": expiration_ms.to_string(),
+            })))
+        },
+    )
     .await
 }
 
@@ -541,9 +665,15 @@ async fn stop(
     headers: HeaderMap,
     Path(user): Path<String>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::Stop, |state, email| {
-        mailbox(state, email)?.watch = None;
-        Ok(StatusCode::NO_CONTENT)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::Stop,
+        |state, email| {
+            mailbox(state, email)?.watch = None;
+            Ok(StatusCode::NO_CONTENT)
+        },
+    )
     .await
 }

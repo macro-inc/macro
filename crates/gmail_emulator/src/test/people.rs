@@ -18,7 +18,10 @@ async fn contacts_sync_incrementally_until_the_sync_token_expires() {
     let emulator = GmailEmulator::start(Seed {
         mailboxes: vec![SeedMailbox {
             name: Some("Ada Example".to_string()),
-            contacts: vec![contact("grace@example.com", "Grace"), contact("alan@example.com", "Alan")],
+            contacts: vec![
+                contact("grace@example.com", "Grace"),
+                contact("alan@example.com", "Alan"),
+            ],
             other_contacts: vec![contact("edsger@example.com", "Edsger")],
             ..SeedMailbox::new(ADA)
         }],
@@ -36,17 +39,36 @@ async fn contacts_sync_incrementally_until_the_sync_token_expires() {
     let all = client.get_contacts_page(&ada, None, None).await.unwrap();
     assert_eq!(all.connections.len(), 2);
     let sync_token = all.next_sync_token.unwrap();
-    let others = client.get_other_contacts_page(&ada, None, None).await.unwrap();
-    assert_eq!(others.other_contacts[0].email_addresses[0].value.as_deref(), Some("edsger@example.com"));
+    let others = client
+        .get_other_contacts_page(&ada, None, None)
+        .await
+        .unwrap();
+    assert_eq!(
+        others.other_contacts[0].email_addresses[0].value.as_deref(),
+        Some("edsger@example.com")
+    );
 
-    emulator.upsert_contact(ADA, contact("barbara@example.com", "Barbara"), false).unwrap();
-    let changed = client.get_contacts_page(&ada, Some(&sync_token), None).await.unwrap();
+    emulator
+        .upsert_contact(ADA, contact("barbara@example.com", "Barbara"), false)
+        .unwrap();
+    let changed = client
+        .get_contacts_page(&ada, Some(&sync_token), None)
+        .await
+        .unwrap();
     assert_eq!(changed.connections.len(), 1);
-    assert_eq!(changed.connections[0].names[0].display_name.as_deref(), Some("Barbara"));
+    assert_eq!(
+        changed.connections[0].names[0].display_name.as_deref(),
+        Some("Barbara")
+    );
 
     emulator.expire_contact_sync_tokens(ADA).unwrap();
     let expired = repository(&emulator)
-        .list_contacts_page(&AccessToken::new(ada), Uuid::now_v7(), Some(&sync_token), None)
+        .list_contacts_page(
+            &AccessToken::new(ada),
+            Uuid::now_v7(),
+            Some(&sync_token),
+            None,
+        )
         .await;
     assert_eq!(expired.unwrap_err(), EmailApiError::OutdatedCursor);
 }
@@ -55,7 +77,9 @@ async fn contacts_sync_incrementally_until_the_sync_token_expires() {
 async fn a_grant_without_the_contacts_scope_is_refused_contacts() {
     let emulator = GmailEmulator::start(Seed {
         mailboxes: vec![SeedMailbox {
-            scopes: Some(vec!["https://www.googleapis.com/auth/gmail.modify".to_string()]),
+            scopes: Some(vec![
+                "https://www.googleapis.com/auth/gmail.modify".to_string(),
+            ]),
             ..SeedMailbox::new(ADA)
         }],
         ..Seed::default()

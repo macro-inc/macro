@@ -22,12 +22,28 @@ async fn the_control_api_seeds_delivers_injects_and_reports() {
     let http = reqwest::Client::new();
     let control = format!("{}/_emulator", emulator.base_url());
 
-    let seeded = http.post(format!("{control}/seed")).body(SEED).send().await.unwrap();
+    let seeded = http
+        .post(format!("{control}/seed"))
+        .body(SEED)
+        .send()
+        .await
+        .unwrap();
     assert_eq!(seeded.status().as_u16(), 200);
-    let state: serde_json::Value =
-        http.get(format!("{control}/state")).send().await.unwrap().json().await.unwrap();
+    let state: serde_json::Value = http
+        .get(format!("{control}/state"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(state["mailboxes"][0]["messages"], 1);
-    assert!(state["now"].as_str().unwrap().starts_with("2026-03-01T09:00"));
+    assert!(
+        state["now"]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-03-01T09:00")
+    );
 
     let delivered: serde_json::Value = http
         .post(format!("{control}/mailboxes/ada@example.com/messages"))
@@ -52,7 +68,11 @@ async fn the_control_api_seeds_delivers_injects_and_reports() {
     let client = client(&emulator);
     let receipts = client.list_messages(ada, 10, &["Label_1"]).await.unwrap();
     assert_eq!(receipts.len(), 1);
-    let seeded_message = client.get_message(ada, &receipts[0]).await.unwrap().unwrap();
+    let seeded_message = client
+        .get_message(ada, &receipts[0])
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(seeded_message.internal_date, "1772186400000");
 
     let fault = http
@@ -102,9 +122,40 @@ async fn the_authentication_service_stand_in_answers_like_the_real_route() {
 
     let granted: serde_json::Value = ask(ADA).await.unwrap().json().await.unwrap();
     let access = granted["access_token"].as_str().unwrap();
-    assert_eq!(client(&emulator).get_profile(access).await.unwrap().email_address, ADA);
+    assert_eq!(
+        client(&emulator)
+            .get_profile(access)
+            .await
+            .unwrap()
+            .email_address,
+        ADA
+    );
 
-    assert_eq!(ask("nobody@example.com").await.unwrap().status().as_u16(), 404);
+    assert_eq!(
+        ask("nobody@example.com").await.unwrap().status().as_u16(),
+        404
+    );
     emulator.revoke_grant(ADA).unwrap();
     assert_eq!(ask(ADA).await.unwrap().status().as_u16(), 403);
+}
+
+#[tokio::test]
+async fn the_example_seed_file_starts_an_emulator() {
+    let seed = Seed::parse(include_str!("../../seed.example.yaml")).unwrap();
+
+    let emulator = GmailEmulator::start(seed).await.unwrap();
+
+    let sizes: Vec<(String, usize, usize)> = emulator
+        .mailboxes()
+        .into_iter()
+        .map(|mailbox| (mailbox.email, mailbox.messages, mailbox.threads))
+        .collect();
+    assert_eq!(
+        sizes,
+        vec![
+            (ADA.to_string(), 6, 4),
+            (BOB.to_string(), 2, 2),
+            ("carol@example.com".to_string(), 0, 0),
+        ]
+    );
 }

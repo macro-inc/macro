@@ -28,7 +28,10 @@ fn operators_words_phrases_and_negation_must_all_match() {
     assert!(matches("from:grace subject:invoice friday", &[]));
     assert!(matches("\"pay by friday\" -from:alan", &[]));
     assert!(!matches("from:grace -subject:invoice", &[]));
-    assert!(matches("is:unread in:inbox label:money-stuff", &["UNREAD", "INBOX", "Label_1"]));
+    assert!(matches(
+        "is:unread in:inbox label:money-stuff",
+        &["UNREAD", "INBOX", "Label_1"]
+    ));
     assert!(!matches("is:read", &["UNREAD"]));
     assert!(!matches("has:attachment", &[]));
 }

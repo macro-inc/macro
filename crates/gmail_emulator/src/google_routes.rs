@@ -42,15 +42,21 @@ pub(crate) fn router() -> Router<GmailEmulator> {
 }
 
 async fn me(AxumState(emulator): Emulator, headers: HeaderMap) -> Response {
-    mailbox_request(&emulator, &headers, None, Route::PeopleGet, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let contact = SeedContact {
-            email: mailbox.email.clone(),
-            name: mailbox.name.clone(),
-            photo_url: None,
-        };
-        Ok(Json(person_json("people/me", &contact, false)))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        None,
+        Route::PeopleGet,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let contact = SeedContact {
+                email: mailbox.email.clone(),
+                name: mailbox.name.clone(),
+                photo_url: None,
+            };
+            Ok(Json(person_json("people/me", &contact, false)))
+        },
+    )
     .await
 }
 
@@ -66,20 +72,31 @@ async fn connections(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, None, Route::ConnectionsList, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        if !mailbox.has_scope(CONTACTS_SCOPE) {
-            return Err(scope_required(CONTACTS_SCOPE));
-        }
+    mailbox_request(
+        &emulator,
+        &headers,
+        None,
+        Route::ConnectionsList,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            if !mailbox.has_scope(CONTACTS_SCOPE) {
+                return Err(scope_required(CONTACTS_SCOPE));
+            }
 
-        let (people, next_page, next_sync) = mailbox.contacts.list(
-            params.get("syncToken"),
-            params.flag("requestSyncToken"),
-            params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
-            params.offset()?,
-        )?;
-        Ok(Json(people_page("connections", people, next_page, next_sync)))
-    })
+            let (people, next_page, next_sync) = mailbox.contacts.list(
+                params.get("syncToken"),
+                params.flag("requestSyncToken"),
+                params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
+                params.offset()?,
+            )?;
+            Ok(Json(people_page(
+                "connections",
+                people,
+                next_page,
+                next_sync,
+            )))
+        },
+    )
     .await
 }
 
@@ -89,20 +106,31 @@ async fn other_contacts(
     Query(params): Listed,
 ) -> Response {
     let params = Params(params);
-    mailbox_request(&emulator, &headers, None, Route::OtherContactsList, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        if !mailbox.has_scope(OTHER_CONTACTS_SCOPE) {
-            return Err(scope_required(OTHER_CONTACTS_SCOPE));
-        }
+    mailbox_request(
+        &emulator,
+        &headers,
+        None,
+        Route::OtherContactsList,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            if !mailbox.has_scope(OTHER_CONTACTS_SCOPE) {
+                return Err(scope_required(OTHER_CONTACTS_SCOPE));
+            }
 
-        let (people, next_page, next_sync) = mailbox.other_contacts.list(
-            params.get("syncToken"),
-            params.flag("requestSyncToken"),
-            params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
-            params.offset()?,
-        )?;
-        Ok(Json(people_page("otherContacts", people, next_page, next_sync)))
-    })
+            let (people, next_page, next_sync) = mailbox.other_contacts.list(
+                params.get("syncToken"),
+                params.flag("requestSyncToken"),
+                params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
+                params.offset()?,
+            )?;
+            Ok(Json(people_page(
+                "otherContacts",
+                people,
+                next_page,
+                next_sync,
+            )))
+        },
+    )
     .await
 }
 
@@ -180,7 +208,10 @@ async fn token(
             Some(refresh_token) => refresh(state, refresh_token),
             None => (
                 None,
-                oauth_error("invalid_request", "Missing required parameter: refresh_token"),
+                oauth_error(
+                    "invalid_request",
+                    "Missing required parameter: refresh_token",
+                ),
             ),
         }
     })
@@ -249,8 +280,14 @@ async fn certs(AxumState(emulator): Emulator) -> Response {
 
     (
         [
-            (header::CONTENT_TYPE, HeaderValue::from_static("application/json")),
-            (header::CACHE_CONTROL, HeaderValue::from_static(CERTS_CACHE_CONTROL)),
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            ),
+            (
+                header::CACHE_CONTROL,
+                HeaderValue::from_static(CERTS_CACHE_CONTROL),
+            ),
         ],
         key.jwks.clone(),
     )

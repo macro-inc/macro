@@ -109,9 +109,7 @@ pub(crate) fn build_raw(
 
     let from = message.from.as_deref().unwrap_or("sender@example.com");
     let to = message.to.as_deref().unwrap_or(mailbox);
-    let date_seconds = message
-        .date
-        .map_or(now_ms / 1000, |date| date.timestamp());
+    let date_seconds = message.date.map_or(now_ms / 1000, |date| date.timestamp());
     let message_id = message
         .message_id
         .clone()
@@ -206,7 +204,10 @@ pub(crate) fn parse(raw: &[u8]) -> Result<Parsed, EmulatorError> {
     collect_text(&payload, &mut texts, &mut html, &mut has_attachment);
     let body_text = match texts.first() {
         Some(text) => text.clone(),
-        None => html.first().map(|html| strip_tags(html)).unwrap_or_default(),
+        None => html
+            .first()
+            .map(|html| strip_tags(html))
+            .unwrap_or_default(),
     };
 
     let message_id = header(&payload.headers, "Message-ID").map(strip_angle_brackets);

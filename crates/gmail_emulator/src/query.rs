@@ -117,12 +117,7 @@ impl Query {
         self.matches_parsed(&message.parsed, &message.labels, labels)
     }
 
-    fn matches_parsed(
-        &self,
-        parsed: &Parsed,
-        held: &BTreeSet<String>,
-        labels: &[Label],
-    ) -> bool {
+    fn matches_parsed(&self, parsed: &Parsed, held: &BTreeSet<String>, labels: &[Label]) -> bool {
         self.terms
             .iter()
             .all(|term| predicate_matches(&term.predicate, parsed, held, labels) != term.negated)

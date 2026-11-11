@@ -306,10 +306,12 @@ impl Mailbox {
     }
 
     /// Forgets all history, so every stored `startHistoryId` is too old.
+    /// Nothing in the mailbox changed, so no watch is notified.
     pub(crate) fn expire_history(&mut self) {
         self.history.clear();
         self.history_id += 1;
         self.history_floor = self.history_id;
+        self.notified_history_id = self.history_id;
     }
 
     /// `users.history.list`.
@@ -397,8 +399,8 @@ impl Mailbox {
         thread_id: Option<&str>,
         internal_date_ms: Option<i64>,
     ) -> Result<(String, String), ApiError> {
-        let parsed = mime::parse(&raw)
-            .map_err(|error| ApiError::invalid_argument(&error.to_string()))?;
+        let parsed =
+            mime::parse(&raw).map_err(|error| ApiError::invalid_argument(&error.to_string()))?;
         for label in labels {
             if self.label(label).is_none() {
                 return Err(ApiError::invalid_argument(&format!(
@@ -535,9 +537,7 @@ impl Mailbox {
             })
             .filter(|message| query.is_none_or(|query| query.matches(message, &self.labels)))
             .collect();
-        messages.sort_by(|a, b| {
-            (b.internal_date_ms, &b.id).cmp(&(a.internal_date_ms, &a.id))
-        });
+        messages.sort_by(|a, b| (b.internal_date_ms, &b.id).cmp(&(a.internal_date_ms, &a.id)));
         messages
     }
 

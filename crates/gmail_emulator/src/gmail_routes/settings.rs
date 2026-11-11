@@ -30,17 +30,23 @@ async fn list_filters(
     headers: HeaderMap,
     Path(user): Path<String>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::FiltersList, |state, email| {
-        let filters: Vec<Value> = mailbox(state, email)?
-            .filters
-            .iter()
-            .map(|(_, filter)| filter.clone())
-            .collect();
-        Ok(Json(match filters.is_empty() {
-            true => json!({}),
-            false => json!({ "filter": filters }),
-        }))
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::FiltersList,
+        |state, email| {
+            let filters: Vec<Value> = mailbox(state, email)?
+                .filters
+                .iter()
+                .map(|(_, filter)| filter.clone())
+                .collect();
+            Ok(Json(match filters.is_empty() {
+                true => json!({}),
+                false => json!({ "filter": filters }),
+            }))
+        },
+    )
     .await
 }
 
@@ -49,14 +55,20 @@ async fn get_filter(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::FiltersGet, |state, email| {
-        mailbox(state, email)?
-            .filters
-            .iter()
-            .find(|(filter_id, _)| *filter_id == id)
-            .map(|(_, filter)| Json(filter.clone()))
-            .ok_or_else(ApiError::not_found)
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::FiltersGet,
+        |state, email| {
+            mailbox(state, email)?
+                .filters
+                .iter()
+                .find(|(filter_id, _)| *filter_id == id)
+                .map(|(_, filter)| Json(filter.clone()))
+                .ok_or_else(ApiError::not_found)
+        },
+    )
     .await
 }
 
@@ -66,34 +78,45 @@ async fn create_filter(
     Path(user): Path<String>,
     Json(body): Json<Value>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::FiltersCreate, |state, email| {
-        let (criteria, action) = (body["criteria"].clone(), body["action"].clone());
-        if !criteria.as_object().is_some_and(|criteria| !criteria.is_empty()) {
-            return Err(ApiError::invalid_argument("Filter must have criteria"));
-        }
-
-        let id = format!("ANe1Bm{}", state.ids.next());
-        let mailbox = mailbox(state, email)?;
-        let labels = strings(&action["addLabelIds"])
-            .into_iter()
-            .chain(strings(&action["removeLabelIds"]));
-        for label in labels {
-            if mailbox.label(&label).is_none() {
-                return Err(ApiError::invalid_argument(&format!("Invalid label: {label}")));
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::FiltersCreate,
+        |state, email| {
+            let (criteria, action) = (body["criteria"].clone(), body["action"].clone());
+            if !criteria
+                .as_object()
+                .is_some_and(|criteria| !criteria.is_empty())
+            {
+                return Err(ApiError::invalid_argument("Filter must have criteria"));
             }
-        }
-        let exists = mailbox
-            .filters
-            .iter()
-            .any(|(_, filter)| filter["criteria"] == criteria && filter["action"] == action);
-        if exists {
-            return Err(ApiError::invalid_argument("Filter already exists"));
-        }
 
-        let filter = json!({ "id": id, "criteria": criteria, "action": action });
-        mailbox.filters.push((id, filter.clone()));
-        Ok(Json(filter))
-    })
+            let id = format!("ANe1Bm{}", state.ids.next());
+            let mailbox = mailbox(state, email)?;
+            let labels = strings(&action["addLabelIds"])
+                .into_iter()
+                .chain(strings(&action["removeLabelIds"]));
+            for label in labels {
+                if mailbox.label(&label).is_none() {
+                    return Err(ApiError::invalid_argument(&format!(
+                        "Invalid label: {label}"
+                    )));
+                }
+            }
+            let exists = mailbox
+                .filters
+                .iter()
+                .any(|(_, filter)| filter["criteria"] == criteria && filter["action"] == action);
+            if exists {
+                return Err(ApiError::invalid_argument("Filter already exists"));
+            }
+
+            let filter = json!({ "id": id, "criteria": criteria, "action": action });
+            mailbox.filters.push((id, filter.clone()));
+            Ok(Json(filter))
+        },
+    )
     .await
 }
 
@@ -102,15 +125,21 @@ async fn delete_filter(
     headers: HeaderMap,
     Path((user, id)): Path<(String, String)>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::FiltersDelete, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let before = mailbox.filters.len();
-        mailbox.filters.retain(|(filter_id, _)| *filter_id != id);
-        match mailbox.filters.len() == before {
-            true => Err(ApiError::not_found()),
-            false => Ok(StatusCode::NO_CONTENT),
-        }
-    })
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::FiltersDelete,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let before = mailbox.filters.len();
+            mailbox.filters.retain(|(filter_id, _)| *filter_id != id);
+            match mailbox.filters.len() == before {
+                true => Err(ApiError::not_found()),
+                false => Ok(StatusCode::NO_CONTENT),
+            }
+        },
+    )
     .await
 }
 
@@ -119,33 +148,39 @@ async fn list_send_as(
     headers: HeaderMap,
     Path(user): Path<String>,
 ) -> Response {
-    mailbox_request(&emulator, &headers, Some(&user), Route::SendAsList, |state, email| {
-        let mailbox = mailbox(state, email)?;
-        let primary = json!({
-            "sendAsEmail": mailbox.email,
-            "displayName": mailbox.name.clone().unwrap_or_default(),
-            "replyToAddress": "",
-            "signature": "",
-            "isPrimary": true,
-            "isDefault": true,
-        });
-        let aliases = mailbox.send_as.iter().map(|alias| {
-            json!({
-                "sendAsEmail": alias.email,
-                "displayName": alias.name.clone().unwrap_or_default(),
+    mailbox_request(
+        &emulator,
+        &headers,
+        Some(&user),
+        Route::SendAsList,
+        |state, email| {
+            let mailbox = mailbox(state, email)?;
+            let primary = json!({
+                "sendAsEmail": mailbox.email,
+                "displayName": mailbox.name.clone().unwrap_or_default(),
                 "replyToAddress": "",
-                "signature": alias.signature.clone().unwrap_or_default(),
-                "isPrimary": false,
-                "isDefault": false,
-                "treatAsAlias": true,
-                "verificationStatus": match alias.verified {
-                    true => "accepted",
-                    false => "pending",
-                },
-            })
-        });
-        let send_as: Vec<Value> = std::iter::once(primary).chain(aliases).collect();
-        Ok(Json(json!({ "sendAs": send_as })))
-    })
+                "signature": "",
+                "isPrimary": true,
+                "isDefault": true,
+            });
+            let aliases = mailbox.send_as.iter().map(|alias| {
+                json!({
+                    "sendAsEmail": alias.email,
+                    "displayName": alias.name.clone().unwrap_or_default(),
+                    "replyToAddress": "",
+                    "signature": alias.signature.clone().unwrap_or_default(),
+                    "isPrimary": false,
+                    "isDefault": false,
+                    "treatAsAlias": true,
+                    "verificationStatus": match alias.verified {
+                        true => "accepted",
+                        false => "pending",
+                    },
+                })
+            });
+            let send_as: Vec<Value> = std::iter::once(primary).chain(aliases).collect();
+            Ok(Json(json!({ "sendAs": send_as })))
+        },
+    )
     .await
 }
