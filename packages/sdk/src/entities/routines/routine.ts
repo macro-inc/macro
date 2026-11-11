@@ -155,7 +155,11 @@ export type RoutineOptions = AgentRoutineOptions | StepsRoutineOptions;
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
-  /** The routine's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The routine's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/routines/${this.id}`;
   }
@@ -239,7 +243,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     (link) => link?.key ?? undefined,
   );
 
-  /** This routine's sub-routines, finished one-time ones included. */
+  /**
+   * This routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   *
+   * @readonly
+   */
   async children(): Promise<Routine[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActions({
@@ -251,6 +260,8 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * Keep this sub-routine as the user's own routine: it moves to their main
    * list and no longer pauses or is deleted with its parent.
+   *
+   * @write
    */
   async keepAsOwn(): Promise<void> {
     await this.mutate((c) =>
@@ -258,7 +269,11 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** This routine's shared template, or `undefined` when it isn't shared. */
+  /**
+   * This routine's shared template, or `undefined` when it isn't shared.
+   *
+   * @readonly
+   */
   async template(): Promise<RoutineTemplate | undefined> {
     const result = await this.client.scheduledAction.getScheduledActionTemplate(
       { path: { id: this.id } },
@@ -270,6 +285,9 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * Share this routine as a template, or update its shared snapshot. People
    * get the template, never the routine, its runs or its results.
+   *
+   * @write
+   * @idempotent
    */
   async shareAsTemplate(options: {
     /** What the routine does for someone. */
@@ -290,6 +308,8 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /**
    * Create the caller's own routine from this routine's shared template, with
    * its references already filled in for them.
+   *
+   * @write
    */
   async activateTemplate(options: RoutineOptions): Promise<Routine> {
     return Routine.from(
@@ -311,7 +331,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Stop sharing this routine. Routines already activated keep running. */
+  /**
+   * Stop sharing this routine. Routines already activated keep running.
+   *
+   * @destructive
+   * @idempotent
+   */
   async stopSharingTemplate(): Promise<void> {
     unwrap(
       await this.client.scheduledAction.unshareScheduledActionTemplate({
@@ -320,7 +345,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Replace the routine's task and trigger configuration. */
+  /**
+   * Replace the routine's task and trigger configuration.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: RoutineOptions): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.updateScheduledAction({
@@ -330,7 +360,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Enable or disable triggering. */
+  /**
+   * Enable or disable triggering.
+   *
+   * @write
+   * @idempotent
+   */
   async setEnabled(enabled: boolean): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.setScheduledActionEnabled({
@@ -340,7 +375,11 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Start an execution immediately and return its transcript handle if available. */
+  /**
+   * Start an execution immediately and return its transcript handle if available.
+   *
+   * @write
+   */
   async execute(): Promise<Chat | AgentSession | undefined> {
     const result = unwrap(
       await this.client.scheduledAction.executeScheduledActionNow({
@@ -359,7 +398,11 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     return result.chat_id ? Chat.byId(this.client, result.chat_id) : undefined;
   }
 
-  /** Completed executions, with their routine scoped identity. */
+  /**
+   * Completed executions, with their routine scoped identity.
+   *
+   * @readonly
+   */
   async history(): Promise<RoutineExecution[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActionHistory({
@@ -377,7 +420,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     );
   }
 
-  /** Delete the routine. */
+  /**
+   * Delete the routine.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
@@ -385,7 +433,11 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   }
 }
 
-/** One run of a routine, by the id of its history record. */
+/**
+ * One run of a routine, by the id of its history record.
+ *
+ * @mcp-exclude Read from a sub-routine's record; no call takes one.
+ */
 export class RoutineRun {
   constructor(
     /** The run's id, which its {@link RoutineExecution} has once it ends. */
@@ -398,7 +450,11 @@ export class RoutineRun {
   }
 }
 
-/** A routine shared as a template, which people activate as their own routine. */
+/**
+ * A routine shared as a template, which people activate as their own routine.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class RoutineTemplate {
   constructor(
     /** The shared routine. */
@@ -412,6 +468,8 @@ export class RoutineTemplate {
   /**
    * Create the caller's own routine from this template, with its references
    * already filled in for them.
+   *
+   * @write
    */
   activate(options: RoutineOptions): Promise<Routine> {
     return this.routine.activateTemplate(options);

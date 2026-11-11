@@ -128,6 +128,8 @@ export class RoutineNamespace {
    *   },
    *   { key: `check-${taskId}` },
    * );
+   *
+   * @write
    */
   async create(
     options: RoutineOptions,
@@ -167,6 +169,8 @@ export class RoutineNamespace {
    *   steps: [{ type: 'code', title: 'Post hello', source }],
    * });
    * if (!check.ok) return { problems: check.problems, steps: check.steps };
+   *
+   * @readonly
    */
   async check(
     options: RoutineOptions,
@@ -209,6 +213,8 @@ export class RoutineNamespace {
    *   keepProbability: 0.6,
    * });
    * if (!outcome.ok) return outcome.problems;
+   *
+   * @write
    */
   async suggest(
     suggestion:
@@ -252,10 +258,13 @@ export class RoutineNamespace {
   /**
    * List the user's top-level routines, as their Routines list shows them:
    * sub-routines, which other routines' runs created, are left out. Pass
-   * `parent` for one routine's sub-routines (finished one-time ones
-   * included), or `includeChildren` for every routine; each sub-routine
-   * names its {@link Routine.parent} and {@link Routine.createdByRun}.
-   * `includeEvents` adds event-triggered routines.
+   * `parent` for one routine's sub-routines (its newest finished one-time
+   * ones included), or `includeChildren` to add active sub-routines; each
+   * sub-routine names its {@link Routine.parent} and
+   * {@link Routine.createdByRun}. `includeEvents` adds event-triggered
+   * routines.
+   *
+   * @readonly
    */
   async list(options?: {
     includeEvents?: boolean;

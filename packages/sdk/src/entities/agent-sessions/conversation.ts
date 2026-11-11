@@ -9,7 +9,11 @@ import type { Channel } from '../channels/channel';
 import { Message } from '../channels/message';
 import { AgentSession } from './agent-session';
 
-/** An agent's conversation in one channel. */
+/**
+ * An agent's conversation in one channel.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class AgentConversation {
   constructor(
     private readonly client: MacroClient,
@@ -18,12 +22,20 @@ export class AgentConversation {
     private readonly record: AgentConversationDto,
   ) {}
 
-  /** The agent taking part. */
+  /**
+   * The agent taking part.
+   *
+   * @readonly
+   */
   agent(): Agent {
     return Agent.byId(this.client, this.record.botId);
   }
 
-  /** Conversation sessions with their current flag. */
+  /**
+   * Conversation sessions with their current flag.
+   *
+   * @readonly
+   */
   sessions() {
     return this.record.sessions.map((s) => ({
       session: AgentSession.byId(this.client, s.sessionId),
@@ -32,14 +44,22 @@ export class AgentConversation {
     }));
   }
 
-  /** Recorded conversation turns. */
+  /**
+   * Recorded conversation turns.
+   *
+   * @readonly
+   */
   turns(): ConversationTurn[] {
     return this.record.turns.map(
       (t) => new ConversationTurn(this.client, this, t),
     );
   }
 
-  /** Start a fresh conversation from one of its sessions. */
+  /**
+   * Start a fresh conversation from one of its sessions.
+   *
+   * @write
+   */
   async startFresh(session: AgentSession): Promise<void> {
     unwrap(
       await this.client.agentHarness.startFreshAgentConversation({
@@ -55,7 +75,11 @@ export class AgentConversation {
   }
 }
 
-/** One agent conversation turn, identified by its source message. */
+/**
+ * One agent conversation turn, identified by its source message.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
+ */
 export class ConversationTurn {
   constructor(
     private readonly client: MacroClient,
@@ -64,7 +88,11 @@ export class ConversationTurn {
     private readonly record: AgentConversationTurnDto,
   ) {}
 
-  /** Originating message. */
+  /**
+   * Originating message.
+   *
+   * @readonly
+   */
   source(): Message {
     return Message.byId(
       this.client,
@@ -73,12 +101,21 @@ export class ConversationTurn {
     );
   }
 
-  /** Session that handled this turn. */
+  /**
+   * Session that handled this turn.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return AgentSession.byId(this.client, this.record.sessionId);
   }
 
-  /** Retry with a caller persisted action nonce. Never retries automatically. */
+  /**
+   * Retry with a caller persisted action nonce. Never retries automatically.
+   *
+   * @write
+   * @idempotent
+   */
   async retry(actionId: string): Promise<void> {
     unwrap(
       await this.client.agentHarness.retryAgentConversationTurn({

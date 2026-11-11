@@ -15,6 +15,8 @@ import type { MacroClient } from '../../utils/client';
  * so this wraps whatever DTO the caller already has, the same shape
  * `DiscussionComment` wraps a list-sourced record, rather than `MacroEntity`'s
  * lazy-fetch-by-id.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class QueuedAction {
   private constructor(
@@ -69,6 +71,9 @@ export class QueuedAction {
    * Replace this queued prompt's text before it dispatches. Returns this
    * handle for chaining; the edit endpoint answers 204, so `prompt` is
    * applied locally rather than reread from a response body.
+   *
+   * @write
+   * @idempotent
    */
   async edit(prompt: string): Promise<this> {
     unwrap(
@@ -81,7 +86,11 @@ export class QueuedAction {
     return this;
   }
 
-  /** Move this action to the front and interrupt the current turn to run it next. */
+  /**
+   * Move this action to the front and interrupt the current turn to run it next.
+   *
+   * @destructive
+   */
   async steer(): Promise<void> {
     unwrap(
       await this.client.agentHarness.steerQueuedAction({
@@ -90,7 +99,12 @@ export class QueuedAction {
     );
   }
 
-  /** Remove this action from the queue before it dispatches. */
+  /**
+   * Remove this action from the queue before it dispatches.
+   *
+   * @destructive
+   * @idempotent
+   */
   async remove(): Promise<void> {
     unwrap(
       await this.client.agentHarness.removeQueuedAction({
