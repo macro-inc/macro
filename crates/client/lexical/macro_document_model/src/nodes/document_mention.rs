@@ -49,6 +49,11 @@ impl ImportPolicy for DocumentMentionNode {
 }
 impl DecoratorNode for DocumentMentionNode {
     lexical_model::decorator_node_base!();
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, Error> {
+        Ok(Some(DecoratorRenderSignature::new(to_js_json_string(
+            &serde_json::to_value(self)?,
+        ))))
+    }
     fn json_version(&self) -> u32 {
         2
     }

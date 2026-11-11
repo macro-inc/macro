@@ -54,6 +54,17 @@ impl ImportPolicy for DocumentCardNode {
 }
 impl DecoratorNode for DocumentCardNode {
     lexical_model::decorator_node_base!();
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, Error> {
+        let mut props = serde_json::to_value(self)?;
+        if self.block_name == Maybe::Value("database".into())
+            && let Some(props) = props.as_object_mut()
+        {
+            props.shift_remove("blockParams");
+        }
+        Ok(Some(DecoratorRenderSignature::new(to_js_json_string(
+            &props,
+        ))))
+    }
     fn json_version(&self) -> u32 {
         1
     }

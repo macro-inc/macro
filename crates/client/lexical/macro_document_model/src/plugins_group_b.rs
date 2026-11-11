@@ -236,6 +236,9 @@ pub fn query(
     if let Some(reply) = checklist_query::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
+    if let Some(reply) = decorator_content_actions::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
     table::query(name, data, generation, state)
 }
 
