@@ -1,3 +1,7 @@
+import {
+  createEditor as createOriginalEditor,
+  ElementNode as OriginalElementNode,
+} from 'lexical';
 import { expect, test } from 'vitest';
 import { prepareEditorRegisteredNodes } from '../configuration/registered-nodes';
 import { foreignHooks } from '../hooks.generated';
@@ -6,6 +10,193 @@ import { ElementNode } from '../nodes/element';
 import { TabNode } from '../nodes/tab';
 import { TextNode } from '../nodes/text';
 import { ForeignClassRegistry, NativeNodeCatalog } from './registry';
+
+test('Original construction defers instance getters and configured metadata must do the same', () => {
+  class OriginalCustom extends OriginalElementNode {
+    static getType() {
+      return 'original-accessor';
+    }
+  }
+  const originalFailure = { reason: 'Original instance getter' };
+  let originalReads = 0;
+  let originalReceiver: unknown;
+  Object.defineProperty(OriginalCustom.prototype, 'getIndent', {
+    configurable: true,
+    get(this: OriginalCustom) {
+      originalReads++;
+      originalReceiver = this;
+      throw originalFailure;
+    },
+  });
+  const original = createOriginalEditor({
+    nodes: [OriginalCustom],
+    onError: (error) => {
+      throw error;
+    },
+  });
+  expect(originalReads).toBe(0);
+  original.update(
+    () => {
+      const instance = new OriginalCustom();
+      let caught: unknown;
+      try {
+        instance.getIndent();
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBe(originalFailure);
+      expect(originalReceiver).toBe(instance);
+      expect(originalReads).toBe(1);
+    },
+    { discrete: true }
+  );
+  class Custom extends ElementNode {
+    static getType() {
+      return 'configured-accessor';
+    }
+  }
+  const failure = { reason: 'metadata must not invoke getter' };
+  let reads = 0;
+  Object.defineProperty(Custom.prototype, 'getIndent', {
+    configurable: true,
+    get() {
+      reads++;
+      throw failure;
+    },
+  });
+  const catalog = new NativeNodeCatalog([
+    { klass: ElementNode, kind: 'Element', type: null },
+  ]);
+  const registry = ForeignClassRegistry.fromConfigured(catalog, [
+    { klass: Custom, type: 'configured-accessor' },
+  ]);
+  try {
+    const index = foreignHooks.findIndex((hook) => hook.name === 'getIndent');
+    if (index < 0) throw new Error('missing getIndent hook');
+    expect(registry.rows()[0].overrides).toBe(1n << BigInt(index));
+    expect(registry.beforeUpdate()[0].overrides).toBe(1n << BigInt(index));
+    expect(reads).toBe(0);
+    expect(
+      Object.getOwnPropertyDescriptor(Custom.prototype, 'getIndent')?.get
+    ).toBeDefined();
+  } finally {
+    registry.dispose();
+  }
+});
+
+test('configured accessors stay virtual without resolving dynamic values, including native-valued getters', () => {
+  class Custom extends ElementNode {
+    static getType() {
+      return 'dynamic-accessor';
+    }
+  }
+  let reads = 0;
+  let current = ElementNode.prototype.getIndent;
+  const getter = () => {
+    reads++;
+    return current;
+  };
+  Object.defineProperty(Custom.prototype, 'getIndent', {
+    configurable: true,
+    get: getter,
+  });
+  const catalog = new NativeNodeCatalog([
+    { klass: ElementNode, kind: 'Element', type: null },
+  ]);
+  const registry = ForeignClassRegistry.fromConfigured(catalog, [
+    { klass: Custom, type: 'dynamic-accessor' },
+  ]);
+  try {
+    const index = foreignHooks.findIndex((hook) => hook.name === 'getIndent');
+    if (index < 0) throw new Error('missing getIndent hook');
+    const indent = 1n << BigInt(index);
+    expect(registry.beforeUpdate()[0].overrides).toBe(indent);
+    current = () => 99;
+    expect(registry.rows()[0].overrides).toBe(indent);
+    current = ElementNode.prototype.getIndent;
+    expect(registry.rows()[0].overrides).toBe(indent);
+    expect(
+      Object.getOwnPropertyDescriptor(Custom.prototype, 'getIndent')?.get
+    ).toBe(getter);
+    expect(reads).toBe(0);
+  } finally {
+    registry.dispose();
+  }
+});
+
+test('configured inspection walks registry slot getters without invoking an inherited user getter', () => {
+  class Parent extends ElementNode {}
+  class Custom extends Parent {
+    static getType() {
+      return 'inherited-accessor';
+    }
+  }
+  const catalog = new NativeNodeCatalog([
+    { klass: ElementNode, kind: 'Element', type: null },
+  ]);
+  const registry = ForeignClassRegistry.fromConfigured(catalog, [
+    { klass: Custom, type: 'inherited-accessor' },
+  ]);
+  let reads = 0;
+  const getter = () => {
+    reads++;
+    throw new Error('inherited getter is dispatch-only');
+  };
+  try {
+    expect(registry.rows()[0].overrides).toBe(0n);
+    expect(
+      Object.getOwnPropertyDescriptor(Custom.prototype, 'getIndent')?.get
+    ).toBeDefined();
+    Object.defineProperty(Parent.prototype, 'getIndent', {
+      configurable: true,
+      get: getter,
+    });
+    const index = foreignHooks.findIndex((hook) => hook.name === 'getIndent');
+    if (index < 0) throw new Error('missing getIndent hook');
+    expect(registry.beforeUpdate()[0].overrides).toBe(1n << BigInt(index));
+    Object.defineProperty(Parent.prototype, 'getIndent', {
+      configurable: true,
+      writable: true,
+      value: ElementNode.prototype.getIndent,
+    });
+    expect(registry.rows()[0].overrides).toBe(0n);
+    Object.defineProperty(Parent.prototype, 'getIndent', {
+      configurable: true,
+      get: getter,
+    });
+    expect(() => registry.rows()).toThrow('native hook getIndent');
+    expect(reads).toBe(0);
+  } finally {
+    registry.dispose();
+  }
+});
+
+test('legacy construction retains its existing method getter evaluation', () => {
+  class Legacy extends ElementNode {
+    static getType() {
+      return 'legacy-accessor';
+    }
+  }
+  const failure = { reason: 'legacy method getter' };
+  let reads = 0;
+  Object.defineProperty(Legacy.prototype, 'getIndent', {
+    get() {
+      reads++;
+      throw failure;
+    },
+  });
+  const catalog = new NativeNodeCatalog([
+    { klass: ElementNode, kind: 'Element', type: null },
+  ]);
+  let caught: unknown;
+  try {
+    new ForeignClassRegistry(catalog, [Legacy]);
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBe(failure);
+  expect(reads).toBe(1);
+});
 
 test('prepared SameNameText replaces the catalog name without rereading getType or adding hidden Text ancestry', () => {
   const catalog = new NativeNodeCatalog([

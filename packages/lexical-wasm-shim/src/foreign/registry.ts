@@ -27,6 +27,10 @@ interface Registration extends Omit<NodeRegistration, 'overrides'> {
 }
 interface HookSlot {
   readonly owners: Set<WeakRef<RegistryState>>;
+  readonly readOwn: () => {
+    readonly written: boolean;
+    readonly value: unknown;
+  };
 }
 // Prototype metadata only: neither node instances nor editors are retained here.
 const slots = new WeakMap<object, Map<string, HookSlot>>();
@@ -46,6 +50,31 @@ function target(klass: NodeClass, isStatic: boolean): object {
 function method(klass: NodeClass, index: number): unknown {
   const hook = foreignHooks[index];
   return Reflect.get(target(klass, hook.static), hook.name);
+}
+function configuredOverride(
+  klass: NodeClass,
+  index: number,
+  baseline: unknown
+): boolean {
+  const hook = foreignHooks[index];
+  let owner: object | null = target(klass, hook.static);
+  while (owner !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(owner, hook.name);
+    if (descriptor !== undefined) {
+      const slot = slots.get(owner)?.get(hook.name);
+      if (
+        slot !== undefined &&
+        descriptor.get === getters.get(slot) &&
+        descriptor.set === setters.get(slot)
+      ) {
+        const own = slot.readOwn();
+        if (own.written) return own.value !== baseline;
+      } else if ('value' in descriptor) return descriptor.value !== baseline;
+      else return true;
+    }
+    owner = Object.getPrototypeOf(owner);
+  }
+  return baseline !== undefined;
 }
 function parent(klass: NodeClass): NodeClass | null {
   const value: unknown = Object.getPrototypeOf(klass);
@@ -107,6 +136,7 @@ class RegistryState {
   disposed = false;
   dirty = true;
   revision = 0;
+  deferAccessors = false;
 
   prepare(): readonly (readonly [Registration, bigint])[] {
     const pending: [Registration, bigint][] = [];
@@ -129,8 +159,10 @@ class RegistryState {
           hook.name !== 'transform'
         )
           continue;
-        if (method(record.klass, i) !== record.baseline.methods[i])
-          mask |= 1n << BigInt(i);
+        const overridden = this.deferAccessors
+          ? configuredOverride(record.klass, i, record.baseline.methods[i])
+          : method(record.klass, i) !== record.baseline.methods[i];
+        if (overridden) mask |= 1n << BigInt(i);
       }
       const added = mask & ~record.overrides;
       if (this.started && added !== 0n) {
@@ -207,6 +239,7 @@ function watch(owner: object, name: string, registry: RegistryState): void {
   let value: unknown = descriptor?.value;
   const slot: HookSlot = {
     owners: new Set([...(existing?.owners ?? []), new WeakRef(registry)]),
+    readOwn: () => ({ written, value }),
   };
   const setter = function (this: object, next: unknown): void {
     if (this !== owner) {
@@ -314,6 +347,7 @@ export class ForeignClassRegistry {
       types.add(type);
     }
     const registry = new ForeignClassRegistry(catalog, []);
+    registry.state.deferAccessors = true;
     for (const [klass, { type, baseline }] of registered) {
       const ancestry: string[] = [];
       let current = parent(klass);

@@ -24,9 +24,18 @@ Preserve the selected baseline, hook masks, dynamic accessors and prototype trap
 The generated hook inventory excludes clone staging; this metadata API does not
 bind clone, constructor, hydration, callback or native payload authority.
 
+Configured masks inspect hook descriptors without evaluating user accessors on
+prototypes. Eligible accessors are virtual even if they would return the native
+function; only actual dispatch may resolve their value on the real receiver.
+Registry-owned getter/setter pairs are recognized by identity and inspected
+through their existing trap state, continuing up the parent chain for an
+unwritten inherited slot. Replacing a registry getter with a user accessor does
+not make that accessor safe to invoke during metadata preparation or refresh.
+
 The existing constructor remains the legacy path. It still discovers type names,
 deduplicates repeated classes, checks catalog-name collisions, and includes
 catalog names in ancestry. Do not change it to prepared-map semantics implicitly.
+Its existing method-getter evaluation also remains unchanged.
 
 ## Checks
 
