@@ -24,6 +24,9 @@ const MAX_ERROR_BODY_LEN: usize = 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The audience Google signs Gmail push tokens for.
+const PUSH_TOKEN_AUDIENCE: &str = "macro-gmail-webhook";
+
 static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
 
@@ -45,6 +48,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 }
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
+use macro_service_urls::{GmailApiUrl, GoogleOauthCertsUrl, GooglePeopleApiUrl};
 use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
@@ -81,22 +85,23 @@ pub struct GmailClient {
 impl GmailClient {
     /// Client for API calls that do not register push subscriptions.
     pub fn without_watch() -> Self {
-        Self::new_with_urls(
-            None,
-            "https://www.googleapis.com/gmail/v1".to_string(),
-            "https://people.googleapis.com/v1".to_string(),
-            "https://www.googleapis.com/oauth2/v3/certs".to_string(),
-            "macro-gmail-webhook".to_string(),
-        )
+        Self::with_service_urls(None)
     }
 
     pub fn new(subscription_topic: String) -> Self {
+        Self::with_service_urls(Some(subscription_topic))
+    }
+
+    /// Client for Google's hosts, or for the hosts their `OVERRIDE_*` service
+    /// URL variables name (a local Gmail emulator). Like every service URL,
+    /// an override that cannot be read stops startup.
+    fn with_service_urls(subscription_topic: Option<String>) -> Self {
         Self::new_with_urls(
             subscription_topic,
-            "https://www.googleapis.com/gmail/v1".to_string(),
-            "https://people.googleapis.com/v1".to_string(),
-            "https://www.googleapis.com/oauth2/v3/certs".to_string(),
-            "macro-gmail-webhook".to_string(),
+            GmailApiUrl::unwrap_new().to_string(),
+            GooglePeopleApiUrl::unwrap_new().to_string(),
+            GoogleOauthCertsUrl::unwrap_new().to_string(),
+            PUSH_TOKEN_AUDIENCE.to_string(),
         )
     }
 
