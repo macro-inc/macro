@@ -2,6 +2,14 @@ use super::*;
 use serde_json::Value;
 /// Application exclusions and comparison policy; projection has no application dependencies.
 pub trait SyncPolicy: Send + Sync + 'static {
+    /// Whether normal local writes derive Source's root search text.
+    fn writes_root_search_text(&self) -> bool {
+        false
+    }
+    /// Durable identity used by the application's root search serialization.
+    fn root_search_text_id(&self, _view: StateRef<'_>, _key: NodeKey) -> Result<Option<String>> {
+        Ok(None)
+    }
     /// Source own-undefined properties stored as Loro null instead of omitted JSON.
     fn own_undefined_fields(&self, _node_type: &str) -> &[String] {
         &[]

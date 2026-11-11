@@ -1,6 +1,7 @@
 import { startEditorOperation } from '@app/observability/editor';
 import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
 import type { NativeMarkdownOverlayInstallation } from '@core/component/LexicalMarkdown/editing/nativeOverlayPorts';
+import { ENABLE_MARKDOWN_SEARCH_TEXT } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ABI_MAJOR,
@@ -132,7 +133,9 @@ export function createRustEditorSession(
         config,
         now,
         wall,
-        options.view.namespace
+        options.view.namespace,
+        undefined,
+        ENABLE_MARKDOWN_SEARCH_TEXT
       ),
     false
   );

@@ -292,3 +292,6 @@ Expose group-b.table-facts through ordinary query kind 9 with its existing pre-d
 Validate table selection actions through the real Machine application envelope with current and stale generations and authorization downgrade/retry controls; model-only dispatch does not prove session admission.
 
 A selection view effect (kind 6, code 0) sets its flag only for a focused browser history awareness restore. That flag permits the DOM write after the content update in the same packet skipped selection.
+
+
+The optional final `createMacroWithNamespace` argument enables root search-text storage for the ordinary Macro browser host. Default it to false and rebuild the glue and declaration from the same source as the native artifact.

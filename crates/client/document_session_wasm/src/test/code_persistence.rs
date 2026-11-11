@@ -27,6 +27,7 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
         0.0,
         1000.0,
         "source-editor-instance_17",
+        false,
     )
     .expect("production Macro factory");
     writer.sync(SyncInput::Start, 0.0, None).expect("start");

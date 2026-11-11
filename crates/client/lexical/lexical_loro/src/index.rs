@@ -257,6 +257,7 @@ impl LoroProjection {
         }
         Ok(Self {
             own_exports: Default::default(),
+            search_text: policy.writes_root_search_text().then(Default::default),
             child_index,
             indexed_state: state.clone(),
             indexed_vv: doc.oplog_vv(),
@@ -277,8 +278,18 @@ impl LoroProjection {
         doc: &LoroDoc,
         state: &EditorState,
     ) -> std::result::Result<(), Inconsistency> {
-        let editor =
-            comparison::model(state, self.policy).map(|s| serde_json::Value::Object(s.root));
+        let editor = comparison::model(state, self.policy).map(|mut state_json| {
+            if let Some(search_text) = &self.search_text {
+                search_text.apply_expected_tree(
+                    state.view(),
+                    NodeKey::ROOT,
+                    self.policy,
+                    &self.index,
+                    &mut state_json.root,
+                );
+            }
+            serde_json::Value::Object(state_json.root)
+        });
         let actual = comparison::loro(doc, self.policy).map(|s| serde_json::Value::Object(s.root));
         match (editor, actual) {
             (Ok(editor), Ok(actual)) if editor == actual => {}
@@ -315,7 +326,12 @@ impl LoroProjection {
                 if !view.is_attached(key) || synced_owner(view, key, self.policy) != Some(key) {
                     continue;
                 }
-                let expected = comparison::model_own(view, key, self.policy);
+                let expected = comparison::model_own(view, key, self.policy).map(|mut own| {
+                    if let Some(search_text) = &self.search_text {
+                        search_text.apply_expected(key, &self.index, &mut own);
+                    }
+                    own
+                });
                 let actual = self.index.map(doc, key).and_then(|map| {
                     if map.is_deleted() {
                         return Err(diverged("indexed map deleted"));

@@ -79,6 +79,7 @@ mod policy;
 pub use policy::*;
 mod index;
 mod schema;
+mod search_text;
 pub use index::{
     InitialEditorState, fork_doc, new_doc, reconstruct_initial_state, reconstruct_state,
 };
@@ -96,6 +97,7 @@ pub struct LoroProjection {
     events: Arc<Mutex<Vec<remote::PendingBatch>>>,
     child_index: child_index::ChildIndex,
     own_exports: (JsonExportBuffer, JsonExportBuffer),
+    search_text: Option<search_text::SearchText>,
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,
     indexed_frontiers: loro::Frontiers,
