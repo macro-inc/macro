@@ -929,6 +929,32 @@ pub struct HistoryBoundary {
     pub initialization_log_id: Uuid,
 }
 
+/// The `_meta` namespace and key that mark a `tool_call` frame as a card the
+/// service presented ([`SessionToolPresentation`]), not a call the agent made.
+/// The agent never saw it, so a rebuild of the agent's conversation from the
+/// log leaves it out.
+const PRESENTED_META: (&str, &str) = ("macro", "presented");
+
+/// The `_meta` a presented card's `tool_call` frame carries.
+#[must_use]
+pub fn presented_meta() -> agent_client_protocol::schema::v1::Meta {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        PRESENTED_META.0.to_owned(),
+        serde_json::json!({ PRESENTED_META.1: true }),
+    );
+    meta
+}
+
+/// Whether a `tool_call` frame's `_meta` marks a card the service presented.
+#[must_use]
+pub fn is_presented(meta: Option<&agent_client_protocol::schema::v1::Meta>) -> bool {
+    meta.and_then(|meta| meta.get(PRESENTED_META.0))
+        .and_then(|ours| ours.get(PRESENTED_META.1))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false)
+}
+
 /// A durable, nonblocking tool card supplied by a trusted session capability.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SessionToolPresentation {

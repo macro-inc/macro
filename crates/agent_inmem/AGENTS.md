@@ -21,7 +21,10 @@ milliseconds instead of waiting on container provisioning.
   (history without reasoning parts and with adjacent text merged, as
   `agent::to_rig_messages` builds it; model, effort, speed, identity,
   instructions) must equal the live one, with no summary in flight, failed, or
-  image descriptions cached, since none of that is in the log. A replay change
+  image descriptions cached, since none of that is in the log. Cards the
+  session presents on a turn's behalf (code-mode views and reviews,
+  `_meta.macro.presented`) never reached the agent, so replay skips them. A
+  replay change
   that drifts from the live history stops sessions from releasing; the
   manager tests with MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
