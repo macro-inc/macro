@@ -28,10 +28,11 @@ use model_notifications::{
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
     CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
-    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
-    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage, CommentedOnDocumentMetadata,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
     RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent,
@@ -775,6 +776,54 @@ impl GraphqlRoutineRunFinishedMetadata {
     }
 }
 
+/// How close a Macro computer's Claude sign-in is to no longer working.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlClaudeSignInExpiryStage {
+    /// It expires within three days.
+    ExpiresSoon,
+    /// It expires within a day.
+    ExpiresToday,
+    /// It expired, or Claude rejected it.
+    Expired,
+}
+
+impl From<ClaudeSignInExpiryStage> for GraphqlClaudeSignInExpiryStage {
+    fn from(value: ClaudeSignInExpiryStage) -> Self {
+        match value {
+            ClaudeSignInExpiryStage::ExpiresSoon => Self::ExpiresSoon,
+            ClaudeSignInExpiryStage::ExpiresToday => Self::ExpiresToday,
+            ClaudeSignInExpiryStage::Expired => Self::Expired,
+        }
+    }
+}
+
+/// GraphQL wrapper for Claude sign-in expiry metadata.
+pub struct GraphqlClaudeSignInExpiryMetadata(ClaudeSignInExpiryMetadata);
+
+/// Metadata for a Macro computer's Claude sign-in running out.
+#[Object]
+impl GraphqlClaudeSignInExpiryMetadata {
+    /// The computer's harness id.
+    async fn harness_id(&self) -> ID {
+        ID(self.0.harness_id.to_string())
+    }
+
+    /// The computer's name when the notice was sent.
+    async fn computer_name(&self) -> &str {
+        &self.0.computer_name
+    }
+
+    /// How close the sign-in is to no longer working.
+    async fn stage(&self) -> GraphqlClaudeSignInExpiryStage {
+        self.0.stage.into()
+    }
+
+    /// When the sign-in expires or expired; absent when Claude rejected it.
+    async fn expires_at(&self) -> Option<String> {
+        self.0.expires_at.map(|timestamp| timestamp.to_rfc3339())
+    }
+}
+
 /// GraphQL wrapper for removed runtime access metadata.
 pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
 
@@ -1378,6 +1427,8 @@ pub enum GraphqlNotifEvent {
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
     RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
+    /// Claude sign-in expiry metadata.
+    ClaudeSignInExpiry(GraphqlClaudeSignInExpiryMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1441,6 +1492,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::NewEmail(metadata) => Self::NewEmail(GraphqlNewEmailMetadata(metadata)),
             NotifEvent::RoutineRunFinished(metadata) => {
                 Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
+            }
+            NotifEvent::ClaudeSignInExpiry(metadata) => {
+                Self::ClaudeSignInExpiry(GraphqlClaudeSignInExpiryMetadata(metadata))
             }
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))

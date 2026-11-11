@@ -4145,6 +4145,41 @@ export type ClaimedPairing = {
     token: string;
 };
 
+/**
+ * Claude Code's sign-in on a Macro computer, as `claude auth status` reports it.
+ */
+export type ClaudeAccount = {
+    status: 'signed_out';
+} | {
+    /**
+     * The account's email address, when Claude reports one.
+     */
+    account?: string | null;
+    /**
+     * The account's id at Anthropic (`oauthAccount.accountUuid`).
+     */
+    account_id: string;
+    /**
+     * When the sign-in stops refreshing and must be repeated.
+     */
+    expires_at?: string | null;
+    /**
+     * The account's organization, when Claude reports one.
+     */
+    organization?: string | null;
+    /**
+     * The account's plan (`subscriptionType`), e.g. `max`.
+     */
+    plan?: string | null;
+    status: 'signed_in';
+};
+
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
 /**
@@ -4661,6 +4696,8 @@ export type CompleteUploads = {
      */
     uploads: Array<UploadId>;
 };
+
+export type ComputerId = string;
 
 /**
  * The conferencing system backing an event's join URL.
@@ -5879,7 +5916,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -12394,6 +12431,16 @@ export type Harness = {
      */
     allow_permission_bypass?: boolean;
     /**
+     * What the harness's machine can do, as macrod last reported it.
+     */
+    capabilities?: HarnessCapabilities;
+    /**
+     * How Claude Code on this machine is paid for, derived from whether
+     * it has an active Claude login. Only meaningful for Macro computers.
+     */
+    claude_mode?: ClaudeMode;
+    computer_id?: null | ComputerId;
+    /**
      * Whether the daemon currently holds a runtime connection.
      */
     connected: boolean;
@@ -12456,6 +12503,20 @@ export type HarnessAgent = {
      * Display name.
      */
     name: string;
+};
+
+/**
+ * What a harness's machine can do beyond running agents.
+ *
+ * macrod reports this after it connects; every field defaults to off, so
+ * harnesses that never report stay plain.
+ */
+export type HarnessCapabilities = {
+    claude?: null | ClaudeAccount;
+    /**
+     * A display Macro can stream (Xvnc on `127.0.0.1:5900`).
+     */
+    screen?: boolean;
 };
 
 export type HarnessId = string;
@@ -15026,6 +15087,8 @@ export type PairingDetails = {
      */
     requested_name: string;
 };
+
+export type PairingId = string;
 
 /**
  * Paragraph formatting changes.
@@ -31229,7 +31292,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';
@@ -31352,6 +31415,27 @@ export type ListHarnessAgentsResponses = {
 };
 
 export type ListHarnessAgentsResponse = ListHarnessAgentsResponses[keyof ListHarnessAgentsResponses];
+
+export type PutSelfHarnessCapabilitiesData = {
+    body: HarnessCapabilities;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/capabilities';
+};
+
+export type PutSelfHarnessCapabilitiesErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutSelfHarnessCapabilitiesError = PutSelfHarnessCapabilitiesErrors[keyof PutSelfHarnessCapabilitiesErrors];
+
+export type PutSelfHarnessCapabilitiesResponses = {
+    204: void;
+};
+
+export type PutSelfHarnessCapabilitiesResponse = PutSelfHarnessCapabilitiesResponses[keyof PutSelfHarnessCapabilitiesResponses];
 
 export type ListHarnessSessionsData = {
     body?: never;

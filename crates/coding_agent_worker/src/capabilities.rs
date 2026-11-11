@@ -1,0 +1,147 @@
+//! Capability reports, only for enrolled Macro computers.
+
+use std::time::Duration;
+
+use harnesses::domain::models::HarnessCapabilities;
+use rootcause::prelude::ResultExt as _;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
+
+use crate::config::{HarnessCredentials, MacroApi};
+
+#[cfg(test)]
+mod test;
+
+const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
+/// The box image's Xvnc display.
+pub const SCREEN_ADDRESS: &str = "127.0.0.1:5900";
+const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
+/// How often the screen and Claude sign-in are probed again.
+const SCREEN_INTERVAL: Duration = Duration::from_secs(60);
+const REPORT_TIMEOUT: Duration = Duration::from_secs(10);
+
+async fn listening(address: &str) -> bool {
+    matches!(
+        tokio::time::timeout(PROBE_TIMEOUT, tokio::net::TcpStream::connect(address)).await,
+        Ok(Ok(_))
+    )
+}
+
+/// Written last by enrollment; only computers bearing this marker report.
+pub const ENROLLED_MARKER: &str = "/var/lib/macrod/enrolled";
+
+/// Whether this machine is an enrolled Macro computer.
+pub fn is_macro_computer() -> bool {
+    cfg!(unix) && std::path::Path::new(ENROLLED_MARKER).exists()
+}
+
+/// Track the reporter with the daemon so cancellation interrupts probes and
+/// reports.
+pub fn spawn_reporter(
+    config: &MacroApi,
+    credentials: &HarnessCredentials,
+    computer: Option<std::sync::Arc<crate::computer::Computer>>,
+    cancel: CancellationToken,
+    tasks: &TaskTracker,
+) -> rootcause::Result<()> {
+    let http = report_client_builder()
+        .build()
+        .context("could not build the capability report client")?;
+    let url = format!(
+        "{}/harnesses/me/capabilities",
+        config.storage_url.trim_end_matches('/')
+    );
+    let token = credentials.token.clone();
+    track_reporter(tasks, cancel, async move {
+        let mut reported = None;
+        // Join the setup trace until the first report reaches the control plane.
+        let mut setup_parent = crate::telemetry::setup_parent();
+        let mut current = HarnessCapabilities::default();
+        let mut interval = tokio::time::interval(SCREEN_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            match &computer {
+                // A sign-in or sign-out reports at once, not a minute later.
+                Some(computer) => tokio::select! {
+                    _ = interval.tick() => {
+                        current.claude = Some(computer.refresh_claude_auth().await.0);
+                    }
+                    () = computer.claude_auth_changed() => {
+                        current.claude = Some(computer.claude_auth().0);
+                    }
+                },
+                None => {
+                    interval.tick().await;
+                }
+            }
+            current.screen = listening(SCREEN_ADDRESS).await;
+            if reported.as_ref() != Some(&current) {
+                match report(&http, &url, &token, &current, setup_parent).await {
+                    Ok(()) => {
+                        setup_parent = None;
+                        reported = Some(current.clone());
+                    }
+                    Err(error) => tracing::warn!(error = ?error, "capability report failed"),
+                }
+            }
+        }
+    });
+    Ok(())
+}
+
+fn report_client_builder() -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .timeout(REPORT_TIMEOUT)
+        // Repeated health polls must not pin a reassigned service IP forever.
+        .pool_max_idle_per_host(0)
+}
+
+fn track_reporter(
+    tasks: &TaskTracker,
+    cancel: CancellationToken,
+    work: impl Future<Output = ()> + Send + 'static,
+) {
+    tasks.spawn(async move {
+        tokio::select! {
+            () = cancel.cancelled() => {},
+            () = work => {},
+        }
+    });
+}
+
+async fn report(
+    http: &reqwest::Client,
+    url: &str,
+    token: &str,
+    capabilities: &HarnessCapabilities,
+    setup_parent: Option<&str>,
+) -> rootcause::Result<()> {
+    use tracing::Instrument as _;
+    let span = tracing::info_span!(
+        "macrod.capabilities.report",
+        screen = capabilities.screen,
+        setup = setup_parent.is_some(),
+        otel.status_code = tracing::field::Empty
+    );
+    hosted_runtimes::domain::telemetry::attach(&span, setup_parent);
+    async {
+        let status = http
+            .put(url)
+            .headers(crate::telemetry::trace_headers(setup_parent))
+            .header(HARNESS_TOKEN_HEADER, token)
+            .json(capabilities)
+            .send()
+            .await
+            .context("could not reach the service to report capabilities")?
+            .status();
+        if !status.is_success() {
+            rootcause::bail!("capability report returned HTTP {status}");
+        }
+        Ok(())
+    }
+    .instrument(span.clone())
+    .await
+    .inspect_err(|_| {
+        span.record("otel.status_code", "ERROR");
+    })
+}

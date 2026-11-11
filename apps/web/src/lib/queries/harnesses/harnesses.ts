@@ -13,6 +13,7 @@ import {
   storageServiceClient,
 } from '@service-storage/client';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { harnessKeys } from './keys';
 
 export type ApproveHarnessPairingParams = {
@@ -59,12 +60,23 @@ const harnessDirectoryQueryOptions = queryOptions({
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnessDirectory()),
   staleTime: 15_000,
+  refetchInterval: (query) =>
+    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
+      ? false
+      : 15_000,
+  refetchIntervalInBackground: false,
+  reconcile: 'id',
   throwOnError: false,
 });
 
 /** Every runtime of the viewer's teammates, usable by the viewer or not. */
-export function useHarnessDirectoryQuery() {
-  return useQuery(() => harnessDirectoryQueryOptions);
+export function useHarnessDirectoryQuery(
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQuery(() => ({
+    ...harnessDirectoryQueryOptions,
+    enabled: enabled(),
+  }));
 }
 
 function harnessResidentsQueryOptions(harnessId: string, enabled: boolean) {

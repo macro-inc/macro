@@ -19811,8 +19811,7 @@
             "description": "Pairing ID",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/PairingId"
             }
           }
         ],
@@ -20084,6 +20083,59 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me/capabilities": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/me/capabilities`.",
+        "description": "macrod reports what its machine can do after it connects; the body\nreplaces the previous report.",
+        "operationId": "put_self_harness_capabilities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarnessCapabilities"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -31811,6 +31863,59 @@
           }
         }
       },
+      "ClaudeAccount": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No Claude account; sessions run on Macro credits.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["signed_out"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Signed in to a Claude account.",
+            "required": ["account_id", "status"],
+            "properties": {
+              "account": {
+                "type": ["string", "null"],
+                "description": "The account's email address, when Claude reports one."
+              },
+              "account_id": {
+                "type": "string",
+                "description": "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+              },
+              "expires_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the sign-in stops refreshing and must be repeated."
+              },
+              "organization": {
+                "type": ["string", "null"],
+                "description": "The account's organization, when Claude reports one."
+              },
+              "plan": {
+                "type": ["string", "null"],
+                "description": "The account's plan (`subscriptionType`), e.g. `max`."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["signed_in"]
+              }
+            }
+          }
+        ],
+        "description": "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+      },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -32754,6 +32859,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "ComputerId": {
+        "type": "string"
       },
       "ConferenceProvider": {
         "type": "string",
@@ -34326,8 +34434,7 @@
             "description": "When the pairing expires."
           },
           "pairing_id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/PairingId",
             "description": "Pairing id used to poll for the claim."
           },
           "poll_interval_seconds": {
@@ -45138,6 +45245,25 @@
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
           },
+          "capabilities": {
+            "$ref": "#/components/schemas/HarnessCapabilities",
+            "description": "What the harness's machine can do, as macrod last reported it."
+          },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for, derived from whether\nit has an active Claude login. Only meaningful for Macro computers."
+          },
+          "computer_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerId",
+                "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+              }
+            ]
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -45208,6 +45334,29 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          }
+        }
+      },
+      "HarnessCapabilities": {
+        "type": "object",
+        "description": "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain.",
+        "properties": {
+          "claude": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClaudeAccount",
+                "description": "The Claude account Claude Code on a Macro computer is signed in to;\nabsent where macrod does not manage Claude."
+              }
+            ],
+            "default": null
+          },
+          "screen": {
+            "type": "boolean",
+            "description": "A display Macro can stream (Xvnc on `127.0.0.1:5900`).",
+            "default": false
           }
         }
       },
@@ -49139,6 +49288,9 @@
             "description": "Harness display name the daemon asked for."
           }
         }
+      },
+      "PairingId": {
+        "type": "string"
       },
       "ParaPatch": {
         "type": "object",

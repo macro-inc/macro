@@ -138,6 +138,78 @@ pub enum ToRuntimeMessage {
     /// configured harness what it advertises. Answers are therefore
     /// interchangeable, so nothing correlates a response to a request.
     ModelProbeRequest,
+    /// A command for a Macro computer's runtime itself, not its agent,
+    /// answered by one [`ToServerMessage::ComputerControlResponse`] with the
+    /// same `requestId`.
+    ComputerControl {
+        /// Correlates the answer.
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// What to do.
+        command: ComputerCommand,
+        /// W3C trace context for the runtime-side operation.
+        #[serde(
+            default,
+            rename = "_meta",
+            skip_serializing_if = "serde_json::Map::is_empty"
+        )]
+        #[specta(type = std::collections::HashMap<String, Unknown>)]
+        meta: serde_json::Map<String, serde_json::Value>,
+    },
+}
+
+/// A command for a Macro computer's runtime.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "command", rename_all = "snake_case")]
+pub enum ComputerCommand {
+    /// Start Claude Code's `/login` in a herdr pane and answer with its
+    /// sign-in URL.
+    ClaudeSignInStart,
+    /// Type the code the user pasted into the waiting login.
+    ClaudeSignInComplete {
+        /// The pasted code.
+        code: String,
+    },
+    /// Close any pending Claude login pane.
+    ClaudeSignInCancel,
+    /// Forget the Claude account and return to Macro credits.
+    ClaudeSignOut,
+}
+
+/// A Macro computer runtime's answer to a [`ComputerCommand`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ComputerControlResult {
+    /// The sign-in is waiting for the user at `url`.
+    SignInStarted {
+        /// Where the user signs in to Claude.
+        url: String,
+    },
+    /// The pending login was cancelled.
+    SignInCancelled,
+    /// The pasted OAuth code was rejected; start a fresh sign-in.
+    InvalidCode,
+    /// Claude Code now runs on a Claude account.
+    SignedIn {
+        /// The account's id at Anthropic (`oauthAccount.accountUuid`).
+        account_id: String,
+        /// The account's email address, when Claude reports one.
+        #[serde(default)]
+        account: Option<String>,
+        /// The account's organization, when Claude reports one.
+        #[serde(default)]
+        organization: Option<String>,
+        /// The account's plan (`subscriptionType`), e.g. `max`.
+        #[serde(default)]
+        plan: Option<String>,
+    },
+    /// Claude Code is back on Macro credits.
+    SignedOut,
+    /// The command failed; the message is safe to show.
+    Failed {
+        /// What went wrong.
+        message: String,
+    },
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -157,5 +229,13 @@ pub enum ToServerMessage {
     ModelProbeResponse {
         /// Raw options or a safe failure.
         result: ModelProbeResult,
+    },
+    /// The answer to a [`ToRuntimeMessage::ComputerControl`].
+    ComputerControlResponse {
+        /// The request it answers.
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// The outcome.
+        result: ComputerControlResult,
     },
 }

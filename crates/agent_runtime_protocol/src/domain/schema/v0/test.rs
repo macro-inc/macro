@@ -139,3 +139,74 @@ fn model_probe_messages_carry_no_session_id_and_no_correlation() {
         })
     );
 }
+
+#[test]
+fn computer_control_round_trips_on_the_wire() {
+    let request = ToRuntimeMessage::ComputerControl {
+        request_id: "r1".to_owned(),
+        command: ComputerCommand::ClaudeSignInComplete {
+            code: "abc#def".to_owned(),
+        },
+        meta: Default::default(),
+    };
+    let wire = json!({
+        "type": "computerControl",
+        "requestId": "r1",
+        "command": { "command": "claude_sign_in_complete", "code": "abc#def" }
+    });
+    assert_eq!(serde_json::to_value(&request).unwrap(), wire);
+    let ToRuntimeMessage::ComputerControl { command, .. } =
+        serde_json::from_value::<ToRuntimeMessage>(wire).unwrap()
+    else {
+        panic!("not a computer control message");
+    };
+    assert_eq!(
+        command,
+        ComputerCommand::ClaudeSignInComplete {
+            code: "abc#def".to_owned()
+        }
+    );
+
+    let response = ToServerMessage::ComputerControlResponse {
+        request_id: "r1".to_owned(),
+        result: ComputerControlResult::SignInStarted {
+            url: "https://claude.ai/oauth/authorize?code=true".to_owned(),
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&response).unwrap(),
+        json!({
+            "type": "computerControlResponse",
+            "requestId": "r1",
+            "result": {
+                "status": "sign_in_started",
+                "url": "https://claude.ai/oauth/authorize?code=true"
+            }
+        })
+    );
+}
+
+#[test]
+fn rejected_claude_code_preserves_its_typed_result() {
+    let result =
+        serde_json::from_value::<ComputerControlResult>(json!({"status": "invalid_code"})).unwrap();
+    assert_eq!(result, ComputerControlResult::InvalidCode);
+}
+
+#[test]
+fn claude_sign_in_cancel_has_a_typed_wire_command_and_terminal_result() {
+    let command =
+        serde_json::from_value::<ComputerCommand>(json!({"command": "claude_sign_in_cancel"}))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(command).unwrap(),
+        json!({"command": "claude_sign_in_cancel"})
+    );
+    let result =
+        serde_json::from_value::<ComputerControlResult>(json!({"status": "sign_in_cancelled"}))
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(result).unwrap(),
+        json!({"status": "sign_in_cancelled"})
+    );
+}

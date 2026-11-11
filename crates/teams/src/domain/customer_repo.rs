@@ -4,7 +4,10 @@ use std::collections::HashMap;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use crate::domain::model::{CustomerError, ScheduledSeatPlan, SeatPlan};
+use crate::domain::model::{
+    CustomerError, ItemProration, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
+    SubscriptionTerms,
+};
 
 /// The CustomerRepository defines a set of actions to perform on customer data
 ///
@@ -122,6 +125,40 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         subscription: &stripe::SubscriptionId,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// Replay an internally generated operation key before resolving current
+    /// subscription/prices. Returns false only if no charge was attempted.
+    fn replay_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<bool, CustomerError>> + Send;
+
+    /// Apply every change to the subscription in ONE update, billed as
+    /// `proration` says (through the schedule, when one is attached, like seat
+    /// changes). A declined payment fails with [`CustomerError::PaymentFailed`]
+    /// and changes nothing. A change that would take a price below zero fails
+    /// with [`CustomerError::QuantityBelowZero`] before anything is sent.
+    /// `idempotency_key` names this one logical change: a retry with the same
+    /// key after it was applied is a no-op.
+    fn change_item_quantities(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<(), CustomerError>> + Send;
+
+    /// The subscription's current period end, interval and currency.
+    fn subscription_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> impl Future<Output = Result<SubscriptionTerms, CustomerError>> + Send;
+
+    /// What a price charges per unit.
+    fn price(
+        &self,
+        price_id: &stripe::PriceId,
+    ) -> impl Future<Output = Result<PriceInfo, CustomerError>> + Send;
 
     /// Cancels a subscription immediately. A subscription that is already
     /// cancelled or no longer exists counts as cancelled.

@@ -126,6 +126,14 @@ compatible with the service code currently deployed, not just the code in its PR
    nix develop --command just prepare_db
    ```
 
+   The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
+   database on localhost:5432; exporting the environment variable does not
+   override it. For a dedicated test database, set the Just variable explicitly:
+
+   ```bash
+   nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
+   ```
+
    Commit generated `.sqlx` changes with the query/schema change. Never manually
    create or edit `.sqlx/query-*.json`, and never generate a crate-local cache.
    Unrelated Rust-only DB-crate edits still need appropriate tests, but do not

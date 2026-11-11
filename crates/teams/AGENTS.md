@@ -30,6 +30,17 @@ event contract (schema, sanitization, delivery semantics).
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
+- `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
+  (Macro computers) on the team subscription by price. One Stripe update per
+  change set, under the team billing lock, invoiced now with
+  `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
+  idempotent by key (`subscription_item_change` durable requests/receipts plus
+  an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
+  Replay the receipt before resolving current subscription/prices. Pending item
+  changes block subsequent subscription mutations until resolved; retries send
+  the stored endpoint and exact request, including scheduled updates. Retain
+  receipts after subscription/team deletion to prevent delayed duplicate charges.
+  Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
@@ -61,6 +72,9 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Carry async-stripe's `stripe::PriceId` through generic item changes; validate
+  once at configuration/provider boundaries.
+
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled
@@ -86,6 +100,10 @@ event contract (schema, sanitization, delivery semantics).
   without a separate acceptance. Existing accounts accept like any other invite.
   Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
 
+## Billing identifiers
+
+- Use `stripe::PriceId` for seat price configuration, item quantity changes, and price lookups; its parse accepts any string, so callers validate configured ids before building `SeatPrices`.
+
 ## Checks
 
 - `cargo test -p teams` (`SQLX_OFFLINE` unset).
@@ -97,3 +115,7 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+- Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
+
+- `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.

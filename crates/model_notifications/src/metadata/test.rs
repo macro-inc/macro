@@ -1477,3 +1477,39 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }
+
+#[test]
+fn claude_sign_in_expiry_names_the_computer_and_how_close_it_is() {
+    let expiring = ClaudeSignInExpiryMetadata {
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: ClaudeSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let rejected = ClaudeSignInExpiryMetadata {
+        stage: ClaudeSignInExpiryStage::Expired,
+        expires_at: None,
+        ..expiring.clone()
+    };
+
+    let value = serde_json::to_value(&expiring).unwrap();
+    assert_eq!(value["harnessId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["computerName"], "Build box");
+    assert_eq!(value["stage"], "expires_soon");
+    assert_eq!(value["expiresAt"], "2026-11-20T12:00:00Z");
+    assert_eq!(
+        expiring.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires soon"
+    );
+    assert_eq!(
+        rejected.format_title(None).unwrap(),
+        "Claude sign-in on Build box expired"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "claude_sign_in_expiry",
+        "content": serde_json::to_value(&rejected).unwrap(),
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::ClaudeSignInExpiry(_)));
+}

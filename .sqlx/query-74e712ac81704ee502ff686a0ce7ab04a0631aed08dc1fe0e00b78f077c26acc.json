@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO harness_account_logins\n                    (id, harness_id, provider_account_id, provider, signed_in_by)\n                VALUES ($1, $2, $3, $4, $5)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74e712ac81704ee502ff686a0ce7ab04a0631aed08dc1fe0e00b78f077c26acc"
+}

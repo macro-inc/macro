@@ -16,7 +16,8 @@ use tokio::task::JoinSet;
 
 use crate::domain::channel::Channel;
 use crate::domain::schema::v0::{
-    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ComputerControlResult, ModelProbeResult, SystemEvent, ToRuntimeMessage,
+    ToServerMessage,
 };
 
 #[cfg(test)]
@@ -190,6 +191,9 @@ async fn run_server<H>(
                     ToServerMessage::ModelProbeResponse { .. } => {
                         tracing::warn!("dropping a model probe response without a probe waiter");
                     }
+                    ToServerMessage::ComputerControlResponse { .. } => {
+                        tracing::warn!("dropping a computer control response without a waiter");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {
@@ -241,6 +245,15 @@ async fn run_runtime<H>(
                         {
                             acp_open = false;
                         }
+                    }
+                    // Only a Macro computer's macrod runs computer commands.
+                    ToRuntimeMessage::ComputerControl { request_id, .. } => {
+                        let _ = outbound.send(ToServerMessage::ComputerControlResponse {
+                            request_id,
+                            result: ComputerControlResult::Failed {
+                                message: "this runtime is not a Macro computer".to_owned(),
+                            },
+                        });
                     }
                     ToRuntimeMessage::ModelProbeRequest => {
                         let model_probes = Arc::clone(&model_probes);

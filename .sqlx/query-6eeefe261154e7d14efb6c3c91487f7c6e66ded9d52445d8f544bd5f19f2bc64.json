@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO hosted_runtime\n                (id, team_id, name, size, host_id, awake, holds_units, state,\n                 created_by, created_at, updated_at, vcpus, memory_gib, disk_gib, catalog_entry, price_id)\n            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7, $8, $8, $9, $10, $11, $12, $13)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6eeefe261154e7d14efb6c3c91487f7c6e66ded9d52445d8f544bd5f19f2bc64"
+}

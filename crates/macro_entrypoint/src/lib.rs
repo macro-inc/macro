@@ -120,6 +120,7 @@ impl Default for MacroEntrypoint {
 pub struct InitializedEntrypoint {
     tracer_provider: Option<SdkTracerProvider>,
     logger_provider: Option<SdkLoggerProvider>,
+    meter_provider: Option<opentelemetry_sdk::metrics::SdkMeterProvider>,
 }
 
 /// Failure to flush telemetry before a serverless runtime freezes.
@@ -160,6 +161,11 @@ impl InitializedEntrypoint {
     /// Gracefully shut down the OpenTelemetry providers.
     /// This should be called before the application exits to ensure all traces and logs are flushed.
     pub fn shutdown(&self) {
+        if let Some(provider) = &self.meter_provider
+            && let Err(error) = provider.shutdown()
+        {
+            tracing::error!(error = ?error, "failed to shutdown meter provider");
+        }
         if let Some(ref provider) = self.tracer_provider
             && let Err(e) = provider.shutdown()
         {
@@ -206,6 +212,7 @@ impl MacroEntrypoint {
                 let tracer_provider =
                     export_otel.then(|| init_opentelemetry("local".to_string(), None));
                 let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
+                let meter_provider = export_otel.then(|| init_otel_metrics("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
                     let otel_filter = otel_env_filter();
@@ -252,6 +259,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider,
                     logger_provider,
+                    meter_provider,
                 }
             }
             (
@@ -271,6 +279,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider: None,
                     logger_provider: None,
+                    meter_provider: None,
                 }
             }
             (Environment::Production | Environment::Develop, _) => {
@@ -281,6 +290,7 @@ impl MacroEntrypoint {
                 let grafana_endpoint = matches!(self.env, Environment::Develop)
                     .then(GrafanaOtlpEndpoint::new)
                     .flatten();
+                let meter_provider = init_otel_metrics(env.clone());
                 let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
 
                 let tracer = tracer_provider.tracer(service_name());
@@ -320,6 +330,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider: Some(tracer_provider),
                     logger_provider: None,
+                    meter_provider: Some(meter_provider),
                 }
             }
         }
@@ -440,7 +451,11 @@ fn init_opentelemetry(
         }
     }
 
-    provider.build()
+    let provider = provider.build();
+    // Spans with recorded start/end times (durable waits) use the OpenTelemetry
+    // API directly; route them through the same exporters as tracing spans.
+    opentelemetry::global::set_tracer_provider(provider.clone());
+    provider
 }
 
 /// OTLP log export for the [`OpenTelemetryTracingBridge`]: tracing events
@@ -513,4 +528,18 @@ fn dependency_logs_allowed(suppressed: &[&str], target: &str) -> bool {
                 .strip_prefix(prefix)
                 .is_some_and(|suffix| suffix.starts_with("::"))
     })
+}
+
+fn init_otel_metrics(environment: String) -> opentelemetry_sdk::metrics::SdkMeterProvider {
+    let exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_tonic()
+        .with_endpoint(otel_endpoint())
+        .build()
+        .expect("failed to create OTLP metric exporter");
+    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
+        .with_resource(otel_resource(environment))
+        .with_periodic_exporter(exporter)
+        .build();
+    opentelemetry::global::set_meter_provider(provider.clone());
+    provider
 }

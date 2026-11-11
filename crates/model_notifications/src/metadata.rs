@@ -1,12 +1,14 @@
 mod access_request;
 mod calendar_join_request;
 mod channel_push;
+mod claude_sign_in;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
+pub use claude_sign_in::{ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage};
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,
 };

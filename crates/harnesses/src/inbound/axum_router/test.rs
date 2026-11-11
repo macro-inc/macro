@@ -2,7 +2,7 @@ use axum::http::HeaderValue;
 use chrono::Utc;
 
 use super::*;
-use crate::domain::models::HarnessOwner;
+use crate::domain::models::{ClaudeMode, HarnessOwner};
 
 fn harness(connected: bool) -> Harness {
     Harness {
@@ -20,6 +20,9 @@ fn harness(connected: bool) -> Harness {
         updated_at: Utc::now(),
         connected,
         last_connected_at: None,
+        capabilities: HarnessCapabilities::default(),
+        computer_id: None,
+        claude_mode: ClaudeMode::MacroCredits,
     }
 }
 

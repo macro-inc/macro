@@ -4,7 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ClaudeMode } from './claudeMode';
 import type { HarnessAccess } from './harnessAccess';
+import type { HarnessCapabilities } from './harnessCapabilities';
+import type { HarnessComputerId } from './harnessComputerId';
 import type { HarnessId } from './harnessId';
 import type { HarnessLastConnectedAt } from './harnessLastConnectedAt';
 import type { HarnessOwner } from './harnessOwner';
@@ -20,6 +24,12 @@ in question, such as to the daemon itself. */
   access?: HarnessAccess;
   /** Whether agents may bypass ACP permission requests on this harness. */
   allow_permission_bypass?: boolean;
+  /** What the harness's machine can do, as macrod last reported it. */
+  capabilities?: HarnessCapabilities;
+  /** How Claude Code on this machine is paid for, derived from whether
+it has an active Claude login. Only meaningful for Macro computers. */
+  claude_mode?: ClaudeMode;
+  computer_id?: HarnessComputerId;
   /** Whether the daemon currently holds a runtime connection. */
   connected: boolean;
   /** Creation timestamp. */

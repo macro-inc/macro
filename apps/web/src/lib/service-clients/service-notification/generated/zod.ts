@@ -2300,6 +2300,40 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's Claude sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['claude_sign_in_expiry']),
+                    })
+                    .describe(
+                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -4478,6 +4512,40 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's Claude sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['claude_sign_in_expiry']),
+                    })
+                    .describe(
+                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -6606,6 +6674,40 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          computerName: zod
+                            .string()
+                            .describe(
+                              "The computer's name when the notice was sent."
+                            ),
+                          expiresAt: zod.iso
+                            .datetime({})
+                            .nullish()
+                            .describe(
+                              'When the sign-in expires or expired; absent when Claude rejected it.'
+                            ),
+                          harnessId: zod
+                            .uuid()
+                            .describe(
+                              "The computer's harness, whose runtime row holds the sign-in."
+                            ),
+                          stage: zod
+                            .enum(['expires_soon', 'expires_today', 'expired'])
+                            .describe(
+                              "How close a computer's Claude sign-in is to no longer working."
+                            ),
+                        })
+                        .describe(
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                        ),
+                      tag: zod.enum(['claude_sign_in_expiry']),
+                    })
+                    .describe(
+                      "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -8571,6 +8673,38 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               "One of the user's routines finished a run, successfully or not."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  computerName: zod
+                    .string()
+                    .describe("The computer's name when the notice was sent."),
+                  expiresAt: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the sign-in expires or expired; absent when Claude rejected it.'
+                    ),
+                  harnessId: zod
+                    .uuid()
+                    .describe(
+                      "The computer's harness, whose runtime row holds the sign-in."
+                    ),
+                  stage: zod
+                    .enum(['expires_soon', 'expires_today', 'expired'])
+                    .describe(
+                      "How close a computer's Claude sign-in is to no longer working."
+                    ),
+                })
+                .describe(
+                  "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
+                ),
+              tag: zod.enum(['claude_sign_in_expiry']),
+            })
+            .describe(
+              "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
             ),
           zod
             .object({

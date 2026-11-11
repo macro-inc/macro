@@ -21,8 +21,11 @@ fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
 
 #[tokio::test]
 async fn stop_does_not_wait_for_in_flight_work() {
+    let cancel = CancellationToken::new();
     let daemon = Daemon {
-        cancel: CancellationToken::new(),
+        _cancel_on_drop: cancel.clone().drop_guard(),
+        cancel,
+        background: TaskTracker::new(),
         task: tokio::spawn(std::future::pending()),
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
@@ -60,6 +63,7 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
+        pairing_id: None,
     };
     let storage_task = tokio::spawn(async move {
         let (mut socket, _) = storage.accept().await.unwrap();
@@ -174,6 +178,7 @@ async fn a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon() 
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
+        pairing_id: None,
     };
     tokio::spawn(serve_storage(storage));
 

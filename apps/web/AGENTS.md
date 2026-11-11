@@ -707,6 +707,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
+  and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, and release only after
+  the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
@@ -1297,42 +1305,34 @@ Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 
-### Agent backend hosting
+### Computer Claude access
 
-Cognition, routines, preview control, and MCP share `agent_harness_service`.
-Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; the `@` menu offers routines only to their owner in
-channel composers, where picking one shares it as a template.
-Direct local hosts use port 8101 with the existing feature prefixes; the
-instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
+Computer rows show the Claude mode and the active login's account (email, plan,
+signer) from `claude-mode` for managers, and the harness list's derived
+`claude_mode` for other members. Sign-in is a dialog
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
+claude.ai control stays a plain `target="_blank"` link; never open it after an
+await. The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/settings/computers`.
 
-## File downloads
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+null breakdown or the flag off keeps the existing plan and computers UI.
 
-Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
-`createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Call recording menus and the list-row Download
-(`makeDownloadAction`) use the same controller; the list action runs it under
-its own root, because choosing a context-menu item disposes the menu's owner.
-Download hands off directly to browser downloads
-or the native save picker. Show channel Download on hover or keyboard focus,
-always on touch, without a footer. Keep system Share inside the touch Download
-menu; desktop Share belongs to Macro permissions. Do not add a custom
-confirmation sheet. Snapshot file/version before loading, cancel on disposal or
-selection change, and preserve original filenames from static-file metadata.
-Native Android and iOS use bounded byte exports. Older iOS binaries use Web
-Share until the optional file-export bridge ships. If browser activation expires
-while preparing a share, retain the bytes and let the same action's next tap
-open the system sheet synchronously. Browser success means handoff, not confirmed
-disk completion. See the native bridge's `tauri/file_export_plugin/AGENTS.md`.
-Keep download confirmations title-only and lightbox Download controls icon-only.
-Keep the expanded video first in the dialog's tab order so initial Space presses
-control native playback; restore focus to its opener on close.
+Reuse `PriceBreakdown` for Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
 
-The backend-free browser regression downloads real fixture bytes from channel
-cards, the expanded viewer, and the shared Drive/standalone header on desktop,
-phone, and tablet, and checks Space playback on opening and reopening the viewer:
-`bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
-See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
+### Computer capacity
+
+Computer offers expose `soldOut` availability. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.
 
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.

@@ -26,6 +26,8 @@ path = "src/scheduling_openapi.rs"
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+clap = { workspace = true }
+computer_id = { workspace = true }
 universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false, features = ["axum", "outbound", "schema"] }
@@ -78,6 +80,7 @@ contacts = { path = "../../crates/contacts" }
 crm = { path = "../../crates/crm", features = ["lookup", "ports"] }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
+dashmap = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
 databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres"] }
 databases_sql = { path = "../../crates/databases_sql", features = ["ai_tools"] }
@@ -95,11 +98,14 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+genai_telemetry = { path = "../../crates/genai_telemetry" }
 github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }
+incus_client = { path = "../../crates/incus_client" }
 http = { workspace = true }
 http-body-util = { workspace = true }
 image_generation = { path = "../../crates/image_generation", features = ["axum"] }
@@ -170,6 +176,7 @@ soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = ["ai_projection", "chat", "document_text_extractor", "email", "gmail", "search"] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+sse-core = { workspace = true }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }

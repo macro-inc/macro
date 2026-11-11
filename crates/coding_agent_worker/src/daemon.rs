@@ -8,8 +8,8 @@ use std::path::Path;
 use std::time::Duration;
 
 use tokio::sync::watch;
-use tokio_util::sync::CancellationToken;
-use tokio_util::task::AbortOnDropHandle;
+use tokio_util::sync::{CancellationToken, DropGuard};
+use tokio_util::task::{AbortOnDropHandle, TaskTracker};
 
 use crate::config::{Config, HarnessCredentials};
 use crate::dispatch::Dispatcher;
@@ -36,6 +36,8 @@ const PRESENCE_CHECK_EVERY: Duration = Duration::from_secs(60);
 /// A running serving core: SSE listener, harness bridge.
 pub struct Daemon {
     cancel: CancellationToken,
+    _cancel_on_drop: DropGuard,
+    background: TaskTracker,
     task: tokio::task::JoinHandle<rootcause::Result<()>>,
     turns: ActiveTurns,
     #[cfg_attr(
@@ -69,6 +71,7 @@ impl Daemon {
         inherited: Option<InheritedAgent>,
     ) -> rootcause::Result<Self> {
         let cancel = CancellationToken::new();
+        let background = TaskTracker::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
 
@@ -99,6 +102,20 @@ impl Daemon {
         let turns = ActiveTurns::default();
         let adopted = adopt(inherited, &turns);
         let (handoffs, handoff) = Handoffs::channel();
+        let computer = if crate::capabilities::is_macro_computer() {
+            Some(
+                crate::computer::Computer::load(
+                    &config.macro_api,
+                    &config.harness,
+                    &config.workspace.path,
+                    cancel.child_token(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+        let computer_for_reports = computer.clone();
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -108,6 +125,7 @@ impl Daemon {
             turns.clone(),
             adopted,
             handoffs,
+            computer,
         );
         let runtime_connected = runtime.connection_state();
         let presence_watch = AbortOnDropHandle::new(tokio::spawn(watch_presence(
@@ -131,6 +149,17 @@ impl Daemon {
             workspace = %config.workspace.path.display(),
             "daemon listening for agent triggers over SSE"
         );
+
+        if crate::capabilities::is_macro_computer() {
+            // Ends with the daemon's cancellation.
+            crate::capabilities::spawn_reporter(
+                &config.macro_api,
+                &credentials,
+                computer_for_reports,
+                cancel.clone(),
+                &background,
+            )?;
+        }
 
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
@@ -158,6 +187,8 @@ impl Daemon {
         });
 
         Ok(Self {
+            _cancel_on_drop: cancel.clone().drop_guard(),
+            background,
             cancel,
             task,
             turns,
@@ -210,6 +241,8 @@ impl Daemon {
         self.cancel.cancel();
         self.task.abort();
         let _ = self.task.await;
+        self.background.close();
+        self.background.wait().await;
         tracing::info!("daemon stopped");
     }
 }
