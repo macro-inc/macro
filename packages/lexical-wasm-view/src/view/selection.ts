@@ -187,6 +187,88 @@ function resolveElementDescent(
   return { key: element.key, offset: index, type: 'element' };
 }
 
+function siblingOf(
+  view: EditorView,
+  node: ViewNode,
+  delta: -1 | 1
+): ViewNode | null {
+  if (node.parent === null) return null;
+  const parent = view.node(node.parent);
+  if (!parent) return null;
+  const key = parent.children[parent.children.indexOf(node.key) + delta];
+  return key === undefined ? null : view.node(key);
+}
+
+function isInlineElement(view: EditorView, node: ViewNode | null): boolean {
+  return node?.kind === 'element' && view.flags(node)?.isInline === true;
+}
+
+/** Pinned resolveSelectionPointOnBoundary over the view mirror. */
+function resolvePointOnBoundary(
+  view: EditorView,
+  point: Point,
+  backward: boolean,
+  collapsed: boolean
+): Point {
+  const node = view.node(point.key);
+  if (point.type !== 'text' || node?.kind !== 'text') return point;
+  const parent = node.parent === null ? null : view.node(node.parent);
+  if (point.offset === 0) {
+    const previous = siblingOf(view, node, -1);
+    if (!backward) {
+      if (previous && !collapsed && isInlineElement(view, previous))
+        return {
+          key: previous.key,
+          offset: previous.children.length,
+          type: 'element',
+        };
+      if (previous?.kind === 'text')
+        return {
+          key: previous.key,
+          offset: previous.text.length,
+          type: 'text',
+        };
+    } else if (
+      (collapsed || !backward) &&
+      previous === null &&
+      parent &&
+      isInlineElement(view, parent)
+    ) {
+      const outer = siblingOf(view, parent, -1);
+      if (outer?.kind === 'text')
+        return { key: outer.key, offset: outer.text.length, type: 'text' };
+    }
+  } else if (point.offset === node.text.length) {
+    const next = siblingOf(view, node, 1);
+    if (backward && next && isInlineElement(view, next))
+      return { key: next.key, offset: 0, type: 'element' };
+    if (
+      (collapsed || backward) &&
+      next === null &&
+      parent &&
+      isInlineElement(view, parent) &&
+      view.flags(parent)?.canInsertTextAfter === false
+    ) {
+      const outer = siblingOf(view, parent, 1);
+      if (outer?.kind === 'text')
+        return { key: outer.key, offset: 0, type: 'text' };
+    }
+  }
+  return point;
+}
+
+function textPointBefore(view: EditorView, a: Point, b: Point): boolean {
+  if (a.key === b.key) return a.offset < b.offset;
+  const left = view.getElementByKey(a.key);
+  const right = view.getElementByKey(b.key);
+  if (!left || !right) return false;
+  return (
+    (left.compareDocumentPosition(right) &
+      4) /* DOCUMENT_POSITION_FOLLOWING */ !==
+    0
+  );
+}
+
 function read(view: EditorView, rootBoundary: boolean): ViewSelection {
   const selection = view.root.ownerDocument.getSelection();
   if (!selection?.anchorNode || !selection.focusNode) return { kind: 'none' };
@@ -230,6 +312,16 @@ function read(view: EditorView, rootBoundary: boolean): ViewSelection {
       focus,
       previous.kind === 'range' ? previous.focus : undefined
     );
+  }
+  // Pinned $normalizeSelectionPointsForBoundaries, part of every DOM read.
+  if (anchor.type === 'text' && focus.type === 'text') {
+    const before = textPointBefore(view, anchor, focus);
+    const collapsed =
+      anchor.key === focus.key && anchor.offset === focus.offset;
+    anchor = resolvePointOnBoundary(view, anchor, before, collapsed);
+    focus = collapsed
+      ? anchor
+      : resolvePointOnBoundary(view, focus, !before, collapsed);
   }
   return { kind: 'range', anchor, focus, dirty };
 }
