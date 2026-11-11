@@ -24,6 +24,12 @@ type QueueEntry = {
   enqueuedAtMs: number;
 };
 
+const DRAFT_KEY = 'GraphqlSoupEmailMessage:';
+type ConfirmedDraft = { record: Record<string, unknown>; mutationUuid: string };
+type SavedDraft = { draftId?: string; draft?: Record<string, unknown> };
+const savedDraft = (data: unknown) =>
+  (data as { saveEmailDraft?: SavedDraft } | null | undefined)?.saveEmailDraft;
+
 const WRITTEN = {
   revision: INITIAL_CACHE_REVISION,
   revisionAdvanced: true,
@@ -35,7 +41,8 @@ const WRITTEN = {
 /**
  * The cache engine's durable mutation queue, following `cache-core` and
  * `cache-turso`: a strict head, coalescing by UUID, leases, and the
- * settlements the worker announces. It keeps no records.
+ * settlements the worker announces. Of the cache's records it keeps only
+ * drafts, enough for a draft's writes to find the key they coalesce under.
  */
 export function createQueue(activity: () => void) {
   const entries: QueueEntry[] = [];
@@ -100,6 +107,62 @@ export function createQueue(activity: () => void) {
       : undefined;
   const remove = (entry: QueueEntry) => {
     entries.splice(entries.indexOf(entry), 1);
+  };
+
+  /** Drafts the server confirmed, by server id, as the cache holds them. */
+  const confirmed = new Map<string, ConfirmedDraft>();
+  /** Client handles, bound to the server id their draft was saved under. */
+  const aliases = new Map<string, string>();
+  const resolve = (id: string) => aliases.get(id) ?? id;
+  const writtenDraft = (entry: QueueEntry) => {
+    const { input } = (entry.args.variables ?? {}) as {
+      input?: { draftId?: unknown };
+    };
+    return input?.draftId == null ? undefined : String(input.draftId);
+  };
+  /**
+   * The cache's view of one draft: its confirmed record under every queued
+   * write of it, with the key the draft's writes coalesce under.
+   */
+  const readDraft = (id: string) => {
+    const target = resolve(id);
+    const base = confirmed.get(target);
+    let record = base?.record;
+    let identity = base && { mutationUuid: base.mutationUuid, pending: false };
+    for (const entry of entries) {
+      const written = writtenDraft(entry);
+      if (written === undefined || resolve(written) !== target) continue;
+      const draft = savedDraft(entry.args.data)?.draft;
+      if (entry.args.operationName === 'DeleteEmailDraft') {
+        record = undefined;
+        identity = undefined;
+      } else if (draft) {
+        record = { ...record, ...draft, id: base ? target : draft.id };
+        identity = { mutationUuid: entry.args.uuid, pending: true };
+      }
+    }
+    return record && identity ? { record, identity } : undefined;
+  };
+  /** A committed write becomes the confirmed record; its handle still reads it. */
+  const confirm = (entry: QueueEntry, data: unknown) => {
+    const written = writtenDraft(entry);
+    if (written === undefined) return;
+    if (entry.args.operationName === 'DeleteEmailDraft') {
+      const target = resolve(written);
+      confirmed.delete(target);
+      for (const [handle, serverId] of [...aliases])
+        if (serverId === target) aliases.delete(handle);
+      return;
+    }
+    const saved = savedDraft(data);
+    if (!saved?.draftId || !saved.draft) return;
+    confirmed.set(saved.draftId, {
+      record: { ...savedDraft(entry.args.data)?.draft, ...saved.draft },
+      // Later writes keep coalescing under the key the draft was created with.
+      mutationUuid:
+        confirmed.get(saved.draftId)?.mutationUuid ?? entry.args.uuid,
+    });
+    if (written !== saved.draftId) aliases.set(written, saved.draftId);
   };
 
   const engine = {
@@ -198,9 +261,14 @@ export function createQueue(activity: () => void) {
       if (serverFailure) entry.serverFailureCount += 1;
       return { kind: 'deferred' as const };
     },
-    commitOptimisticWrite(transactionId: string, claim: MutationClaim) {
+    commitOptimisticWrite(
+      transactionId: string,
+      claim: MutationClaim,
+      args: { data: unknown }
+    ) {
       const entry = leased(transactionId, claim);
       const replacement = replacementOf(entry);
+      confirm(entry, args.data);
       remove(entry);
       announce(
         replacement === undefined
@@ -301,9 +369,13 @@ export function createQueue(activity: () => void) {
         () => '00000000-0000-4000-8000-000000000001'
       ),
       readQuery: answer(() => ({ kind: 'miss' as const })),
-      readRecordsByKeys: answer(() => ({
+      readRecordsByKeys: answer((args: { keys: string[] }) => ({
         revision: INITIAL_CACHE_REVISION,
-        records: [],
+        records: args.keys.flatMap((recordKey) => {
+          if (!recordKey.startsWith(DRAFT_KEY)) return [];
+          const draft = readDraft(recordKey.slice(DRAFT_KEY.length));
+          return draft ? [{ recordKey, ...draft }] : [];
+        }),
       })),
       search: answer(() => ({ documents: [], nextCursor: null })),
       entityFilter: answer(() => ({ kind: 'unsupported' as const })),
