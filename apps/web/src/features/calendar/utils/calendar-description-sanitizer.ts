@@ -350,3 +350,13 @@ export function sanitizeCalendarDescription(raw: string): string {
   sanitizeDocument(doc, plainText);
   return doc.body.innerHTML;
 }
+
+/** Add display-only paragraph markers without changing portable stored HTML. */
+export function calendarDescriptionPreviewHtml(raw: string): string {
+  const safe = sanitizeCalendarDescription(raw);
+  if (!safe) return '';
+  const doc = parseHtml(safe);
+  for (const paragraph of doc.body.querySelectorAll('p'))
+    paragraph.classList.add('calendar-description-paragraph');
+  return doc.body.innerHTML;
+}
