@@ -53,3 +53,5 @@ Read decorator model text and instance layout facts in bulk through generation-a
 Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich MIME order, file flags and HTML nodes independently, and initialize ordinary native clipboard reads explicitly to false.
 
 Include the fixture file ID and escape control characters in libtest trial names so nextest lists every case once on a single line. Keep original fixture identity and oracle data.
+
+Forward application queries through EditorSurface.application_query under the session mutex, rejecting stale model generations before payload decoding; never reconstruct committed controller state from serialized nodes.
