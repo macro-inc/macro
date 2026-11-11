@@ -108,10 +108,10 @@ optional reply. Closing a target returns to the call thread rather than to no ta
 
 Normal thread rules apply, with two differences for call threads:
 
-- **Connected people get nothing.** Followers are computed as usual, including through
-  mentions, and notifications are dropped at send time for anyone connected to the call.
-  When they leave, the next reply reaches them. The only thing they are never notified
-  about is a message sent while the thread was in their call.
+- **Connected people are notified like followers.** Followers are computed as usual,
+  including through mentions, and channel members connected to the call are added at send
+  time, so a message in the call chat pops up for the others on the call. People connected
+  without channel membership (guests) are never notified.
 - **The caller is not a follower for starting the call.** People follow by sending a
   message or being mentioned.
 

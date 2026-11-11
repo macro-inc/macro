@@ -96,8 +96,8 @@ after replying elsewhere; nothing posts top-level from the panel. A popup counts
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 
-People connected to the call get no notification from its thread, mentions included; they stay
-followers, so later replies reach them after they leave. The call's root accepts replies and nothing
+Channel members connected to the call are notified of its thread's messages like followers, so a
+message sent in the call chat pops up for everyone else on the call, even before they post in it. The call's root accepts replies and nothing
 else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
 and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
 
