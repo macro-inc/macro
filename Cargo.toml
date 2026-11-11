@@ -99,6 +99,7 @@ members = [
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
   "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
@@ -498,6 +499,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
