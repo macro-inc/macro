@@ -40,6 +40,7 @@ mod structure;
 pub mod table;
 mod text_paste;
 mod theme;
+mod title_handoff;
 pub use theme::parse_pasted_theme;
 
 /// Surface block conversion supported by the node-transform plugin.
@@ -113,7 +114,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = booking_mention_actions::register(builder);
     let builder = date_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
-    gif_insert::register(builder)
+    let builder = gif_insert::register(builder);
+    title_handoff::register(builder)
 }
 
 #[cfg(test)]
@@ -213,6 +215,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = gif_insert::decode(name, json)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = title_handoff::decode(name, json)? {
         return Ok(Some(command));
     }
     if name == "group-b.select-all" {
