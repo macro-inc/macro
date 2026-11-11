@@ -195,7 +195,12 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
   /** Shared icon and color overrides. */
   readonly appearance = this.field('appearance');
 
-  /** Replace shared appearance without rescheduling. Pass {} to reset both overrides. */
+  /**
+   * Replace shared appearance without rescheduling. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
   setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
     return this.mutate((client) =>
       client.scheduledAction.setScheduledActionAppearance({

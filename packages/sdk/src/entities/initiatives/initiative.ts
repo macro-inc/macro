@@ -104,7 +104,12 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
   /** Shared icon and color overrides. */
   readonly appearance = this.field('appearance');
 
-  /** Replace shared appearance. Pass {} to reset both overrides. */
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
   setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
     return this.mutate((client) =>
       client.storage.setInitiativeAppearance({

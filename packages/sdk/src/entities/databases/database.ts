@@ -392,7 +392,12 @@ export class Database extends MacroEntity<DatabaseDetail> {
     (record) => record.appearance,
   );
 
-  /** Replace shared appearance. Pass {} to reset both overrides. */
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
   setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
     return this.mutate((client) =>
       client.storage.setDatabaseAppearance({

@@ -235,7 +235,12 @@ export class Form extends MacroEntity<FormDetail> {
   /** Shared icon and color overrides. */
   readonly appearance = this.mappedField('form', (form) => form.appearance);
 
-  /** Replace shared appearance. Pass {} to reset both overrides. */
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
   setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
     return this.mutate((client) =>
       client.storage.setFormAppearance({
