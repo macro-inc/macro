@@ -56,7 +56,9 @@ import {
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
+import { useDocTags } from '@property/tags';
 import type { SyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context-loader';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   isAndroid,
   isAppleDevice,
@@ -95,6 +97,11 @@ export default function RustMarkdownEditor(props: {
   const userId = useUserId();
   const owner = getOwner() ?? undefined;
   const { documentId, kind, permissions, state } = useMarkdownDocument();
+  const documentKind = kind();
+  const documentTags = useDocTags(
+    documentId(),
+    documentKind === 'task' ? EntityType.TASK : EntityType.DOCUMENT
+  );
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const [ready, setReady] = createSignal(false);
   const abort = new AbortController();
@@ -275,6 +282,18 @@ export default function RustMarkdownEditor(props: {
                         openFileDialog: (kind) =>
                           imageUploads.openFileDialog(kind),
                         requestEquation: () => equationContext.requestCreate(),
+                      },
+                    },
+                    tags: {
+                      applyTargetLabel:
+                        documentKind === 'task' ? 'Task' : 'Document',
+                      isApplied: (tag) => documentTags.isApplied(tag.optionId),
+                      onApplyTag(tag) {
+                        if (!permissions.canEdit()) return;
+                        fireAndForget(
+                          documentTags.applyTag(tag.scope, tag.optionId),
+                          'rust-editor.tags'
+                        );
                       },
                     },
                   });

@@ -16,6 +16,7 @@ import {
   type NativeActionsOptions,
   NativeActionsOverlay,
 } from './NativeActionsOverlay';
+import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
 import {
   type NativeUserMentionsOptions,
   NativeUserMentionsOverlay,
@@ -24,6 +25,7 @@ import type { NativeMarkdownOverlayInstallation } from './nativeOverlayPorts';
 import { registerNativeInlineSearch } from './overlay-hosts/native-inline-search';
 import { createNativeListenerScope } from './overlay-hosts/native-listeners';
 import { registerNativeMentionSearch } from './overlay-hosts/native-mention-search';
+import { registerNativeTagsSearch } from './overlay-hosts/native-tags-search';
 
 /** Install only native body capabilities with an actual model action. */
 export function installNativeMarkdownOverlays(
@@ -32,6 +34,7 @@ export function installNativeMarkdownOverlays(
     readonly canEdit: Accessor<boolean>;
     readonly mentions?: NativeUserMentionsOptions;
     readonly actions?: NativeActionsOptions;
+    readonly tags?: NativeTagsOptions;
   }
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
@@ -40,6 +43,8 @@ export function installNativeMarkdownOverlays(
   const alive = () => renderActive() && mentionsAvailable() && view.isMounted;
   let Overlays: Component | undefined;
   const overlays: Component[] = [];
+  const [tagsAvailable, setTagsAvailable] = createSignal(true);
+  const tagsAlive = () => renderActive() && tagsAvailable() && view.isMounted;
   const [actionsAvailable, setActionsAvailable] = createSignal(true);
   let actionsRetired = false;
   const actionsAlive = () =>
@@ -81,6 +86,34 @@ export function installNativeMarkdownOverlays(
               menu,
               source,
               alive,
+            })
+          );
+        }
+      } catch (error) {
+        unavailable(error);
+      }
+    }
+    // MarkdownEditor's tags plugin sits in the afterMentions slot.
+    if (options.tags) {
+      const menu = createMenuOperations();
+      const source = options.tags;
+      const unavailable = (error: unknown) => {
+        setTagsAvailable(false);
+        try {
+          Telemetry.error(error, { surface: 'native-tags-menu' });
+        } catch {
+          // Optional menu failure must not tear down the document or its overlays.
+        }
+      };
+      try {
+        listeners.add(registerNativeTagsSearch(view, menu, unavailable));
+        if (tagsAvailable()) {
+          overlays.push(() =>
+            createComponent(NativeTagsOverlay, {
+              view,
+              menu,
+              source,
+              alive: tagsAlive,
             })
           );
         }

@@ -130,6 +130,7 @@ Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
 Source capture, dirty cancellation, root identity and synchronous commit result.
 Assemble mention hosts at the shared controller's original initialization point;
 capture Source selection handlers once while root/close reads stay dynamic.
+Keep the tags menu on `TagsMenuHost` (Lexical and native adapters); native insertion settles search removal before `group-a.insert-tag-mention`, and a second `#` while open closes the search as Source does.
 Keep emoji insertion as Source REMOVE then INSERT_TEXT after usage recording;
 preserve the existing enclosed-shortcode transform's editor lifetime.
 Keep snippet fetching lazy in the real Source command payload; shared analytics

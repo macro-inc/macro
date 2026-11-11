@@ -23,6 +23,7 @@ import {
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { useEditorEntityDrop } from '@core/component/LexicalMarkdown/editing/entityDrop';
 import { MarkdownEditingOverlays } from '@core/component/LexicalMarkdown/editing/MarkdownEditingOverlays';
+import { createLexicalTagsMenuHost } from '@core/component/LexicalMarkdown/editing/overlay-hosts/lexical-tags';
 import {
   type MarkdownEditingSource,
   registerMarkdownEditing,
@@ -764,7 +765,7 @@ export function MarkdownEditor(props: {
         />
 
         <TagsMenu
-          editor={editor}
+          host={createLexicalTagsMenuHost(() => editor)}
           menu={tagsMenuOperations}
           useBlockBoundary={true}
           applyTargetLabel={tagApplyTargetLabel()}

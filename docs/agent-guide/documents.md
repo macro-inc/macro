@@ -52,6 +52,12 @@ while the editor retains a focused range leaves that range in place. Queued
 focus waits for native completion and rechecks disposal/editability before
 browser focus. These checks do not establish slash-menu or full document-app acceptance.
 
+In the native body, `#` opens the same tags menu as the Off engine: after a
+space, an opening bracket or a quote, and not inside code. Filter by typing,
+pick a tag to insert it, then confirm **Add tag to Document** (or Task) to apply
+it to the item's properties. A second `#` while the menu is open closes it and
+leaves literal text. `@` likewise opens after `(`, `[` and quotes in both engines.
+
 The isolated GIF menu controls live in
 `LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
 animated-byte upload, cancellation and actual commit errors before enabling a

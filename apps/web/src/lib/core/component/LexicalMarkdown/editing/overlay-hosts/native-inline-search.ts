@@ -19,7 +19,9 @@ function searchRecord(value: unknown) {
     value === null ||
     !('kind' in value) ||
     typeof value.kind !== 'string' ||
-    !['actions', 'mentions', 'emojis', 'snippets'].includes(value.kind) ||
+    !['actions', 'mentions', 'emojis', 'snippets', 'tags'].includes(
+      value.kind
+    ) ||
     !('open' in value) ||
     typeof value.open !== 'boolean' ||
     !('term' in value) ||
@@ -40,14 +42,17 @@ export type NativeInlineSearchKind =
   | 'actions'
   | 'mentions'
   | 'emojis'
-  | 'snippets';
+  | 'snippets'
+  | 'tags';
 
 export function registerNativeInlineSearch(
   view: EditorView,
   menu: MenuOperations,
   kind: NativeInlineSearchKind,
   trigger: string,
-  onUnavailable?: (error: unknown) => void
+  onUnavailable?: (error: unknown) => void,
+  /** Source listeners that consume their trigger key return true. */
+  interceptTrigger?: () => boolean
 ): () => void {
   if (!view.port.nativeEnter)
     throw new Error(
@@ -114,6 +119,7 @@ export function registerNativeInlineSearch(
     // This issued native callback reads only the existing UI cache.
     listeners.add(view.registerViewCommand(enter, () => menu.isOpen(), 4));
     const rootListener = createInlineMenuTriggerListener(trigger, () => {
+      if (interceptTrigger?.()) return;
       dispatchApplicationCommand(view, 'group-a.search-trigger', {
         kind,
       });
