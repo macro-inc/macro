@@ -319,9 +319,14 @@ test('clipboard facts release once when a lazy HTML paste is cancelled by view d
   }
 });
 
-test.each([false, true])(
-  'plain-only=%s changes only Markdown parsing through the real native session',
-  async (plainOnly) => {
+test.each([
+  { plainOnly: false, advertised: true },
+  { plainOnly: true, advertised: true },
+  { plainOnly: false, advertised: false },
+  { plainOnly: true, advertised: false },
+])(
+  'plain-only=$plainOnly with advertised=$advertised preserves readable clipboard text',
+  async ({ plainOnly, advertised }) => {
     const fixture = nativeSurface();
     let released = 0;
     const releaseFacts = fixture.view.clipboard.registerFacts(() => ({
@@ -364,9 +369,11 @@ test.each([false, true])(
       });
       fixture.counters.admissions = 0;
       const inputs = vi.spyOn(fixture.port, 'input');
+      const clipboard = transfer('**bold**');
+      if (!advertised) Object.defineProperty(clipboard, 'types', { value: [] });
       expect(
         await fixture.view.clipboard.paste(
-          transfer('**bold**'),
+          clipboard,
           readSelection(fixture.view),
           { plainOnly }
         )

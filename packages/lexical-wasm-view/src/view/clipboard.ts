@@ -106,6 +106,17 @@ export class ClipboardAccess {
           mime,
           value: clipboard.getData(mime),
         }));
+        // Some browser transfers expose readable text without advertising its MIME.
+        for (const mime of [
+          'text/plain',
+          'text/uri-list',
+          'text/html',
+          'application/x-lexical-editor',
+        ]) {
+          if (entries.some((entry) => entry.mime === mime)) continue;
+          const value = clipboard.getData(mime);
+          if (value) entries.push({ mime, value });
+        }
         entries.push(...facts.flatMap((fact) => fact.entries));
         span.setAttr('editor.paste.html_code_units', html.length);
         span.setAttr('editor.paste.lexical_code_units', lexical.length);

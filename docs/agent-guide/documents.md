@@ -134,6 +134,8 @@ Select all body content with browser endpoints on the editor root, then Copy or
 Cut before and after selectionchange. Both paths must use the resolved text
 endpoints; cutting ordinary paragraph content leaves the surviving empty
 paragraph, including for backward selections.
+When a browser reports no clipboard types, verify readable plain text still reaches the native editor; inspect the paste input as well as the final model.
+
 Compare plain-text paste with both engines while holding Shift: `**literal**`
 must remain literal, while ordinary paste converts its Markdown. Release Shift
 and repeat. Rich HTML and Lexical clipboard data retain their normal priority,
