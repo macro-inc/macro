@@ -114,7 +114,7 @@ and cached media props.
 Bind image and video actions to the mounted node generation and decorator revision. Route notifications from the real upload owner by media kind, generation and local URL.
 Open native image/video file dialogs through the surface upload controller; recheck the mounted generation and editability on file selection, use the eventual model selection, and retire pending dialogs on disposal.
 Classify native inline image and video clipboard files by the same extension lists as Source. Send them through the shared static-file provider. Publish completion only after native admission matches the local source and keep the loaded preview mounted.
-Equation decorators request selection and equation capabilities. Preserve retained menu callbacks after local editability changes and route updates through ordinary SessionEdit admission.
+Equation decorators request selection and equation capabilities. Bind the actual view before opening an insertion menu, preserve retained menu callbacks after local editability changes, and route updates and insertions through ordinary SessionEdit admission.
 Establish a real Source decorator host before StaticMarkdown builds its eager
 DOM tree; preserve its inherited Lexical wrapper instead of native host keys.
 Keep the floating link controller and markup on `LinkMenuHost`; its Source

@@ -23,3 +23,12 @@ or assertion failure.
 Run `source.browser.e2e.ts` for Source behavior and `native.browser.e2e.ts` for
 raw parity in Chromium, Firefox, and WebKit. Set independent
 `EQUATION_TEST_OUTPUT` and `EQUATION_TEST_REPORT` paths for each run.
+
+The equation context exposes `requestCreate()` for the retained real floating
+menu after the app has bound its view. Opening requires a current model selection.
+Submission dispatches the typed equation insertion action. Source insertion
+controls in `plugins/katex/insert.test.ts` pin both display flags, expanded and
+previous selections, the resulting caret and root-end insertion. A previous
+selection control reads its backward cache before committing; the uncached
+frozen Source selection currently throws when the plugin uses it.
+Native insertion browser acceptance requires a matched artifact with the action.

@@ -5,10 +5,13 @@ import type { EquationHost } from './equation-host';
 import type { NativeDecoratorContext } from './native-adapter';
 import { createNativeSelectionDecoratorContext } from './native-selection-host';
 
-/** Edit existing equations through the current session; creation is not exposed. */
+/** One view owns the retained equation menu and admitted edit/insert actions. */
 export function createNativeEquationContext(
   theme: EditorThemeClasses
-): NativeDecoratorContext<EquationHost> & { dispose(): void } {
+): NativeDecoratorContext<EquationHost> & {
+  requestCreate(): boolean;
+  dispose(): void;
+} {
   const selection = createNativeSelectionDecoratorContext(theme);
   let view: DecoratorProps['view'] | undefined;
   let generation: number | null = null;
@@ -63,11 +66,27 @@ export function createNativeEquationContext(
               { key: node.key, equation }
             );
         },
+        insert(equation, inline) {
+          const mounted = currentView();
+          if (mounted)
+            dispatchApplicationCommandIfSessionEdit(
+              mounted,
+              'group-b.equation-insert',
+              { equation, inline }
+            );
+        },
         root: () => currentView()?.root ?? null,
         focus() {
           currentView()?.focus();
         },
       },
+    },
+    requestCreate() {
+      const mounted = currentView();
+      if (!mounted || mounted.selection().selection.kind === 'none' || !menu)
+        return false;
+      menu.create();
+      return true;
     },
     bindView(incoming) {
       selection.bindView(incoming);
