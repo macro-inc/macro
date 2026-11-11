@@ -1,5 +1,6 @@
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { type ProfilePicture, toProfilePicture } from './profile-picture';
 import { User } from './user';
 
 /**
@@ -20,6 +21,33 @@ export class UserNamespace {
    */
   me(): Promise<User> {
     return User.me(this.client);
+  }
+
+  /**
+   * Current profile pictures for several users in one request. Users without
+   * a picture are absent from the map.
+   *
+   * @example
+   * const pictures = await macro.users.profilePictures(teammates);
+   * const mine = pictures.get(teammates[0]);
+   *
+   * @readonly
+   */
+  async profilePictures(users: User[]): Promise<Map<User, ProfilePicture>> {
+    const result = new Map<User, ProfilePicture>();
+    const ids = [...new Set(users.map((user) => user.id))];
+    if (ids.length === 0) return result;
+    const { pictures } = unwrap(
+      await this.client.auth.postProfilePictures({
+        body: { user_id_list: ids },
+      }),
+    );
+    const byId = new Map(pictures.map((row) => [row.id, row]));
+    for (const user of users) {
+      const picture = toProfilePicture(this.client, byId.get(user.id));
+      if (picture) result.set(user, picture);
+    }
+    return result;
   }
 
   /**

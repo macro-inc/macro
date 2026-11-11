@@ -6651,6 +6651,16 @@
               }
             }
           },
+          "429": {
+            "description": "Picture changed less than a second ago",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6712,6 +6722,16 @@
           },
           "404": {
             "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Picture changed less than a second ago",
             "content": {
               "application/json": {
                 "schema": {
