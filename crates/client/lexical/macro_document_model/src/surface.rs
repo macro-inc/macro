@@ -78,6 +78,7 @@ pub fn query(
     let queries: &[Query] = &[
         // WP-58 Group B bulk reads.
         crate::plugins_group_b::query,
+        crate::plugins_group_a::menu::action_dependencies::query,
     ];
     for query in queries {
         if let Some(reply) = query(name, data, generation, state)? {

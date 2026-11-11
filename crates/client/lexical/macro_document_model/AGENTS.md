@@ -11,6 +11,9 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 ## Boundaries
 
 - Prepare expanded link editing with the existing empty-URL toggle policy and preserve the range; match Source cancel retaining the empty link until a paired product fix changes both engines.
+- Answer action dependency queries from actual registered node-kind metadata; preserve generation-before-decode and never treat registration as JavaScript availability or construction authority.
+
+- Insert horizontal rules through the configured factory and shared list splitter; preserve detached construction without a Range and Source decorator selectNext caret restoration.
 
 - Share table hover-delete bounds with bulk facts; obtain selected-cell paint from actual TableSelection traversal independently, preserving merged-cell closure and current selection-only updates.
 - Decode group-b.format-text and group-b.format-element from canonical enum JSON strings into the existing core commands; preserve the application envelope's generation, selection and admission checks and all command priorities.

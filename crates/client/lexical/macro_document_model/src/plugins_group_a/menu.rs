@@ -4,6 +4,7 @@ use crate::{
     plugins_group_b::{BlockKind, NODE_TRANSFORM},
 };
 use lexical_model::*;
+pub(crate) mod action_dependencies;
 mod mention_user;
 pub(crate) mod search;
 mod source;

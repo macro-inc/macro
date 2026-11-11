@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod action_dependencies;
 mod click;
 mod decorator_actions;
 mod focus_end;

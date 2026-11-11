@@ -10,6 +10,9 @@ mod decorator_content_actions;
 mod diff;
 mod focus;
 mod formatting;
+mod horizontal_rule;
+#[cfg(test)]
+mod horizontal_rule_test;
 mod keyboard;
 mod links;
 mod list_insert;
@@ -77,6 +80,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
     let builder = structure::register(builder);
     let builder = focus::register(builder);
+    let builder = horizontal_rule::register(builder);
     let builder = movement::register(builder);
     let builder = keyboard::register(builder);
     let builder = table::register(builder);
@@ -124,6 +128,9 @@ pub fn decode_command(
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
     if let Some(command) = formatting::decode(name, json)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = horizontal_rule::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = focus::decode(name, json)? {
