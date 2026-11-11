@@ -107,22 +107,27 @@ test('the system prompt is the same for every call: what differs goes in the fir
   );
 });
 
-test("a call's brain runs as the agent, or as nobody, and without the audio libraries' LD_LIBRARY_PATH", () => {
+test("a call's brain runs as the agent, or as nobody, with only the baseline of this process", () => {
   const assistant = { GH_TOKEN: 'agents', GIT_AUTHOR_NAME: 'Agent' };
   expect(
     brainEnvironment(
-      { LD_LIBRARY_PATH: '/x', KEEP: 'y', GH_TOKEN: 'owners' },
+      {
+        LD_LIBRARY_PATH: '/x',
+        PATH: '/bin',
+        MUPPET_CREDENTIALS_FILE: '/run/agent.env',
+        GH_TOKEN: 'owners',
+      },
       assistant
     )
-  ).toEqual({ KEEP: 'y', GH_TOKEN: 'agents', GIT_AUTHOR_NAME: 'Agent' });
+  ).toEqual({ PATH: '/bin', GH_TOKEN: 'agents', GIT_AUTHOR_NAME: 'Agent' });
   const nobody = brainEnvironment(
-    { GH_TOKEN: 'owners', LD_LIBRARY_PATH: '/x', KEEP: 'y' },
+    { GH_TOKEN: 'owners', LD_LIBRARY_PATH: '/x', PATH: '/bin' },
     noIdentity
   );
   expect(nobody.GH_TOKEN).toBeUndefined();
   expect(nobody.LD_LIBRARY_PATH).toBeUndefined();
   expect(nobody.GIT_AUTHOR_NAME).toBe('');
-  expect(nobody.KEEP).toBe('y');
+  expect(nobody.PATH).toBe('/bin');
 });
 
 const join = (...parts: readonly string[]) => parts.join('/');

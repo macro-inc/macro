@@ -9,6 +9,7 @@ import {
   scheduler,
 } from '@macro-inc/muppet/utilities/schedules';
 import { budgeted, fileLedger, recordSpend } from '../../../agent/budget.ts';
+import { passthrough } from '../../../agent/claude.ts';
 import { config as makeConfig } from '../../../context/config.ts';
 import { memoryCredentials } from '../../../context/credentials.ts';
 import type { Base } from '../../../context/index.ts';
@@ -82,6 +83,11 @@ const setup = () => {
       throw new Error('Macro is not reached');
     },
     environment: async () => ({}),
+    relay: async () => {
+      throw new Error('no relay');
+    },
+    relayed: async () => ({}),
+    trace: passthrough,
   };
   const lock = { held: false };
   const heartbeat: HeartbeatContext['heartbeat'] = {

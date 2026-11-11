@@ -2,9 +2,11 @@
  * The processes a watcher deals with: finding the agent's joins among everything
  * running, signalling one, and starting one.
  */
+
 import type { Config } from '../../../context/config.ts';
 import type { Disk } from '../../../context/disk.ts';
 import type { Shell, Started } from '../../../context/shell.ts';
+import { telemetryEnvironment } from '../../../context/telemetry.ts';
 import { type CallsPaths, joinCapability } from '../config.ts';
 import type { JoinInput } from '../join.ts';
 import type { LeaveSignal } from '../watch.ts';
@@ -95,8 +97,11 @@ export const startJoin =
     config,
     paths,
     join,
+    relayed,
   }: {
     readonly shell: Pick<Shell, 'start'>;
+    /** What makes the join's process the agent's, reaching Macro through its relay. */
+    readonly relayed: () => Promise<Readonly<Record<string, string>>>;
     readonly disk: Pick<Disk, 'makeDirectory'>;
     readonly config: Pick<Config, 'root'>;
     readonly paths: Pick<CallsPaths, 'call' | 'joinLog' | 'joinErrors'>;
@@ -119,7 +124,11 @@ export const startJoin =
       {
         cwd: config.root,
         // rtc-node logs debug lines to stdout otherwise.
-        env: { NODE_ENV: 'production' },
+        env: {
+          ...(await relayed()),
+          ...telemetryEnvironment(process.env),
+          NODE_ENV: 'production',
+        },
         detached: true,
       }
     );

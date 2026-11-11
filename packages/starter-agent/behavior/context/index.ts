@@ -24,6 +24,7 @@ import {
 } from '@macro-inc/muppet/utilities/credentials';
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { Macro } from '@macro-inc/sdk';
+import type { Trace } from '../agent/claude.ts';
 import {
   type Addresses,
   addresses as addressesFrom,
@@ -43,6 +44,7 @@ import { timedOut } from './shell.ts';
 import { sopsCredentials } from './sops.ts';
 import { type Configured, type Startup, variables } from './startup.ts';
 import { state as makeState, type State } from './state.ts';
+import { trace } from './telemetry.ts';
 
 /** The credential holding the key of the agent's own Macro account. */
 export const macroKey = 'MACRO_API_KEY';
@@ -67,7 +69,19 @@ export type Base = {
   readonly environment: () => Promise<
     Readonly<Record<string, string | undefined>>
   >;
+  /**
+   * The relay this process reaches Macro through: the one it was given (a
+   * script's or a call's process), or the agent's own, started on first use.
+   */
+  readonly relay: () => Promise<Relayed>;
+  /** The environment a child needs to call back into this agent: see `Wiring.relayed`. */
+  readonly relayed: () => Promise<Readonly<Record<string, string>>>;
+  /** Spans around an area's operations. */
+  readonly trace: Trace;
 };
+
+/** A relay's address and the capability it takes. */
+export type Relayed = { readonly url: string; readonly token: string };
 
 /** How this process is wired to the world beyond its context: the launcher, its children and Macro. */
 export type Wiring = {
@@ -341,14 +355,21 @@ export const base = (
   if (found.kind === 'invalid') return found;
   const { credentials, addresses, relay: given } = found.value;
   let macro: Promise<Macro> | undefined;
-  let relay:
-    | Promise<{ readonly url: string; readonly token: string }>
-    | undefined;
+  let relay: Promise<Relayed> | undefined;
   const ownRelay = () => {
     relay ??= Promise.all([addresses(), credentials.get(macroKey)]).then(
       ([{ hosts }, apiKey]) => startRelay({ targets: hosts, apiKey })
     );
     return relay;
+  };
+  const relayed = async () => {
+    const { url, token } = given ?? (await ownRelay());
+    return {
+      [variables.workspace]: root,
+      [variables.relayUrl]: url,
+      [variables.relayToken]: token,
+      [variables.credentialNames]: (await credentials.names()).join(','),
+    };
   };
   return configured({
     base: {
@@ -377,18 +398,13 @@ export const base = (
         return macro;
       },
       environment: () => agentEnvironment({ config, credentials }),
+      relay: async () => given ?? (await ownRelay()),
+      relayed,
+      trace,
     },
     wiring: {
       addresses,
-      relayed: async () => {
-        const { url, token } = given ?? (await ownRelay());
-        return {
-          [variables.workspace]: root,
-          [variables.relayUrl]: url,
-          [variables.relayToken]: token,
-          [variables.credentialNames]: (await credentials.names()).join(','),
-        };
-      },
+      relayed,
       claudeAccess: async () =>
         given === undefined
           ? claudeAccess(await held(credentials, claudeKeys))

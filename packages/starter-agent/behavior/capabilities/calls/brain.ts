@@ -16,6 +16,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { type Guard, refusal } from '../../agent/guard.ts';
+import { childEnvironment } from '../../context/children.ts';
 import type { Config } from '../../context/config.ts';
 import type { Disk } from '../../context/disk.ts';
 import type { Shell } from '../../context/shell.ts';
@@ -172,21 +173,16 @@ export const systemAppend = (
 type Environment = Readonly<Record<string, string | undefined>>;
 
 /**
- * What the call's Claude runs with: this process's environment made the
- * agent's (or nobody's, when its token is missing), without LD_LIBRARY_PATH, which
- * is for the call's native audio libraries only and breaks other programs.
+ * What the call's Claude runs with: a child's baseline, plus what the agent
+ * adds (the way back through its relay, and its identity, or nobody's when
+ * its token is missing). Nothing else of this process: no credentials, and
+ * no LD_LIBRARY_PATH, which is for the call's native audio libraries only
+ * and breaks other programs.
  */
 export const brainEnvironment = (
   own: Environment,
-  identity: Environment
-): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries({
-      ...own,
-      ...identity,
-      LD_LIBRARY_PATH: undefined,
-    }).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]]))
-  );
+  added: Environment
+): Record<string, string> => childEnvironment(own, added);
 
 export type BriefingPorts = {
   readonly disk: Pick<Disk, 'read'>;
