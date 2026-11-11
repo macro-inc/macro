@@ -13,7 +13,7 @@ Shared collaborative document models, transport and portable session host adapte
 ## Boundaries
 
 SessionExecutor executes effects; Rust owns retry, backoff, WAL and permission policy.
-`SessionExecutor.comment` correlates input kind 9 with its kind-5/code-2 reply by request id and rejects outstanding requests on close; copy each nested Bebop encode (`.slice()`), because encodes share one buffer.
+`SessionExecutor.comment` (input kind 9, reply code 2) and `SessionExecutor.flush` (input kind 4, reply code 1: drained, not drained, offline, read-only) correlate replies by request id and reject outstanding requests on close; copy each nested Bebop encode (`.slice()`), because encodes share one buffer.
 Inspect callback leases only through beforeConsume after successful native calls; finish cleanup and original-cause delivery through afterDrain after the outer FIFO unlocks, preserving an explicit failure holder even for throw undefined.
 Transfer native ownership to SessionExecutor only through create; constructor failure invokes the typed onConstructionFailure hook before freeing native resources and releases its lease asynchronously without masking the original cause.
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.

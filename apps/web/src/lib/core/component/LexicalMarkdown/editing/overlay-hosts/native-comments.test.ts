@@ -14,7 +14,7 @@ import {
 } from '@macro-inc/lexical-wasm-view';
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { createNativeComments } from './native-comments';
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -184,6 +184,53 @@ test('anchors, caret marks and selection follow the native comment marks', async
 
       caret(runtime, one.key, 1);
       expect(comments.captureSelection()).toBeNull();
+    } finally {
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+});
+
+test('publication and removal wait for a drained flush, as Source does', async () => {
+  const runtime = mount();
+  await createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    try {
+      const one = textNode(runtime, 'one ');
+      runtime.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: one.key, offset: 0, type: 'text' },
+        focus: { key: one.key, offset: 3, type: 'text' },
+      });
+      const bookmark = comments.captureSelection();
+      if (!bookmark) throw new Error('Missing bookmark');
+      const order: string[] = [];
+      const flush = runtime.port.flush.bind(runtime.port);
+      const comment = runtime.port.comment.bind(runtime.port);
+      const flushSpy = vi
+        .spyOn(runtime.port, 'flush')
+        .mockImplementation(() => {
+          order.push('flush');
+          return flush();
+        });
+      const commentSpy = vi
+        .spyOn(runtime.port, 'comment')
+        .mockImplementation((...args) => {
+          order.push('comment');
+          return comment(...args);
+        });
+      await comments.publish('mark-c', bookmark);
+      await comments.remove('mark-a');
+      expect(order).toEqual(['flush', 'comment', 'flush', 'comment']);
+
+      // Undelivered local edits refuse publication without a comment request.
+      flushSpy.mockResolvedValue({ kind: 'not-drained', undelivered: 1 });
+      order.length = 0;
+      expect(await comments.publish('mark-c', bookmark)).toBe(false);
+      expect(await comments.remove('mark-a')).toBe(false);
+      expect(commentSpy).toHaveBeenCalledTimes(2);
     } finally {
       comments.dispose();
       dispose();

@@ -231,6 +231,12 @@ export function createNativeComments(view: EditorView): NativeComments {
     span.setAttr('comment.action', action.kind);
     span.setAttr('comment.mark_id', markId);
     try {
+      // Source flushCollaboration: local edits are delivered before the mark
+      // changes; a read-only session has none to deliver.
+      const flushed = await port.flush();
+      span.setAttr('comment.flush', flushed.kind);
+      if (flushed.kind !== 'drained' && flushed.kind !== 'read-only')
+        return false;
       const result = await port.comment(markId, action);
       span.setAttr('comment.reply', result.kind);
       if (result.kind === 'refused')

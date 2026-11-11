@@ -16,6 +16,7 @@ import {
 import type {
   CommentMarkAction,
   CommentMarkReply,
+  FlushReply,
   SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
@@ -93,7 +94,7 @@ export class SessionPort implements EditorPort {
       Partial<
         Pick<
           SessionExecutor<EditorSession>,
-          'runSync' | 'runSettled' | 'comment'
+          'runSync' | 'runSettled' | 'comment' | 'flush'
         >
       >,
     private readonly view: ViewSink,
@@ -569,6 +570,13 @@ export class SessionPort implements EditorPort {
       type: value.type === 0 ? 'text' : 'element',
     });
     return { anchor: point(anchor), focus: point(focus) };
+  }
+  /** Append local edits and resolve when they are delivered or cannot be. */
+  flush(): Promise<FlushReply> {
+    this.assertRootAdmission();
+    const flush = this.executor.flush;
+    if (!flush) throw new Error('Session flush is unavailable');
+    return flush.call(this.executor);
   }
   /** Publish or remove an annotation from the session's isolated staging peer. */
   comment(
