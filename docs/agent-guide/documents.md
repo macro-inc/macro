@@ -66,6 +66,13 @@ group ownership, save/reopen and read-only transitions. The isolated paired
 controls are in `LexicalMarkdown/editing/drag-browser-test`; they use trusted
 mouse HTML5 dragging and do not establish touch dragging or a click block menu.
 
+Native body comments use the same margin, drawer and thread queries as the Off
+engine. Selecting text shows Comment in the floating menu (commenters see only
+Comment); it opens a draft from the session's durable selection cursors, which
+follows edits until the mark is published through the session's isolated
+staging peer. Existing comment marks bind to their threads, highlight at the
+caret, and open from comment links once the native body is ready.
+
 The isolated GIF menu controls live in
 `LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
 animated-byte upload, cancellation and actual commit errors before enabling a

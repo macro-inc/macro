@@ -27,3 +27,5 @@ Capture all native formatting query results inside the construction-time latestP
 Keep native FormatTools in the selected-body withinPopup path; its full-header title/body focus routing is not qualified by this component checkpoint and must retain Source behavior before any broader host wiring.
 
 Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Keep its Link button hidden until the native link editor is qualified; do not expose requestLink to Actions from this mount.
+
+Render Comment through the menu's optional `commentAction` slot, never a second toolbar: it shows for commenters while the live root exists and the session draft capability is mounted, after one divider only when formatting controls are present, and keeps formatting gated on `isInteractable`. Insert keeps the popup open with the Source toast on failure and closes it on success.
