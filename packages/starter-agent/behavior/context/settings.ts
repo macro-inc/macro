@@ -22,6 +22,8 @@ export const Settings = z.object({
   budgetUsdPerRun: z.number().positive().optional(),
   /** The most the owner's day may spend, in USD; no wake starts past it until the next day. 50 if unset. */
   budgetUsdPerDay: z.number().positive().optional(),
+  /** Whether the agent joins and places Macro calls; off unless true, while calls are behind a flag. */
+  calls: z.boolean().optional(),
 });
 export type Settings = z.infer<typeof Settings>;
 

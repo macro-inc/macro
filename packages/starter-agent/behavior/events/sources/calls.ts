@@ -1,6 +1,6 @@
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { source } from '@macro-inc/muppet/core/event';
-import { deepgramKey } from '../../capabilities/calls/config.ts';
+import { callsReady } from '../../capabilities/calls/config.ts';
 import type { CallsContext } from '../../capabilities/calls/context.ts';
 import { followCalls, world, worlds } from '../../capabilities/calls/watch.ts';
 
@@ -15,7 +15,7 @@ type Needs = Pick<CallsContext, 'calls' | 'config' | 'clock' | 'log'> & {
  * meetings in channels the agent is in, the channels it always joins, and
  * the calls it was told to leave. Sooner when Macro says a call changed, a
  * join of its exits, or a failed join's retry comes due. Quiet, reading
- * nothing, until calls have their speech key.
+ * nothing, until agent.json turns calls on and they have their speech key.
  */
 const readings = ({
   calls: { watcher },
@@ -28,7 +28,7 @@ const readings = ({
   let following = false;
   return worlds({
     ready: async () => {
-      const ready = await credentials.has(deepgramKey);
+      const ready = await callsReady(config.features, credentials);
       // Macro's call events only matter once a call could be joined.
       if (ready && !following) {
         following = true;

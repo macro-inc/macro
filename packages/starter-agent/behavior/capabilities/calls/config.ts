@@ -16,6 +16,16 @@ export const owner = 'calls';
 export const deepgramKey = 'DEEPGRAM_API_KEY';
 export const inworldKey = 'INWORLD_API_KEY';
 
+/**
+ * Whether calls are on: `calls` in agent.json (off unless set, while calls
+ * are behind a flag) and the speech key. The watcher joins nothing until
+ * both are there.
+ */
+export const callsReady = async (
+  features: { readonly calls: boolean },
+  credentials: { readonly has: (name: string) => Promise<boolean> }
+): Promise<boolean> => features.calls && (await credentials.has(deepgramKey));
+
 /** Calls stay off until this is set: said by every part that refuses for it. */
 export const noVoice = `Calls need a speech key: add ${deepgramKey} with setCredential.`;
 

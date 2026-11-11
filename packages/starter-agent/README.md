@@ -39,7 +39,7 @@ to `state/memory/identity/identity.md`.
 | `people`    | Remember the people it talks with, on this machine only                 | nothing                             |
 | `heartbeat` | Schedules, its own clock, and changing its own code (`commit`, `land`)  | nothing                             |
 | `tools`     | Its credentials, by name                                                | nothing                             |
-| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | speech credentials (see below)      |
+| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | `"calls": true` in agent.json, and speech credentials|
 | `screen`    | Show a browser on a call                                                | the screen service running          |
 
 An area whose credentials are missing stays quiet: nothing fails, and the
