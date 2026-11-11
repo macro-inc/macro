@@ -18,6 +18,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
 
 - Share the full-replay operation index only within one immutable diff; preserve causal/sliced visitor parity and reuse DAG contexts instead of retaining one mutable VV per change.
+- Reconstruct cached shallow roots only through bounded forward prefixes; preserve exact replay-path snapshot bytes, empty future-container headers and live logical state/frontiers/attachment.
 
 ## Checks
 

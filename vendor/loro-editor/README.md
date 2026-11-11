@@ -53,3 +53,13 @@ without computing a child's sequence rank or cloning its map key. Movable lists
 share the same current-value and active-leaf validation with index lookups;
 mergeable children still validate their parent marker. No liveness cache,
 reachability bypass, operation ordering or encoder change is introduced.
+
+Local shallow-export optimization: reconstruct an eligible requested root from
+its cached shallow state plus a bounded retained prefix, avoiding reverse
+checkout of a large tail. Keep the existing frontier, retention/redaction,
+latest-state overlay and encoder; reproduce reverse checkout's empty future
+container headers. Reject oversized cached state or prefixes before copying,
+and retain ordinary checkout for ineligible or unreadable seeds. Compare exact
+snapshot bytes with the existing replay path, including rich/deleted containers,
+multiple peers and detached documents; validate retained snapshot/WAL controls
+through a production-mode decoder as well as the library tests.
