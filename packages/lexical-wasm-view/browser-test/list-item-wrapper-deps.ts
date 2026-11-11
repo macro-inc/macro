@@ -9,7 +9,8 @@ import * as ts from 'typescript';
 const appDirectory = fileURLToPath(new URL('../', import.meta.url));
 const cacheDirectory = resolve(
   appDirectory,
-  'node_modules/.vite-list-wrapper/deps'
+  process.env.LEXICAL_WASM_VIEW_TEST_CACHE_DIR || 'node_modules/.vite',
+  'deps'
 );
 const expected = new Map([
   [

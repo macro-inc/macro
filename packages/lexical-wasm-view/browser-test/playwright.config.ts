@@ -4,6 +4,7 @@ const port = Number(process.env.LEXICAL_WASM_VIEW_TEST_PORT ?? 3076);
 export default defineConfig({
   testDir: import.meta.dirname,
   testMatch: '*.browser.e2e.ts',
+  testIgnore: ['normal-enter.browser.e2e.ts', 'native-escape.browser.e2e.ts'],
   workers: 1,
   use: {
     baseURL: `http://127.0.0.1:${port}`,

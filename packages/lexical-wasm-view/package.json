@@ -11,7 +11,9 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "playwright test --config browser-test/playwright.config.ts"
+    "test:browser": "bun run test:browser:dev && bun run test:browser:ordered",
+    "test:browser:dev": "playwright test --config browser-test/playwright.config.ts",
+    "test:browser:ordered": "playwright test --config browser-test/normal-enter.playwright.config.ts --project chromium"
   },
   "dependencies": {
     "@macro-inc/collaboration": "workspace:*",

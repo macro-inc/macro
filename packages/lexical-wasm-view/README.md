@@ -68,6 +68,12 @@ Production modules import neither Lexical nor the development shim.
 Build `document_session_wasm` before tests. Run `bun run check`, `bun run test`,
 and `bun run test:browser` from this directory. Chromium tests launch a separate
 browser; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system browser.
+The browser command runs the generic development fixtures, then builds and serves
+the ordered Enter/Escape fixtures in production mode, both in Chromium. Run
+`test:browser:dev` or `test:browser:ordered` to select a phase. The latter requires
+the generated native module with both ordered command APIs; an Enter-only build
+cannot run the Escape fixtures. Neither command builds Rust. The compiled Source
+dependency witness reads the same Vite cache as the development server.
 `local-session.browser.e2e.ts` exercises independent drafts, native undo/redo,
 read-only host import, repeated close and absence of sync/storage effects.
 

@@ -3,7 +3,8 @@ import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 export default defineConfig({
   plugins: [solid()],
-  cacheDir: process.env.LEXICAL_WASM_VIEW_TEST_CACHE_DIR,
+  cacheDir:
+    process.env.LEXICAL_WASM_VIEW_TEST_CACHE_DIR || 'node_modules/.vite',
   resolve: {
     alias: {
       '@core': fileURLToPath(
