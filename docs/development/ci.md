@@ -11,8 +11,9 @@ real CI on before building further, or when you think the PR is done. Never
 after every push, and never instead of local checks.
 
 If the label starts nothing and `CI gate` says `PR CI can't start`, the PR
-conflicts with `main` or was last pushed before `PR CI` existed: merge `main`
-in, push, and add the label again.
+conflicts with `main` or was last pushed before `PR CI` existed (merge `main`
+in, push, and add the label again), or it targets another branch: `PR CI` runs
+only on PRs into `main`, so add the label once it does.
 
 The [`run-ci` skill](../../.agents/skills/run-ci/SKILL.md) has the commands,
 what each `CI gate` state means, re-runs, and fork PRs. The workflows are

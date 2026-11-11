@@ -62,13 +62,21 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
-| fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |
+| fail, `PR CI ended without a verdict` | GitHub ended the run without running its `CI gate` job | Add the label again |
+| fail, `PR CI was cancelled before its verdict` | Someone cancelled the run, and no newer run took over | Add the label again |
+| fail, `PR CI can't start: ...` | The PR conflicts with `main`, was last pushed before `PR CI` existed, or targets another branch | Merge `main` in and push, or wait until it targets `main`; add the label again |
 | missing | A fork PR before its first run, or a PR that conflicts with `main` | A maintainer adds the label; or merge `main` in and push |
 
 GitHub takes `PR CI` from the PR's merge commit with `main`, which it rebuilds
-on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
-such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
-and says why in `CI gate`.
+on a push but not when `main` moves, and runs nothing on a conflicting PR.
+`PR CI` also runs only on PRs into `main`, so on a stacked PR the label starts
+nothing until the PR below it merges and this one targets `main`. On all of
+these `CI Gate Label Check` removes the label and says why in `CI gate`.
+
+`Running on <sha>` always ends in a result. When a run ends without setting one
+(GitHub never ran its `CI gate` job, or someone cancelled it), `CI Gate Run End`
+fails `CI gate` with why. A run cancelled by a newer request is left to the
+newer run.
 
 ## Fix a failure
 
