@@ -1,0 +1,507 @@
+agent-teammates/starter-agent/behavior/capabilities/mail/triage.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-227
+agent-teammates/starter-agent/behavior/capabilities/identity/prompt.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-28
+agent-teammates/starter-agent/flake.nix
+  s_0030f7dd01decd::t_cedc865523d1e0 1-57
+agent-teammates/starter-agent/behavior/capabilities/calls/test/share-policy.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-154
+agent-teammates/starter-agent/behavior/capabilities/calls/working.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-194
+agent-teammates/starter-agent/systemd/agent-screen.service
+  s_0030f7dd01decd::t_b684e59796c83b 1-2
+  s_0030f7dd01decd::t_cedc865523d1e0 3-25
+agent-teammates/starter-agent/behavior/capabilities/people/card.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-130
+agent-teammates/starter-agent/behavior/capabilities/mail/test/trust.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-15,19-30,32-33,36,38,42-48,50-53,55,58-65,68,71,73-82,84-85,87-100,102-143,145-148,150-168
+  s_0030f7dd01decd::t_b684e59796c83b 16-18,31,34-35,37,39-41,49,54,56-57,66-67,69-70,72,83,86,101,144,149
+agent-teammates/starter-agent/behavior/capabilities/tools/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-17
+agent-teammates/starter-agent/behavior/capabilities/chat/test/listen.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-145
+agent-teammates/starter-agent/behavior/capabilities/mail/trust.ts
+  s_0030f7dd01decd::t_b684e59796c83b 103
+  s_0030f7dd01decd::t_cedc865523d1e0 1-102,104-304
+agent-teammates/starter-agent/behavior/capabilities/screen/DESIGN.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-93
+agent-teammates/starter-agent/behavior/capabilities/chat/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-54
+agent-teammates/starter-agent/behavior/agent/guards/gh-identity.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-45
+agent-teammates/starter-agent/behavior/capabilities/calls/context/share-frames.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-88
+agent-teammates/starter-agent/behavior/capabilities/calls/events.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-209
+agent-teammates/starter-agent/behavior/capabilities/mail/watch.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-383
+agent-teammates/starter-agent/biome.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/starter-agent/behavior/agent/guards/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-13
+agent-teammates/starter-agent/behavior/capabilities/calls/capabilities/chat.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-50
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/handlers.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-296
+agent-teammates/starter-agent/behavior/capabilities/screen/screen.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-445
+agent-teammates/starter-agent/behavior/capabilities/screen/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-147
+agent-teammates/starter-agent/behavior/context/identity.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-60
+agent-teammates/starter-agent/behavior/capabilities/people/rules.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-381
+agent-teammates/starter-agent/behavior/capabilities/calls/capabilities/filled.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-10
+agent-teammates/README.md
+  s_0030f7dd01decd::t_9a4f921388a8c8 1-19
+agent-teammates/starter-agent/behavior/capabilities/calls/capabilities/watch.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-136
+agent-teammates/starter-agent/behavior/capabilities/calls/watch.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-724
+agent-teammates/starter-agent/behavior/capabilities/calls/test/events.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-276
+agent-teammates/starter-agent/behavior/capabilities/calls/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-125
+agent-teammates/starter-agent/behavior/capabilities/mail/act.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-246
+agent-teammates/starter-agent/behavior/capabilities/mail/schedule.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-20
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/state.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-24
+agent-teammates/starter-agent/behavior/capabilities/later/test/later.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-65
+agent-teammates/starter-agent/behavior/capabilities/screen/measure.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-331
+agent-teammates/starter-agent/CLAUDE.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1
+agent-teammates/starter-agent/behavior/capabilities/calls/test/working.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-199
+agent-teammates/starter-agent/behavior/capabilities/mail/test/act.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-243
+agent-teammates/starter-agent/behavior/events/handlers/identity.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-54
+agent-teammates/starter-agent/behavior/agent/guards/test/git-identity.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-150
+agent-teammates/starter-agent/bin/guard-hook
+  s_0030f7dd01decd::t_cedc865523d1e0 1-34
+agent-teammates/starter-agent/bin/setup
+  s_0030f7dd01decd::t_b684e59796c83b 2,11-13,37-46,52
+  s_0030f7dd01decd::t_cedc865523d1e0 1,3-10,14-36,47-51,53-122
+agent-teammates/starter-agent/behavior/capabilities/calls/test/room.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-227
+agent-teammates/starter-agent/behavior/context/credentials.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/state.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-44
+agent-teammates/starter-agent/behavior/capabilities/tools/test/tools.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-15
+agent-teammates/starter-agent/behavior/capabilities/calls/retry.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-97
+agent-teammates/starter-agent/behavior/capabilities/calls/context/processes.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-126
+agent-teammates/starter-agent/behavior/capabilities/chat/test/queue.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-88
+agent-teammates/starter-agent/behavior/capabilities/people/macro.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-29
+agent-teammates/starter-agent/behavior/capabilities/calls/report.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-207
+agent-teammates/starter-agent/behavior/capabilities/calls/test/judge.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-627
+agent-teammates/starter-agent/behavior/events/sources/chat.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/starter-agent/behavior/capabilities/mail/test/watch.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-349
+agent-teammates/starter-agent/behavior/context/settings.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/starter-agent/behavior/capabilities/mail/gmail.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-191
+agent-teammates/starter-agent/behavior/capabilities/calls/room.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-244
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/prune.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-178
+agent-teammates/starter-agent/behavior/capabilities/tools/totp.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-43
+agent-teammates/starter-agent/behavior/capabilities/calls/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-64
+agent-teammates/starter-agent/behavior/capabilities/mail/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-91
+agent-teammates/starter-agent/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-57
+agent-teammates/starter-agent/behavior/capabilities/people/transcript.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-78
+agent-teammates/starter-agent/behavior/capabilities/mail/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-394
+agent-teammates/starter-agent/behavior/capabilities/chat/typing.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-54
+agent-teammates/starter-agent/behavior/capabilities/people/test/ignored.test.ts
+  s_0030f7dd01decd::t_0bc3c8f35bf059 10-11
+  s_0030f7dd01decd::t_cedc865523d1e0 1-9,12-32
+agent-teammates/starter-agent/behavior/capabilities/people/keep.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-149
+agent-teammates/starter-agent/behavior/capabilities/calls/asks.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-252
+agent-teammates/starter-agent/behavior/capabilities/calls/test/inputs.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-113
+agent-teammates/starter-agent/behavior/capabilities/calls/context/share-feed.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-127
+agent-teammates/starter-agent/behavior/capabilities/mail/sha256.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-100
+agent-teammates/starter-agent/behavior/capabilities/screen/test/inputs.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-33
+agent-teammates/starter-agent/behavior/capabilities/identity/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-61
+agent-teammates/starter-agent/behavior/capabilities/mail/reply.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-211
+agent-teammates/starter-agent/behavior/agent/guards/test/shell.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-206
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-127
+agent-teammates/starter-agent/test/no-audio.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-15
+agent-teammates/starter-agent/behavior/capabilities/calls/context/voice.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-217
+agent-teammates/starter-agent/behavior/capabilities/calls/capabilities/voice.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-135
+agent-teammates/starter-agent/behavior/capabilities/calls/judge.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-369
+agent-teammates/starter-agent/behavior/context/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-80
+agent-teammates/starter-agent/behavior/context/disk.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-66
+agent-teammates/starter-agent/behavior/capabilities/calls/context/ledgers.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-294
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/live.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-385
+agent-teammates/starter-agent/behavior/capabilities/mail/ports.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-146
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/prune.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-128
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/rules.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-82
+agent-teammates/starter-agent/behavior/context/log.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/commit.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-324,326-327
+  s_0030f7dd01decd::t_b684e59796c83b 325
+agent-teammates/starter-agent/behavior/capabilities/calls/audio.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-113
+agent-teammates/starter-agent/behavior/context/test/fakes.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-63
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-430
+agent-teammates/starter-agent/behavior/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-111
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/schedules.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-79
+agent-teammates/starter-agent/behavior/capabilities/calls/test/join.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-572
+agent-teammates/starter-agent/behavior/capabilities/tools/test/capabilities.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-145
+agent-teammates/starter-agent/bin/agent
+  s_0030f7dd01decd::t_cedc865523d1e0 1-6
+agent-teammates/starter-agent/behavior/capabilities/mail/test/helpers.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-210
+agent-teammates/starter-agent/behavior/events/sources/calls.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-55
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/tick.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-218
+agent-teammates/starter-agent/behavior/agent/guards/session.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-72
+agent-teammates/starter-agent/behavior/capabilities/people/appraise.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-378
+agent-teammates/starter-agent/behavior/capabilities/screen/test/screen.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-352
+agent-teammates/starter-agent/behavior/capabilities/calls/voices.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-70
+agent-teammates/starter-agent/behavior/capabilities/mail/redact.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-74
+agent-teammates/starter-agent/behavior/context/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-209
+agent-teammates/starter-agent/behavior/capabilities/calls/test/retry.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-159
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/sandbox.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-158
+agent-teammates/starter-agent/behavior/agent/guards/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-12
+agent-teammates/starter-agent/AGENT.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-165
+agent-teammates/starter-agent/behavior/events/handlers/failures.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-31
+agent-teammates/starter-agent/behavior/agent/guards/mail-wake.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-132
+agent-teammates/starter-agent/behavior/capabilities/calls/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-120
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/schedules.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-82
+agent-teammates/starter-agent/.sops.yaml
+  s_0030f7dd01decd::t_cedc865523d1e0 1-6
+agent-teammates/starter-agent/README.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-2,5-25,28-30,35,39,42-122,124-130,132-147
+  s_0030f7dd01decd::t_b684e59796c83b 3-4,26-27,31-34,36-38,40-41,123,131
+agent-teammates/starter-agent/behavior/capabilities/calls/context/disk.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-124
+agent-teammates/starter-agent/behavior/capabilities/calls/test/brain.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-311
+agent-teammates/starter-agent/behavior/capabilities/calls/test/session.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-597
+agent-teammates/starter-agent/.gitignore
+  s_0030f7dd01decd::t_cedc865523d1e0 1-14
+agent-teammates/starter-agent/behavior/capabilities/screen/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-126
+agent-teammates/starter-agent/behavior/agent/guards/test/gh-identity.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-67
+agent-teammates/starter-agent/AGENTS.md
+  s_0030f7dd01decd::t_217ebb60bb5cef 1-44
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/commit.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-162
+agent-teammates/starter-agent/behavior/context/sops.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-56
+agent-teammates/starter-agent/behavior/capabilities/chat/screen.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-17
+agent-teammates/starter-agent/agent.example.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-8
+agent-teammates/starter-agent/behavior/capabilities/calls/context/share-sound.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-89
+agent-teammates/starter-agent/behavior/capabilities/chat/presence.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-51
+agent-teammates/starter-agent/behavior/capabilities/mail/message.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-191
+agent-teammates/starter-agent/behavior/events/sources/mail.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-73
+agent-teammates/starter-agent/behavior/capabilities/chat/listen.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-125
+agent-teammates/starter-agent/behavior/capabilities/calls/place.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-283
+agent-teammates/starter-agent/behavior/capabilities/calls/context/share-browser.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-337
+agent-teammates/starter-agent/behavior/capabilities/mail/test/gmail.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-122
+agent-teammates/starter-agent/behavior/capabilities/calls/types.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-233
+agent-teammates/starter-agent/ENGINEERING.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-47
+agent-teammates/starter-agent/behavior/capabilities/screen/context/cdp.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-135
+agent-teammates/starter-agent/behavior/capabilities/chat/macro.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-265
+agent-teammates/starter-agent/behavior/capabilities/chat/DESIGN.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-46
+agent-teammates/starter-agent/behavior/capabilities/calls/context/rooms.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-24
+agent-teammates/starter-agent/behavior/events/handlers/people.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-75
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-77
+agent-teammates/starter-agent/behavior/capabilities/calls/test/watch.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-545
+agent-teammates/starter-agent/behavior/capabilities/people/store.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-155
+agent-teammates/starter-agent/behavior/capabilities/people/test/wiring.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-303
+agent-teammates/starter-agent/behavior/capabilities/calls/test/arbiter.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-426,428-1222
+  s_0030f7dd01decd::t_b684e59796c83b 427
+agent-teammates/starter-agent/test/invoke.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-74
+agent-teammates/starter-agent/behavior/capabilities/mail/test/triage.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-17,21-40,42-79,81-86,88-93,95-100,102-108,111-159,161-164,166-193,195,197-224,226-263,265-269,271,273-281,283-287,289-446
+  s_0030f7dd01decd::t_da1932c1368a18 264
+  s_0030f7dd01decd::t_b684e59796c83b 18-20,41,80,87,94,101,109-110,160,165,194,196,225,270,272,282,288
+agent-teammates/starter-agent/behavior/agent/profile.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-30
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/land.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-337
+agent-teammates/starter-agent/behavior/capabilities/chat/history.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-70
+agent-teammates/starter-agent/behavior/capabilities/screen/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-115
+agent-teammates/starter-agent/behavior/context/state.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-57
+agent-teammates/starter-agent/behavior/capabilities/people/memory.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-51
+agent-teammates/starter-agent/behavior/capabilities/mail/filter.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-23
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/land.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-396
+agent-teammates/starter-agent/behavior/capabilities/calls/macro.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-380
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/collect.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-56
+agent-teammates/starter-agent/behavior/capabilities/calls/context/share.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-41
+agent-teammates/starter-agent/behavior/capabilities/mail/test/guards.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-30,32-34,36-73,75-92,94-171,173-177,179-267
+  s_0030f7dd01decd::t_b684e59796c83b 31,35,74,93,172,178
+agent-teammates/starter-agent/behavior/capabilities/calls/test/report.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-128
+CLAUDE.md
+  s_0030f7dd01decd::t_70447d65cdafa0 30
+agent-teammates/starter-agent/behavior/agent/guards/no-email.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-37
+agent-teammates/starter-agent/behavior/capabilities/calls/test/macro.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-723
+agent-teammates/starter-agent/behavior/capabilities/mail/test/reply.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-48,51-58,61,63-69,71-75,77-84,86-153,155-227,229-251,253-255,257-292
+  s_0030f7dd01decd::t_b684e59796c83b 49-50,59-60,62,70,76,85,154,228,252,256
+agent-teammates/starter-agent/behavior/capabilities/mail/prune.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-25
+agent-teammates/starter-agent/behavior/capabilities/calls/test/chat.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-14
+agent-teammates/starter-agent/behavior/capabilities/calls/test/audio.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-32
+agent-teammates/starter-agent/behavior/agent/test/profile.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-20
+agent-teammates/starter-agent/behavior/capabilities/later/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-101
+agent-teammates/starter-agent/behavior/capabilities/chat/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-233
+agent-teammates/starter-agent/behavior/context/stream.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-82
+agent-teammates/starter-agent/behavior/capabilities/calls/context/disk-worker.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-58
+agent-teammates/starter-agent/behavior/capabilities/chat/entry.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-55
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/collect.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-66
+agent-teammates/starter-agent/behavior/capabilities/calls/capabilities/ledgers.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-212
+agent-teammates/starter-agent/behavior/capabilities/people/DESIGN.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-81
+agent-teammates/starter-agent/behavior/agent/claude.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-185
+agent-teammates/starter-agent/test/guard-hook.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-52
+agent-teammates/starter-agent/tsconfig.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-22
+agent-teammates/starter-agent/behavior/capabilities/mail/test/review.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-45,47-51,56-69,74-197
+  s_0030f7dd01decd::t_b684e59796c83b 46,52-55,70-73
+agent-teammates/starter-agent/behavior/context/test/identity.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-43
+agent-teammates/starter-agent/behavior/events/handlers/heartbeat.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-134
+agent-teammates/starter-agent/behavior/agent/guards/path.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-60
+agent-teammates/starter-agent/behavior/capabilities/chat/test/capabilities.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-111
+agent-teammates/starter-agent/behavior/capabilities/people/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-16
+agent-teammates/starter-agent/behavior/events/handlers/chat.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-114
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/guard.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-115
+agent-teammates/starter-agent/behavior/context/shell.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-53
+agent-teammates/starter-agent/behavior/capabilities/mail/review.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-231
+agent-teammates/starter-agent/package.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-30
+agent-teammates/starter-agent/behavior/capabilities/identity/test/identity.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-80
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/test/tick.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-253
+agent-teammates/starter-agent/behavior/capabilities/people/test/people.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-630
+agent-teammates/starter-agent/behavior/agent/guards/test/path.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-53
+agent-teammates/starter-agent/behavior/capabilities/calls/arbiter.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-1144
+agent-teammates/starter-agent/behavior/capabilities/calls/DESIGN.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-402
+agent-teammates/starter-agent/behavior/capabilities/mail/test/capabilities.test.ts
+  s_0030f7dd01decd::t_b684e59796c83b 115,123
+  s_0030f7dd01decd::t_cedc865523d1e0 1-114,116-122,124-385
+agent-teammates/starter-agent/systemd/agent.service
+  s_0030f7dd01decd::t_cedc865523d1e0 3-20
+  s_0030f7dd01decd::t_b684e59796c83b 1-2
+agent-teammates/starter-agent/behavior/events/handlers/calls.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-19
+agent-teammates/starter-agent/behavior/capabilities/chat/prompt.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-51
+agent-teammates/starter-agent/behavior/capabilities/calls/session.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-575
+agent-teammates/starter-agent/behavior/capabilities/mail/store.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-189
+agent-teammates/starter-agent/behavior/capabilities/calls/test/place.test.ts
+  s_0030f7dd01decd::t_b684e59796c83b 83
+  s_0030f7dd01decd::t_cedc865523d1e0 1-82,84-580
+agent-teammates/starter-agent/behavior/capabilities/tools/secrets.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-63
+agent-teammates/starter-agent/behavior/capabilities/people/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-177
+agent-teammates/starter-agent/behavior/capabilities/screen/test/measure.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-73
+agent-teammates/starter-agent/behavior/capabilities/calls/ledger.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-78
+agent-teammates/starter-agent/behavior/capabilities/people/test/fakes.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-128
+agent-teammates/starter-agent/behavior/capabilities/tools/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-182
+agent-teammates/starter-agent/behavior/capabilities/calls/context/voiceLive.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-511
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/prompt.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-21
+agent-teammates/starter-agent/behavior/capabilities/calls/test/asks.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-415
+agent-teammates/starter-agent/behavior/agent/guards/git-identity.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-163
+agent-teammates/starter-agent/behavior/capabilities/calls/share-policy.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-192
+agent-teammates/starter-agent/behavior/capabilities/mail/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-146
+agent-teammates/starter-agent/behavior/capabilities/calls/test/share.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-390
+agent-teammates/starter-agent/behavior/capabilities/later/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-15
+agent-teammates/starter-agent/behavior/capabilities/calls/join.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-641
+agent-teammates/starter-agent/ARCHITECTURE.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-161
+agent-teammates/starter-agent/behavior/capabilities/heartbeat/repository.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-64
+agent-teammates/starter-agent/behavior/capabilities/people/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-89
+agent-teammates/starter-agent/behavior/agent/guards/shell.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-407
+agent-teammates/starter-agent/behavior/agent/guard.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-57
+agent-teammates/starter-agent/behavior/events/handlers/mail.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-143
+agent-teammates/starter-agent/behavior/capabilities/calls/brain.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-810
+agent-teammates/starter-agent/behavior/events/handlers/later.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-32
+agent-teammates/starter-agent/behavior/capabilities/calls/replay.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-91
+agent-teammates/starter-agent/behavior/capabilities/tools/config.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-21
+agent-teammates/starter-agent/behavior/contracts.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-44
+agent-teammates/starter-agent/cli.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-163
+agent-teammates/starter-agent/behavior/capabilities/mail/test/redact.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-66
+agent-teammates/starter-agent/behavior/capabilities/calls/share.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-306
+agent-teammates/starter-agent/bun.lock
+  s_0030f7dd01decd::t_9dda2042190984 1-687
+agent-teammates/starter-agent/flake.lock
+  s_0030f7dd01decd::t_3cab3217d0b548 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6315fc7e6d3b93bacd7f23de8d01d331aeee99c3",
+  "prompts": {},
+  "sessions": {
+    "s_0030f7dd01decd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "169c829c-493c-4436-9e16-7883862f5297",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
