@@ -7,6 +7,8 @@ import type { Agent } from '@macro-inc/muppet/core/agent';
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import type { Script as ScriptOf } from '@macro-inc/muppet/core/code';
 import { fileStore, scheduling } from '@macro-inc/muppet/utilities/schedules';
+import { browserContext } from './capabilities/browser/context.ts';
+import { browserCapabilities } from './capabilities/browser/index.ts';
 import { callsContext } from './capabilities/calls/context.ts';
 import { callsCapabilities } from './capabilities/calls/index.ts';
 import { chatContext } from './capabilities/chat/context.ts';
@@ -73,6 +75,7 @@ export const assistant = (
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
   const screen = screenContext(base);
+  const browser = browserContext(base);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
   return behavior()
     .decorate(base)
@@ -102,6 +105,8 @@ export const assistant = (
     .use(callsHandlers(callsEvents))
     .use(screen)
     .use(screenCapabilities)
+    .use(browser)
+    .use(browserCapabilities)
     .use(secrets)
     .use(secretsCapabilities)
     .use(secretsHandlers(scheduled));
