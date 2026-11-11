@@ -1,7 +1,6 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
-import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -353,23 +352,15 @@ function PrMetadata(props: {
         )}
       </Show>
       <Layer depth={2}>
-        <Tooltip.Root>
-          <Tooltip.Trigger
-            as="a"
-            href={props.pullRequest?.url}
-            target="_blank"
-            rel="noreferrer"
-            class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
-          >
-            {prDisplayName(props.prRef)}
-            <ArrowSquareOut aria-hidden="true" class="size-3.5 shrink-0" />
-          </Tooltip.Trigger>
-          <Tooltip.Portal>
-            <Tooltip.Content>
-              <div class="text-xs">{t('entityActions.openOnGitHub')}</div>
-            </Tooltip.Content>
-          </Tooltip.Portal>
-        </Tooltip.Root>
+        <a
+          href={props.pullRequest?.url}
+          target="_blank"
+          rel="noreferrer"
+          class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
+        >
+          {prDisplayName(props.prRef)}
+          <ArrowSquareOut aria-hidden="true" class="size-3.5 shrink-0" />
+        </a>
       </Layer>
       <Show
         when={

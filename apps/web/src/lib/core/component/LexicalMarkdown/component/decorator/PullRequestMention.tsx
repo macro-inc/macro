@@ -37,7 +37,7 @@ import type {
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
 } from '@service-storage/generated/schemas';
-import { buttonClasses, CopyButton, cn, Surface, Tooltip } from '@ui';
+import { buttonClasses, CopyButton, cn, Surface } from '@ui';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
@@ -311,24 +311,16 @@ function PullRequestLinkActions(props: { url: string }) {
       >
         <LinkIcon class="size-4" />
       </CopyButton>
-      <Tooltip.Root>
-        <Tooltip.Trigger
-          as="a"
-          href={props.url}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={t('entityActions.openOnGitHub')}
-          class={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
-          onClick={(e: MouseEvent) => e.stopPropagation()}
-        >
-          <ArrowSquareOut class="size-4" />
-        </Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content>
-            <div class="text-xs">{t('entityActions.openOnGitHub')}</div>
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
+      <a
+        href={props.url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={t('entityActions.openOnGitHub')}
+        class={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ArrowSquareOut class="size-4" />
+      </a>
     </div>
   );
 }
