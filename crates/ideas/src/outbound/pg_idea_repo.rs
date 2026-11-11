@@ -281,7 +281,7 @@ impl PgIdeaRepo {
     }
 }
 
-/// An `idea_run` row as the run queries select it.
+/// An `suggestion_run` row as the run queries select it.
 struct RunRow {
     session_id: Uuid,
     suggestion_id: Uuid,
