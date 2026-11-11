@@ -28,6 +28,7 @@
 
 #![deny(missing_docs)]
 
+mod calendar;
 mod control;
 mod error;
 mod fault;
@@ -57,9 +58,12 @@ use tokio::sync::{OnceCell, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub use control::{MessageChange, MessageSummary, SubscriptionSummary};
+pub use control::{CalendarSummary, MessageChange, MessageSummary, SubscriptionSummary};
 pub use fault::{Fault, FaultError, Route};
-pub use seed::{NewAttachment, NewMessage, Seed, SeedContact, SeedError, SeedFolder, SeedMailbox};
+pub use seed::{
+    NewAttachment, NewEvent, NewMessage, Seed, SeedCalendar, SeedContact, SeedError, SeedFolder,
+    SeedMailbox,
+};
 
 use crate::signing_key::{SigningKey, SigningKeyError};
 use crate::state::{NotificationJob, State};
@@ -82,6 +86,15 @@ pub enum EmulatorError {
     /// No subscription has this id.
     #[error("no subscription {0}")]
     UnknownSubscription(String),
+    /// The mailbox has no calendar with this name or id.
+    #[error("no calendar {0}")]
+    UnknownCalendar(String),
+    /// The mailbox has no event with this id.
+    #[error("no event {0}")]
+    UnknownEvent(String),
+    /// An event could not be built or changed from what was given.
+    #[error("invalid event: {0}")]
+    InvalidEvent(String),
     /// A message could not be built from what was given.
     #[error("invalid message: {0}")]
     InvalidMessage(String),

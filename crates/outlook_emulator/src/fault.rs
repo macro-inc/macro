@@ -128,6 +128,43 @@ pub enum Route {
     /// `GET /me/contactFolders/{id}/contacts/{id}/photo/$value`
     #[strum(serialize = "contacts.photo")]
     ContactsPhoto,
+    /// `GET /me/mailboxSettings`
+    #[strum(serialize = "mailboxSettings.get")]
+    MailboxSettingsGet,
+    /// `GET /me/calendars`
+    #[strum(serialize = "calendars.list")]
+    CalendarsList,
+    /// `GET /me/calendars/{id}`
+    #[strum(serialize = "calendars.get")]
+    CalendarsGet,
+    /// `GET /me/calendarView/delta`
+    #[strum(serialize = "calendarView.delta")]
+    CalendarViewDelta,
+    /// `GET /me/calendars/{id}/calendarView`
+    #[strum(serialize = "calendarView.list")]
+    CalendarViewList,
+    /// `GET /me/calendars/{id}/events`
+    #[strum(serialize = "events.list")]
+    EventsList,
+    /// `GET /me/events/{id}` and `/me/calendars/{id}/events/{id}`
+    #[strum(serialize = "events.get")]
+    EventsGet,
+    /// `GET /me/events/{id}/instances`
+    #[strum(serialize = "events.instances")]
+    EventsInstances,
+    /// `POST /me/calendars/{id}/events`
+    #[strum(serialize = "events.create")]
+    EventsCreate,
+    /// `PATCH /me/events/{id}`
+    #[strum(serialize = "events.update")]
+    EventsUpdate,
+    /// `DELETE /me/events/{id}`
+    #[strum(serialize = "events.delete")]
+    EventsDelete,
+    /// `POST /me/events/{id}/accept`, `tentativelyAccept` and `decline`,
+    /// also under `/me/calendars/{id}`
+    #[strum(serialize = "events.respond")]
+    EventsRespond,
     /// `GET /subscriptions`
     #[strum(serialize = "subscriptions.list")]
     SubscriptionsList,
