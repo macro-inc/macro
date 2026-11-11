@@ -5,6 +5,7 @@ import type {
   RenderContext,
 } from '../registry';
 import { themeClass } from '../registry';
+import { applyElementDirection } from './builtins';
 import type { ViewNode } from '../types';
 
 export const macroDecoratorTypes = [
@@ -232,11 +233,13 @@ export function registerMacroElementViews(
       createDOM(node, ctx) {
         const dom = ctx.document.createElement(elementTag(node));
         elementProperties(node, dom);
+        applyElementDirection(node, dom, ctx);
         return dom;
       },
-      updateDOM(previous, next, dom) {
+      updateDOM(previous, next, dom, ctx) {
         if (elementTag(previous) !== elementTag(next)) return true;
         elementProperties(next, dom);
+        applyElementDirection(next, dom, ctx);
         return false;
       },
     });
