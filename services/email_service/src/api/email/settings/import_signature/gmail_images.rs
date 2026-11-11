@@ -141,6 +141,11 @@ where
             return PublicImages.fetch(url).await;
         };
         let mut reads = self.reads.lock().await;
+        // The import answers "try again" once one read failed that way, so
+        // further reads would only wait out the mailbox's cooldown.
+        if reads.retryable.is_some() {
+            return Ok(None);
+        }
         let result = self.read_image(&mut reads.parts, &image).await;
         if let Err(error) = &result
             && error.is_transient()
@@ -149,6 +154,10 @@ where
             reads.retryable = Some(error.clone());
         }
         Ok(result?)
+    }
+
+    fn is_public(&self, url: &str) -> bool {
+        GmailMessageImage::parse(url).is_none()
     }
 }
 

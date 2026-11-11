@@ -21,6 +21,13 @@ const MAX_REDIRECTS: usize = 5;
 pub trait ImageSource: Sync {
     /// Returns the image at `url`, or `None` when this source can't read it.
     fn fetch(&self, url: &str) -> impl Future<Output = anyhow::Result<Option<Bytes>>> + Send;
+
+    /// Whether anyone can load `url`. Only those images' SFS copies go into
+    /// the shared mapping table, which answers whoever presents the same URL;
+    /// an image read with an account's credentials is copied per request.
+    fn is_public(&self, _url: &str) -> bool {
+        true
+    }
 }
 
 /// Unauthenticated HTTP GETs: only what a recipient's mail client could load.
@@ -210,7 +217,12 @@ async fn cache_images(
     images: &impl ImageSource,
 ) -> anyhow::Result<HashMap<String, String>> {
     // filter out values that already exist in db or are already sfs urls
-    let mut url_map = email_db_client::sfs_mappings::fetch_sfs_mappings(db, &source_urls).await?;
+    let public_urls: HashSet<String> = source_urls
+        .iter()
+        .filter(|url| images.is_public(url))
+        .cloned()
+        .collect();
+    let mut url_map = email_db_client::sfs_mappings::fetch_sfs_mappings(db, &public_urls).await?;
 
     let new_urls: HashSet<_> = source_urls
         .into_iter()
@@ -241,7 +253,12 @@ async fn cache_images(
             url_map.insert(source_url, sfs_url);
         }
 
-        if let Err(e) = email_db_client::sfs_mappings::insert_sfs_mappings(db, &url_map).await {
+        let shared_map: HashMap<String, String> = url_map
+            .iter()
+            .filter(|(url, _)| public_urls.contains(*url))
+            .map(|(url, sfs_url)| (url.clone(), sfs_url.clone()))
+            .collect();
+        if let Err(e) = email_db_client::sfs_mappings::insert_sfs_mappings(db, &shared_map).await {
             tracing::warn!(error = ?e, "Failed to asynchronously insert SFS mappings into database");
         }
     }
@@ -477,6 +494,9 @@ fn rewrite_html_image_links(
 
     String::from_utf8(output).context("Rewritten HTML output is not valid UTF-8")
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {

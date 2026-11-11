@@ -163,6 +163,27 @@ async fn reports_a_rate_limited_read_as_retryable() {
 }
 
 #[tokio::test]
+async fn stops_reading_gmail_after_a_retryable_failure() {
+    let fake = FakeGmail::start().await;
+    fake.state.rate_limited.store(true, Ordering::SeqCst);
+    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let icon_url = embedded_url("permmsgid=msg-f:1849112233445566778", ICON_CONTENT_ID);
+
+    assert!(images.fetch(EMBEDDED_URL).await.is_err());
+    assert_eq!(images.fetch(&icon_url).await.unwrap(), None);
+    assert_eq!(fake.state.message_reads.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn keeps_gmail_image_copies_out_of_the_shared_mapping() {
+    let fake = FakeGmail::start().await;
+    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+
+    assert!(!images.is_public(EMBEDDED_URL));
+    assert!(images.is_public("https://example.com/logo.png"));
+}
+
+#[tokio::test]
 async fn fetches_other_images_over_public_http() {
     let fake = FakeGmail::start().await;
     let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
