@@ -16,13 +16,8 @@ use crate::state::State;
 
 const MAX_REQUESTS: usize = 20;
 
-/// Serves one request of a batch and renders its response entry.
-fn step(
-    state: &mut State,
-    token: Option<&str>,
-    root: &str,
-    request: &Value,
-) -> Result<Value, GraphError> {
+/// Reads one request of a batch, without running it.
+fn parse(root: &str, request: &Value) -> Result<(String, Call), GraphError> {
     let invalid = |what: &str| GraphError::bad_request(&format!("A batch request needs {what}."));
     let id = request["id"].as_str().ok_or_else(|| invalid("an id"))?;
     let method: Method = request["method"]
@@ -55,19 +50,23 @@ fn step(
         None => Vec::new(),
     };
     let call = Call::new(method, path, query, &headers, body, root.to_string());
-    if call
-        .segments
-        .first()
-        .is_some_and(|first| first == "subscriptions")
-        && call.method == Method::POST
-    {
+    let creates_subscription = call.method == Method::POST
+        && call
+            .segments
+            .first()
+            .is_some_and(|first| first == "subscriptions");
+    if creates_subscription {
         return Err(GraphError::bad_request(
             "The emulator does not create subscriptions inside a batch.",
         ));
     }
+    Ok((id.to_string(), call))
+}
 
+/// Serves one request of a batch and renders its response entry.
+fn run(state: &mut State, token: Option<&str>, id: &str, call: &Call) -> Value {
     let date = render::time(state.now());
-    let served = serve(state, token, &call);
+    let served = serve(state, token, call);
     let mut entry_headers = serde_json::Map::new();
     let (status, body) = match served.result {
         Ok(Reply::Json(status, body)) => (status, Some(body)),
@@ -87,7 +86,7 @@ fn step(
     if let Some(body) = body {
         entry["body"] = body;
     }
-    Ok(entry)
+    entry
 }
 
 pub(crate) async fn serve_batch(
@@ -119,9 +118,15 @@ pub(crate) async fn serve_batch(
                     "The batch has more than 20 requests.",
                 ));
             }
+            // The whole batch is read before any of it runs, so a request
+            // the emulator refuses leaves nothing half done.
+            let calls: Vec<(String, Call)> = requests
+                .iter()
+                .map(|request| parse(&call.root, request))
+                .collect::<Result<_, _>>()?;
             let mut responses = Vec::new();
-            for request in requests {
-                responses.push(step(ctx.state, token, &call.root, request)?);
+            for (id, request) in &calls {
+                responses.push(run(ctx.state, token, id, request));
             }
             Ok(Reply::Json(200, json!({ "responses": responses })))
         });

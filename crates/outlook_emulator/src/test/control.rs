@@ -306,9 +306,14 @@ async fn send_mail_replies_and_forwards_behave_as_graph_documents() {
     );
 
     // A batch that asks for ordering is refused, not run out of order.
-    let batch =
-        json!({"requests": [{"id": "1", "method": "GET", "url": "/me", "dependsOn": ["0"]}]});
+    let batch = json!({"requests": [
+        {"id": "0", "method": "DELETE", "url": format!("/me/messages/{hello}")},
+        {"id": "1", "method": "GET", "url": "/me", "dependsOn": ["0"]},
+    ]});
     assert_eq!(post("$batch".into(), batch).await.unwrap().status(), 400);
+    // Nothing before the refused request ran.
+    let kept = emulator.messages(ADA).unwrap();
+    assert!(kept.iter().any(|message| message.id == hello));
 }
 
 #[tokio::test]
