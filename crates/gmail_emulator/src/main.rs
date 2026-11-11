@@ -8,6 +8,8 @@ use clap::Parser;
 use gmail_emulator::{
     DEFAULT_PUSH_AUDIENCE, GmailEmulator, PushConfig, Seed, SeedError, StartError,
 };
+use macro_entrypoint::MacroEntrypoint;
+use macro_env::Environment;
 
 /// A stateful fake of the Google APIs Macro's email code calls.
 #[derive(Parser)]
@@ -39,7 +41,7 @@ enum RunError {
 
 #[tokio::main]
 async fn main() -> Result<(), RunError> {
-    tracing_subscriber::fmt::init();
+    let _telemetry = MacroEntrypoint::new(Environment::Local).init();
     let args = Args::parse();
 
     let mut seed = match &args.seed {

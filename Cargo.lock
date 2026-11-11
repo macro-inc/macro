@@ -9142,6 +9142,8 @@ dependencies = [
  "email_api_client",
  "gmail_client",
  "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
  "mail-builder",
  "mailparse",
  "models_email",
@@ -9157,7 +9159,6 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
