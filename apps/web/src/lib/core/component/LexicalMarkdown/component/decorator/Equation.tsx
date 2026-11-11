@@ -1,7 +1,7 @@
 import { cn } from '@ui';
 import type { NodeKey } from 'lexical';
 import { createEffect, createSignal, onMount } from 'solid-js';
-import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
+import { useEquationHost } from '../../decorator-host/equation-host';
 
 // Lazy load katex - will be loaded on first render
 let katexModule: typeof import('katex') | null = null;
@@ -28,7 +28,7 @@ export function Equation(props: {
   >(undefined);
   const [isKatexReady, setIsKatexReady] = createSignal(katexLoaded);
 
-  const host = useDecoratorHost();
+  const host = useEquationHost();
   const isSelectedAsNode = () => host.isSelected(props.key ?? '');
 
   onMount(async () => {
