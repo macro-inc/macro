@@ -204,6 +204,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                // macro.crm.listCompanies() and macro.crm.pipelines.create()
+                // with its stages and fields.
+                | "ListCompanies"
+                | "CreatePipeline"
                 | "EditDocument"
                 | "ReadCanvas"
                 | "EditCanvas"
