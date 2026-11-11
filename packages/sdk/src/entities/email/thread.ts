@@ -326,7 +326,7 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * `replyingTo` instead. Returns a handle when the API reports the created
    * message's id.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async reply(opts: ReplyEmailOptions): Promise<EmailMessage | undefined> {

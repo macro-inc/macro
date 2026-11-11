@@ -56,6 +56,7 @@ async fn force_flush_exports_short_invocations_and_preserves_warm_provider() {
     let entrypoint = InitializedEntrypoint {
         tracer_provider: Some(provider),
         logger_provider: None,
+        meter_provider: None,
     };
 
     tracer.in_span("first-invocation", |_| {});
@@ -108,6 +109,7 @@ async fn force_flush_reports_export_failure_instead_of_success() {
     let entrypoint = InitializedEntrypoint {
         tracer_provider: Some(provider),
         logger_provider: None,
+        meter_provider: None,
     };
     assert!(matches!(
         entrypoint.force_flush().await,
@@ -121,10 +123,54 @@ async fn force_flush_without_exporters_is_a_noop() {
     InitializedEntrypoint {
         tracer_provider: None,
         logger_provider: None,
+        meter_provider: None,
     }
     .force_flush()
     .await
     .expect("no exporter needs flushing");
+}
+
+#[tokio::test]
+async fn force_flush_exports_recorded_gauges() {
+    use opentelemetry::metrics::MeterProvider as _;
+    use opentelemetry_sdk::metrics::InMemoryMetricExporter;
+    use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData};
+
+    let exporter = InMemoryMetricExporter::default();
+    let provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter.clone())
+        .build();
+    provider
+        .meter("gauge-test")
+        .u64_gauge("test.workers")
+        .build()
+        .record(7, &[]);
+    let entrypoint = InitializedEntrypoint {
+        tracer_provider: None,
+        logger_provider: None,
+        meter_provider: Some(provider),
+    };
+
+    entrypoint.force_flush().await.expect("flush succeeds");
+
+    let exported = exporter.get_finished_metrics().expect("exported metrics");
+    let metric = exported
+        .iter()
+        .flat_map(|resource| resource.scope_metrics())
+        .flat_map(|scope| scope.metrics())
+        .find(|metric| metric.name() == "test.workers")
+        .expect("the gauge is exported");
+    let AggregatedMetrics::U64(MetricData::Gauge(gauge)) = metric.data() else {
+        panic!("a u64 gauge; got {:?}", metric.data());
+    };
+    assert_eq!(
+        gauge
+            .data_points()
+            .map(|point| point.value())
+            .collect::<Vec<_>>(),
+        vec![7]
+    );
+    entrypoint.shutdown();
 }
 
 #[test]

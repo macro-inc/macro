@@ -678,6 +678,7 @@ dependencies = [
  "mcp_select",
  "memory",
  "messages",
+ "mimalloc",
  "model",
  "model-entity",
  "model-error-response",
@@ -689,6 +690,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "opentelemetry",
  "pipedream_mcp",
  "prompt",
  "properties",
@@ -2330,6 +2332,7 @@ dependencies = [
  "url",
  "urlencoding",
  "user_api_key",
+ "user_events",
  "user_language",
  "user_quota",
  "utoipa",
@@ -5189,14 +5192,19 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "connection_gateway_client",
  "futures",
  "http-body-util",
+ "kafka_util",
  "macro_authorization",
  "macro_db_client",
  "macro_db_migrator",
+ "macro_event_broker",
  "macro_user_id",
+ "model-entity",
  "non_empty",
  "rate_limit",
+ "rdkafka",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
@@ -5208,6 +5216,7 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "urlencoding",
+ "user_events",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -21510,6 +21519,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "user_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "user_language"
 version = "0.1.0"
 dependencies = [
@@ -22134,6 +22156,7 @@ dependencies = [
  "tracing",
  "trigger_context",
  "url",
+ "user_events",
  "utoipa",
  "uuid",
  "webhook_signature",

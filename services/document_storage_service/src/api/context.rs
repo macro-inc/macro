@@ -931,8 +931,13 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
+    EntityAccessService,
+    PgWebhookRepo,
+    crate::outbound::stream_contacts::ContactsStreamChecker<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =

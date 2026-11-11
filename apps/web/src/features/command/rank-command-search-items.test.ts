@@ -362,10 +362,10 @@ describe('command menu search ranking', () => {
     expect(ids(items, 'jack')).toEqual([
       'recent-dm',
       'old-dm',
-      'channel-slot',
       'jack',
-      'command',
+      'channel-slot',
       'recent-crm',
+      'command',
       'older-crm',
     ]);
   });
@@ -538,5 +538,48 @@ describe('command menu search ranking', () => {
         'first-word-note',
       ]);
     });
+  });
+  it('ranks rows containing the typed word above rows that only contain its letters', () => {
+    const items = [
+      note('scattered', 'Jan catch-up notes on billing', NOW),
+      note('word', 'Major Jacob review', NOW - 20 * DAY),
+    ];
+
+    expect(ids(items, 'jacob')).toEqual(['word', 'scattered']);
+  });
+
+  it('keeps window order among equal name matches without lifting a weaker person above exact names', () => {
+    const windowed = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      personOrder,
+    });
+    const items = [
+      channel('exact-channel', 'jacob', NOW - 30 * DAY),
+      note('exact-note', 'Jacob', NOW - 30 * DAY),
+      // The window lists the most recent contact first.
+      windowed('major', 'Major Jacob', 0),
+      windowed('baker', 'Jacob Baker', 1),
+      windowed('adams', 'Jacob Adams', 2),
+    ];
+
+    const order = ids(items, 'jacob');
+    expect(order).toHaveLength(5);
+    expect(order.indexOf('baker')).toBeLessThan(order.indexOf('adams'));
+    expect(order.indexOf('adams')).toBeLessThan(order.indexOf('major'));
+    expect(order.indexOf('exact-channel')).toBeLessThan(order.indexOf('major'));
+    expect(order.indexOf('exact-note')).toBeLessThan(order.indexOf('major'));
+  });
+  it('lists a person before documents and channels that match equally well, and never above a better match', () => {
+    const items = [
+      channel('prefix-channel', 'jacob-team', NOW),
+      note('prefix-note', 'Jacob onboarding', NOW),
+      { ...person('prefix-person', 'Jacobson Amy'), personOrder: 0 },
+      note('exact-note', 'Jacob', NOW - 90 * DAY),
+    ];
+
+    expect(ids(items, 'jacob').slice(0, 2)).toEqual([
+      'exact-note',
+      'prefix-person',
+    ]);
   });
 });
