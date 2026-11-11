@@ -3,6 +3,7 @@ import { behavior } from '@macro-inc/muppet/core/behavior';
 import type { Source } from '@macro-inc/muppet/core/event';
 import type { Fired } from '@macro-inc/muppet/utilities/schedules';
 import { z } from 'zod';
+import { budgetNotice, budgetRefused } from '../../agent/budget.ts';
 import { commit, wakeMessage } from '../../capabilities/heartbeat/commit.ts';
 import { limits, logs } from '../../capabilities/heartbeat/config.ts';
 import {
@@ -128,7 +129,15 @@ export const heartbeatHandlers = (clock: {
       (sources) => sources.hooks.failed,
       async (failure, context) => {
         // A handler that threw changed nothing a wake would have: only a failed wake is committed.
-        if (failure.kind === 'wake')
-          await commitAfter(context, failure.wake.event, false);
+        if (failure.kind !== 'wake') return;
+        // A wake the budget refused never ran: nothing to commit, and the
+        // owner is told the first time each day.
+        if (budgetRefused(failure.error)) {
+          const notice = budgetNotice(failure.error);
+          if (notice !== undefined)
+            await context.chat.dm(context.config.owner, notice);
+          return;
+        }
+        await commitAfter(context, failure.wake.event, false);
       }
     );

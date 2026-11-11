@@ -11,13 +11,15 @@ export const owner = 'heartbeat';
 export const logs = { heartbeat: 'heartbeat', schedules: 'schedules' } as const;
 
 export const settings = {
-  /** Where the agent's own repository is pushed, and the only branch that is. */
+  /** Where the agent's own repository is pulled from and pushed to, and the only branch that is. */
   remote: 'origin',
   main: 'main',
-  /** The CI job that must have passed on a commit for it to land. */
+  /** With GitHub, the CI job that must have passed on a commit for it to land. */
   checkJob: 'check',
-  /** The script that stands in for CI while the repository has no remote. */
+  /** The script that must pass on a commit for it to land. */
   checkScript: 'check',
+  /** Where checks and rebases get their worktrees, inside the repository so they resolve its packages. */
+  worktrees: '.worktrees',
   /** The programs the heartbeat runs. */
   git: 'git',
   gh: 'gh',
@@ -30,8 +32,6 @@ export const settings = {
 export const limits = {
   /** A commit waits this long for the git lock, then leaves its change for the next commit. */
   commitLockWait: 60_000,
-  /** The tick's tamper check skips a tick rather than wait behind a commit or a landing. */
-  guardLockWait: 5_000,
   landLockWait: 30 * 60_000,
   ciTimeout: 15 * 60_000,
   ciPoll: 10_000,
@@ -39,16 +39,13 @@ export const limits = {
   mergedPoll: 3_000,
   gh: 30_000,
   install: 5 * 60_000,
-  /** GitHub's commit list can lag a push: a SHA behind what was pushed is read again this many times, this far apart. */
-  staleReads: 6,
-  reread: 5_000,
   lockPoll: 100,
 } as const;
 
 const cursorFile = 'tick.json';
 const snapshotFile = 'snapshot.md';
 const gitLockFile = 'git.lock';
-const mainAlarmFile = 'main-alarm';
+const conflictFile = 'conflict';
 const mergesFile = 'merges.md';
 const notesFile = 'notes.md';
 
@@ -66,8 +63,8 @@ export const paths = ({
   snapshot: join(state.run(owner), snapshotFile),
   /** Held by anything that commits, lands or compares with the remote. */
   gitLock: join(state.run(owner), gitLockFile),
-  /** Holds the remote SHA already alarmed on. While it exists, commits stay local. */
-  mainAlarm: join(state.run(owner), mainAlarmFile),
+  /** Holds the remote SHA a pull conflicted on, once the owner was told. */
+  conflict: join(state.run(owner), conflictFile),
   /** The merge log: one row per merged PR or landing. */
   merges: join(state.memory(owner), mergesFile),
   /** The agent's notes from one wake to the next. */

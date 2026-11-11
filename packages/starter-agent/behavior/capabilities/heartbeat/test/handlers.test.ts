@@ -8,6 +8,7 @@ import {
   memoryStore,
   scheduler,
 } from '@macro-inc/muppet/utilities/schedules';
+import { budgeted, fileLedger, recordSpend } from '../../../agent/budget.ts';
 import { config as makeConfig } from '../../../context/config.ts';
 import { memoryCredentials } from '../../../context/credentials.ts';
 import type { Base } from '../../../context/index.ts';
@@ -106,6 +107,7 @@ const setup = () => {
     scratch: { make: async () => '/scratch', remove: async () => undefined },
     sections: [async () => watched.section],
     prune: [],
+    restart: undefined,
     awake: new Map(),
   };
 
@@ -238,15 +240,64 @@ test('with nothing watched and a healthy repository, a tick commits and wakes no
   await box.stop();
 });
 
-test("without a GitHub token nothing is pushed, nothing is checked on GitHub, and the commit is still the agent's", async () => {
+test("with no remote nothing is pulled or pushed, nothing is asked of GitHub, and the commit is still the agent's", async () => {
   const box = setup();
   await box.fire(tick);
   await box.settle();
-  expect(box.ran.some((line) => line.includes('push'))).toBe(false);
+  expect(box.ran.some((line) => / (push|pull) /.test(line))).toBe(false);
   expect(box.ran.some((line) => line.startsWith('gh '))).toBe(false);
-  // Not even asked for the remote: without a token there is none to use.
-  expect(box.ran.some((line) => line.includes('remote get-url'))).toBe(false);
   expect(box.authors).toEqual(['Agent <agent@example.com>']);
+  await box.stop();
+});
+
+test('a wake refused for the budget tells the owner once, and commits nothing', async () => {
+  const box = setup();
+  const disk = memoryDisk();
+  const clock = fixedClock('2026-11-09T15:00:00Z');
+  const ledger = fileLedger({ disk, join, directory: '/budget' });
+  await recordSpend({ ledger, clock, timeZone: 'UTC' })({
+    event: 'x',
+    cost_usd: 1,
+  });
+  const over = budgeted({
+    agent: { wake: async () => ({ kind: 'done', reply: '' }) },
+    ledger,
+    caps: { perDayUsd: 1 },
+    clock,
+    timeZone: 'UTC',
+  });
+  const refusals = await Promise.all(
+    [0, 1].map(async () => {
+      const woke = await over.wake({
+        request: '',
+        systemPrompt: '',
+        event: { name: 'schedules', payload: {} },
+        state: {
+          code: {
+            catalog: '',
+            script: { file: '', name: '' },
+            execute: async () => ({ kind: 'failed', error: '', logs: '' }),
+            describe: async () => '',
+          },
+        },
+      });
+      return woke.kind === 'failed' ? woke.error : '';
+    })
+  );
+
+  box.watched.section = '## Leftovers\n- a';
+  await box.fire(tick);
+  const before = box.commits().length;
+  box.wakes[0]?.end({ kind: 'failed', error: refusals[0] ?? '' });
+  await box.settle();
+  await box.fire('standing', { wake: 'again' });
+  await box.settle();
+  box.wakes[1]?.end({ kind: 'failed', error: refusals[1] ?? '' });
+  await box.settle();
+  const told = box.sent.filter((line) => line.startsWith(`${owner}: `));
+  expect(told).toHaveLength(1);
+  expect(told[0]).toContain('daily cap');
+  expect(box.commits()).toHaveLength(before);
   await box.stop();
 });
 

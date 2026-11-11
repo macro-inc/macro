@@ -5,7 +5,7 @@
  *   bin/agent list                    its catalog, one line per capability
  *   bin/agent describe <name>...      full docs of capabilities, or of single functions
  *   bin/agent <function> [json|-]     call a function of a capability; its output is printed as JSON
- *   bin/agent exec <file|->           type-check and run a code-mode script, as ExecuteCode does
+ *   bin/agent exec <file|->           type-check and run a code-mode script, as RunCapabilityScript does
  *   bin/agent guard                   a Claude Code PreToolUse hook: hold a tool call to the agent's guards
  *
  * A function called here runs in its own process, with the same context and
@@ -13,6 +13,9 @@
  * person can do from a shell. It is called by a one-line script, so its JSON
  * input is type-checked like any script's: a mistyped flag, or input the
  * function doesn't take, is refused before anything runs.
+ *
+ * Everything it needs is in its environment (`behavior/context/startup.ts`);
+ * without it, it exits 78. `run` exits 0 when stopped.
  */
 // Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
 import 'temporal-polyfill/global';
@@ -21,17 +24,27 @@ import {
   moduleOf,
   summarize,
 } from '@macro-inc/muppet/core/capability';
-import { calling, execute } from '@macro-inc/muppet/core/code';
+import { calling, execute, resultLine } from '@macro-inc/muppet/core/code';
 import { parallel } from '@macro-inc/muppet/runtimes/parallel';
 import { z } from 'zod';
 import { refusal } from './behavior/agent/guard.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { stayOnline } from './behavior/capabilities/chat/presence.ts';
+import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
 import { ensureMailSchedules } from './behavior/capabilities/mail/schedule.ts';
 import { macroKey } from './behavior/context/index.ts';
+import { exitCodes } from './behavior/context/startup.ts';
 import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
-import { assistant, base, scripts } from './index.ts';
+import {
+  assistant,
+  base,
+  claude,
+  launcherFiles,
+  resultFlag,
+  scripts,
+  wiring,
+} from './index.ts';
 
 const usage =
   'usage: bin/agent <run|list|describe|exec|guard|function> [input]';
@@ -61,12 +74,33 @@ const Hook = z.object({
   cwd: z.string(),
 });
 
+/** The value, or the process ends with the configuration exit code: what is missing isn't the code's fault. */
+const configuredOrExit = async <Value>(
+  value: () => Promise<Value> | Value
+): Promise<Value> => {
+  try {
+    return await value();
+  } catch (error) {
+    console.error(
+      `can't start: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return process.exit(exitCodes.configuration);
+  }
+};
+
 const run = async (): Promise<void> => {
+  // Everything the agent needs to run is checked before anything starts,
+  // including the files it tells its launcher through (`launcherFiles`): a
+  // healthy boot, or a restart onto code it landed.
+  const files = launcherFiles();
+  await configuredOrExit(claude);
+  const { presence } = await configuredOrExit(wiring.addresses);
+  const apiKey = await configuredOrExit(() => base.credentials.get(macroKey));
+  process.on('SIGTERM', () => process.exit(exitCodes.stopped));
   // The agent shows online in Macro for as long as it runs.
-  const apiKey = await base.credentials.get(macroKey);
   stayOnline({
     open: () => {
-      const socket = new WebSocket(base.config.gateway, {
+      const socket = new WebSocket(presence, {
         headers: { 'x-macro-user-api-key': apiKey },
       });
       return {
@@ -86,12 +120,20 @@ const run = async (): Promise<void> => {
   await ensureSchedules(assistant.decorations.schedules);
   // A new agent's first wake is to ask its owner who it is.
   await ensureIntroduction(base, assistant.decorations.schedules);
-  await assistant.run(
+  const running = assistant.run(
     parallel({
       systemPrompt: (await base.disk.read(base.config.charter)) ?? '',
       ...scripts,
     })
   );
+  // Built, credentials read, presence open and sources started: a healthy
+  // boot, so the launcher's rollback starts from this HEAD.
+  await markHealthy({
+    git: (args) => base.shell.run(['git', '-C', base.config.root, ...args]),
+    disk: base.disk,
+    file: files.lastGood,
+  });
+  await running;
 };
 
 switch (command) {
@@ -108,13 +150,16 @@ switch (command) {
     print(await describe(assistant.capabilities, rest, scripts.signatures));
     break;
   case 'exec': {
-    const [file] = rest;
+    // With the flag, the result is one marked line, for the agent's process that ran this one.
+    const marked = rest[0] === resultFlag;
+    const [file] = marked ? rest.slice(1) : rest;
     const source =
       file === undefined || file === '-'
         ? await Bun.stdin.text()
         : await Bun.file(file).text();
     const executed = await execute(assistant.decorations, scripts.load)(source);
-    print(executed);
+    if (marked) process.stdout.write(resultLine(executed));
+    else print(executed);
     process.exit(executed.kind === 'succeeded' ? 0 : 1);
     break;
   }

@@ -91,9 +91,6 @@ const tick = (
     commit: async (message) => {
       done.push(`commit ${message}`);
     },
-    guard: async () => {
-      done.push('guard');
-    },
     collect: async () => '## Section\n- do it\n',
     cursor: {
       read: async () => state.cursor,
@@ -139,7 +136,7 @@ test('a tick that wakes prunes, wakes the agent with the prompt, and records the
   expect(prompts[0]).toStartWith(
     'TICK\n## Why you woke: snapshot changed\n## Snapshot now\n## Section\n- do it\n'
   );
-  expect(done).toEqual([`commit ${syncMessage}`, 'guard', 'prune']);
+  expect(done).toEqual([`commit ${syncMessage}`, 'prune']);
   expect(state.cursor).toEqual({
     hash: snapshotHash(digest, '## Section\n- do it'),
     lastRun: '2026-11-03T10:00:00Z',
@@ -150,14 +147,14 @@ test('a tick that wakes prunes, wakes the agent with the prompt, and records the
   ]);
 });
 
-test('a quiet tick commits, checks main and prunes, and wakes nobody', async () => {
+test('a quiet tick commits and prunes, and wakes nobody', async () => {
   const { deps, done, logged, prompts, state } = tick(
     { collect: async () => 'S' },
     { cursor: quiet('S') }
   );
   expect(await beat(deps)).toEqual({ kind: 'asleep' });
   expect(prompts).toEqual([]);
-  expect(done).toEqual([`commit ${syncMessage}`, 'guard', 'prune']);
+  expect(done).toEqual([`commit ${syncMessage}`, 'prune']);
   expect(logged).toEqual([{ woke: false }]);
   expect(state.cursor).toEqual(quiet('S'));
 });
@@ -206,13 +203,12 @@ test("a failed run is logged as failed, and still recorded so it isn't retried e
   expect(state.cursor?.hash).toBe(snapshotHash(digest, 'S'));
 });
 
-test('the sync commit, the main check and the prune failing stop nothing', async () => {
+test('the sync commit and the prune failing stop nothing', async () => {
   const boom = async () => {
     throw new Error('down');
   };
   const { deps, logged, prompts } = tick({
     commit: boom,
-    guard: boom,
     prune: boom,
     people: boom,
   });
@@ -220,9 +216,8 @@ test('the sync commit, the main check and the prune failing stop nothing', async
   if (beaten.kind !== 'woke') throw new Error('should have woken');
   await beaten.finished;
   expect(prompts).toHaveLength(1);
-  expect(logged.slice(0, 3)).toEqual([
+  expect(logged.slice(0, 2)).toEqual([
     { failed: 'sync commit', error: 'Error: down' },
-    { failed: 'main check', error: 'Error: down' },
     { failed: 'prune', error: 'Error: down' },
   ]);
 });

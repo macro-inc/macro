@@ -4,13 +4,12 @@
  * its own, so a change in it means something happened, and an empty one
  * means there is nothing to wake for.
  */
-import { unreadable } from './guard.ts';
 import type { Misplaced } from './state.ts';
 
 /** What is wrong with the agent's repository, if anything. */
 export type RepositoryState = {
-  /** The remote SHA the owner was alarmed on, `unknown` for a rejected push nobody could name, or undefined. */
-  readonly alarm: string | undefined;
+  /** The remote SHA a pull conflicted on, once the owner was told, or undefined. */
+  readonly conflict: string | undefined;
   /** Files git tracks that their bucket says it shouldn't. */
   readonly misplaced: Misplaced;
 };
@@ -34,16 +33,14 @@ const listed = (paths: readonly string[]): string =>
 
 /** The repository's section: empty when nothing is wrong. */
 export const repositorySection = ({
-  alarm,
+  conflict,
   misplaced: { local, stray },
 }: RepositoryState): string => {
   const lines = [
-    ...(alarm === undefined
+    ...(conflict === undefined
       ? []
       : [
-          alarm === unreadable
-            ? "- A push to the remote's main was rejected: someone else pushed. Your owner has been told. Nothing is pushed until the remote is back at what you last pushed."
-            : `- The remote's main moved without you, to ${alarm.slice(0, 12)}. Your owner has been told. Nothing is pushed until the remote is back at what you last pushed.`,
+          `- Your commits on main conflict with the remote's main at ${conflict.slice(0, 12)}: pulling it with --rebase stopped, so it was aborted and nothing is pushed. Your owner has been told. Every commit tries again.`,
         ]),
     ...(local.length === 0
       ? []

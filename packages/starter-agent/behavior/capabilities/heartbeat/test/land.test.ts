@@ -1,6 +1,15 @@
 import { afterEach, expect, test } from 'bun:test';
+import { disk, shell } from '../../../context/index.ts';
+import { output } from '../../../context/shell.ts';
 import { commit } from '../commit.ts';
-import { ciVerdict, land, localRow, mergeRow, worktreeOf } from '../land.ts';
+import {
+  ciVerdict,
+  land,
+  localRow,
+  mergeRow,
+  worktreeCheck,
+  worktreeOf,
+} from '../land.ts';
 import { type Sandbox, sandbox } from './sandbox.ts';
 
 const made: Sandbox[] = [];
@@ -80,6 +89,7 @@ test('lands by fast-forward: same SHA on main, live tree updated, HEAD untouched
     sha: expect.any(String),
     pr: 7,
     merged: true,
+    restarting: false,
   });
   expect(await box.git(box.live, 'symbolic-ref', '--short', 'HEAD')).toBe(
     'main\n'
@@ -314,49 +324,17 @@ test('a branch nobody has checked out rebases in a temporary worktree; the live 
   ).toHaveLength(1);
 });
 
-test("the remote's main moved: refuses, nothing lands, and the pushed code never arrives", async () => {
+test('the owner pushed meanwhile: the landing pulls it and lands on top, with nothing lost', async () => {
   const { box } = await setup();
-  const evil = await box.tamper();
-  const before = await box.git(box.live, 'rev-parse', 'main');
-  expect(
-    await land(box.repository(), 'feat', '', box.landDeps())
-  ).toMatchObject({
-    status: 'refused',
-    reason: expect.stringContaining('alarm'),
-  });
-  expect(await box.git(box.live, 'rev-parse', 'main')).toBe(before);
-  expect(await box.exists(`${box.live}/evil.ts`)).toBe(false);
-  expect((await box.raw(box.live, ['cat-file', '-e', evil])).code).not.toBe(0);
-  expect(await box.remoteSha()).toBe(evil);
-});
-
-test("the API lagging the landing's own flush: no alarm, no refusal", async () => {
-  const { box } = await setup();
-  const before = (await box.git(box.live, 'rev-parse', 'main')).trim();
-  // The flush pushes, then the guard reads.
-  await box.write(
-    `${box.live}/state/memory/notes.md`,
-    'flushed by the landing\n'
-  );
-  let reads = 0;
-  const landed = await land(
-    box.repository({
-      remoteMain: async () => {
-        reads += 1;
-        return {
-          sha: reads === 1 ? before : await box.remoteSha(),
-          author: 'agent-bot',
-        };
-      },
-    }),
-    'feat',
-    '',
-    box.landDeps()
-  );
+  await box.theirs('owner.md', 'from the owner\n');
+  const landed = await land(box.repository(), 'feat', '', box.landDeps());
   expect(landed.status).toBe('landed');
-  expect(reads).toBe(2);
+  expect(await box.read(`${box.live}/owner.md`)).toBe('from the owner\n');
+  expect(await box.read(`${box.live}/code.ts`)).toContain('FIVE');
+  expect(await box.subjects(box.remote)).toStartWith(
+    'merge log: #7\nfeat: change\ntheirs: owner.md\ninit'
+  );
   expect(box.sent).toEqual([]);
-  expect(box.marker.sha).toBe('');
 });
 
 test("with no remote: no PR, the repository's own check decides, nothing is pushed, and the merge log has a row", async () => {
@@ -382,6 +360,7 @@ test("with no remote: no PR, the repository's own check decides, nothing is push
     sha,
     pr: undefined,
     merged: false,
+    restarting: false,
   });
   expect(seen).toEqual([sha, sha]);
   expect(await box.read(`${box.live}/code.ts`)).toContain('FIVE');
@@ -393,4 +372,88 @@ test("with no remote: no PR, the repository's own check decides, nothing is push
   ]);
   expect(await box.subjects(box.remote)).toBe('init\n');
   expect(box.sent).toEqual([]);
+});
+
+/** The repository's own check as `land` runs it without GitHub, with `bun run check` stood in for by a script that passes only on GOOD. */
+const ownCheck = (box: Sandbox, install: readonly string[] = ['false']) =>
+  worktreeCheck({
+    repository: box.repository(),
+    checkouts: {
+      make: async () => {
+        const worktrees = `${box.live}/.worktrees`;
+        await output(shell, ['mkdir', '-p', worktrees]);
+        return (await output(shell, ['mktemp', '-d', '-p', worktrees])).trim();
+      },
+      remove: (path) => disk.remove(path),
+    },
+    run: (argv, { cwd }) => shell.run(argv, { cwd }),
+    check: ['sh', '-c', `pwd >> '${box.root}/where'; grep -q GOOD code.ts`],
+    install,
+    manifests: ['package.json', 'bun.lock'],
+    failed: async (sha) => {
+      box.logged.push(`check failed on ${sha.slice(0, 12)}`);
+    },
+  });
+
+test('without GitHub: the check runs in a worktree under .worktrees; red refuses with main untouched, green lands, pushes and restarts', async () => {
+  const { box, worktree } = await setup();
+  const restarts: string[] = [];
+  const deps = box.landDeps({
+    github: undefined,
+    ci: ownCheck(box),
+    restart: async () => {
+      restarts.push(await box.remoteSha());
+    },
+  });
+  const before = await box.git(box.live, 'rev-parse', 'main');
+
+  const red = await land(box.repository(), 'feat', '', deps);
+  expect(red).toMatchObject({
+    status: 'refused',
+    reason: expect.stringContaining('check failed'),
+  });
+  expect(await box.git(box.live, 'rev-parse', 'main')).toBe(before);
+  expect(await box.remoteSha()).toBe(before.trim());
+  expect(await box.read(`${box.live}/code.ts`)).not.toContain('FIVE');
+  expect(restarts).toEqual([]);
+  expect(box.logged).toHaveLength(1);
+
+  await box.write(`${worktree}/code.ts`, 'one\ntwo\nthree\nfour\nFIVE GOOD\n');
+  await box.git(worktree, 'commit', '-qam', 'feat: good');
+  const green = await land(box.repository(), 'feat', 'did it', deps);
+  expect(green).toMatchObject({ status: 'landed', restarting: true });
+  expect(await box.read(`${box.live}/code.ts`)).toContain('FIVE GOOD');
+  // Pushed before the restart: what the agent restarts onto is on the remote.
+  const pushed = (await box.git(box.live, 'rev-parse', 'main')).trim();
+  expect(await box.remoteSha()).toBe(pushed);
+  expect(restarts).toEqual([pushed]);
+  expect(await box.subjects(box.remote)).toStartWith(
+    'merge log: feat\nfeat: good\nfeat: change\ninit'
+  );
+
+  // Each check ran in its own worktree under .worktrees, and none is left.
+  const where = ((await box.read(`${box.root}/where`)) ?? '')
+    .split('\n')
+    .filter((line) => line !== '');
+  expect(where).toHaveLength(2);
+  for (const line of where) expect(line).toStartWith(`${box.live}/.worktrees/`);
+  expect(
+    (await box.git(box.live, 'worktree', 'list')).trim().split('\n')
+  ).toHaveLength(2);
+});
+
+test('a branch that changes a manifest is installed in its worktree before the check, and a failed install is red', async () => {
+  const { box, worktree } = await setup();
+  await box.write(`${worktree}/package.json`, '{}\n');
+  await box.write(`${worktree}/code.ts`, 'GOOD\n');
+  await box.git(worktree, 'add', '-A');
+  await box.git(worktree, 'commit', '-qm', 'feat: deps');
+  const sha = (await box.git(worktree, 'rev-parse', 'HEAD')).trim();
+  expect(await ownCheck(box, ['false'])(sha)).toBe('red');
+  expect(
+    await ownCheck(box, ['sh', '-c', `echo installed >> '${box.root}/where'`])(
+      sha
+    )
+  ).toBe('green');
+  expect(await box.read(`${box.root}/where`)).toContain('installed\n');
 });

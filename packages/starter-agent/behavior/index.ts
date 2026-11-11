@@ -42,7 +42,12 @@ import { mailSources } from './events/sources/mail.ts';
 const schedulesOwner = 'schedules';
 const schedulesFile = 'schedules.json';
 
-export const assistant = (base: Base, agent: Agent) => {
+export const assistant = (
+  base: Base,
+  agent: Agent,
+  /** Restarts the agent onto code that landed; none outside a supervisor. */
+  restart?: () => Promise<void>
+) => {
   const chat = chatContext(base);
   const chatEvents = chatSources(chat.decorations);
   const mail = mailContext(base);
@@ -59,6 +64,7 @@ export const assistant = (base: Base, agent: Agent) => {
   const heartbeat = heartbeatContext(base, {
     sections: [],
     prune: [...mailPruneRules(base)],
+    restart,
   });
   // A task handed over from a reply or a call is a wake of its own, later.
   const later = laterContext(base, scheduled.decorations.schedules);

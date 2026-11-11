@@ -137,8 +137,9 @@ behave differently.
 - Never change code in this checkout directly: it is the one you are running
   from. Work in a git worktree under `.worktrees/`, on a branch from `main`,
   run `bun run check` there, and bring it in with `land`, which checks the
-  exact commit again and refuses if it fails. Then restart yourself (the
-  README says how) so the new code is what runs.
+  exact commit again and refuses if it fails. When it lands and you are
+  supervised you restart onto the new code (its result says `restarting`), so
+  make the landing the last thing a run does.
 - Your memory and this charter are edited in place, and committed after each
   wake.
 - The library you are built on, muppet, is a dependency. Never modify it.

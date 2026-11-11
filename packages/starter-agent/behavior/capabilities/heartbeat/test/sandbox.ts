@@ -1,13 +1,13 @@
 /**
  * Real git repositories in a temporary directory, for the tests of what
- * commits, guards and lands: a bare remote, the live checkout on main, and
+ * commits and lands: a bare remote, the live checkout on main, and
  * whoever else has write access. Nothing here reaches a network.
  */
 import { disk, shell } from '../../../context/index.ts';
 import { output } from '../../../context/shell.ts';
 import { fixedClock } from '../../../context/test/fakes.ts';
 import type { LandDeps } from '../land.ts';
-import type { RemoteMain, Repository } from '../repository.ts';
+import type { Repository } from '../repository.ts';
 
 const identity = {
   GIT_AUTHOR_NAME: 't',
@@ -49,17 +49,13 @@ export const sandbox = async () => {
   const clock = fixedClock('2026-11-09T15:00:00Z');
   const remoteSha = async () => (await git(remote, 'rev-parse', 'main')).trim();
 
-  /** The live checkout as the code under test sees it. The remote is read the way the API is: SHA and author only. */
+  /** The live checkout as the code under test sees it. */
   const repository = (over: Partial<Repository> = {}): Repository => ({
     git: (args, { cwd } = {}) => raw(cwd ?? live, args),
     remote: 'origin',
     main: 'main',
     hasRemote: async () =>
       (await raw(live, ['remote', 'get-url', '--push', 'origin'])).code === 0,
-    remoteMain: async (): Promise<RemoteMain> => ({
-      sha: await remoteSha(),
-      author: 'mallory',
-    }),
     dm: async (text) => {
       sent.push(text);
     },
@@ -85,8 +81,6 @@ export const sandbox = async () => {
     log: async (line) => {
       logged.push(line);
     },
-    staleReads: 6,
-    rereadMs: 1,
     ...over,
   });
 
@@ -107,6 +101,7 @@ export const sandbox = async () => {
       merges.push(row);
       await disk.append(`${live}/state/memory/merges.md`, `${row}\n`);
     },
+    restart: undefined,
     pollMs: 1,
     ciTimeoutMs: 200,
     lockWaitMs: 1000,
@@ -135,11 +130,12 @@ export const sandbox = async () => {
     repository,
     landDeps,
     remoteSha,
-    /** Someone else pushes to main; returns the SHA. */
-    tamper: async (): Promise<string> => {
-      await write(`${other}/evil.ts`, `evil ${sent.length}${marker.sha}\n`);
+    /** The owner, in their own clone, pushes a change to one file to main; returns the SHA. */
+    theirs: async (file: string, text: string): Promise<string> => {
+      await git(other, 'pull', '-q', '--rebase', 'origin', 'main');
+      await write(`${other}/${file}`, text);
       await git(other, 'add', '-A');
-      await git(other, 'commit', '-qm', 'evil');
+      await git(other, 'commit', '-qm', `theirs: ${file}`);
       await git(other, 'push', '-q', 'origin', 'HEAD:main');
       return (await git(other, 'rev-parse', 'HEAD')).trim();
     },
