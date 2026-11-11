@@ -148,9 +148,11 @@ function posthogSourceMapLimit(): Plugin {
     name: 'posthog-source-map-limit',
     apply: 'build',
     generateBundle(_options, bundle) {
+      return; // EXPERIMENT: Rolldown attaches maps after generateBundle; timing only
       const problems = Object.values(bundle).flatMap((file) => {
         if (file.type === 'chunk') {
-          return file.map ? [] : [`${file.fileName} has no source map`];
+          // EXPERIMENT: Rolldown emits maps as `.map` assets, not chunk.map.
+          return file.map || bundle[`${file.fileName}.map`] ? [] : [`${file.fileName} has no source map`];
         }
         if (!file.fileName.endsWith('.map')) return [];
         const bytes =
@@ -182,6 +184,7 @@ const isGeneratedSource = (id: string) =>
  * otherwise the chunks would import each other and could read bindings before
  * they are initialized.
  */
+const ENTRY_SOURCES = ['src/index.tsx', 'src/features/block-canvas/views/render-entry.tsx'];
 function startupChunks(): Rollup.ManualChunksOption {
   const plans = new WeakMap<Rollup.GetModuleInfo, Map<string, string>>();
   const planChunks = (
@@ -217,10 +220,17 @@ function startupChunks(): Rollup.ManualChunksOption {
     }
     return plan;
   };
-  return (id, { getModuleInfo, getModuleIds }) => {
+  // EXPERIMENT (Rolldown has no getModuleIds): start from the HTML entries.
+  let rolldownPlan: Map<string, string> | undefined;
+  return (id, meta) => {
+    const { getModuleInfo } = meta;
+    if (!meta.getModuleIds) {
+      rolldownPlan ??= planChunks(getModuleInfo, ENTRY_SOURCES.map((p) => resolve(__dirname, p)));
+      return rolldownPlan.get(id);
+    }
     let plan = plans.get(getModuleInfo);
     if (!plan) {
-      plan = planChunks(getModuleInfo, getModuleIds());
+      plan = planChunks(getModuleInfo, meta.getModuleIds());
       plans.set(getModuleInfo, plan);
     }
     return plan.get(id);
