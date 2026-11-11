@@ -2,10 +2,10 @@ import 'fake-indexeddb/auto';
 import type { EmailDraftStorage } from '@app/features/email-compose/context/compose-capabilities';
 import type { DraftSyncViewState } from '@app/features/email-compose/core/local-draft';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createFakeWebLocks } from '@graphql-cache/exchange/fake-web-locks';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { IDBFactory } from 'fake-indexeddb';
 import { vi } from 'vitest';
-import { createLocks } from './draft-sync-locks';
 import { createQueue } from './draft-sync-queue';
 import { createServer, Refusal, wait } from './draft-sync-server';
 import { ACCOUNT, INBOX, never, SENDER } from './draft-sync-shared';
@@ -623,7 +623,7 @@ type WorldCore = {
   events: WorldEvent[];
   offline: boolean;
   localStallMs: number;
-  locks: ReturnType<typeof createLocks>;
+  locks: ReturnType<typeof createFakeWebLocks>;
   activity(): void;
 };
 
@@ -651,7 +651,7 @@ export async function createDraftSyncWorld() {
     events: [],
     offline: false,
     localStallMs: 0,
-    locks: createLocks(),
+    locks: createFakeWebLocks(),
     activity: active,
   };
 

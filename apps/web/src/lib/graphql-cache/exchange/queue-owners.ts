@@ -12,26 +12,34 @@
  *
  * Not at once: the gone page's request may still reach the server, and a write
  * queued behind it must not overtake it. A lease is handed over only once it
- * is old enough that its request can no longer be on the wire.
+ * is old enough that its request can no longer be on the wire. That holds only
+ * where a request ends with its page, so hosts whose requests outlive the page
+ * (the native HTTP client) do not hand leases over at all.
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CacheHost } from '../host/types';
 
 const SURFACE = 'graphql-cache-mutation-queue';
 const KEY_PREFIX = 'graphql-cache:queue-owner:';
 /** A lease older than this has run out, whatever storage it belongs to. */
 const STALE_RECORD_MS = 10 * 60_000;
 
-type Lease = { transactionId: string; leaseGeneration: string };
-type OwnerRecord = { generation: string; at: number } & Partial<Lease>;
+/** A leased queue head: its transaction and lease, and the item it sends. */
+export type QueueLease = {
+  transactionId: string;
+  leaseGeneration: string;
+  itemId: string;
+};
+type OwnerRecord = { generation: string; at: number; lease?: QueueLease };
 
-export type AbandonedLease = Lease & { owner: string };
+export type AbandonedLease = QueueLease & { owner: string };
 
 export type QueueOwners = {
   /** Writes down this runner's storage and, while it holds one, its lease. */
-  record(generation: string, lease?: Lease): void;
+  record(generation: string, lease?: QueueLease): void;
   /** Whether another runner is on record: a cheap check before taking locks. */
-  hasCandidates(): boolean;
+  othersOnRecord(): boolean;
   /**
    * Takes the leases that gone runners of this storage left at least
    * `settledAfterMs` ago, forgetting each runner. `pendingUntil` is when the
@@ -46,7 +54,7 @@ export type QueueOwners = {
 
 export const NO_QUEUE_OWNERS: QueueOwners = {
   record: () => undefined,
-  hasCandidates: () => false,
+  othersOnRecord: () => false,
   abandoned: async () => ({ leases: [] }),
   dispose: () => undefined,
 };
@@ -56,16 +64,37 @@ type OwnerStorage = Pick<
   'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'
 >;
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+function parseLease(value: unknown): QueueLease | undefined {
+  if (!isObject(value)) return undefined;
+  const { transactionId, leaseGeneration, itemId } = value;
+  return typeof transactionId === 'string' &&
+    typeof leaseGeneration === 'string' &&
+    typeof itemId === 'string'
+    ? { transactionId, leaseGeneration, itemId }
+    : undefined;
+}
+
 function parseRecord(value: string | null): OwnerRecord | undefined {
   if (value === null) return undefined;
   try {
     const parsed: unknown = JSON.parse(value);
-    if (typeof parsed !== 'object' || parsed === null) return undefined;
-    const record = parsed as Partial<OwnerRecord>;
-    return typeof record.generation === 'string' &&
-      typeof record.at === 'number'
-      ? (record as OwnerRecord)
+    if (!isObject(parsed)) return undefined;
+    const { generation, at } = parsed;
+    return typeof generation === 'string' && typeof at === 'number'
+      ? { generation, at, lease: parseLease(parsed.lease) }
       : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Reading the property throws where storage access is denied. */
+function browserStorage(): OwnerStorage | undefined {
+  try {
+    return globalThis.localStorage;
   } catch {
     return undefined;
   }
@@ -78,7 +107,7 @@ function parseRecord(value: string | null): OwnerRecord | undefined {
 export function createQueueOwners(
   owner: string,
   locks: Pick<LockManager, 'request'> | undefined = globalThis.navigator?.locks,
-  storage: OwnerStorage | undefined = globalThis.localStorage,
+  storage: OwnerStorage | undefined = browserStorage(),
   now: () => number = Date.now
 ): QueueOwners {
   if (!locks || !storage) return NO_QUEUE_OWNERS;
@@ -142,12 +171,8 @@ export function createQueueOwners(
     }
     const ours = record.generation === generation;
     const lease =
-      ours && record.transactionId && record.leaseGeneration
-        ? {
-            owner: key.slice(KEY_PREFIX.length),
-            transactionId: record.transactionId,
-            leaseGeneration: record.leaseGeneration,
-          }
+      ours && record.lease
+        ? { owner: key.slice(KEY_PREFIX.length), ...record.lease }
         : undefined;
     // Its request may still be on its way to the server: ask again later.
     if (lease && now() - record.at < settledAfterMs)
@@ -160,10 +185,10 @@ export function createQueueOwners(
 
   return {
     record(generation, lease) {
-      latest = { generation, at: now(), ...lease };
+      latest = { generation, at: now(), lease };
       fireAndForget(write(), SURFACE);
     },
-    hasCandidates: () => otherKeys().length > 0,
+    othersOnRecord: () => otherKeys().length > 0,
     async abandoned(generation, settledAfterMs) {
       const leases: AbandonedLease[] = [];
       let pendingUntil: number | undefined;
@@ -192,4 +217,39 @@ export function createQueueOwners(
       release?.();
     },
   };
+}
+
+/**
+ * Gives every lease a gone runner of this storage left back to the queue,
+ * using that runner's own claim. `released` says whether the head can now be
+ * claimed; `pendingUntil` is when a lease still held back becomes old enough.
+ */
+export async function giveBackAbandonedLeases(
+  host: Pick<CacheHost, 'deferOptimisticWrite'>,
+  owners: QueueOwners,
+  generation: string,
+  settledAfterMs: number,
+  report: (outcome: 'released' | 'stale', lease: AbandonedLease) => void
+): Promise<{ released: boolean; pendingUntil?: number }> {
+  const { leases, pendingUntil } = await owners.abandoned(
+    generation,
+    settledAfterMs
+  );
+  let released = false;
+  for (const lease of leases) {
+    try {
+      await host.deferOptimisticWrite(
+        lease.transactionId,
+        { owner: lease.owner, generation: lease.leaseGeneration },
+        Date.now(),
+        'Queue runner is gone'
+      );
+      released = true;
+      report('released', lease);
+    } catch {
+      // Settled, expired or reclaimed since: nothing is left to give back.
+      report('stale', lease);
+    }
+  }
+  return { released, pendingUntil };
 }

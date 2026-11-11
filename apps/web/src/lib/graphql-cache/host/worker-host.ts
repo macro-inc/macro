@@ -1354,6 +1354,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   return {
     clientId,
     liveQueries: true,
+    requestsEndWithPage: true,
     people: createPeopleCache({
       snapshot: (request, traceparent) =>
         initializedRequest({ kind: 'contact-snapshot', request, traceparent }),

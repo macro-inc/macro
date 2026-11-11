@@ -457,12 +457,12 @@ describe('reloading the page', () => {
     reopened.type('Typed after the reload');
 
     // Not yet: the old page's request could still reach the server.
-    await world.advance(QUEUE_REQUEST_TIMEOUT_MS - 10_000);
+    await world.advance(QUEUE_REQUEST_TIMEOUT_MS);
     expect(world.server.draft(draftId)?.body).toBe(
       'On the wire during the reload'
     );
     // Well before the five-minute lease would have run out.
-    await world.advance(20_000);
+    await world.advance(30_000);
     await expectSynced(draftId, 'Typed after the reload');
     expectQuiet();
   });

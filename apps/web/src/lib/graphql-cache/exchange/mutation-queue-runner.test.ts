@@ -29,6 +29,7 @@ import {
   type MutationAttemptTelemetry,
   NOOP_MUTATION_QUEUE_TELEMETRY,
 } from './mutation-queue-telemetry';
+import { optimisticMutationDispositionOf } from './optimistic';
 import type { QueueOwners } from './queue-owners';
 
 beforeEach(() => vi.useFakeTimers());
@@ -373,7 +374,7 @@ describe('leases left unsettled', () => {
   ) =>
     ({
       record: vi.fn(),
-      hasCandidates: () => leases.length > 0 || pendingUntil !== undefined,
+      othersOnRecord: () => leases.length > 0 || pendingUntil !== undefined,
       abandoned: vi.fn(async () => ({ leases, pendingUntil })),
       dispose: () => undefined,
     }) satisfies QueueOwners;
@@ -392,15 +393,41 @@ describe('leases left unsettled', () => {
     expect(queueOwners.record).toHaveBeenLastCalledWith('storage', {
       transactionId: '1',
       leaseGeneration: '4',
+      itemId: 'same-attempt',
     });
     expect(forwarded).toHaveLength(1);
   });
 
+  it('comes off the record once the attempt is over', async () => {
+    const queueOwners = owners([]);
+    const { runner, forwarded } = fixture({}, queueOwners);
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+    await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+    await runner.settle(
+      {
+        operation: forwarded[0],
+        data: savedDraft,
+        stale: false,
+        hasNext: false,
+      },
+      queueAttemptOf(forwarded[0])!
+    );
+    // The drain that follows finds the queue empty.
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueOwners.record).toHaveBeenLastCalledWith('storage');
+  });
+
   it('is given back when its page is gone, and the head is claimed at once', async () => {
-    const gone = { owner: 'gone', transactionId: '1', leaseGeneration: '2' };
+    const gone = {
+      owner: 'gone',
+      transactionId: '1',
+      leaseGeneration: '2',
+      itemId: 'item',
+    };
     const queueOwners = owners([gone]);
     const { telemetry } = recordingTelemetry();
-    const released = vi.spyOn(telemetry, 'abandonedLeaseReleased');
+    const released = vi.spyOn(telemetry, 'abandonedLease');
     const { runner, forwarded, host } = fixture(
       { mutationQueueTelemetry: telemetry },
       queueOwners
@@ -421,7 +448,7 @@ describe('leases left unsettled', () => {
       expect.any(Number),
       'Queue runner is gone'
     );
-    expect(released).toHaveBeenCalledOnce();
+    expect(released).toHaveBeenCalledExactlyOnceWith('released', gone);
     expect(host.claimNextMutation).toHaveBeenCalledTimes(2);
     expect(forwarded).toHaveLength(1);
   });
@@ -431,7 +458,7 @@ describe('leases left unsettled', () => {
     const { runner, host } = fixture({}, queueOwners);
     runner.start();
     await vi.advanceTimersByTimeAsync(0);
-    expect(queueOwners.abandoned).toHaveBeenLastCalledWith('storage', 60_000);
+    expect(queueOwners.abandoned).toHaveBeenLastCalledWith('storage', 70_000);
     expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
     expect(host.claimNextMutation).toHaveBeenCalledOnce();
 
@@ -442,10 +469,19 @@ describe('leases left unsettled', () => {
   });
 
   it('is left to run out when the gone runner had already settled it', async () => {
-    const queueOwners = owners([
-      { owner: 'gone', transactionId: '1', leaseGeneration: '2' },
-    ]);
-    const { runner, host } = fixture({}, queueOwners);
+    const gone = {
+      owner: 'gone',
+      transactionId: '1',
+      leaseGeneration: '2',
+      itemId: 'item',
+    };
+    const queueOwners = owners([gone]);
+    const { telemetry } = recordingTelemetry();
+    const stale = vi.spyOn(telemetry, 'abandonedLease');
+    const { runner, host } = fixture(
+      { mutationQueueTelemetry: telemetry },
+      queueOwners
+    );
     vi.mocked(host.deferOptimisticWrite).mockRejectedValue(
       new Error('stale mutation claim')
     );
@@ -453,6 +489,7 @@ describe('leases left unsettled', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+    expect(stale).toHaveBeenCalledExactlyOnceWith('stale', gone);
     // Nothing was released, so the head is not asked for again.
     expect(host.claimNextMutation).toHaveBeenCalledOnce();
   });
@@ -508,5 +545,31 @@ describe('leases left unsettled', () => {
     expect(attempts[0]?.finished).toEqual([
       ['ack-lost', { retryDelayMs: 300_000 }],
     ]);
+  });
+});
+
+it('lets a replacement run at once when the unsettled head was superseded', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const { runner, forwarded, commit, host } = fixture({
+    mutationQueueTelemetry: telemetry,
+  });
+  commit.mockRejectedValueOnce(new Error('local disk unavailable'));
+  vi.mocked(host.deferOptimisticWrite).mockResolvedValueOnce({
+    kind: 'discarded-superseded',
+    replacementTransactionId: '2',
+    revision: INITIAL_CACHE_REVISION,
+    affectedOps: [],
+  } as never);
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  const settled = await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+
+  expect(attempts[0]?.finished).toEqual([['superseded', {}]]);
+  // The caller's write lives on in the replacement.
+  expect(optimisticMutationDispositionOf(settled)).toEqual({
+    kind: 'queued',
+    transactionId: '2',
   });
 });

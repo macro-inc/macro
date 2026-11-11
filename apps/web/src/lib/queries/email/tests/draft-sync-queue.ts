@@ -366,6 +366,7 @@ export function createQueue(activity: () => void) {
     const host = {
       // Each page is its own queue runner, as each tab is.
       clientId: `page-${++pages}`,
+      requestsEndWithPage: true,
       currentRevision: answer(() => INITIAL_CACHE_REVISION),
       currentStorageGeneration: answer(
         () => '00000000-0000-4000-8000-000000000001'

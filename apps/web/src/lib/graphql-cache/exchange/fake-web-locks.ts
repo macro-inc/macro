@@ -1,8 +1,8 @@
 /**
- * Web Locks for the pages of one simulated device. A page that reloads drops
- * every lock it held, as a real document does when it goes away.
+ * Web Locks for several pages in one process, for tests. A page that goes
+ * away drops every lock it held, as a real document does.
  */
-export function createLocks() {
+export function createFakeWebLocks() {
   const held = new Map<string, object>();
   return {
     /** The lock manager one page sees as `navigator.locks`. */

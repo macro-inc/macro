@@ -65,7 +65,11 @@ import {
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
-import { NO_QUEUE_OWNERS, type QueueOwners } from './queue-owners';
+import {
+  giveBackAbandonedLeases,
+  NO_QUEUE_OWNERS,
+  type QueueOwners,
+} from './queue-owners';
 
 /**
  * Private operation-context field carrying the optimistic transaction id
@@ -78,6 +82,12 @@ export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
 const ACK_LOST_RETRY_MS = 5_000;
+/**
+ * How long after it was recorded a gone runner's lease is given back: the
+ * request timeout, plus the admission hooks that run between the record and
+ * the request.
+ */
+const ABANDONED_LEASE_HOLD_MS = QUEUE_REQUEST_TIMEOUT_MS + 10_000;
 // A deferred admission usually waits on user info, which lands within a
 // second or two of the cache client at startup.
 const DEFERRED_ADMISSION_RETRY_MS = 1_000;
@@ -362,6 +372,8 @@ export function createMutationQueueRunner(
   const queueOwners = deps.queueOwners ?? NO_QUEUE_OWNERS;
   /** The durable storage this runner's leases belong to, once the host said. */
   let durableStorage: string | undefined;
+  /** Whether this runner's record still names a lease. */
+  let leaseOnRecord = false;
   const telemetry =
     options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
@@ -463,13 +475,16 @@ export function createMutationQueueRunner(
     if (!isCurrent(epoch) || !isNewClaim(claimed)) return;
     latestClaim = claimed;
     activeAttempt = attempt;
-    // Written down before anything is sent: if this page goes away now,
+    // Put on record as the attempt starts: if this page goes away now,
     // another runner gives the lease back instead of waiting it out.
-    if (durableStorage !== undefined)
+    if (durableStorage !== undefined) {
+      leaseOnRecord = true;
       queueOwners.record(durableStorage, {
         transactionId: claimed.transactionId,
         leaseGeneration: claimed.leaseGeneration,
+        itemId: claimed.uuid,
       });
+    }
     const attemptTelemetry = telemetry.attempt(claimed);
     attempt.telemetry = attemptTelemetry;
     // Settlement ends a sent attempt; anything that returns before sending
@@ -740,28 +755,22 @@ export function createMutationQueueRunner(
    * it must not overtake it.
    */
   async function releaseAbandonedLeases(): Promise<boolean> {
-    if (!queueOwners.hasCandidates()) return false;
-    let released = false;
-    const { leases, pendingUntil } = await queueOwners.abandoned(
-      await host.currentStorageGeneration(),
-      QUEUE_REQUEST_TIMEOUT_MS
+    // The attempt this runner recorded is over: nobody should give it back.
+    if (leaseOnRecord && durableStorage !== undefined) {
+      leaseOnRecord = false;
+      queueOwners.record(durableStorage);
+    }
+    if (durableStorage === undefined || !queueOwners.othersOnRecord())
+      return false;
+    const { released, pendingUntil } = await giveBackAbandonedLeases(
+      host,
+      queueOwners,
+      durableStorage,
+      ABANDONED_LEASE_HOLD_MS,
+      telemetry.abandonedLease
     );
     if (pendingUntil !== undefined)
       deferredUntil = Math.min(deferredUntil ?? Infinity, pendingUntil);
-    for (const lease of leases) {
-      try {
-        await host.deferOptimisticWrite(
-          lease.transactionId,
-          { owner: lease.owner, generation: lease.leaseGeneration },
-          Date.now(),
-          'Queue runner is gone'
-        );
-        released = true;
-        telemetry.abandonedLeaseReleased();
-      } catch {
-        // Settled, expired or reclaimed since: nothing is left to give back.
-      }
-    }
     return released;
   }
 
@@ -946,27 +955,30 @@ export function createMutationQueueRunner(
 
   /**
    * This runner still holds the lease it could not settle. Giving it back
-   * lets the head run again after a short backoff. If that fails too, or the
-   * failed settlement did remove the head, the lease time decides as before.
+   * lets the head run again after a backoff. If that fails too, or the failed
+   * settlement did remove the head, the lease time decides as before. The
+   * engine may instead drop a superseded head in favour of its replacement.
    */
   async function releaseUnsettledLease(
     attempt: QueueAttemptContext,
     claim: MutationClaim
-  ): Promise<number> {
+  ): Promise<{ retryDelayMs: number } | { replacementTransactionId: string }> {
     const retryDelayMs = Math.min(
       ACK_LOST_RETRY_MS * 2 ** Math.max(0, attempt.attemptCount - 1),
       QUEUE_LEASE_MS
     );
     try {
-      await host.deferOptimisticWrite(
+      const deferred = await host.deferOptimisticWrite(
         attempt.transactionId,
         claim,
         Date.now() + retryDelayMs,
         'Acknowledgement lost'
       );
-      return retryDelayMs;
+      return deferred.kind === 'discarded-superseded'
+        ? { replacementTransactionId: deferred.replacementTransactionId }
+        : { retryDelayMs };
     } catch {
-      return QUEUE_LEASE_MS;
+      return { retryDelayMs: QUEUE_LEASE_MS };
     }
   }
 
@@ -1171,11 +1183,19 @@ export function createMutationQueueRunner(
       if (!settled && isCurrent(attempt)) {
         // A lost acknowledgement may hide a completed transaction.
         // Preserve optimism and let a fresh durable claim decide.
-        const retryDelayMs = await releaseUnsettledLease(attempt, claim);
-        retryAt = Date.now() + retryDelayMs;
-        disposition = 'queued';
-        outcome = 'ack-lost';
-        details = { ...details, retryDelayMs };
+        const released = await releaseUnsettledLease(attempt, claim);
+        if ('replacementTransactionId' in released) {
+          // The head is gone with its answer; its replacement runs next.
+          transition(attempt, forgetConfirmed);
+          replacementTransactionId = released.replacementTransactionId;
+          disposition = 'superseded';
+          outcome = 'superseded';
+        } else {
+          retryAt = Date.now() + released.retryDelayMs;
+          disposition = 'queued';
+          outcome = 'ack-lost';
+          details = { ...details, retryDelayMs: released.retryDelayMs };
+        }
       }
     } finally {
       if (transition(attempt, release)) {
@@ -1213,6 +1233,7 @@ export function createMutationQueueRunner(
     telemetry.storageReset();
     resolveLiveOperationsAsQueued();
     durableStorage = undefined;
+    leaseOnRecord = false;
     fireAndForget(recordOwner(), 'graphql-cache-mutation-queue');
   }
 

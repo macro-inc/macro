@@ -128,8 +128,14 @@ export interface MutationQueueTelemetry {
   }): MutationEnqueueTelemetry;
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
   skipped(reason: MutationQueueSkipReason): void;
-  /** This runner gave back a lease left by a runner whose page is gone. */
-  abandonedLeaseReleased(): void;
+  /**
+   * A lease left by a runner whose page is gone: given back to the queue, or
+   * `stale` when it had already been settled or had run out.
+   */
+  abandonedLease(
+    outcome: 'released' | 'stale',
+    lease: { itemId: string; transactionId: string }
+  ): void;
   storageReset(): void;
 }
 
@@ -149,7 +155,7 @@ export const NOOP_MUTATION_QUEUE_TELEMETRY: MutationQueueTelemetry = {
   enqueue: () => NOOP_ENQUEUE,
   attempt: () => NOOP_MUTATION_ATTEMPT_TELEMETRY,
   skipped: () => undefined,
-  abandonedLeaseReleased: () => undefined,
+  abandonedLease: () => undefined,
   storageReset: () => undefined,
 };
 
@@ -249,6 +255,7 @@ const ROUTINE_COUNTERS: ReadonlySet<string> = new Set([
   'attempt.deferred',
   'attempt.discarded',
   'attempt.superseded',
+  'lease.abandoned-stale',
 ]);
 
 const OPERATION_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,99}$/;
@@ -720,13 +727,16 @@ export function createMutationQueueTelemetry({
           'mutation_queue.skip_reason': reason,
         });
     },
-    abandonedLeaseReleased() {
-      count('lease.abandoned-released');
+    abandonedLease(outcome, lease) {
+      count(`lease.abandoned-${outcome}`);
+      if (outcome !== 'released') return;
       // Rare, and each one would otherwise have stalled the queue for the
       // full lease, so every occurrence is logged.
       Telemetry.info('graphql.mutation_queue.abandoned_lease_released', {
         ...environmentAttributes(),
         ...queueAttributes(),
+        'mutation_queue.item_id': lease.itemId,
+        'mutation_queue.transaction_id': lease.transactionId,
       });
     },
     storageReset() {

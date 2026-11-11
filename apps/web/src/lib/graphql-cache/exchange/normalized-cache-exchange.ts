@@ -113,7 +113,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
-import { createQueueOwners } from './queue-owners';
+import { createQueueOwners, NO_QUEUE_OWNERS } from './queue-owners';
 import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 
 /** Server writes acknowledged since this query left for the network. */
@@ -929,7 +929,11 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
-        queueOwners: createQueueOwners(queueOwner),
+        // A lease is only handed over where the request it guards cannot
+        // outlive the page that sent it.
+        queueOwners: host.requestsEndWithPage
+          ? createQueueOwners(queueOwner)
+          : NO_QUEUE_OWNERS,
         forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({

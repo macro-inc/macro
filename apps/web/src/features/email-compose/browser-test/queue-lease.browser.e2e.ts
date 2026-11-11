@@ -1,7 +1,7 @@
 import type { QueueOwners } from '@graphql-cache/exchange/queue-owners';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 
-const lease = { transactionId: '7', leaseGeneration: '2' };
+const lease = { transactionId: '7', leaseGeneration: '2', itemId: 'item' };
 type Lease = typeof lease;
 const runnerOf = () =>
   (window as unknown as { queueOwners: QueueOwners }).queueOwners;

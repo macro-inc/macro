@@ -1,29 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
+import { createFakeWebLocks } from './fake-web-locks';
 import { createQueueOwners } from './queue-owners';
-
-/** Web Locks for several pages in one process; a page that dies drops its locks. */
-function createLocks() {
-  const held = new Map<string, object>();
-  return (page: object): Pick<LockManager, 'request'> & { die(): void } => ({
-    async request(name: string, ...rest: unknown[]) {
-      const options = rest.length > 1 ? (rest[0] as LockOptions) : {};
-      const callback = rest.at(-1) as (lock: Lock | null) => unknown;
-      if (held.has(name)) {
-        if (options.ifAvailable) return await callback(null);
-        throw new Error(`${name} is held and this fake never queues`);
-      }
-      held.set(name, page);
-      try {
-        return await callback({ name, mode: 'exclusive' });
-      } finally {
-        if (held.get(name) === page) held.delete(name);
-      }
-    },
-    die() {
-      for (const [name, holder] of held) if (holder === page) held.delete(name);
-    },
-  });
-}
 
 function createStorage() {
   const values = new Map<string, string>();
@@ -43,20 +20,25 @@ function createStorage() {
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-const lease = { transactionId: '7', leaseGeneration: '2' };
-let locksFor: ReturnType<typeof createLocks>;
+const lease = { transactionId: '7', leaseGeneration: '2', itemId: 'item' };
+let locks: ReturnType<typeof createFakeWebLocks>;
 let storage: ReturnType<typeof createStorage>;
 let clock: number;
 beforeEach(() => {
-  locksFor = createLocks();
+  locks = createFakeWebLocks();
   storage = createStorage();
   clock = 1_000_000;
 });
 
 function page(owner: string) {
-  const locks = locksFor({});
-  const owners = createQueueOwners(owner, locks, storage, () => clock);
-  return { owners, die: locks.die };
+  const self = {};
+  const owners = createQueueOwners(
+    owner,
+    locks.forPage(self),
+    storage,
+    () => clock
+  );
+  return { owners, die: () => locks.release(self) };
 }
 
 const GRACE = 60_000;
@@ -76,7 +58,7 @@ it('hands over the lease of a runner whose page is gone', async () => {
   expect(await leasesOf(second.owners)).toEqual([]);
 
   first.die();
-  expect(second.owners.hasCandidates()).toBe(true);
+  expect(second.owners.othersOnRecord()).toBe(true);
   expect(await leasesOf(second.owners)).toEqual([{ owner: 'first', ...lease }]);
 });
 
@@ -116,14 +98,14 @@ it('hands a lease over once, then forgets the runner', async () => {
 it('reports the newest lease a runner recorded', async () => {
   const dead = page('dead');
   dead.owners.record('storage', lease);
-  dead.owners.record('storage', { transactionId: '8', leaseGeneration: '1' });
+  dead.owners.record('storage', { ...lease, transactionId: '8' });
   const second = page('second');
   await tick();
   dead.die();
   clock += GRACE;
 
   expect(await leasesOf(second.owners)).toEqual([
-    { owner: 'dead', transactionId: '8', leaseGeneration: '1' },
+    { owner: 'dead', ...lease, transactionId: '8' },
   ]);
 });
 
@@ -135,7 +117,7 @@ it('forgets a gone runner that held no lease', async () => {
   dead.die();
 
   expect(await leasesOf(second.owners)).toEqual([]);
-  expect(second.owners.hasCandidates()).toBe(false);
+  expect(second.owners.othersOnRecord()).toBe(false);
 });
 
 it('leaves another storage its runners until their leases have run out', async () => {
@@ -155,7 +137,7 @@ it('leaves another storage its runners until their leases have run out', async (
   stale.die();
   clock += 11 * 60_000;
   expect(await leasesOf(second.owners)).toEqual([]);
-  expect(second.owners.hasCandidates()).toBe(false);
+  expect(second.owners.othersOnRecord()).toBe(false);
 });
 
 it('tracks nothing without Web Locks', async () => {
@@ -164,4 +146,21 @@ it('tracks nothing without Web Locks', async () => {
   await tick();
   expect(storage.length).toBe(0);
   expect(await owners.abandoned('storage', GRACE)).toEqual({ leases: [] });
+});
+
+it('ignores a record it cannot read', async () => {
+  const second = page('second');
+  await tick();
+  storage.setItem('graphql-cache:queue-owner:broken', '{"generation":7}');
+  storage.setItem(
+    'graphql-cache:queue-owner:half',
+    JSON.stringify({
+      generation: 'storage',
+      at: 0,
+      lease: { transactionId: 7 },
+    })
+  );
+
+  expect(await leasesOf(second.owners)).toEqual([]);
+  expect(second.owners.othersOnRecord()).toBe(false);
 });
