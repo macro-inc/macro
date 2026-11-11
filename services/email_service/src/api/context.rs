@@ -1,3 +1,4 @@
+pub(crate) use super::email::init::InitFailureObserver;
 use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
@@ -144,8 +145,27 @@ pub(crate) type BackfillJobSvc = email::domain::backfill_jobs::BackfillJobServic
     crate::outbound::backfill_jobs::BackfillInitializationQueue,
 >;
 
+pub(crate) type InitialConnectionBackfill =
+    crate::outbound::inbox_connection::InitialConnectionBackfill<
+        crate::outbound::backfill_jobs::PgBackfillJobs,
+        crate::outbound::backfill_jobs::BackfillInitializationQueue,
+        crate::outbound::inbox_connection::ConnectionHistory,
+        crate::outbound::inbox_connection::ConnectionEvents<EmailEventBroker>,
+    >;
+pub(crate) type InboxConnectionSvc = email::domain::mailbox::connection::InboxConnectionService<
+    crate::outbound::inbox_connection::PgConnectionLinks<EmailPgRepo>,
+    crate::outbound::inbox_connection::PgConnectionTransactions,
+    crate::outbound::inbox_connection::GoogleConnectionProvider,
+    crate::outbound::inbox_connection::GoogleConnectionGrants<PgCalendarRepository>,
+    MailboxInitializer,
+    InitialConnectionBackfill,
+    crate::outbound::inbox_connection::LoginEmailIdentity,
+    InitFailureObserver,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub inbox_connection: Arc<InboxConnectionSvc>,
     pub backfill_jobs: Arc<BackfillJobSvc>,
     pub calendar_disconnect: Arc<CalendarDisconnectSvc>,
     pub contacts: Arc<ContactListSvc>,

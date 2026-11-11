@@ -17,6 +17,7 @@ use uuid::Uuid;
 pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;

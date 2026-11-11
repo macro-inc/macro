@@ -6,6 +6,9 @@ use models_email::service::{
 };
 use uuid::Uuid;
 
+mod connection;
+pub use connection::*;
+
 #[cfg(test)]
 mod test;
 

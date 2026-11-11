@@ -18,6 +18,9 @@ tools — hexagonal, heavily feature-gated.
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
   and settings patches.
+- `src/domain/mailbox/connection.rs` (feature `mailbox`): inbox connection,
+  completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
+  Reuses mailbox initialization and backfill-job services.
 - `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
   cancellation, active-job reuse, and initialization publication.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
