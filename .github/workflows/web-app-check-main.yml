@@ -47,6 +47,7 @@ jobs:
             - 'packages/sdk/**'
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
+            - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
@@ -369,6 +370,8 @@ jobs:
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
         check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+        check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
+        check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
         failed=0
         for index in "${!names[@]}"; do
           status=0

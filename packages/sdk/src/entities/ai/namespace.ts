@@ -22,7 +22,11 @@ export type {
  * @routing Use when generating structured objects or classifying supplied content with Jev; not generating images (`macro.images`) or answering the user yourself.
  */
 export class AiNamespace {
-  /** Read AI usage over a time range, optionally restricting it to users. */
+  /**
+   * Read AI usage over a time range, optionally restricting it to users.
+   *
+   * @readonly
+   */
   async usage(
     options: Omit<UsageRequest, 'include_users'> & { users?: User[] } = {},
   ) {
@@ -40,6 +44,8 @@ export class AiNamespace {
    * Generate an answer matching a JSON Schema. Set toolset to { type: 'none' }
    * to use only supplied context. Other toolsets can perform the requested
    * actions; always inspect outcome and toolActivity, including interruptions.
+   *
+   * @write
    */
   async structuredCompletion(
     request: StructuredCompletionRequest,
@@ -52,6 +58,8 @@ export class AiNamespace {
   /**
    * Ask named yes/no questions about JSON input. Each probability estimates
    * yes, from 0 to 1. This classifies supplied data without running tools.
+   *
+   * @write
    */
   async decide(request: DecisionRequest): Promise<DecisionResponse> {
     return unwrap(await this.client.cognition.decisions({ body: request }));

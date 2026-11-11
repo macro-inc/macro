@@ -251,7 +251,7 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
 }
 
 #[test]
-fn mcp_calls_replay_their_canonical_names_instead_of_display_titles() {
+fn mcp_calls_replay_as_the_mcp_calls_the_live_agent_recorded() {
     let input = serde_json::json!({"query": "standup"});
     let output = serde_json::json!({"hits": 1});
     let history = replay_history(vec![
@@ -280,8 +280,10 @@ fn mcp_calls_replay_their_canonical_names_instead_of_display_titles() {
     assert_eq!(
         parts,
         &[
-            AssistantMessagePart::ToolCall {
-                name: "mcp__slack__search".to_owned(),
+            AssistantMessagePart::McpToolCall {
+                name: "search".to_owned(),
+                service: "slack".to_owned(),
+                display_name: Some("Search Slack".to_owned()),
                 json: input,
                 id: "call-1".to_owned(),
             },
@@ -722,7 +724,7 @@ fn streamed_mcp_call_replays_its_tool_name_metadata_instead_of_its_label() {
         panic!("one turn should replay");
     };
     assert!(
-        matches!(&parts[0], AssistantMessagePart::ToolCall { name, json, .. } if name == "mcp__files__search" && json == &serde_json::json!({"query":"plan"}))
+        matches!(&parts[0], AssistantMessagePart::McpToolCall { name, service, display_name, json, .. } if name == "search" && service == "files" && display_name.as_deref() == Some("Search files") && json == &serde_json::json!({"query":"plan"}))
     );
     assert!(
         matches!(&parts[1], AssistantMessagePart::ToolCallResponseJson { name, .. } if name == "mcp__files__search")
