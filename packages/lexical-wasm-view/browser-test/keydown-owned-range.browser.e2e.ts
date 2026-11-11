@@ -108,6 +108,14 @@ for (const feedback of ['pending', 'delivered'] as const) {
     );
     if (feedback === 'pending') {
       expect(pasted.json.root.children).toHaveLength(2);
+      expect(
+        pasted.json.root.children[0].children.every(
+          (node: { type: string }) =>
+            node.type === 'text' ||
+            node.type === 'linebreak' ||
+            node.type === 'tab'
+        )
+      ).toBe(true);
       await expect(root.locator('code')).toContainText('alpha');
       await expect(root.locator('code')).toContainText('beta');
     } else {

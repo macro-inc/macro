@@ -71,6 +71,8 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 
 Keep the model NodeSelection when submitting unmodified Backspace or Delete. The DOM range cannot represent it.
 
+Assert direct child types when testing rich insertion into code, since nested blocks can preserve the same visible text.
+
 ## Checks
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
