@@ -5,7 +5,7 @@ use bots::domain::ports::BotRepo;
 use model_notifications::ManualNotificationAgent;
 use rootcause::compat::IntoRootcause;
 
-use super::AgentProfiles;
+use crate::manual::AgentProfiles;
 
 /// Reads agent names and avatars from the bots table, system bots included.
 pub(crate) struct BotAgentProfiles<Bots>(pub Bots);

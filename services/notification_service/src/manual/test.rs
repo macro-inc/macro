@@ -13,8 +13,9 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::{
-    AgentProfiles, LinkAccess, ManualNotificationDraft, ManualNotificationError,
-    ManualNotifications, ManualSender, SessionListing,
+    AgentProfiles, EMAIL_THREAD_LINKS, EmailThreadLinks, Feed, FeedVerdict, FeedVisibility,
+    LinkAccess, ManualNotificationDraft, ManualNotificationError, ManualNotifications,
+    ManualSender,
 };
 
 mod delivered;
@@ -57,12 +58,25 @@ impl LinkAccess for GrantedAccess {
     }
 }
 
-/// Lists every session except `session-unlisted`.
-struct ListedSessions;
+/// Lists every link except `unlisted-on-home`, which Home leaves out, and
+/// records whose feeds were asked.
+#[derive(Default)]
+struct Feeds {
+    asked: Mutex<Vec<String>>,
+}
 
-impl SessionListing for ListedSessions {
-    async fn is_listed(&self, session: &Entity<'_>) -> Result<bool, Report> {
-        Ok(session.entity_id != "session-unlisted")
+impl FeedVisibility for Feeds {
+    async fn admits(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        link: &Entity<'static>,
+    ) -> Result<FeedVerdict, Report> {
+        self.asked.lock().unwrap().push(viewer.as_ref().to_string());
+        Ok(if link.entity_id == "unlisted-on-home" {
+            FeedVerdict::NotListed(Feed::Home)
+        } else {
+            FeedVerdict::Listed
+        })
     }
 }
 
@@ -87,10 +101,10 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 
 fn service(
     grants: &[(&'static str, &'static str)],
-) -> ManualNotifications<GrantedAccess, ListedSessions, OneAgent, RecordingIngress> {
+) -> ManualNotifications<GrantedAccess, Feeds, OneAgent, RecordingIngress> {
     ManualNotifications {
         access: GrantedAccess(grants.iter().copied().collect()),
-        sessions: ListedSessions,
+        feeds: Feeds::default(),
         agents: OneAgent,
         ingress: RecordingIngress::default(),
     }
@@ -107,6 +121,7 @@ async fn notifies_a_recipient_who_can_see_the_link_from_the_sender() {
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
                 agent_id: Some(BotId::new_from_uuid(Uuid::from_u128(0xB07))),
             },
             ManualNotificationDraft {
@@ -160,6 +175,7 @@ async fn a_note_to_oneself_has_no_sender_so_the_ingress_keeps_it() {
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
                 agent_id: None,
             },
             ManualNotificationDraft {
@@ -192,6 +208,7 @@ async fn never_tells_a_recipient_about_something_they_cannot_see() {
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
                 agent_id: None,
             },
             ManualNotificationDraft {
@@ -219,6 +236,7 @@ async fn refuses_a_link_the_sender_cannot_see() {
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
                 agent_id: None,
             },
             ManualNotificationDraft {
@@ -243,6 +261,7 @@ async fn refuses_blank_or_oversized_text_and_unlinkable_entities() {
     ]);
     let sender = || ManualSender {
         user: user("macro|sender@macro.com"),
+        opaque_id: "fa-sender".to_string(),
         agent_id: None,
     };
 
@@ -325,6 +344,7 @@ async fn refuses_links_the_inbox_and_home_never_list() {
             .send(
                 ManualSender {
                     user: user("macro|sender@macro.com"),
+                    opaque_id: "fa-sender".to_string(),
                     agent_id: None,
                 },
                 ManualNotificationDraft {
@@ -346,20 +366,24 @@ async fn refuses_links_the_inbox_and_home_never_list() {
 }
 
 #[tokio::test]
-async fn refuses_an_agent_session_the_inbox_leaves_out() {
-    let notifications = service(&[("macro|sender@macro.com", "session-unlisted")]);
+async fn refuses_a_link_the_recipients_feeds_would_not_list() {
+    let notifications = service(&[
+        ("macro|sender@macro.com", "unlisted-on-home"),
+        ("macro|teammate@macro.com", "unlisted-on-home"),
+    ]);
 
     let error = notifications
         .send(
             ManualSender {
                 user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
                 agent_id: None,
             },
             ManualNotificationDraft {
-                recipient: None,
-                title: "Run finished".to_string(),
+                recipient: Some(user("macro|teammate@macro.com")),
+                title: "Look at this".to_string(),
                 body: None,
-                link: EntityType::AgentSession.with_entity_string("session-unlisted".to_string()),
+                link: EntityType::Document.with_entity_string("unlisted-on-home".to_string()),
             },
         )
         .await
@@ -367,7 +391,41 @@ async fn refuses_an_agent_session_the_inbox_leaves_out() {
 
     assert!(matches!(
         error,
-        ManualNotificationError::UnlistedAgentSession
+        ManualNotificationError::NotListedForRecipient(Feed::Home)
     ));
+    assert_eq!(
+        *notifications.feeds.asked.lock().unwrap(),
+        vec!["macro|teammate@macro.com".to_string()],
+        "the recipient's feeds decide, not the sender's"
+    );
     assert!(notifications.ingress.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn email_thread_links_follow_the_feed_check_switch() {
+    let notifications = service(&[("macro|sender@macro.com", "unlisted-on-home")]);
+
+    let result = notifications
+        .send(
+            ManualSender {
+                user: user("macro|sender@macro.com"),
+                opaque_id: "fa-sender".to_string(),
+                agent_id: None,
+            },
+            ManualNotificationDraft {
+                recipient: None,
+                title: "Reply needed".to_string(),
+                body: None,
+                link: EntityType::EmailThread.with_entity_string("unlisted-on-home".to_string()),
+            },
+        )
+        .await;
+
+    match EMAIL_THREAD_LINKS {
+        EmailThreadLinks::FeedChecked => assert!(matches!(
+            result,
+            Err(ManualNotificationError::NotListedForRecipient(Feed::Home))
+        )),
+        EmailThreadLinks::AccessChecked => assert!(result.is_ok()),
+    }
 }

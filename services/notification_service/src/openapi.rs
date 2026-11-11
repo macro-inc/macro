@@ -7,6 +7,7 @@ mod env;
 mod manual;
 mod model;
 mod notification;
+mod wiring;
 
 use utoipa::OpenApi;
 

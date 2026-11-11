@@ -39,6 +39,7 @@ mod env;
 mod manual;
 mod model;
 mod notification;
+mod wiring;
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
@@ -255,15 +256,17 @@ pub async fn main() -> anyhow::Result<()> {
     };
     let manual_notification_state = api::manual_notification::ManualNotificationState {
         notifications: Arc::new(manual::ManualNotifications {
-            access: manual::entity_access::EntityAccessLinks(
+            access: manual::outbound::entity_access::EntityAccessLinks(
                 entity_access::domain::service::EntityAccessServiceImpl::new(
                     entity_access::outbound::PgAccessRepository::new(db.clone()),
                 ),
             ),
-            sessions: manual::sessions::PgSessionListing(db.clone()),
-            agents: manual::bots::BotAgentProfiles(bots::outbound::pg_bots_repo::PgBotsRepo::new(
-                db.clone(),
-            )),
+            feeds: manual::outbound::feed_visibility::FeedCandidateVisibility(
+                wiring::soup_candidates(db.clone()),
+            ),
+            agents: manual::outbound::bots::BotAgentProfiles(
+                bots::outbound::pg_bots_repo::PgBotsRepo::new(db.clone()),
+            ),
             ingress: ::notification::domain::service::SqsNotificationIngress {
                 queue: ::notification::outbound::queue::SqsQueue::new(
                     aws_sdk_sqs::Client::new(&aws_config),

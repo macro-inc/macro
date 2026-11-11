@@ -1,26 +1,14 @@
-//! Manual notifications sent through the real access checks and ingress land
-//! in the inbox and on Home, read through their real policies and Soup's
-//! candidate query.
+//! Manual notifications sent through the real access checks, feed check and
+//! ingress land in the recipient's inbox and on Home, read through their real
+//! services over Soup and Postgres; links those feeds would not list are
+//! refused before anything is stored.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use attention_feed::domain::models::FeedViewer;
 use attention_feed::outbound::notifications::ReaderFeedNotifications;
-use attention_feed::outbound::soup::SoupCandidateSource;
 use attention_feed::test_support::{FakeMail, FakeSignals};
-use channels::domain::list_service::ChannelListServiceImpl;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use crm::domain::service::NoOpCrmService;
-use email::domain::ports::ReadonlyEmailPreviewAdapter;
-use email::domain::service::EmailServiceImpl;
-use email::outbound::EmailPgRepo;
-use foreign_entity::domain::service::ForeignEntityServiceImpl;
-use foreign_entity::outbound::pg_foreign_entity_repo::PgForeignEntityRepo;
-use frecency::domain::services::FrecencyQueryServiceImpl;
-use frecency::outbound::postgres::FrecencyPgStorage;
-use github_pull_requests::domain::service::GithubPullRequestServiceImpl;
-use github_pull_requests::outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_entity::{Entity, EntityType};
 use model_notifications::NotifEvent;
@@ -38,36 +26,47 @@ use notification::domain::service::{
 use notification::outbound::repository::DbNotificationRepository;
 use notification_inbox::domain::models::{InboxQuery, InboxScope};
 use notification_inbox::domain::service::{NotificationInboxService, NotificationInboxServiceImpl};
-use readonly_pool::ReadOnlyPool;
 use rootcause::Report;
 use serde::Serialize;
-use soup::domain::service::SoupImpl;
-use soup::outbound::pg_soup_repo::PgSoupRepo;
 use sqlx::{Pool, Postgres};
 use work_feed::domain::models::{WorkFeedMode, WorkFeedQuery, WorkFeedScope};
 use work_feed::domain::service::{WorkFeedService, WorkFeedServiceImpl};
 
-use super::super::entity_access::EntityAccessLinks;
-use super::super::sessions::PgSessionListing;
+use super::super::outbound::entity_access::EntityAccessLinks;
+use super::super::outbound::feed_visibility::FeedCandidateVisibility;
 use super::super::{
-    ACCESS_CHECKED_TYPES, ManualNotificationDraft, ManualNotificationError, ManualNotifications,
-    ManualSender, shown_in_inbox_and_home,
+    ACCESS_CHECKED_TYPES, EMAIL_THREAD_LINKS, EmailThreadLinks, Feed, ManualNotificationDraft,
+    ManualNotificationError, ManualNotifications, ManualSender, shown_in_inbox_and_home,
 };
 use super::{OneAgent, user};
+use crate::wiring::{SoupCandidates, soup_candidates};
 
 const USER_1: &str = "macro|user-1@example.com";
+const USER_2: &str = "macro|user-2@example.com";
+const USER_3: &str = "macro|user-3@example.com";
+
+const DOC: &str = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const LINK_SHARED_DOC: &str = "11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const TRASHED_DOC: &str = "11111111-cccc-cccc-cccc-cccccccccccc";
+const SNIPPET: &str = "11111111-dddd-dddd-dddd-dddddddddddd";
+const SHARED_JUST_NOW: &str = "11111111-eeee-eeee-eeee-eeeeeeeeeeee";
+const OWN_THREAD: &str = "44444444-0000-0000-0000-000000000001";
+const TEAMMATES_THREAD: &str = "44444444-0000-0000-0000-000000000002";
+const NOISE_THREAD: &str = "44444444-0000-0000-0000-000000000003";
 const LISTED_SESSION: &str = "77777777-0000-0000-0000-000000000001";
 const UNLISTED_SESSION: &str = "77777777-0000-0000-0000-000000000002";
 const HIDDEN_SESSION: &str = "77777777-0000-0000-0000-000000000003";
 
-/// The fixture entity of each kind a manual notification can link to.
-fn fixture_entity(entity_type: EntityType) -> Option<&'static str> {
+/// The entity of each linkable kind that `viewer` can be notified about.
+fn linkable_for(viewer: &str, entity_type: EntityType) -> Option<&'static str> {
     match entity_type {
-        EntityType::Document => Some("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        EntityType::Document => Some(DOC),
         EntityType::Chat => Some("22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
         EntityType::Channel => Some("33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
         EntityType::Project => Some("66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        EntityType::EmailThread => Some("44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        // Mail is listed only in its owner's inbox.
+        EntityType::EmailThread if viewer == USER_1 => Some(OWN_THREAD),
+        EntityType::EmailThread => Some(TEAMMATES_THREAD),
         EntityType::AgentSession => Some(LISTED_SESSION),
         _ => None,
     }
@@ -138,148 +137,55 @@ impl SnsEndpointManager for NoSns {
 fn sender() -> ManualSender {
     ManualSender {
         user: user(USER_1),
+        opaque_id: "fa-user-1".to_string(),
         agent_id: None,
     }
 }
 
-fn draft(link: Entity<'static>) -> ManualNotificationDraft {
+fn draft(recipient: Option<&str>, link: Entity<'static>) -> ManualNotificationDraft {
     ManualNotificationDraft {
-        recipient: None,
+        recipient: recipient.map(user),
         title: format!("{} finished", link.entity_type),
         body: None,
         link,
     }
 }
 
-fn viewer() -> FeedViewer {
-    FeedViewer {
-        user: user(USER_1),
-        team: None,
-    }
-}
+type Notifications = ManualNotifications<
+    EntityAccessLinks<
+        entity_access::domain::service::EntityAccessServiceImpl<
+            entity_access::outbound::PgAccessRepository,
+        >,
+    >,
+    FeedCandidateVisibility<SoupCandidates>,
+    OneAgent,
+    NotificationIngressService<DbNotificationRepository<Pool<Postgres>>, NoDelivery, NoDigest>,
+>;
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("manual_links"))
-)]
-async fn every_linkable_kind_reaches_the_inbox_and_home_and_the_rest_are_refused(
-    pool: Pool<Postgres>,
-) {
-    let notifications = ManualNotifications {
+/// The service as `main.rs` wires it, with a database ingress in place of SQS.
+fn notifications(pool: &Pool<Postgres>) -> Notifications {
+    ManualNotifications {
         access: EntityAccessLinks(
             entity_access::domain::service::EntityAccessServiceImpl::new(
                 entity_access::outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
-        sessions: PgSessionListing(pool.clone()),
+        feeds: FeedCandidateVisibility(soup_candidates(pool.clone())),
         agents: OneAgent,
         ingress: NotificationIngressService::new(
             DbNotificationRepository::new(pool.clone()),
             NoDelivery,
             NoDigest,
         ),
-    };
-
-    let mut sent = Vec::new();
-    for entity_type in ACCESS_CHECKED_TYPES {
-        let result = match fixture_entity(entity_type) {
-            Some(id) => {
-                notifications
-                    .send(
-                        sender(),
-                        draft(entity_type.with_entity_string(id.to_string())),
-                    )
-                    .await
-            }
-            None => {
-                notifications
-                    .send(
-                        sender(),
-                        draft(entity_type.with_entity_string(uuid::Uuid::now_v7().to_string())),
-                    )
-                    .await
-            }
-        };
-        if shown_in_inbox_and_home(entity_type) {
-            let id = fixture_entity(entity_type)
-                .unwrap_or_else(|| panic!("give the fixture a {entity_type} to link to"));
-            result.unwrap_or_else(|error| panic!("{entity_type}: {error:?}"));
-            sent.push(entity_type.with_entity_string(id.to_string()));
-        } else {
-            assert!(
-                matches!(result, Err(ManualNotificationError::NotShownInInbox(refused)) if refused == entity_type),
-                "{entity_type}: {result:?}"
-            );
-        }
     }
-    assert_eq!(
-        sent.iter().map(|link| link.entity_type).collect::<Vec<_>>(),
-        vec![
-            EntityType::Document,
-            EntityType::Chat,
-            EntityType::Channel,
-            EntityType::Project,
-            EntityType::EmailThread,
-            EntityType::AgentSession,
-        ]
-    );
+}
 
-    for session in [UNLISTED_SESSION, HIDDEN_SESSION] {
-        let refused = notifications
-            .send(
-                sender(),
-                draft(EntityType::AgentSession.with_entity_string(session.to_string())),
-            )
-            .await;
-        assert!(
-            matches!(refused, Err(ManualNotificationError::UnlistedAgentSession)),
-            "{session}: {refused:?}"
-        );
-    }
-
-    let stored: Vec<(String, String)> = sqlx::query_as(
-        "SELECT event_item_type, event_item_id FROM notification WHERE notification_event_type = 'manual' ORDER BY event_item_type",
-    )
-    .fetch_all(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        stored.len(),
-        sent.len(),
-        "only the accepted links were stored"
-    );
-
-    let frecency_storage = FrecencyPgStorage::new(pool.clone());
-    let frecency = FrecencyQueryServiceImpl::new(frecency_storage.clone());
-    let email = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
-        frecency.clone(),
-        email::domain::ports::NoOpEnqueuer,
-        NoOpCrmService,
-        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
-            entity_access_management::outbound::PgRepository::new(pool.clone()),
-        ),
-        0,
-    );
-    let soup = Arc::new(SoupImpl::new(
-        PgSoupRepo::new(ReadOnlyPool(pool.clone())),
-        frecency,
-        ReadonlyEmailPreviewAdapter(email.clone()),
-        ChannelListServiceImpl::new(
-            PgChannelsRepo::new(pool.clone()),
-            PgChannelsRepo::new(pool.clone()),
-            frecency_storage,
-        ),
-        call::domain::service::CallRecordQueryServiceImpl::new(
-            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
-        ),
-        NoOpCrmService,
-        GithubPullRequestServiceImpl::new(
-            ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
-            PgGithubPullRequestRepo::new(pool.clone()),
-        ),
-    ));
-    let email = Arc::new(email);
+/// The entities with a manual notification in `viewer`'s inbox and on their
+/// Home, read through the real services.
+async fn listed_manual(
+    pool: &Pool<Postgres>,
+    viewer: &str,
+) -> (HashSet<Entity<'static>>, HashSet<Entity<'static>>) {
     let reader = Arc::new(NotificationReaderService {
         repository: DbNotificationRepository::new(pool.clone()),
         queue: NoDelivery,
@@ -291,15 +197,22 @@ async fn every_linkable_kind_reaches_the_inbox_and_home_and_the_rest_are_refused
         },
         realtime: NoopNotificationRealtimePublisher,
     });
+    let viewer = FeedViewer {
+        user: user(viewer),
+        team: None,
+    };
+    let manual = |notification: &&Arc<UserNotificationRow<NotifEvent>>| {
+        matches!(notification.notification_metadata, NotifEvent::Manual(_))
+    };
 
     let inbox = NotificationInboxServiceImpl::new(
-        SoupCandidateSource::new(soup.clone(), email.clone()),
+        soup_candidates(pool.clone()),
         ReaderFeedNotifications::new(reader.clone()),
         FakeMail::default(),
         FakeSignals::default(),
     )
     .page(
-        viewer(),
+        viewer.clone(),
         InboxQuery {
             scope: InboxScope::default(),
             limit: 50,
@@ -307,31 +220,29 @@ async fn every_linkable_kind_reaches_the_inbox_and_home_and_the_rest_are_refused
         },
     )
     .await
-    .unwrap();
-    let in_inbox: HashSet<Entity<'static>> = inbox
-        .entries
-        .iter()
-        .filter(|entry| {
-            entry.rows.iter().any(|row| {
-                row.all_notifications().any(|notification| {
-                    matches!(notification.notification_metadata, NotifEvent::Manual(_))
-                })
-            })
-        })
-        .map(|entry| entry.group.entity().clone())
-        .collect();
+    .unwrap()
+    .entries
+    .into_iter()
+    .filter(|entry| {
+        entry
+            .rows
+            .iter()
+            .any(|row| row.all_notifications().any(|n| manual(&n)))
+    })
+    .map(|entry| entry.group.entity().clone())
+    .collect();
 
     let home = WorkFeedServiceImpl::new(
-        SoupCandidateSource::new(soup, email),
+        soup_candidates(pool.clone()),
         ReaderFeedNotifications::new(reader),
         FakeMail::default(),
         FakeSignals::default(),
     )
     .page(
-        viewer(),
+        viewer,
         WorkFeedQuery {
             scope: WorkFeedScope {
-                mode: WorkFeedMode::Attention,
+                mode: WorkFeedMode::Work,
                 types: Vec::new(),
                 include_snippets: false,
             },
@@ -341,22 +252,210 @@ async fn every_linkable_kind_reaches_the_inbox_and_home_and_the_rest_are_refused
         },
     )
     .await
-    .unwrap();
-    let on_home: HashSet<Entity<'static>> = home
-        .entries
-        .iter()
-        .filter(|entry| {
-            entry.item.notifications.iter().any(|notification| {
-                matches!(notification.notification_metadata, NotifEvent::Manual(_))
-            })
-        })
-        .map(|entry| entry.item.key.entity().clone())
-        .collect();
+    .unwrap()
+    .entries
+    .into_iter()
+    .filter(|entry| entry.item.notifications.iter().any(|n| manual(&n)))
+    .map(|entry| entry.item.key.entity().clone())
+    .collect();
 
-    let sent: HashSet<Entity<'static>> = sent.into_iter().collect();
-    assert_eq!(in_inbox, sent, "inbox groups with a manual notification");
+    (inbox, home)
+}
+
+async fn stored(pool: &Pool<Postgres>) -> i64 {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM notification WHERE notification_event_type = 'manual'"#
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
+/// Sends a notification about one entity of every linkable kind to
+/// `recipient` (`None`: to oneself), refusing the kinds the feeds never
+/// list, and returns the links that were sent.
+async fn send_every_kind(
+    notifications: &Notifications,
+    recipient: Option<&str>,
+) -> HashSet<Entity<'static>> {
+    let viewer = recipient.unwrap_or(USER_1);
+    let mut sent = HashSet::new();
+    for entity_type in ACCESS_CHECKED_TYPES {
+        let id = linkable_for(viewer, entity_type)
+            .map(str::to_string)
+            .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
+        let link = entity_type.with_entity_string(id);
+        let result = notifications
+            .send(sender(), draft(recipient, link.clone()))
+            .await;
+        if shown_in_inbox_and_home(entity_type) {
+            assert!(
+                linkable_for(viewer, entity_type).is_some(),
+                "give the fixture a {entity_type} {viewer} can be notified about"
+            );
+            result.unwrap_or_else(|error| panic!("{entity_type} to {viewer}: {error:?}"));
+            sent.insert(link);
+        } else {
+            assert!(
+                matches!(result, Err(ManualNotificationError::NotShownInInbox(refused)) if refused == entity_type),
+                "{entity_type}: {result:?}"
+            );
+        }
+    }
+    sent
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("manual_links"))
+)]
+async fn every_linkable_kind_reaches_a_recipients_inbox_and_home(pool: Pool<Postgres>) {
+    let notifications = notifications(&pool);
+    let sent = send_every_kind(&notifications, Some(USER_2)).await;
+    assert_eq!(sent.len(), 6);
+
+    let (inbox, home) = listed_manual(&pool, USER_2).await;
     assert_eq!(
-        on_home, sent,
-        "Home attention items with a manual notification"
+        inbox, sent,
+        "the recipient's inbox groups with a manual notification"
     );
+    assert_eq!(
+        home, sent,
+        "the recipient's Home items with a manual notification"
+    );
+    let (sender_inbox, sender_home) = listed_manual(&pool, USER_1).await;
+    assert!(
+        sender_inbox.is_empty() && sender_home.is_empty(),
+        "the sender is not notified"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("manual_links"))
+)]
+async fn every_linkable_kind_reaches_the_senders_own_inbox_and_home(pool: Pool<Postgres>) {
+    let notifications = notifications(&pool);
+    let sent = send_every_kind(&notifications, None).await;
+    assert_eq!(sent.len(), 6);
+
+    let (inbox, home) = listed_manual(&pool, USER_1).await;
+    assert_eq!(inbox, sent);
+    assert_eq!(home, sent);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("manual_links"))
+)]
+async fn links_the_recipients_feeds_would_not_list_are_refused(pool: Pool<Postgres>) {
+    let notifications = notifications(&pool);
+    let document = |id: &str| EntityType::Document.with_entity_string(id.to_string());
+    let thread = |id: &str| EntityType::EmailThread.with_entity_string(id.to_string());
+    let session = |id: &str| EntityType::AgentSession.with_entity_string(id.to_string());
+
+    let mail_refused = EMAIL_THREAD_LINKS == EmailThreadLinks::FeedChecked;
+    let cases = [
+        (
+            "a recipient who sees it only through its public link",
+            Some(USER_3),
+            document(LINK_SHARED_DOC),
+            Some(Feed::Inbox),
+        ),
+        (
+            "a document in the trash",
+            None,
+            document(TRASHED_DOC),
+            Some(Feed::Inbox),
+        ),
+        (
+            "a snippet, which Home leaves out",
+            None,
+            document(SNIPPET),
+            Some(Feed::Home),
+        ),
+        (
+            "mail shared with the sender",
+            None,
+            thread(TEAMMATES_THREAD),
+            mail_refused.then_some(Feed::Inbox),
+        ),
+        (
+            "mail that is not Signal",
+            None,
+            thread(NOISE_THREAD),
+            mail_refused.then_some(Feed::Inbox),
+        ),
+        (
+            "the sender's own Signal inbox mail",
+            None,
+            thread(OWN_THREAD),
+            None,
+        ),
+        (
+            "an unlisted session",
+            None,
+            session(UNLISTED_SESSION),
+            Some(Feed::Inbox),
+        ),
+        (
+            "a hidden session",
+            None,
+            session(HIDDEN_SESSION),
+            Some(Feed::Inbox),
+        ),
+    ];
+    let mut accepted = 0;
+    for (case, recipient, link, refused_by) in cases {
+        let result = notifications.send(sender(), draft(recipient, link)).await;
+        match refused_by {
+            Some(feed) => assert!(
+                matches!(result, Err(ManualNotificationError::NotListedForRecipient(refused)) if refused == feed),
+                "{case}: {result:?}"
+            ),
+            None => {
+                result.unwrap_or_else(|error| panic!("{case}: {error:?}"));
+                accepted += 1;
+            }
+        }
+    }
+    assert_eq!(
+        stored(&pool).await,
+        accepted,
+        "refused notifications are never stored"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("manual_links"))
+)]
+async fn a_link_shared_just_before_sending_is_accepted(pool: Pool<Postgres>) {
+    let notifications = notifications(&pool);
+    let link = EntityType::Document.with_entity_string(SHARED_JUST_NOW.to_string());
+
+    let before = notifications
+        .send(sender(), draft(Some(USER_3), link.clone()))
+        .await;
+    assert!(
+        matches!(before, Err(ManualNotificationError::RecipientCannotSeeLink)),
+        "{before:?}"
+    );
+
+    sqlx::query!(
+        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'document', $2, 'user', 'view')",
+        uuid::Uuid::parse_str(SHARED_JUST_NOW).unwrap(),
+        USER_3,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    notifications
+        .send(sender(), draft(Some(USER_3), link.clone()))
+        .await
+        .unwrap();
+    let (inbox, home) = listed_manual(&pool, USER_3).await;
+    assert_eq!(inbox, HashSet::from([link.clone()]));
+    assert_eq!(home, HashSet::from([link]));
 }

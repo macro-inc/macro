@@ -8,7 +8,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use super::LinkAccess;
+use crate::manual::LinkAccess;
 
 /// Answers "can this user view this entity" with the same checks every
 /// entity's own endpoints use.

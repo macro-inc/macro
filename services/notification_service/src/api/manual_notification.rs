@@ -29,20 +29,41 @@ use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::api::context::AuthorizationService;
-use crate::manual::bots::BotAgentProfiles;
-use crate::manual::entity_access::EntityAccessLinks;
-use crate::manual::sessions::PgSessionListing;
+use crate::manual::outbound::bots::BotAgentProfiles;
+use crate::manual::outbound::entity_access::EntityAccessLinks;
+use crate::manual::outbound::feed_visibility::FeedCandidateVisibility;
+use crate::wiring::SoupCandidates;
+
+#[cfg(test)]
+mod test;
 use crate::manual::{
     ManualNotificationDraft, ManualNotificationError, ManualNotifications, ManualSender,
 };
 
 /// Sends per acting user per window; a routine reporting back stays far below it.
 const SENDS_PER_WINDOW: u64 = 60;
+/// Notifications one person receives per window, from every sender together,
+/// so no group of senders can flood someone's phone.
+const RECEIVES_PER_WINDOW: u64 = 60;
 const WINDOW: Duration = Duration::from_secs(60 * 60);
+
+/// The per-recipient limit's key: shared by every sender.
+fn per_recipient_key(recipient: &MacroUserIdStr<'_>) -> RateLimitKey {
+    RateLimitKey::builder(&"manual-notification-recipient")
+        .append(&recipient.as_ref())
+        .finish()
+}
+
+fn per_recipient_config() -> RateLimitConfig {
+    RateLimitConfig {
+        max_count: RECEIVES_PER_WINDOW,
+        window: WINDOW,
+    }
+}
 
 pub(crate) type Notifications = ManualNotifications<
     EntityAccessLinks<EntityAccessServiceImpl<PgAccessRepository>>,
-    PgSessionListing,
+    FeedCandidateVisibility<SoupCandidates>,
     BotAgentProfiles<PgBotsRepo>,
     SqsNotificationIngress<SqsQueue>,
 >;
@@ -130,8 +151,11 @@ impl FromRequestParts<ManualNotificationState> for PerSenderRateLimit {
 #[serde(rename_all = "camelCase")]
 pub struct ManualNotificationLink {
     /// One of document, chat, channel, project, email_thread or agent_session:
-    /// the kinds the inbox and Home list. An agent session must be listed;
-    /// an email thread shows only while it is Signal-important and not shared.
+    /// the kinds the inbox and Home list. The recipient's inbox and Home must
+    /// both list it: their access comes from a share the feeds read (not a
+    /// link share or an attachment), it is not deleted, a session is listed,
+    /// a document is not a snippet, and an email thread is the recipient's own
+    /// Signal mail in the inbox.
     pub entity_type: EntityType,
     /// The entity's id.
     pub entity_id: String,
@@ -183,7 +207,7 @@ pub(crate) fn router<S>(state: ManualNotificationState) -> Router<S> {
         (status = 401, body = ErrorResponse),
         (status = 403, description = "The recipient cannot see the link", body = ErrorResponse),
         (status = 404, description = "The link does not exist or the caller cannot see it", body = ErrorResponse),
-        (status = 429, description = "Too many manual notifications from this sender"),
+        (status = 429, description = "Too many manual notifications from this sender, or to this recipient"),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -194,11 +218,41 @@ pub(crate) async fn send_manual_notification(
 ) -> Result<StatusCode, (StatusCode, Json<ErrorResponse<'static>>)> {
     let user = authorization.authorization.user;
 
-    state
+    let recipient = request
+        .recipient_id
+        .clone()
+        .unwrap_or_else(|| user.macro_user_id.clone());
+    let recipient_ticket = match state
+        .rate_limiter
+        .check_rate_limit(per_recipient_key(&recipient), per_recipient_config())
+        .await
+    {
+        Ok(Ok(ticket)) => ticket,
+        Ok(Err(_exceeded)) => {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorResponse {
+                    message: "too many notifications to this recipient; try again later".into(),
+                }),
+            ));
+        }
+        Err(report) => {
+            tracing::error!(error = ?report, "could not check the recipient rate limit");
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "could not send the notification".into(),
+                }),
+            ));
+        }
+    };
+
+    let sent = state
         .notifications
         .send(
             ManualSender {
                 user: user.macro_user_id,
+                opaque_id: user.user_context.fusion_user_id,
                 agent_id: user.agent_id,
             },
             ManualNotificationDraft {
@@ -211,8 +265,13 @@ pub(crate) async fn send_manual_notification(
                     .with_entity_string(request.link.entity_id),
             },
         )
-        .await
-        .map_err(error_response)?;
+        .await;
+    if let Err(error) = sent {
+        if let Err(report) = state.rate_limiter.rollback_ticket(recipient_ticket).await {
+            tracing::error!(error = ?report, "could not roll back the recipient rate limit");
+        }
+        return Err(error_response(error));
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -224,7 +283,7 @@ fn error_response(error: ManualNotificationError) -> (StatusCode, Json<ErrorResp
         | ManualNotificationError::BodyTooLong
         | ManualNotificationError::UnlinkableEntity(_)
         | ManualNotificationError::NotShownInInbox(_)
-        | ManualNotificationError::UnlistedAgentSession => StatusCode::BAD_REQUEST,
+        | ManualNotificationError::NotListedForRecipient(_) => StatusCode::BAD_REQUEST,
         ManualNotificationError::LinkNotFound => StatusCode::NOT_FOUND,
         ManualNotificationError::RecipientCannotSeeLink => StatusCode::FORBIDDEN,
         ManualNotificationError::Internal(report) => {
