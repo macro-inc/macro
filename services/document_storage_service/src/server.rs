@@ -1217,6 +1217,50 @@ async fn run_server() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
+    // Pushes each created, renamed, re-pictured or deleted bot to the people
+    // who see it, so open views show its current name and picture.
+    let bot_profile_brokers = config.kafka_brokers.as_ref().to_string();
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        let consumer = bots::inbound::profile_consumer::BotProfileConsumer::new(
+            bots::domain::profile_fanout::BotProfileFanout::new(
+                PgBotsRepo::new(db.clone()),
+                bots::outbound::connection_gateway_profiles::ConnectionGatewayBotProfilePublisher::new(
+                    conn_gateway_client.clone(),
+                ),
+            ),
+        );
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting bot profile push consumer");
+                let result = consumer
+                    .run(&bot_profile_brokers, cancellation_token.cancelled())
+                    .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("bot profile push consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(error = ?error, "bot profile push consumer exited unexpectedly");
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
     // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();

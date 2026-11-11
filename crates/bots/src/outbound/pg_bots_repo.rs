@@ -1048,6 +1048,47 @@ impl BotRepo for PgBotsRepo {
         Ok(profiles)
     }
 
+    async fn bot_audience(&self, bot_id: BotId) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let user_ids = sqlx::query_scalar!(
+            r#"
+            WITH bot AS (
+                SELECT owner_user_id, team_id, deleted_at
+                FROM bots
+                WHERE id = $1
+            )
+            SELECT owner_user_id AS "user_id!"
+            FROM bot
+            WHERE owner_user_id IS NOT NULL
+            UNION
+            SELECT tu.user_id
+            FROM bot
+            INNER JOIN team_user tu ON tu.team_id = bot.team_id
+            UNION
+            SELECT user_p.user_id
+            FROM bot
+            INNER JOIN comms_channel_participants bot_p
+              ON bot_p.user_id = $2
+             AND (bot_p.left_at IS NULL OR bot_p.left_at >= bot.deleted_at)
+            INNER JOIN comms_channel_participants user_p
+              ON user_p.channel_id = bot_p.channel_id
+             AND user_p.left_at IS NULL
+            WHERE user_p.user_id NOT LIKE 'bot|%'
+            "#,
+            bot_id.as_uuid(),
+            principal_id(bot_id),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the bot's audience")?;
+
+        user_ids
+            .into_iter()
+            .map(|user_id| {
+                MacroUserIdStr::try_from(user_id).context("bot audience holds an invalid user id")
+            })
+            .collect()
+    }
+
     async fn get_agent(&self, bot_id: BotId) -> Result<Option<Agent>, Self::Err> {
         let row = sqlx::query_as!(
             AgentRow,
