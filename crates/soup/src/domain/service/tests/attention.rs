@@ -14,6 +14,7 @@ fn work_feed_request(limit: u16) -> AttentionSoupRequest {
         filter: EntityFilterAst::default(),
         after: None,
         only: None,
+        assume_attention: false,
     }
 }
 

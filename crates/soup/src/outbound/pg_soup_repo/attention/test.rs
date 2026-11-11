@@ -25,6 +25,7 @@ const CHANNEL_X: &str = "33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_M: &str = "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_Z: &str = "44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const THREAD_S: &str = "44444444-5555-5555-5555-555555555555";
+const THREAD_A: &str = "44444444-0000-0000-0000-000000000000";
 const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const PROJECT_1: &str = "66666666-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const COMPANY_1: &str = "88888888-0000-0000-0000-000000000001";
@@ -78,6 +79,7 @@ fn req<'a>(
         hydratable: EVERYTHING,
         crm: false,
         only: None,
+        assume_attention: false,
     }
 }
 
@@ -270,6 +272,86 @@ async fn only_restricts_to_known_items(pool: Pool<Postgres>) -> anyhow::Result<(
             (EntityType::Document, DOC_A.to_string()),
             (EntityType::ChannelMessage, THREAD_M.to_string()),
         ]
+    );
+
+    Ok(())
+}
+
+#[test]
+fn only_a_probe_changes_the_query() {
+    let link_ids = [];
+    let sources = sources();
+    let normal = build_query(&req(ATTENTION, &link_ids, &sources));
+    assert_eq!(
+        normal,
+        format!(
+            include_str!("query.sql"),
+            attention_source = "pending",
+            thread_keyed = thread_keyed(AttentionKeying::ThreadScoped),
+            own_work_ae = own_work("ae"),
+            own_work_newer = own_work("newer"),
+            email_inbox_gate = email_inbox_gate(),
+            document_gate = document_gate(ID_SQL, None),
+            chat_gate = chat_gate(ID_SQL, None),
+            project_gate = project_gate(ID_SQL, None),
+            initiative_gate = initiative_gate(ID_SQL, None),
+            channel_gate = channel_gate(ID_SQL, None),
+            channel_thread_gate = channel_thread_gate(ID_SQL, None),
+            email_gate = email_gate(ID_SQL, None),
+            calendar_event_gate = calendar_event_gate(None),
+            foreign_entity_gate = foreign_entity_gate(None),
+            agent_session_gate = agent_session_gate(None),
+            crm_company_gate = crm_company_gate(),
+            crm_contact_gate = crm_contact_gate(),
+            harness_gate = harness_gate(),
+        )
+    );
+    assert!(normal.contains("FROM pending\n            WHERE ($3::timestamptz"));
+
+    let mut probe = req(ATTENTION, &link_ids, &sources);
+    probe.assume_attention = true;
+    assert_ne!(build_query(&probe), normal);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_probe_lists_what_a_new_notification_would_place(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only: Vec<Entity<'static>> = vec![
+        // Already notified: listed once.
+        EntityType::Document.with_entity_string(DOC_A.to_string()),
+        // Never notified, but visible: a new notification would place it.
+        EntityType::Document.with_entity_string(DOC_F.to_string()),
+        // No such document.
+        EntityType::Document.with_entity_string(Uuid::nil().to_string()),
+        // Archived mail never places an item.
+        EntityType::EmailThread.with_entity_string(THREAD_A.to_string()),
+    ];
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.only = Some(&only);
+    request.assume_attention = true;
+    let page = attention_soup_page(&pool, request).await?;
+
+    let mut listed = keys(&page);
+    listed.sort_by(|a, b| a.1.cmp(&b.1));
+    assert_eq!(
+        listed,
+        vec![
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::Document, DOC_F.to_string()),
+        ]
+    );
+
+    let mut without_probe = req(ATTENTION, &link_ids, &sources);
+    without_probe.only = Some(&only);
+    assert_eq!(
+        keys(&attention_soup_page(&pool, without_probe).await?),
+        vec![(EntityType::Document, DOC_A.to_string())]
     );
 
     Ok(())

@@ -77,6 +77,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 ## Gotchas
 
+- `AttentionCandidateRequest::assume_attention` probes the attention query:
+  each `only` key counts as if a notification about it were pending, so a
+  caller can ask whether a new notification would be listed. Normal pages
+  build byte-identical SQL (`only_a_probe_changes_the_query`).
+
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
   `SoupService::group_labels` names the groups a grouping field leaves
