@@ -22,7 +22,6 @@ import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
-import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
@@ -36,6 +35,7 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { SuggestionNamespace } from './entities/suggestions/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
@@ -491,16 +491,6 @@ export {
 } from './entities/github-pull-requests/pull-request';
 export { Harness } from './entities/harnesses/harness';
 export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
-export {
-  Suggestion,
-  type SuggestionChanges,
-  type SuggestionItem,
-  type SuggestionWriteOutcome,
-} from './entities/suggestions/suggestion';
-export type {
-  SuggestionsReview,
-  SuggestionInput,
-} from './entities/suggestions/namespace';
 export { GeneratedImage, StaticImage } from './entities/images/image';
 export type {
   GenerateImageAspectRatio,
@@ -567,6 +557,16 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export type {
+  SuggestionInput,
+  SuggestionsReview,
+} from './entities/suggestions/namespace';
+export {
+  Suggestion,
+  type SuggestionChanges,
+  type SuggestionItem,
+  type SuggestionWriteOutcome,
+} from './entities/suggestions/suggestion';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export type { ActivityReport } from './entities/users/user';
