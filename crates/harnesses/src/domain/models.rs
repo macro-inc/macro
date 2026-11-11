@@ -107,13 +107,14 @@ pub struct Harness {
     /// machine the user paired themselves.
     #[serde(default)]
     pub computer_id: Option<ComputerId>,
-    /// How Claude Code on this machine is paid for. Only meaningful for
-    /// Macro computers.
+    /// How Claude Code on this machine is paid for, derived from whether
+    /// it has an active Claude login. Only meaningful for Macro computers.
     #[serde(default)]
     pub claude_mode: ClaudeMode,
 }
 
-/// How Claude Code on a Macro computer is paid for.
+/// How Claude Code on a Macro computer is paid for: its own Claude account
+/// when it has an active Claude login, otherwise Macro credits.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -143,28 +144,6 @@ impl std::str::FromStr for ClaudeMode {
             "macro_credits" => Ok(Self::MacroCredits),
             "own_account" => Ok(Self::OwnAccount),
             other => Err(format!("unknown claude mode: {other}")),
-        }
-    }
-}
-
-/// A confirmed change to how Claude Code on a Macro computer is paid for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClaudeModeChange {
-    /// `signed_in_by` signed a Claude account in through Macro.
-    SignedIn {
-        /// The person whose request completed the sign-in.
-        signed_in_by: MacroUserIdStr<'static>,
-    },
-    /// The account was signed out; Macro credits pay again.
-    SignedOut,
-}
-
-impl ClaudeModeChange {
-    /// The mode it leaves the harness in.
-    pub const fn mode(&self) -> ClaudeMode {
-        match self {
-            Self::SignedIn { .. } => ClaudeMode::OwnAccount,
-            Self::SignedOut => ClaudeMode::MacroCredits,
         }
     }
 }
@@ -205,8 +184,16 @@ pub enum ClaudeAccount {
     SignedOut,
     /// Signed in to a Claude account.
     SignedIn {
+        /// The account's id at Anthropic (`oauthAccount.accountUuid`).
+        account_id: String,
         /// The account's email address, when Claude reports one.
         account: Option<String>,
+        /// The account's organization, when Claude reports one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        organization: Option<String>,
+        /// The account's plan (`subscriptionType`), e.g. `max`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<String>,
         /// When the sign-in stops refreshing and must be repeated.
         expires_at: Option<DateTime<Utc>>,
     },

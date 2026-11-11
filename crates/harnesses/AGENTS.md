@@ -69,11 +69,20 @@ before acting"); paired machines keep it off until their owner turns it on.
 - `authorize_harness(caller, harness_id, HarnessPermission::{View, Use, Manage})` is
   the access boundary for other services' routes: View requires effective
   access; Use requires Owner or User; Manage is the owner, or an owner of a
-  team the runtime is shared with (take it out of service). `set_claude_mode`
-  (trusted) records a `ClaudeModeChange` once macrod confirmed it: `SignedIn
-  { signed_in_by }` writes `own_account` with `claude_signed_in_by` and
-  `claude_signed_in_at`; `SignedOut` writes `macro_credits` and clears both.
-  The control plane's Claude sign-in notices go to that signer.
+  team the runtime is shared with (take it out of service). Provider
+  accounts (`domain::account_logins`): `provider_accounts` is one account at an
+  `AgentProvider` (only `Claude`; new providers widen the CHECK), keyed by the
+  provider's own id (Claude: `oauthAccount.accountUuid`), shared by every
+  machine signed in to it. `harness_account_logins` is one sign-in on a
+  machine: `record_account_login` (trusted) applies an `AccountLoginChange`
+  once macrod confirmed it, in one transaction: a sign-in upserts the account,
+  signs out the provider's active login and inserts a new row; a sign-out
+  stamps `signed_out_at`, so history stays as signed-out rows. At most one
+  active login per provider per machine (partial unique index). `claude_mode`
+  is derived (an active `claude` login means `own_account`), never stored.
+  Capability reports on the active login's account update its `expires_at`
+  and the account's display fields. The control plane's Claude sign-in
+  notices go to the login's signer (`signed_in_by`, NULL once deleted).
 - `patch_harness` lets managers change the name and permission bypass while
   preserving computer identity, capabilities, and Claude billing mode.
 - Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
@@ -118,4 +127,4 @@ before acting"); paired machines keep it off until their owner turns it on.
 
 - New hosted-registration and metadata persistence failures use typed adapter errors with rootcause reports; existing repository callers retain their error contract.
 
-- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and Claude mode.
+- `pg_harness_repo/hosted_pairing.rs` owns hosted enrollment and computer lookups; `metadata.rs` persists capabilities and provider account logins.

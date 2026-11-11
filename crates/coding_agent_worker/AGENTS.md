@@ -70,7 +70,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (`Screen::read`) and tested against captured Claude Code 2.1.280 screens;
   update those fixtures when the pinned Claude Code changes its wording.
   `claude_auth.rs` reads `claude auth status --json` (only `claude.ai` logins
-  count) for the account and `loginExpiresAt`; sign-out runs
+  count) for the email, organization, plan (`subscriptionType`) and
+  `loginExpiresAt`, and `~/.claude.json` for `oauthAccount.accountUuid`, the
+  account's id; a Claude login without one is an error, never reported; sign-out runs
   `claude auth logout`. `claude_sign_in_cancel` interrupts URL/code waits
   before taking the sign-in mutex and closes the workspace. The capability
   reporter re-reads the sign-in every minute and reports at once when it

@@ -5674,11 +5674,55 @@
           }
         }
       },
+      "ClaudeAccountStatus": {
+        "type": "object",
+        "description": "A computer's active Claude login.",
+        "required": ["signedInAt"],
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "The account's email address, when Claude reports one."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the sign-in stops refreshing, as the computer last reported it."
+          },
+          "organization": {
+            "type": ["string", "null"],
+            "description": "The account's organization, when Claude reports one."
+          },
+          "plan": {
+            "type": ["string", "null"],
+            "description": "The account's plan, e.g. `max`."
+          },
+          "signedInAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was signed in."
+          },
+          "signedInBy": {
+            "type": ["string", "null"],
+            "description": "Who signed it in through Macro; absent once that user is deleted."
+          }
+        }
+      },
       "ClaudeModeResponse": {
         "type": "object",
-        "description": "How Claude Code on a computer is paid for.",
+        "description": "How Claude Code on a computer is paid for, and the Claude account it is\nsigned in to when it uses its own.",
         "required": ["mode"],
         "properties": {
+          "account": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClaudeAccountStatus",
+                "description": "The active Claude login; absent on Macro credits."
+              }
+            ]
+          },
           "mode": {
             "type": "string",
             "description": "`macro_credits` or `own_account`.",

@@ -22,8 +22,9 @@ use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
 use crate::domain::{
+    account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin},
     models::{
-        ClaudeModeChange, Harness, HarnessAccess, HarnessAgent, HarnessCapabilities, HarnessOwner,
+        ClaudeMode, Harness, HarnessAccess, HarnessAgent, HarnessCapabilities, HarnessOwner,
         HarnessResident, HarnessSession, PairingClaimFacts, PairingDetails, PairingStatus,
     },
     ports::{
@@ -58,7 +59,7 @@ struct HarnessRow {
     last_disconnected_at: Option<DateTime<Utc>>,
     capabilities: Json<HarnessCapabilities>,
     computer_id: Option<Uuid>,
-    claude_mode: String,
+    has_claude_login: bool,
     has_live_connection: bool,
     has_connection_record: bool,
     access: Option<AccessLevel>,
@@ -126,10 +127,11 @@ impl TryFrom<HarnessRow> for Harness {
             last_connected_at: row.last_connected_at,
             capabilities: row.capabilities.0,
             computer_id: row.computer_id.map(ComputerId::new_from_uuid),
-            claude_mode: row
-                .claude_mode
-                .parse()
-                .map_err(HarnessPersistenceError::InvalidClaudeMode)?,
+            claude_mode: if row.has_claude_login {
+                ClaudeMode::OwnAccount
+            } else {
+                ClaudeMode::MacroCredits
+            },
         })
     }
 }
@@ -153,7 +155,8 @@ async fn fetch_harness(
         SELECT
             id, kind, name, owner_user_id, created_by, allow_permission_bypass,
             created_at, updated_at, last_connected_at, last_disconnected_at,
-            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id, claude_mode,
+            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id,
+            EXISTS (SELECT 1 FROM harness_account_logins login WHERE login.harness_id = harnesses.id AND login.provider = 'claude' AND login.signed_out_at IS NULL) AS "has_claude_login!",
             EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()) AS "has_live_connection!",
             EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id) AS "has_connection_record!",
             NULL::"AccessLevel" AS "access?: AccessLevel",
@@ -353,12 +356,22 @@ impl HarnessRepo for PgHarnessRepo {
             .map_err(Into::into)
     }
 
-    async fn set_claude_mode(
+    async fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> Result<bool, Self::Err> {
-        self.set_claude_mode_inner(harness_id, change)
+        self.record_account_login_inner(harness_id, change)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> Result<Option<HarnessAccountLogin>, Self::Err> {
+        self.active_account_login_inner(harness_id, provider)
             .await
             .map_err(Into::into)
     }
@@ -487,7 +500,8 @@ impl HarnessRepo for PgHarnessRepo {
             SELECT
                 h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
                 h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
-                h.capabilities AS "capabilities: Json<HarnessCapabilities>", h.computer_id, h.claude_mode,
+                h.capabilities AS "capabilities: Json<HarnessCapabilities>", h.computer_id,
+                EXISTS (SELECT 1 FROM harness_account_logins login WHERE login.harness_id = h.id AND login.provider = 'claude' AND login.signed_out_at IS NULL) AS "has_claude_login!",
                 EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id AND c.lease_expires_at > now()) AS "has_live_connection!",
                 EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id) AS "has_connection_record!",
                 harness_access_level(h.id, $1) AS "access?: AccessLevel",
@@ -515,7 +529,8 @@ impl HarnessRepo for PgHarnessRepo {
             SELECT
                 h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
                 h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
-                h.capabilities AS "capabilities: Json<HarnessCapabilities>", h.computer_id, h.claude_mode,
+                h.capabilities AS "capabilities: Json<HarnessCapabilities>", h.computer_id,
+                EXISTS (SELECT 1 FROM harness_account_logins login WHERE login.harness_id = h.id AND login.provider = 'claude' AND login.signed_out_at IS NULL) AS "has_claude_login!",
                 EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id AND c.lease_expires_at > now()) AS "has_live_connection!",
                 EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id) AS "has_connection_record!",
                 harness_access_level(h.id, $1) AS "access?: AccessLevel",
@@ -636,7 +651,8 @@ impl HarnessRepo for PgHarnessRepo {
             RETURNING
             id, kind, name, owner_user_id, created_by, allow_permission_bypass,
             created_at, updated_at, last_connected_at, last_disconnected_at,
-            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id, claude_mode,
+            capabilities AS "capabilities: Json<HarnessCapabilities>", computer_id,
+            EXISTS (SELECT 1 FROM harness_account_logins login WHERE login.harness_id = harnesses.id AND login.provider = 'claude' AND login.signed_out_at IS NULL) AS "has_claude_login!",
             EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()) AS "has_live_connection!",
             EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id) AS "has_connection_record!",
             NULL::"AccessLevel" AS "access?: AccessLevel",

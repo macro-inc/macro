@@ -120,6 +120,36 @@ async fn computer_route_access(
             }))
         })
     });
+    repo.expect_active_account_login()
+        .returning(|harness_id, provider| {
+            Box::pin(async move {
+                Ok(Some(
+                    harnesses::domain::account_logins::HarnessAccountLogin {
+                        id: uuid::Uuid::from_u128(0x1001),
+                        harness_id,
+                        account: harnesses::domain::account_logins::ProviderAccount {
+                            id: uuid::Uuid::from_u128(0x2001),
+                            provider,
+                            identity: harnesses::domain::account_logins::ProviderAccountIdentity {
+                                external_account_id: "acct-1".to_owned(),
+                                display_email: Some("team@example.com".to_owned()),
+                                display_org: Some("Acme".to_owned()),
+                                plan: Some("max".to_owned()),
+                            },
+                        },
+                        signed_in_by: Some(
+                            macro_user_id::user_id::MacroUserIdStr::try_from(
+                                "macro|owner@example.com".to_owned(),
+                            )
+                            .unwrap(),
+                        ),
+                        signed_in_at: "2026-01-02T00:00:00Z".parse().unwrap(),
+                        expires_at: None,
+                        signed_out_at: None,
+                    },
+                ))
+            })
+        });
     repo.expect_harness_access().returning(|_, caller| {
         Box::pin(async move {
             Ok(match caller.as_ref() {
@@ -190,10 +220,20 @@ async fn computer_route_access(
     if enabled && fleet_attachment == FleetAttachment::Attached {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(
-                &to_bytes(response.into_body(), 1024).await.unwrap()
+                &to_bytes(response.into_body(), 4096).await.unwrap()
             )
             .unwrap(),
-            serde_json::json!({"mode": "own_account"})
+            serde_json::json!({
+                "mode": "own_account",
+                "account": {
+                    "email": "team@example.com",
+                    "organization": "Acme",
+                    "plan": "max",
+                    "signedInBy": "macro|owner@example.com",
+                    "signedInAt": "2026-01-02T00:00:00Z",
+                    "expiresAt": null,
+                },
+            })
         );
     }
 
@@ -333,7 +373,9 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
     };
     use harness_id::HarnessId;
     use harnesses::domain::{
-        models::ClaudeModeChange, ports::MockHarnessRepo, service::HarnessServiceImpl,
+        account_logins::{AccountLoginChange, AgentProvider, ProviderAccountIdentity},
+        ports::MockHarnessRepo,
+        service::HarnessServiceImpl,
     };
     use std::sync::Arc;
 
@@ -348,13 +390,20 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
         super::ComputerControl::start(runtimes, redis.clone(), &cleanup, shutdown.clone());
     let (mode_saved, saved) = tokio::sync::oneshot::channel();
     let mut repo = MockHarnessRepo::new();
-    repo.expect_set_claude_mode()
+    repo.expect_record_account_login()
         .times(1)
         .return_once(move |id, change| {
             assert_eq!(id, harness_id);
             assert_eq!(
                 change,
-                ClaudeModeChange::SignedIn {
+                AccountLoginChange::SignedIn {
+                    provider: AgentProvider::Claude,
+                    account: ProviderAccountIdentity {
+                        external_account_id: "acct-1".to_owned(),
+                        display_email: Some("team@example.com".to_owned()),
+                        display_org: Some("Acme".to_owned()),
+                        plan: Some("max".to_owned()),
+                    },
                     signed_in_by: macro_user_id::user_id::MacroUserIdStr::try_from(
                         "macro|owner@example.com".to_owned()
                     )
@@ -417,7 +466,12 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
         .tx
         .send(ToServerMessage::ComputerControlResponse {
             request_id: completion_id,
-            result: ComputerControlResult::SignedIn { account: None },
+            result: ComputerControlResult::SignedIn {
+                account_id: "acct-1".to_owned(),
+                account: Some("team@example.com".to_owned()),
+                organization: Some("Acme".to_owned()),
+                plan: Some("max".to_owned()),
+            },
         })
         .unwrap();
     if acknowledge_cancel {

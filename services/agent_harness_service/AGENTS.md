@@ -90,10 +90,10 @@ Pulumi stacks; they do not host extra agent processes.
   and `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights).
   A completed sign-in records its caller as the signer; sign-out clears it.
 - `src/computers/claude_expiry.rs`: the ports of the operator's
-  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers on
-  `own_account` (harness signer, capabilities and report time joined with the
-  computer's team and last `claude_notice_*`) and records sent notices on
-  `hosted_runtime`; `IngressClaudeSignInNotices` addresses the team's owner and
+  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers'
+  active Claude logins (signer, `expires_at` and last notice from
+  `harness_account_logins`, capabilities and report time from the harness, the
+  team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `claude_sign_in_expiry` (inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.

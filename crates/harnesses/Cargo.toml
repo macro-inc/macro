@@ -19,6 +19,7 @@ ports = ["dep:tokio"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+strum = { workspace = true }
 computer_id = { workspace = true, features = ["schema", "sqlx"] }
 pairing_id = { workspace = true, features = ["schema", "sqlx"] }
 anyhow = { workspace = true }

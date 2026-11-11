@@ -43365,11 +43365,28 @@ export const approveHarnessPairingResponse = zod
                       .describe(
                         "The account's email address, when Claude reports one."
                       ),
+                    account_id: zod
+                      .string()
+                      .describe(
+                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                      ),
                     expires_at: zod.iso
                       .datetime({})
                       .nullish()
                       .describe(
                         'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    organization: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's organization, when Claude reports one."
+                      ),
+                    plan: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's plan (`subscriptionType`), e.g. `max`."
                       ),
                     status: zod.enum(['signed_in']),
                   })
@@ -43392,7 +43409,9 @@ export const approveHarnessPairingResponse = zod
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
       .optional()
-      .describe('How Claude Code on a Macro computer is paid for.'),
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
     computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
@@ -43486,11 +43505,28 @@ export const claimHarnessPairingResponse = zod
                           .describe(
                             "The account's email address, when Claude reports one."
                           ),
+                        account_id: zod
+                          .string()
+                          .describe(
+                            "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                          ),
                         expires_at: zod.iso
                           .datetime({})
                           .nullish()
                           .describe(
                             'When the sign-in stops refreshing and must be repeated.'
+                          ),
+                        organization: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "The account's organization, when Claude reports one."
+                          ),
+                        plan: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "The account's plan (`subscriptionType`), e.g. `max`."
                           ),
                         status: zod.enum(['signed_in']),
                       })
@@ -43515,7 +43551,9 @@ export const claimHarnessPairingResponse = zod
         claude_mode: zod
           .enum(['macro_credits', 'own_account'])
           .optional()
-          .describe('How Claude Code on a Macro computer is paid for.'),
+          .describe(
+            'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+          ),
         computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
@@ -43597,11 +43635,28 @@ export const listHarnessesResponseItem = zod
                       .describe(
                         "The account's email address, when Claude reports one."
                       ),
+                    account_id: zod
+                      .string()
+                      .describe(
+                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                      ),
                     expires_at: zod.iso
                       .datetime({})
                       .nullish()
                       .describe(
                         'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    organization: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's organization, when Claude reports one."
+                      ),
+                    plan: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's plan (`subscriptionType`), e.g. `max`."
                       ),
                     status: zod.enum(['signed_in']),
                   })
@@ -43624,7 +43679,9 @@ export const listHarnessesResponseItem = zod
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
       .optional()
-      .describe('How Claude Code on a Macro computer is paid for.'),
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
     computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
@@ -43700,11 +43757,28 @@ export const listHarnessDirectoryResponseItem = zod
                       .describe(
                         "The account's email address, when Claude reports one."
                       ),
+                    account_id: zod
+                      .string()
+                      .describe(
+                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                      ),
                     expires_at: zod.iso
                       .datetime({})
                       .nullish()
                       .describe(
                         'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    organization: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's organization, when Claude reports one."
+                      ),
+                    plan: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's plan (`subscriptionType`), e.g. `max`."
                       ),
                     status: zod.enum(['signed_in']),
                   })
@@ -43727,7 +43801,9 @@ export const listHarnessDirectoryResponseItem = zod
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
       .optional()
-      .describe('How Claude Code on a Macro computer is paid for.'),
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
     computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
@@ -43805,11 +43881,28 @@ export const getSelfHarnessResponse = zod
                       .describe(
                         "The account's email address, when Claude reports one."
                       ),
+                    account_id: zod
+                      .string()
+                      .describe(
+                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                      ),
                     expires_at: zod.iso
                       .datetime({})
                       .nullish()
                       .describe(
                         'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    organization: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's organization, when Claude reports one."
+                      ),
+                    plan: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's plan (`subscriptionType`), e.g. `max`."
                       ),
                     status: zod.enum(['signed_in']),
                   })
@@ -43832,7 +43925,9 @@ export const getSelfHarnessResponse = zod
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
       .optional()
-      .describe('How Claude Code on a Macro computer is paid for.'),
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
     computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
@@ -43909,11 +44004,28 @@ export const putSelfHarnessCapabilitiesBody = zod
                   .describe(
                     "The account's email address, when Claude reports one."
                   ),
+                account_id: zod
+                  .string()
+                  .describe(
+                    "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                  ),
                 expires_at: zod.iso
                   .datetime({})
                   .nullish()
                   .describe(
                     'When the sign-in stops refreshing and must be repeated.'
+                  ),
+                organization: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The account's organization, when Claude reports one."
+                  ),
+                plan: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The account's plan (`subscriptionType`), e.g. `max`."
                   ),
                 status: zod.enum(['signed_in']),
               })
@@ -44023,11 +44135,28 @@ export const patchHarnessResponse = zod
                       .describe(
                         "The account's email address, when Claude reports one."
                       ),
+                    account_id: zod
+                      .string()
+                      .describe(
+                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+                      ),
                     expires_at: zod.iso
                       .datetime({})
                       .nullish()
                       .describe(
                         'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    organization: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's organization, when Claude reports one."
+                      ),
+                    plan: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's plan (`subscriptionType`), e.g. `max`."
                       ),
                     status: zod.enum(['signed_in']),
                   })
@@ -44050,7 +44179,9 @@ export const patchHarnessResponse = zod
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
       .optional()
-      .describe('How Claude Code on a Macro computer is paid for.'),
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
     computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()

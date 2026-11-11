@@ -4156,14 +4156,27 @@ export type ClaudeAccount = {
      */
     account?: string | null;
     /**
+     * The account's id at Anthropic (`oauthAccount.accountUuid`).
+     */
+    account_id: string;
+    /**
      * When the sign-in stops refreshing and must be repeated.
      */
     expires_at?: string | null;
+    /**
+     * The account's organization, when Claude reports one.
+     */
+    organization?: string | null;
+    /**
+     * The account's plan (`subscriptionType`), e.g. `max`.
+     */
+    plan?: string | null;
     status: 'signed_in';
 };
 
 /**
- * How Claude Code on a Macro computer is paid for.
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
  */
 export type ClaudeMode = 'macro_credits' | 'own_account';
 
@@ -12422,8 +12435,8 @@ export type Harness = {
      */
     capabilities?: HarnessCapabilities;
     /**
-     * How Claude Code on this machine is paid for. Only meaningful for
-     * Macro computers.
+     * How Claude Code on this machine is paid for, derived from whether
+     * it has an active Claude login. Only meaningful for Macro computers.
      */
     claude_mode?: ClaudeMode;
     computer_id?: null | ComputerId;

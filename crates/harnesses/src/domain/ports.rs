@@ -10,12 +10,13 @@ use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin};
 use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaudeModeChange,
-    CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
-    HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
-    HarnessSession, HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus,
-    PatchHarnessRequest, SetHarnessTeamAccessRequest,
+    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
+    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent,
+    HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
+    HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
+    SetHarnessTeamAccessRequest,
 };
 
 /// A pairing row to persist.
@@ -173,13 +174,22 @@ pub trait HarnessRepo: Send + Sync + 'static {
         capabilities: HarnessCapabilities,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Record how Claude Code on an active harness is paid for, and who
-    /// signed it in. Returns `false` when the harness is unknown or deleted.
-    fn set_claude_mode(
+    /// Record a sign-in or sign-out at a provider on an active harness, in
+    /// one transaction: a sign-in upserts the provider account, signs out
+    /// the provider's active login and inserts a new one. Returns `false`
+    /// when the harness is unknown or deleted.
+    fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// The harness's active login at `provider`, if any.
+    fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, Self::Err>> + Send;
 
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(
@@ -442,14 +452,21 @@ pub trait HarnessService: Send + Sync + 'static {
         access: HarnessPermission,
     ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
-    /// Record how Claude Code on a harness is paid for, and who signed it
-    /// in, once its runtime confirmed the switch. Trusted in-process callers
-    /// only.
-    fn set_claude_mode(
+    /// Record a sign-in or sign-out at a provider on a harness once its
+    /// runtime confirmed it. Trusted in-process callers only.
+    fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// The harness's active login at `provider`, if any. Trusted in-process
+    /// callers only; they authorize the harness first.
+    fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, HarnessError>> + Send;
 }
 
 /// Harness service error.

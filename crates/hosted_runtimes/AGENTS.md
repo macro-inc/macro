@@ -300,9 +300,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Claude sign-in notices**: `domain::claude_sign_in::due_notice(now, sign_in)`
   is pure: within three days of the reported expiry `ExpiresSoon`, within one
   day `ExpiresToday`, once passed (or macrod reports Claude signed out)
-  `Expired`. Only a report newer than the recorded sign-in counts. The last
-  notice (stage, sign-in time, expiry) is stored on `hosted_runtime`
-  (`claude_notice_*`); one for an older sign-in or expiry no longer counts,
+  `Expired`. Only a report newer than the recorded sign-in counts. Each
+  `ClaudeSignIn` is a computer's active Claude login, and its last notice
+  (stage and the expiry it warned about) is stored on that login row
+  (`harness_account_logins.notice_*`), so a new sign-in starts over; one for an
+  older expiry no longer counts,
   nothing follows `Expired` for the same sign-in, and a later stage skips the
   ones it overtook. `ComputerOperator::notify_claude_sign_ins(sign_ins, notices)`
   sends each due notice to the signer plus the team's owner and admins, then

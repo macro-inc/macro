@@ -220,6 +220,7 @@ impl Modify for SecurityAddon {
         crate::computers::claude::ClaudeSignInComplete,
         crate::computers::claude::ClaudeSignedIn,
         crate::computers::claude::ClaudeModeResponse,
+        crate::computers::claude::ClaudeAccountStatus,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

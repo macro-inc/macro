@@ -4,11 +4,14 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ClaudeModeResponseAccount } from './claudeModeResponseAccount';
 
 /**
- * How Claude Code on a computer is paid for.
+ * How Claude Code on a computer is paid for, and the Claude account it is
+signed in to when it uses its own.
  */
 export interface ClaudeModeResponse {
+  account?: ClaudeModeResponseAccount;
   /** `macro_credits` or `own_account`. */
   mode: string;
 }

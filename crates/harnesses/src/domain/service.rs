@@ -13,8 +13,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::{
+    account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin},
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeModeChange,
+        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
         HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
         HarnessSession, HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
@@ -654,20 +655,34 @@ where
         Ok(harness)
     }
 
-    #[tracing::instrument(skip(self, change), fields(mode = change.mode().as_str()), err)]
-    async fn set_claude_mode(
+    #[tracing::instrument(skip(self, change), fields(provider = change.provider().as_ref()), err)]
+    async fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> Result<(), HarnessError> {
         if !self
             .repo
-            .set_claude_mode(harness_id, change)
+            .record_account_login(harness_id, change)
             .await
             .map_err(Into::into)?
         {
             return Err(HarnessError::NotFound("unknown harness".to_owned()));
         }
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), fields(provider = provider.as_ref()), err)]
+    async fn active_account_login(
+        &self,
+        harness_id: HarnessId,
+        provider: AgentProvider,
+    ) -> Result<Option<HarnessAccountLogin>, HarnessError> {
+        let login = self
+            .repo
+            .active_account_login(harness_id, provider)
+            .await
+            .map_err(Into::<anyhow::Error>::into)?;
+        Ok(login)
     }
 }

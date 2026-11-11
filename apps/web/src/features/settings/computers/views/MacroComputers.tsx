@@ -118,9 +118,14 @@ function ManagedComputerRow(props: {
   const undoCancel = useUndoCancelComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
+  // The active login names the account; macrod's report says whether Claude
+  // is still signed in to it.
   const account = () => {
     const claude = props.harness?.capabilities?.claude;
-    return claude?.status === 'signed_in' ? claude.account : undefined;
+    if (claude?.status !== 'signed_in') return undefined;
+    return mode.isSuccess
+      ? (mode.data.account?.email ?? undefined)
+      : claude.account;
   };
   const currentMode = () =>
     mode.isSuccess ? mode.data.mode : props.harness?.claude_mode;

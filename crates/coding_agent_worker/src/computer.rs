@@ -209,10 +209,10 @@ impl Computer {
     #[tracing::instrument(name = "macrod.claude.sign_in.complete", skip_all, err)]
     async fn complete_sign_in(&self, code: &str) -> rootcause::Result<ComputerControlResult> {
         let mut slot = self.sign_in.lock().await;
-        if slot.is_none() && self.claude_auth().is_signed_in() {
-            return Ok(ComputerControlResult::SignedIn {
-                account: self.claude_auth().account(),
-            });
+        if slot.is_none()
+            && let Some(signed_in) = self.claude_auth().signed_in_result()
+        {
+            return Ok(signed_in);
         }
         let mut sign_in = slot
             .take()
@@ -238,10 +238,12 @@ impl Computer {
             }
             Err(error) => return Err(rootcause::report!("{error}")),
         };
-        let account = auth.account();
+        let signed_in = auth
+            .signed_in_result()
+            .ok_or_else(|| rootcause::report!("Claude is not signed in after the sign-in"))?;
         self.set_auth(auth);
         tracing::info!("Claude account signed in");
-        Ok(ComputerControlResult::SignedIn { account })
+        Ok(signed_in)
     }
 
     #[cfg(unix)]

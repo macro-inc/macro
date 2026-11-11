@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,\n                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,\n                h.capabilities AS \"capabilities: Json<HarnessCapabilities>\", h.computer_id, h.claude_mode,\n                EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id AND c.lease_expires_at > now()) AS \"has_live_connection!\",\n                EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = h.id) AS \"has_connection_record!\",\n                harness_access_level(h.id, $1) AS \"access?: AccessLevel\",\n                ARRAY(SELECT ea.source_id FROM entity_access ea WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team') AS shared_team_ids\n            FROM harnesses h\n            WHERE h.deleted_at IS NULL AND harness_can_run(h.id, $1)\n            ORDER BY h.created_at DESC\n            ",
+  "query": "\n            UPDATE harnesses\n            SET\n                name = COALESCE($2, name),\n                allow_permission_bypass = COALESCE($3, allow_permission_bypass),\n                updated_at = now()\n            WHERE id = $1 AND deleted_at IS NULL\n            RETURNING\n            id, kind, name, owner_user_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n            capabilities AS \"capabilities: Json<HarnessCapabilities>\", computer_id,\n            EXISTS (SELECT 1 FROM harness_account_logins login WHERE login.harness_id = harnesses.id AND login.provider = 'claude' AND login.signed_out_at IS NULL) AS \"has_claude_login!\",\n            EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()) AS \"has_live_connection!\",\n            EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id) AS \"has_connection_record!\",\n            NULL::\"AccessLevel\" AS \"access?: AccessLevel\",\n            ARRAY(SELECT ea.source_id FROM entity_access ea WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team') AS shared_team_ids\n            ",
   "describe": {
     "columns": [
       {
@@ -65,8 +65,8 @@
       },
       {
         "ordinal": 12,
-        "name": "claude_mode",
-        "type_info": "Text"
+        "name": "has_claude_login!",
+        "type_info": "Bool"
       },
       {
         "ordinal": 13,
@@ -103,7 +103,9 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid",
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -119,12 +121,12 @@
       true,
       false,
       true,
-      false,
+      null,
       null,
       null,
       null,
       null
     ]
   },
-  "hash": "f67a671c4006e3666f43396ba4b45dc053dbb0d1f5aa58ffb54bc04516cff6da"
+  "hash": "12a1fc98e28a635898a826874e71dfe1713a95d75ce0c75af590ab9990657f5d"
 }

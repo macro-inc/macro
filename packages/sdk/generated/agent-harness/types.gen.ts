@@ -1166,9 +1166,41 @@ export type ClassifyInputResponse = {
 };
 
 /**
- * How Claude Code on a computer is paid for.
+ * A computer's active Claude login.
+ */
+export type ClaudeAccountStatus = {
+    /**
+     * The account's email address, when Claude reports one.
+     */
+    email?: string | null;
+    /**
+     * When the sign-in stops refreshing, as the computer last reported it.
+     */
+    expiresAt?: string | null;
+    /**
+     * The account's organization, when Claude reports one.
+     */
+    organization?: string | null;
+    /**
+     * The account's plan, e.g. `max`.
+     */
+    plan?: string | null;
+    /**
+     * When it was signed in.
+     */
+    signedInAt: string;
+    /**
+     * Who signed it in through Macro; absent once that user is deleted.
+     */
+    signedInBy?: string | null;
+};
+
+/**
+ * How Claude Code on a computer is paid for, and the Claude account it is
+ * signed in to when it uses its own.
  */
 export type ClaudeModeResponse = {
+    account?: null | ClaudeAccountStatus;
     /**
      * `macro_credits` or `own_account`.
      */

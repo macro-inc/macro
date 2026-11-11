@@ -544,6 +544,8 @@ export * from './claudeAccountOneOfStatus';
 export * from './claudeAccountOneOfThree';
 export * from './claudeAccountOneOfThreeAccount';
 export * from './claudeAccountOneOfThreeExpiresAt';
+export * from './claudeAccountOneOfThreeOrganization';
+export * from './claudeAccountOneOfThreePlan';
 export * from './claudeAccountOneOfThreeStatus';
 export * from './claudeMode';
 export * from './cloudStorageItemType';

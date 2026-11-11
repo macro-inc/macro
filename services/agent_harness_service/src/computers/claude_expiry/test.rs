@@ -53,18 +53,38 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
     sqlx::query!(
         r#"
         INSERT INTO harnesses (
-            id, name, owner_user_id, created_by, computer_id, claude_mode,
-            claude_signed_in_by, claude_signed_in_at, capabilities, capabilities_reported_at
+            id, name, owner_user_id, created_by, computer_id, capabilities, capabilities_reported_at
         )
         VALUES (
             $1, 'Build box', 'macro|owner@example.com', 'macro|owner@example.com', $2,
-            'own_account', 'macro|signer@example.com', '2026-11-01T12:00:00Z',
-            '{"screen": true, "claude": {"status": "signed_in", "account": "team@example.com", "expires_at": "2026-11-20T12:00:00Z"}}',
+            '{"screen": true, "claude": {"status": "signed_in", "account_id": "acct-1", "account": "team@example.com", "expires_at": "2026-11-25T12:00:00Z"}}',
             '2026-11-01T12:01:00Z'
         )
         "#,
         harness_id.as_uuid(),
         signed_in.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // The login row, not the capability report, holds the expiry to warn about.
+    let login_id = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_1001);
+    sqlx::query!(
+        r#"
+        WITH account AS (
+            INSERT INTO provider_accounts (id, provider, external_account_id, display_email)
+            VALUES ($3, 'claude', 'acct-1', 'team@example.com')
+            RETURNING id
+        )
+        INSERT INTO harness_account_logins
+            (id, harness_id, provider_account_id, provider, signed_in_by, signed_in_at, expires_at)
+        SELECT $1, $2, account.id, 'claude', 'macro|owner@example.com',
+               '2026-11-01T12:00:00Z', '2026-11-20T12:00:00Z'
+        FROM account
+        "#,
+        login_id,
+        harness_id.as_uuid(),
+        Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_2001),
     )
     .execute(&pool)
     .await
@@ -83,11 +103,12 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
     let sign_ins = PgClaudeSignIns::new(pool);
     let at = |day, hour| Utc.with_ymd_and_hms(2026, 11, day, hour, 0, 0).unwrap();
     let expected = ClaudeSignIn {
+        login_id,
         computer_id: signed_in,
         harness_id,
         team_id: TEAM,
         computer_name: "Build box".to_owned(),
-        signed_in_by: MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
+        signed_in_by: Some(MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()),
         signed_in_at: at(1, 12),
         report: Some(ClaudeReport::SignedIn {
             expires_at: Some(at(20, 12)),
@@ -103,7 +124,7 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
         stage: ClaudeSignInStage::ExpiresSoon,
         expires_at: Some(at(20, 12)),
     };
-    sign_ins.record_notice(signed_in, notice).await.unwrap();
+    sign_ins.record_notice(login_id, notice).await.unwrap();
 
     assert_eq!(
         sign_ins.signed_in().await.unwrap(),

@@ -2,7 +2,10 @@ use super::*;
 
 fn signed_in() -> ClaudeAccount {
     ClaudeAccount::SignedIn {
+        account_id: "acct-ada".to_owned(),
         account: Some("ada@example.com".to_owned()),
+        organization: None,
+        plan: None,
         expires_at: None,
     }
 }

@@ -6,6 +6,8 @@
  */
 import type { ClaudeAccountOneOfThreeAccount } from './claudeAccountOneOfThreeAccount';
 import type { ClaudeAccountOneOfThreeExpiresAt } from './claudeAccountOneOfThreeExpiresAt';
+import type { ClaudeAccountOneOfThreeOrganization } from './claudeAccountOneOfThreeOrganization';
+import type { ClaudeAccountOneOfThreePlan } from './claudeAccountOneOfThreePlan';
 import type { ClaudeAccountOneOfThreeStatus } from './claudeAccountOneOfThreeStatus';
 
 /**
@@ -14,7 +16,13 @@ import type { ClaudeAccountOneOfThreeStatus } from './claudeAccountOneOfThreeSta
 export type ClaudeAccountOneOfThree = {
   /** The account's email address, when Claude reports one. */
   account?: ClaudeAccountOneOfThreeAccount;
+  /** The account's id at Anthropic (`oauthAccount.accountUuid`). */
+  account_id: string;
   /** When the sign-in stops refreshing and must be repeated. */
   expires_at?: ClaudeAccountOneOfThreeExpiresAt;
+  /** The account's organization, when Claude reports one. */
+  organization?: ClaudeAccountOneOfThreeOrganization;
+  /** The account's plan (`subscriptionType`), e.g. `max`. */
+  plan?: ClaudeAccountOneOfThreePlan;
   status: ClaudeAccountOneOfThreeStatus;
 };

@@ -68,7 +68,7 @@ struct Calls {
     team_lookups: Vec<(String, Uuid)>,
     hosted_upserts: Vec<(NewPairing, NewHarness)>,
     capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
-    claude_modes: Vec<(HarnessId, ClaudeModeChange)>,
+    account_logins: Vec<(HarnessId, AccountLoginChange)>,
     team_access: Vec<(Uuid, bool)>,
 }
 
@@ -204,17 +204,25 @@ impl HarnessRepo for FakeRepo {
         Ok(self.set_capabilities_result)
     }
 
-    async fn set_claude_mode(
+    async fn record_account_login(
         &self,
         harness_id: HarnessId,
-        change: ClaudeModeChange,
+        change: AccountLoginChange,
     ) -> Result<bool, Self::Err> {
         self.calls
             .lock()
             .unwrap()
-            .claude_modes
+            .account_logins
             .push((harness_id, change));
         Ok(self.harness.is_some())
+    }
+
+    async fn active_account_login(
+        &self,
+        _harness_id: HarnessId,
+        _provider: AgentProvider,
+    ) -> Result<Option<HarnessAccountLogin>, Self::Err> {
+        Ok(None)
     }
 
     async fn pairing_claim_facts(
@@ -1275,24 +1283,14 @@ async fn team_members_view_a_team_harness_but_only_managers_manage_it() {
 }
 
 #[tokio::test]
-async fn claude_mode_reaches_the_repo() {
-    let repo = FakeRepo {
-        harness: Some(harness(user_owner(OWNER_ID))),
-        ..FakeRepo::default()
-    };
-    let signed_in = ClaudeModeChange::SignedIn {
-        signed_in_by: MacroUserIdStr::try_from(OWNER_ID.to_owned()).unwrap(),
-    };
-    service(repo.clone())
-        .set_claude_mode(HarnessId::TEST_A, signed_in.clone())
-        .await
-        .unwrap();
-    assert_eq!(
-        repo.calls.lock().unwrap().claude_modes,
-        [(HarnessId::TEST_A, signed_in)]
-    );
+async fn an_account_login_on_an_unknown_harness_is_not_found() {
     let missing = service(FakeRepo::default())
-        .set_claude_mode(HarnessId::TEST_A, ClaudeModeChange::SignedOut)
+        .record_account_login(
+            HarnessId::TEST_A,
+            AccountLoginChange::SignedOut {
+                provider: AgentProvider::Claude,
+            },
+        )
         .await;
     assert!(matches!(missing, Err(HarnessError::NotFound(_))));
 }

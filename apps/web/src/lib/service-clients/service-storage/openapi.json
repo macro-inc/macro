@@ -31879,16 +31879,28 @@
           {
             "type": "object",
             "description": "Signed in to a Claude account.",
-            "required": ["status"],
+            "required": ["account_id", "status"],
             "properties": {
               "account": {
                 "type": ["string", "null"],
                 "description": "The account's email address, when Claude reports one."
               },
+              "account_id": {
+                "type": "string",
+                "description": "The account's id at Anthropic (`oauthAccount.accountUuid`)."
+              },
               "expires_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the sign-in stops refreshing and must be repeated."
+              },
+              "organization": {
+                "type": ["string", "null"],
+                "description": "The account's organization, when Claude reports one."
+              },
+              "plan": {
+                "type": ["string", "null"],
+                "description": "The account's plan (`subscriptionType`), e.g. `max`."
               },
               "status": {
                 "type": "string",
@@ -31901,7 +31913,7 @@
       },
       "ClaudeMode": {
         "type": "string",
-        "description": "How Claude Code on a Macro computer is paid for.",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
         "enum": ["macro_credits", "own_account"]
       },
       "CloudStorageItemType": {
@@ -45239,7 +45251,7 @@
           },
           "claude_mode": {
             "$ref": "#/components/schemas/ClaudeMode",
-            "description": "How Claude Code on this machine is paid for. Only meaningful for\nMacro computers."
+            "description": "How Claude Code on this machine is paid for, derived from whether\nit has an active Claude login. Only meaningful for Macro computers."
           },
           "computer_id": {
             "oneOf": [

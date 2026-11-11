@@ -251,23 +251,31 @@ mod claude_status {
 
     #[test]
     fn only_a_claude_account_login_counts_as_signed_in() {
+        let status = r#"{"loggedIn":true,"authMethod":"claude.ai","email":"team@example.com","loginExpiresAt":"2027-02-01T00:00:00.000Z","orgName":"Acme","subscriptionType":"max"}"#;
         let signed_in = parse_status(
-            r#"{"loggedIn":true,"authMethod":"claude.ai","email":"team@example.com","loginExpiresAt":"2027-02-01T00:00:00.000Z","orgName":"Acme"}"#,
+            status,
+            Some(r#"{"oauthAccount":{"accountUuid":"8f3c1b2a-0000-4000-8000-000000000001","emailAddress":"team@example.com"}}"#),
         )
         .unwrap();
         assert_eq!(
             signed_in.0,
             ClaudeAccount::SignedIn {
+                account_id: "8f3c1b2a-0000-4000-8000-000000000001".to_owned(),
                 account: Some("team@example.com".to_owned()),
+                organization: Some("Acme".to_owned()),
+                plan: Some("max".to_owned()),
                 expires_at: Some("2027-02-01T00:00:00Z".parse().unwrap()),
             }
         );
         assert_eq!(signed_in.account().as_deref(), Some("team@example.com"));
+        // Accounts are keyed by their id, so a login without one is refused.
+        assert!(parse_status(status, None).is_err());
+        assert!(parse_status(status, Some("{}")).is_err());
 
-        let signed_out = parse_status(r#"{"loggedIn":false,"authMethod":"none"}"#).unwrap();
+        let signed_out = parse_status(r#"{"loggedIn":false,"authMethod":"none"}"#, None).unwrap();
         assert_eq!(signed_out.0, ClaudeAccount::SignedOut);
-        let api_key = parse_status(r#"{"loggedIn":true,"authMethod":"api_key"}"#).unwrap();
+        let api_key = parse_status(r#"{"loggedIn":true,"authMethod":"api_key"}"#, None).unwrap();
         assert!(!api_key.is_signed_in());
-        assert!(parse_status("not json").is_err());
+        assert!(parse_status("not json", None).is_err());
     }
 }

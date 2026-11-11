@@ -64,9 +64,12 @@ pub struct ClaudeSignInNotice {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
-/// A computer whose Claude Code runs on an account signed in through Macro.
+/// A computer whose Claude Code runs on an account signed in through Macro:
+/// its active Claude login.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaudeSignIn {
+    /// The login (`harness_account_logins` row), where notices are recorded.
+    pub login_id: Uuid,
     /// The computer.
     pub computer_id: ComputerId,
     /// Its harness, where the sign-in lives.
@@ -75,15 +78,15 @@ pub struct ClaudeSignIn {
     pub team_id: Uuid,
     /// The computer's name as the team sees it.
     pub computer_name: String,
-    /// Who signed Claude in through Macro.
-    pub signed_in_by: MacroUserIdStr<'static>,
+    /// Who signed Claude in through Macro; `None` once that user is deleted.
+    pub signed_in_by: Option<MacroUserIdStr<'static>>,
     /// When the sign-in was recorded.
     pub signed_in_at: DateTime<Utc>,
     /// macrod's latest Claude report, if it sent one.
     pub report: Option<ClaudeReport>,
     /// When macrod sent `report`.
     pub reported_at: Option<DateTime<Utc>>,
-    /// The last notice sent for this computer, for any sign-in.
+    /// The last notice sent for this login.
     pub last_notice: Option<ClaudeSignInNotice>,
 }
 
@@ -159,10 +162,10 @@ pub trait ClaudeSignIns: Send + Sync + 'static {
     /// through Macro.
     fn signed_in(&self) -> impl Future<Output = Result<Vec<ClaudeSignIn>, Self::Err>> + Send;
 
-    /// Remember that `notice` went out for `computer_id`.
+    /// Remember that `notice` went out for the login `login_id`.
     fn record_notice(
         &self,
-        computer_id: ComputerId,
+        login_id: Uuid,
         notice: ClaudeSignInNotice,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
@@ -267,7 +270,7 @@ where
             return false;
         }
     };
-    let mut recipients = HashSet::from([sign_in.signed_in_by]);
+    let mut recipients: HashSet<_> = sign_in.signed_in_by.into_iter().collect();
     recipients.extend(admins);
 
     let expiry = ClaudeSignInExpiry {
@@ -280,7 +283,7 @@ where
         tracing::error!(%computer_id, error = ?error, "could not send a Claude sign-in notice");
         return false;
     }
-    if let Err(error) = sign_ins.record_notice(computer_id, notice).await {
+    if let Err(error) = sign_ins.record_notice(sign_in.login_id, notice).await {
         tracing::error!(%computer_id, error = ?error, "could not record a Claude sign-in notice");
         return false;
     }

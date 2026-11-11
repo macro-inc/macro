@@ -9,17 +9,11 @@ SET LOCAL lock_timeout = '5s';
 -- What a harness's machine can do, reported by macrod after it connects,
 -- e.g. {"screen": true}. `computer_id` is the Macro computer it runs on; null
 -- for a machine the user paired. No foreign key: computers outlive
--- soft-deleted harness rows. `claude_mode` is how Claude Code on a computer
--- is paid for; the sign-in columns are set with 'own_account' and cleared on
--- sign-out. `capabilities_reported_at` is when macrod last reported, so a
--- report older than a sign-in is not taken for its outcome.
+-- soft-deleted harness rows. `capabilities_reported_at` is when macrod last
+-- reported, so a report older than a sign-in is not taken for its outcome.
 ALTER TABLE public.harnesses
     ADD COLUMN capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
     ADD COLUMN computer_id uuid,
-    ADD COLUMN claude_mode text NOT NULL DEFAULT 'macro_credits'
-        CHECK (claude_mode IN ('macro_credits', 'own_account')),
-    ADD COLUMN claude_signed_in_by text,
-    ADD COLUMN claude_signed_in_at timestamptz,
     ADD COLUMN capabilities_reported_at timestamptz;
 
 -- Deleting a Macro computer's harness does not unbind its agents: the
@@ -39,6 +33,50 @@ $$
 $$;
 
 -- New tables.
+
+-- An account at an agent's provider (e.g. a Claude account), shared by every
+-- machine it is signed in on. `external_account_id` is the provider's own id
+-- (Claude: oauthAccount.accountUuid); the display columns are what the
+-- provider last reported. New providers widen the CHECK.
+CREATE TABLE provider_accounts (
+    id UUID PRIMARY KEY,
+    provider TEXT NOT NULL CHECK (provider IN ('claude')),
+    external_account_id TEXT NOT NULL,
+    display_email TEXT,
+    display_org TEXT,
+    plan TEXT,
+    first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (provider, external_account_id),
+    -- The target of harness_account_logins' provider-matching foreign key.
+    UNIQUE (id, provider)
+);
+
+-- One sign-in of a provider account on a machine. A new sign-in inserts a row
+-- and signs the previous one out, so history stays as signed-out rows. A
+-- machine uses its own account at a provider while it has an active row
+-- (otherwise Macro credits). `expires_at` moves as the machine reports
+-- refreshes; the notice columns are the last expiry notice sent for this
+-- sign-in and the expiry it warned about.
+CREATE TABLE harness_account_logins (
+    id UUID PRIMARY KEY,
+    harness_id UUID NOT NULL REFERENCES harnesses (id) ON DELETE CASCADE,
+    provider_account_id UUID NOT NULL,
+    provider TEXT NOT NULL CHECK (provider IN ('claude')),
+    signed_in_by TEXT REFERENCES "User" (id) ON DELETE SET NULL,
+    signed_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ,
+    signed_out_at TIMESTAMPTZ,
+    notice_stage TEXT CHECK (notice_stage IN ('expires_soon', 'expires_today', 'expired')),
+    notice_expires_at TIMESTAMPTZ,
+    FOREIGN KEY (provider_account_id, provider) REFERENCES provider_accounts (id, provider)
+);
+
+-- One active login per provider per machine.
+CREATE UNIQUE INDEX harness_account_logins_active_uq
+    ON harness_account_logins (harness_id, provider) WHERE signed_out_at IS NULL;
+CREATE INDEX harness_account_logins_account_idx ON harness_account_logins (provider_account_id);
+CREATE INDEX harness_account_logins_signed_in_by_idx ON harness_account_logins (signed_in_by);
 
 -- The model configuration each paired runtime last reported, so its agents
 -- stay editable while the machine is off. Owned by agent_harness_service.
@@ -78,8 +116,7 @@ CREATE TABLE hosted_runtime_host (
 -- computers have no price. `created_by` is RESTRICTed so enrollment and
 -- billing attribution survive until the computer or team is deleted.
 -- `image` is what the root disk was last built from and `previous_image`
--- the rollback target, both null until the first creation finishes. The
--- claude_notice_* columns are the last Claude sign-in expiry notice sent.
+-- the rollback target, both null until the first creation finishes.
 -- Bots are soft-deleted, so `default_agent_id` can name a deleted agent.
 CREATE TABLE hosted_runtime (
     id UUID PRIMARY KEY,
@@ -107,14 +144,8 @@ CREATE TABLE hosted_runtime (
     default_agent_id UUID REFERENCES bots (id) ON DELETE SET NULL,
     image TEXT,
     previous_image TEXT,
-    claude_notice_stage TEXT
-        CHECK (claude_notice_stage IN ('expires_soon', 'expires_today', 'expired')),
-    claude_notice_signed_in_at TIMESTAMPTZ,
-    claude_notice_expires_at TIMESTAMPTZ,
     CONSTRAINT hosted_runtime_price_provenance_check
-        CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL)),
-    CONSTRAINT hosted_runtime_claude_notice_complete
-        CHECK ((claude_notice_stage IS NULL) = (claude_notice_signed_in_at IS NULL))
+        CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL))
 );
 
 CREATE INDEX hosted_runtime_team_idx ON hosted_runtime (team_id, created_at);

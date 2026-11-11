@@ -18,13 +18,16 @@ fn at(day: u32, hour: u32) -> DateTime<Utc> {
 /// report from a minute after the sign-in and no notice sent yet.
 fn signed_in_on_the_first() -> ClaudeSignIn {
     ClaudeSignIn {
+        login_id: Uuid::from_u128(0x101),
         computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
         harness_id: HarnessId::new_from_uuid(Uuid::from_u128(
             0x0000_0000_0000_7000_8000_0000_0000_0c0c,
         )),
         team_id: TEAM,
         computer_name: "Build box".to_owned(),
-        signed_in_by: MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
+        signed_in_by: Some(
+            MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
+        ),
         signed_in_at: at(1, 12),
         report: Some(ClaudeReport::SignedIn {
             expires_at: Some(at(20, 12)),
@@ -220,7 +223,7 @@ struct FakeError;
 
 struct FakeSignIns {
     signed_in: Vec<ClaudeSignIn>,
-    recorded: Mutex<Vec<(ComputerId, ClaudeSignInNotice)>>,
+    recorded: Mutex<Vec<(Uuid, ClaudeSignInNotice)>>,
 }
 
 impl ClaudeSignIns for FakeSignIns {
@@ -232,10 +235,10 @@ impl ClaudeSignIns for FakeSignIns {
 
     async fn record_notice(
         &self,
-        computer_id: ComputerId,
+        login_id: Uuid,
         notice: ClaudeSignInNotice,
     ) -> Result<(), FakeError> {
-        self.recorded.lock().unwrap().push((computer_id, notice));
+        self.recorded.lock().unwrap().push((login_id, notice));
         Ok(())
     }
 }
@@ -277,10 +280,12 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
         signed_in: vec![
             signed_in_on_the_first(),
             ClaudeSignIn {
+                login_id: Uuid::from_u128(0x102),
                 computer_id: failing,
                 ..signed_in_on_the_first()
             },
             ClaudeSignIn {
+                login_id: Uuid::from_u128(0x103),
                 computer_id: quiet,
                 report: Some(ClaudeReport::SignedIn {
                     expires_at: Some(at(30, 12)),
@@ -330,6 +335,6 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
     // The failed computer is not recorded, so the next pass retries it.
     assert_eq!(
         *sign_ins.recorded.lock().unwrap(),
-        vec![(ComputerId::new_from_uuid(Uuid::from_u128(1)), notice)]
+        vec![(Uuid::from_u128(0x101), notice)]
     );
 }

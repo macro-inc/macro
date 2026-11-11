@@ -111,6 +111,8 @@ export function useClaudeCompleteMutation() {
       queryClient.setQueryData<ClaudeModeResponse>(modeKey(vars.harnessId), {
         mode: 'own_account',
       });
+      // Read back the recorded login (email, plan, signer).
+      queryClient.invalidateQueries({ queryKey: modeKey(vars.harnessId) });
       // Refresh shared harness metadata without making a successful sign-in fail.
       return invalidateHarnesses();
     },

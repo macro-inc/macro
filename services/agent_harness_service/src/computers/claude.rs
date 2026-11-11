@@ -3,7 +3,7 @@
 //! Each route sends a [`ComputerCommand`] to the computer's runtime through
 //! [`ComputerControl`], which carries it to whichever replica holds the
 //! runtime connection. An account lease serializes sign-in, sign-out and their
-//! `claude_mode` writes across replicas.
+//! account login writes across replicas.
 
 use std::sync::Arc;
 
@@ -14,7 +14,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeMode, ClaudeModeChange, HarnessPermission};
+use harnesses::domain::account_logins::{
+    AccountLoginChange, AgentProvider, HarnessAccountLogin, ProviderAccountIdentity,
+};
+use harnesses::domain::models::{ClaudeMode, HarnessPermission};
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{FleetAttachment, FleetUnavailable};
 use macro_authorization::{
@@ -140,12 +143,57 @@ pub struct ClaudeSignedIn {
     pub account: Option<String>,
 }
 
-/// How Claude Code on a computer is paid for.
+/// How Claude Code on a computer is paid for, and the Claude account it is
+/// signed in to when it uses its own.
 #[derive(Debug, serde::Serialize, utoipa::ToSchema)]
 pub struct ClaudeModeResponse {
     /// `macro_credits` or `own_account`.
     #[schema(value_type = String, example = "macro_credits")]
     pub mode: ClaudeMode,
+    /// The active Claude login; absent on Macro credits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<ClaudeAccountStatus>,
+}
+
+/// A computer's active Claude login.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeAccountStatus {
+    /// The account's email address, when Claude reports one.
+    pub email: Option<String>,
+    /// The account's organization, when Claude reports one.
+    pub organization: Option<String>,
+    /// The account's plan, e.g. `max`.
+    pub plan: Option<String>,
+    /// Who signed it in through Macro; absent once that user is deleted.
+    #[schema(value_type = Option<String>)]
+    pub signed_in_by: Option<MacroUserIdStr<'static>>,
+    /// When it was signed in.
+    pub signed_in_at: chrono::DateTime<chrono::Utc>,
+    /// When the sign-in stops refreshing, as the computer last reported it.
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl ClaudeModeResponse {
+    fn of(login: Option<HarnessAccountLogin>) -> Self {
+        match login {
+            None => Self {
+                mode: ClaudeMode::MacroCredits,
+                account: None,
+            },
+            Some(login) => Self {
+                mode: ClaudeMode::OwnAccount,
+                account: Some(ClaudeAccountStatus {
+                    email: login.account.identity.display_email,
+                    organization: login.account.identity.display_org,
+                    plan: login.account.identity.plan,
+                    signed_in_by: login.signed_in_by,
+                    signed_in_at: login.signed_in_at,
+                    expires_at: login.expires_at,
+                }),
+            },
+        }
+    }
 }
 
 /// Start a Claude sign-in on the computer and return its URL.
@@ -293,11 +341,14 @@ where
         ComputerControlResult::SignedOut => {
             state
                 .harnesses
-                .set_claude_mode(path.harness_id, ClaudeModeChange::SignedOut)
+                .record_account_login(
+                    path.harness_id,
+                    AccountLoginChange::SignedOut {
+                        provider: AgentProvider::Claude,
+                    },
+                )
                 .await?;
-            Ok(Json(ClaudeModeResponse {
-                mode: ClaudeMode::MacroCredits,
-            }))
+            Ok(Json(ClaudeModeResponse::of(None)))
         }
         other => Err(ComputerRouteError::from_result(other)),
     };
@@ -323,12 +374,14 @@ where
     Harnesses: HarnessService,
     Auth: MacroAuthorizationService,
 {
-    let harness = state
+    state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    Ok(Json(ClaudeModeResponse {
-        mode: harness.claude_mode,
-    }))
+    let login = state
+        .harnesses
+        .active_account_login(path.harness_id, AgentProvider::Claude)
+        .await?;
+    Ok(Json(ClaudeModeResponse::of(login)))
 }
 
 impl<Harnesses, Auth> ClaudeAccessState<Harnesses, Auth>
@@ -361,11 +414,25 @@ where
                         .send(harness_id, ComputerCommand::ClaudeSignInComplete { code })
                         .await?
                     {
-                        ComputerControlResult::SignedIn { account } => {
+                        ComputerControlResult::SignedIn {
+                            account_id,
+                            account,
+                            organization,
+                            plan,
+                        } => {
                             harnesses
-                                .set_claude_mode(
+                                .record_account_login(
                                     harness_id,
-                                    ClaudeModeChange::SignedIn { signed_in_by },
+                                    AccountLoginChange::SignedIn {
+                                        provider: AgentProvider::Claude,
+                                        account: ProviderAccountIdentity {
+                                            external_account_id: account_id,
+                                            display_email: account.clone(),
+                                            display_org: organization,
+                                            plan,
+                                        },
+                                        signed_in_by,
+                                    },
                                 )
                                 .await?;
                             Ok(account)

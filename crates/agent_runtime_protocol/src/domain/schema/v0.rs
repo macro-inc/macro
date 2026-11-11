@@ -191,9 +191,17 @@ pub enum ComputerControlResult {
     InvalidCode,
     /// Claude Code now runs on a Claude account.
     SignedIn {
+        /// The account's id at Anthropic (`oauthAccount.accountUuid`).
+        account_id: String,
         /// The account's email address, when Claude reports one.
         #[serde(default)]
         account: Option<String>,
+        /// The account's organization, when Claude reports one.
+        #[serde(default)]
+        organization: Option<String>,
+        /// The account's plan (`subscriptionType`), e.g. `max`.
+        #[serde(default)]
+        plan: Option<String>,
     },
     /// Claude Code is back on Macro credits.
     SignedOut,
