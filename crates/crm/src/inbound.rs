@@ -9,6 +9,11 @@ pub mod call_archived;
 #[cfg(feature = "ai_tools")]
 pub mod toolset;
 
+/// The team's companies by recent interaction, as the `ListCompanies` tool
+/// lists them.
+#[cfg(feature = "axum")]
+pub mod company_listing;
+
 /// Pipeline routes.
 #[cfg(feature = "axum")]
 pub mod pipelines;

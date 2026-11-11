@@ -27,18 +27,18 @@ use uuid::Uuid;
 use crate::domain::{
     crm_transfer::{CrmTransferService, CsvInput, PipelineDestination, TransferError},
     pipeline_workflows::{
-        EntryAddition, EntryQuery, EntryTarget, EntryUpdate, MAX_SCANNED_ROWS, PipelineEdit,
-        PipelineWorkflowService, RecordTarget, WorkflowError,
+        EntryAddition, EntryQuery, EntryTarget, EntryUpdate, MAX_SCANNED_ROWS, NewPipeline,
+        PipelineEdit, PipelineWorkflowService, RecordTarget, WorkflowError,
     },
 };
 
 use models::{
-    AddEntriesRequest, AddEntriesResponse, CompanyImportResponse, EditPipelineRequest,
-    EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse, ImportCompaniesCsvRequest,
-    ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries, PipelineEntry,
-    PipelineExportResponse, PipelineFields, PipelineImportResponse, RecordEntriesRequest,
-    RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest, UpdateEntriesResponse,
-    UpdatedPipelineEntry, pairs,
+    AddEntriesRequest, AddEntriesResponse, CompanyImportResponse, CreatePipelineRequest,
+    EditPipelineRequest, EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse,
+    ImportCompaniesCsvRequest, ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries,
+    PipelineEntry, PipelineExportResponse, PipelineFields, PipelineImportResponse,
+    RecordEntriesRequest, RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest,
+    UpdateEntriesResponse, UpdatedPipelineEntry, pairs,
 };
 
 /// Entries a read returns when it names no limit.
@@ -97,6 +97,10 @@ where
         .route(
             "/pipelines/entry-search",
             get(search_entries::<Workflows, Transfer, Authorization>),
+        )
+        .route(
+            "/pipelines/create",
+            post(create::<Workflows, Transfer, Authorization>),
         )
         .route(
             "/pipelines/{id}/edit",
@@ -382,6 +386,42 @@ pub async fn remove_entries<
         removed: removed.removed.iter().map(PipelineEntry::from).collect(),
         version: removed.version.map(|version| version.0),
     }))
+}
+
+/// Create a pipeline with its stages and fields in one call: the team's
+/// default stages unless `stages` gives others, then `fields` after the
+/// standard ones.
+#[utoipa::path(post, path = "/crm/pipelines/create", operation_id = "create_crm_pipeline_with_fields",
+    request_body = CreatePipelineRequest,
+    responses((status = 200, body = PipelineFields), (status = 400, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all, fields(pipeline_id = tracing::field::Empty))]
+pub async fn create<
+    Workflows: PipelineWorkflowService,
+    Transfer: CrmTransferService,
+    Authorization: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<Authorization, UserOrInternal>,
+    State(state): State<PipelineWorkflowRouterState<Workflows, Transfer, Authorization>>,
+    Json(request): Json<CreatePipelineRequest>,
+) -> Result<Json<PipelineFields>, WorkflowError> {
+    let created = state
+        .workflows
+        .create(
+            &viewer(&auth),
+            NewPipeline {
+                name: request.name,
+                record_type: request.record_type,
+                sharing: request.sharing,
+                stages: request.stages,
+                fields: request.fields.iter().map(Into::into).collect(),
+            },
+        )
+        .await?;
+    tracing::Span::current().record(
+        "pipeline_id",
+        tracing::field::display(created.pipeline.pipeline.id),
+    );
+    Ok(Json(PipelineFields::from(&created)))
 }
 
 /// Rename or share a pipeline, and add, rename or delete its fields and

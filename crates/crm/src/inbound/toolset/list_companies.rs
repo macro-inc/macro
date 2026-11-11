@@ -4,33 +4,18 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entity_access::domain::{
-    models::{EntityType, TeamRole},
-    ports::EntityAccessService,
-};
-use properties::{PropertiesService, PropertyTargetKey};
+use entity_access::domain::ports::EntityAccessService;
+use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
 use crate::domain::{
-    companies_repo::CrmCompanyListSort, model::CrmCompanyForSoup, service::CrmService,
+    company_listing::{CompanyListQuery, CompanyListingError, ListedCompany, list_companies},
+    service::CrmService,
 };
 
-use super::{
-    CrmToolContext, ToolCompanyStage, caller_team_receipt, company_view_receipts, crm_error,
-    extract_company_crm_props, load_stage_option_catalog,
-};
-
-/// Default number of companies returned when `limit` is omitted.
-const DEFAULT_LIMIT: u16 = 50;
-/// Maximum number of companies a single call can return.
-const MAX_LIMIT: u16 = 200;
-/// How many companies are pulled from the repository before in-memory
-/// filtering. Matches the CRM request cap used by the app (a team's CRM
-/// list is capped around 500 rows per page).
-const FETCH_LIMIT: i64 = 500;
+use super::{CrmToolContext, ToolCompanyStage, caller_team_receipt, crm_error};
 
 /// A CRM company row returned by [`ListCompanies`].
 #[derive(Debug, Serialize, JsonSchema)]
@@ -131,219 +116,71 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List CRM companies");
 
-        let (team_receipt, role) =
+        let (team_receipt, _role) =
             caller_team_receipt(&*service_context.entity_access_service, &request_context).await?;
+        let listing = list_companies(
+            &*service_context.service,
+            &*service_context.properties,
+            &team_receipt,
+            &CompanyListQuery {
+                search: self.search.clone(),
+                stage: self.stage.clone(),
+                owner_user_id: self.owner_user_id.clone(),
+                include_hidden: self.include_hidden.unwrap_or(false),
+                limit: self.limit,
+            },
+        )
+        .await
+        .map_err(listing_error)?;
 
-        let include_hidden = self.include_hidden.unwrap_or(false);
-        if include_hidden && !matches!(role, TeamRole::Admin | TeamRole::Owner) {
-            return Err(ToolCallError {
-                description: "include_hidden requires team admin or owner role".to_string(),
-                internal_error: anyhow::anyhow!("caller is not a team admin/owner"),
-            });
-        }
-
-        let limit = usize::from(self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT));
-        let user_id: &str = request_context.user_id.0.as_ref();
-
-        // Fetch visible companies (and hidden ones when requested), most
-        // recently active first, then filter in memory.
-        let mut companies = service_context
-            .service
-            .list_companies_for_soup(
-                &team_receipt,
-                user_id,
-                &[],
-                Some(false),
-                CrmCompanyListSort::UpdatedAt,
-                None,
-                FETCH_LIMIT,
-            )
-            .await
-            .map_err(crm_error)?;
-        if include_hidden {
-            let hidden = service_context
-                .service
-                .list_companies_for_soup(
-                    &team_receipt,
-                    user_id,
-                    &[],
-                    Some(true),
-                    CrmCompanyListSort::UpdatedAt,
-                    None,
-                    FETCH_LIMIT,
-                )
-                .await
-                .map_err(crm_error)?;
-            companies.extend(hidden);
-            companies.sort_by(|a, b| {
-                b.company
-                    .updated_at
-                    .cmp(&a.company.updated_at)
-                    .then_with(|| b.company.id.cmp(&a.company.id))
-            });
-        }
-
-        // Text filter first so the property fetch only covers candidates.
-        if let Some(search) = self
-            .search
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            let needle = search.to_lowercase();
-            companies.retain(|c| matches_search(c, &needle));
-        }
-
-        let stage_catalog =
-            load_stage_option_catalog(&*service_context.properties, team_receipt.receipt()).await?;
-
-        // Resolve the stage filter to option ids up front so an unknown
-        // stage fails with an actionable error instead of an empty list.
-        let stage_option_ids = match self
-            .stage
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-        {
-            Some(stage) => {
-                let ids = stage_catalog.matching_option_ids(stage);
-                if ids.is_empty() {
-                    return Err(ToolCallError {
-                        description: format!(
-                            "unknown stage '{stage}'. Known stages for this team: {}",
-                            stage_catalog.known_labels().join(", ")
-                        ),
-                        internal_error: anyhow::anyhow!("unknown stage filter"),
-                    });
-                }
-                Some(ids)
-            }
-            None => None,
-        };
-
-        // Attach Stage / Owner / Revenue for the remaining candidates.
-        // Teams with customized pipelines store stage values under a
-        // team-scoped "Stage" definition rather than the system one, so
-        // include those definition ids in the fetch filter too.
-        // Access to these companies is proven by the caller's team receipt:
-        // the list is the caller's own team's CRM listing.
-        let company_access = company_view_receipts(
-            &request_context.user_id,
-            companies.iter().map(|c| c.company.id),
-        );
-        let mut property_ids = vec![
-            SystemPropertyKey::STAGE_UUID,
-            SystemPropertyKey::COMPANY_OWNER_UUID,
-            SystemPropertyKey::REVENUE_UUID,
-        ];
-        property_ids.extend_from_slice(stage_catalog.team_stage_definition_ids());
-        let properties_map = service_context
-            .properties
-            .get_bulk_entity_properties(&company_access, property_ids)
-            .await
-            .map_err(|e| ToolCallError {
-                description: "failed to load company properties".to_string(),
-                internal_error: e.into(),
-            })?;
-
-        let mut items: Vec<CompanyListItem> = Vec::new();
-        let mut total_matching = 0usize;
-        for company in companies {
-            let props_key = PropertyTargetKey {
-                entity_id: company.company.id.to_string(),
-                entity_type: EntityType::CrmCompany,
-            };
-            let props = properties_map
-                .get(&props_key)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            let crm_props = extract_company_crm_props(props, &stage_catalog);
-
-            if let Some(stage_ids) = &stage_option_ids {
-                let matches_stage = crm_props
-                    .stage
-                    .as_ref()
-                    .is_some_and(|stage| stage_ids.contains(&stage.option_id));
-                if !matches_stage {
-                    continue;
-                }
-            }
-            if let Some(owner_filter) = self
-                .owner_user_id
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                let matches_owner = crm_props
-                    .owner_user_id
-                    .as_deref()
-                    .is_some_and(|owner| owner.eq_ignore_ascii_case(owner_filter));
-                if !matches_owner {
-                    continue;
-                }
-            }
-
-            total_matching += 1;
-            if items.len() < limit {
-                items.push(to_list_item(company, crm_props));
-            }
-        }
-
-        let summary = if items.is_empty() {
+        let shown = listing.companies.len();
+        let summary = if shown == 0 {
             "No CRM companies match the given filters.".to_string()
-        } else if total_matching > items.len() {
+        } else if listing.total_matching > shown {
             format!(
-                "Showing {} of {} matching CRM companies (sorted by most recent interaction). Narrow with search/stage/owner filters or raise limit.",
-                items.len(),
-                total_matching
+                "Showing {shown} of {} matching CRM companies (sorted by most recent interaction). Narrow with search/stage/owner filters or raise limit.",
+                listing.total_matching
             )
         } else {
             format!(
-                "Found {} CRM compan{} (sorted by most recent interaction).",
-                items.len(),
-                if items.len() == 1 { "y" } else { "ies" }
+                "Found {shown} CRM compan{} (sorted by most recent interaction).",
+                if shown == 1 { "y" } else { "ies" }
             )
         };
 
         Ok(ListCompaniesResponse {
-            companies: items,
+            companies: listing.companies.into_iter().map(Into::into).collect(),
             summary,
         })
     }
 }
 
-fn matches_search(company: &CrmCompanyForSoup, needle: &str) -> bool {
-    if company
-        .name
-        .as_deref()
-        .is_some_and(|name| name.to_lowercase().contains(needle))
-    {
-        return true;
+fn listing_error(error: CompanyListingError) -> ToolCallError {
+    match error {
+        CompanyListingError::Crm(error) => crm_error(error),
+        error @ (CompanyListingError::HiddenRequiresAdmin
+        | CompanyListingError::UnknownStage { .. }) => ToolCallError {
+            description: error.to_string(),
+            internal_error: error.into(),
+        },
+        CompanyListingError::Properties(error) => ToolCallError {
+            description: "failed to load company properties".to_string(),
+            internal_error: error.into(),
+        },
     }
-    company
-        .company
-        .domains
-        .iter()
-        .any(|d| d.domain.to_lowercase().contains(needle))
 }
 
-fn to_list_item(company: CrmCompanyForSoup, props: super::CompanyCrmProps) -> CompanyListItem {
-    CompanyListItem {
-        id: company.company.id,
-        name: company.name,
-        domains: company
-            .company
-            .domains
-            .iter()
-            .map(|d| d.domain.clone())
-            .collect(),
-        hidden: company.company.hidden,
-        // The repo fills `company.updated_at` from
-        // `crm_companies.last_interaction`, so this really is the latest
-        // email interaction, not a row-lifecycle timestamp.
-        last_interaction: company.company.updated_at,
-        stage: props.stage,
-        owner_user_id: props.owner_user_id,
-        revenue: props.revenue,
+impl From<ListedCompany> for CompanyListItem {
+    fn from(company: ListedCompany) -> Self {
+        Self {
+            id: company.id,
+            name: company.name,
+            domains: company.domains,
+            hidden: company.hidden,
+            last_interaction: company.last_interaction,
+            stage: company.stage.map(Into::into),
+            owner_user_id: company.owner_user_id,
+            revenue: company.revenue,
+        }
     }
 }

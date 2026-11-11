@@ -17,7 +17,6 @@ pub mod transfer;
 #[cfg(test)]
 mod test;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
@@ -28,21 +27,17 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
-use models_properties::DataType;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
 use properties::PropertiesService;
 use schemars::JsonSchema;
 use serde::Serialize;
-use system_properties::{StageOption, SystemPropertyKey};
 use uuid::Uuid;
 
+pub(crate) use crate::domain::company_listing::{StageOptionCatalog, extract_company_crm_props};
 use crate::domain::{
     auth::{CrmCompanyReceipt, CrmTeamReceipt},
+    company_listing::{self, CompanyStage},
     model::CrmError,
     service::CrmService,
-    stages::CRM_TEAM_STAGE_DEFINITION_NAME,
 };
 
 pub use create_company::{CreateCompany, CreateCompanyResponse};
@@ -124,72 +119,16 @@ pub struct ToolCompanyStage {
     pub label: String,
 }
 
-/// The builtin CRM company property values extracted from a company's
-/// entity properties.
-#[derive(Debug, Default)]
-pub(crate) struct CompanyCrmProps {
-    pub(crate) stage: Option<ToolCompanyStage>,
-    pub(crate) owner_user_id: Option<String>,
-    pub(crate) revenue: Option<f64>,
-}
-
-/// The catalog of stage options available to a team: the system Stage
-/// definition's options plus any team-scoped definition named "Stage"
-/// (teams can customize their pipeline stages).
-#[derive(Debug, Default)]
-pub(crate) struct StageOptionCatalog {
-    /// option id -> label
-    labels: HashMap<Uuid, String>,
-    /// Ids of team-scoped select definitions named "Stage". Teams with a
-    /// customized pipeline store their stage values under one of these
-    /// definitions instead of the system Stage definition, so property
-    /// fetches filtered by definition id must include them.
-    team_stage_definition_ids: Vec<Uuid>,
-}
-
-impl StageOptionCatalog {
-    /// Resolve a stage option id to its label. Falls back to the builtin
-    /// [`StageOption`] constants when the id isn't in the catalog.
-    pub(crate) fn label_for(&self, option_id: Uuid) -> Option<String> {
-        self.labels
-            .get(&option_id)
-            .cloned()
-            .or_else(|| StageOption::from_uuid(option_id).map(|s| s.display_value().to_string()))
-    }
-
-    /// Resolve a user-supplied `stage` filter (an option id or a label,
-    /// matched case-insensitively) to the set of matching option ids.
-    pub(crate) fn matching_option_ids(&self, stage: &str) -> Vec<Uuid> {
-        let trimmed = stage.trim();
-        if let Ok(id) = Uuid::parse_str(trimmed) {
-            return vec![id];
+impl From<CompanyStage> for ToolCompanyStage {
+    fn from(stage: CompanyStage) -> Self {
+        Self {
+            option_id: stage.option_id,
+            label: stage.label,
         }
-        self.labels
-            .iter()
-            .filter(|(_, label)| label.eq_ignore_ascii_case(trimmed))
-            .map(|(id, _)| *id)
-            .collect()
-    }
-
-    /// Ids of the team-scoped "Stage" definitions (empty when the team
-    /// only uses the system Stage definition).
-    pub(crate) fn team_stage_definition_ids(&self) -> &[Uuid] {
-        &self.team_stage_definition_ids
-    }
-
-    /// The distinct stage labels known to this team, for actionable error
-    /// messages.
-    pub(crate) fn known_labels(&self) -> Vec<String> {
-        let mut labels: Vec<String> = self.labels.values().cloned().collect();
-        labels.sort();
-        labels.dedup();
-        labels
     }
 }
 
-/// Load the stage option catalog for the team proven by `team`: options of
-/// the system Stage definition (id `00000001-0000-0000-0000-000000000010`)
-/// plus any team-scoped select definition named "Stage".
+/// The team's stage options, as a tool error when they cannot be read.
 pub(crate) async fn load_stage_option_catalog<PSvc>(
     properties: &PSvc,
     team: &properties::TeamReceipt,
@@ -197,143 +136,12 @@ pub(crate) async fn load_stage_option_catalog<PSvc>(
 where
     PSvc: PropertiesService,
 {
-    let defs = properties
-        .list_property_definitions_with_options(Some(team), None, true, None)
+    company_listing::load_stage_option_catalog(properties, team)
         .await
         .map_err(|e| ToolCallError {
             description: "failed to load the team's stage options".to_string(),
             internal_error: e.into(),
-        })?;
-
-    let mut labels = HashMap::new();
-    let mut team_stage_definition_ids = Vec::new();
-    for def in defs {
-        let is_stage_definition = def.definition.id == SystemPropertyKey::STAGE_UUID
-            || (def.definition.display_name == CRM_TEAM_STAGE_DEFINITION_NAME
-                && matches!(
-                    def.definition.data_type,
-                    DataType::SelectString | DataType::SelectNumber
-                ));
-        if !is_stage_definition {
-            continue;
-        }
-        if def.definition.id != SystemPropertyKey::STAGE_UUID {
-            team_stage_definition_ids.push(def.definition.id);
-        }
-        for option in def.property_options {
-            let label = match option.value {
-                PropertyOptionValue::String(s) => s,
-                PropertyOptionValue::Number(n) => n.to_string(),
-            };
-            labels.insert(option.id, label);
-        }
-    }
-
-    // Make sure the builtin defaults are always resolvable, even if the
-    // seed rows are missing from this environment.
-    for stage in [
-        StageOption::Lead,
-        StageOption::Qualified,
-        StageOption::Demo,
-        StageOption::Trial,
-        StageOption::Negotiation,
-        StageOption::Customer,
-        StageOption::Churned,
-    ] {
-        labels
-            .entry(stage.uuid())
-            .or_insert_with(|| stage.display_value().to_string());
-    }
-
-    Ok(StageOptionCatalog {
-        labels,
-        team_stage_definition_ids,
-    })
-}
-
-/// Extract the builtin CRM props (Stage / Owner / Revenue) from a
-/// company's entity properties. The stage may live on the system Stage
-/// definition or on a team-scoped select definition named "Stage";
-/// teams with customized pipelines use the latter, so its value wins
-/// over one set under the system definition.
-pub(crate) fn extract_company_crm_props(
-    props: &[EntityPropertyWithDefinition],
-    stages: &StageOptionCatalog,
-) -> CompanyCrmProps {
-    let mut out = CompanyCrmProps::default();
-    let mut system_stage: Option<ToolCompanyStage> = None;
-    let mut team_stage: Option<ToolCompanyStage> = None;
-    for prop in props {
-        let definition_id = prop.property.property_definition_id;
-        if definition_id == SystemPropertyKey::COMPANY_OWNER_UUID {
-            if let Some(PropertyValue::EntityRef(refs)) = &prop.value {
-                out.owner_user_id = refs.first().map(|r| r.entity_id.clone());
-            }
-            continue;
-        }
-        if definition_id == SystemPropertyKey::REVENUE_UUID {
-            if let Some(PropertyValue::Num(n)) = prop.value {
-                out.revenue = Some(n);
-            }
-            continue;
-        }
-        let is_system_stage = definition_id == SystemPropertyKey::STAGE_UUID;
-        let is_team_stage = !is_system_stage
-            && (stages.team_stage_definition_ids.contains(&definition_id)
-                || prop.definition.display_name == CRM_TEAM_STAGE_DEFINITION_NAME);
-        let slot = if is_system_stage {
-            &mut system_stage
-        } else if is_team_stage {
-            &mut team_stage
-        } else {
-            continue;
-        };
-        if slot.is_none()
-            && let Some(PropertyValue::SelectOption(option_ids)) = &prop.value
-            && let Some(option_id) = option_ids.first().copied()
-        {
-            // Prefer the options attached to the property itself, then
-            // the team catalog / builtin defaults.
-            let label = prop
-                .options
-                .as_ref()
-                .and_then(|options| {
-                    options
-                        .iter()
-                        .find(|o| o.id == option_id)
-                        .map(|o| match &o.value {
-                            PropertyOptionValue::String(s) => s.clone(),
-                            PropertyOptionValue::Number(n) => n.to_string(),
-                        })
-                })
-                .or_else(|| stages.label_for(option_id))
-                .unwrap_or_else(|| option_id.to_string());
-            *slot = Some(ToolCompanyStage { option_id, label });
-        }
-    }
-    out.stage = team_stage.or(system_stage);
-    out
-}
-
-/// Properties view receipts for a batch of company ids
-/// (`entity_type = company`). Asserted rather than minted: callers only pass
-/// company ids whose access was already verified through the CRM seam (the
-/// caller's own team listing, or a company permission check) — re-checking
-/// each company here would repeat that lookup per company.
-pub(crate) fn company_view_receipts(
-    user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
-    company_ids: impl IntoIterator<Item = Uuid>,
-) -> Vec<properties::ViewReceipt> {
-    company_ids
-        .into_iter()
-        .map(|id| {
-            EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
-                user_id.clone(),
-                &id.to_string(),
-                EntityType::CrmCompany,
-            )
         })
-        .collect()
 }
 
 /// Resolve the caller's team and mint a member-level team receipt for

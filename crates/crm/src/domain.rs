@@ -13,6 +13,10 @@ pub(crate) mod generic_email_domains;
 /// Persistence port for CRM companies
 #[cfg(feature = "ports")]
 pub mod companies_repo;
+/// The team's companies by recent interaction, with their own Stage, Owner
+/// and Revenue
+#[cfg(feature = "ports")]
+pub mod company_listing;
 /// Outbound port for resolving company metadata from a domain
 #[cfg(feature = "ports")]
 pub mod company_metadata_resolver;

@@ -234,6 +234,13 @@ pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssCompanyListingState = crm::inbound::company_listing::CompanyListingRouterState<
+    DssCrmService,
+    PropertiesService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssSoupService = SoupImpl<
     PgSoupRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -1048,6 +1055,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub company_listing_state: DssCompanyListingState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
     pub pipeline_workflow_state: DssPipelineWorkflowState,

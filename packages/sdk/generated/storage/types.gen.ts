@@ -4652,6 +4652,34 @@ export type CompanyImportResponse = {
 };
 
 /**
+ * A page of listed companies, most recent interaction first.
+ */
+export type CompanyListing = {
+    /**
+     * The companies, at most the query's limit.
+     */
+    companies: Array<ListedCompany>;
+    /**
+     * How many companies matched before the limit.
+     */
+    totalMatching: number;
+};
+
+/**
+ * A company's own Stage property: the option set and its label.
+ */
+export type CompanyStage = {
+    /**
+     * The stage's label, such as "Lead" or "Customer".
+     */
+    label: string;
+    /**
+     * The stage option id.
+     */
+    optionId: string;
+};
+
+/**
  * Explicit upload completion; a seal can be submitted separately with an empty list.
  */
 export type CompleteUploads = {
@@ -5501,6 +5529,32 @@ export type CreatePipeline = {
      * Defaults to private.
      */
     sharing?: PipelineSharing;
+};
+
+/**
+ * A pipeline to create with its stages and fields, the way the
+ * `CreatePipeline` tool creates one.
+ */
+export type CreatePipelineRequest = {
+    /**
+     * Fields to add after the standard ones, or after a generic pipeline's
+     * Name.
+     */
+    fields?: Array<NewFieldRequest>;
+    /**
+     * Its name.
+     */
+    name: string;
+    recordType?: null | PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
+    /**
+     * Its stages, first to last, replacing the team's default stages. A
+     * generic pipeline gets a Stage field only when these are given.
+     */
+    stages?: Array<string>;
 };
 
 export type CreateProjectRequest = {
@@ -13348,6 +13402,41 @@ export type ListWebhooksResponse = {
      * The caller's webhooks, newest first. Signing secrets are omitted.
      */
     webhooks: Array<Webhook>;
+};
+
+/**
+ * One listed company.
+ */
+export type ListedCompany = {
+    /**
+     * Its email domains, primary first.
+     */
+    domains: Array<string>;
+    /**
+     * Whether it is hidden from the team's CRM listings.
+     */
+    hidden: boolean;
+    /**
+     * The company id.
+     */
+    id: string;
+    /**
+     * The most recent known email interaction with it.
+     */
+    lastInteraction: string;
+    /**
+     * Its display name, when resolved.
+     */
+    name?: string | null;
+    /**
+     * Macro user id of its owner.
+     */
+    ownerUserId?: string | null;
+    /**
+     * Its revenue in dollars.
+     */
+    revenue?: number | null;
+    stage?: null | CompanyStage;
 };
 
 /**
@@ -26070,6 +26159,48 @@ export type ImportCrmCompaniesCsvResponses = {
 
 export type ImportCrmCompaniesCsvResponse = ImportCrmCompaniesCsvResponses[keyof ImportCrmCompaniesCsvResponses];
 
+export type ListCrmCompaniesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Text matched, ignoring case, against company names and domains.
+         */
+        search?: string;
+        /**
+         * The company's own Stage, not a pipeline entry's: a label, ignoring
+         * case, or an option id.
+         */
+        stage?: string;
+        /**
+         * Macro user id of the company's owner.
+         */
+        ownerUserId?: string;
+        /**
+         * Also list hidden companies; team admins and owners only.
+         */
+        includeHidden?: boolean;
+        /**
+         * At most this many, 1 to 200; 50 when omitted.
+         */
+        limit?: number;
+    };
+    url: '/crm/companies/list';
+};
+
+export type ListCrmCompaniesErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListCrmCompaniesError = ListCrmCompaniesErrors[keyof ListCrmCompaniesErrors];
+
+export type ListCrmCompaniesResponses = {
+    200: CompanyListing;
+};
+
+export type ListCrmCompaniesResponse = ListCrmCompaniesResponses[keyof ListCrmCompaniesResponses];
+
 export type GetCompanyData = {
     body?: never;
     path: {
@@ -26507,6 +26638,25 @@ export type CreateCrmPipelineResponses = {
 };
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
+
+export type CreateCrmPipelineWithFieldsData = {
+    body: CreatePipelineRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/create';
+};
+
+export type CreateCrmPipelineWithFieldsErrors = {
+    400: ErrorResponse;
+};
+
+export type CreateCrmPipelineWithFieldsError = CreateCrmPipelineWithFieldsErrors[keyof CreateCrmPipelineWithFieldsErrors];
+
+export type CreateCrmPipelineWithFieldsResponses = {
+    200: PipelineFields;
+};
+
+export type CreateCrmPipelineWithFieldsResponse = CreateCrmPipelineWithFieldsResponses[keyof CreateCrmPipelineWithFieldsResponses];
 
 export type SearchCrmPipelineEntriesData = {
     body?: never;

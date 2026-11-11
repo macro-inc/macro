@@ -20,10 +20,16 @@ tools/HTTP/GraphQL surfaces over them.
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `src/domain/company_listing.rs`: the team's companies by most recent
+  interaction with their own Stage/Owner/Revenue, shared by the
+  `ListCompanies` tool and `GET /crm/companies/list`
+  (`src/inbound/company_listing.rs`, its own router state because it needs the
+  properties service).
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
   merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
-  entry methods call them.
+  entry methods call them. `POST /crm/pipelines/create` runs the workflow
+  create with stages and fields, like the `CreatePipeline` tool.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.

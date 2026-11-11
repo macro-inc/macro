@@ -243,7 +243,7 @@ where
             // row-lifecycle timestamps.
             first_interaction: record.company.created_at,
             last_interaction: record.company.updated_at,
-            stage: crm_props.stage,
+            stage: crm_props.stage.map(Into::into),
             owner_user_id: crm_props.owner_user_id,
             revenue: crm_props.revenue,
             contacts: record.contacts.into_iter().map(Into::into).collect(),

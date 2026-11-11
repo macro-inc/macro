@@ -407,6 +407,9 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .merge(crm::inbound::pipeline_workflows::router(
                     state.pipeline_workflow_state.clone(),
+                ))
+                .merge(crm::inbound::company_listing::router(
+                    state.company_listing_state.clone(),
                 )),
         )
         .merge(

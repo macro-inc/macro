@@ -10,11 +10,57 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
+import { User } from '../users/user';
 import { Company } from './company';
 import { Contact } from './contact';
 import { CrmPipeline } from './pipeline';
 import { type CompanyImport, pipelineImport } from './pipeline-entry';
 import { PipelineNamespace } from './pipelines';
+
+/** Which of the team's companies {@link CrmNamespace.listCompanies} lists. */
+export type ListCompaniesOptions = {
+  /** Text matched, ignoring case, against company names and domains. */
+  search?: string;
+  /**
+   * The company's own Stage, not a pipeline entry's: its label, ignoring
+   * case (teams may rename their stages).
+   */
+  stage?: string;
+  /** Companies this user owns (the company's own Owner property). */
+  owner?: User;
+  /** Also list hidden companies; team admins and owners only. */
+  includeHidden?: boolean;
+  /** At most this many, 1 to 200; 50 when omitted. */
+  limit?: number;
+};
+
+/** One company in a {@link CompanyListing}. */
+export type ListedCompany = {
+  /** The company, for reads and writes. */
+  company: Company;
+  /** Its display name, when resolved. */
+  name?: string;
+  /** Its email domains, primary first. */
+  domains: string[];
+  /** Whether it is hidden from the team's CRM listings. */
+  hidden: boolean;
+  /** The most recent known email interaction with it, as an ISO timestamp. */
+  lastInteraction: string;
+  /** The label of its own Stage, separate from any pipeline entry's. */
+  stage?: string;
+  /** Its owner (its own Owner property). */
+  owner?: User;
+  /** Its revenue in dollars. */
+  revenue?: number;
+};
+
+/** The team's companies, most recent interaction first. */
+export type CompanyListing = {
+  /** The companies, at most the requested limit. */
+  companies: ListedCompany[];
+  /** How many companies matched before the limit. */
+  totalMatching: number;
+};
 
 /**
  * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
@@ -233,6 +279,40 @@ export class CrmNamespace {
             pipeline,
           )
         : undefined,
+    };
+  }
+
+  /**
+   * The team's CRM companies, most recent interaction first, each with its
+   * domains and its own Stage, Owner and Revenue (not a pipeline deal's).
+   * Narrow with `search`, `stage` and `owner`; an unknown stage fails with the
+   * team's stage labels. For deals, use the pipeline methods instead.
+   *
+   * @readonly
+   */
+  async listCompanies(
+    options: ListCompaniesOptions = {},
+  ): Promise<CompanyListing> {
+    const { owner, ...query } = options;
+    const listing = unwrap(
+      await this.client.storage.listCrmCompanies({
+        query: { ...query, ownerUserId: owner?.id },
+      }),
+    );
+    return {
+      totalMatching: listing.totalMatching,
+      companies: listing.companies.map((row) => ({
+        company: Company.byId(this.client, row.id),
+        name: row.name ?? undefined,
+        domains: row.domains,
+        hidden: row.hidden,
+        lastInteraction: row.lastInteraction,
+        stage: row.stage?.label,
+        owner: row.ownerUserId
+          ? User.byId(this.client, row.ownerUserId)
+          : undefined,
+        revenue: row.revenue ?? undefined,
+      })),
     };
   }
 
