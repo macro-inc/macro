@@ -10,11 +10,16 @@ export type Hosts = Partial<Record<ServiceName, string>>;
 export type Addresses = {
   readonly hosts: Hosts;
   readonly presence: string;
+  /** The agent harness's egress listener: Anthropic and a call's speech are under it. */
+  readonly egress: string;
 };
 
 /** The public gateway origin enrollment gives, which every route below is under. */
 export const gatewayKey = 'MACRO_GATEWAY';
 const websocketKey = 'OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL';
+/** `macro_service_urls::AgentHarnessEgressUrl`'s override, which enrollment writes. */
+const egressKey = 'OVERRIDE_AGENT_HARNESS_EGRESS_URL';
+const egressRoute = '/agent-harness-egress';
 const connectionService: ServiceName = 'connection';
 
 /**
@@ -116,6 +121,7 @@ export const addresses = (
   const named = [
     gatewayKey,
     websocketKey,
+    egressKey,
     ...services.map(({ override }) => override),
   ];
   const broken = named.find((key) => {
@@ -147,5 +153,16 @@ export const addresses = (
       return [name, `${gateway}${route}`];
     })
   );
-  return { kind: 'configured', value: { hosts, presence } };
+  const egress = values[egressKey];
+  return {
+    kind: 'configured',
+    value: {
+      hosts,
+      presence,
+      egress:
+        egress === undefined || egress === ''
+          ? `${gateway}${egressRoute}`
+          : trimmed(egress),
+    },
+  };
 };
