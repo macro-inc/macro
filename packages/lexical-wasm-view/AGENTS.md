@@ -145,3 +145,9 @@ Observe current published presentation with construction-time latestPublished ob
 Retire optional presentation resources through onTeardown on direct disposal or beginTeardown, including late registration; terminal callbacks must not enter native receivers. Verify recovery after a reported DOM apply failure never restores failed observation, and preserve opaque primary input failures through reentrant drains and cleanup.
 
 Block command-profile admission before invoking terminal observers. No-command terminal callbacks are pure cleanup and must not submit input; disposed views remove their DOM input route, but retained Port references gain no new admission fence.
+
+Defer cross-owner native key listener removal through the existing post-return teardown queue, preserving callback functions until return; invalidate queued requests when actual cleanup runs, retain Source stale-cleanup semantics, and skip already-cleared owner buckets without touching freed sessions.
+
+Mark whole-owner terminal unregistration before its first native cleanup attempt; keep deferred listener cleanup inert for retiring or released owners even when native removal fails, without marking per-key disposal terminal.
+
+Preserve existing executor fallback attribution for deferred key cleanup errors, including opaque undefined; an error settlement does not imply the native action rolled back, and another owner must remain usable.

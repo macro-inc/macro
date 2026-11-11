@@ -8,8 +8,10 @@ import {
   EditorInputMsg,
   SessionInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import type { ExecutorSettlement } from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { Telemetry } from '@macro-inc/observability';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import * as native from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { mountLocalSessionView } from '../local-session-view';
 import { createViewCommand } from './commands';
@@ -420,5 +422,375 @@ test('Escape dispatches a real application through its issued transaction scope'
   } finally {
     await runtime.close();
     runtime.root.remove();
+  }
+});
+
+test('another editor callback releases a live owner listener once before its next registration', async () => {
+  const first = mount();
+  const second = mount();
+  const calls: string[] = [];
+  const command = createViewCommand(
+    'Key(Escape)',
+    (value): value is KeyboardEvent | null =>
+      value === null || value instanceof KeyboardEvent
+  );
+  const original = () => {
+    calls.push('original');
+    return true;
+  };
+  const release = first.view.registerViewCommand(command, original, 3);
+  const duplicate = first.view.registerViewCommand(command, original, 3);
+  const unregister = vi.spyOn(first.executor.session, 'unregisterViewEscape');
+  first.view.registerViewCommand(
+    command,
+    () => {
+      calls.push('later');
+      return false;
+    },
+    3
+  );
+  second.view.registerViewCommand(
+    command,
+    () => {
+      release();
+      release();
+      duplicate();
+      return true;
+    },
+    3
+  );
+  try {
+    expect(second.port.nativeEscape?.dispatch()).toBe(true);
+    expect(unregister).toHaveBeenCalledTimes(1);
+    first.view.registerViewCommand(command, original, 3);
+    expect(first.port.nativeEscape?.dispatch()).toBe(true);
+    expect(calls).toEqual(['later', 'original']);
+    calls.length = 0;
+    release();
+    expect(first.port.nativeEscape?.dispatch()).toBe(false);
+    expect(calls).toEqual(['later']);
+    expect(unregister).toHaveBeenCalledTimes(2);
+  } finally {
+    unregister.mockRestore();
+    await second.close();
+    await first.close();
+    second.root.remove();
+    first.root.remove();
+  }
+});
+
+test('owner close before deferred listener removal never calls a freed receiver', async () => {
+  const first = mount();
+  const second = mount();
+  const command = createViewCommand(
+    'Key(Escape)',
+    (value): value is KeyboardEvent | null =>
+      value === null || value instanceof KeyboardEvent
+  );
+  const release = first.view.registerViewCommand(command, () => true, 3);
+  let closing: Promise<void> | undefined;
+  second.view.registerViewCommand(
+    command,
+    () => {
+      closing = first.close();
+      release();
+      release();
+      return true;
+    },
+    3
+  );
+  try {
+    expect(second.port.nativeEscape?.dispatch()).toBe(true);
+    if (!closing)
+      throw new Error('Actual callback did not close its other owner');
+    await closing;
+    expect(() => first.executor.session.effectiveAccess()).toThrow();
+    expect(() => release()).not.toThrow();
+    second.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [
+                { type: 'text', version: 1, text: 'Second owner still live' },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    expect(second.root.textContent).toBe('Second owner still live');
+  } finally {
+    await second.close();
+    await first.close();
+    first.root.remove();
+    second.root.remove();
+  }
+});
+
+test('deferred cross-owner cleanup failure stays secondary to the actual callback primary', async () => {
+  const first = mount();
+  const second = mount();
+  const primary = { kind: 'actual second-owner callback failure' };
+  const cleanup = undefined;
+  const command = createViewCommand(
+    'Key(Escape)',
+    (value): value is KeyboardEvent | null =>
+      value === null || value instanceof KeyboardEvent
+  );
+  let firstCalls = 0;
+  const release = first.view.registerViewCommand(
+    command,
+    () => {
+      firstCalls++;
+      return true;
+    },
+    3
+  );
+  const unregister = vi
+    .spyOn(first.executor.session, 'unregisterViewEscape')
+    .mockImplementationOnce(() => {
+      throw cleanup;
+    });
+  const report = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+  second.view.registerViewCommand(
+    command,
+    () => {
+      release();
+      throw primary;
+    },
+    3
+  );
+  try {
+    let thrown: { error: unknown } | undefined;
+    try {
+      second.port.nativeEscape?.dispatch();
+    } catch (error) {
+      thrown = { error };
+    }
+    expect(thrown).toEqual({ error: primary });
+    expect(report.mock.calls.some(([error]) => error === cleanup)).toBe(true);
+    unregister.mockRestore();
+    expect(first.port.nativeEscape?.dispatch()).toBe(true);
+    expect(firstCalls).toBe(1);
+  } finally {
+    unregister.mockRestore();
+    report.mockRestore();
+    await second.close();
+    await first.close();
+    first.root.remove();
+    second.root.remove();
+  }
+});
+
+test('idle cleanup invalidates a deferred request before the same identity is readded', async () => {
+  const first = mount();
+  const second = mount();
+  const calls: string[] = [];
+  const original = () => {
+    calls.push('original');
+    return true;
+  };
+  const release = first.view.registerViewCommand(escapeCommand, original, 3);
+  first.view.registerViewCommand(
+    escapeCommand,
+    () => {
+      calls.push('later');
+      return false;
+    },
+    3
+  );
+  second.view.registerViewCommand(
+    escapeCommand,
+    () => {
+      release();
+      return true;
+    },
+    3
+  );
+  try {
+    // Keep the actual returned flags unconsumed to exercise the real post-return gap.
+    const flags = second.executor.session.viewCommandEscape(
+      second.executor.now(),
+      Date.now()
+    );
+    release();
+    first.view.registerViewCommand(escapeCommand, original, 3);
+    second.executor.runSync(() => flags);
+    expect(first.port.nativeEscape?.dispatch()).toBe(true);
+    expect(calls).toEqual(['later', 'original']);
+  } finally {
+    await second.close();
+    await first.close();
+    first.root.remove();
+    second.root.remove();
+  }
+});
+
+test('failed owner unregistration cannot make deferred cleanup enter its freed session', async () => {
+  const first = mount();
+  const second = mount();
+  const cause = { kind: 'injected terminal unregister failure' };
+  const release = first.view.registerViewCommand(escapeCommand, () => true, 3);
+  const unregister = vi
+    .spyOn(first.executor.session, 'unregisterViewEscape')
+    .mockImplementationOnce(() => {
+      throw cause;
+    })
+    .mockImplementationOnce(() => {
+      throw cause;
+    });
+  second.view.registerViewCommand(
+    escapeCommand,
+    () => {
+      release();
+      return true;
+    },
+    3
+  );
+  try {
+    const closing = first.close().then(
+      () => undefined,
+      (error) => ({ error })
+    );
+    // Queue removal after Stop drained, then let the real terminal close finish.
+    const flags = second.executor.session.viewCommandEscape(
+      second.executor.now(),
+      Date.now()
+    );
+    expect(await closing).toEqual({ error: cause });
+    expect(() => first.executor.session.effectiveAccess()).toThrow();
+    // Consume the actual flags once, only after the other receiver was freed.
+    expect(() => second.executor.runSync(() => flags)).not.toThrow();
+    expect(unregister).toHaveBeenCalledTimes(2);
+  } finally {
+    unregister.mockRestore();
+    await second.close();
+    await first.close().catch((error) => {
+      expect(error).toBe(cause);
+    });
+    first.root.remove();
+    second.root.remove();
+  }
+});
+
+test('terminal owner failure makes queued removal inert before close finishes', async () => {
+  const first = mount();
+  const second = mount();
+  const cause = { kind: 'injected terminal unregister failure' };
+  const release = first.view.registerViewCommand(escapeCommand, () => true, 3);
+  const unregister = vi
+    .spyOn(first.executor.session, 'unregisterViewEscape')
+    .mockImplementationOnce(() => {
+      throw cause;
+    })
+    .mockImplementationOnce(() => {
+      throw cause;
+    });
+  let closing: Promise<{ error: unknown } | undefined> | undefined;
+  second.view.registerViewCommand(
+    escapeCommand,
+    () => {
+      closing = first.close().then(
+        () => undefined,
+        (error) => ({ error })
+      );
+      release();
+      return true;
+    },
+    3
+  );
+  try {
+    expect(second.port.nativeEscape?.dispatch()).toBe(true);
+    expect(unregister).toHaveBeenCalledTimes(2);
+    if (!closing)
+      throw new Error('Actual callback did not initiate terminal close');
+    expect(await closing).toEqual({ error: cause });
+    expect(() => first.executor.session.effectiveAccess()).toThrow();
+  } finally {
+    unregister.mockRestore();
+    await second.close();
+    await first.close().catch((error) => {
+      expect(error).toBe(cause);
+    });
+    first.root.remove();
+    second.root.remove();
+  }
+});
+
+test('per-key disposal keeps the live owner reusable and preserves stale cleanup semantics', async () => {
+  const runtime = mount();
+  let calls = 0;
+  const listener = () => {
+    calls++;
+    return true;
+  };
+  const stale = runtime.view.registerViewCommand(escapeCommand, listener, 3);
+  try {
+    runtime.port.nativeEscape?.dispose();
+    runtime.view.registerViewCommand(escapeCommand, listener, 3);
+    expect(runtime.port.nativeEscape?.dispatch()).toBe(true);
+    expect(calls).toBe(1);
+    stale();
+    expect(runtime.port.nativeEscape?.dispatch()).toBe(false);
+    expect(calls).toBe(1);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('a deferred cleanup error belongs to its draining entry and leaves the other owner live', async () => {
+  const first = mount();
+  const second = mount();
+  const cleanup = undefined;
+  const release = first.view.registerViewCommand(escapeCommand, () => true, 3);
+  const unregister = vi
+    .spyOn(first.executor.session, 'unregisterViewEscape')
+    .mockImplementationOnce(() => {
+      throw cleanup;
+    });
+  second.view.registerViewCommand(
+    escapeCommand,
+    () => {
+      release();
+      return true;
+    },
+    3
+  );
+  try {
+    const before = second.view.query.serializedState();
+    let thrown: { error: unknown } | undefined;
+    let result: ExecutorSettlement | undefined;
+    try {
+      second.executor.runSettled(
+        () =>
+          second.executor.session.viewCommandEscape(
+            second.executor.now(),
+            Date.now()
+          ),
+        (value) => {
+          result = value;
+        }
+      );
+    } catch (error) {
+      thrown = { error };
+    }
+    expect(thrown).toEqual({ error: cleanup });
+    expect(result).toEqual({ status: 'error', error: cleanup });
+    expect(second.view.query.serializedState()).toBe(before);
+    expect(second.executor.session.takeOutput()).toHaveLength(0);
+    unregister.mockRestore();
+    expect(first.port.nativeEscape?.dispatch()).toBe(true);
+  } finally {
+    unregister.mockRestore();
+    await second.close();
+    await first.close();
+    first.root.remove();
+    second.root.remove();
   }
 });

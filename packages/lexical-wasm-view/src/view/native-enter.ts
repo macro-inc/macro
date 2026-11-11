@@ -94,6 +94,7 @@ export class NativeEnterDispatcher {
   private readonly failures = new Map<bigint, Failure>();
   private readonly sessions = new WeakMap<Native.EditorSession, bigint>();
   private readonly owners = new Map<bigint, Native.EditorSession>();
+  private readonly retiringOwners = new Set<bigint>();
   private readonly listeners = new Map<
     bigint,
     Map<NativeCommandKey, OwnerListeners>
@@ -352,7 +353,13 @@ export class NativeEnterDispatcher {
         throw error;
       }
     }
-    return () => {
+    let queued: object | undefined;
+    const unregister = () => {
+      queued = undefined;
+      const bound = this.owners.get(owner);
+      if (!bound || this.retiringOwners.has(owner)) return;
+      if (bound !== session)
+        throw new Error('Native key cleanup owner does not match its session');
       const entry = bucket.get(identity);
       if (entry) {
         this.remove(session, owner, entry);
@@ -367,6 +374,20 @@ export class NativeEnterDispatcher {
           this.removeCollection(session, owner, listeners.collection);
         listeners.collection = undefined;
       }
+    };
+    return () => {
+      const active = this.activeScope();
+      if (active && active.owner !== owner) {
+        if (!queued) {
+          const request = {};
+          queued = request;
+          this.deferTeardown(() => {
+            if (queued === request) unregister();
+          });
+        }
+        return;
+      }
+      unregister();
     };
   }
 
@@ -417,6 +438,9 @@ export class NativeEnterDispatcher {
   ): void {
     const listeners = this.listeners.get(owner);
     if (!listeners) return;
+    if (this.owners.get(owner) !== session)
+      throw new Error('Native key cleanup owner does not match its session');
+    if (key === undefined) this.retiringOwners.add(owner);
     for (const [command, entry] of listeners) {
       if (key !== undefined && key !== command) continue;
       if (entry.collection)
@@ -439,6 +463,7 @@ export class NativeEnterDispatcher {
     }
     this.listeners.delete(owner);
     this.owners.delete(owner);
+    this.retiringOwners.delete(owner);
     this.sessions.delete(session);
     this.clearFailures(owner);
   }
