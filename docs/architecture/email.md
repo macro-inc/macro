@@ -307,8 +307,12 @@ The working copy and the mutation queue are separate stores, so a discard is
 first recorded beside its copy (`deleteAttemptId`), which stays listed and
 editable. The copy becomes `deleting`, hidden and closed to edits, only when the
 queue admits the delete, and the queue admits it only for the revision it was
-requested on: an edit or a newer save drops the request, and a request that
-never reached the queue is inert. A discard on its way to the server is never
+requested on: only an edit, which makes a new revision, withdraws the request,
+and a request that never reached the queue is inert. A save and a discard of
+one draft share a queue key, so the one queued last replaces the other; a save
+of the revision being discarded is therefore never queued, whichever started
+first. A composer that closes flushes its last edit behind any save still on the
+wire, and that flush can run after the draft was reopened and discarded. A discard on its way to the server is never
 shown as a failure. **Retry discard** follows a server rejection or a delete the
 queue lost (`delete-failed`); every copy that starts needing a retry logs
 `email_draft.sync_failed` with its status, cause and error code.
