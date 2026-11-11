@@ -152,14 +152,6 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
       discovery.active = active;
       return {
         contacts: () => (active() ? contacts() : []),
-        users: () =>
-          users().filter((user) =>
-            contacts().some(
-              (contact) =>
-                contact.email?.trim().toLowerCase() ===
-                user.data.email.toLowerCase()
-            )
-          ),
         isLoading: loading,
         hasMore,
         isLoadingMore: () => false,

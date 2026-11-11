@@ -11,12 +11,6 @@ import type {
   Settings,
 } from '@service-email/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
-import {
-  assertQueryAccount,
-  isCurrentQueryAccount,
-  mutationQueryAccount,
-} from '../auth/account-scope';
-import { useQueryAccount } from '../auth/use-query-account';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 import { useNonPrimaryEmailLinkIdHeader } from './link';
@@ -67,31 +61,17 @@ export function useUpdateEmailSettingsMutation(
   callbacks?: UpdateSettingsCallbacks
 ) {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  const account = useQueryAccount();
   return useMutation(() => ({
-    meta: { queryAccount: account() },
-    mutationFn: async (
-      { linkId, settings, span }: UpdateSettingsVars,
-      context
-    ) => {
-      assertQueryAccount(mutationQueryAccount(context));
-      return throwOnErr(() =>
+    mutationFn: async ({ linkId, settings, span }: UpdateSettingsVars) =>
+      throwOnErr(() =>
         emailClient.patchSettings({ settings }, toHeaderLinkId(linkId), span)
-      );
-    },
+      ),
 
     ...withCallbacks<PatchSettingsResponse, Error, UpdateSettingsVars>(
       {
-        onSuccess: async (
-          result,
-          { linkId, settings, span },
-          _result,
-          context
-        ) => {
-          const owner = mutationQueryAccount(context);
-          if (!isCurrentQueryAccount(owner)) return;
+        onSuccess: async (result, { linkId, settings, span }) => {
           queryClient.setQueryData<ListLinksResponse>(
-            emailKeys.links(owner.userId).queryKey,
+            emailKeys.links.queryKey,
             (old) =>
               old
                 ? {
@@ -156,14 +136,11 @@ export function useImportGmailSignatureMutation(
   callbacks?: ImportGmailSignatureCallbacks
 ) {
   const toHeaderLinkId = useNonPrimaryEmailLinkIdHeader();
-  const account = useQueryAccount();
   return useMutation(() => ({
-    meta: { queryAccount: account() },
-    mutationFn: async (
-      { linkId, span }: ImportGmailSignatureVars,
-      context
-    ): Promise<ImportGmailSignatureResult> => {
-      assertQueryAccount(mutationQueryAccount(context));
+    mutationFn: async ({
+      linkId,
+      span,
+    }: ImportGmailSignatureVars): Promise<ImportGmailSignatureResult> => {
       const result = await emailClient.importGmailSignature(
         toHeaderLinkId(linkId),
         span
@@ -187,11 +164,10 @@ export function useImportGmailSignatureMutation(
       ImportGmailSignatureVars
     >(
       {
-        onSuccess: async (result, { linkId, span }, _result, context) => {
-          const owner = mutationQueryAccount(context);
-          if (!result.success || !isCurrentQueryAccount(owner)) return;
+        onSuccess: async (result, { linkId, span }) => {
+          if (!result.success) return;
           queryClient.setQueryData<ListLinksResponse>(
-            emailKeys.links(owner.userId).queryKey,
+            emailKeys.links.queryKey,
             (old) =>
               old
                 ? {

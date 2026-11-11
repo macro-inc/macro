@@ -53,7 +53,7 @@ may import a block package, `@core/block`, or block-related signal modules.
   resolved presentation values and event callbacks. Its caller provides the
   rendering context, selection, expansion, reply actions, and footer.
 - `email-thread/email-thread.tsx` constructs the existing shared thread query,
-  source adapter, viewer/scoped-recipient capabilities, thread commands, composer capabilities,
+  source adapter, viewer/contact capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
   supplied contexts. It imports no production entry point for a nested
@@ -239,24 +239,6 @@ the `EmailThreadContext` consumed by state and navigation, alongside the compose
 context and view callbacks. State creates one retained thread snapshot
 and passes that accessor to the injected command factory, so commands and reading
 state cannot disagree because they retained separate snapshots.
-
-## Personal recipient suggestions
-
-Production compose and thread composition no longer fetch the complete personal
-contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
-To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
-The field is required at composition boundaries, with explicit `undefined` for
-hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
-`recipients` and reply-session options contain scoped extras and thread addresses,
-not an address-book catalog. Controllers still own selected values independently
-of suggestions. Closing, paging, sender changes and failed reads cannot erase them.
-
-Scoped addresses and personal-directory users are deduplicated by canonical email
-after matching, preserving the selected representation when a custom address later
-matches a known user. Main new-email and reply/forward views forward the factory;
-AI inference's separate people pool is not reduced to a suggestion page. The real
-composer fixture covers late contacts and scoped/directory deduplication on desktop
-and phone via `recipient-directory.app.e2e.ts` in the app browser configuration.
 
 ## Async completion and naming
 

@@ -20,10 +20,7 @@ use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
     MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
-use crate::search::{
-    SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
-    project_search_documents,
-};
+use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use predicate_index::{
@@ -88,49 +85,15 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Streams compact text matches from one indexed profile/bucket, without
-    /// collecting the bucket or decoding normalized records. May return a
-    /// superset of matches; must not omit matches or limit before ranking.
-    fn visit_search_documents(
+    /// Loads one compact bucket for text search. Must use the profile/bucket
+    /// index, never unrelated buckets or normalized record payloads.
+    fn load_search_documents(
         &self,
-        profile: SearchProfile,
-        bucket: &str,
-        query: &SearchQuery,
-        visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
-    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
-
-    /// Streams normalized contact records after the existing text prefilter.
-    /// Extra ranking/exclusion facts are evaluated before any result limit.
-    fn visit_contact_records(
-        &self,
-        query: &SearchQuery,
-        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
-    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
-
-    /// Execute the name-policy read into its bounded core collector. Indexed
-    /// adapters may probe then fall back to a complete matching stream; a work
-    /// budget is never completion evidence. The engine owns scope admission.
-    fn visit_name_search(
-        &self,
-        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
-    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
-
-    /// Visit one raw contact-record page in key order. Return its last visited
-    /// position only when more records exist. Never accumulate the corpus.
-    fn scan_contact_records(
-        &self,
-        after: Option<&str>,
-        limit: usize,
-        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
-    ) -> impl Future<Output = Result<Option<String>, Self::Error>> + MaybeSend;
-
-    /// Execute filtering, aggregation and limits in local storage. Unsupported
-    /// implementations must refuse; collecting the directory is not a fallback.
-    fn read_people_sql(
-        &self,
-        viewer: &str,
-        plan: &crate::people::sql::PeopleSqlPlan,
-    ) -> impl Future<Output = Result<crate::people::sql::PeopleSqlResult, Self::Error>> + MaybeSend;
+        _profile: SearchProfile,
+        _bucket: &str,
+    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
+        async { Ok(Vec::new()) }
+    }
 
     /// Reads one bucket in indexed recent order. `after` is exclusive.
     fn browse_search_documents(
@@ -333,8 +296,8 @@ pub struct InMemoryStorage {
     mutations: BTreeMap<MutationId, InMemoryQueuedMutation>,
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
-    search_query_count: Arc<AtomicUsize>,
-    search_rows_visited: Arc<AtomicUsize>,
+    search_catalog_load_count: Arc<AtomicUsize>,
+    search_catalog_rows_loaded: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
@@ -429,14 +392,14 @@ impl InMemoryStorage {
         self.record_get_count.load(Ordering::Relaxed)
     }
 
-    /// Number of text queries against storage (test diagnostics).
-    pub fn search_query_count(&self) -> usize {
-        self.search_query_count.load(Ordering::Relaxed)
+    /// Number of compact catalog loads (test diagnostics).
+    pub fn search_catalog_load_count(&self) -> usize {
+        self.search_catalog_load_count.load(Ordering::Relaxed)
     }
 
-    /// Number of matching compact rows passed to visitors (test diagnostics).
-    pub fn search_rows_visited(&self) -> usize {
-        self.search_rows_visited.load(Ordering::Relaxed)
+    /// Number of compact rows loaded across bucket reads (test diagnostics).
+    pub fn search_catalog_rows_loaded(&self) -> usize {
+        self.search_catalog_rows_loaded.load(Ordering::Relaxed)
     }
 
     /// Number of full mutation-queue loads (test diagnostics).
@@ -447,64 +410,6 @@ impl InMemoryStorage {
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
-
-    async fn visit_name_search(
-        &self,
-        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
-    ) -> Result<(), Self::Error> {
-        for (key, record) in &self.records {
-            read.push(key, record, None);
-        }
-        if !read.prior_dm_targets().is_empty() {
-            for (key, record) in &self.records {
-                read.note_prior_alias(key, record);
-            }
-        }
-        Ok(())
-    }
-
-    async fn scan_contact_records(
-        &self,
-        after: Option<&str>,
-        limit: usize,
-        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
-    ) -> Result<Option<String>, Self::Error> {
-        let mut selected = BTreeMap::new();
-        for (key, record) in &self.records {
-            if key.typename() != Some("GraphqlContact") {
-                continue;
-            }
-            let Some(id) = key.id() else {
-                continue;
-            };
-            if after.is_some_and(|after| id <= after) {
-                continue;
-            }
-            selected.insert(id, (key, record));
-            if selected.len() > limit + 1 {
-                selected.pop_last();
-            }
-        }
-        let more = selected.len() > limit;
-        if more {
-            selected.pop_last();
-        }
-        let next = more
-            .then(|| selected.last_key_value().map(|(id, _)| (*id).to_owned()))
-            .flatten();
-        for (_, (key, record)) in selected {
-            visit(key, record);
-        }
-        Ok(next)
-    }
-
-    async fn read_people_sql(
-        &self,
-        _viewer: &str,
-        _plan: &crate::people::sql::PeopleSqlPlan,
-    ) -> Result<crate::people::sql::PeopleSqlResult, Self::Error> {
-        Ok(crate::people::sql::PeopleSqlResult::Unsupported)
-    }
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.record_get_count.fetch_add(1, Ordering::Relaxed);
@@ -543,40 +448,22 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
 
-    async fn visit_search_documents(
+    async fn load_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-        query: &SearchQuery,
-        mut visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
-    ) -> Result<(), Self::Error> {
-        self.search_query_count.fetch_add(1, Ordering::Relaxed);
-        for document in self.search_documents.values().filter(|document| {
-            document.profile == profile
-                && document.bucket == bucket
-                && query.matches(&document.search_text)
-        }) {
-            self.search_rows_visited.fetch_add(1, Ordering::Relaxed);
-            visit(document.as_borrowed());
-        }
-        Ok(())
-    }
-
-    async fn visit_contact_records(
-        &self,
-        query: &SearchQuery,
-        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
-    ) -> Result<(), Self::Error> {
-        for document in self.search_documents.values().filter(|document| {
-            document.profile == SearchProfile::QuickAccessV1
-                && document.bucket == "person"
-                && query.matches(&document.search_text)
-        }) {
-            if let Some(record) = self.records.get(&document.record_key) {
-                visit(&document.record_key, record);
-            }
-        }
-        Ok(())
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.search_catalog_load_count
+            .fetch_add(1, Ordering::Relaxed);
+        let documents: Vec<_> = self
+            .search_documents
+            .values()
+            .filter(|document| document.profile == profile && document.bucket == bucket)
+            .cloned()
+            .collect();
+        self.search_catalog_rows_loaded
+            .fetch_add(documents.len(), Ordering::Relaxed);
+        Ok(documents)
     }
 
     async fn browse_search_documents(

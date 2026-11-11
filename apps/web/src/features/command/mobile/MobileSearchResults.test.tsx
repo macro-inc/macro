@@ -161,7 +161,6 @@ vi.mock('../queries/entity-search', () => ({
     hasError: () => mocks.refreshError(),
     hasAuthoritativeError: () => false,
     pagination: {
-      windowKey: () => undefined,
       hasMore: () => mocks.hasMore,
       isLoadingMore: () => mocks.loadingMore,
       loadMore: mocks.loadMore,

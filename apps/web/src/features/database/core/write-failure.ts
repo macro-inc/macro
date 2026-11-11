@@ -186,11 +186,6 @@ export function databaseReadMessage(failure: DatabaseReadFailure): string {
       { kind: 'fetch' },
       () => 'The rows could not be loaded. Check your connection.'
     )
-    .with({ kind: 'rejected' }, ({ message }) => message)
-    .with(
-      { kind: 'scope-changed' },
-      () => 'The account or access changed. Reopen the table to continue.'
-    )
     .with(
       { kind: 'read-only' },
       { kind: 'cancelled' },

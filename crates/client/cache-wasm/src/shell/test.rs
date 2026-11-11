@@ -9,9 +9,7 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
-mod hydration_scope;
 mod mail_projection;
-mod people;
 
 #[wasm_bindgen_test]
 fn read_response_conversion_preserves_json_and_revision_strings() {
@@ -1236,7 +1234,6 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
                 }
             })),
             Some("user-1".into()),
-            JsValue::UNDEFINED,
         ))
         .await,
     );
@@ -1262,7 +1259,6 @@ async fn backfill_supplement_failure_does_not_commit_or_advance_revision() {
             }
         })),
         Some("user-1".into()),
-        JsValue::UNDEFINED,
     ))
     .await
     .expect_err("invalid required backfill supplement rejects before storage");

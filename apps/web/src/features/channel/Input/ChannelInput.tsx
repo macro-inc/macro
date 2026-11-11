@@ -65,7 +65,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
-import { useAgentMentionUserTransform } from '../use-agent-mention-users';
+import { useAgentMentionUsers } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -149,8 +149,8 @@ export type ChannelInputProps = InputCallbacks & {
   attachmentTracker?: InputAttachmentTracker;
   /**
    * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
-   * scope: channel participants, CRM teammates, or bounded personal suggestions
-   * on documents, projects and calls. An explicit empty list never widens.
+   * own people: a channel's participants, or the workspace contacts a
+   * document's composers offer.
    */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
@@ -369,21 +369,16 @@ export function ChannelInput(props: ChannelInputProps) {
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUserTransform; it decorates only the current directory
-  // window or the explicit participant roster.
+  // useAgentMentionUsers; participants and parent agents feed it here.
   // The editor is configured once, at mount.
   const initialFeatures = features();
   const participantsOnly = initialFeatures.mentions === 'participants';
   const mentionUsers = participantsOnly
     ? () => props.participants?.() ?? []
-    : () => props.participants?.() ?? parentParticipants();
-  const withAgents = participantsOnly
-    ? undefined
-    : useAgentMentionUserTransform();
-  const transformUsers = withAgents
-    ? (users: readonly IUser[]) =>
-        withAgents([...users, ...(props.bots?.() ?? parentBots())])
-    : undefined;
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
 
   const groupMentions =
     !participantsOnly && (!props.parent || props.parent.type === 'channel');
@@ -401,7 +396,6 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(initialFeatures.gifs ? [] : ['gif']),
     ],
     users: mentionUsers,
-    transformUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
@@ -480,7 +474,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // Whichever Macro the `@macro` typeahead offers: the classic chat reply or
   // the agent-session bot, depending on rollout.
   const macroUser = () =>
-    (transformUsers ? transformUsers([]) : (mentionUsers() ?? [])).find(
+    mentionUsers().find(
       (user) => isMacroAgentId(user.id) || isMacroNewId(user.id)
     );
   const addMenuGroups = (): ComposerAddMenuGroup[] => {

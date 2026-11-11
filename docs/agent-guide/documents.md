@@ -2450,10 +2450,6 @@ an actual task mention additionally get a filter menu (status, priority,
 assignee, due date) that reveals on hover and stays while filters are active;
 filters dim unmatched items in place and persist with the document. Plain
 checkbox lists have no filter, and removing the last task mention removes it.
-Assignee labels resolve only identities referenced by the document's loaded tasks,
-in bounded lookup batches. They do not load the personal directory. Missing names
-stay Unknown; changing references releases old label data without erasing persisted
-filter identities.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu

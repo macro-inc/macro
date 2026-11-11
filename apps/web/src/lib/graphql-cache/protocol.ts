@@ -8,15 +8,6 @@ export type IdentityBindingWire = {
 };
 
 import type { EntityResolverWire } from './exchange/entity-resolvers';
-import type {
-  ContactReconcile,
-  ContactSnapshotRequest,
-  PeopleContextUpdate,
-  PeopleReferenceRequest,
-  PeopleScope,
-  PeopleSearch,
-  PeopleSqlRequest,
-} from './people/generated';
 
 /**
  * Wire protocol between page contexts and the cache worker (the `CacheHost`
@@ -67,15 +58,13 @@ export function parseCacheRevision(value: unknown): CacheRevision {
 export const INITIAL_CACHE_REVISION = '0' as CacheRevision;
 
 /** Validates the durable database-generation UUID shared by cache hosts. */
-export function isStorageGeneration(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)
-  );
-}
-
 export function parseStorageGeneration(value: unknown): string {
-  if (!isStorageGeneration(value)) {
+  if (
+    typeof value !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      value
+    )
+  ) {
     throw new TypeError('invalid cache storage generation');
   }
   return value;
@@ -86,37 +75,6 @@ export type CacheReadPriority = 'user-visible';
 
 /** Recursive partial-variable object used to limit query inspection work. */
 export type QueryVariableFilter = Record<string, unknown>;
-
-/** Rust engine::HydrationScope: captured before fetching a background page. */
-export type HydrationScope = PeopleScope;
-
-/** Scope rejection is expected cancellation, not a storage failure. */
-export function isStaleHydrationScopeError(error: unknown): boolean {
-  return (
-    error instanceof Error && error.message === 'cache hydration scope changed'
-  );
-}
-
-export type PeopleRequest =
-  | {
-      kind: 'contact-snapshot';
-      request: ContactSnapshotRequest;
-      traceparent?: string;
-    }
-  | {
-      kind: 'contact-reconcile';
-      request: ContactReconcile;
-      traceparent?: string;
-    }
-  | { kind: 'people-sql'; request: PeopleSqlRequest; traceparent?: string }
-  | {
-      kind: 'people-references';
-      request: PeopleReferenceRequest;
-      traceparent?: string;
-    }
-  | { kind: 'people-context'; scope: PeopleScope; traceparent?: string }
-  | { kind: 'people-update'; update: PeopleContextUpdate; traceparent?: string }
-  | { kind: 'people-search'; request: PeopleSearch; traceparent?: string };
 
 export type SearchProfile = 'quick-access-v1';
 
@@ -145,9 +103,6 @@ export type SearchCacheArgs = {
 };
 
 export type SearchCachePage = {
-  /** Engine projection revision; absent on older native binaries. Contact
-   * ingestion/search requires revision 5 (including page-retention support). */
-  projectionVersion?: number;
   documents: SearchDocumentWire[];
   nextCursor: SearchCursor | null;
 };
@@ -856,7 +811,6 @@ export type CacheRequest = { id: number } & (
   | {
       /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
-      hydrationScope?: HydrationScope;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -923,7 +877,6 @@ export type CacheRequest = { id: number } & (
       fragmentName: string;
       keys: string[];
     }
-  | PeopleRequest
   | {
       kind: 'search';
       request: SearchCacheArgs & { nowMs: number };

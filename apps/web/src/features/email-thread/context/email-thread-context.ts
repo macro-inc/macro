@@ -55,7 +55,6 @@ export interface EmailThreadCommands {
 
 export interface EmailThreadContext {
   source: EmailThreadSource;
-  /** Explicitly scoped extras; personal suggestions belong to the composer source. */
   recipients: Accessor<EmailRecipient[]>;
   viewerEmail: Accessor<string | undefined>;
   viewerLoading: Accessor<boolean>;

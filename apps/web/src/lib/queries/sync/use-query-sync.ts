@@ -30,7 +30,7 @@ import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { requestContactRefresh } from '@queries/contacts/refresh';
+import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
@@ -116,7 +116,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        requestContactRefresh();
+        fireAndForget(invalidateContacts(), 'websocket-query-sync');
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(

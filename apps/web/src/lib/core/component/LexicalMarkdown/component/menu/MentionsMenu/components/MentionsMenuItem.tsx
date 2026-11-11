@@ -71,7 +71,6 @@ export function MentionsMenuItem(props: {
         return (
           <UserIcon
             id={props.item.id}
-            name={props.item.data.name}
             size="sm"
             isDeleted={false}
             photoUrl={props.item.data.photoUrl}

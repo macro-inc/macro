@@ -10,9 +10,7 @@ use cache_core::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
     NewQueuedMutation, QueuedMutation,
 };
-use cache_core::search::{
-    SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
-};
+use cache_core::search::{SearchCursor, SearchDocument, SearchProfile};
 use cache_core::store::{QueueDiagnostics, Storage};
 use cache_core::value::{EntityKey, Record};
 use cache_turso::{PhysicalResetReason, TursoStorage, TursoStorageError};
@@ -67,23 +65,6 @@ impl BrowserStorage {
 impl Storage for BrowserStorage {
     type Error = TursoStorageError;
 
-    async fn scan_contact_records(
-        &self,
-        after: Option<&str>,
-        limit: usize,
-        visit: impl FnMut(&EntityKey<'_>, &Record),
-    ) -> Result<Option<String>, Self::Error> {
-        self.inner.scan_contact_records(after, limit, visit).await
-    }
-
-    async fn read_people_sql(
-        &self,
-        viewer: &str,
-        plan: &cache_core::people::sql::PeopleSqlPlan,
-    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
-        self.inner.read_people_sql(viewer, plan).await
-    }
-
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         self.take(TestStorageFault::GetBatch)?;
         self.inner.get_batch(keys).await
@@ -110,31 +91,12 @@ impl Storage for BrowserStorage {
         self.inner.delete_batch(keys).await
     }
 
-    async fn visit_search_documents(
+    async fn load_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-        query: &SearchQuery,
-        visit: impl FnMut(SearchDocumentRef<'_>),
-    ) -> Result<(), Self::Error> {
-        self.inner
-            .visit_search_documents(profile, bucket, query, visit)
-            .await
-    }
-
-    async fn visit_name_search(
-        &self,
-        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
-    ) -> Result<(), Self::Error> {
-        self.inner.visit_name_search(read).await
-    }
-
-    async fn visit_contact_records(
-        &self,
-        query: &SearchQuery,
-        visit: impl FnMut(&EntityKey<'_>, &Record),
-    ) -> Result<(), Self::Error> {
-        self.inner.visit_contact_records(query, visit).await
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.inner.load_search_documents(profile, bucket).await
     }
 
     async fn browse_search_documents(

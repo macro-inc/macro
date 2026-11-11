@@ -66,7 +66,6 @@ function renderEnvelope(inboxId: 'gmail' | 'outlook', mobile: boolean) {
   });
   render(() => (
     <ReplyEnvelope
-      createRecipientSource={undefined}
       fields={state.fields}
       values={state.values}
       options={() => []}

@@ -262,11 +262,7 @@ jobs:
           all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
           # The checks only exist once someone has run PR CI on this head; its CI gate
           # fails with the native check, so only the gate's description is read here.
-          gate=$(jq -r '
-            [.[] | select(.name == "CI gate") | .description] as $gates |
-            ([$gates[] | select(startswith("Running on") or startswith("Passed on"))][0] //
-             [$gates[] | select(startswith("Failed:"))][0] // "")
-          ' <<<"$all_checks")
+          gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
           case "$gate" in
             "" | "Not run on this commit."*)
               echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add ios-update once it passes." >&2

@@ -1,8 +1,6 @@
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import type { RecipientSelectorProps } from '@core/component/RecipientSelector';
-import type { CombinedRecipientItem } from '@core/user/combinedRecipient';
-import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { JSX } from 'solid-js';
 import type { RosterAgent } from '../../agents-view/core/roster';
@@ -17,7 +15,7 @@ import type {
   SubmissionResult,
   Suggestions,
 } from '../core/input';
-import type { Recipient, RecipientLookup } from '../core/recipients';
+import type { Recipient } from '../core/recipients';
 import type { InputObservation } from './telemetry';
 
 export type MessageRecipient = RecipientSelectorProps<
@@ -28,15 +26,16 @@ export type MessageRecipient = RecipientSelectorProps<
 export interface InputDisplay {
   resolveAppLink?: MentionLinkResolver;
   captureMessageMentions?(read: (() => ItemMention[]) | undefined): void;
-  messageChannels(): CombinedRecipientItem<'channel'>[];
-  createRecipientSource: RecipientSourceFactory<'user'>;
-  createMessageSource: RecipientSourceFactory<'user' | 'channel'>;
+  messageRecipients(): ReturnType<
+    RecipientSelectorProps<'user' | 'channel'>['options']
+  >;
   captureCalendarEditor?(editor: LexicalEditor | undefined): void;
   captureEmailEditor?(editor: LexicalEditor | undefined): void;
-  person: RecipientLookup;
+  people(): Recipient[];
   searchChannels(): Recipient[];
+  destinations(): Recipient[];
   recipients(
-    fields: Pick<InputFields, 'recipients'>,
+    fields: InputFields,
     message?: boolean
   ): { recipients: Recipient[]; unresolved: string[] };
   calendars(): { id: string; name: string; emailAddress: string }[];

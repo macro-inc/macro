@@ -23,9 +23,6 @@ const mocks = vi.hoisted(() => ({
   taskSnapshot: vi.fn(),
   taskValues: {} as Record<string, PropertyApiValues>,
   taskDefinitions: new Map<string, PropertyDefinition>(),
-  definitionsWait: vi.fn<() => Promise<void>>(),
-  accountCurrent: true,
-  referencesUnavailable: false,
   saveEmail: vi.fn(),
   sendEmail: vi.fn(),
   connectGoogle: vi.fn(),
@@ -117,35 +114,18 @@ vi.mock('@core/context/quickAccess', () => ({
     }),
   }),
 }));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'team-channel', name: 'engineering', participants: [{}, {}, {}] },
+vi.mock('@core/signal/useCombinedRecipient', () => ({
+  useCombinedRecipients: () => ({
+    users: () => [
+      {
+        id: 'macro|john@example.com',
+        kind: 'user',
+        data: { name: 'John Adams', email: 'john@example.com' },
+      },
     ],
-  }),
-}));
-vi.mock('@queries/contacts/use-references', () => ({
-  useContactReferences: () => ({
-    lookup: (label: string) =>
-      mocks.referencesUnavailable
-        ? undefined
-        : [
-              'john',
-              'john adams',
-              'john@example.com',
-              'macro|john@example.com',
-            ].includes(label)
-          ? [
-              {
-                userId: 'macro|john@example.com',
-                name: 'John Adams',
-                email: 'john@example.com',
-              },
-            ]
-          : [],
-    loading: () => mocks.referencesUnavailable,
-    error: () => null,
-    retry: async () => {},
+    channels: () => [
+      { kind: 'channel', id: 'team-channel', data: { name: 'engineering' } },
+    ],
   }),
 }));
 vi.mock('@app/features/block-md/queries/create-document-with-tags', () => ({
@@ -158,10 +138,7 @@ vi.mock('@app/features/block-md/util/taskComposerProperties', () => ({
 vi.mock('./queries/task-field-source', () => ({
   createTaskFieldSource: () => ({
     definitions: async () => [],
-    createDefinitions: async () => {
-      await mocks.definitionsWait();
-      return mocks.taskDefinitions;
-    },
+    createDefinitions: async () => mocks.taskDefinitions,
     values: () => ({ values: mocks.taskValues, unresolved: [] }),
   }),
 }));
@@ -178,12 +155,6 @@ vi.mock('@app/features/email-compose/compose-adapter', () => ({
     drafts: { saveDraft: mocks.saveEmail },
     delivery: { sendMessage: mocks.sendEmail },
   }),
-}));
-vi.mock('@queries/auth/account-scope', () => ({
-  captureQueryAccount: (userId: string) => ({ userId, session: 0 }),
-  assertQueryAccount: () => {
-    if (!mocks.accountCurrent) throw new Error('Query account changed');
-  },
 }));
 vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({
@@ -244,10 +215,7 @@ async function execute(snapshot: Submission) {
       return await createInputActions(
         () => snapshot.fields,
         'macro|me@example.com',
-        {
-          navigate: (next) => mocks.replace({ next }),
-          intent: () => snapshot.intent,
-        }
+        { navigate: (next) => mocks.replace({ next }) }
       ).submit(snapshot);
     } finally {
       dispose();
@@ -262,9 +230,6 @@ beforeEach(() => {
   mocks.taskSnapshot.mockResolvedValue({ documentId: 'task' });
   mocks.taskValues = {};
   mocks.taskDefinitions = new Map();
-  mocks.definitionsWait.mockResolvedValue(undefined);
-  mocks.accountCurrent = true;
-  mocks.referencesUnavailable = false;
   mocks.session.mockReturnValue('session');
   mocks.saveEmail.mockResolvedValue({
     draftId: 'draft',
@@ -284,7 +249,7 @@ describe('destination adapters', () => {
         await createInputActions(
           () => input('email').fields,
           'macro|me@example.com',
-          { navigate: (next) => mocks.replace({ next }), intent: () => 'email' }
+          { navigate: (next) => mocks.replace({ next }) }
         ).connectGoogle();
         expect(mocks.connectGoogle).toHaveBeenCalledWith({
           scopes: 'gmail_and_calendar',
@@ -506,10 +471,7 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => submission.fields,
           'macro|me@example.com',
-          {
-            navigate: (next) => mocks.replace({ next }),
-            intent: () => submission.intent,
-          }
+          { navigate: (next) => mocks.replace({ next }) }
         );
         expect(mocks.saveEmail).not.toHaveBeenCalled();
         expect(actions.validateEmailDraft(submission)).toBeUndefined();
@@ -567,10 +529,7 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => submission.fields,
           'macro|me@example.com',
-          {
-            navigate: (next) => mocks.replace({ next }),
-            intent: () => submission.intent,
-          }
+          { navigate: (next) => mocks.replace({ next }) }
         );
         actions.captureEmailEditor(editor);
         await actions.submit(submission);
@@ -623,10 +582,7 @@ describe('destination adapters', () => {
         const actions = createInputActions(
           () => snapshot.fields,
           'macro|me@example.com',
-          {
-            navigate: (next) => mocks.replace({ next }),
-            intent: () => snapshot.intent,
-          }
+          { navigate: (next) => mocks.replace({ next }) }
         );
         actions.captureMessageMentions(() => [
           { itemType: 'user', itemId: 'macro|john@example.com' },
@@ -670,84 +626,6 @@ describe('destination adapters', () => {
       expect.any(Map),
       expect.any(Function)
     );
-  });
-  it('keeps the submitted task identities when inference changes while definitions load', async () => {
-    const started = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    mocks.definitionsWait.mockImplementation(async () => {
-      started.resolve();
-      await release.promise;
-    });
-    mocks.taskValues = {
-      [SYSTEM_PROPERTY_IDS.ASSIGNEES]: {
-        valueType: 'ENTITY',
-        refs: [{ entity_id: 'macro|chosen@example.com', entity_type: 'USER' }],
-      },
-    };
-    const submitting = execute(input('task'));
-    await started.promise;
-    mocks.taskValues = {};
-    release.resolve();
-    await submitting;
-    expect(mocks.task.mock.calls[0][2]).toContainEqual([
-      SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      {
-        valueType: 'ENTITY',
-        refs: [{ entity_id: 'macro|chosen@example.com', entity_type: 'USER' }],
-      },
-    ]);
-  });
-  it('does not create a task after the submitting account changes during definition loading', async () => {
-    const started = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    mocks.definitionsWait.mockImplementation(async () => {
-      started.resolve();
-      await release.promise;
-    });
-    const submitting = execute(input('task'));
-    await started.promise;
-    mocks.accountCurrent = false;
-    const rejected = expect(submitting).rejects.toThrow(
-      'Query account changed'
-    );
-    release.resolve();
-    await rejected;
-    expect(mocks.task).not.toHaveBeenCalled();
-  });
-  it('does not guess inferred names when reference evidence is incomplete', async () => {
-    mocks.referencesUnavailable = true;
-    await expect(execute(input('email'))).rejects.toThrow('specific recipient');
-    await expect(
-      execute(input('message', { recipients: '#engineering' }))
-    ).rejects.toThrow('specific recipient');
-    expect(mocks.saveEmail).not.toHaveBeenCalled();
-    expect(mocks.message).not.toHaveBeenCalled();
-    await execute(input('message', { recipients: 'team-channel' }));
-    expect(mocks.message).toHaveBeenCalledWith(
-      expect.objectContaining({
-        parent: { type: 'channel', id: 'team-channel' },
-      })
-    );
-  });
-  it('does not send a saved email draft after the account changes', async () => {
-    mocks.saveEmail.mockImplementationOnce(async () => {
-      mocks.accountCurrent = false;
-      return { draftId: 'draft', threadId: 'thread', inboxId: 'inbox' };
-    });
-    await expect(execute(input('email'))).rejects.toThrow(
-      'Query account changed'
-    );
-    expect(mocks.sendEmail).not.toHaveBeenCalled();
-  });
-  it('does not send a message after account replacement during DM creation', async () => {
-    mocks.dm.mockImplementationOnce(async () => {
-      mocks.accountCurrent = false;
-      return { channel_id: 'dm' };
-    });
-    await expect(execute(input('message'))).rejects.toThrow(
-      'Query account changed'
-    );
-    expect(mocks.message).not.toHaveBeenCalled();
   });
   it('posts to an existing channel without creating a DM', async () => {
     await execute(input('message', { recipients: '#engineering' }));

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { searchFiltersSchema } from '../../next-soup/core/search-filters';
-import { formatRecipientTerms } from './recipients';
 import { recurrenceConfigSchema } from './recurrence';
 
 export const intentSchema = z.enum([
@@ -135,13 +134,7 @@ export function applySuggestions(
     if (key === 'recurrence') next[key] = value ? JSON.stringify(value) : '';
     else if (key === 'properties' || key === 'searchFilters')
       next[key] = JSON.stringify(value ?? []);
-    else if (
-      key === 'recipients' ||
-      key === 'cc' ||
-      key === 'bcc' ||
-      key === 'guests'
-    )
-      next[key] = formatRecipientTerms(suggestions[key] ?? []);
+    else if (Array.isArray(value)) next[key] = value.join(', ');
     else next[key] = typeof value === 'string' ? value : '';
   }
   return next;

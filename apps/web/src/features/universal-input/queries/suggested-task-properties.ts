@@ -1,4 +1,3 @@
-import { normalizeNameText } from '@core/util/name-match-score';
 import type { PropertyApiValues } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
@@ -16,12 +15,6 @@ export type TaskReference = {
   type: EntityType;
   labels: string[];
 };
-/** Evidence is complete for one term, not a suggestion page or a merged catalog. */
-export type TaskReferenceLookup = (
-  text: string,
-  type: EntityType | null
-) => readonly TaskReference[] | undefined;
-
 const suggestions = z.array(
   z.object({ name: z.string(), values: z.array(z.string()) })
 );
@@ -40,42 +33,11 @@ export function parseTaskDate(text: string): Date | undefined {
   return date;
 }
 
-/** Keep model-provided term boundaries and request people only for effective
- * entity fields. Manual property values take precedence over inferred text. */
-export function taskPeopleLabels(
-  raw: string,
-  definitions: TaskFieldDefinition[],
-  manual: Record<string, PropertyApiValues>
-): string[] {
-  let parsed: z.infer<typeof suggestions>;
-  try {
-    parsed = suggestions.parse(JSON.parse(raw || '[]'));
-  } catch {
-    return [];
-  }
-  return parsed.flatMap((suggestion) => {
-    const fields = definitions.filter(
-      ({ definition }) =>
-        normalize(definition.display_name) === normalize(suggestion.name)
-    );
-    if (fields.length !== 1) return [];
-    const { definition } = fields[0];
-    if (
-      manual[definition.id] ||
-      definition.data_type !== 'ENTITY' ||
-      (definition.specific_entity_type &&
-        definition.specific_entity_type !== 'USER')
-    )
-      return [];
-    return suggestion.values;
-  });
-}
-
-/** Model text is resolved against the host's definitions and complete per-term evidence. */
+/** Model text is resolved against the host's definitions and visible entities. */
 export function suggestedTaskProperties(
   raw: string,
   definitions: TaskFieldDefinition[],
-  references: TaskReferenceLookup
+  references: TaskReference[]
 ) {
   const values: Record<string, PropertyApiValues> = {};
   const unresolved: string[] = [];
@@ -118,27 +80,14 @@ export function suggestedTaskProperties(
         }
       )
       .with('ENTITY', (): PropertyApiValues | undefined => {
-        const matched = texts.map((text) => {
-          const evidence = references(text, definition.specific_entity_type);
-          return (
-            evidence?.filter((ref) => {
-              if (
-                definition.specific_entity_type &&
-                ref.type !== definition.specific_entity_type
-              )
-                return false;
-              const normalizeReference =
-                ref.type === 'USER' ? normalizeNameText : normalize;
-              return (
-                normalizeReference(ref.id) === normalizeReference(text) ||
-                ref.labels.some(
-                  (label) =>
-                    normalizeReference(label) === normalizeReference(text)
-                )
-              );
-            }) ?? []
-          );
-        });
+        const matched = texts.map((text) =>
+          references.filter(
+            (ref) =>
+              (!definition.specific_entity_type ||
+                ref.type === definition.specific_entity_type) &&
+              ref.labels.some((label) => normalize(label) === normalize(text))
+          )
+        );
         return matched.every((refs) => refs.length === 1)
           ? {
               valueType: 'ENTITY',

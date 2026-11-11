@@ -1131,10 +1131,7 @@ export type Outcome = {
   rows: (Cell | null)[][];
   /**  For a row-shaped result, the row entity id behind each result row. */
   rowIds: RowId[];
-  /**
-   *  The tables read, so a caller can watch them for changes. Built-in IDs
-   *  are UUID-shaped constants, not RFC-versioned UUIDs.
-   */
+  /**  The tables read, so a caller can watch them for changes. */
   readTables: TableId[];
   /**  Whether the read hit [`ROW_CAP`], making aggregates partial. */
   truncated: boolean;
@@ -1264,14 +1261,6 @@ export type PropfValue =
   | ({ so: OptionId } & { er?: never })
   /**  A referenced entity id. */
   | ({ er: string } & { so?: never });
-
-/**  Read metadata without fetching data or creating a row catalog. */
-export type ReadDescription = {
-  /**  Tables actually bound by the compiler, not text matches in SQL. */
-  readTables: TableId[];
-  /**  Expected output column identities, names and kinds. */
-  columns: OutcomeColumn[];
-};
 
 /**  One fetch the engine wants. */
 export type Request = {
@@ -1691,23 +1680,6 @@ export type RowsResult =
  *  its `Display` text is what an agent reads.
  */
 export type RunError =
-  /**  A read-only caller supplied a write or schema command. */
-  | ({ stage: 'readOnly' } & {
-      column?: never;
-      expected?: never;
-      fed?: never;
-      invariant?: never;
-      key?: never;
-      limit?: never;
-      message?: never;
-      position?: never;
-      received?: never;
-      request?: never;
-      row?: never;
-      sent?: never;
-      table?: never;
-      what?: never;
-    })
   /**  The text was not a statement of the supported grammar. */
   | ({
       stage: 'parse';

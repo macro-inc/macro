@@ -1,4 +1,4 @@
-//! Bounded, disposable Soup, database and contact-directory query snapshots. Entity records and mutation intents
+//! Bounded, disposable Soup query snapshots. Entity records and mutation intents
 //! are not evicted by this policy. Hydration only needs the entities behind a
 //! page, not a durable cursor-qualified entry on the viewer record.
 
@@ -6,7 +6,7 @@ use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, Record};
 use std::collections::BTreeSet;
 
-/// Maximum combined Soup, database and contact snapshots retained on one viewer.
+/// Maximum combined Soup and database view snapshots retained on one viewer.
 pub const MAX_SOUP_PAGES: usize = 64;
 /// Encoded budget for page fields and their write-recency metadata. Fits a
 /// 20,000-row database read, including 500-row pages and filter-bearing cursors.
@@ -19,14 +19,7 @@ const ORDER_OVERHEAD_BYTES: usize = PAGE_ORDER_FIELD.len() + 32;
 fn is_page_field(key: &str) -> bool {
     matches!(
         key.split('(').next(),
-        Some(
-            "soup"
-                | "groupSoup"
-                | "databaseViewRows"
-                | "contacts"
-                | "contactsByUserIds"
-                | "contactsByEmails"
-        )
+        Some("soup" | "groupSoup" | "databaseViewRows")
     )
 }
 

@@ -44,12 +44,8 @@ export interface MentionsOptions {
   sourceDocumentId?: string;
   /** Override entity data source (e.g. sandbox data for onboarding). Bypasses quickAccess. */
   entities?: () => import('@core/context/quickAccess').EntityItem[];
-  /** Explicit people scope. Undefined uses the personal directory; [] never widens. */
-  users?: () => import('@core/user/types').IUser[] | undefined;
-  /** Decorate/filter the current window or explicit scope, not a directory catalog. */
-  transformUsers?: (
-    users: readonly import('@core/user/types').IUser[]
-  ) => import('@core/user/types').IUser[];
+  /** Override users data source (e.g. sandbox contacts for onboarding). */
+  users?: () => import('@core/user/types').IUser[];
   /** Skip backend mention tracking (e.g. for sandbox/onboarding). */
   disableMentionTracking?: boolean;
 }

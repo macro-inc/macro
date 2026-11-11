@@ -2,7 +2,6 @@
  * @vitest-environment jsdom
  */
 
-import type { MentionsOptions } from '@core/component/LexicalMarkdown/builder/types';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import {
@@ -24,7 +23,6 @@ const editorMocks = vi.hoisted(() => ({
   focus: vi.fn(),
   blur: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
-  mentionScope: vi.fn<() => IUser[] | undefined>(),
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
   inlineMenuOpen: false,
@@ -281,13 +279,8 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: (options: MentionsOptions) => {
-          editorMocks.mentionScope.mockImplementation(() => options.users?.());
-          editorMocks.mentionUsers = () => {
-            // Stand in for one loaded window, not a whole directory.
-            const users = options.users?.() ?? [CONTACT];
-            return options.transformUsers?.(users) ?? users;
-          };
+        withMentions: (options: { users?: () => IUser[] }) => {
+          editorMocks.mentionUsers = options.users;
           return builder;
         },
         withEmojis: () => builder,
@@ -347,6 +340,9 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+const peopleMocks = vi.hoisted(() => ({
+  contactsEnabled: undefined as boolean | undefined,
+}));
 const CONTACT = {
   id: 'macro|ann@macro.test',
   name: 'Ann',
@@ -354,6 +350,12 @@ const CONTACT = {
 };
 const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
 
+vi.mock('@queries/contacts/contacts', () => ({
+  useContacts: (enabled?: () => boolean) => {
+    peopleMocks.contactsEnabled = enabled?.() ?? true;
+    return () => [CONTACT];
+  },
+}));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: (channelId: () => string) => ({
     isLoading: false,
@@ -418,7 +420,6 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = false;
     editorMocks.onEscape = undefined;
     editorMocks.mentionUsers = undefined;
-    editorMocks.mentionScope.mockReset();
     device.touch = false;
     editorMocks.ignoredActions = [];
     vi.mocked(isMobile).mockReturnValue(false);
@@ -911,13 +912,13 @@ describe('mention people', () => {
 
   beforeEach(() => {
     editorMocks.mentionUsers = undefined;
-    editorMocks.mentionScope.mockReset();
+    peopleMocks.contactsEnabled = undefined;
   });
 
-  it('delegates a document composer to the bounded workspace window', () => {
+  it('offers a document composer the workspace contacts', () => {
     render(() => <ChannelInput input={baseInput} parent={documentParent} />);
+
     expect(mentionIds()).toContain(CONTACT.id);
-    expect(editorMocks.mentionScope()).toBeUndefined();
   });
 
   it('offers a channel composer its participants, not the workspace contacts', () => {
@@ -925,9 +926,8 @@ describe('mention people', () => {
 
     expect(mentionIds()).toContain(CHANNEL_MEMBER.user_id);
     expect(mentionIds()).not.toContain(CONTACT.id);
-    expect(editorMocks.mentionScope()?.map((user) => user.id)).toContain(
-      CHANNEL_MEMBER.user_id
-    );
+    // A channel never shows them, so it should not fetch them either.
+    expect(peopleMocks.contactsEnabled).toBe(false);
   });
 
   it('keeps an explicitly supplied participants list', () => {

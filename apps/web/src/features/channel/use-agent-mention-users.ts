@@ -32,21 +32,13 @@ export function useAgentMentionUsers(
   users: Accessor<IUser[]>,
   enabled: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
-  const transform = useAgentMentionUserTransform(enabled);
-  return () => transform(users());
-}
-
-/** Apply the same agent policy to a bounded mention window or an explicit roster. */
-export function useAgentMentionUserTransform(
-  enabled: Accessor<boolean> = () => true
-): (users: readonly IUser[]) => IUser[] {
   const canUseCursor = useCursorAgentsAccess();
   const canUseCodex = useCodexAgentsAccess();
   const canUseAgents = useChatV3AgentsFlag();
 
-  return (users) => {
+  return () => {
     // Old participants and saved bot rows must not restore the retired coder.
-    const mentionable = users.filter((user) => !isMacroCoderId(user.id));
+    const mentionable = users().filter((user) => !isMacroCoderId(user.id));
     if (!enabled()) return mentionable;
     const base = mentionable.filter(
       (user) =>

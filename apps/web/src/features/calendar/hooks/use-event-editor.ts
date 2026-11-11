@@ -1,5 +1,6 @@
 import { getMeetingShareToken, getMeetingUrl } from '@channel/Call/call-link';
 import { toast } from '@core/component/Toast/Toast';
+import { recipientEntityMapper, useContacts } from '@core/user';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import {
   isGuestEditRefused,
@@ -27,7 +28,6 @@ import {
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
-import { eventGuestOptions } from '../components/composer/guest-options';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
@@ -156,13 +156,10 @@ export function useEventEditor(props: UseEventEditorProps) {
   // Event edits also need calendar metadata to resolve reminders that still
   // follow the calendar defaults.
   const calendarsQuery = useVisibleCalendarsQuery();
+  const contacts = useContacts();
+
   const guestOptions = createMemo(() =>
-    eventGuestOptions(
-      (props.event()?.attendees ?? []).map((guest) => ({
-        email: guest.email,
-        name: guest.displayName,
-      }))
-    )
+    contacts().map(recipientEntityMapper('user'))
   );
   const writableCalendars = createMemo(
     () => calendarsQuery.data?.filter((calendar) => calendar.isWritable) ?? []

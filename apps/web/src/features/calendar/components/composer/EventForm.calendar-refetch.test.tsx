@@ -22,6 +22,7 @@ vi.mock('@queries/calendar/graphql/flag', () => ({
   useGraphqlCalendarHost: () => () => undefined,
 }));
 vi.mock('@core/user', () => ({
+  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({

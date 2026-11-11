@@ -38,7 +38,6 @@ function renderSubject(initialInboxId: 'gmail' | 'outlook', mobile = false) {
     <ComposeProvider
       value={{
         ...root.state.context,
-        createRecipientSource: undefined,
         bodyActions: {
           recipientAdded: vi.fn(),
           readDroppedFiles: vi.fn(),

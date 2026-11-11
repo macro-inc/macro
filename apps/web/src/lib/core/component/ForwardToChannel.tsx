@@ -13,8 +13,8 @@ import { ShareOptions } from '@core/component/TopBar/ShareButton';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
-import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -22,7 +22,6 @@ import { chatRuleset, uploadFile } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
 import {
   blockNameToItemType,
   itemTypeToReferenceEntityType,
@@ -59,7 +58,7 @@ interface MobileForwardToChannelLayoutProps
   selectedOptions: Accessor<Recipient[]>;
   setSelectedOptions: (v: Recipient[]) => void;
   triedToSubmit: Accessor<boolean>;
-  createSource: RecipientSourceFactory<'user' | 'channel'>;
+  destinationOptions: ReturnType<typeof useCombinedRecipients>['all'];
   submitAccessLevel: Accessor<AccessLevel | null>;
   setSubmitAccessLevel: (level: AccessLevel | null) => void;
   composer: ReturnType<typeof createForwardMessageComposer>;
@@ -80,7 +79,7 @@ function MobileForwardToChannelLayout(
           setSelectedOptions={props.setSelectedOptions}
           selectedOptions={props.selectedOptions()}
           triedToSubmit={props.triedToSubmit}
-          createSource={props.createSource}
+          options={props.destinationOptions}
           triggerMode="input"
           class="border border-edge-muted p-1"
           focusOnMount
@@ -222,6 +221,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
   const canSubmit = () =>
     selectedOptions().length > 0 && !isSubmitting() && !composer.isUploading();
+  const { all: destinationOptions } = useCombinedRecipients();
 
   const destination = createMemo(() => {
     let options = selectedOptions();
@@ -588,7 +588,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             selectedOptions={selectedOptions}
             setSelectedOptions={(v) => setSelectedOptions(v)}
             triedToSubmit={triedToSubmit}
-            createSource={useCombinedRecipientSource}
+            destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
             allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
@@ -610,7 +610,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
                 setSelectedOptions={setSelectedOptions}
                 selectedOptions={selectedOptions()}
                 triedToSubmit={triedToSubmit}
-                createSource={useCombinedRecipientSource}
+                options={destinationOptions}
                 triggerMode="input"
                 focusOnMount
                 horizontalScroll

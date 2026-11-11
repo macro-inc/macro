@@ -1,5 +1,3 @@
-mod description;
-
 use models_databases::{ColumnId, DatabaseId, RowId};
 use std::collections::HashMap;
 use std::sync::Mutex;

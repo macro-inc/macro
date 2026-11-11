@@ -478,7 +478,7 @@ describe('messageTimelineQueryOptions', () => {
 
   it('revalidates channels even when their list advertises a newer root', async () => {
     seedLatestCache([createMessage('msg-1', '2026-09-10T13:19:00.123456Z')]);
-    testQueryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, [
+    testQueryClient.setQueryData(channelKeys.listChannels.queryKey, [
       {
         id: 'channel-1',
         latest_non_thread_message: {

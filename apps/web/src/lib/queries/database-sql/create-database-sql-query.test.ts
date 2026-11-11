@@ -26,7 +26,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { empty, fromPromise, fromValue, mergeMap, pipe } from 'wonka';
 import {
   createDatabaseSqlQuery,
-  type DatabaseSqlQueryCapabilities,
   readDatabaseSql,
 } from './create-database-sql-query';
 
@@ -127,17 +126,6 @@ const names: OpenEngine = async () => {
   };
 };
 
-const localExecution: Pick<
-  DatabaseSqlQueryCapabilities,
-  'account' | 'describe'
-> = {
-  account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
-  describe: async (catalog) => ({
-    readTables: catalog.tables.map((table) => table.id),
-    columns: [],
-  }),
-};
-
 let dispose: (() => void) | undefined;
 
 beforeEach(() => {
@@ -162,11 +150,7 @@ describe('createDatabaseSqlQuery', () => {
           client: () =>
             createClient({ url: 'http://test.invalid', exchanges: [] }),
           cacheHost: () => undefined,
-          account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
-          describe: async (catalog) => ({
-            readTables: catalog.tables.map((table) => table.id),
-            columns: [],
-          }),
+          people: async () => [],
           catalog: build,
           open,
         }
@@ -248,7 +232,7 @@ describe('createDatabaseSqlQuery', () => {
               entityFilter: vi.fn(),
               readRecordsByKeys: vi.fn(),
             }),
-            ...localExecution,
+            people: async () => [],
             catalog: async () => catalog,
             open: names,
           }
@@ -321,7 +305,7 @@ describe('createDatabaseSqlQuery', () => {
             entityFilter: vi.fn(),
             readRecordsByKeys: vi.fn(),
           }),
-          ...localExecution,
+          people: async () => [],
           catalog: async () => catalog,
           open: names,
         }
@@ -411,7 +395,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => host,
-          ...localExecution,
+          people: async () => [],
           catalog: async () => catalog,
           open: names,
         }
@@ -479,7 +463,7 @@ describe('createDatabaseSqlQuery', () => {
         client: () =>
           createClient({ url: 'http://test.invalid', exchanges: [] }),
         cacheHost: () => undefined,
-        ...localExecution,
+        people: async () => [],
         catalog: async () => catalog,
         open,
       });
@@ -547,7 +531,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => undefined,
-          ...localExecution,
+          people: async () => [],
           catalog: async () => catalog,
           open: names,
         }
@@ -652,7 +636,7 @@ describe('createDatabaseSqlQuery', () => {
         {
           client: () => client,
           cacheHost: () => host,
-          ...localExecution,
+          people: async () => [],
           catalog: async () => catalog,
           open: names,
         }
@@ -715,7 +699,7 @@ describe('a refresh another run replaced', () => {
       return createDatabaseSqlQuery(() => ({ schema, sql: sql() }), {
         client: () => client,
         cacheHost: () => undefined,
-        ...localExecution,
+        people: async () => [],
         catalog: async () => catalog,
         open: names,
       });
@@ -808,20 +792,13 @@ describe('readDatabaseSql over macro.people', () => {
       {
         client: () => createClient({ url: 'http://test', exchanges: [] }),
         cacheHost: () => undefined,
-        ...localExecution,
-        describe: async () => ({
-          readTables: [PEOPLE],
-          columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
-        }),
-        localRead: async () => ({
-          columns: [{ name: 'name', column: PERSON_NAME, kind: 'text' }],
-          rows: [[{ type: 'text', value: 'Ada' }]],
-          rowIds: [],
-          readTables: [PEOPLE],
-          truncated: false,
-          insertedRowIds: [],
-          changesApplied: 0,
-        }),
+        people: async () => [
+          {
+            id: 'macro|ada@databases.test',
+            name: 'Ada',
+            email: 'ada@databases.test',
+          },
+        ],
         catalog: catalogOf,
         open: peopleNames,
       }

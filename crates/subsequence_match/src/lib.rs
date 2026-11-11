@@ -1,9 +1,6 @@
-//! Shared name/email/title matching for server directory reads and client cache search.
+//! Shared name/email/title matching for server directory reads.
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
-
-pub mod names;
-pub mod ranking;
 
 /// Maximum raw query size accepted by the interactive search interfaces.
 pub const MAX_QUERY_BYTES: usize = 512;

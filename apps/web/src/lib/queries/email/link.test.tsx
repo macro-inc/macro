@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, type Ok, ok } from 'neverthrow';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authKeys } from '../auth/keys';
 import { emailKeys } from './keys';
 import {
   useDisableCalendarMutation,
@@ -61,9 +60,8 @@ const link = (id: string): EmailLink =>
   }) as unknown as EmailLink;
 
 const cachedLinks = () =>
-  testQueryClient.getQueryData<{ links: EmailLink[] }>(
-    emailKeys.links('macro|self').queryKey
-  )?.links ?? [];
+  testQueryClient.getQueryData<{ links: EmailLink[] }>(emailKeys.links.queryKey)
+    ?.links ?? [];
 
 const cachedLink = (id: string) => cachedLinks().find((it) => it.id === id);
 
@@ -73,9 +71,7 @@ afterEach(() => {
 });
 
 it('does not suspend an offline composer when its primary-inbox lookup resumes', async () => {
-  testQueryClient.removeQueries({
-    queryKey: emailKeys.links('macro|self').queryKey,
-  });
+  testQueryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
   onlineManager.setOnline(false);
   const { promise, resolve } =
     Promise.withResolvers<Ok<{ links: EmailLink[] }, unknown>>();
@@ -108,11 +104,7 @@ beforeEach(() => {
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  testQueryClient.setQueryData(authKeys.userInfo.queryKey, {
-    id: 'macro|self',
-    authenticated: true,
-  });
-  testQueryClient.setQueryData(emailKeys.links('macro|self').queryKey, {
+  testQueryClient.setQueryData(emailKeys.links.queryKey, {
     links: [link('inbox-a'), link('inbox-b')],
   });
 });
@@ -127,17 +119,7 @@ it('starts account lookups and health probes only after sign-in and stops on log
     const health = useInboxHealthProbeQuery();
     return (
       <>
-        <button
-          onClick={() => {
-            testQueryClient.setQueryData(authKeys.userInfo.queryKey, {
-              id: 'macro|self',
-              authenticated: true,
-            });
-            setAuthenticated(true);
-          }}
-        >
-          Sign in
-        </button>
+        <button onClick={() => setAuthenticated(true)}>Sign in</button>
         <button onClick={() => setAuthenticated(false)}>Sign out</button>
         <span>
           {authenticated() && links.isSuccess && health.isSuccess

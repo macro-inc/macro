@@ -21,10 +21,13 @@ import {
   useChannelsContext,
   useDmActivityByUserId,
 } from '@core/context/channels';
-import { useEmailLinksContext } from '@core/context/emailLinks';
+import {
+  type IUser,
+  useContacts,
+  useIsConnectedSecondaryInbox,
+} from '@core/user';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { preservePersonOrder } from '@core/util/ordered-window';
 import type {
   ChannelEntity,
   CrmCompanyEntity,
@@ -40,8 +43,6 @@ import {
   type CachedGraphqlChannel,
   materializeCachedGraphqlChannels,
 } from '@queries/channel/graphql';
-import { createContactExclusions } from '@queries/contacts/exclusions';
-import { useContactDirectoryScope } from '@queries/contacts/use-directory';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import {
   localDraftQuickAccessItems,
@@ -70,7 +71,6 @@ import {
   filterQuickAccessItems,
   searchQuickAccessItems,
 } from './entity-search';
-import { createPersonList } from './person-list';
 import { createProjectedList } from './projected-list';
 import type {
   Bucket,
@@ -207,6 +207,12 @@ function getBucketForHistoryItem(item: HistoryItem): EntityBucket {
   }
 }
 
+function getUserSearchText(user: IUser): string {
+  const { email, name } = user;
+  if (name === email) return `${email} | ${email}`;
+  return `${name} | ${email}`;
+}
+
 function getEntitySearchText(entity: QuickAccessEntity): string {
   return entity.name;
 }
@@ -280,6 +286,13 @@ function getHistoryItemVersion(
   viewedAt?: DateValue | null
 ): string {
   return `${item.name}|${item.updatedAt}|${viewedAt}|${item.deletedAt}`;
+}
+
+function getUserVersion(
+  user: IUser,
+  lastInteraction: DateValue | undefined
+): string {
+  return `${user.name}|${user.email}|${lastInteraction}`;
 }
 
 function getCrmCompanySearchText(company: CrmCompanyEntity): string {
@@ -362,7 +375,7 @@ const RECORD_TYPE_BY_BUCKET: Record<Bucket, string> = {
   note: 'GraphqlSoupDocument',
   email: 'GraphqlSoupEmailThread',
   project: 'GraphqlSoupProject',
-  person: 'GraphqlContact',
+  person: 'GraphqlUser',
   agent_session: 'AgentSession',
   // Databases come from their REST list, not the Soup cache.
   database: 'Database',
@@ -395,13 +408,12 @@ export function createQuickAccessValue(): QuickAccessContextValue {
   // queries
   const historyQuery = useHistoryQuery();
   const { channels, isLoading: channelsLoading } = useChannelsContext();
-  const directoryScope = useContactDirectoryScope();
+  const contacts = useContacts();
   const rawDmActivityByUserId = useDmActivityByUserId();
   const dmActivityByUserId = createMemo(rawDmActivityByUserId, undefined, {
     equals: equalActivityMaps,
   });
-  const { links: emailLinks, isConnectedSecondaryInbox } =
-    useEmailLinksContext();
+  const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   // Read reactively: if the session abandons its cache mid-session, Quick
   // Access falls back to the REST channel list instead of the dead host. The
   // memo keeps the subscription below until the host itself changes.
@@ -585,6 +597,53 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       cachedCount: cachedChannels.length,
       buildDurationMs: performance.now() - startedAt,
     };
+  });
+
+  const contactEntries = createLazyMemo(() => {
+    const activityByUserId = dmActivityByUserId();
+    const allEntries: IndexEntry[] = [];
+
+    // Process contacts (users)
+    const contactData = contacts();
+    for (const contact of contactData) {
+      if (isConnectedSecondaryInbox(contact.id)) continue;
+      const lastInteraction = activityByUserId.get(contact.id);
+
+      const version = getUserVersion(contact, lastInteraction);
+      const cached = itemCache.get(contact.id);
+
+      if (!cached || cached.version !== version) {
+        const augmentedUser = { ...contact, lastInteraction };
+        const sortTimestamp = toTimestamp(lastInteraction);
+
+        const quickAccessItem: QuickAccessItem = {
+          kind: 'user',
+          id: augmentedUser.id,
+          bucket: 'person',
+          searchText: getUserSearchText(augmentedUser),
+          sortTimestamp,
+          timestamps: {
+            lastInteraction: augmentedUser.lastInteraction,
+          },
+          data: augmentedUser,
+        };
+
+        itemCache.set(augmentedUser.id, { item: quickAccessItem, version });
+        allEntries.push({
+          id: augmentedUser.id,
+          bucket: 'person',
+          sortTimestamp,
+        });
+      } else {
+        allEntries.push({
+          id: contact.id,
+          bucket: cached.item.bucket,
+          sortTimestamp: cached.item.sortTimestamp,
+        });
+      }
+    }
+
+    return sortIndexEntries(allEntries);
   });
 
   const crmCompanyEntries = createLazyMemo(() => {
@@ -959,6 +1018,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
       channelEntries().entries,
+      contactEntries(),
       crmCompanyEntries(),
       crmContactEntries(),
       snippetEntries(),
@@ -1085,51 +1145,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           (bucket !== 'initiative' || projectsFlag().enabled)
       )
     );
-    const personExclusions = createContactExclusions(
-      function* () {
-        yield* options?.excludedPeople?.() ?? [];
-        for (const link of emailLinks()) {
-          if (!link.is_primary)
-            yield `macro|${link.email_address.toLowerCase()}`;
-        }
-      },
-      () => (options?.excludeSelf ? directoryScope().userId : undefined)
-    );
-    const personList = createPersonList({
-      scope: directoryScope,
-      resetKey: personExclusions.key,
-      search: () => options?.searchTerm?.() ?? '',
-      enabled: () =>
-        projectedBuckets().includes('person') && options?.enabled?.() !== false,
-      policy: () => {
-        const viewer = directoryScope().userId;
-        return {
-          mode: options?.peopleMode ?? 'command',
-          senderDomain:
-            options?.peopleMode === 'property'
-              ? viewer?.split('@')[1]
-              : undefined,
-          excluded: personExclusions.native(),
-        };
-      },
-      activity: dmActivityByUserId,
-      excluded: (id) =>
-        personExclusions.ids().has(id) || isConnectedSecondaryInbox(id),
-      conversation: (id) => {
-        channelEntries();
-        const item = itemCache.get(id)?.item;
-        return item?.kind === 'entity' && item.data.type === 'channel'
-          ? { ...item, data: item.data }
-          : undefined;
-      },
-    });
     const baseList = createLazyMemo(() => {
       const activeBuckets = projectedBuckets();
-      if (
-        options?.enabled?.() === false ||
-        activeBuckets.length === 0 ||
-        activeBuckets.every((bucket) => bucket === 'person')
-      )
+      if (options?.enabled?.() === false || activeBuckets.length === 0)
         return [];
       let indices: IndexEntry[];
 
@@ -1173,10 +1191,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           () => {
             setCacheRevision((revision) => revision + 1);
           },
-          {
-            searchBuckets: () =>
-              projectedBuckets().filter((bucket) => bucket !== 'person'),
-          }
+          { searchBuckets: projectedBuckets }
         )
       );
     });
@@ -1335,7 +1350,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         : undefined;
 
     const list = createLazyMemo(() => {
-      const local = [...localItems(), ...personList.items()];
+      const local = localItems();
       if (!projected || options?.enabled?.() === false)
         return deduplicateContactItems(local);
 
@@ -1378,33 +1393,27 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))
       );
-      return preservePersonOrder(
-        deduplicateContactItems(
-          options?.searchTerm?.().trim()
-            ? combined
-            : combined.sort(compareRecency)
-        ),
-        combined
+      return deduplicateContactItems(
+        options?.searchTerm?.().trim()
+          ? combined
+          : combined.sort(compareRecency)
       );
     });
     return {
       items: list,
-      windowKey: personList.windowKey,
       totalCount: () => list().length,
-      hasMore: () => personList.hasMore() || (projected?.hasMore() ?? false),
+      hasMore: () => projected?.hasMore() ?? false,
       isLoading: () =>
         options?.enabled?.() !== false &&
         Boolean(
-          personList.isLoading() ||
-            projected?.isLoading() ||
+          projected?.isLoading() ||
             historyQuery.isLoading ||
             (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
-      isLoadingMore: () =>
-        personList.isLoadingMore() || (projected?.isLoadingMore() ?? false),
-      error: () => personList.error() ?? projected?.error(),
+      isLoadingMore: () => projected?.isLoadingMore() ?? false,
+      error: () => projected?.error(),
       loadMore: async () => {
-        await Promise.all([personList.loadMore(), projected?.loadMore()]);
+        await projected?.loadMore();
       },
     };
   }) as QuickAccessContextValue['useList'];
@@ -1441,6 +1450,5 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     isLoading,
     refresh,
     getById,
-    interactionForUser: (id) => dmActivityByUserId().get(id),
   };
 }

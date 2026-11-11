@@ -63,19 +63,12 @@ function createScope(
 
 describe('setupQueryPersistence', () => {
   it('allowlists persisted channel query families', () => {
-    expect(shouldPersistChannelQuery(channelKeys.listChannels._def)).toBe(
-      false
-    );
-    expect(
-      shouldPersistChannelQuery(channelKeys.listChannels(undefined).queryKey)
-    ).toBe(false);
-    expect(shouldPersistChannelQuery(channelKeys.activity._def)).toBe(false);
     expect(shouldPersistChannelQuery(channelKeys.withID('a').queryKey)).toBe(
       false
     );
-    expect(
-      shouldPersistChannelQuery(channelKeys.listChannels('viewer').queryKey)
-    ).toBe(true);
+    expect(shouldPersistChannelQuery(channelKeys.listChannels.queryKey)).toBe(
+      true
+    );
     expect(
       shouldPersistChannelQuery(
         messageKeys.messages({ type: 'channel', id: 'a' }, null).queryKey
@@ -182,13 +175,13 @@ describe('setupQueryPersistence', () => {
     queryClient.setQueryData(messageQueryKey, { value: 'skip' });
     expect(store.set).not.toHaveBeenCalled();
 
-    queryClient.setQueryData(channelKeys.listChannels('viewer').queryKey, {
+    queryClient.setQueryData(channelKeys.listChannels.queryKey, {
       value: 'persist',
     });
     expect(store.set).toHaveBeenCalledTimes(1);
     expect(
       (store.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(channelKeys.listChannels('viewer').queryKey);
+    ).toEqual(channelKeys.listChannels.queryKey);
   });
 
   it('restores query data from store on added event', async () => {
@@ -433,23 +426,6 @@ describe('setupQueryPersistence', () => {
     expect(store.remove).not.toHaveBeenCalled();
     persistence.dispose();
     queryClient.clear();
-  });
-
-  it('does not persist shared or editable name values, including legacy unscoped keys', () => {
-    const scopes = createQueryPersistenceScopes('test');
-    const keys = [
-      authKeys.userName(
-        'macro|viewer@example.com',
-        1,
-        2,
-        'macro|person@example.com'
-      ).queryKey,
-      authKeys.userNameSelf('macro|viewer@example.com', 1).queryKey,
-      ['auth', 'userName', 'macro|person@example.com'],
-      ['auth', 'userNameSelf'],
-    ];
-    for (const key of keys)
-      expect(scopes.some((scope) => scope.shouldPersist(key))).toBe(false);
   });
 
   it('configures only native user-info persistence without an expiry', () => {

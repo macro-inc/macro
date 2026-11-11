@@ -33,6 +33,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
+import { contactsKeys } from '@queries/contacts/keys';
 import { databasesKeys } from '@queries/storage/keys';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
@@ -57,6 +58,7 @@ setGlobalSplitManager({
     return { status: 'navigating' };
   },
 } as SplitManager);
+queryClient.setQueryData(contactsKeys.all.queryKey, { contacts: [] });
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'macro|fixture@example.com',
   authenticated: true,

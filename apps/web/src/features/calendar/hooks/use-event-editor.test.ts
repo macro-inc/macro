@@ -28,6 +28,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, alert: mocks.alert },
 }));
 vi.mock('@core/user', () => ({
+  useContacts: () => () => [],
   recipientEntityMapper: () => (value: unknown) => value,
 }));
 vi.mock('@queries/calendar/calendars', () => ({

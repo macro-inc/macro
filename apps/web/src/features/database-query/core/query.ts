@@ -243,13 +243,6 @@ export function queryErrorMessage(
       () => 'This request was cancelled. Try asking again.'
     )
     .with({ kind: 'fetch' }, () => OFFLINE)
-    .with({ kind: 'rejected' }, ({ message }) =>
-      showSql ? message : `${UNCOMPUTED}. Try a narrower question or refresh.`
-    )
-    .with(
-      { kind: 'scope-changed' },
-      () => 'The account or access changed. Reopen this answer to continue.'
-    )
     .with({ kind: 'read-only' }, () =>
       showSql
         ? 'Questions only read your data. Start with SELECT, or ask a question above.'
@@ -302,9 +295,7 @@ export function queryErrorMessage(
 export function queryFailureDetail(failure: QueryFailure): string | undefined {
   return match(failure)
     .with(
-      {
-        kind: P.union('engine', 'crash', 'fetch', 'rejected', 'scope-changed'),
-      },
+      { kind: P.union('engine', 'crash', 'fetch') },
       ({ message }) => message
     )
     .with(

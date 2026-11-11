@@ -7,11 +7,6 @@ import {
   runSoupBackfill,
 } from './backfill';
 
-vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
-vi.mock('../contacts/use-context-publisher', () => ({
-  useContactContextPublisher: () => {},
-}));
-
 const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));

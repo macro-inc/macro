@@ -24,9 +24,7 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@property/tags/use-tag-filter-group', () => ({
   useTagFilterGroup: () => () => ({ id: 'tags', label: 'Tags', options: [] }),
 }));
-vi.mock('@core/user/use-contact-filter-options', () => ({
-  useContactFilterOptions: vi.fn(),
-}));
+vi.mock('@queries/contacts/contacts', () => ({ useContacts: () => () => [] }));
 vi.mock('@ui', async () => ({
   ...(await import('@ui/components/Button')),
   ...(await import('@ui/components/ButtonGroup')),

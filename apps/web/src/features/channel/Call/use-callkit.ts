@@ -3,7 +3,7 @@ import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { isPlatform } from '@core/util/platform';
-import { useUserNames } from '@queries/auth';
+import { useUserNamesQuery } from '@queries/auth';
 import { invalidateActiveCallQueries } from '@queries/call/call';
 import type { UserName } from '@service-auth/generated/schemas/userName';
 import { notificationServiceClient } from '@service-notification/client';
@@ -141,11 +141,14 @@ type NativeCallChannelTitleSyncValue =
   | null
   | undefined;
 
-type NativeParticipantDisplayNames = {
-  displayNames: Record<string, string>;
-  fetchedNameCount: number;
-  errors: unknown[];
-};
+type NativeParticipantDisplayNames =
+  | { isPending: true }
+  | {
+      isPending: false;
+      displayNames: Record<string, string>;
+      fetchedNameCount: number;
+      errors: unknown[];
+    };
 
 function refreshActiveCallQueriesAfterLeave() {
   void invalidateActiveCallQueries().catch((err) =>
@@ -738,7 +741,7 @@ function useCallKitParticipantDisplayNameSync() {
     uniqueParticipantIds(nativeParticipantIds())
   );
 
-  const participantUserNames = useUserNames({
+  const participantUserNameQueries = useUserNamesQuery({
     userIds: participantIds,
     enabled: () => participantIds().length > 0,
   });
@@ -748,21 +751,26 @@ function useCallKitParticipantDisplayNameSync() {
       const ids = participantIds();
       if (ids.length === 0) return undefined;
 
-      const names = participantUserNames();
-      // Pending/current-scope gaps must publish fallbacks too: otherwise native
-      // metadata would keep a previous account's private labels while fetching.
-      const fetchedNames = names
-        .map((entry) => entry.name)
+      const isPending = participantUserNameQueries.some(
+        (query) => query.isPending
+      );
+      if (isPending) return { isPending: true };
+
+      const fetchedNames = participantUserNameQueries
+        .map((query) => query.data)
         .filter((name): name is UserName => Boolean(name));
 
       return {
+        isPending: false,
         displayNames: buildParticipantDisplayNames(
           ids,
           fallbackParticipantDisplayNames(ids),
           fetchedNames
         ),
         fetchedNameCount: fetchedNames.length,
-        errors: names.flatMap((entry) => (entry.error ? [entry.error] : [])),
+        errors: participantUserNameQueries
+          .filter((query) => query.isError)
+          .map((query) => query.error),
       };
     }
   );
@@ -770,6 +778,7 @@ function useCallKitParticipantDisplayNameSync() {
   createEffect(
     on(participantDisplayNames, (displayNameData) => {
       if (!displayNameData) return;
+      if (displayNameData.isPending) return;
 
       const channelId = nativeCall.activeChannelId();
       const nativeParticipantIds = nativeCall.participantIdentities();

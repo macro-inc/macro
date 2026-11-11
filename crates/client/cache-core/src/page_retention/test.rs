@@ -67,36 +67,6 @@ fn retains_recent_writes_across_reopen_and_keeps_non_page_fields() {
 }
 
 #[test]
-fn contact_queries_share_the_page_budget_and_are_omitted_during_hydration() {
-    let mut record = viewer();
-    for n in 0..MAX_SOUP_PAGES * 2 {
-        let field = ["contacts", "contactsByUserIds", "contactsByEmails", "soup"][n % 4];
-        let mut update = viewer();
-        update.fields.insert(format!("{field}({n})"), page());
-        record.merge(update);
-    }
-    assert_eq!(
-        record
-            .fields
-            .keys()
-            .filter(|key| is_page_field(key))
-            .count(),
-        MAX_SOUP_PAGES
-    );
-    assert!(!record.fields.contains_key("contacts(0)"));
-    record
-        .fields
-        .insert("contactsSettings".into(), CacheValue::Bool(true));
-    let mut updates =
-        RecordUpdates::from([(EntityKey::entity("GraphqlUser", &["viewer"]), record)]);
-    omit_hydration_pages(&mut updates);
-    let viewer = &updates[&EntityKey::entity("GraphqlUser", &["viewer"])];
-    assert!(viewer.fields.keys().all(|key| !is_page_field(key)));
-    assert_eq!(viewer.fields["contactsSettings"], CacheValue::Bool(true));
-    assert!(!viewer.fields.contains_key(PAGE_ORDER_FIELD));
-}
-
-#[test]
 fn combined_flat_and_grouped_pages_obey_encoded_byte_budget() {
     let mut record = viewer();
     for n in 0..MAX_SOUP_PAGES {

@@ -1,6 +1,6 @@
 import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { parseDomain } from '@core/util/domain';
-import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import * as EmailValidator from 'email-validator';
 import { type Accessor, createMemo } from 'solid-js';
 
@@ -11,7 +11,7 @@ export type EmailParticipantSuggestion =
       domain: string;
       /** The CRM company that owns the domain. */
       company?: string;
-      /** How many loaded contacts use it. */
+      /** How many of the viewer's contacts use it. */
       contacts?: number;
     }
   | { type: 'address'; email: string; name?: string };
@@ -21,23 +21,17 @@ const MAX_CONTACT_DOMAINS = 300;
 
 /**
  * Companies first, then people: the team's CRM companies (when CRM is on),
- * the domains of loaded contacts, most used first, then the contacts.
+ * the domains of the viewer's contacts, most used first, then the contacts.
  */
 export function useEmailParticipantSuggestions(): Accessor<
   EmailParticipantSuggestion[]
 > {
-  const recipients = useContactRecipientSource({
-    search: () => '',
-    enabled: () => true,
-    selfId: () => undefined,
-    senderDomain: () => undefined,
-    includeSelf: () => true,
-  });
+  const { users } = useCombinedRecipients(['user']);
   const crm = useQuickAccessCrmCompaniesQuery();
 
   const people = createMemo(() => {
     const seen = new Set<string>();
-    return recipients.items().flatMap((user) => {
+    return users().flatMap((user) => {
       const email = user.data.email.trim().toLowerCase();
       if (seen.has(email) || !EmailValidator.validate(email)) return [];
       seen.add(email);

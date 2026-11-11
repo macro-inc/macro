@@ -1,32 +1,15 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { IUser } from '@core/user/types';
-import { createTaskForAccount } from '@core/util/create';
+import { useContacts } from '@core/user';
+import { createTask } from '@core/util/create';
 import { parseCsv } from '@core/util/csv';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { linearCsvRecordToMacroTaskDraft } from '@core/util/linearImport';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import { Telemetry } from '@macro-inc/observability';
-import {
-  isCurrentQueryAccount,
-  type QueryAccount,
-} from '@queries/auth/account-scope';
-import { useQueryAccount } from '@queries/auth/use-query-account';
 import { useQueryClient } from '@queries/client';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { soupKeys } from '@queries/soup/keys';
 import { Button } from '@ui';
-import {
-  batch,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  onCleanup,
-  Show,
-  Switch,
-} from 'solid-js';
-import { ImportAssigneePicker } from './assignee-picker';
-import { useImportAssignees } from './queries/assignees';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 type ImportProgress =
   | { type: 'idle' }
@@ -37,34 +20,23 @@ function normalize(s: string): string {
   return s.trim();
 }
 
-export default function ImportLinear() {
-  const account = useQueryAccount();
-  return (
-    <Show when={account()} keyed>
-      {(owner) => <ImportFile account={owner} />}
-    </Show>
-  );
+function lower(s: string): string {
+  return normalize(s).toLowerCase();
 }
 
-function ImportFile(props: { account: QueryAccount }) {
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-  const current = () => !disposed && isCurrentQueryAccount(props.account);
+export default function ImportLinear() {
+  const contacts = useContacts();
   const upsertToHistory = useUpsertToHistoryMutation();
   const queryClient = useQueryClient();
 
-  let fileInput: HTMLInputElement | undefined;
   const [fileName, setFileName] = createSignal<string>('');
   const [parseError, setParseError] = createSignal<string>('');
   const [records, setRecords] = createSignal<readonly Record<string, string>[]>(
     []
   );
-  const [revision, setRevision] = createSignal(0);
-  const [overrides, setOverrides] = createSignal(
-    new Map<string, IUser | null>()
-  );
+  const [assigneeMapping, setAssigneeMapping] = createStore<
+    Record<string, string>
+  >({});
   const [createdIds, setCreatedIds] = createSignal<readonly string[]>([]);
   const [progress, setProgress] = createSignal<ImportProgress>({
     type: 'idle',
@@ -90,36 +62,42 @@ function ImportFile(props: { account: QueryAccount }) {
     return [...set].sort((a, b) => a.localeCompare(b));
   });
 
-  const assignees = useImportAssignees(
-    props.account,
-    () => (progress().type === 'idle' ? uniqueAssignees() : []),
-    revision
-  );
-  const assigned = (label: string): IUser | null => {
-    if (overrides().has(label)) return overrides().get(label) ?? null;
-    const match = assignees.match(label);
-    return match.kind === 'matched' ? match.person : null;
-  };
-  const unresolved = () =>
-    uniqueAssignees().some(
-      (label) =>
-        !overrides().has(label) &&
-        ['pending', 'unavailable'].includes(assignees.match(label).kind)
-    );
-  const unavailable = () =>
-    uniqueAssignees().some(
-      (label) =>
-        !overrides().has(label) && assignees.match(label).kind === 'unavailable'
-    );
+  const contactOptions = createMemo(() => {
+    const cs = contacts();
+    return cs
+      .map((c) => ({
+        id: c.id,
+        label:
+          c.name && c.name !== c.email ? `${c.name} (${c.email})` : c.email,
+        email: c.email,
+        name: c.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  createEffect(() => {
+    // Auto-map assignees when possible based on email/name match.
+    const current = uniqueAssignees();
+    const options = contactOptions();
+
+    for (const a of current) {
+      if (assigneeMapping[a] !== undefined) continue;
+
+      const aLower = lower(a);
+      const mapped = a.includes('@')
+        ? options.find((o) => lower(o.email) === aLower)
+        : options.find((o) => lower(o.name) === aLower);
+
+      setAssigneeMapping(a, mapped?.id ?? '');
+    }
+  });
 
   const previewDrafts = createMemo(() => {
     const allRows = records();
 
     const allDrafts = allRows.map((r, index) => {
       const assigneeRaw = normalize(r['Assignee'] ?? '');
-      const assigneeUserId = assigneeRaw
-        ? assigned(assigneeRaw)?.id
-        : undefined;
+      const assigneeUserId = assigneeRaw ? assigneeMapping[assigneeRaw] : '';
       return {
         rowNum: index + 1,
         ...linearCsvRecordToMacroTaskDraft({
@@ -134,135 +112,89 @@ function ImportFile(props: { account: QueryAccount }) {
   });
 
   const handleFileChange = async (file: File | undefined) => {
-    if (isImporting() || !current()) return;
-    const version = revision() + 1;
-    batch(() => {
-      setRevision(version);
-      setOverrides(new Map());
-      setCreatedIds([]);
-      setProgress({ type: 'idle' });
-      setParseError('');
-      setRecords([]);
-      setFileName(file?.name ?? '');
-    });
+    setCreatedIds([]);
+    setProgress({ type: 'idle' });
+    setParseError('');
+    setRecords([]);
+
     if (!file) {
-      if (fileInput) fileInput.value = '';
+      setFileName('');
       return;
     }
-    try {
-      const text = await file.text();
-      if (!current() || version !== revision()) return;
-      const result = parseCsv(text);
-      if (!result.ok) {
-        setParseError(result.error);
-        return;
-      }
-      // Linear exports use quoted headers; the parser returns them unquoted.
-      setRecords(result.records);
-    } catch {
-      if (current() && version === revision())
-        setParseError('Could not read the CSV file.');
+
+    setFileName(file.name);
+    const text = await file.text();
+    const result = parseCsv(text);
+    if (!result.ok) {
+      setParseError(result.error);
+      return;
     }
+
+    // Linear exports use quoted headers; our parser returns them unquoted already.
+    setRecords(result.records);
   };
 
   const canImport = () =>
-    current() &&
-    records().length > 0 &&
-    !parseError() &&
-    !isImporting() &&
-    progress().type === 'idle' &&
-    !unresolved();
+    records().length > 0 && !parseError() && !isImporting();
 
-  const runImport = async () =>
-    Telemetry.span('linear_import.create_tasks', async (span) => {
-      if (!canImport()) return;
-      const rows = records();
-      span.setAttr('import.row_count', rows.length);
-      // Submission owns these identities even if metadata finishes during creation.
-      const selection = new Map(
-        uniqueAssignees().map((label) => {
-          const person = assigned(label);
-          return [
-            label,
-            person
-              ? { id: person.id, email: person.email, name: person.name }
-              : null,
-          ] as const;
-        })
-      );
-      const mapping = new Map(
-        [...selection].map(([label, person]) => [label, person?.id])
-      );
-      batch(() => {
-        setOverrides(selection);
-        setIsImporting(true);
-        setCreatedIds([]);
-        setProgress({ type: 'running', done: 0, total: rows.length });
-      });
+  const runImport = async () => {
+    const rows = records();
+    if (rows.length === 0) return;
 
-      let created = 0;
-      let skipped = 0;
-      let failed = 0;
-      const createdList: string[] = [];
+    setIsImporting(true);
+    setCreatedIds([]);
+    setProgress({ type: 'running', done: 0, total: rows.length });
 
-      try {
-        for (let i = 0; i < rows.length; i++) {
-          if (!current()) return;
-          const r = rows[i];
-          const assigneeRaw = normalize(r['Assignee'] ?? '');
-          const assigneeUserId = assigneeRaw
-            ? mapping.get(assigneeRaw)
-            : undefined;
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+    const createdList: string[] = [];
 
-          const draft = linearCsvRecordToMacroTaskDraft({
-            record: r,
-            assigneeUserId: assigneeUserId ? assigneeUserId : null,
-          });
+    try {
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const assigneeRaw = normalize(r['Assignee'] ?? '');
+        const assigneeUserId = assigneeRaw ? assigneeMapping[assigneeRaw] : '';
 
-          if (!draft.title) {
-            skipped++;
-            setProgress({ type: 'running', done: i + 1, total: rows.length });
-            continue;
-          }
+        const draft = linearCsvRecordToMacroTaskDraft({
+          record: r,
+          assigneeUserId: assigneeUserId ? assigneeUserId : null,
+        });
 
-          let id: string | undefined;
-          try {
-            id = await createTaskForAccount(props.account, {
-              title: draft.title,
-              content: draft.content,
-              propertyValues: draft.propertyValues,
-            });
-          } catch {
-            if (!current()) return;
-          }
-          if (!current()) return;
-
-          if (!id) {
-            failed++;
-          } else {
-            created++;
-            createdList.push(id);
-            upsertToHistory.mutate({ itemId: id, itemType: 'document' });
-          }
-
+        if (!draft.title) {
+          skipped++;
           setProgress({ type: 'running', done: i + 1, total: rows.length });
+          continue;
         }
 
-        // Refresh soup items so the new tasks appear.
-        queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
+        const id = await createTask({
+          title: draft.title,
+          content: draft.content,
+          propertyValues: draft.propertyValues,
+        });
 
-        setCreatedIds(createdList);
-        setProgress({ type: 'done', created, skipped, failed });
-        toast.success(`Imported ${created} tasks`);
-        if (failed > 0) toast.failure(`${failed} tasks failed to import`);
-      } finally {
-        span.setAttr('import.created', created);
-        span.setAttr('import.skipped', skipped);
-        span.setAttr('import.failed', failed);
-        span.setAttr('import.scope_current', current());
-        setIsImporting(false);
+        if (!id) {
+          failed++;
+        } else {
+          created++;
+          createdList.push(id);
+          upsertToHistory.mutate({ itemId: id, itemType: 'document' });
+        }
+
+        setProgress({ type: 'running', done: i + 1, total: rows.length });
       }
-    });
+
+      // Refresh soup items so the new tasks appear.
+      queryClient.invalidateQueries({ queryKey: soupKeys.astItems._def });
+
+      setCreatedIds(createdList);
+      setProgress({ type: 'done', created, skipped, failed });
+      toast.success(`Imported ${created} tasks`);
+      if (failed > 0) toast.failure(`${failed} tasks failed to import`);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   return (
     <div class="flex flex-col size-full">
@@ -271,10 +203,14 @@ function ImportFile(props: { account: QueryAccount }) {
           <div class="text-lg font-medium text-ink">Import Linear CSV</div>
           <Button
             variant="secondary"
-            disabled={isImporting()}
-            onClick={() =>
-              fireAndForget(handleFileChange(undefined), 'linear-import')
-            }
+            onClick={() => {
+              setFileName('');
+              setParseError('');
+              setRecords([]);
+              setCreatedIds([]);
+              setProgress({ type: 'idle' });
+              setAssigneeMapping(reconcile({}));
+            }}
           >
             Clear
           </Button>
@@ -285,16 +221,9 @@ function ImportFile(props: { account: QueryAccount }) {
           <label class="inline-flex items-center gap-2 px-4 py-2 bg-accent text-accent-contrast font-medium rounded-md hover:bg-accent-hover transition-colors w-fit">
             <span>Choose File</span>
             <input
-              ref={fileInput}
               type="file"
               accept=".csv,text/csv"
-              disabled={isImporting()}
-              onChange={(e) =>
-                fireAndForget(
-                  handleFileChange(e.currentTarget.files?.[0]),
-                  'linear-import'
-                )
-              }
+              onChange={(e) => handleFileChange(e.currentTarget.files?.[0])}
               class="sr-only"
             />
           </label>
@@ -318,81 +247,31 @@ function ImportFile(props: { account: QueryAccount }) {
               <div class="flex flex-col gap-2">
                 <div class="text-sm font-medium text-ink">Assignee mapping</div>
                 <div class="text-xs text-ink-muted">
-                  Unmatched or ambiguous assignees import as unassigned unless
-                  you map them here. If lookup is unavailable, choose an
-                  assignee or explicitly choose Unassigned.
+                  Linear assignees that don’t match your contacts will import as
+                  unassigned unless you map them here.
                 </div>
 
-                <Show when={unavailable()}>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={isImporting()}
-                    onClick={() =>
-                      fireAndForget(assignees.retry(), 'linear-import')
-                    }
-                  >
-                    Retry assignee lookup
-                  </Button>
-                </Show>
                 <div class="flex flex-col gap-2 border border-edge rounded-sm p-2">
                   <For each={uniqueAssignees()}>
                     {(assignee) => (
-                      <div class="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <div class="flex items-center gap-3">
                         <div class="flex-1 min-w-0">
                           <div class="text-sm text-ink truncate">
                             {assignee}
                           </div>
                         </div>
-                        <div class="min-w-0 max-w-full flex flex-col gap-1">
-                          <ImportAssigneePicker
-                            label={assignee}
-                            person={assigned(assignee)}
-                            disabled={progress().type !== 'idle'}
-                            onChange={(person) =>
-                              setOverrides((values) =>
-                                new Map(values).set(assignee, person)
-                              )
-                            }
-                          />
-                          <Show when={!overrides().has(assignee)}>
-                            <span class="text-xs text-ink-muted">
-                              <Switch>
-                                <Match
-                                  when={
-                                    assignees.match(assignee).kind === 'pending'
-                                  }
-                                >
-                                  Resolving…
-                                </Match>
-                                <Match
-                                  when={
-                                    assignees.match(assignee).kind ===
-                                    'unavailable'
-                                  }
-                                >
-                                  Lookup unavailable
-                                </Match>
-                                <Match
-                                  when={
-                                    assignees.match(assignee).kind ===
-                                    'ambiguous'
-                                  }
-                                >
-                                  Multiple exact matches
-                                </Match>
-                                <Match
-                                  when={
-                                    assignees.match(assignee).kind ===
-                                    'unmatched'
-                                  }
-                                >
-                                  No exact match
-                                </Match>
-                              </Switch>
-                            </span>
-                          </Show>
-                        </div>
+                        <select
+                          class="text-sm bg-surface border border-edge rounded-xs px-2 py-1"
+                          value={assigneeMapping[assignee] ?? ''}
+                          onChange={(e) =>
+                            setAssigneeMapping(assignee, e.currentTarget.value)
+                          }
+                        >
+                          <option value="">Unassigned</option>
+                          <For each={contactOptions()}>
+                            {(o) => <option value={o.id}>{o.label}</option>}
+                          </For>
+                        </select>
                       </div>
                     )}
                   </For>
@@ -466,11 +345,7 @@ function ImportFile(props: { account: QueryAccount }) {
       </div>
 
       <div class="border-t border-edge p-4 flex items-center gap-3 shrink-0">
-        <Button
-          variant="primary"
-          onClick={() => fireAndForget(runImport(), 'linear-import')}
-          disabled={!canImport()}
-        >
+        <Button variant="primary" onClick={runImport} disabled={!canImport()}>
           Import tasks
         </Button>
         <Show when={runningProgress()}>

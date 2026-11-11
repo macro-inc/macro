@@ -1,13 +1,9 @@
-import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
-import type { IUser } from '@core/user/types';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
 import { isEditableInput } from '@core/util/isEditableInput';
-import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import {
@@ -19,11 +15,10 @@ import {
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils';
-import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import * as EmailValidator from 'email-validator';
 import {
   createEffect,
@@ -31,7 +26,6 @@ import {
   createSignal,
   For,
   type JSX,
-  on,
   onCleanup,
   onMount,
   Show,
@@ -59,8 +53,6 @@ type EntityInputProps = {
     options: Set<string>,
     entityInfo?: { id: string; entity_type: EntityType; name: string }[]
   ) => void;
-  /** UI-only selection metadata; never added to persisted entity references. */
-  onUserSelected?: (user: IUser, custom: boolean) => void;
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
   onCancel?: () => void;
@@ -125,20 +117,10 @@ function getEntityName(entity: CombinedEntity): string {
 const MAX_LIST_HEIGHT = 192;
 
 export function PropertyEntitySelector(props: EntityInputProps) {
-  const [inputValue, setRawInputValue] = createSignal('');
+  const [inputValue, setInputValue] = createSignal('');
   const [searchTerm, setSearchTerm] = createSignal('');
-  // Personal reads debounce themselves. Their UI must stop offering the old
-  // query immediately, particularly when Enter selects a custom address.
-  const search = () =>
-    props.config.specificEntityType === 'USER'
-      ? inputValue().toLowerCase()
-      : searchTerm();
   const [selectedIndex, setSelectedIndex] = createSignal(0);
   const openedSelectedIds = [...props.selectedOptions()];
-  const setInputValue = (value: string) => {
-    setSelectedIndex(0);
-    setRawInputValue(value);
-  };
   const keyboardMode = useKeyPressed(100);
 
   let scrollContainerRef: HTMLDivElement | undefined;
@@ -167,14 +149,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   // Get items from quickAccess based on entity type
-  const quickAccess = useQuickAccessEntities(
-    () => props.config.specificEntityType,
-    search,
-    () => !(props.config.specificEntityType === 'USER' && props.config.users),
-    () => props.config.excludedIds?.() ?? new Set<string>()
-  );
-  const quickAccessItems = quickAccess.items;
-  const isQuickAccessLoading = quickAccess.isLoading;
+  const { items: quickAccessItems, isLoading: isQuickAccessLoading } =
+    useQuickAccessEntities(() => props.config.specificEntityType);
 
   // Fetch emails for browsing (only when THREAD type or generic ENTITY)
   const needsEmailSearch = () =>
@@ -191,7 +167,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     () => ({
       params: { page_size: 20 },
       body: {
-        query: search(),
+        query: searchTerm(),
         match_type: 'partial' as const,
         include: ['emails' as const],
         search_on: 'name' as const,
@@ -235,14 +211,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     ].map((user) => userToEntity(augmentUserWithDmActivity(user)));
   });
 
-  const pinnedUsers = usePinnedContactUsers(
-    props.selectedOptions,
-    () =>
-      (!props.config.specificEntityType ||
-        props.config.specificEntityType === 'USER') &&
-      !props.config.users
-  );
-
   // Convert quickAccess items to CombinedEntity format.
   const entities = createMemo((): CombinedEntity[] => {
     const scoped = scopedUserEntities();
@@ -256,16 +224,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const additionalUsers = [
-      ...new Map(
-        [
-          ...(specificEntityType === 'USER'
-            ? (props.config.additionalUsers?.() ?? [])
-            : []),
-          ...pinnedUsers(),
-        ].map((user) => [user.id, user])
-      ).values(),
-    ];
+    const additionalUsers =
+      specificEntityType === 'USER'
+        ? (props.config.additionalUsers?.() ?? [])
+        : [];
     const converted: CombinedEntity[] = additionalUsers.map(userToEntity);
     const additionalIds = new Set(additionalUsers.map((user) => user.id));
 
@@ -324,7 +286,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const filteredEntities = createMemo(() => {
-    const term = search();
+    const term = searchTerm();
     const excludedIds = props.config.excludedIds?.();
     const allEntities = entities().filter(
       (entity) => !excludedIds?.has(entity.id)
@@ -343,46 +305,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           !(getEntityType(e) === currentEntityType && e.id === blockId)
       : () => true;
 
-    const address = inputValue().trim();
-    if (props.config.allowCustomEmail && EmailValidator.validate(address)) {
-      // A complete address is an identity, not a display-name alias. It must
-      // never redirect a calendar invitation to another person's mailbox.
-      return allEntities
-        .filter(excludeFilter)
-        .filter(
-          (entity) =>
-            entity.kind === 'user' &&
-            entity.data.email.toLowerCase() === address.toLowerCase()
-        );
-    }
-
-    if (props.config.specificEntityType === 'USER' && !props.config.users) {
-      const eligible = allEntities.filter(excludeFilter);
-      const byId = new Map(eligible.map((entity) => [entity.id, entity]));
-      const page = quickAccessItems().flatMap((item) => {
-        const entity = byId.get(item.id);
-        return entity ? [entity] : [];
-      });
-      const pageIds = new Set(page.map((entity) => entity.id));
-      const extras = eligible.filter((entity) => !pageIds.has(entity.id));
-      // Selected/scoped extras remain independent; personal windows retain the
-      // storage order and eligibility rather than being rescored or capped.
-      return [
-        ...page,
-        ...(term ? entitySearch(extras, term).map(({ item }) => item) : extras),
-      ];
-    }
-
-    const eligibleById = new Map(
-      allEntities.filter(excludeFilter).map((entity) => [entity.id, entity])
-    );
-    const personal = quickAccessItems().flatMap((item) => {
-      if (item.kind !== 'user' || item.personOrder === undefined) return [];
-      const entity = eligibleById.get(item.id);
-      return entity ? [entity] : [];
-    });
-    // Get visible entities based on search
-    // Sort self to top BEFORE slicing to ensure self appears even if not in top 50 by default
     let localResults: CombinedEntity[];
     if (term) {
       localResults = entitySearch(allEntities, term)
@@ -403,14 +325,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         .filter((entity) => !excludedIds?.has(entity.id))
         .filter((e) => !localIds.has(e.id))
         .filter(excludeFilter);
-      return preserveOrderedWindow(
-        [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS),
-        personal,
-        (entity) => entity.id
-      );
+      return [...localResults, ...serverResults].slice(0, MAX_SEARCH_RESULTS);
     }
 
-    return preserveOrderedWindow(localResults, personal, (entity) => entity.id);
+    return localResults;
   });
 
   // Sort entities with selected items first when not searching. Self is
@@ -420,11 +338,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     items: filteredEntities,
     allItems: entities,
     selectedIds: () => openedSelectedIds,
-    searchQuery: search,
+    searchQuery: searchTerm,
     getId: (e: CombinedEntity) => e.id,
   });
 
-  const toggleEntity = (entity: CombinedEntity, custom = false) => {
+  const toggleEntity = (entity: CombinedEntity) => {
     const entityType = getEntityType(entity);
     if (!entityType) return;
     const newSelected = new Set(props.selectedOptions());
@@ -441,16 +359,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       if (!isCurrentlySelected) newSelected.add(entity.id);
     }
 
-    if (!isCurrentlySelected && entity.kind === 'user') {
-      props.onUserSelected?.(
-        {
-          id: entity.data.id,
-          email: entity.data.email,
-          name: entity.data.name,
-        },
-        custom
-      );
-    }
     props.setSelectedOptions(newSelected, [
       {
         id: entity.id,
@@ -470,24 +378,12 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
   const resultCount = () => sortedEntities().length + (customEmail() ? 1 : 0);
 
+  // Reset selected index to top when search term or list changes
   createEffect(() => {
-    search();
-    resultCount();
+    searchTerm(); // track search term changes
+    resultCount(); // track list size changes
     setSelectedIndex(0);
   });
-  let previousWindow: string | undefined;
-  createEffect(
-    on(quickAccess.windowKey, (key) => {
-      if (!key) return;
-      if (previousWindow && key !== previousWindow) {
-        setSelectedIndex(0);
-        if (scrollContainerRef) scrollContainerRef.scrollTop = 0;
-      }
-      previousWindow = key;
-    })
-  );
-  const loadNext = () =>
-    fireAndForget(quickAccess.loadMore(), 'property-picker');
 
   // Scroll the selected row into view during keyboard navigation
   createEffect(() => {
@@ -500,11 +396,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (
-      e.defaultPrevented ||
-      (e.target instanceof HTMLElement && e.target.closest('button'))
-    )
-      return;
+    if (e.target instanceof HTMLElement && e.target.closest('button')) return;
     // Another field on the page keeps its own keys.
     if (
       e.target !== searchInputRef &&
@@ -512,31 +404,24 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       isEditableInput(e.target)
     )
       return;
-    if (e.key === 'PageDown' && quickAccess.hasMore()) {
-      e.preventDefault();
-      if (!quickAccess.isLoadingMore()) loadNext();
-      return;
-    }
     const total = resultCount();
     if (total === 0) return;
 
     if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'j')) {
       e.preventDefault();
-      setSelectedIndex((prev) => (Math.min(prev, total - 1) + 1) % total);
+      setSelectedIndex((prev) => (prev + 1) % total);
     } else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'k')) {
       e.preventDefault();
-      setSelectedIndex(
-        (prev) => (Math.min(prev, total - 1) - 1 + total) % total
-      );
+      setSelectedIndex((prev) => (prev - 1 + total) % total);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const idx = Math.min(selectedIndex(), total - 1);
+      const idx = selectedIndex();
       if (idx < sortedEntities().length) {
         const entity = sortedEntities()[idx];
         if (entity) toggleEntity(entity);
       } else {
         const entity = customEmailEntity();
-        if (entity) toggleEntity(entity, true);
+        if (entity) toggleEntity(entity);
       }
     }
   };
@@ -654,11 +539,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                               fallback={
                                 <UserIcon
                                   id={entity.id}
-                                  name={
-                                    entity.kind === 'user'
-                                      ? entity.data.name
-                                      : undefined
-                                  }
                                   size="sm"
                                   isDeleted={false}
                                   suppressClick={true}
@@ -731,7 +611,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                   }}
                   onClick={() => {
                     const next = entity();
-                    if (next) toggleEntity(next, true);
+                    if (next) toggleEntity(next);
                   }}
                   onMouseEnter={() => {
                     if (!keyboardMode()) setSelectedIndex(rowIndex());
@@ -746,7 +626,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
                     <div class="size-4 shrink-0 flex items-center">
                       <UserIcon
                         id={emailToId(email())}
-                        name={email()}
                         size="sm"
                         isDeleted={false}
                         suppressClick={true}
@@ -761,12 +640,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         </div>
       </Show>
 
-      <Show when={quickAccess.error()}>
-        <div role="status" class="px-2 py-2 text-xs text-ink-muted">
-          {t('common.optionsUnavailable')}
-        </div>
-      </Show>
-      <Show when={resultCount() === 0 && !quickAccess.error()}>
+      <Show when={resultCount() === 0}>
         {props.emptyState !== undefined ? (
           props.emptyState
         ) : (
@@ -780,17 +654,6 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             </Show>
           </div>
         )}
-      </Show>
-      <Show when={quickAccess.hasMore()}>
-        <Button
-          variant="ghost"
-          class="w-full"
-          disabled={quickAccess.isLoadingMore()}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={loadNext}
-        >
-          {t('viewMenus.nextOptions')}
-        </Button>
       </Show>
     </div>
   );

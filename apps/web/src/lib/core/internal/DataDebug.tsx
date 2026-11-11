@@ -1,22 +1,21 @@
 import { Bar } from '@core/component/TopBar/Bar';
+import { useContacts } from '@core/user';
 import Refresh from '@icon/system/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@icon/system/regular/copy.svg?component-solid';
-import { useContactDirectoryWindow } from '@queries/contacts/use-directory';
 import { useHistoryQuery } from '@queries/history/history';
 import { Button, Layer } from '@ui';
-import { type Component, For, type JSX, Show } from 'solid-js';
-import { ContactDirectoryInspector } from './ContactDirectoryInspector';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 
-interface SignalDebugCardProps<T> {
+interface SignalDebugCardProps {
   title: string;
-  data: T[];
-  renderItem: (item: T) => JSX.Element;
+  data: any[];
+  renderItem: (item: any) => JSX.Element;
 }
 
-function SignalDebugCard<T>(props: SignalDebugCardProps<T>) {
-  const formatJson = (data: unknown) => {
+function SignalDebugCard(props: SignalDebugCardProps) {
+  const formatJson = (data: any) => {
     try {
-      return JSON.stringify(data, null, 2) ?? String(data);
+      return JSON.stringify(data, null, 2);
     } catch (_e) {
       return String(data);
     }
@@ -73,10 +72,14 @@ function SignalDebugCard<T>(props: SignalDebugCardProps<T>) {
 }
 
 const DataDebug: Component = () => {
-  const contacts = useContactDirectoryWindow();
+  const contacts = useContacts();
   const historyQuery = useHistoryQuery();
 
-  const handleRefresh = () => contacts.restart();
+  const [_, setRefreshKey] = createSignal(0);
+
+  const handleRefresh = () => {
+    setRefreshKey((prev) => prev + 1);
+  };
 
   return (
     <div class="flex flex-col size-full">
@@ -95,7 +98,16 @@ const DataDebug: Component = () => {
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">
         <div class="grid grid-cols-2 @max-md/split:grid-cols-1 gap-6">
-          <ContactDirectoryInspector directory={contacts} />
+          <SignalDebugCard
+            title="useContacts()"
+            data={contacts()}
+            renderItem={(contact) => (
+              <div class="bg-panel p-2 rounded text-sm">
+                <div class="font-medium">{contact.email}</div>
+                <div class="text-ink-muted">ID: {contact.id}</div>
+              </div>
+            )}
+          />
 
           <SignalDebugCard
             title="useHistoryQuery()"

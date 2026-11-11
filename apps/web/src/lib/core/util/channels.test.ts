@@ -1,4 +1,3 @@
-import { contactRefreshRevision } from '@queries/contacts/refresh';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useSendMessageToPeople } from './channels';
 
@@ -18,6 +17,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
+vi.mock('@core/user/contactService', () => ({ invalidateContacts: vi.fn() }));
 vi.mock('@queries/channel/channels', () => ({
   invalidateListChannels: vi.fn(),
 }));
@@ -48,7 +48,6 @@ it.each([['recipient'], ['recipient', 'other']])(
       order.push('message');
       return { id: 'message' };
     });
-    const refreshBeforeSend = contactRefreshRevision();
     await sendToUsers({
       users,
       content: '',
@@ -56,7 +55,6 @@ it.each([['recipient'], ['recipient', 'other']])(
       attachments: [{ entity_type: 'initiative', entity_id: 'project' }],
       beforeSend: grant,
     });
-    expect(contactRefreshRevision()).toBe(refreshBeforeSend + 1);
     expect(order).toEqual(['grant', 'message']);
     expect(grant).toHaveBeenCalledWith(
       users.length === 1 ? 'resolved-dm' : 'resolved-group'
@@ -69,7 +67,6 @@ it.each([['recipient'], ['recipient', 'other']])(
 
 it('does not post an attachment when its destination grant fails', async () => {
   const { sendToChannel } = useSendMessageToPeople();
-  const refreshBeforeSend = contactRefreshRevision();
   await expect(
     sendToChannel({
       channelId: 'channel',
@@ -82,19 +79,4 @@ it('does not post an attachment when its destination grant fails', async () => {
     })
   ).rejects.toThrow('Only owner');
   expect(mocks.send).not.toHaveBeenCalled();
-  expect(contactRefreshRevision()).toBe(refreshBeforeSend);
-});
-
-it('does not schedule contact refresh when message delivery fails', async () => {
-  mocks.send.mockRejectedValue(new Error('unavailable'));
-  const refreshBeforeSend = contactRefreshRevision();
-  const { sendToChannel } = useSendMessageToPeople();
-  expect(
-    await sendToChannel({
-      channelId: 'channel',
-      content: 'Message',
-      mentions: [],
-    })
-  ).toBeUndefined();
-  expect(contactRefreshRevision()).toBe(refreshBeforeSend);
 });

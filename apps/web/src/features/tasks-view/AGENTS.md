@@ -72,10 +72,6 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Block ordinary definition saves while unsupported settings remain; only explicit banner cleanup removes them, and metadata writes leave the definition unchanged.
 
 - Mark task row notifications through `notifications/mark-row-seen.ts` when opening inline details or a split, including board and Gantt rows; keep the mounted Markdown marker for direct routes.
-- Keep Assignee menus team/agent-scoped with selected outsiders; build Created by menus with lazy contact sources on desktop and mobile. Resolve saved-summary labels from that summary's explicit IDs, not active filters or a directory map.
-- Keep semantic `@viewer` outside contact lookup and distinct from fixed self; preserve unknown selected IDs and group-local Only behavior.
-- Extract AI person references without a prompt catalog, then resolve complete per-label evidence; reject the entire plan for unknown, ambiguous or incomplete people rather than dropping constraints. Preserve model array boundaries, literal addresses and viewer-token semantics.
-- Fence planner completions by account/session, navigation and filter edits; returning to an earlier state does not revive an old request.
 
 ## Checks
 
@@ -83,7 +79,6 @@ Run from `apps/web`:
 
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
-- Bounded filters/planner browser regression: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts task-filters.browser.e2e.ts` (synthetic transport, real controls and reference reader).
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 ## Related

@@ -1,11 +1,6 @@
 import { emailToMacroId } from '@core/user/macroId';
 import type { EmailRecipient } from '../../email-compose/core/email-recipient';
-import {
-  formatRecipientTerms,
-  type Recipient,
-  type RecipientChoices,
-  resolveRecipients,
-} from '../core/recipients';
+import { type Recipient, resolveRecipients } from '../core/recipients';
 
 /** Adapt inferred names to the same recipient chips used by email and events. */
 export function composerRecipientOptions(
@@ -26,12 +21,13 @@ export function composerRecipientOptions(
 
 export function composerRecipients(
   text: string,
-  people: RecipientChoices
+  people: Recipient[]
 ): EmailRecipient[] {
   const { recipients, unresolved } = resolveRecipients(text, people, true);
   return [
     ...recipients.flatMap((recipient): EmailRecipient[] => {
-      if (!recipient.external) return composerRecipientOptions([recipient]);
+      if (people.some((person) => person.id === recipient.id))
+        return composerRecipientOptions([recipient]);
       const email = recipient.email ?? recipient.id;
       const id = emailToMacroId(email) ?? recipient.id;
       return [{ kind: 'custom', id, data: { id, email, invalid: false } }];
@@ -47,7 +43,5 @@ export function composerRecipients(
 }
 
 export function recipientAddresses(recipients: EmailRecipient[]): string {
-  return formatRecipientTerms(
-    recipients.map((recipient) => recipient.data.email)
-  );
+  return recipients.map((recipient) => recipient.data.email).join(', ');
 }

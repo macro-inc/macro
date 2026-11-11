@@ -87,28 +87,10 @@ fn driver_times_reused_statements_and_failures_without_bound_values() {
         assert!(rows.is_ok());
     }
     assert!(crate::driver::query_prepared(&mut statement, vec![]).is_err());
-    crate::driver::query_each(
-        &connection,
-        "SELECT ?",
-        vec![Value::from_text("private-streamed")],
-        |_| Ok(()),
-    )
-    .unwrap();
-    assert!(
-        crate::driver::query_each(
-            &connection,
-            "SELECT ?",
-            vec![Value::from_text("private-failure")],
-            |_| Err(crate::TursoStorageError::InvalidInput)
-        )
-        .is_err()
-    );
     assert_eq!(
         telemetry.0.events.borrow().as_slice(),
         [
             (fingerprint("SELECT ?"), 201.0, true),
-            (fingerprint("SELECT ?"), 201.0, true),
-            (fingerprint("SELECT ?"), 201.0, false),
             (fingerprint("SELECT ?"), 201.0, true),
             (fingerprint("SELECT ?"), 201.0, false),
         ]

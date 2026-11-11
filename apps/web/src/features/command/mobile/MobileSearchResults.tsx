@@ -25,15 +25,7 @@ import {
 import { Telemetry } from '@macro-inc/observability';
 import { useDatabaseDiscoverySync } from '@queries/storage/databases';
 import { Button, CommandMenuListItem } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  Show,
-  Suspense,
-} from 'solid-js';
+import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
@@ -61,24 +53,6 @@ function MobileNameResults(props: {
   });
   usePending('search.names', source.isLoadingEntities);
   usePending('search.rank', source.isSettling);
-  let previousWindow: string | undefined;
-  let previousWindowQuery = '';
-  createEffect(
-    on(
-      () => source.pagination.windowKey(),
-      (key) => {
-        if (key === undefined) return;
-        if (
-          previousWindow !== undefined &&
-          key !== previousWindow &&
-          previousWindowQuery === state.query()
-        )
-          virtualizer()?.scrollTo(0);
-        previousWindow = key;
-        previousWindowQuery = state.query();
-      }
-    )
-  );
   useDatabaseDiscoverySync(() => true);
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
@@ -148,10 +122,6 @@ function MobileNameResults(props: {
       source.pagination.isLoadingMore() ||
       source.hasError(),
     loadMore: source.pagination.loadMore,
-    replaceWindows: () =>
-      category() === 'people' ||
-      ((category() === 'all' || category() === 'dms') &&
-        state.query().trim().length > 0),
   });
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
@@ -231,16 +201,6 @@ function MobileNameResults(props: {
       </Show>
       <Show when={!source.isLoadingEntities() && items().length === 0}>
         <p class="p-3 text-ink-muted">{t('commandMenu.noResults')}</p>
-        <Show when={source.pagination.hasMore()}>
-          <Button
-            disabled={source.pagination.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(source.pagination.loadMore(), 'mobile-search')
-            }
-          >
-            {t('viewMenus.nextOptions')}
-          </Button>
-        </Show>
       </Show>
     </div>
   );

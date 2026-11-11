@@ -6,6 +6,7 @@ export {
   recipientEntityMapper,
   type WithCustomUserInput,
 } from './combinedRecipient';
+export { useContacts } from './contactService';
 export {
   getDisplayName,
   getDisplayNameParts,

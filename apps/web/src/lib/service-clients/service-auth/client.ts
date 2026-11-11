@@ -530,15 +530,9 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
-  async getUserNamesWithEmail(
-    args: PostGetNamesRequestBody,
-    init?: Pick<SafeFetchInit, 'headers' | 'trace' | 'signal'>
-  ) {
+  async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
-        headers: init?.headers,
-        trace: init?.trace,
-        signal: init?.signal,
         method: 'POST',
         body: JSON.stringify(args),
       })

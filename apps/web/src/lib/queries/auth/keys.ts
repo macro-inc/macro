@@ -14,14 +14,9 @@ export const authKeys = createQueryKeys('auth', {
   emailConnectionProviders: null,
   userInfo: null,
   userLanguage: null,
-  userName: (
-    viewerId: string,
-    session: number,
-    generation: number,
-    userId: string
-  ) => ({
-    queryKey: [viewerId, session, generation, userId],
+  userName: (userId: string) => ({
+    queryKey: [userId],
   }),
-  userNameSelf: (viewerId: string, session: number) => [viewerId, session],
+  userNameSelf: null,
   userQuota: null,
 });

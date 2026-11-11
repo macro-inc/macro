@@ -88,61 +88,6 @@ impl ClaimFailingStorage {
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
 
-    async fn read_people_sql(
-        &self,
-        viewer: &str,
-        plan: &cache_core::people::sql::PeopleSqlPlan,
-    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
-        Ok(self.inner.read_people_sql(viewer, plan).await.unwrap())
-    }
-
-    async fn scan_contact_records(
-        &self,
-        after: Option<&str>,
-        limit: usize,
-        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
-    ) -> Result<Option<String>, Self::Error> {
-        Ok(self
-            .inner
-            .scan_contact_records(after, limit, visit)
-            .await
-            .unwrap())
-    }
-
-    async fn visit_name_search(
-        &self,
-        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
-    ) -> Result<(), Self::Error> {
-        self.inner.visit_name_search(read).await.unwrap();
-        Ok(())
-    }
-
-    async fn visit_contact_records(
-        &self,
-        query: &cache_core::search::SearchQuery,
-        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
-    ) -> Result<(), Self::Error> {
-        self.inner
-            .visit_contact_records(query, visit)
-            .await
-            .unwrap();
-        Ok(())
-    }
-
-    async fn visit_search_documents(
-        &self,
-        profile: cache_core::search::SearchProfile,
-        bucket: &str,
-        query: &cache_core::search::SearchQuery,
-        visit: impl FnMut(cache_core::search::SearchDocumentRef<'_>) + maybe_send::MaybeSend,
-    ) -> Result<(), Self::Error> {
-        self.inner
-            .visit_search_documents(profile, bucket, query, visit)
-            .await
-            .unwrap();
-        Ok(())
-    }
-
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         Ok(self.inner.get_batch(keys).await.unwrap())
     }

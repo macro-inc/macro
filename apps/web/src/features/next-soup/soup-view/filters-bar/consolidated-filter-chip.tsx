@@ -12,7 +12,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import type { SearchableOptionSourceFactory } from './option-source';
 import {
   SearchableMultiSelect,
   type SearchableOption,
@@ -50,7 +49,6 @@ export type ConsolidatedFilter = {
 
   // Searchable filter props (for In/From style filters)
   searchableOptions?: Accessor<SearchableOption[]>;
-  createSource?: SearchableOptionSourceFactory;
   activeSearchableIds?: Accessor<string[]>;
   onSearchableChange?: (ids: string[]) => void;
   searchPlaceholder?: string;
@@ -239,19 +237,10 @@ const SearchableValueSegment = (props: {
   class?: string;
   mobile?: boolean;
 }) => {
-  if (props.filter.createSource && !props.filter.activeSearchableIds)
-    throw new Error('Query-driven chips require explicit selected IDs');
+  const options: Accessor<SearchableOption[]> = () =>
+    props.filter.searchableOptions?.() ?? [];
   const activeIds: Accessor<string[]> = () =>
     props.filter.activeSearchableIds?.() ?? [];
-  const [internalOpen, setInternalOpen] = createSignal(false);
-  const open = () => props.filter.isPopupOpen?.() ?? internalOpen();
-  const setOpen = (value: boolean) => {
-    setInternalOpen(value);
-    props.filter.setPopupOpen?.(value);
-  };
-  const source = props.filter.createSource?.(activeIds, open);
-  const options = () =>
-    source?.options() ?? props.filter.searchableOptions?.() ?? [];
 
   const handleChange = (ids: string[]) => {
     props.filter.onSearchableChange?.(ids);
@@ -267,14 +256,13 @@ const SearchableValueSegment = (props: {
 
   return (
     <SearchableMultiSelect
-      source={source}
       options={options}
       activeIds={activeIds}
       onChange={handleChange}
       placeholder={placeholder()}
       placement="bottom-start"
-      open={open}
-      onOpenChange={setOpen}
+      open={props.filter.isPopupOpen}
+      onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
       preserveOrder={props.filter.preserveOptionOrder}
       footer={props.filter.searchFooter}
     >
@@ -348,8 +336,7 @@ const StandardValueSegment = (props: {
 };
 
 export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
-  const isSearchable = () =>
-    Boolean(props.filter.searchableOptions || props.filter.createSource);
+  const isSearchable = () => Boolean(props.filter.searchableOptions);
 
   return (
     <Layer depth={2}>

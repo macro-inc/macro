@@ -4,14 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { authKeys } from '../auth/keys';
 import {
   useEmailSignature,
   useNonPrimaryEmailLinkIdHeader,
   usePrimaryEmailLinkId,
 } from './link';
 
-let activeClient: QueryClient;
 const mocks = vi.hoisted(() => ({ getLinks: vi.fn() }));
 vi.mock('@service-email/client', () => ({
   emailClient: { getLinks: mocks.getLinks },
@@ -25,11 +23,7 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|self',
   useIsAuthenticated: () => () => true,
 }));
-vi.mock('@queries/client', () => ({
-  get queryClient() {
-    return activeClient;
-  },
-}));
+vi.mock('@queries/client', () => ({ queryClient: {} }));
 
 const link = (id: string, owner: string, primary: boolean): Link => ({
   id,
@@ -62,11 +56,6 @@ describe('non-suspending inbox metadata', () => {
     mocks.getLinks.mockImplementation(async () => ok(await response.promise));
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
-    });
-    activeClient = client;
-    client.setQueryData(authKeys.userInfo.queryKey, {
-      id: 'macro|self',
-      authenticated: true,
     });
     clients.push(client);
     const [target, setTarget] = createSignal('shared');

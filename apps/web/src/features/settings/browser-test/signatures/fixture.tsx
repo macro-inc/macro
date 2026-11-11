@@ -15,7 +15,6 @@ import {
   SettingsSurface,
 } from '../../primitives';
 import { SignatureSection } from '../../SignatureSection';
-import { AccountSources } from './account-sources';
 import {
   link,
   queryClient,
@@ -82,12 +81,7 @@ if (root)
   render(
     () => (
       <QueryClientProvider client={queryClient}>
-        <Show
-          when={new URLSearchParams(location.search).has('account-sources')}
-          fallback={<Fixture />}
-        >
-          <AccountSources />
-        </Show>
+        <Fixture />
       </QueryClientProvider>
     ),
     root

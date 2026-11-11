@@ -23,6 +23,9 @@ vi.mock('@channel/Input/message-payload', () => ({}));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
 }));
+vi.mock('@queries/contacts/contacts', () => ({
+  useContacts: () => () => [],
+}));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({

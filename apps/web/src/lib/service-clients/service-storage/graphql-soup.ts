@@ -435,12 +435,6 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
-/** Fetch-only transport for callers that must validate scope/cancellation before
- * explicitly admitting a response to the normalized cache. */
-export function getGraphqlSoupNetworkClient(): Client {
-  return graphqlSoupClient;
-}
-
 const reconnectListeners = new Set<() => void>();
 
 /**

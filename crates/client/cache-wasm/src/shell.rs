@@ -6,7 +6,7 @@ use cache_core::codec::{
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    EngineError, HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    EngineError, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
     RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
@@ -41,7 +41,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod calendar;
-mod people;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -1443,7 +1442,7 @@ impl CacheEngine {
     }
 
     /// Searches the compact materialized projection. Empty queries use the
-    /// indexed recent path; text queries rank streamed compact matches without
+    /// indexed recent path; text queries rank the compact catalog without
     /// scanning normalized record blobs.
     pub fn search(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -1730,7 +1729,6 @@ impl CacheEngine {
         variables: JsValue,
         data: JsValue,
         identity: Option<String>,
-        hydration_scope: JsValue,
     ) -> js_sys::Promise {
         let state = self.state.clone();
         let ops = self.ops.clone();
@@ -1787,39 +1785,17 @@ impl CacheEngine {
             )
             .await
             .map_err(|error| state.mail_projection_error(error))?;
-            let scope: Option<HydrationScope> =
-                serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
-            let result = match scope {
-                Some(scope) => {
-                    state
-                        .engine_mut()?
-                        .hydrate_query_in_scope(
-                            NetworkWrite {
-                                query: &query,
-                                operation_name: operation_name.as_deref(),
-                                variables: &variables,
-                                data: &data,
-                                identity: identity.as_deref(),
-                            },
-                            &scope,
-                            projections,
-                        )
-                        .await
-                }
-                None => {
-                    state
-                        .engine_mut()?
-                        .hydrate_query_with_projections(
-                            &query,
-                            operation_name.as_deref(),
-                            &variables,
-                            &data,
-                            identity.as_deref(),
-                            projections,
-                        )
-                        .await
-                }
-            };
+            let result = state
+                .engine_mut()?
+                .hydrate_query_with_projections(
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                    projections,
+                )
+                .await;
             let result = state.engine_result(result)?;
             // A failed optional proof must still deliver the committed write and broad invalidation.
             let unchanged_views = state

@@ -23,13 +23,14 @@ export const channelKeys = createQueryKeys('channel', {
   channelBots: (channelID: string) => ({
     queryKey: [channelID],
   }),
-  activity: (userId: string | undefined) => ({ queryKey: [userId] }),
-  listChannels: (userId: string | undefined) => ({ queryKey: [userId] }),
-  quickAccessGraphql: (
-    cacheClientId: string,
-    userId: string | undefined,
-    generation: number
-  ) => ({
-    queryKey: [cacheClientId, userId, generation],
+  activity: null,
+  listChannels: {
+    queryKey: null,
+    contextQueries: {
+      account: (actorId?: string) => [actorId ?? 'signed-out'],
+    },
+  },
+  quickAccessGraphql: (cacheClientId: string) => ({
+    queryKey: [cacheClientId],
   }),
 });

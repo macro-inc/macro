@@ -3,7 +3,6 @@ import { type IUser, useAugmentUserWithDmActivity } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import type { EmailEntity } from '@entity';
 import { createEmailsInfiniteQuery } from '@entity';
-import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import { useSearchSoupQuery } from '@queries/soup/search';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -32,8 +31,6 @@ type EntityPropertyOptions = {
   users?: Accessor<IUser[] | undefined>;
   /** Keep selected entities available beyond the initial result limit. */
   selectedIds?: Accessor<string[] | undefined>;
-  /** Resolve personal selection labels independently of the suggestion window. */
-  selectedUserIds?: Accessor<Iterable<string>>;
 };
 
 export function useEntitiesForProperty(
@@ -63,11 +60,8 @@ export function useEntitiesForProperty(
   const specificEntityType = () => property()?.specificEntityType;
 
   // Get items from quickAccess based on entity type
-  const { items: quickAccessItems } = useQuickAccessEntities(
-    specificEntityType,
-    searchTerm,
-    () => !(specificEntityType() === 'USER' && options?.users?.() !== undefined)
-  );
+  const { items: quickAccessItems } =
+    useQuickAccessEntities(specificEntityType);
 
   // Email queries for THREAD type or generic ENTITY (no specific type)
   const needsEmailSearch = () =>
@@ -104,13 +98,6 @@ export function useEntitiesForProperty(
       .map((entity) => threadMapper(entity as EmailEntity));
   });
 
-  const pinnedUsers = usePinnedContactUsers(
-    () => options?.selectedUserIds?.() ?? [],
-    () =>
-      (!specificEntityType() || specificEntityType() === 'USER') &&
-      options?.users?.() === undefined
-  );
-
   // Convert quickAccess items to CombinedEntity format
   const entities = createMemo((): CombinedEntity[] => {
     const entityType = specificEntityType();
@@ -132,11 +119,9 @@ export function useEntitiesForProperty(
 
     // Convert quickAccess items to CombinedEntity
     const items = quickAccessItems();
-    const converted: CombinedEntity[] = pinnedUsers().map(userToEntity);
-    const pinnedIds = new Set(converted.map((item) => item.id));
+    const converted: CombinedEntity[] = [];
 
     for (const item of items) {
-      if (pinnedIds.has(item.id)) continue;
       // Augment users with DM activity
       if (item.kind === 'user') {
         const augmentedUser = augmentUserWithDmActivity(item.data);

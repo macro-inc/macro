@@ -24,11 +24,12 @@ import {
 import { RecurrenceBuilder } from '../../calendar/components/composer/RecurrenceBuilder';
 import { buildRecurrenceLines } from '../../calendar/utils/recurrence';
 import type { InputDisplay } from '../context/capabilities';
-import { formatRecipientTerms } from '../core/recipients';
 import { parseRecurrenceDraft } from '../core/recurrence';
-import { createRecipientSelection } from '../primitives/recipient-selection';
 import type { UniversalInputController } from '../primitives/universal-input';
-import { composerRecipients } from '../queries/composer-recipients';
+import {
+  composerRecipientOptions,
+  composerRecipients,
+} from '../queries/composer-recipients';
 
 /** Reuse the calendar composer's date/time menus and editable property pills. */
 export function CalendarDraft(props: {
@@ -46,15 +47,13 @@ export function CalendarDraft(props: {
       color: 'var(--color-accent)',
     }))
   );
-  const selection = createRecipientSelection(
-    () => s.fields().guests,
-    (text) => composerRecipients(text, a.person),
-    (guests) => formatRecipientTerms(guests.map(guestEmail)),
-    (text) => s.edit('guests', text)
+  const guests = createMemo(() =>
+    composerRecipients(s.fields().guests, a.people())
   );
-  const guests = selection.selected;
   const options = createMemo(() =>
-    guests().filter((person) => person.kind !== 'custom')
+    composerRecipientOptions(a.people()).filter(
+      (person) => person.kind !== 'custom'
+    )
   );
   const recurrenceValues = (): EventEditorInitialValues => {
     const fields = s.fields();
@@ -189,7 +188,9 @@ export function CalendarDraft(props: {
         <EventComposerGuestsPill
           options={options}
           selected={guests()}
-          onChange={selection.select}
+          onChange={(selected) =>
+            s.edit('guests', selected.map(guestEmail).join(', '))
+          }
           disabled={s.sending()}
         />
         <EventComposerLocationPill

@@ -625,7 +625,6 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           fields={state.recipients}
           values={form.recipients}
           options={props.session.recipientOptions}
-          createRecipientSource={composeContext.createRecipientSource}
           inboxes={composeContext.accounts.inboxes}
           activeInboxId={activeInboxId}
           senderEmail={activeInboxEmail}

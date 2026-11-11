@@ -147,13 +147,6 @@ three-step flow:
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
-The channel header's Invite dialog and Participants add controls use paged personal
-suggestions, not a complete address book. Next options (or PageDown) replaces the
-window; selected people and typed external addresses remain independent. Existing
-members are excluded, including anyone who joins while selected. A large roster
-can leave a short or empty page with more options available. Add all teammates
-uses the current team roster, never just the visible suggestion page.
-
 The first message in a DM to an unregistered recipient sends an email saying
 `<sender email> sent you a message on Macro`, with the message and a **View message**
 button leading to signup. It must not invite the recipient to `#<their own name>`.

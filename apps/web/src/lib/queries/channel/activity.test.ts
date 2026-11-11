@@ -2,7 +2,6 @@ import { queryClient } from '@queries/client';
 import type { ApiActivity } from '@service-storage/generated/schemas/apiActivity';
 import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { authKeys } from '../auth/keys';
 import { recordChannelViewWhenIdle } from './activity';
 import { channelKeys } from './keys';
 
@@ -32,10 +31,6 @@ function activity(channelId: string, viewedAt: string): ApiActivity {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  queryClient.setQueryData(authKeys.userInfo.queryKey, {
-    id: 'user',
-    authenticated: true,
-  });
   recordActivity.mockImplementation(async ({ channelId }) =>
     activity(channelId, '2026-02-01T00:00:00Z')
   );
@@ -71,22 +66,17 @@ it('sends one request for views of a channel that are still pending', async () =
 });
 
 it('writes the recorded row into the activity list instead of refetching it', async () => {
-  queryClient.setQueryData<ApiActivity[]>(
-    channelKeys.activity('user').queryKey,
-    [
-      activity('a', '2026-01-01T00:00:00Z'),
-      activity('c', '2026-01-01T00:00:00Z'),
-    ]
-  );
+  queryClient.setQueryData<ApiActivity[]>(channelKeys.activity.queryKey, [
+    activity('a', '2026-01-01T00:00:00Z'),
+    activity('c', '2026-01-01T00:00:00Z'),
+  ]);
 
   recordChannelViewWhenIdle('a');
   recordChannelViewWhenIdle('b');
   await flushIdle();
 
   expect(
-    queryClient.getQueryData<ApiActivity[]>(
-      channelKeys.activity('user').queryKey
-    )
+    queryClient.getQueryData<ApiActivity[]>(channelKeys.activity.queryKey)
   ).toEqual([
     activity('a', '2026-02-01T00:00:00Z'),
     activity('c', '2026-01-01T00:00:00Z'),

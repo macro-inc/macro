@@ -5,11 +5,6 @@ fake backend from `tests/fake-onboarding-context.ts`. No module is aliased or
 mocked, and nothing touches the network: the only difference from production is
 the context the provider receives.
 
-The bounded teammate source has separate real-query/team-step composition coverage
-in `src/lib/core/internal/browser-test/onboarding-contacts.browser.e2e.ts`, including
-empty continuation pages, the six-email bound and manual edits during refreshes.
-That fixture replaces transport and auth/team services, not the query or form.
-
 The fake world is persisted in sessionStorage, so the full-page round-trips are
 real page loads. Google or Microsoft sign-up, inbox OAuth, and native GitHub account linking
 reload into the flow, and

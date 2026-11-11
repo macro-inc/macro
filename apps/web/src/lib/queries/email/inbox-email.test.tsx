@@ -5,12 +5,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { authKeys } from '../auth/keys';
 import { useInboxEmail } from './inbox-email';
 import { emailKeys } from './keys';
 
 const getLinksMock = vi.hoisted(() => vi.fn());
-const VIEWER = 'macro|viewer@example.com';
 
 vi.mock('@service-email/client', () => ({
   emailClient: { getLinks: getLinksMock },
@@ -23,7 +21,6 @@ vi.mock('@queries/soup/normalized-cache', () => ({
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'login@macro.com',
   useIsAuthenticated: () => () => true,
-  useUserId: () => () => VIEWER,
 }));
 
 let client: QueryClient;
@@ -55,10 +52,6 @@ const mount = (linkId: string | undefined) => {
 
 beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(authKeys.userInfo.queryKey, {
-    id: VIEWER,
-    authenticated: true,
-  });
 });
 
 afterEach(() => {
@@ -102,9 +95,9 @@ describe('useInboxEmail', () => {
     const { viewer } = mount('outlook');
     await vi.waitFor(() => expect(getLinksMock).toHaveBeenCalledOnce());
     await vi.waitFor(() =>
-      expect(
-        client.getQueryState(emailKeys.links(VIEWER).queryKey)?.status
-      ).toBe('error')
+      expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
+        'error'
+      )
     );
     expect(viewer()).toBe('unknown');
   });
@@ -116,8 +109,8 @@ describe('useInboxEmail', () => {
     getLinksMock.mockResolvedValue(
       err([{ code: 'HTTP_ERROR' as const, message: 'unavailable' }])
     );
-    await client.refetchQueries({ queryKey: emailKeys.links(VIEWER).queryKey });
-    expect(client.getQueryState(emailKeys.links(VIEWER).queryKey)?.status).toBe(
+    await client.refetchQueries({ queryKey: emailKeys.links.queryKey });
+    expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
       'error'
     );
     expect(viewer()).toBe('owner@tenant.example.com');
@@ -128,9 +121,9 @@ describe('useInboxEmail', () => {
     const { viewer, setId } = mount(undefined);
     await vi.waitFor(() => expect(getLinksMock).toHaveBeenCalledOnce());
     await vi.waitFor(() =>
-      expect(
-        client.getQueryState(emailKeys.links(VIEWER).queryKey)?.status
-      ).toBe('success')
+      expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
+        'success'
+      )
     );
     expect(viewer()).toBe('unknown');
     setId('outlook');
@@ -141,9 +134,9 @@ describe('useInboxEmail', () => {
     getLinksMock.mockResolvedValue(ok({ links: [outlook] }));
     const { viewer } = mount('shared-inbox');
     await vi.waitFor(() =>
-      expect(
-        client.getQueryState(emailKeys.links(VIEWER).queryKey)?.status
-      ).toBe('success')
+      expect(client.getQueryState(emailKeys.links.queryKey)?.status).toBe(
+        'success'
+      )
     );
     expect(viewer()).toBe('unknown');
   });

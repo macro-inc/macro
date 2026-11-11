@@ -1,5 +1,4 @@
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import {
   type BaseFetchErrorCode,
@@ -18,40 +17,28 @@ function isExpired(token: string) {
 }
 
 let macroApiTokenPromise: Promise<string> | null = null;
-let tokenGeneration = 0;
 
-/** Login/account replacement must not reuse the previous viewer's bearer token. */
-export function resetMacroApiToken() {
-  tokenGeneration++;
-  macroApiTokenPromise = null;
-}
-function assertTokenGeneration(generation: number) {
-  if (generation !== tokenGeneration)
-    throw new DOMException('Authentication session changed', 'AbortError');
-}
-async function readMacroApiToken(generation: number) {
-  const result = await authServiceClient.macroApiToken();
-  assertTokenGeneration(generation);
-  if (result.isErr()) throw result.error;
-  return result.value.macro_api_token;
-}
-async function releaseFailedToken(promise: Promise<string>) {
-  try {
-    await promise;
-  } catch {
-    if (macroApiTokenPromise === promise) macroApiTokenPromise = null;
-  }
-}
 function requestMacroApiToken() {
-  const promise = readMacroApiToken(tokenGeneration);
+  const promise = authServiceClient.macroApiToken().then((result) => {
+    if (result.isErr()) {
+      throw result.error;
+    }
+    return result.value.macro_api_token;
+  });
+
   macroApiTokenPromise = promise;
-  fireAndForget(releaseFailedToken(promise), 'auth-token');
+  void promise.catch(() => {
+    // A failed request must not poison the cache permanently. Keep the
+    // identity check so an older rejection cannot clear a newer request.
+    if (macroApiTokenPromise === promise) {
+      macroApiTokenPromise = null;
+    }
+  });
   return promise;
 }
 
 export async function getMacroApiToken(): Promise<string> {
   const parent = Telemetry.captureContext();
-  const generation = tokenGeneration;
   if (LOCAL_ONLY) {
     const apiToken = import.meta.env.__LOCAL_JWT__;
     if (apiToken) {
@@ -65,7 +52,6 @@ export async function getMacroApiToken(): Promise<string> {
   }
 
   const apiToken = await cachedPromise;
-  assertTokenGeneration(generation);
   if (!isExpired(apiToken)) {
     return apiToken;
   }
@@ -108,12 +94,8 @@ export async function fetchWithAuth<
   input: RequestInfo,
   init?: fetchWithAuthOptions<T, CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
-  const generation = tokenGeneration;
-  init?.signal?.throwIfAborted();
   const parentSpan = init?.trace?.parentSpan ?? Telemetry.captureContext();
   const apiToken = await parentSpan.run(getMacroApiToken);
-  init?.signal?.throwIfAborted();
-  assertTokenGeneration(generation);
   if (!apiToken) {
     return err([
       { code: 'UNAUTHORIZED', message: 'No access and/or refresh token found' },
@@ -182,7 +164,6 @@ export async function fetchWithAuth<
     safeFetchErrorHandler
   );
 
-  assertTokenGeneration(generation);
   if (result.isErr()) {
     return err(result.error);
   }

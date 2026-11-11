@@ -2,18 +2,15 @@ import { type UserItem, useQuickAccess } from '@core/context/quickAccess';
 import { useEmail } from '@core/context/user';
 import type { IUser } from '@core/user';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
-import { preservePersonOrder } from '@core/util/ordered-window';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionUser } from '../utils/botMention';
 
 type UseUsersMentionOptions = {
-  /** Undefined uses personal search; [] remains a closed, empty scope. */
-  users?: Accessor<IUser[] | undefined>;
-  transformUsers?: (users: readonly IUser[]) => IUser[];
+  /** Custom users list if necessary */
+  users?: Accessor<IUser[]>;
   searchTerm: Accessor<string>;
-  enabled?: Accessor<boolean>;
   /**
    * Whether the composer posts to a channel. Group mentions are an editor
    * configuration, not a block-context lookup: the channels view hosts a
@@ -28,11 +25,6 @@ type UseUsersMentionResult = {
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
   usersAndGroups: Accessor<(UserItem | GroupMentionItem)[]>;
-  windowKey: Accessor<string | undefined>;
-  hasMore: Accessor<boolean>;
-  isLoading: Accessor<boolean>;
-  isLoadingMore: Accessor<boolean>;
-  loadMore: () => Promise<void>;
 };
 
 /** Available group aliases and their match functions */
@@ -54,15 +46,7 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
-  const usesDirectory = () =>
-    options.enabled?.() !== false && customUsers?.() === undefined;
-  const workspace = quickAccess.useList({
-    buckets: ['person'],
-    searchTerm,
-    peopleMode: 'mention',
-    enabled: usesDirectory,
-  });
-  const workspaceUsers = workspace.items;
+  const workspaceUsers = quickAccess.useList('person').items;
   const currentUserEmail = useEmail();
 
   const currentUserDomain = () => {
@@ -71,35 +55,26 @@ export function useUsersMention(
   };
 
   const usersList = createLazyMemo((): UserItem[] => {
-    if (options.enabled?.() === false) return [];
-    const scoped = customUsers?.();
-    if (scoped === undefined && !options.transformUsers)
-      return workspaceUsers();
-    const window = scoped === undefined ? workspaceUsers() : [];
-    const rows = new Map(window.map((item) => [item.id, item]));
-    const base = scoped ?? window.map((item) => item.data);
-    const users = options.transformUsers?.(base) ?? base;
-    // Scoped lists retain their supplied display data. Untouched native rows
-    // retain the context/timestamps used to rank that window before limiting.
-    return users.map((user): UserItem => {
-      const row = rows.get(user.id);
-      if (row?.data === user) return row;
-      if (row) return { ...row, data: user };
-      return {
-        id: user.id,
-        data: user,
-        kind: 'user',
-        bucket: 'person',
-        sortTimestamp: new Date(
-          quickAccess.interactionForUser(user.id) ?? user.lastInteraction ?? 0
-        ).getTime(),
-        timestamps: {
-          lastInteraction:
-            quickAccess.interactionForUser(user.id) ?? user.lastInteraction,
-        },
-        searchText: `${user.name || user.email} | ${user.email}`,
-      };
-    });
+    if (!customUsers) return workspaceUsers();
+
+    // Custom lists scope who can be mentioned, but should retain the same
+    // interaction ranking as the document body's workspace list.
+    const workspaceUsersById = new Map(
+      workspaceUsers().map((item) => [item.id, item])
+    );
+    return customUsers().map((user) => ({
+      id: user.id,
+      data: user,
+      kind: 'user',
+      bucket: 'person',
+      sortTimestamp: workspaceUsersById.get(user.id)?.sortTimestamp ?? 0,
+      timestamps: {
+        lastInteraction:
+          workspaceUsersById.get(user.id)?.timestamps.lastInteraction ??
+          user.lastInteraction,
+      },
+      searchText: `${user.name || user.email} | ${user.email}`,
+    }));
   });
 
   const userSearch = () => {
@@ -125,14 +100,6 @@ export function useUsersMention(
   const users = createLazyMemo(() => {
     const term = searchTerm();
     const list = usersList();
-    if (usesDirectory()) {
-      const personal = list.filter((item) => item.personOrder !== undefined);
-      const extras = userSearch()(
-        list.filter((item) => item.personOrder === undefined),
-        term
-      ).map(({ item }) => item);
-      return preservePersonOrder([...personal, ...extras], list);
-    }
     return userSearch()(list, term).map(({ item }) => item);
   });
 
@@ -163,12 +130,5 @@ export function useUsersMention(
     currentUserDomain,
     groups,
     usersAndGroups,
-    windowKey: () => (usesDirectory() ? workspace.windowKey?.() : undefined),
-    hasMore: () => usesDirectory() && workspace.hasMore(),
-    isLoading: () => usesDirectory() && workspace.isLoading(),
-    isLoadingMore: () => usesDirectory() && workspace.isLoadingMore(),
-    loadMore: async () => {
-      if (usesDirectory()) await workspace.loadMore();
-    },
   };
 }

@@ -1,8 +1,7 @@
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
-import type { ContactFilterSourceFactory } from '@queries/contacts/filter-source';
-import { useContactFilterSource } from '@queries/contacts/use-directory';
+import { useContacts, useContactsQuery } from '@queries/contacts/contacts';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { CalendarPeopleFilterSubmenu } from './CalendarPeopleFilterSubmenu';
@@ -56,10 +55,10 @@ function SubmenuLabel(props: { label: string; active: boolean }) {
 export function CalendarSearchFilters(props: {
   value: CalendarSearchFilterValues;
   onChange: (value: CalendarSearchFilterValues) => void;
-  createPeopleSource?: ContactFilterSourceFactory;
 }) {
   const [open, setOpen] = createSignal(false);
-  const createPeopleSource = props.createPeopleSource ?? useContactFilterSource;
+  const contacts = useContacts(open);
+  const contactsQuery = useContactsQuery(open);
   const updateFilters = (change: Partial<CalendarSearchFilterValues>) =>
     props.onChange({ ...props.value, ...change });
   const hasFilters = () =>
@@ -170,15 +169,17 @@ export function CalendarSearchFilters(props: {
           </Dropdown.Sub>
           <CalendarPeopleFilterSubmenu
             label="Organizer"
-            createSource={createPeopleSource}
-            parentOpen={open}
+            contacts={contacts}
+            loading={() => contactsQuery.isPending}
+            error={() => contactsQuery.isError}
             values={() => props.value.organizers}
             onChange={(organizers) => updateFilters({ organizers })}
           />
           <CalendarPeopleFilterSubmenu
             label="Attendee"
-            createSource={createPeopleSource}
-            parentOpen={open}
+            contacts={contacts}
+            loading={() => contactsQuery.isPending}
+            error={() => contactsQuery.isError}
             values={() => props.value.attendees}
             onChange={(attendees) => updateFilters({ attendees })}
           />

@@ -48,7 +48,6 @@ function setup(team = true) {
       participantsReady
       participantIds={['existing']}
       options={() => []}
-      createSource={undefined}
       onAdd={onAdd}
       onClose={onClose}
     />

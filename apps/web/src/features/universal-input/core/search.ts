@@ -1,30 +1,16 @@
 import { parseSearchFilters } from '../../next-soup/core/search-filters';
-import {
-  type Recipient,
-  type RecipientChoices,
-  resolveRecipientTerms,
-} from './recipients';
-
-/** Structured model terms already have boundaries; never split them again. */
-export function searchPeopleTerms(value: string): string[] {
-  const draft = parseSearchFilters(value);
-  if (draft.type === 'channels') return draft.channels.from;
-  if (draft.type === 'calls') return draft.calls.from;
-  if (draft.type === 'task')
-    return [...draft.task.assignees, ...draft.task.createdBy];
-  return [];
-}
+import { type Recipient, resolveRecipientTerms } from './recipients';
 
 /** Resolve against the directory; ambiguous or missing identities cannot broaden a search. */
 export function resolveSearchFilters(
   value: string,
-  people: RecipientChoices,
+  people: Recipient[],
   channels: Recipient[],
   inboxes: { id: string; email_address: string }[] = []
 ) {
   const draft = parseSearchFilters(value);
   const unresolved: string[] = [];
-  const resolve = (terms: string[], options: RecipientChoices) => {
+  const resolve = (terms: string[], options: Recipient[]) => {
     const result = resolveRecipientTerms(terms, options, false);
     unresolved.push(...result.unresolved);
     return [

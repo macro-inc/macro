@@ -7,8 +7,8 @@ export const emailKeys = createQueryKeys('email', {
   threadOperations: (threadId: string) => ({ queryKey: [threadId] }),
   messageOperation: (messageId: string) => ({ queryKey: [messageId] }),
   labels: null,
-  links: (userId: string | undefined) => ({ queryKey: [userId] }),
-  linksHealthProbe: (userId: string | undefined) => ({ queryKey: [userId] }),
+  links: null,
+  linksHealthProbe: null,
   threads: null,
   thread: (threadId: string) => ({
     queryKey: [threadId],

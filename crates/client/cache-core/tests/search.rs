@@ -77,7 +77,7 @@ fn request(query: &str, limit: usize) -> SearchRequest {
 }
 
 #[test]
-fn text_search_queries_storage_each_time_without_scanning_records() {
+fn text_search_loads_compact_catalog_once_and_never_scans_records() {
     block_on(async {
         let storage = InMemoryStorage::new();
         let diagnostics = storage.clone();
@@ -102,10 +102,10 @@ fn text_search_queries_storage_each_time_without_scanning_records() {
             "GraphqlSoupDocument:doc-1"
         );
         assert_eq!(second.documents.len(), 1);
-        assert_eq!(diagnostics.search_query_count(), 2);
+        assert_eq!(diagnostics.search_catalog_load_count(), 1);
         assert_eq!(diagnostics.record_get_count(), gets_before_search);
 
-        // A write-through update is visible to the next storage search.
+        // A write-through update patches the loaded catalog incrementally.
         engine
             .write_query(
                 None,
@@ -134,7 +134,7 @@ fn text_search_queries_storage_each_time_without_scanning_records() {
                 .len(),
             1
         );
-        assert_eq!(diagnostics.search_query_count(), 4);
+        assert_eq!(diagnostics.search_catalog_load_count(), 1);
 
         engine
             .delete_keys(&[EntityKey::entity("GraphqlSoupDocument", &["doc-1"])])
@@ -255,7 +255,7 @@ fn unnamed_notes_are_browsable_without_matching_ui_fallback_text() {
 }
 
 #[test]
-fn optimistic_records_explicitly_overlay_the_durable_search_projection() {
+fn optimistic_records_explicitly_overlay_the_durable_search_catalog() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         engine
@@ -382,37 +382,6 @@ fn in_memory_recent_browse_uses_component_wise_record_key_order() {
 }
 
 #[test]
-fn engine_recent_browse_keeps_prefix_related_records_after_cursor() {
-    block_on(async {
-        let mut storage = InMemoryStorage::new();
-        let entries = ["Type:9", "Type0:1"].map(|key| {
-            let mut record = Record::default();
-            record.fields.insert(
-                "__typename".into(),
-                CacheValue::String("GraphqlSoupDocument".into()),
-            );
-            record
-                .fields
-                .insert("name".into(), CacheValue::String(key.into()));
-            record.fields.insert(
-                "updatedAt".into(),
-                CacheValue::Number(cache_core::value::CacheNumber::PosInt(1)),
-            );
-            (EntityKey(key.into()), record)
-        });
-        storage.put_batch(entries.into()).await.unwrap();
-        let mut engine = Engine::new(storage);
-
-        let first = engine.search(&request("", 1)).await.unwrap();
-        assert_eq!(first.documents[0].record_key.as_ref(), "Type:9");
-        let mut continuation = request("", 1);
-        continuation.cursor = first.next_cursor;
-        let second = engine.search(&continuation).await.unwrap();
-        assert_eq!(second.documents[0].record_key.as_ref(), "Type0:1");
-    });
-}
-
-#[test]
 fn empty_query_is_bounded_and_uses_recent_projection_path() {
     block_on(async {
         let mut storage = InMemoryStorage::new();
@@ -445,7 +414,7 @@ fn empty_query_is_bounded_and_uses_recent_projection_path() {
         assert_eq!(page.documents.len(), 25);
         assert_eq!(page.documents[0].timestamp_ms, 999);
         assert!(page.next_cursor.is_some());
-        assert_eq!(diagnostics.search_query_count(), 0);
+        assert_eq!(diagnostics.search_catalog_load_count(), 0);
         assert_eq!(diagnostics.record_get_count(), 0);
     });
 }

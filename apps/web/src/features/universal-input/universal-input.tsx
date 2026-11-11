@@ -59,7 +59,6 @@ function InputContent(props: {
     props.userId,
     {
       navigate: props.navigate,
-      intent: () => state()?.draft().intent,
       onNoteTagsChange: (value) => state()?.edit('noteTags', value),
       submitSurface: 'other',
       referredFrom: props.referredFrom,

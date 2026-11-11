@@ -45,7 +45,7 @@ describe('suggested task property resolution', () => {
           options: [],
         },
       ],
-      () => []
+      []
     );
     expect(result.values).toEqual({});
     expect(result.unresolved).toEqual(['Window']);
@@ -55,7 +55,7 @@ describe('suggested task property resolution', () => {
       suggestedTaskProperties(
         JSON.stringify([{ name: 'Priority', values: ['Urgent'] }]),
         [priority],
-        () => []
+        []
       ).values
     ).toEqual({
       [SYSTEM_PROPERTY_IDS.PRIORITY]: {
@@ -69,7 +69,7 @@ describe('suggested task property resolution', () => {
           { name: 'Priority', values: [PROPERTY_OPTION_IDS.PRIORITY.URGENT] },
         ]),
         [priority],
-        () => []
+        []
       ).unresolved
     ).toEqual(['Priority']);
   });
@@ -80,7 +80,7 @@ describe('suggested task property resolution', () => {
         { name: 'Made up', values: ['yes'] },
       ]),
       [priority],
-      () => []
+      []
     );
     expect(result.values).toEqual({});
     expect(result.unresolved).toEqual(['Priority', 'Made up']);
@@ -106,7 +106,7 @@ describe('suggested task property resolution', () => {
       },
     ];
     expect(
-      suggestedTaskProperties(raw, [assignees], () => people).values[
+      suggestedTaskProperties(raw, [assignees], people).values[
         SYSTEM_PROPERTY_IDS.ASSIGNEES
       ]
     ).toEqual({
@@ -114,10 +114,11 @@ describe('suggested task property resolution', () => {
       refs: [{ entity_id: 'julia-a', entity_type: 'USER' }],
     });
     expect(
-      suggestedTaskProperties(raw, [assignees], () => [
-        ...people,
-        { id: 'julia-b', type: 'USER', labels: ['Julia'] },
-      ]).unresolved
+      suggestedTaskProperties(
+        raw,
+        [assignees],
+        [...people, { id: 'julia-b', type: 'USER', labels: ['Julia'] }]
+      ).unresolved
     ).toEqual(['Assignees']);
   });
 });
@@ -137,7 +138,7 @@ it('rejects impossible or ambiguous dates instead of rolling them into another d
       suggestedTaskProperties(
         JSON.stringify([{ name: 'Review date', values: [value] }]),
         [date],
-        () => []
+        []
       ).unresolved
     ).toEqual(['Review date']);
   }
@@ -156,7 +157,7 @@ it('keeps distinct catalog names with hyphens and underscores distinct', () => {
     suggestedTaskProperties(
       JSON.stringify([{ name: 'Follow_up', values: ['Yes'] }]),
       fields,
-      () => []
+      []
     ).values
   ).toEqual({ Follow_up: { valueType: 'STRING', value: 'Yes' } });
 });

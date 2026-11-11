@@ -11,7 +11,6 @@ export function createSearchPagination<T>(options: {
   hasMore: Accessor<boolean>;
   busy: Accessor<boolean>;
   loadMore: () => Promise<unknown>;
-  replaceWindows?: Accessor<boolean>;
 }) {
   let disposed = false;
   let queued = false;
@@ -26,14 +25,7 @@ export function createSearchPagination<T>(options: {
     const remaining = options.remaining();
     if (remaining === undefined || remaining > 44 * 3) return;
     const page = options.items();
-    if (
-      automatic &&
-      (page === lastAutoPage ||
-        (options.replaceWindows?.() &&
-          page.length === 0 &&
-          lastAutoPage?.length === 0))
-    )
-      return;
+    if (automatic && page === lastAutoPage) return;
     lastAutoPage = page;
     fireAndForget(options.loadMore(), 'mobile-search');
   };

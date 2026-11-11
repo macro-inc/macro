@@ -27,22 +27,24 @@ import {
 } from '@app/features/soup/assignee-picker';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { UserIcon } from '@core/component/UserIcon';
 import { useUserContext, useUserId } from '@core/context/user';
-import {
-  useContactFilterLabels,
-  useContactFilterOptions,
-} from '@core/user/use-contact-filter-options';
 import { deepEqual } from '@core/util/compareUtils';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
-import { batch, createMemo, createSignal } from 'solid-js';
-import { unassignedFilterOption } from './assignee-filter-source';
+import { useContacts } from '@queries/contacts/contacts';
+import { batch, createMemo, createSignal, type JSX } from 'solid-js';
 import type {
   ConsolidatedFilter,
   FilterValue,
 } from './consolidated-filter-chip';
 import type { FilterCategory } from './filter-categories';
+import type { SearchableOption } from './searchable-multi-select';
 import { useTagFilter } from './tag-filter';
-import { VIEW_FILTER_CATEGORIES } from './unified-filter-dropdown';
+import {
+  buildContactLabel,
+  VIEW_FILTER_CATEGORIES,
+} from './unified-filter-dropdown';
 
 // Filter IDs that are set by tabs and should not be shown as removable chips
 const TAB_ONLY_FILTERS = new Set([
@@ -85,6 +87,7 @@ export function useFilterRefinements() {
   const filterData = () => queryFilters.state;
   const panel = useSplitPanelOrThrow();
   const user = useUserContext();
+  const contacts = useContacts();
   const currentUserId = useUserId();
   const tagFilter = useTagFilter();
   const selectFilters = useSoupView().extensions?.selectFilters ?? [];
@@ -151,9 +154,78 @@ export function useFilterRefinements() {
     assigneeFilter,
     () => currentView() === 'tasks'
   );
-  const assigneeLabels = useContactFilterLabels(() =>
-    assigneeFilter().filter((id) => id !== NO_ASSIGNEE)
+
+  /**
+   * Human-readable options for the assignee sub-filter, keyed by assignee ID.
+   * Uses the same team and selected-outsider options as the pickers.
+   */
+  const assigneeOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      map.set(NO_ASSIGNEE, {
+        label: t('viewMenus.unassigned'),
+        icon: () => <CircleDashedIcon class="size-3 text-ink-muted" />,
+      });
+      for (const option of assigneePicker.options()) {
+        map.set(option.id, { label: option.label, icon: option.icon });
+      }
+      return map;
+    }
   );
+
+  /** Creator options for the Tasks and Files Created by filter. */
+  const createdByOptionsMap = createMemo(
+    (): Map<string, { label: string; icon?: () => JSX.Element }> => {
+      const uid = currentUserId();
+      const map = new Map<
+        string,
+        { label: string; icon?: () => JSX.Element }
+      >();
+      for (const contact of contacts()) {
+        map.set(contact.id, {
+          label: buildContactLabel(contact, uid),
+          icon: () => (
+            <UserIcon
+              id={contact.id}
+              size="sm"
+              suppressClick
+              showTooltip={false}
+            />
+          ),
+        });
+      }
+      return map;
+    }
+  );
+
+  const createdBySearchableOptions = createMemo((): SearchableOption[] => {
+    const uid = currentUserId();
+    let meOption: SearchableOption | undefined;
+    const otherContactOptions: SearchableOption[] = [];
+    for (const contact of contacts()) {
+      const option: SearchableOption = {
+        id: contact.id,
+        label: buildContactLabel(contact, uid),
+        icon: () => (
+          <UserIcon
+            id={contact.id}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
+        ),
+      };
+      if (contact.id === uid) {
+        meOption = option;
+      } else {
+        otherContactOptions.push(option);
+      }
+    }
+    return [...(meOption ? [meOption] : []), ...otherContactOptions];
+  });
 
   // The Files "Owned" tab scopes its base query to the current creator.
   // An empty explicit selection must restore that preset constraint instead
@@ -164,7 +236,6 @@ export function useFilterRefinements() {
   const createdByIds = createMemo(
     () => filterData().include.documentOwnerId ?? []
   );
-  const createdByLabels = useContactFilterLabels(createdByIds);
   const hasCreatedByRefinement = () =>
     !deepEqual(createdByIds(), baseCreatedByIds());
 
@@ -509,10 +580,7 @@ export function useFilterRefinements() {
       // Compute values as accessor for reactivity, including icons
       const getValues = (): FilterValue[] =>
         assigneeFilter().map((id) => {
-          const opt =
-            id === NO_ASSIGNEE
-              ? unassignedFilterOption()
-              : assigneeLabels().get(id);
+          const opt = assigneeOptionsMap().get(id);
           return {
             id,
             label: opt?.label ?? id,
@@ -567,7 +635,7 @@ export function useFilterRefinements() {
 
       const getValues = (): FilterValue[] =>
         createdByIds().map((id) => {
-          const option = createdByLabels().get(id);
+          const option = createdByOptionsMap().get(id);
           return { id, label: option?.label ?? id, icon: option?.icon };
         });
 
@@ -588,7 +656,7 @@ export function useFilterRefinements() {
               return t('viewMenus.createdBy');
             },
             values: getValues,
-            createSource: useContactFilterOptions,
+            searchableOptions: createdBySearchableOptions,
             activeSearchableIds: createdByIds,
             onSearchableChange: handleCreatedByChange,
             get searchPlaceholder() {
@@ -673,7 +741,6 @@ export function useFilterRefinements() {
               categoryLabel: filter.label,
               values: filter.chipValues,
               searchableOptions: filter.chipOptions,
-              createSource: filter.createChipSource,
               activeSearchableIds: filter.values,
               onSearchableChange: filter.changeChip,
               searchPlaceholder: filter.placeholder,

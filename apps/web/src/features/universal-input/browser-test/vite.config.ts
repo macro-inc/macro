@@ -19,15 +19,6 @@ export default defineConfig({
       name: 'composer-test-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
-        if (
-          source === '@service-storage/graphql-contacts' ||
-          (importer?.endsWith('/queries/contacts/use-directory.ts') &&
-            [
-              '../auth/use-query-account',
-              '@service-storage/graphql-soup',
-            ].includes(source))
-        )
-          return `${directory}/contact-directory-fixture.ts`;
         if (importer?.endsWith('/mobile/MobileSearchResults.tsx')) {
           if (
             [

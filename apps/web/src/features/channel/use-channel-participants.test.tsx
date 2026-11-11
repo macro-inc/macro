@@ -6,10 +6,7 @@ import { Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useChannelParticipants } from './use-channel-participants';
 
-vi.mock('@queries/client', async () => {
-  const { QueryClient } = await import('@tanstack/solid-query');
-  return { queryClient: new QueryClient() };
-});
+vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { getChannelParticipants: vi.fn() },
 }));

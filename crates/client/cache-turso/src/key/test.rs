@@ -18,30 +18,6 @@ fn checked_entity_key_round_trips() {
 }
 
 #[test]
-fn borrowed_keys_validate_components_and_reuse_the_buffer() {
-    let mut buffer = String::with_capacity(128);
-    for (typename, id, expected) in [
-        ("ROOT_QUERY", "", "ROOT_QUERY"),
-        ("ROOT_QUERY", "child", "ROOT_QUERY:child"),
-        ("Thing", "tenant:record", "Thing:tenant:record"),
-        ("Thing", "", "Thing:"),
-        ("Thing", "unicode-🐢", "Thing:unicode-🐢"),
-    ] {
-        let borrowed = RecordKey::borrow_entity(typename, id, &mut buffer).unwrap();
-        assert_eq!(borrowed.as_ref(), expected);
-        assert!(matches!(borrowed.0, Cow::Borrowed(_)));
-        assert_eq!(buffer.capacity(), 128);
-    }
-    for typename in ["", ":", "Thing:other"] {
-        assert!(
-            RecordKey::borrow_entity(typename, "id", &mut buffer)
-                .unwrap_err()
-                .requires_physical_reset()
-        );
-    }
-}
-
-#[test]
 fn invalid_entity_keys_and_sql_pairs_are_rejected() {
     for value in ["", "Thing", ":id", "ROOT_QUERY:"] {
         assert!(RecordKey::from_entity(&EntityKey(Cow::Borrowed(value))).is_err());

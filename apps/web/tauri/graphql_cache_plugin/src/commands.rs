@@ -25,13 +25,6 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
-use cache_core::{
-    engine::HydrationScope,
-    people::{
-        ContextState, ContextUpdate, PeopleReferenceRequest, PeopleReferenceResult, PeopleSearch,
-        PeopleSearchResult,
-    },
-};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -40,17 +33,6 @@ use tauri::{AppHandle, Manager, Runtime, State};
 mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
-
-// This is an opaque correlation field, not a trusted parent context. Never log
-// arbitrary IPC strings as trace metadata.
-fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
-    value.filter(|value| {
-        value.len() == 55
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
-    })
-}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -234,97 +216,6 @@ pub async fn graphql_cache_search(
     request: SearchRequest,
 ) -> Result<SearchPage, String> {
     engine_handle(&state)?.search(request).await
-}
-
-/// Read local person-context publication. A distinct command makes OTA capability explicit.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
-pub async fn graphql_cache_people_context(
-    state: State<'_, CacheState>,
-    scope: HydrationScope,
-    traceparent: Option<String>,
-) -> Result<ContextState, String> {
-    engine_handle(&state)?.people_context(scope).await
-}
-
-/// Persist one scoped local-context batch. JS publishes hydration-only hints.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
-pub async fn graphql_cache_people_update(
-    state: State<'_, CacheState>,
-    update: ContextUpdate,
-    traceparent: Option<String>,
-) -> Result<WriteResultWire, String> {
-    engine_handle(&state)?.people_update(update).await
-}
-
-/// Rank current-account people before the result limit.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
-pub async fn graphql_cache_people_search(
-    state: State<'_, CacheState>,
-    request: PeopleSearch,
-    traceparent: Option<String>,
-) -> Result<PeopleSearchResult, String> {
-    engine_handle(&state)?.people_search(request).await
-}
-
-/// Read one bounded contact membership window without exposing names.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
-pub async fn graphql_cache_contact_snapshot(
-    state: State<'_, CacheState>,
-    request: cache_core::people::sync::ContactSnapshotRequest,
-    traceparent: Option<String>,
-) -> Result<cache_core::people::sync::ContactSnapshot, String> {
-    engine_handle(&state)?.contact_snapshot(request).await
-}
-
-/// Apply authoritative requested-ID omissions, never omissions from a page scan.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
-pub async fn graphql_cache_contact_reconcile<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, CacheState>,
-    request: cache_core::people::sync::ContactReconcile,
-    traceparent: Option<String>,
-) -> Result<WriteResultWire, String> {
-    let result = engine_handle(&state)?.contact_reconcile(request).await?;
-    emit_ops_affected(&app, &result.affected_ops, result.field_changes.as_ref());
-    if result.revision_advanced {
-        emit_cache_changed_with_hints(
-            &app,
-            &result.revision,
-            result.reset,
-            result.search_changed_buckets.as_ref(),
-            None,
-        );
-    }
-    Ok(result)
-}
-
-/// Execute a read in local storage; query text and people are never traced.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
-pub async fn graphql_cache_people_read_sql(
-    state: State<'_, CacheState>,
-    request: cache_core::people::sql::PeopleSqlRequest,
-    traceparent: Option<String>,
-) -> Result<cache_core::people::sql::PeopleSqlResult, String> {
-    engine_handle(&state)?.people_read_sql(request).await
-}
-
-/// Resolve scoped label evidence, never a complete in-memory people catalog.
-#[tauri::command]
-#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref()), label_count = request.labels.len()), err)]
-pub async fn graphql_cache_people_resolve_references(
-    state: State<'_, CacheState>,
-    request: PeopleReferenceRequest,
-    traceparent: Option<String>,
-) -> Result<PeopleReferenceResult, String> {
-    engine_handle(&state)?
-        .people_resolve_references(request)
-        .await
 }
 
 /// Evaluates Soup filters over native projections, including cached Mail pages.
@@ -522,7 +413,6 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             variables.unwrap_or_default(),
             data,
             identity,
-            None,
         )
         .await?;
     if result.write_result.reset {
@@ -535,51 +425,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             );
         }
     }
-    Ok(hydration_result(result))
-}
-
-/// Required scoped-admission inputs for background responses. Kept separate
-/// from the deployed unscoped command so old binaries cannot ignore a guard.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ScopedHydrationRequest {
-    query: String,
-    operation_name: Option<String>,
-    variables: Option<Variables>,
-    data: serde_json::Value,
-    identity: Option<String>,
-    hydration_scope: cache_core::engine::HydrationScope,
-}
-
-/// Admits a background response without switching account or data generation.
-#[tracing::instrument(
-    name = "graphql_cache.ipc.receive",
-    skip_all,
-    fields(graphql_cache.ipc.command = "hydrate_scoped", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
-    err
-)]
-#[tauri::command]
-pub async fn graphql_cache_hydrate_scoped(
-    state: State<'_, CacheState>,
-    request: ScopedHydrationRequest,
-    traceparent: Option<String>,
-) -> Result<HydrationResultWire, String> {
-    let result = engine_handle(&state)?
-        .hydrate_query(
-            request.query,
-            request.operation_name,
-            request.variables.unwrap_or_default(),
-            request.data,
-            request.identity,
-            Some(request.hydration_scope),
-        )
-        .await?;
-    // Guarded writes never reset identity; JS publishes ordinary hydration hints.
-    Ok(hydration_result(result))
-}
-
-fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> HydrationResultWire {
-    match result.data {
+    Ok(match result.data {
         Some(data) => HydrationResultWire::Data {
             unchanged_views: result.unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
@@ -593,7 +439,7 @@ fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> Hydratio
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
         },
-    }
+    })
 }
 
 /// Durably queues an optimistic mutation and attempts to claim the strict

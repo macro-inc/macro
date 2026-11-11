@@ -162,7 +162,6 @@ function LoadedEmailComposeView(
   } = state;
   const ctxValue: ComposeContextValue = {
     ...state.context,
-    createRecipientSource: composeContext.createRecipientSource,
     bodyActions: {
       focusSibling: props.host?.focusSibling,
       recipientAdded: (email) =>

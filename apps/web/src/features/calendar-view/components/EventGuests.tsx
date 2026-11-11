@@ -9,7 +9,6 @@ import {
   initialGuestOptions,
   type SelectedEventEditorGuest,
 } from '@app/features/calendar/components/composer/event-form-model';
-import { eventGuestOptions } from '@app/features/calendar/components/composer/guest-options';
 import { EventAttendeesSection } from '@app/features/calendar/components/EventDetails';
 import type {
   GuestInvitation,
@@ -25,6 +24,7 @@ import {
 import { useOpenEventEmail } from '@app/features/calendar-view/components/use-open-event-email';
 import { copyGuestEmails } from '@app/features/calendar-view/copy-guest-emails';
 import { isMobile } from '@core/mobile/isMobile';
+import { recipientEntityMapper, useContacts } from '@core/user';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
@@ -40,15 +40,11 @@ const INVITE_SCOPE_OPTIONS = [
   { value: 'all', label: 'All events' },
 ] satisfies { value: CalendarInviteScope; label: string }[];
 
-/** Event-owned guest metadata; personal suggestions belong to the open picker. */
+/** The viewer's contacts as guest options, and the event's guests among them. */
 function createGuestOptions(event: () => CalendarEvent) {
+  const contacts = useContacts();
   const options = createMemo<EventEditorGuestOption[]>(() =>
-    eventGuestOptions(
-      event().attendees.map((guest) => ({
-        email: guest.email,
-        name: guest.displayName,
-      }))
-    )
+    contacts().map(recipientEntityMapper('user'))
   );
   const current = createMemo(() =>
     initialGuestOptions(

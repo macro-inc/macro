@@ -36,7 +36,7 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', async () => {
     PropertyEntitySelector: (props: {
       config: {
         placeholder: string;
-        additionalUsers?: () => { id: string; name: string }[];
+        users?: () => { id: string; name: string }[];
         excludedIds?: () => ReadonlySet<string>;
       };
       selectedOptions: () => Set<string>;
@@ -51,7 +51,7 @@ vi.mock('@property/editors/selectors/PropertyEntitySelector', async () => {
       createRenderEffect(() => {
         const excluded = props.config.excludedIds?.() ?? new Set();
         suggestions.replaceChildren(
-          ...(props.config.additionalUsers?.() ?? [])
+          ...(props.config.users?.() ?? [])
             .filter((user) => !excluded.has(user.id))
             .map((user) => {
               const option = document.createElement('button');

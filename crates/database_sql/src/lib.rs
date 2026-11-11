@@ -20,7 +20,6 @@ pub mod catalog;
 pub mod engine;
 pub mod fold;
 pub mod formula;
-pub mod local_people;
 pub mod parse;
 pub mod resolve;
 pub mod run;
@@ -39,8 +38,7 @@ pub use parse::{ParseError, parse};
 pub use resolve::{CompileError, Query, ResolveError, compile, resolve};
 pub use run::{
     AlteredColumn, Answer, EngineError, Input, OpResultKind, OpsSink, Outcome, OutcomeColumn,
-    OutcomeKind, Page, ReadDescription, RowSource, RunError, RunFailure, SentOp, describe_read,
-    describe_select, result_columns, run, run_select,
+    OutcomeKind, Page, RowSource, RunError, RunFailure, SentOp, result_columns, run,
 };
 pub use split::{
     GqlQuery, JoinPlan, KeyHint, MAX_KEY_HINT_VALUES, Plan, Propf, PropfLiteral, PropfValue,

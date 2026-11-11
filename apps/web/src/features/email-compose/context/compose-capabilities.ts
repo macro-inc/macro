@@ -1,4 +1,3 @@
-import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -427,10 +426,6 @@ export interface EmailCalendarEvents {
   open(email: { subject: string; guests: string[]; text: string }): boolean;
 }
 
-export type EmailRecipientSourceFactory = RecipientSourceFactory<
-  EmailRecipient['kind']
->;
-
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
   /** Absent where the composer has no calendar, such as isolated tests. */
@@ -446,10 +441,7 @@ export interface EmailComposeContext {
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
-  /** Explicit host-scoped extras, never the full personal directory. */
   recipients: Accessor<EmailRecipient[]>;
-  /** Each open To/Cc/Bcc selector owns its personal suggestion source. */
-  createRecipientSource: EmailRecipientSourceFactory | undefined;
   recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
   recordMention(sourceId: string, targetId: string): void;

@@ -125,13 +125,11 @@ const MultiValueSegment = (props: {
   const panel = useSplitPanel();
   const [open, setOpen] = createSignal(false);
   onCleanup(() => props.facet.onPickerOpenChange?.(false));
-  const source = props.facet.createSource?.(props.facet.activeIds, open);
 
   return (
     <SearchableMultiSelect
       portalScope="local"
       options={props.facet.options}
-      source={source}
       activeIds={props.facet.activeIds}
       onChange={props.facet.onChange}
       onOnly={props.facet.onOnly}

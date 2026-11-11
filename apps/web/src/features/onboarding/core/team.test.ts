@@ -35,21 +35,6 @@ describe('prefillableTeammates', () => {
     ).toEqual([]);
   });
 
-  it('compares domain, self and duplicates case-insensitively while preserving the first address', () => {
-    expect(
-      prefillableTeammates({
-        contacts: [
-          'SELF@TEAM.EXAMPLE.COM',
-          'First@team.example.com',
-          'first@TEAM.example.com',
-          'other@elsewhere.example.com',
-        ],
-        domain: 'TEAM.example.com',
-        ownEmail: 'self@team.example.com',
-      })
-    ).toEqual(['First@team.example.com']);
-  });
-
   it('caps how many teammates get pre-added', () => {
     const contacts = Array.from({ length: PREFILL_CAP + 3 }, (_, i) =>
       contact(`teammate${i}@macro.com`)

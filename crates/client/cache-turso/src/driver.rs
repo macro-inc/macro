@@ -1,7 +1,7 @@
 use crate::{PhysicalResetReason, TursoStorageError};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use turso_core::{Connection, LimboError, Row, Statement, StepResult, Value};
+use turso_core::{Connection, LimboError, Statement, StepResult, Value};
 
 pub(crate) type Values = Vec<Value>;
 pub(crate) type Rows = Vec<Values>;
@@ -62,43 +62,6 @@ pub(crate) fn query(
     query_prepared(&mut statement, values)
 }
 
-/// Visits each row before stepping again, retaining no result collection.
-/// Uses the same checked statement cleanup and telemetry as collected queries.
-pub(crate) fn query_each(
-    connection: &Arc<Connection>,
-    sql: &str,
-    values: Values,
-    visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
-) -> Result<(), TursoStorageError> {
-    let mut statement = prepare(connection, sql)?;
-    query_each_prepared(&mut statement, values, visit)
-}
-
-pub(crate) fn query_each_prepared(
-    statement: &mut Statement,
-    values: Values,
-    visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
-) -> Result<(), TursoStorageError> {
-    let mut visit = visit;
-    visit_prepared(statement, values, |row| visit(row).map(|()| true))
-        .map(|_| ())
-        .map_err(|failure| failure.error)
-}
-
-/// Stops a read when the visitor proves later ordered rows cannot improve its
-/// bounded result. The same checked reset runs on both early stop and exhaustion.
-pub(crate) fn query_until(
-    connection: &Arc<Connection>,
-    sql: &str,
-    values: Values,
-    visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
-) -> Result<(), TursoStorageError> {
-    let mut statement = prepare(connection, sql)?;
-    visit_prepared(&mut statement, values, visit)
-        .map(|_| ())
-        .map_err(|failure| failure.error)
-}
-
 pub(crate) fn execute_prepared(
     statement: &mut Statement,
     values: Values,
@@ -125,20 +88,7 @@ pub(crate) fn query_prepared(
 }
 
 fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64), RunFailure> {
-    let mut rows = Vec::new();
-    let changed = visit_prepared(statement, values, |row| {
-        rows.push(row.get_values().cloned().collect());
-        Ok(true)
-    })?;
-    Ok((rows, changed))
-}
-
-fn visit_prepared(
-    statement: &mut Statement,
-    values: Values,
-    mut visit: impl FnMut(&Row) -> Result<bool, TursoStorageError>,
-) -> Result<i64, RunFailure> {
-    // Time binding, stepping/I/O, row processing, and cleanup, not worker queue
+    // Time binding, stepping/I/O, row collection, and cleanup, not worker queue
     // wait or statement preparation. Reused statements are timed per execution.
     let timer = crate::query_telemetry::QueryTimer::start();
     let execution = (|| {
@@ -152,6 +102,7 @@ fn visit_prepared(
                 .map_err(TursoStorageError::turso)?;
         }
 
+        let mut rows = Vec::new();
         loop {
             // The pinned Turso revision completes this rollback without
             // producing rollback-owned File work. Native fault tests use this
@@ -173,9 +124,7 @@ fn visit_prepared(
                     let row = statement
                         .row()
                         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
-                    if !visit(row)? {
-                        break;
-                    }
+                    rows.push(row.get_values().cloned().collect());
                 }
                 StepResult::IO => {
                     #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -189,7 +138,7 @@ fn visit_prepared(
                 }
             }
         }
-        Ok(statement.n_change())
+        Ok((rows, statement.n_change()))
     })();
 
     // Turso has no separate public finalize call. A checked reset releases the

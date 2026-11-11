@@ -1,10 +1,15 @@
-/** Live SQL reads: ordinary tables use the cache; people statements execute in
- * local Turso. No browser source can enumerate the personal directory. */
+/**
+ * A live SQL statement run in the browser over the GraphQL row source, rerun from the
+ * cache whenever it changes; a changed statement keeps the last answer until its own arrives.
+ */
+
 import {
+  checkReadStatement,
   type DatabaseSqlFailure,
   engineFailure,
   type OpenEngine,
   type OpenView,
+  type RowSource,
   runDatabaseSql,
   runDatabaseView,
 } from '@core/database-sql/driver';
@@ -12,7 +17,6 @@ import type {
   Catalog,
   DatabaseView,
   Outcome,
-  ReadDescription,
   Schema,
 } from '@core/database-sql/generated/types';
 import {
@@ -23,18 +27,12 @@ import type {
   DatabaseSqlReadContext,
   DatabaseSqlReadReason,
 } from '@core/database-sql/trace';
-import {
-  buildDatabaseSqlCatalog,
-  describeDatabaseRead,
-} from '@core/database-sql/wasm-module';
-import { fireAndForget } from '@core/util/fireAndForget';
-import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
+import { buildDatabaseSqlCatalog } from '@core/database-sql/wasm-module';
+import { idToDisplayName, idToEmail } from '@core/user/util';
+import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  currentQueryAccount,
-  type QueryAccount,
-} from '@queries/auth/account-scope';
-import { useQueryAccount } from '@queries/auth/use-query-account';
+import { queryClient } from '@queries/client';
+import { contactsQueryOptions } from '@queries/contacts/contacts';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import {
   getGraphqlSoupCacheHost,
@@ -51,20 +49,20 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { subscribeContactCheckpoint } from '../contacts/backfill';
-import { createGraphqlRowSource, type LocalMembership } from './graphql-source';
 import {
-  createLocalSqlReader,
-  type LocalPeopleSqlHost,
-  type LocalSqlReader,
-  localPeopleRows,
-  type readLocalSql,
-} from './local-read';
+  createGraphqlRowSource,
+  type LocalMembership,
+  type Person,
+} from './graphql-source';
 
-export type DatabaseSqlStatement = { schema: Schema; scope?: string } & (
-  | { sql: string; view?: never }
-  | { view: DatabaseView; sql?: never }
-);
+/** A statement, or a view's rows, and the databases its catalog is built from. */
+export type DatabaseSqlStatement = {
+  schema: Schema;
+  /** The database the statement is written from: its tables win name ties. */
+  scope?: string;
+} & ({ sql: string; view?: never } | { view: DatabaseView; sql?: never });
+
+/** Equal statements answer alike, so a rebuilt but unchanged one need not rerun. */
 export function sameDatabaseSqlStatement(
   left: DatabaseSqlStatement | undefined,
   right: DatabaseSqlStatement | undefined
@@ -76,9 +74,11 @@ export function sameDatabaseSqlStatement(
     JSON.stringify(left?.schema) === JSON.stringify(right?.schema)
   );
 }
+
+/** Builds a statement's catalog; the wasm engine unless a test says otherwise. */
 type BuildCatalog = (schema: Schema, scope?: string) => Promise<Catalog>;
+
 export interface DatabaseSqlQueryCapabilities {
-  account: Accessor<QueryAccount | undefined>;
   client: () => Client;
   cacheHost: () =>
     | Pick<
@@ -86,13 +86,11 @@ export interface DatabaseSqlQueryCapabilities {
         'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys' | 'readQuery'
       >
     | undefined;
-  /** The local directory capability is independent of ordinary table reads. */
-  localPeople?: () => LocalPeopleSqlHost | undefined;
-  localRead?: typeof readLocalSql;
+  people: () => Promise<Person[]>;
+  /** The engine; the wasm module unless a test says otherwise. */
   open?: OpenEngine;
   openView?: OpenView;
   catalog?: BuildCatalog;
-  describe?: typeof describeDatabaseRead;
 }
 
 function statementCatalog(
@@ -107,86 +105,16 @@ function statementCatalog(
     engineFailure
   );
 }
-function describeStatement(
-  catalog: Catalog,
-  statement: DatabaseSqlStatement,
-  capabilities: Pick<DatabaseSqlQueryCapabilities, 'describe'>
-) {
-  const input = statement.view
-    ? { view: statement.view }
-    : { sql: statement.sql };
-  return ResultAsync.fromPromise(
-    (capabilities.describe ?? describeDatabaseRead)(catalog, input),
-    engineFailure
-  );
-}
-function readsPeople(catalog: Catalog, description: ReadDescription): boolean {
-  return catalog.tables.some(
-    (table) =>
-      table.source === 'people' && description.readTables.includes(table.id)
-  );
-}
-function sameAccount(
-  left: QueryAccount | undefined,
-  right: QueryAccount | undefined
-): boolean {
-  return left?.userId === right?.userId && left?.session === right?.session;
-}
 
+/** Run a statement, or a view's compiled query, over `source`. */
 function runStatement(
   catalog: Catalog,
   statement: DatabaseSqlStatement,
-  description: ReadDescription,
-  capabilities: DatabaseSqlQueryCapabilities,
-  account: QueryAccount,
-  signal: AbortSignal,
-  requestPolicy: RequestPolicy,
-  membership: LocalMembership | undefined,
+  source: RowSource,
+  capabilities: Pick<DatabaseSqlQueryCapabilities, 'open' | 'openView'>,
   context: DatabaseSqlReadContext,
-  local: LocalSqlReader
-): ResultAsync<Outcome | undefined, DatabaseSqlFailure> {
-  if (signal.aborted || !sameAccount(account, capabilities.account()))
-    return errAsync({
-      kind: 'fetch',
-      message: 'Query account changed or read canceled',
-    });
-  if (
-    description.readTables.length === 1 &&
-    readsPeople(catalog, description)
-  ) {
-    if (statement.view)
-      return errAsync({
-        kind: 'rejected',
-        message: 'People views require a supported SQL statement',
-      });
-    return local.read(
-      {
-        account,
-        host: capabilities.localPeople?.(),
-        input: { kind: 'statement', sql: statement.sql },
-        description,
-      },
-      signal
-    );
-  }
-  const source = createGraphqlRowSource({
-    client: capabilities.client(),
-    catalog,
-    requestPolicy,
-    cache: capabilities.cacheHost(),
-    membership,
-    people: (ids) =>
-      local
-        .read(
-          {
-            account,
-            host: capabilities.localPeople?.(),
-            input: { kind: 'identities', ids },
-          },
-          signal
-        )
-        .andThen(localPeopleRows),
-  });
+  signal?: AbortSignal
+): ResultAsync<Outcome, DatabaseSqlFailure> {
   if (statement.view)
     return runDatabaseView(catalog, statement.view, {
       source,
@@ -202,82 +130,72 @@ function runStatement(
   });
 }
 
+/** Whether a run's answer is the one shown; a later run, or a changed statement, replaces it. */
 export type DatabaseSqlRun = { landed: boolean };
+
 export interface DatabaseSqlQuery {
+  /** The last answer; kept while a later run, of this statement or a changed one, is in flight. */
   outcome: Accessor<Outcome | undefined>;
+  /** The catalog the last answer was read against. */
   catalog: Accessor<Catalog | undefined>;
+  /** Why the last run failed, until one succeeds. */
   error: Accessor<DatabaseSqlFailure | undefined>;
   loading: Accessor<boolean>;
+  /** Read the statement's tables from the server again. */
   refresh: (
     reason?: DatabaseSqlReadReason
   ) => ResultAsync<DatabaseSqlRun, DatabaseSqlFailure>;
+  /** Whether a local cache backs the reads, so rows read into it can answer the statement. */
   cached: () => boolean;
+  /** Answer the statement again from the local cache, as a cache change would, without waiting on one. */
   answerFromCache: () => ResultAsync<DatabaseSqlRun, DatabaseSqlFailure>;
 }
 
-function productionDatabaseSqlCapabilities(
-  account: Accessor<QueryAccount | undefined>
-): DatabaseSqlQueryCapabilities {
+/** The app's GraphQL client and cache, and the contacts query for people. */
+function productionDatabaseSqlCapabilities(): DatabaseSqlQueryCapabilities {
   return {
-    account: () => {
-      account();
-      return currentQueryAccount();
-    },
     client: getGraphqlSoupClient,
     cacheHost: getGraphqlSoupCacheHost,
-    localPeople: getGraphqlSoupCacheHost,
+    people: async () => {
+      const { contacts } = await queryClient.fetchQuery(contactsQueryOptions());
+      return contacts.map((id) => ({
+        id,
+        name: idToDisplayName(id),
+        email: idToEmail(id),
+      }));
+    },
   };
 }
 
 export function createDatabaseSqlQuery(
   statement: Accessor<DatabaseSqlStatement | undefined>,
-  supplied?: DatabaseSqlQueryCapabilities
+  capabilities: DatabaseSqlQueryCapabilities = productionDatabaseSqlCapabilities()
 ): DatabaseSqlQuery {
-  const capabilities =
-    supplied ?? productionDatabaseSqlCapabilities(useQueryAccount());
   const [outcome, setOutcome] = createSignal<Outcome>();
   const [catalog, setCatalog] = createSignal<Catalog>();
   const [error, setError] = createSignal<DatabaseSqlFailure>();
   const [loading, setLoading] = createSignal(false);
-  const [peopleOnly, setPeopleOnly] = createSignal<boolean>();
-  const [hasPeople, setHasPeople] = createSignal(false);
-  const local = createLocalSqlReader(capabilities.localRead);
   let latest = 0;
-  let disposed = false;
-  let scopeOwner = untrack(capabilities.account);
-  let active: AbortController | undefined;
+  let activeRead: AbortController | undefined;
   let cancelFrame: (() => void) | undefined;
+  // The cache may not hold what an in-flight network read will bring, so a
+  // cache change waits for it instead of answering from older rows.
   let networkRead: ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> | undefined;
+  // First-page evidence for the local filter index, per statement.
   let baselines: LocalMembership['baselines'] = new Map();
 
+  /** Fails with this run's failure, unless a later run replaced it. */
   const run = (
     current: DatabaseSqlStatement,
     requestPolicy: RequestPolicy,
     reconcile: boolean,
     reason: DatabaseSqlReadReason,
-    options: {
-      reportFailure?: boolean;
-      keepLoading?: boolean;
-      allowDisposed?: boolean;
-    } = {}
+    options: { reportFailure?: boolean; keepLoading?: boolean } = {}
   ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> => {
     const generation = ++latest;
-    active?.abort();
+    activeRead?.abort();
     const controller = new AbortController();
-    active = controller;
-    const account = capabilities.account();
-    if (
-      !account ||
-      (disposed &&
-        (!options.allowDisposed || !sameAccount(account, scopeOwner)))
-    )
-      return okAsync({ landed: false });
-    const valid = () =>
-      (!disposed ||
-        (options.allowDisposed && sameAccount(account, scopeOwner))) &&
-      generation === latest &&
-      !controller.signal.aborted &&
-      sameAccount(account, capabilities.account());
+    activeRead = controller;
     const querySpan = Telemetry.span('database_sql.query');
     querySpan.setAttr('database_sql.read_reason', reason);
     querySpan.setAttr('database_sql.request_policy', requestPolicy);
@@ -293,97 +211,73 @@ export function createDatabaseSqlQuery(
       .andTee(() => catalogSpan.end())
       .orTee(() => catalogSpan.end())
       .andThen((built) =>
-        describeStatement(built, current, capabilities).andThen(
-          (description) => {
-            if (!valid())
-              return okAsync<DatabaseSqlRun, DatabaseSqlFailure>({
-                landed: false,
-              });
+        querySpan
+          .run(() =>
+            runStatement(
+              built,
+              current,
+              createGraphqlRowSource({
+                client: capabilities.client(),
+                catalog: built,
+                requestPolicy,
+                cache: host,
+                people: capabilities.people,
+                membership: host ? { host, baselines, reconcile } : undefined,
+              }),
+              capabilities,
+              {
+                reason,
+                scope: current.scope,
+                requestPolicy,
+                reportFailure: options.reportFailure,
+              },
+              controller.signal
+            )
+          )
+          .map((answer): DatabaseSqlRun => {
+            if (generation !== latest) return { landed: false };
+            // A cache change that left the answer alone keeps the same outcome.
+            querySpan.setAttr('database_sql.row_count', answer.rows.length);
+            querySpan.setAttr('database_sql.truncated', answer.truncated);
+            const changed = profileDatabasePhase(
+              querySpan.span('database_sql.compare'),
+              () => ({
+                catalog:
+                  JSON.stringify(untrack(catalog)) !== JSON.stringify(built),
+                outcome:
+                  JSON.stringify(untrack(outcome)) !== JSON.stringify(answer),
+              })
+            );
             querySpan.setAttr(
-              'database_sql.execution',
-              description.readTables.length === 1 &&
-                readsPeople(built, description)
-                ? 'local-turso'
-                : 'local-fold'
+              'database_sql.result_changed',
+              changed.catalog || changed.outcome
             );
-            setHasPeople(readsPeople(built, description));
-            setPeopleOnly(
-              description.readTables.length === 1 &&
-                readsPeople(built, description)
+            const publishSpan = querySpan.span('database_sql.publish');
+            profileDatabasePhase(publishSpan, () =>
+              batch(() => {
+                if (changed.catalog) setCatalog(built);
+                if (changed.outcome) setOutcome(answer);
+                setError(undefined);
+              })
             );
-            return querySpan
-              .run(() =>
-                runStatement(
-                  built,
-                  current,
-                  description,
-                  capabilities,
-                  account,
-                  controller.signal,
-                  requestPolicy,
-                  host ? { host, baselines, reconcile } : undefined,
-                  {
-                    reason,
-                    scope: current.scope,
-                    requestPolicy,
-                    reportFailure: options.reportFailure,
-                  },
-                  local
-                )
-              )
-              .map((answer): DatabaseSqlRun => {
-                if (!answer || !valid()) return { landed: false };
-                querySpan.setAttr('database_sql.row_count', answer.rows.length);
-                querySpan.setAttr('database_sql.truncated', answer.truncated);
-                const changed = profileDatabasePhase(
-                  querySpan.span('database_sql.compare'),
-                  () => ({
-                    catalog:
-                      JSON.stringify(untrack(catalog)) !==
-                      JSON.stringify(built),
-                    outcome:
-                      JSON.stringify(untrack(outcome)) !==
-                      JSON.stringify(answer),
-                  })
-                );
-                querySpan.setAttr(
-                  'database_sql.result_changed',
-                  changed.catalog || changed.outcome
-                );
-                profileDatabasePhase(
-                  querySpan.span('database_sql.publish'),
-                  () =>
-                    batch(() => {
-                      if (changed.catalog) setCatalog(built);
-                      if (changed.outcome) setOutcome(answer);
-                      setError(undefined);
-                    })
-                );
-                if (!disposed && (changed.catalog || changed.outcome)) {
-                  cancelFrame?.();
-                  cancelFrame = traceDatabaseFrame(
-                    querySpan.span('database_sql.frame')
-                  );
-                }
-                return { landed: true };
-              });
-          }
-        )
+            if (changed.catalog || changed.outcome) {
+              cancelFrame?.();
+              cancelFrame = traceDatabaseFrame(
+                querySpan.span('database_sql.frame')
+              );
+            }
+            return { landed: true };
+          })
       )
       .orElse((failure) => {
-        if (!valid()) return okAsync({ landed: false });
-        if (failure.kind === 'scope-changed')
-          batch(() => {
-            setOutcome(undefined);
-            setCatalog(undefined);
-          });
+        if (generation !== latest) return okAsync({ landed: false });
         if (options.reportFailure !== false) setError(failure);
         return errAsync(failure);
       });
     const settle = async () => {
       try {
         const result = await answered;
-        if (valid() && !options.keepLoading) setLoading(false);
+        if (generation === latest && !options.keepLoading) setLoading(false);
         querySpan.setAttr(
           'database_sql.outcome',
           result.isErr()
@@ -394,7 +288,7 @@ export function createDatabaseSqlQuery(
         );
         return result;
       } finally {
-        if (active === controller) active = undefined;
+        if (activeRead === controller) activeRead = undefined;
         querySpan.end();
       }
     };
@@ -403,7 +297,7 @@ export function createDatabaseSqlQuery(
 
   function trackNetwork(
     reading: ResultAsync<DatabaseSqlRun, DatabaseSqlFailure>
-  ) {
+  ): ResultAsync<DatabaseSqlRun, DatabaseSqlFailure> {
     networkRead = reading;
     const settle = async () => {
       const result = await reading;
@@ -412,168 +306,76 @@ export function createDatabaseSqlQuery(
     };
     return new ResultAsync(settle());
   }
+
   function openStatement(
     current: DatabaseSqlStatement,
     reason: DatabaseSqlReadReason
-  ) {
-    if (!capabilities.cacheHost() && !capabilities.localPeople?.()) {
-      fireAndForget(
-        trackNetwork(run(current, 'cache-and-network', false, reason)),
-        'database-sql'
-      );
+  ): void {
+    if (!capabilities.cacheHost()) {
+      void trackNetwork(run(current, 'cache-and-network', false, reason));
       return;
     }
+    // Only a complete cached answer is shown. A miss still reads the network.
     const cached = run(current, 'cache-only', false, reason, {
       reportFailure: false,
       keepLoading: true,
     });
     const generation = latest;
     const reconcile = async () => {
-      const result = await cached;
-      if (generation !== latest || disposed) return ok({ landed: false });
-      if (peopleOnly()) {
-        setLoading(false);
-        if (result.isErr()) setError(result.error);
-        return result;
-      }
+      await cached;
+      if (generation !== latest) return ok({ landed: false });
       return await run(current, 'network-only', false, reason);
     };
-    fireAndForget(trackNetwork(new ResultAsync(reconcile())), 'database-sql');
+    void trackNetwork(new ResultAsync(reconcile()));
   }
 
   createEffect(
-    on(
-      () => [statement(), capabilities.account()] as const,
-      ([current, account], previous) => {
-        scopeOwner = account;
-        cancelFrame?.();
-        active?.abort();
-        latest += 1;
-        baselines = new Map();
-        networkRead = undefined;
+    on(statement, (current, previous) => {
+      cancelFrame?.();
+      baselines = new Map();
+      latest += 1;
+      activeRead?.abort();
+      setError(undefined);
+      setLoading(false);
+      if (!current) {
         batch(() => {
-          setError(undefined);
-          setLoading(false);
-          setPeopleOnly(undefined);
-          setHasPeople(false);
-          if (!current || !account || !sameAccount(account, previous?.[1])) {
-            setOutcome(undefined);
-            setCatalog(undefined);
-          }
+          setOutcome(undefined);
+          setCatalog(undefined);
         });
-        if (!current || !account) return;
-        const prior = previous?.[0];
-        const reason = !prior
-          ? 'initial'
-          : JSON.stringify(prior.schema) !== JSON.stringify(current.schema)
-            ? 'schema-change'
-            : 'statement-change';
-        openStatement(current, reason);
+        return;
       }
-    )
+      const reason = !previous
+        ? 'initial'
+        : JSON.stringify(previous.schema) !== JSON.stringify(current.schema)
+          ? 'schema-change'
+          : 'statement-change';
+      openStatement(current, reason);
+    })
   );
+
+  // Rerun against the cache whenever it changes; the engine is cheap next to
+  // a network read, and an unchanged cache answers the same rows.
   createEffect(() => {
     const host = capabilities.cacheHost();
-    const people = hasPeople();
     if (!host) return;
-    let observing = true;
-    onCleanup(() => {
-      observing = false;
-    });
-    const refresh = async () => {
-      if (networkRead) {
-        const generation = latest;
-        await networkRead;
-        // Refresh a people snapshot once after an intervening commit;
-        // ordinary reads retain their existing hydration reconciliation.
-        if (!people || !observing || generation !== latest) return;
-      }
-      if (!observing || disposed) return;
-      const current = untrack(statement);
-      if (current)
-        await trackNetwork(run(current, 'cache-first', true, 'cache-change'));
-    };
-    const changes: Pick<CacheHost, 'onCacheChanged'> = people
-      ? {
-          onCacheChanged(listener) {
-            let previous: Parameters<CacheChangeListener>[0] | undefined;
-            const notify: CacheChangeListener = (revision, changes) => {
-              if (revision === previous) return;
-              previous = revision;
-              listener(revision, changes);
-            };
-            const committed = host.onCacheChanged(notify, {
-              includeHydration: false,
-            });
-            const hydrated = host.onCacheChanged(
-              (revision, changes) => {
-                if (
-                  changes?.searchChangedBuckets &&
-                  !changes.searchChangedBuckets.includes('person')
-                )
-                  return;
-                notify(revision, changes);
-              },
-              { includeHydration: true }
-            );
-            return () => {
-              committed();
-              hydrated();
-            };
-          },
-        }
-      : host;
-    onCleanup(subscribeToVisibleCacheChanges(changes, refresh));
-  });
-  let previousPeopleHost = untrack(() => capabilities.localPeople?.());
-  createEffect(() => {
-    const host = capabilities.localPeople?.();
-    const reset = () => {
-      active?.abort();
-      latest += 1;
-      baselines = new Map();
-      batch(() => {
-        setOutcome(undefined);
-        setCatalog(undefined);
-        setError(undefined);
-      });
-      const current = untrack(statement);
-      if (current && capabilities.account() && !disposed)
-        openStatement(current, 'cache-change');
-    };
-    if (host !== previousPeopleHost) {
-      previousPeopleHost = host;
-      reset();
-    }
-    if (host) onCleanup(host.onCacheGenerationChanged(reset));
-  });
-  createEffect(() => {
-    const account = capabilities.account();
-    if (!account) return;
     onCleanup(
-      subscribeContactCheckpoint(account.userId, () => {
-        if (
-          disposed ||
-          !untrack(hasPeople) ||
-          !sameAccount(account, capabilities.account())
-        )
+      subscribeToVisibleCacheChanges(host, async () => {
+        if (networkRead) {
+          await networkRead;
           return;
+        }
         const current = untrack(statement);
-        if (current)
-          fireAndForget(
-            trackNetwork(run(current, 'cache-first', true, 'cache-change')),
-            'local-sql-readiness'
-          );
+        if (current) await run(current, 'cache-first', true, 'cache-change');
       })
     );
   });
+
   onCleanup(() => {
-    disposed = true;
-    local.dispose();
-    active?.abort();
     cancelFrame?.();
     latest += 1;
+    activeRead?.abort();
   });
+
   return {
     outcome,
     catalog,
@@ -581,89 +383,57 @@ export function createDatabaseSqlQuery(
     loading,
     refresh: (reason = 'refresh') => {
       const current = untrack(statement);
-      return current
-        ? trackNetwork(
-            run(current, 'network-only', false, reason, { allowDisposed: true })
-          )
-        : okAsync({ landed: false });
+      if (!current) return okAsync({ landed: false });
+      return trackNetwork(run(current, 'network-only', false, reason));
     },
-    cached: () =>
-      peopleOnly()
-        ? !!capabilities.localPeople?.()
-        : capabilities.cacheHost() !== undefined,
+    cached: () => capabilities.cacheHost() !== undefined,
     answerFromCache: () => {
       const current = untrack(statement);
-      return current
-        ? run(current, 'cache-first', true, 'cache-reconcile', {
-            allowDisposed: true,
-          })
-        : okAsync({ landed: false });
+      if (!current) return okAsync({ landed: false });
+      return run(current, 'cache-first', true, 'cache-reconcile');
     },
   };
 }
 
+/** Refresh without waiting; a failure shows through the reader's own error. */
 export function refreshInBackground(reader: {
   refresh: () => ResultAsync<unknown, unknown>;
 }): void {
-  fireAndForget(reader.refresh(), 'database-sql');
+  void reader.refresh();
 }
 
+/** One read of a statement from the network, for an answer nothing keeps live. */
 export function readDatabaseSql(
   statement: DatabaseSqlStatement,
-  capabilities: DatabaseSqlQueryCapabilities = productionDatabaseSqlCapabilities(
-    currentQueryAccount
-  ),
+  capabilities: DatabaseSqlQueryCapabilities = productionDatabaseSqlCapabilities(),
   reason: DatabaseSqlReadReason = 'read'
 ): ResultAsync<{ catalog: Catalog; outcome: Outcome }, DatabaseSqlFailure> {
-  const account = capabilities.account();
-  if (!account)
-    return errAsync({
-      kind: 'fetch',
-      message: 'Database reads require authentication',
-    });
-  const signal = new AbortController().signal;
-  const local = createLocalSqlReader(capabilities.localRead);
-  return statementCatalog(statement, capabilities)
-    .andThen((catalog) =>
-      describeStatement(catalog, statement, capabilities).andThen(
-        (description) =>
-          runStatement(
-            catalog,
-            statement,
-            description,
-            capabilities,
-            account,
-            signal,
-            'network-only',
-            undefined,
-            { reason, scope: statement.scope, requestPolicy: 'network-only' },
-            local
-          ).andThen(
-            (
-              outcome
-            ): ResultAsync<
-              { catalog: Catalog; outcome: Outcome },
-              DatabaseSqlFailure
-            > =>
-              outcome && sameAccount(account, capabilities.account())
-                ? okAsync({ catalog, outcome })
-                : errAsync({
-                    kind: 'fetch',
-                    message: 'Query account changed or read canceled',
-                  })
-          )
-      )
-    )
-    .andTee(() => local.dispose())
-    .orTee(() => local.dispose());
+  return statementCatalog(statement, capabilities).andThen((catalog) =>
+    runStatement(
+      catalog,
+      statement,
+      createGraphqlRowSource({
+        client: capabilities.client(),
+        catalog,
+        requestPolicy: 'network-only',
+        people: capabilities.people,
+      }),
+      capabilities,
+      { reason, scope: statement.scope, requestPolicy: 'network-only' }
+    ).map((outcome) => ({ catalog, outcome }))
+  );
 }
 
-/** Validate with the compiler, without invoking any data source or RPC. */
+/** Compile and plan a statement against its catalog, reading nothing; a write is refused. */
 export function checkDatabaseSql(
   statement: Extract<DatabaseSqlStatement, { sql: string }>,
-  capabilities: Pick<DatabaseSqlQueryCapabilities, 'catalog' | 'describe'> = {}
+  capabilities: Pick<DatabaseSqlQueryCapabilities, 'open' | 'catalog'> = {}
 ): ResultAsync<void, DatabaseSqlFailure> {
-  return statementCatalog(statement, capabilities)
-    .andThen((catalog) => describeStatement(catalog, statement, capabilities))
-    .map(() => undefined);
+  return statementCatalog(statement, capabilities).andThen((catalog) =>
+    checkReadStatement(
+      catalog,
+      statement.sql,
+      capabilities.open ? { open: capabilities.open } : {}
+    )
+  );
 }

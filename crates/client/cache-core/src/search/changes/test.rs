@@ -31,7 +31,6 @@ fn new_rows_and_deletions_report_only_their_projection_bucket() {
         ("GraphqlSoupChat", "chat"),
         ("GraphqlSoupProject", "project"),
         ("GraphqlSoupCrmCompany", "crm_company"),
-        ("GraphqlContact", "person"),
     ] {
         let value = record(typename);
         let expected = BTreeSet::from([bucket.to_owned()]);
@@ -55,24 +54,6 @@ fn unrelated_fields_do_not_refresh_search_and_are_not_snapshotted() {
     let snapshot = snapshot_search_fields(&EntityKey::entity(typename, &["one"]), &after).unwrap();
     assert_eq!(snapshot, before);
     assert!(changes("GraphqlProperty", None, Some(&record("GraphqlProperty"))).is_empty());
-}
-
-#[test]
-fn contact_target_changes_refresh_materialized_people() {
-    let before = record("GraphqlContact");
-    let mut after = before.clone();
-    after.fields.insert(
-        "userId".into(),
-        CacheValue::String("macro|person@example.com".into()),
-    );
-    assert_eq!(
-        changes("GraphqlContact", Some(&before), Some(&after)),
-        BTreeSet::from(["person".into()])
-    );
-    assert_eq!(
-        snapshot_search_fields(&EntityKey::entity("GraphqlContact", &["one"]), &after),
-        Some(after)
-    );
 }
 
 #[test]

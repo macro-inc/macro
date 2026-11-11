@@ -188,7 +188,6 @@ function FacetSection(props: {
   facet: SearchFacetVM;
   query?: string;
   onQueryChange?: (query: string) => void;
-  enabled: () => boolean;
 }) {
   return (
     <MobileDrawer.Section
@@ -230,35 +229,11 @@ function FacetSection(props: {
           </Match>
           <Match when={props.facet.kind === 'multi' && props.facet}>
             {(facet) => (
-              <Show
-                when={facet().createSource}
-                fallback={
-                  <MultiFacetContent
-                    facet={facet()}
-                    query={props.query}
-                    onQueryChange={props.onQueryChange}
-                  />
-                }
-              >
-                {(createSource) => (
-                  <MobileFilterDrawer.SourceOptions
-                    groupId={facet().id}
-                    createSource={createSource()}
-                    activeIds={facet().activeIds}
-                    enabled={props.enabled}
-                    placeholder={facet().placeholder}
-                    onChange={(id, checked) =>
-                      facet().onChange(
-                        checked
-                          ? [...facet().activeIds(), id]
-                          : facet()
-                              .activeIds()
-                              .filter((value) => value !== id)
-                      )
-                    }
-                  />
-                )}
-              </Show>
+              <MultiFacetContent
+                facet={facet()}
+                query={props.query}
+                onQueryChange={props.onQueryChange}
+              />
             )}
           </Match>
         </Switch>
@@ -276,7 +251,6 @@ function FacetSection(props: {
  * file is presentation only.
  */
 export const MobileSearchFilterDrawer = (props: { class?: string }) => {
-  const [open, setOpen] = createSignal(false);
   const controller = createSearchFiltersController();
   const facets = useSearchFacets(controller);
   const [queries, setQueries] = createStore<Record<string, string>>({});
@@ -292,13 +266,11 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
   return (
     <MobileFilterDrawer
       class={props.class}
-      open={open()}
       triggerLabel="Open search filters"
       label="Search filters"
       activeCount={activeCount()}
       onClear={resetAll}
       onOpenChange={(open) => {
-        setOpen(open);
         for (const facet of facets()) {
           if (facet.kind !== 'multi' || !facet.onPickerOpenChange) continue;
           facet.onPickerOpenChange(
@@ -329,7 +301,6 @@ export const MobileSearchFilterDrawer = (props: { class?: string }) => {
           {(facet) => (
             <FacetSection
               facet={facet}
-              enabled={() => open() && expandedSections().includes(facet.id)}
               query={
                 facet.kind === 'multi' && facet.onPickerOpenChange
                   ? (queries[facet.id] ?? '')

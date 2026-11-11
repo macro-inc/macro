@@ -47,12 +47,3 @@ stubbed and its photo library picker failing, the composer opens no picker by
 itself, since WKWebView ignores a file input click once the native round trip
 has outlived the tap. It shows a toast whose Choose files button opens the
 picker instead.
-
-The mention-ranking fixture also mounts document discussion composers over a
-bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,
-replaceable pages and scroll reset, a late-directory match, insertion, and an
-explicit empty scope that offers agents without falling back to the directory.
-Each scenario uses its own draft persistence key. The real configured editor,
-MarkdownShell, mention hook and menu run together; this catches dropped window
-transforms that isolated source tests cannot. Channel/CRM scope and agent rollout
-behavior also have unit coverage.

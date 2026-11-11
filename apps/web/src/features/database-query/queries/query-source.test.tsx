@@ -161,11 +161,7 @@ function engine(count: () => number, offline: () => boolean = () => false) {
   const read: DatabaseSqlQueryCapabilities = {
     client: () => client,
     cacheHost: () => undefined,
-    account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
-    describe: async (catalog) => ({
-      readTables: catalog.tables.map((table) => table.id),
-      columns: [],
-    }),
+    people: async () => [],
     catalog: async (schema, scope) => {
       builds.push({ schema, scope });
       return catalog;

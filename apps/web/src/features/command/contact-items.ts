@@ -7,9 +7,7 @@ import {
   resolveContactPeople,
   toCrmContactItem,
 } from '@core/context/quickAccess/crm-contacts';
-import { emailToMacroId } from '@core/user/macroId';
 import type { CrmContactEntity } from '@entity';
-import { crmContactEmailKey } from '@entity/types/entity';
 import type { CommandMenuItem } from './useCommandItems';
 
 function directMessageRecipient(
@@ -29,11 +27,7 @@ export function commandSearchResultKey(
   item: CommandMenuItem,
   viewerId: string | undefined
 ): string {
-  return (
-    ('searchKey' in item ? item.searchKey : undefined) ??
-    directMessageRecipient(item, viewerId) ??
-    item.id
-  );
+  return directMessageRecipient(item, viewerId) ?? item.id;
 }
 
 function directMessagesByUser(
@@ -56,24 +50,18 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
   viewerId: string | undefined
 ): (T | EntityItem)[] {
   // Typed search can find DMs outside the bounded recent list.
-  const searchedConversations = directMessagesByUser(items, viewerId);
-  const recentConversations = directMessagesByUser(directMessages, viewerId);
+  const conversations = directMessagesByUser(
+    [...directMessages, ...items],
+    viewerId
+  );
   const merged = new Map<string, T | EntityItem>();
   for (const item of items) {
     if (item.kind === 'user' && item.id === viewerId) continue;
     const conversation =
-      item.kind === 'user'
-        ? (searchedConversations.get(item.id) ??
-          item.commandTarget ??
-          recentConversations.get(item.id))
-        : undefined;
+      item.kind === 'user' ? conversations.get(item.id) : undefined;
     const resolved = conversation
       ? {
           ...conversation,
-          ...(item.kind === 'user' ? { personOrder: item.personOrder } : {}),
-          ...('searchKey' in item && item.searchKey
-            ? { searchKey: item.searchKey }
-            : {}),
           searchText: `${conversation.searchText} | ${item.searchText}`,
         }
       : item;
@@ -83,9 +71,6 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
       previous
         ? {
             ...resolved,
-            ...('personOrder' in previous && previous.personOrder !== undefined
-              ? { personOrder: previous.personOrder }
-              : {}),
             searchText: `${previous.searchText} | ${resolved.searchText}`,
           }
         : resolved
@@ -110,14 +95,9 @@ export function contactCommandItems(options: {
     options.contacts.map(toCrmContactItem),
     options.users
   ).map(({ contact, user }) => {
-    const email = contact.data.email;
-    const searchKey =
-      (email ? emailToMacroId(crmContactEmailKey(email)) : undefined) ??
-      contact.id;
-    if (!user) return { ...contact, searchKey };
+    if (!user) return contact;
     return {
       ...user,
-      searchKey,
       searchText: `${user.searchText} | ${contact.searchText}`,
     };
   });

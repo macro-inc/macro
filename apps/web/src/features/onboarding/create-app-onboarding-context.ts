@@ -5,7 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { idToDisplayName } from '@core/user/util';
+import { idToDisplayName, idToEmail } from '@core/user/util';
 import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -21,6 +21,7 @@ import {
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { useContactsQuery } from '@queries/contacts/contacts';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useGithubStarsQuery } from '@queries/github-stars';
@@ -63,7 +64,6 @@ import {
   generateRoutineSuggestions,
   useRoutineSuggestionsEnabled,
 } from './queries/routine-suggestions';
-import { useTeamContacts } from './queries/team-contacts';
 import { createOnboardingToolCatalog } from './queries/tool-catalog';
 import { createOnboardingToolConnect } from './queries/tool-connect';
 
@@ -295,10 +295,10 @@ export function createAppOnboardingContext(): OnboardingContext {
       );
     },
 
-    createTeamDirectory: (input) => {
+    createTeamDirectory: () => {
       const teams = useUserTeamsQuery();
       const invites = useUserInvitesQuery();
-      const suggestions = useTeamContacts(input.domain, input.ownEmail);
+      const contacts = useContactsQuery();
       return {
         teams: () =>
           loadableQuery(teams, (data) =>
@@ -311,11 +311,11 @@ export function createAppOnboardingContext(): OnboardingContext {
               invitedBy: idToDisplayName(invite.invited_by),
             }))
           ),
-        contacts: suggestions.contacts,
+        contacts: () =>
+          loadableQuery(contacts, (data) => data.contacts.map(idToEmail)),
         retry: () => {
           fireAndForget(teams.refetch(), 'onboarding');
           fireAndForget(invites.refetch(), 'onboarding');
-          fireAndForget(suggestions.retry(), 'onboarding');
         },
       };
     },

@@ -13,8 +13,10 @@ import {
 import type { EntityData } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 
+// Seed mock display names so user names render correctly
+seedMockDisplayNames([...MOCK_USERS]);
+
 export default function DebugEntityView() {
-  seedMockDisplayNames([...MOCK_USERS]);
   const [selectedIds, setSelectedIds] = createSignal<Set<string>>(new Set());
   const [lastSelectedIndex, setLastSelectedIndex] = createSignal<number | null>(
     null

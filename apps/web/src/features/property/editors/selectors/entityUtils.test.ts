@@ -1,15 +1,12 @@
-import type { QuickAccessList } from '@core/context/quickAccess/types';
 import type { EntityData } from '@entity';
-import { createRoot, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-
-const lists = vi.hoisted(() => ({ create: vi.fn<() => QuickAccessList>() }));
 
 // Mock @core/context/quickAccess to break the import chain that pulls in
 // LexicalMarkdown plugins -> themeSignals -> window.matchMedia
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
-    useList: lists.create,
+    useList: () => () => [],
     isLoading: () => false,
     refresh: () => {},
     getById: () => undefined,
@@ -70,43 +67,6 @@ describe('getEntityType', () => {
 });
 
 describe('useQuickAccessEntities', () => {
-  it('does not recreate a paged list when its factory reads reactive loading state', () => {
-    createRoot((dispose) => {
-      try {
-        const [loading, setLoading] = createSignal(false);
-        const [field, setField] = createSignal<{
-          kind: 'USER' | 'DOCUMENT';
-          label: string;
-        }>({ kind: 'USER', label: 'Initial' });
-        lists.create.mockImplementation(() => {
-          loading();
-          return {
-            items: () => [],
-            totalCount: () => 0,
-            isLoading: loading,
-            isLoadingMore: loading,
-            error: () => undefined,
-            hasMore: () => false,
-            loadMore: async () => {},
-          };
-        });
-        const source = useQuickAccessEntities(() => field().kind);
-        expect(lists.create).toHaveBeenCalledOnce();
-        setLoading(true);
-        expect(source.isLoading()).toBe(true);
-        expect(source.items()).toEqual([]);
-        expect(lists.create).toHaveBeenCalledOnce();
-        setField({ kind: 'USER', label: 'Renamed without changing scope' });
-        expect(lists.create).toHaveBeenCalledOnce();
-        setField({ kind: 'DOCUMENT', label: 'Document scope' });
-        expect(lists.create).toHaveBeenCalledTimes(2);
-      } finally {
-        dispose();
-        lists.create.mockReset();
-      }
-    });
-  });
-
   it('lists nothing for an entity type a newer service added', () => {
     const fromNewerService = JSON.parse('"AGENT_SESSION"');
 

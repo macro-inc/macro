@@ -3,7 +3,6 @@ use models_databases::{DatabaseId, OptionId, RowId};
 use std::collections::HashMap;
 
 mod limits;
-mod people_hints;
 mod projection;
 mod transcripts;
 
