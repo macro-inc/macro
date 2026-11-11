@@ -2006,7 +2006,7 @@
     "/suggestions/{id}/draft": {
       "put": {
         "tags": ["suggestions"],
-        "summary": "Make a reply draft an ideas generation session wrote the draft of an\nopen reply idea. Nothing is sent.",
+        "summary": "Make a reply draft a suggestions generation session wrote the draft of an\nopen reply suggestion. Nothing is sent.",
         "operationId": "attach_suggestion_draft",
         "parameters": [
           {
@@ -2493,13 +2493,13 @@
       },
       "AttachDraft": {
         "type": "object",
-        "description": "A reply draft a session wrote for an open reply idea, as the user,\nthrough `macro.email.createDraft`. It replaces the idea's draft, if any;\nnothing is ever sent.",
+        "description": "A reply draft a session wrote for an open reply suggestion, as the user,\nthrough `macro.email.createDraft`. It replaces the suggestion's draft, if any;\nnothing is ever sent.",
         "required": ["emailDraftId", "reason"],
         "properties": {
           "emailDraftId": {
             "type": "string",
             "format": "uuid",
-            "description": "The email draft: an unsent draft in one of the user's own inboxes, in\nthe thread the idea is about."
+            "description": "The email draft: an unsent draft in one of the user's own inboxes, in\nthe thread the suggestion is about."
           },
           "reason": {
             "type": "string",
@@ -4901,7 +4901,7 @@
                   },
                   {
                     "$ref": "#/components/schemas/Target",
-                    "description": "A reply idea's draft, once a session wrote one: the email thread\nit is in, with the draft as the part."
+                    "description": "A reply suggestion's draft, once a session wrote one: the email thread\nit is in, with the draft as the part."
                   }
                 ]
               },

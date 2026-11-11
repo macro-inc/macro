@@ -176,14 +176,14 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
- * A reply draft a session wrote for an open reply idea, as the user,
- * through `macro.email.createDraft`. It replaces the idea's draft, if any;
+ * A reply draft a session wrote for an open reply suggestion, as the user,
+ * through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
  * nothing is ever sent.
  */
 export type AttachDraft = {
     /**
      * The email draft: an unsent draft in one of the user's own inboxes, in
-     * the thread the idea is about.
+     * the thread the suggestion is about.
      */
     emailDraftId: string;
     /**

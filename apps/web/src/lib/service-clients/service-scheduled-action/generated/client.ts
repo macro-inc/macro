@@ -2136,8 +2136,8 @@ export const dismissSuggestion = async (
 };
 
 /**
- * @summary Make a reply draft an ideas generation session wrote the draft of an
-open reply idea. Nothing is sent.
+ * @summary Make a reply draft a suggestions generation session wrote the draft of an
+open reply suggestion. Nothing is sent.
  */
 export type attachSuggestionDraftResponse200 = {
   data: SuggestionWriteOutcome;

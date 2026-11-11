@@ -306,8 +306,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Make a reply draft an ideas generation session wrote the draft of an
-     * open reply idea. Nothing is sent.
+     * Make a reply draft a suggestions generation session wrote the draft of an
+     * open reply suggestion. Nothing is sent.
      */
     public attachSuggestionDraft<ThrowOnError extends boolean = false>(options: Options<AttachSuggestionDraftData, ThrowOnError>): RequestResult<AttachSuggestionDraftResponses, AttachSuggestionDraftErrors, ThrowOnError> {
         return (options.client ?? this.client).put<AttachSuggestionDraftResponses, AttachSuggestionDraftErrors, ThrowOnError>({
