@@ -1,0 +1,38 @@
+apps/web/tauri/src-tauri/README.md
+  s_0ace76a62ffacf::t_97d25b9054e7a5 443,451-456
+  s_0ace76a62ffacf::t_e81599412332d3 457
+crates/native_app_service/src/tests.rs
+  s_0ace76a62ffacf::t_53715e393b1fdd 417
+  s_0ace76a62ffacf::t_6d8ee970f6d771 507-511
+  s_0ace76a62ffacf::t_306170cf4b4142 420,441-488
+apps/web/min-native-build.json
+  s_0ace76a62ffacf::t_84da63288f3e57 3-4
+apps/web/justfile
+  s_0ace76a62ffacf::t_84da63288f3e57 163-164,171
+apps/web/scripts/write-bundle-manifest.test.mjs
+  s_0ace76a62ffacf::t_84da63288f3e57 28-32,35
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_0ace76a62ffacf::t_c3fdcfd0ce1418 153,162,167-169,180
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models/test.rs
+  s_0ace76a62ffacf::t_c3fdcfd0ce1418 15-19
+crates/native_app_service/src/domain/models.rs
+  s_0ace76a62ffacf::t_53715e393b1fdd 82,89,91,96-100,111
+apps/web/scripts/write-bundle-manifest.mjs
+  s_0ace76a62ffacf::t_84da63288f3e57 34-35,39-41,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0eb7a973b143f3509ceb2c5e5175f235f4ac0ea8",
+  "prompts": {},
+  "sessions": {
+    "s_0ace76a62ffacf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "14dbdc2c-a8d5-44b6-be66-bf47855b0493",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
