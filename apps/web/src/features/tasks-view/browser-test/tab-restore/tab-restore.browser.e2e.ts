@@ -24,8 +24,15 @@ async function statusFilter(page: Page, phone: boolean, label: string) {
     await page
       .getByRole('menuitemcheckbox', { name: label, exact: true })
       .click();
+    await page.mouse.move(0, 0);
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
+    await expect(
+      page.getByRole('menu', { name: 'Filter tasks', exact: true })
+    ).toHaveCount(0);
+    // Move keyboard focus off the filter trigger so its tooltip cannot cover
+    // the next fixture action after the menu has closed.
+    await page.keyboard.press('Tab');
   }
 }
 
