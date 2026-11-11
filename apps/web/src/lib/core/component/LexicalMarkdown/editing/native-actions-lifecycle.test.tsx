@@ -20,6 +20,8 @@ import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import { FloatingMenuGroup } from '../context/FloatingMenuContext';
+import { ACTIONS } from '../plugins/actions/actions';
+import { dispatchApplicationCommandSettled } from '../plugins/group-b/command';
 import { createMenuOperations } from '../shared/inlineMenu';
 import { installNativeMarkdownOverlays } from './installNativeMarkdownOverlays';
 import * as actions from './NativeActionsOverlay';
@@ -428,3 +430,57 @@ test('a dependency query failure after healthy projection retires only the mount
     container.remove();
   }
 });
+
+for (const kind of ['task', 'document'] as const) {
+  test(`the ${kind} composer receives the exact context after actual search removal`, async () => {
+    const runtime = mount();
+    const completed = Promise.withResolvers<void>();
+    const errors = vi
+      .spyOn(Telemetry, 'error')
+      .mockImplementation((error) => completed.reject(error));
+    const context = {
+      sourceDocumentId: 'fixture-document',
+      sourceBlockName: 'md',
+      disableMentionTracking: true,
+    };
+    const requestCreation = vi.fn(
+      (requestedKind: 'task' | 'document', received: unknown) => {
+        try {
+          expect(requestedKind).toBe(kind);
+          expect(received).toBe(context);
+          expect(runtime.executor.session.serializedState()).not.toContain(
+            'inline-search'
+          );
+          expect(runtime.root.textContent).toBe(' body');
+          completed.resolve();
+        } catch (error) {
+          completed.reject(error);
+        }
+        return true;
+      }
+    );
+    const requests = { requestTable() {}, requestCreation };
+    const host = createNativeActionMenuHost(runtime.view, requests, () => true);
+    try {
+      const trigger = await dispatchApplicationCommandSettled(
+        runtime.view,
+        'group-a.search-trigger',
+        { kind: 'actions' }
+      );
+      expect(trigger).toMatchObject({ status: 'success', handled: true });
+      expect(runtime.executor.session.serializedState()).toContain(
+        'inline-search'
+      );
+      const action = ACTIONS.find((item) => item.id === kind);
+      if (!action) throw new Error('Missing actual creation catalog item');
+      host.select(action, 'keyboard', context);
+      await completed.promise;
+      expect(requestCreation).toHaveBeenCalledTimes(1);
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      host.dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}

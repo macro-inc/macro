@@ -63,7 +63,7 @@ All component paths below are relative to
 
 | Overlay | Actual Source reads/calls | Narrow host capability | Native status at review base |
 | --- | --- | --- | --- |
-| Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | Existing strict `group-a.menu-select` atomically validates/replaces a supplied range. Full catalog behavior separately requires Source REMOVE admission then actual action/request; it must not be silently replaced with an atomic removal/choice. No consumable general menu query/close primitive. Filtering to nine block actions would lose Source rows. |
+| Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | Existing strict `group-a.menu-select` atomically validates/replaces a supplied range. Full catalog behavior separately requires Source REMOVE admission then actual action/request; it must not be silently replaced with an atomic removal/choice. Ordered search snapshots/events and close/remove commands are available through the native application envelope. The optional native host uses actual registry dependency queries and settled REMOVE before catalog commands or document requests; remaining composer and picker IO requires its owning callback. |
 | Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` is installed through the additive overlay lifetime. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
 | Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | `MentionMenuHost` supplies root, close and selection to the actual mention controller; query/range and other search controllers remain separate | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No consumable general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
@@ -77,11 +77,12 @@ All component paths below are relative to
 | GIF (`component/menu/FloatingGifMenu.tsx`) | Picker callback; cloned selection, skip-DOM-selection tag; root/update listener; async upload, selection restore, attached checks and insertion | `GifMenuHost<Target, Insertion>`: picker registration, captured target, prepared insertion, dirty subscription, identity checks and actual commit result | Source host preserves the real controller. Native still needs an exact GIF payload, captured target and asynchronous completion contract; no native GIF host is mounted. |
 | Exterior focus (`component/core/FocusClickTarget.tsx`) | Active range, focused state, last child's paragraph/empty status; append paragraph then select end in one update and focus | `hasSelection`, `editable`, atomic `focusAtEnd` | The additive overlay installation calls real `group-b.focus-end`, then browser focus after actual completion with lifetime/editability rechecks. Local policy, Machine and shared-component browser controls pass; installed document-app acceptance remains separate. |
 
-## Integrated checklist and exterior focus
+## Native overlay installation
 
-The native document installs only the checklist pointer bridge and exterior
-focus through `installNativeMarkdownOverlays`. No renderer or menu is returned.
-`runtime.editing` stays independent, and unavailable capabilities remain absent.
+The native document installs checklist, trailing-paragraph, touch-selection and
+exterior-focus capabilities through `installNativeMarkdownOverlays`. Optional
+mention and action menu components render under the document component owner.
+`runtime.editing` retains its independent installation lifetime.
 
 The focused regression is
 `apps/web/src/lib/core/component/LexicalMarkdown/editing/browser-test`.
@@ -515,9 +516,20 @@ handles are released immediately after retirement. Installation and component
 cleanup share idempotent ownership.
 
 Block choices and divider insertion use existing typed native commands. Table
-selection uses the actual picker host. File, GIF, equation and link requests
-require their real document-owned callbacks. The installer accepts those
+selection uses the actual picker host. File, GIF, equation, link and creation requests
+require their real document-owned callbacks. Task and document composer requests
+run synchronously after settled search removal, before queued picker requests;
+their boolean reports opening the composer, while placeholder admission belongs
+to its actual callbacks. The installer accepts those
 capabilities explicitly. The lifecycle controls in
 `editing/native-actions-lifecycle.test.tsx` exercise actual SessionPort queries
 and registration cleanup; rendered catalog parity and app callback activation
 require their corresponding browser gates.
+
+
+Supply the actual source-document context and media picker controller from the
+document owner. Bind the retained equation context only after the real initial
+projection and the existing abort check, before document readiness. Binding during overlay installation is invalid while the published
+generation is null. A plain document can then open the shared equation menu
+without an existing equation row. The Chromium startup controls use the actual
+app session factory and separately exercise close before projection.

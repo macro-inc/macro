@@ -16,6 +16,11 @@ export interface NativeActionRequests {
   requestGif?: () => boolean;
   requestEquation?: () => void;
   requestLink?: () => void;
+  /** Reports the real composer open request, before any placeholder admission. */
+  requestCreation?: (
+    kind: 'task' | 'document',
+    context?: ActionContext
+  ) => boolean;
   additionalActions?: ReadonlyMap<
     Action,
     (context?: ActionContext) => void | Promise<void>
@@ -72,7 +77,6 @@ export function createNativeActionMenuHost(
     current: () => boolean,
     context?: ActionContext
   ) => {
-    if (!current()) return;
     const additional = requests.additionalActions?.get(item);
     if (additional) {
       await additional(context);
@@ -90,6 +94,13 @@ export function createNativeActionMenuHost(
     }
     if (item.id === 'hr') {
       await command('group-b.horizontal-rule', {}, current);
+      return;
+    }
+    if (
+      (item.id === 'task' || item.id === 'document') &&
+      requests.requestCreation
+    ) {
+      requests.requestCreation(item.id, context);
       return;
     }
     await new Promise<void>((resolve) => queueMicrotask(resolve));
@@ -134,6 +145,7 @@ export function createNativeActionMenuHost(
       console.error('Dispatched Action with missing dependencies:', item);
       return;
     }
+    if (!current()) return;
     await run(item, current, context);
   };
   return {
