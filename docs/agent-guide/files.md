@@ -192,7 +192,8 @@ the submenu cancels the pending close. While the mouse heads toward an open
 submenu, including one that opens to the left, the categories it crosses on the
 way do not take over. A category the mouse moves to directly, or rests on for
 300 ms, opens in its place. Escape and outside clicks still dismiss immediately.
-`Sort files` offers modified, created, and viewed dates.
+`Sort files` offers modified, created, and viewed dates, plus **Name**, which
+reads A to Z case-insensitively with unnamed rows last.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. **New → Folder**
 and the launcher’s **Folder** action open the folder composer. Enter **Folder name**,

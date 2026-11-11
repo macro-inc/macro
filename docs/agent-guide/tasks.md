@@ -279,10 +279,12 @@ the optimistic tag. Repeat with an existing assignment and with removal.
 
 ## Due dates
 
-Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
-**Due furthest away** sorting alongside Viewed, Updated, and Created. Status
+Tasks lists and boards offer **Title**, **Status**, **Priority**, **Due soonest**,
+and **Due furthest away** sorting alongside Viewed, Updated, and Created. Title
+reads A to Z case-insensitively; picking it again reverses it, and the list's
+**Task** column header selects and reverses it too. Status
 follows stored option order; Priority puts urgent tasks first. Missing values
-stay last. Property-sort ties use newest update, then descending task ID.
+stay last. Property- and title-sort ties use newest update, then descending task ID.
 Text search retains its existing ordering and flat list results; clear search to sort.
 While searching, the desktop header hides Sort (leaving Group in its island), the
 keyboard shortcut sheet and command menu drop **Sort tasks** (S does nothing), and
