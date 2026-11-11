@@ -517,27 +517,34 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     const reply = new Promise<CommentMarkReply>((resolve, reject) => {
       this.commentReplies.set(request, { resolve, reject });
     });
-    const input = {
-      ...emptyInput(9),
-      request,
-      markId,
-      ...(action.kind === 'add'
-        ? {
-            code: 1,
-            // Bebop encodes into one shared buffer; copy before the next encode.
-            anchor: NodeCursorMsg.encode(action.anchor).slice(),
-            focus: NodeCursorMsg.encode(action.focus).slice(),
-            expectedText: action.text,
-          }
-        : { code: 0 }),
-    };
-    this.run(() =>
-      this.session.input(
-        SessionInputMsg.encode(input),
-        this.now(),
-        this.clock.wall()
-      )
-    );
+    try {
+      const input = {
+        ...emptyInput(9),
+        request,
+        markId,
+        ...(action.kind === 'add'
+          ? {
+              code: 1,
+              // Bebop encodes into one shared buffer; copy before the next encode.
+              anchor: NodeCursorMsg.encode(action.anchor).slice(),
+              focus: NodeCursorMsg.encode(action.focus).slice(),
+              expectedText: action.text,
+            }
+          : { code: 0 }),
+      };
+      this.run(() =>
+        this.session.input(
+          SessionInputMsg.encode(input),
+          this.now(),
+          this.clock.wall()
+        )
+      );
+    } catch (error) {
+      // The caller receives the encoding or admission error; close must not
+      // reject an abandoned reply nobody holds.
+      this.commentReplies.delete(request);
+      throw error;
+    }
     return reply;
   }
   private settleComment(effect: IViewEffectMsg): void {

@@ -3,14 +3,17 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { locks } from 'node:worker_threads';
 import * as native from '@core/document-session/wasm/document_session_wasm.js';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  NodeCursorMsg,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
 import { NOOP_SPAN } from '@macro-inc/observability';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 beforeAll(() => {
@@ -140,4 +143,48 @@ test('comment requests settle with their own replies and reject after close', as
       runtime.port.comment('mark-c', { kind: 'remove' })
     )
   ).rejects.toThrow();
+});
+
+test('a comment whose encoding or admission throws leaves nothing for close to reject', async () => {
+  const runtime = mount();
+  const unhandled: unknown[] = [];
+  const record = (reason: unknown) => unhandled.push(reason);
+  process.on('unhandledRejection', record);
+  try {
+    const [first] = runtime.texts;
+    if (!first) throw new Error('Missing actual native text');
+    runtime.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: first.key, offset: 0, type: 'text' },
+      focus: { key: first.key, offset: 5, type: 'text' },
+    });
+    const selection = runtime.port.commentSelection();
+    if (!selection) throw new Error('Missing selection cursors');
+
+    const encode = vi.spyOn(NodeCursorMsg, 'encode').mockImplementation(() => {
+      throw new Error('encoding failed');
+    });
+    expect(() =>
+      runtime.port.comment('mark-a', { kind: 'add', ...selection })
+    ).toThrow('encoding failed');
+    encode.mockRestore();
+
+    const input = vi
+      .spyOn(runtime.executor.session, 'input')
+      .mockImplementation(() => {
+        throw new Error('admission failed');
+      });
+    expect(() => runtime.port.comment('mark-b', { kind: 'remove' })).toThrow(
+      'admission failed'
+    );
+    input.mockRestore();
+
+    await runtime.close();
+    // Unhandled rejections are reported after the current macrotask.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off('unhandledRejection', record);
+    runtime.root.remove();
+  }
 });
