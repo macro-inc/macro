@@ -2,7 +2,8 @@ use email_api_client::domain::models::EmailApiError;
 use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-use crate::pubsub::gmail_ops::worker::GmailOpsContext;
+use super::{GmailOpsRetryQueue, GmailOpsService};
+use crate::domain::mailbox::connection::ConnectionSourceError;
 
 #[cfg(test)]
 mod test;
@@ -38,8 +39,8 @@ fn error_policy(error: &EmailApiError) -> ErrorPolicy {
     }
 }
 
-pub(crate) async fn handle_email_api_error(
-    ctx: &GmailOpsContext,
+pub(crate) async fn handle_email_api_error<R, G, Q: GmailOpsRetryQueue>(
+    ctx: &GmailOpsService<R, G, Q>,
     data: &GmailOpsPubsubMessage,
     error: EmailApiError,
 ) -> ProcessingError {
@@ -51,8 +52,8 @@ pub(crate) async fn handle_email_api_error(
     }
 }
 
-async fn handle_rate_limit(
-    ctx: &GmailOpsContext,
+async fn handle_rate_limit<R, G, Q: GmailOpsRetryQueue>(
+    ctx: &GmailOpsService<R, G, Q>,
     data: &GmailOpsPubsubMessage,
     error: EmailApiError,
 ) -> ProcessingError {
@@ -70,14 +71,12 @@ async fn handle_rate_limit(
         error = %error,
         "Gmail API rate limited or unavailable, moving message from primary queue to retry queue"
     );
-    if let Err(enqueue_error) = ctx
-        .sqs_client
-        .enqueue_gmail_ops_retry_notification(data.clone())
-        .await
-    {
+    if let Err(enqueue_error) = ctx.retry_queue.enqueue(data.clone()).await {
         return ProcessingError::Retryable(DetailedError {
             reason: FailureReason::SqsEnqueueFailed,
-            source: enqueue_error.context("Failed to enqueue gmail ops retry message"),
+            source: enqueue_error
+                .into_original()
+                .context("Failed to enqueue gmail ops retry message"),
         });
     }
 

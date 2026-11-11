@@ -567,8 +567,7 @@ async fn a_resumed_older_write_skips_messages_a_newer_write_took_over(pool: PgPo
 async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_rejection(
     pool: PgPool,
 ) {
-    use crate::pubsub::gmail_ops::operations::OperationError;
-    use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
+    use email::domain::message_labels::gmail_ops::{OperationError, modify_message_labels};
     use email::domain::ports::EmailRepo;
     use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
     use uuid::Uuid;
@@ -622,7 +621,7 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
 
     wiring::reset_admission(&mut sim.world.redis, sim.world.link_id).await;
     let requests_before = sim.world.gmail.lock().log.len();
-    let result = modify_message_labels(&sim.world.ops, &link, &unarchive).await;
+    let result = modify_message_labels(sim.world.ops.service.as_ref(), &link, &unarchive).await;
     assert!(matches!(result, Err(OperationError::WaitingForNewerWrite)));
     let sent: Vec<String> = sim.world.gmail.lock().log[requests_before..]
         .iter()
@@ -637,12 +636,12 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
         .lock()
         .next_writes
         .push_back(Reply::Rejected);
-    let result = modify_message_labels(&sim.world.ops, &link, &archive).await;
+    let result = modify_message_labels(sim.world.ops.service.as_ref(), &link, &archive).await;
     assert!(matches!(result, Err(OperationError::Gmail(_))));
     assert!(in_inbox(sim, T2).await);
 
     wiring::reset_admission(&mut sim.world.redis, sim.world.link_id).await;
-    modify_message_labels(&sim.world.ops, &link, &unarchive)
+    modify_message_labels(sim.world.ops.service.as_ref(), &link, &unarchive)
         .await
         .unwrap();
     for message in [M1A, M1B, M1C, M2A, M2B] {
