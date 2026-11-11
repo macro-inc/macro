@@ -497,6 +497,12 @@ An SSH forward to the HTTP Vite port still works for localhost-only access:
 `ssh -N -L 3000:127.0.0.1:20110 your-dev-host`, then open
 `http://localhost:3000/app/`. HMR follows the page's host, port, and protocol.
 
+For production-mode scorecard builds, keep `DEV=false` and set
+`VITE_LOCAL_ONLY=true`, `VITE_LOCAL_SERVERS=ALL` and
+`VITE_LOCAL_BACKEND_ORIGIN=same-origin` explicitly through Vite build definitions.
+Without the three settings, production routing stays hosted. An explicit
+`VITE_SYNC_SERVICE_HOST` override retains the hosted permission-token signer.
+
 The launcher sets `VITE_LOCAL_BACKEND_ORIGIN=same-origin` and supplies Vite's
 server-only `MACRO_LOCAL_BACKEND_PROXY` and `MACRO_LOCAL_BACKEND_ROUTES` from the
 selected instance and backend inventory. The proxy preserves paths, query
