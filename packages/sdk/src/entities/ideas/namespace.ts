@@ -81,6 +81,8 @@ export type IdeaSuggestion =
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
  * - A reply idea may carry a reply draft: write it with `macro.email.createDraft({thread, replyingTo, ...}, await thread.link())`, never send it, and attach it with `idea.attachDraft(draft, reason)`. Write none in a thread that already holds a draft (`thread.drafts()`).
+ *
+ * @mcp-exclude Ideas are written by hidden generation sessions and acted on in the app, not over MCP.
  */
 export class IdeaNamespace {
   constructor(private readonly client: MacroClient) {}

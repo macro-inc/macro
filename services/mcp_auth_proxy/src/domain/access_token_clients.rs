@@ -67,14 +67,13 @@ impl AccessTokenClients {
             .clients
             .find_client(&binding.client_id)
             .await?
-            .map(|client| {
-                client
-                    .client_name
-                    .chars()
-                    .take(MAX_CLIENT_NAME_CHARS)
-                    .collect()
-            }))
+            .map(|client| client_label(&client.client_name)))
     }
+}
+
+/// A registered client name as the label on what the client writes.
+pub(crate) fn client_label(client_name: &str) -> String {
+    client_name.chars().take(MAX_CLIENT_NAME_CHARS).collect()
 }
 
 fn access_token_digest(access_token: &str) -> String {
