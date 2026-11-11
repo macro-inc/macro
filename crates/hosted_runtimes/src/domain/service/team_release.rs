@@ -21,9 +21,11 @@ impl<Repo: ComputerRepo, Time: Clock> TeamComputerRelease<Repo, Time> {
         Self { repo, clock }
     }
 
-    /// Release every live computer of the team through the normal effects
-    /// (billing item removal, destroy with the data volume, harness
-    /// revocation), then delete its reservations. Safe to repeat: released
+    /// Delete the team's reservations, then release every live computer
+    /// through the normal effects (billing item removal, destroy with the
+    /// data volume, harness revocation). A charge still in flight for a
+    /// deleted reservation never becomes a computer; cancelling the
+    /// subscription, which team deletion does next, settles its receipt. Safe to repeat: released
     /// computers are skipped. A quarantined computer stops the deletion,
     /// since it cannot be released safely.
     #[tracing::instrument(skip(self), err)]
@@ -37,6 +39,13 @@ pub(crate) async fn release_team<Repo: ComputerRepo, Time: Clock>(
     clock: &Time,
     team_id: Uuid,
 ) -> Result<(), ComputerError> {
+    // Reservations first: one that converts meanwhile is a computer by the
+    // time computers are listed, and one deleted here can no longer convert.
+    for reservation in repo.team_reservations(team_id).await.map_err(internal)? {
+        repo.delete_reservation(reservation.id)
+            .await
+            .map_err(internal)?;
+    }
     for record in repo.list_for_team(team_id).await.map_err(internal)? {
         let computer = match record {
             ComputerRecord::Healthy(computer) => computer,
@@ -50,11 +59,6 @@ pub(crate) async fn release_team<Repo: ComputerRepo, Time: Clock>(
             None | Some(Applied::Changed(_)) | Some(Applied::Rejected(Rejected::Released)) => {}
             Some(Applied::Rejected(rejected)) => return Err(rejected.into()),
         }
-    }
-    for reservation in repo.team_reservations(team_id).await.map_err(internal)? {
-        repo.delete_reservation(reservation.id)
-            .await
-            .map_err(internal)?;
     }
     Ok(())
 }

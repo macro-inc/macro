@@ -6,12 +6,15 @@ use hosted_runtimes::domain::{
     ids::ComputerId,
     lifecycle::SubscriptionItemId,
     models::{BillingInterval, Quote, SubscriptionItem},
-    ports::{Billing, BillingError, ComputerRepo, ItemCharge},
+    ports::{Billing, BillingError, ChargeStatus, ComputerRepo, ItemCharge},
     service::{Clock, ComputerService, SubscriptionObserved},
     size::ComputerSize,
 };
 use teams::domain::{
-    model::{BillingCadence, CustomerError, ItemProration, ItemQuantityChange, ItemRemoval},
+    model::{
+        BillingCadence, CustomerError, ItemChangeStatus, ItemProration, ItemQuantityChange,
+        ItemRemoval,
+    },
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
 };
 use uuid::Uuid;
@@ -151,7 +154,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     ) -> Result<Option<SubscriptionItemId>, BillingError> {
         let settlement = self
             .teams
-            .settle_subscription_item_change(idempotency_key)
+            .settle_subscription_item_change(&team_id, idempotency_key)
             .await
             .map_err(billing_error)?;
         tracing::info!(?settlement, "computer charge settled");
@@ -161,6 +164,23 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
             Err(BillingError::NoSubscription) => Ok(None),
             outcome => outcome,
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn charge_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ChargeStatus>, BillingError> {
+        Ok(self
+            .teams
+            .subscription_item_change_status(idempotency_key)
+            .await
+            .map_err(billing_error)?
+            .map(|status| match status {
+                ItemChangeStatus::Pending => ChargeStatus::Pending,
+                ItemChangeStatus::Applied => ChargeStatus::Applied,
+                ItemChangeStatus::NotApplied => ChargeStatus::NotApplied,
+            }))
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -204,6 +224,20 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn require_paid_plan(&self, team_id: Uuid) -> Result<(), BillingError> {
+        if self
+            .teams
+            .team_subscription_terms(&team_id)
+            .await
+            .map_err(billing_error)?
+            .trialing
+        {
+            return Err(BillingError::TeamOnTrial);
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn period_end(&self, team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
         Ok(self
             .teams
@@ -219,6 +253,9 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         TeamSubscriptionItemsError::NoSubscription
         | TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionNotActive) => {
             BillingError::NoSubscription
+        }
+        TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionTrialing) => {
+            BillingError::TeamOnTrial
         }
         // An abandoned change is never sent again: nothing was charged.
         TeamSubscriptionItemsError::Customer(

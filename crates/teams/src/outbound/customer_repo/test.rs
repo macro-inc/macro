@@ -1229,6 +1229,7 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
             current_period_end: chrono::DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
             interval: BillingCadence::Year,
             currency: "usd".into(),
+            trialing: false,
         }
     );
     assert_eq!(

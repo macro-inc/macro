@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemChangeSettlement, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
-    ScheduledSeatPlan, SeatPlan, SubscriptionItemView, SubscriptionTerms,
+    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
+    ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionItemView, SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -189,11 +189,20 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
 
     /// End an item change whose outcome stayed unknown: if it reached the
     /// subscription it is [`ItemChangeSettlement::Applied`]; otherwise its
-    /// receipt is abandoned so no later replay can send it.
+    /// receipt is abandoned so no later replay can send it. With no receipt
+    /// yet, an abandoned one is written on `fence` (under its guard), so a
+    /// send still on its way can never charge later.
     fn settle_item_change(
         &self,
         idempotency_key: &str,
+        fence: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<ItemChangeSettlement, CustomerError>> + Send;
+
+    /// Where the change keyed `idempotency_key` stands; `None` when it was never sent.
+    fn item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ItemChangeStatus>, CustomerError>> + Send;
 
     /// The subscription's current period end, interval and currency.
     fn subscription_terms(

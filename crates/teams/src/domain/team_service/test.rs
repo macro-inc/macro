@@ -1363,7 +1363,15 @@ impl CustomerRepository for MockCustomerRepository {
     async fn settle_item_change(
         &self,
         _: &str,
+        _: Option<&stripe::SubscriptionId>,
     ) -> Result<crate::domain::model::ItemChangeSettlement, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn item_change_status(
+        &self,
+        _: &str,
+    ) -> Result<Option<crate::domain::model::ItemChangeStatus>, CustomerError> {
         unimplemented!("not exercised by team service tests")
     }
 

@@ -118,6 +118,9 @@ Pulumi stacks; they do not host extra agent processes.
   gets only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
   (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
+  `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
+  the session repo, the `enable-agent-navigation` flag, Redis budgets and
+  the gateway `ui_command` send.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the

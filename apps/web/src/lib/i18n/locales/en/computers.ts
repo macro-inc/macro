@@ -171,6 +171,9 @@ export default {
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
   getComputerLine: 'Claude Code, a browser and Docker, ready to go',
+  trialBlocked:
+    'Computers are available on paid plans. Your team is on a trial.',
+  trialBillingAction: 'Go to Billing',
   readyInMinutes: 'ready in minutes',
   runAgentsTitle: 'Run coding agents on a Macro computer',
   newComputer: 'New Macro computer',

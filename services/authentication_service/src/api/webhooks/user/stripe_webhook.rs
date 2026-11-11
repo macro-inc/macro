@@ -853,58 +853,45 @@ async fn handle_team_subscription_event<'a>(
         },
     )
     .await;
-    reconcile_team_computers(ctx, subscription_id, team_id).await;
-    result
+    // Run even when the subscription work failed; either failure fails the
+    // webhook, so Stripe delivers it again.
+    let reconciled = reconcile_team_computers(ctx, subscription_id, team_id).await;
+    result?;
+    reconciled
 }
 
 /// Reports a complete subscription snapshot to the computer billing owner,
 /// which decides what it means for each computer. Reads the subscription
 /// fresh because webhook payloads arrive out of order, and stamps when it
-/// read, so a computer billed after the read is left alone. Never fails the
-/// webhook.
-#[tracing::instrument(skip(ctx))]
-async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
+/// read, so a computer billed after the read is left alone. A failure fails
+/// the webhook, so Stripe redelivers it and the next delivery reconciles.
+#[tracing::instrument(skip(ctx), err)]
+async fn reconcile_team_computers(
+    ctx: &ApiContext,
+    subscription_id: &str,
+    team_id: &uuid::Uuid,
+) -> anyhow::Result<()> {
     let observed_at = chrono::Utc::now();
-    let id = match stripe::SubscriptionId::from_str(subscription_id) {
-        Ok(id) => id,
-        Err(error) => {
-            tracing::warn!(error = ?error, "invalid team subscription id; skipping computer reconcile");
-            return;
-        }
-    };
-    let subscription = match stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await {
-        Ok(subscription) => subscription,
-        Err(error) => {
-            tracing::warn!(error = ?error, "could not read the team subscription; skipping computer reconcile");
-            return;
-        }
-    };
-    let items = match subscription_items(ctx, &id).await {
-        Ok(items) => items,
-        Err(error) => {
-            tracing::warn!(error = ?error, "could not list the team subscription items; skipping computer reconcile");
-            return;
-        }
-    };
-    let Some(current_period_end) =
-        chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
-    else {
-        tracing::warn!("team subscription has an invalid period end; skipping computer reconcile");
-        return;
-    };
+    let id = stripe::SubscriptionId::from_str(subscription_id)
+        .context("invalid team subscription id")?;
+    let subscription = stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[])
+        .await
+        .context("could not read the team subscription for computer reconcile")?;
+    let items = subscription_items(ctx, &id)
+        .await
+        .context("could not list the team subscription items for computer reconcile")?;
+    let current_period_end = chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
+        .context("team subscription has an invalid period end")?;
     let observed = hosted_runtimes::domain::service::SubscriptionObserved {
         status: subscription_status(subscription.status),
         items,
         current_period_end,
         observed_at,
     };
-    if let Err(error) = ctx
-        .computer_billing_observer
+    ctx.computer_billing_observer
         .subscription_observed(*team_id, observed)
         .await
-    {
-        tracing::error!(error = ?error, "computer billing reconcile failed");
-    }
+        .map_err(|error| anyhow::anyhow!("computer billing reconcile failed: {error:?}"))
 }
 
 fn subscription_status(

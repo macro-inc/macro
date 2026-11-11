@@ -151,6 +151,7 @@ impl HarnessApi {
             .json(&ControlRequest {
                 action_id,
                 context,
+                client_id: None,
                 action,
             })
             .send()

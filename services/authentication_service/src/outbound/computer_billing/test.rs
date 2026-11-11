@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use teams::domain::model::{
-    ItemChangeSettlement, PriceInfo, SubscriptionItemView, SubscriptionTerms,
+    ItemChangeSettlement, ItemChangeStatus, PriceInfo, SubscriptionItemView, SubscriptionTerms,
 };
 
 use super::*;
@@ -25,6 +25,7 @@ struct FakeTeams {
     subscribed: bool,
     decline: bool,
     abandoned: bool,
+    trialing: bool,
     items: Arc<Mutex<Vec<SubscriptionItemView>>>,
     prices: Arc<Mutex<Vec<(stripe::PriceId, String, String)>>>,
     adds: Arc<Mutex<Vec<Add>>>,
@@ -38,6 +39,7 @@ impl FakeTeams {
             subscribed: true,
             decline: false,
             abandoned: false,
+            trialing: false,
             items: Arc::default(),
             prices: Arc::default(),
             adds: Arc::default(),
@@ -142,8 +144,22 @@ impl TeamSubscriptionItems for FakeTeams {
         Ok(self.items.lock().unwrap().clone())
     }
 
+    async fn subscription_item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ItemChangeStatus>, TeamSubscriptionItemsError> {
+        Ok(self
+            .adds
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|add| add.key == idempotency_key)
+            .then_some(ItemChangeStatus::Applied))
+    }
+
     async fn settle_subscription_item_change(
         &self,
+        _: &Uuid,
         idempotency_key: &str,
     ) -> Result<ItemChangeSettlement, TeamSubscriptionItemsError> {
         Ok(
@@ -172,6 +188,7 @@ impl TeamSubscriptionItems for FakeTeams {
             current_period_end: DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
             interval: self.interval,
             currency: "usd".into(),
+            trialing: self.trialing,
         })
     }
 
@@ -453,4 +470,25 @@ async fn no_prices_rejects_sales_before_contacting_the_subscription_provider() {
             Err(BillingError::NotAvailable)
         ));
     }
+}
+
+#[tokio::test]
+async fn a_trialing_team_is_refused_computers() {
+    let billing = TeamComputerBilling::new(
+        FakeTeams {
+            trialing: true,
+            ..FakeTeams::new(BillingCadence::Month)
+        },
+        prices(),
+    );
+    assert!(matches!(
+        billing.require_paid_plan(Uuid::nil()).await,
+        Err(BillingError::TeamOnTrial)
+    ));
+    assert!(
+        TeamComputerBilling::new(FakeTeams::new(BillingCadence::Month), prices())
+            .require_paid_plan(Uuid::nil())
+            .await
+            .is_ok()
+    );
 }

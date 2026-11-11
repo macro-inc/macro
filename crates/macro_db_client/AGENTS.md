@@ -21,6 +21,8 @@ queries used across Rust services.
 - Not here: domain logic, authorization decisions, or caching built on top of
   these queries — those live in the owning domain crate/service that calls in.
 
+`activity_events.agent_verb` is nullable so older writers and historical rows remain valid during a rolling deploy.
+
 `agent_session_notification` is an additive leased outbox owned by
 `agent_session`. Review adapters use its transaction-aware producer port;
 notification frames have their own log direction. Session deletion cascades
@@ -134,3 +136,4 @@ foreign keys; the broker deletes expired rows.
 Hosted runtime enrollment generations are additive counters owned by
 `hosted_runtimes`. The forward persona cleanup removes reserved bootstrap keys
 from both persona maps in place without retaining recovery copies.
+- `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.

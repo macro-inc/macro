@@ -101,7 +101,12 @@ impl CustomerRepositoryImpl {
         }
         let adds = changes.iter().any(|change| change.delta > 0);
         let billable = match subscription.status {
-            stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing => true,
+            stripe::SubscriptionStatus::Active => true,
+            // Computers are for paying teams; removing a trial's item is fine.
+            stripe::SubscriptionStatus::Trialing if adds && computer_item.is_some() => {
+                return Err(CustomerError::SubscriptionTrialing);
+            }
+            stripe::SubscriptionStatus::Trialing => true,
             // Removing items from a subscription behind on payment still
             // stops what it bills; adding to one is refused.
             stripe::SubscriptionStatus::PastDue | stripe::SubscriptionStatus::Unpaid => !adds,
@@ -203,9 +208,9 @@ impl CustomerRepositoryImpl {
             return Ok(ItemRemoval::AlreadyGone);
         }
         let items = self.subscription_items(subscription_id).await?;
-        if !items.iter().any(|item| &item.id == item_id) {
+        let Some(removed) = items.into_iter().find(|item| &item.id == item_id) else {
             return Ok(ItemRemoval::AlreadyGone);
-        }
+        };
         self.update_retrieved_items(
             subscription,
             vec![UpdateSubscriptionItems {
@@ -220,7 +225,30 @@ impl CustomerRepositoryImpl {
             },
         )
         .await?;
+        if removed.computer_id.is_some() {
+            self.archive_computer_price(&removed.price_id).await;
+        }
         Ok(ItemRemoval::Removed)
+    }
+
+    /// A computer's own price bills nothing once its item is gone; archive
+    /// it so the catalog does not grow with every computer. Best effort: an
+    /// active price with no item costs nothing.
+    async fn archive_computer_price(&self, price_id: &stripe::PriceId) {
+        #[derive(serde::Serialize)]
+        struct Archive {
+            active: bool,
+        }
+        if let Err(error) = self
+            .client
+            .post_form::<stripe::Price, _>(
+                &format!("/prices/{price_id}"),
+                &Archive { active: false },
+            )
+            .await
+        {
+            tracing::warn!(price_id = %price_id, error = ?error, "could not archive a computer's price");
+        }
     }
 
     pub(super) async fn subscription_items(

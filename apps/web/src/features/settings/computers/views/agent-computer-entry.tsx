@@ -10,7 +10,11 @@ import { WhereItRunsOption } from '../../components/where-it-runs-option';
 import { formatQuote } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ComputerBuyFlow } from './computer-buy-flow';
-import { cheapestOffer, GetComputerRow } from './MacroComputers';
+import {
+  cheapestOffer,
+  GetComputerRow,
+  offersBlockedByTrial,
+} from './MacroComputers';
 
 /**
  * Whether the viewer can buy the team a computer from Settings → Agents, and
@@ -31,7 +35,12 @@ export function useComputerOffer() {
         : t('computers.fromPrice', { price: formatQuote(offer.quote) });
     return `${price} · ${t('computers.readyInMinutes')}`;
   };
-  return { canBuy, fromLine, hasComputers: () => computers().length > 0 };
+  return {
+    // A trialing team can't buy; Settings → Machines says why.
+    canBuy: () => canBuy() && !offersBlockedByTrial(offers),
+    fromLine,
+    hasComputers: () => computers().length > 0,
+  };
 }
 
 /**

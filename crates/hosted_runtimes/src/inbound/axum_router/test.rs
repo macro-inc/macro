@@ -15,6 +15,24 @@ async fn computers_not_sold_answers_service_unavailable() {
     );
 }
 
+/// The web app shows a trial team why it cannot buy, so the error carries a
+/// stable code beside its message.
+#[tokio::test]
+async fn a_trialing_team_gets_a_coded_forbidden() {
+    let response =
+        ComputersHttpError::from(ComputerError::Billing(BillingError::TeamOnTrial)).into_response();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let body = axum::body::to_bytes(response.into_body(), 1024)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "team_on_trial");
+    assert_eq!(
+        body["message"],
+        "Computers are available on paid plans. Your team is on a trial."
+    );
+}
+
 use crate::domain::fakes::TEAM;
 use crate::domain::service::test::availability::{assert_no_http_work, detached_router_service};
 use axum::{
@@ -174,9 +192,6 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
         let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
-        let internal_purchase = serde_json::json!({"billing": {"kind": "stripe"}, "teamId": TEAM,
-            "createdBy": "macro|admin@example.com", "size": "standard", "purchaseKey": "buy-dialog-1"})
-        .to_string();
         for (method, path, body) in [
             (
                 Method::POST,
@@ -228,11 +243,6 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 Method::POST,
                 format!("/team/computers/{id}/release"),
                 r#"{"confirmName":"Build box"}"#.to_owned(),
-            ),
-            (
-                Method::POST,
-                "/internal/computers".to_owned(),
-                internal_purchase,
             ),
             (
                 Method::GET,
@@ -316,15 +326,10 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
     for path in [
-        "/internal/computers".to_owned(),
         format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
         format!("/internal/computers/{id}?teamId={TEAM}"),
     ] {
-        let method = if path == "/internal/computers" {
-            Method::POST
-        } else {
-            Method::GET
-        };
+        let method = Method::GET;
         let response = router
             .clone()
             .oneshot(

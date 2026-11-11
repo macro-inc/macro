@@ -607,6 +607,7 @@ impl IntoResponse for HarnessesHandlerErr {
             HarnessError::Gone(_) => StatusCode::GONE,
             HarnessError::Unauthorized => StatusCode::UNAUTHORIZED,
             HarnessError::Throttled => StatusCode::TOO_MANY_REQUESTS,
+            HarnessError::ComputerHarness => StatusCode::CONFLICT,
             HarnessError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         if status == StatusCode::INTERNAL_SERVER_ERROR {

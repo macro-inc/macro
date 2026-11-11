@@ -885,7 +885,11 @@ To buy one as a team admin:
    browser and Docker, ready to go · from <price>/month"). In **Settings →
    Agents**, a team without a computer also sees **Run coding agents on a Macro
    computer** in the agents list, and **Where it runs** ends with **New Macro
-   computer**.
+   computer**. Computers are for paying teams: on a trialing subscription the
+   row instead reads "Computers are available on paid plans. Your team is on a
+   trial." with **Go to Billing**, and the Agents entries are hidden. The API
+   answers 403 with `code: "team_on_trial"` to offers, quote, purchase, undo
+   and restore.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
    to Try it. The Computer step has the size radios (**Standard**, **Large**,
@@ -897,8 +901,8 @@ To buy one as a team admin:
    opening of the modal makes one `purchaseKey`, sent again on every retry, so
    a retried Buy never charges twice. Any error means nothing was charged and
    stays in the step for a retry: sold out or a key used for another purchase
-   (409), payment declined (402), a subscription that can't add computers
-   (422), or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
+   (409), payment declined (402), a team on a trial (403 `team_on_trial`), a
+   subscription that can't add computers (422), or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
    purchased. Provisioning now."; a 202 (`state: confirming`) is a success too
    and toasts "Confirming your payment. Setup starts once it goes through.",
    with the computer listed as `purchasing`. Either way the modal moves

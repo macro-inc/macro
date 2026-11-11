@@ -295,6 +295,17 @@ pub enum ItemChangeSettlement {
     NotApplied,
 }
 
+/// Where an item change stands, from its durable receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemChangeStatus {
+    /// Sent, outcome not known yet; the next guarded change settles it.
+    Pending,
+    /// The change reached the subscription.
+    Applied,
+    /// The change was refused or abandoned and is never sent again.
+    NotApplied,
+}
+
 /// How an item change bills the part of the period already paid for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemProration {
@@ -328,6 +339,8 @@ pub struct SubscriptionTerms {
     pub interval: BillingCadence,
     /// ISO currency code, lowercase.
     pub currency: String,
+    /// The subscription is in a trial.
+    pub trialing: bool,
 }
 
 /// What a Stripe price charges.
@@ -881,6 +894,14 @@ pub enum CustomerError {
     /// never sent again.
     #[error("The item change was abandoned")]
     ItemChangeAbandoned,
+    /// Another change to this subscription was sent moments ago and may
+    /// still be in flight at the provider; try again shortly.
+    #[error("another subscription change is still in flight")]
+    ItemChangeInFlight,
+    /// A computer item cannot be added while the subscription is trialing:
+    /// computers are for paying teams.
+    #[error("the subscription is trialing")]
+    SubscriptionTrialing,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

@@ -19,6 +19,13 @@ const mocks = vi.hoisted(() => ({
   lists: {} as Record<string, () => QuickAccessItem[]>,
   searchDms: (): QuickAccessItem[] => [],
 }));
+vi.mock('@queries/team/members', () => ({
+  useTeamMembers: () => ({
+    users: () => [],
+    isLoading: () => false,
+    isError: () => false,
+  }),
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
 }));

@@ -3,8 +3,6 @@ use crate::domain::model::CustomerError;
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum SubscriptionDataError {
-    #[error("subscription has an unresolved item change")]
-    UnresolvedItemChange,
     #[error("subscription has no recurring item")]
     MissingRecurringItem,
     #[error("invalid subscription period end")]
