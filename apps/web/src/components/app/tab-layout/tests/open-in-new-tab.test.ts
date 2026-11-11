@@ -7,6 +7,7 @@ import type { TabManager } from '../tab-manager';
 afterEach(() => {
   setGlobalTabManager(undefined);
   consumeOpenInNewTabIntent();
+  vi.restoreAllMocks();
 });
 
 describe('openInNewTab', () => {
@@ -29,11 +30,27 @@ describe('openInNewTab', () => {
     expect(open).toHaveBeenCalledOnce();
   });
 
-  it('expires an intent no navigation consumed', () => {
+  it('holds the intent while an async open waits, then lets it expire', async () => {
     setGlobalTabManager({} as TabManager);
     const now = vi.spyOn(performance, 'now').mockReturnValue(0);
+    let finish!: () => void;
+    const pending = openInNewTab(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    );
+
+    now.mockReturnValue(60_000);
+    finish();
+    await pending;
+    await Promise.resolve();
+    // Released at 60s: still armed just after, gone once a click's window passes.
+    now.mockReturnValue(60_100);
+    expect(consumeOpenInNewTabIntent()).toEqual({ activate: true });
+
     openInNewTab(() => undefined);
-    now.mockReturnValue(10_000);
+    now.mockReturnValue(120_000);
     expect(consumeOpenInNewTabIntent()).toBeUndefined();
   });
 });

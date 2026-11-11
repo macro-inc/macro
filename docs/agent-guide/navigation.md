@@ -42,7 +42,8 @@ platforms the strip does not render.
 The same entity can be open in several tabs. Selecting or opening something a
 background tab shows opens it in the current tab, with no toast and no switch,
 and each tab keeps its own instance, scroll, and history. Within one tab an
-entity still has one split: opening it again focuses that split.
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)

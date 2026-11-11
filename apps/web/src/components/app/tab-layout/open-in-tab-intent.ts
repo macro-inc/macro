@@ -67,11 +67,16 @@ export function consumeOpenInNewTabIntent(): OpenInNewTabIntent | undefined {
 
 /**
  * Arms the intent without a modifier click, for menu actions that open in a
- * new tab. It expires like a click's, since guards and middleware can resolve
- * the navigation after the caller's open returns.
+ * new tab. It holds while the menu's open runs, however long that waits on
+ * the network; the returned release then starts a click's expiry, which
+ * covers a navigation the open started but the router has not resolved.
  */
-export function armOpenInNewTabIntent(intent: OpenInNewTabIntent): void {
-  armed = { intent, expires: performance.now() + INTENT_EXPIRY_MS };
+export function holdOpenInNewTabIntent(intent: OpenInNewTabIntent): () => void {
+  const held = { intent, expires: Number.POSITIVE_INFINITY };
+  armed = held;
+  return () => {
+    if (armed === held) held.expires = performance.now() + INTENT_EXPIRY_MS;
+  };
 }
 
 /** Tab operations call this before navigating so they can't hijack themselves. */

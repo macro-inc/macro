@@ -91,6 +91,9 @@ function App() {
       openInNewTab(() =>
         manager.openWithSplit({ type: 'md', id }, { preferNewSplit: false })
       ),
+    openInCurrentSplit: (id: string) =>
+      manager.openWithSplit({ type: 'md', id }, { preferNewSplit: false })
+        .status,
     tabCount: () => tabManager.tabs().length,
     activeIndex: () =>
       tabManager.tabs().findIndex((tab) => tab.id === tabManager.activeTabId()),

@@ -591,6 +591,13 @@ function CommandSearchMenu(
     const item = selectedItem();
     return item && (isEntityItem(item) || isUserItem(item));
   };
+  /** Entities Cmd+K opens in a split, so they can open in a new tab too. */
+  const selectedOpensInSplit = () => {
+    const item = selectedItem();
+    if (!item || !isEntityItem(item)) return false;
+    if (isGithubPrEntity(item.data)) return USE_MACRO_PR_SUMMARY_BLOCK;
+    return item.data.type !== 'foreign';
+  };
   const selectedIsSearch = () => {
     const item = selectedItem();
     return item && isSearchItem(item);
@@ -765,7 +772,7 @@ function CommandSearchMenu(
     hotkey: 'cmd+enter',
     scopeId: hotkeyScope,
     description: () => t('commandMenu.openInNewTab'),
-    condition: () => canOpenInNewTab() && selectedIsEntity(),
+    condition: () => canOpenInNewTab() && selectedOpensInSplit(),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
       if (query() === CommandState.query() && !selectedItem()) return false;
@@ -1063,7 +1070,7 @@ function CommandSearchMenu(
                 label={t('commandMenu.openInNewSplit')}
               />
             </Show>
-            <Show when={canOpenInNewTab()}>
+            <Show when={canOpenInNewTab() && selectedOpensInSplit()}>
               <HotkeyHint
                 command={confirmTabHotkey}
                 label={t('commandMenu.openInNewTab')}
