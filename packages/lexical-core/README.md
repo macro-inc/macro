@@ -15,11 +15,12 @@ and escaped URL text retain their own syntax. Existing bare URLs become clickabl
 when imported; their source Markdown is not rewritten in storage.
 
 An editor links a typed or pasted URL only once the caret leaves it, so a
-message sent right after its URL holds the URL as plain text. Export writes such
-a URL without escaping its `*`, `_`, `` ` `` or `~`, so it imports as a link. For
-the same reason, import links a URL whose only escapes are of those characters
-(saved by older clients); any other escape, such as `\.` or `\:`, keeps it
-literal.
+message sent right after its URL holds the URL as plain text, and Lexical's
+export escapes its `*`, `_`, `` ` `` and `~`. Import therefore links a URL whose
+only escapes are of those characters; any other escape, such as `\.` or `\:`,
+keeps it literal. `$convertToMarkdownString` also writes such a URL in unformatted text
+without those escapes, so stored Markdown carries the URL as typed. Formatted
+text keeps them, because a raw `*` or `~` would pair with the format's markers.
 
 The editor and parser share URL validation and normalization. Preserve existing
 percent escapes, use the HTTP/HTTPS/mailto allowlist, and continue past rejected

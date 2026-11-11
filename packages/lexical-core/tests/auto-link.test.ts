@@ -151,8 +151,9 @@ describe('Markdown URL imports', () => {
         );
       });
   });
-  it('saves plain-text URLs without escaping their formatting characters', () => {
+  it('saves plain-text URLs that load as links, keeping their formatting', () => {
     const url = 'https://example.com/post?a=x_y&s=20';
+    const italicUrl = 'https://example.com/a*b';
     const editor = parse('');
     editor.update(
       () => {
@@ -161,7 +162,7 @@ describe('Markdown URL imports', () => {
           .append(
             $createParagraphNode().append(
               $createTextNode(`snake_case ${url} and `),
-              $createTextNode(url).setFormat('bold')
+              $createTextNode(italicUrl).setFormat('italic')
             )
           );
       },
@@ -170,15 +171,19 @@ describe('Markdown URL imports', () => {
     const markdown = editor
       .getEditorState()
       .read(() => $convertToMarkdownString(INTERNAL_TRANSFORMERS));
-    expect(markdown).toBe(`snake\\_case ${url} and **${url}**`);
+    // Formatted text keeps its escapes so a `*` in the URL cannot close the
+    // italic; import links it anyway.
+    expect(markdown).toBe(
+      `snake\\_case ${url} and *https://example.com/a\\*b*`
+    );
     parse(markdown)
       .getEditorState()
       .read(() => {
         expect(links($getRoot())).toEqual([
           { text: url, url },
-          { text: url, url },
+          { text: italicUrl, url: italicUrl },
         ]);
-        expect($getRoot().getAllTextNodes()[3].hasFormat('bold')).toBe(true);
+        expect($getRoot().getAllTextNodes()[3].hasFormat('italic')).toBe(true);
       });
   });
   it('does not nest links inside explicit Markdown or internal links', () => {

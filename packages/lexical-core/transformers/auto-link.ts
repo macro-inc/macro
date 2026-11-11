@@ -117,10 +117,12 @@ export const AUTO_LINK: ConversionOnlyTransformer<TextMatchTransformer> = {
   // An editor links a URL only once the caret leaves it, so a message sent
   // right after its URL holds the URL as plain text, whose `_`, `*`, `~` and
   // backticks Markdown export would escape. Write those URLs as typed, so
-  // import links them like any other bare URL.
+  // import links them like any other bare URL. Formatted text keeps the
+  // escapes, which import also links: raw, a `*` or `~` in the URL would pair
+  // with the format's own markers.
   export: (node, _exportChildren, exportFormat) => {
     if (!$isTextNode(node) || $isUnlinkedTextNode(node)) return null;
-    if (node.hasFormat('code')) return null;
+    if (node.getFormat() !== 0) return null;
 
     const text = node.getTextContent();
     if (text.includes(URL_PLACEHOLDER)) return null;
