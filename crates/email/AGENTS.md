@@ -18,6 +18,8 @@ tools — hexagonal, heavily feature-gated.
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
   and settings patches.
+- `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
+  deletion order, the already-missing-file rule, and delivery disposition.
 - `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
   push-token rotation retry and notification intake; lifecycle also owns ordered
   deletion requests for a deleted user's inboxes.

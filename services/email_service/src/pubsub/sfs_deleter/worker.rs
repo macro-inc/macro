@@ -1,9 +1,12 @@
+use crate::outbound::sfs_deletion::{PgSfsDeletion, SfsDeletionClient};
 use crate::pubsub::sfs_deleter::context::SFSDeleteContext;
 use crate::pubsub::sfs_deleter::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
+use email::domain::attachment_cleanup::sfs_deletion::SfsDeletionService;
 use futures::StreamExt;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
@@ -22,8 +25,10 @@ pub(crate) fn context(
     sfs_client: StaticFileServiceClient,
 ) -> SFSDeleteContext {
     SFSDeleteContext {
-        db,
-        sfs_client,
+        service: Arc::new(SfsDeletionService {
+            repository: PgSfsDeletion(db),
+            files: SfsDeletionClient(sfs_client),
+        }),
         sqs_worker: worker.clone(),
     }
 }

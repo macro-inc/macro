@@ -54,6 +54,8 @@ pub mod signature_settings;
 pub mod backfill_jobs;
 pub mod gmail_push;
 pub mod inbox_connection;
+/// File-service and stored attachment deletion.
+pub mod sfs_deletion;
 pub mod user_deletion;
 
 /// Link-maintenance persistence, notifications, and temporary physical deletion.
