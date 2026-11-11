@@ -3,7 +3,14 @@
 # repo is rendered from that directory outside the monorepo, and its image
 # installs node_modules from exactly this lock. `--check` fails instead of
 # writing when the committed lock is stale.
+# Run it inside `nix develop`: the image installs with the devshell's Bun,
+# which reads only lockfile version 1.
 set -euo pipefail
+
+case "$(bun --version)" in
+  1.3.*) ;;
+  *) echo "run inside nix develop: Bun $(bun --version) writes a lockfile the image's Bun cannot read" >&2; exit 1 ;;
+esac
 
 repo_root=$(git rev-parse --show-toplevel)
 package="$repo_root/packages/starter-agent"

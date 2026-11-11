@@ -67,6 +67,7 @@ export const redact = (text: string): string => {
 };
 
 /** Control characters, and the ones that reorder text, which could spoof a log line. */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching control characters is the point.
 const control = /[\u0000-\u001f\u007f‪-‮⁦-⁩]+/g;
 
 /** Text with control characters out, cut short: safe on one line in a log or DM. */
