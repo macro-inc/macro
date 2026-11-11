@@ -73,7 +73,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { replaceCitations } from '../../citationsUtils';
+import { DecoratorHostContext } from '../../context/DecoratorHostContext';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { MarkdownHostContext } from '../../context/MarkdownHostContext';
+import { createLexicalDecoratorHost } from '../../decorator-host/lexical';
 import '../../styles.css';
 import type { BlockName } from '@core/block';
 import {
@@ -1198,7 +1201,7 @@ export function StaticLexical(props: { serializedState: string }) {
   return <>{tree()}</>;
 }
 
-export function StaticMarkdown(props: {
+type StaticMarkdownProps = {
   markdown: string;
   parentEditor?: LexicalEditor;
   theme?: EditorThemeClasses;
@@ -1217,7 +1220,19 @@ export function StaticMarkdown(props: {
   lazy?: boolean;
   /** Disable preview interactions while exposing a plain-text equivalent to assistive technology. */
   inert?: boolean;
-}) {
+};
+
+export function StaticMarkdown(props: StaticMarkdownProps) {
+  const wrapper = useContext(LexicalWrapperContext);
+  const host = createLexicalDecoratorHost(wrapper);
+  return (
+    <DecoratorHostContext.Provider value={host}>
+      <StaticMarkdownInner {...props} />
+    </DecoratorHostContext.Provider>
+  );
+}
+
+function StaticMarkdownInner(props: StaticMarkdownProps) {
   let {
     editor: contextEditor,
     theme: parentTheme,

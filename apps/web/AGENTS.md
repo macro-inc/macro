@@ -277,6 +277,8 @@ adapter tests separately check file types, access failures, and split selection.
 Keep shared mention, image, equation and horizontal-rule components on
 `DecoratorHost`; preserve the source host's command order, transaction boundaries
 and cached media props.
+Establish a real Source decorator host before StaticMarkdown builds its eager
+DOM tree; preserve its inherited Lexical wrapper instead of native host keys.
 Keep the floating link controller and markup on `LinkMenuHost`; its Source
 adapter retains PluginManager ownership and HIGH Escape/CRITICAL Enter order.
 Keep the table size picker on `TablePickerHost`; its Source adapter retains
