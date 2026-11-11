@@ -19,6 +19,7 @@ import { theme } from '../../theme';
 import { installNativeMarkdownOverlays } from '../installNativeMarkdownOverlays';
 import { createNativeFocusTarget } from '../overlay-hosts/native-focus';
 import blockGap from './fixtures/block-gap.json';
+import listSwipe from './fixtures/list-swipe.json';
 import tableSelection from './fixtures/table-selection.json';
 
 function element(id: string) {
@@ -181,6 +182,10 @@ const reportState = () => {
   );
 };
 runtime.view.onCommit(() => queueMicrotask(reportState));
+element('load-swipe').addEventListener('click', () => {
+  runtime.port.setState(JSON.stringify(listSwipe));
+  runtime.port.command(CommandCode.ClearHistory);
+});
 element('load-gap').addEventListener('click', () => {
   runtime.port.setState(JSON.stringify(blockGap));
   runtime.port.command(CommandCode.ClearHistory);

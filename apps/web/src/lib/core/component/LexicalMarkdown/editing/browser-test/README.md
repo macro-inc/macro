@@ -35,7 +35,11 @@ must wait for command completion and recheck disposal/read-only UI before
 calling browser focus. The fixture observes the real focus method and published
 DOM; it never fabricates flags, a synchronous executor step or model output.
 
-The installer also owns block-gap clicks and table long presses. Its required
+The installer also owns body list swipes, block-gap clicks and table long presses.
+Trusted Chromium phone/tablet touch checks indent/outdent and listener disposal,
+remount and read-only admission in `list-swipe.browser.e2e.ts`. Native list policy
+keeps nested descendants with their parent; the adapter supplies gesture geometry
+and uses current session-edit admission. Its required
 `canEdit` accessor comes from the document host; it does not infer reactive
 permission from DOM attributes. The gap fixture loads actual Source-produced
 code JSON and clears real native history after loading, then checks insertion,

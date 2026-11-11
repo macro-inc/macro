@@ -1,5 +1,5 @@
 import { EditorView } from '@macro-inc/lexical-wasm-view';
-import { dispatchApplicationCommand } from '../group-b/command';
+import { dispatchApplicationCommandIfSessionEdit } from '../group-b/command';
 
 /** Touch geometry only; native policy moves each item with its complete nested group. */
 export function registerNativeListSwipeIndent(
@@ -68,7 +68,7 @@ export function registerNativeListSwipeIndent(
           view.mirror.keyGeneration !== generation
         )
           return;
-        dispatchApplicationCommand(view, 'group-b.move', {
+        dispatchApplicationCommandIfSessionEdit(view, 'group-b.move', {
           action: 'swipe',
           key: item,
           outdent: dx < 0,

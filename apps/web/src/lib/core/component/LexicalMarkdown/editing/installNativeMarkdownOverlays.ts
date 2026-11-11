@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
+import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/native';
 import { registerNativeTableTouchSelection } from '../plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../plugins/trailing-paragraph/native';
 import { createMenuOperations } from '../shared/inlineMenu';
@@ -76,6 +77,7 @@ export function installNativeMarkdownOverlays(
   let comments: NativeComments | undefined;
   try {
     listeners.add(registerNativeChecklist(view));
+    listeners.add(registerNativeListSwipeIndent(view, options.canEdit));
     if (options.comments) {
       const installed = createNativeComments(view);
       comments = installed;

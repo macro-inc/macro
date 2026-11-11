@@ -3437,3 +3437,7 @@ Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
 optional-menu reply and confirm ordinary typing still works. Keep test transport
 same-origin and fail external request attempts rather than contacting production.
+
+For native body list swipes, use a touch profile and swipe a list row horizontally
+to indent or outdent. Verify vertical scrolling, read-only mode and overlay
+disposal/remount separately; desktop drag controls do not establish touch support.
