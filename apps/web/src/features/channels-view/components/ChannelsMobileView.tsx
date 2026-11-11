@@ -25,13 +25,12 @@ import { InboxDivider } from '@entity/composed/list-entity/shared';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn, EmptyStatePanel, TabSelector } from '@ui';
+import { Button, cn, EmptyStatePanel } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   For,
-  type JSX,
   Match,
   on,
   onCleanup,
@@ -59,17 +58,10 @@ export function ChannelsMobileView(props: {
   pinned: readonly ChannelEntity[];
   searchQuery: string;
   onClearSearch: () => void;
-  /** Flagged sections compose their tabs into the existing Home list. */
-  header?: JSX.Element;
   horizontalPins?: boolean;
   preferences?: ChannelSectionPreferences;
-  panelValue?: string;
   scrollKey?: string;
   includePinnedInList?: boolean;
-  headingForChannel?: (
-    channel: ChannelEntity,
-    index: number
-  ) => string | undefined;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -277,13 +269,6 @@ export function ChannelsMobileView(props: {
             >
               {/* Home's touch row (InboxListEntity): avatar column,
                       unread rail, and a divider inset to the content. */}
-              <Show when={props.headingForChannel?.(channel, index())}>
-                {(heading) => (
-                  <div class="px-(--mobile-chrome-gutter) pt-4 pb-2 text-sm font-medium text-ink-muted">
-                    {heading()}
-                  </div>
-                )}
-              </Show>
               <div
                 data-soup-entity
                 class={cn(
@@ -422,13 +407,8 @@ export function ChannelsMobileView(props: {
               </For>
             </ChannelPinGrid>
           </Show>
-          {props.header}
         </div>
-        <Show when={props.panelValue} fallback={content}>
-          {(value) => (
-            <TabSelector.Panel value={value()}>{content}</TabSelector.Panel>
-          )}
-        </Show>
+        {content}
         <div
           aria-hidden="true"
           class="h-[max(1rem,var(--mobile-content-inset-bottom,0px))]"

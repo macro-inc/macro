@@ -1,34 +1,27 @@
-import { SearchBar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { PillTabs } from '@components/app/mobile/PillTabs';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { enableChannelTags } from '@core/constant/featureFlags';
-import { touchHandler } from '@core/directive/touchHandler';
 import type { ChannelEntity } from '@entity';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
-import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, TabSelector, Tooltip } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  Show,
-} from 'solid-js';
+import { Button } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
 import { deduplicateChannels } from '../../../../queries';
 import { useChannelListSearchPool } from '../../../../queries/channel-list-search-pool';
 import { ChannelsMobileView } from '../../../ChannelsMobileView';
-import { createSectionSearchSource } from '../channel-discovery-source';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
 import { MobileSectionOptions } from './MobileSectionOptions';
 import {
@@ -59,41 +52,24 @@ export function MobileSectionsView(props: {
     return [...teamLabels, ...personalLabels];
   });
   const [selection, setSelection] = createSignal<MobileSectionTab>('all');
-  const [query, setQuery] = createSignal('');
-  const [searchOpen, setSearchOpen] = createSignal(false);
-  let searchInput: HTMLInputElement | undefined;
   const keys = () => mobileSectionTabKeys(labels(), state.sectionOrder);
   const selected = () => resolveMobileSectionTab(selection(), keys());
   const selectedLabel = () =>
     labels().find((label) => `label:${label.id}` === selected());
   const preferences = () => {
     const label = selectedLabel();
-    if (searchOpen() || !label) return;
+    if (!label) return;
     return {
       sort: 'name' as const,
       ...state.sectionPreferences[`label:${label.id}`],
     };
   };
-  const tabElements = new Map<MobileSectionTab, HTMLElement>();
-  createEffect(
-    on(selected, (key) =>
-      tabElements
-        .get(key)
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-    )
-  );
   const localChannels = useChannelListSearchPool();
   const members = useCachedChannelsByIds(
     () => selectedLabel()?.channelIds ?? [],
     sectionsEnabled
   );
   usePending('channels.section.members', members.isLoading);
-  const search = createSectionSearchSource({
-    enabled: searchOpen,
-    text: query,
-    recent: () => props.sources.recents,
-    localChannels,
-  });
   const sectionChannels = () =>
     channelsForMobileSection({
       tab: selected(),
@@ -110,7 +86,7 @@ export function MobileSectionsView(props: {
     selected() === 'direct_messages'
       ? props.sources.direct_messages
       : props.sources.recents;
-  const browsing: ChannelsDataSource = {
+  const source: ChannelsDataSource = {
     items: sectionChannels,
     isLoading: () =>
       selectedLabel() ? members.isLoading() : base().isLoading(),
@@ -129,21 +105,6 @@ export function MobileSectionsView(props: {
         shared.refetch(),
         personal.refetch(),
       ]);
-    },
-  };
-  const activeSource = () => (searchOpen() ? search : browsing);
-  const source: ChannelsDataSource = {
-    items: () => activeSource().items(),
-    isLoading: () => activeSource().isLoading(),
-    isFetching: () => activeSource().isFetching(),
-    error: () => activeSource().error(),
-    hasMore: () => activeSource().hasMore(),
-    isLoadingMore: () => activeSource().isLoadingMore(),
-    loadMore: async () => {
-      await activeSource().loadMore();
-    },
-    refresh: async () => {
-      await activeSource().refresh();
     },
   };
   const title = (key: MobileSectionTab) => {
@@ -197,139 +158,76 @@ export function MobileSectionsView(props: {
       const insertion = order.indexOf('channels');
       order.splice(insertion < 0 ? order.length : insertion, 0, key);
       setSectionOrder(order);
-      setQuery('');
-      setSearchOpen(false);
       setSelection(key);
     },
   });
   return (
-    <TabSelector.Root
-      value={selected()}
-      onChange={choose}
-      class="size-full min-h-0"
-    >
+    <>
+      <SplitHeaderLeft>
+        <nav
+          aria-label={t('channelSections.sections')}
+          class="h-10 min-w-0 flex-1"
+        >
+          <PillTabs
+            scrollable
+            class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+            contentClass="px-(--mobile-chrome-gutter)"
+            value={selected()}
+            onChange={choose}
+            items={keys().map((key) => ({
+              value: key,
+              label: (
+                <span class="flex items-center gap-1.5">
+                  {title(key)}
+                  <Show
+                    when={
+                      labels().find((label) => `label:${label.id}` === key)
+                        ?.teamId
+                    }
+                  >
+                    <UsersIcon class="size-3.5 shrink-0" />
+                  </Show>
+                  <Show
+                    when={
+                      labels().find((label) => `label:${label.id}` === key)
+                        ?.rule
+                    }
+                  >
+                    <FunnelIcon class="size-3.5 shrink-0" />
+                  </Show>
+                </span>
+              ),
+            }))}
+            leading={
+              <Show when={selectedLabel()}>
+                {(label) => (
+                  <HeaderIsland>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={t('channelSections.optionsFor', {
+                        name: label().name,
+                      })}
+                      onClick={() => setOptionsFor(label().id)}
+                    >
+                      <DotsThreeIcon class="size-5" />
+                    </Button>
+                  </HeaderIsland>
+                )}
+              </Show>
+            }
+          />
+        </nav>
+      </SplitHeaderLeft>
       <ChannelsMobileView
         source={source}
-        pinned={searchOpen() ? [] : props.pinned}
-        searchQuery={query()}
-        onClearSearch={() => setQuery('')}
+        pinned={props.pinned}
+        searchQuery=""
+        onClearSearch={() => {}}
         horizontalPins
         scrollKey={selected()}
-        panelValue={selected()}
         preferences={preferences()}
-        includePinnedInList={selected() !== 'all' || searchOpen()}
-        headingForChannel={
-          searchOpen()
-            ? (channel, index) => {
-                if (index !== 0 && channel.isParticipant === false) return;
-                if (
-                  index !== 0 &&
-                  source.items()[index - 1]?.isParticipant !== false
-                )
-                  return;
-                return channel.isParticipant === false
-                  ? t('channelSections.notJoined')
-                  : t(
-                      query().trim()
-                        ? 'channelSections.channels'
-                        : 'channelSections.recent'
-                    );
-              }
-            : undefined
-        }
-        header={
-          <div class="flex flex-col gap-2 px-(--mobile-chrome-gutter) pb-2">
-            <Show
-              when={searchOpen()}
-              fallback={
-                <div class="flex min-w-0 items-center gap-2">
-                  <TabSelector>
-                    <TabSelector.List
-                      aria-label={t('channelSections.sections')}
-                    >
-                      <For each={keys()}>
-                        {(key) => {
-                          const label = () =>
-                            labels().find(
-                              (label) => `label:${label.id}` === key
-                            );
-                          return (
-                            <Tooltip label={title(key)}>
-                              <TabSelector.Tab
-                                value={key}
-                                ref={(element: HTMLButtonElement) => {
-                                  tabElements.set(key, element);
-                                  touchHandler(element, () => ({
-                                    onLongPress: () => {
-                                      const current = label();
-                                      if (!current) return;
-                                      setSelection(key);
-                                      setOptionsFor(current.id);
-                                    },
-                                  }));
-                                }}
-                              >
-                                <span class="truncate">{title(key)}</span>
-                                <Show when={label()?.teamId}>
-                                  <UsersIcon class="size-3.5 shrink-0" />
-                                </Show>
-                                <Show when={label()?.rule}>
-                                  <FunnelIcon class="size-3.5 shrink-0" />
-                                </Show>
-                              </TabSelector.Tab>
-                            </Tooltip>
-                          );
-                        }}
-                      </For>
-                    </TabSelector.List>
-                  </TabSelector>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t('channelSections.search')}
-                    onClick={() => {
-                      setSearchOpen(true);
-                      searchInput?.focus();
-                    }}
-                  >
-                    <SearchIcon class="size-4" />
-                  </Button>
-                </div>
-              }
-            >
-              <SearchBar
-                ref={(element) => {
-                  searchInput = element;
-                }}
-                label={t('channelSections.search')}
-                value={query()}
-                onValueChange={setQuery}
-                placeholder={t('channelSections.search')}
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setQuery('');
-                  setSearchOpen(false);
-                }}
-              >
-                {t('common.cancel')}
-              </Button>
-            </Show>
-            <Show when={selectedLabel()}>
-              {(label) => (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setOptionsFor(label().id)}
-                >
-                  {t('channelSections.optionsFor', { name: label().name })}
-                </Button>
-              )}
-            </Show>
-          </div>
-        }
+        includePinnedInList={selected() !== 'all'}
       />
       <Show when={optionsLabel()}>
         {(label) => (
@@ -387,6 +285,6 @@ export function MobileSectionsView(props: {
           />
         )}
       </Show>
-    </TabSelector.Root>
+    </>
   );
 }

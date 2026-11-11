@@ -929,6 +929,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Rail splits open at latest before notifications load; only rows that stand
   for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign on desktop and phone with `enable-chat-sidebar-sections`; wait for its result and restore the original rail and Recent phone feed when off.
+  Compose phone section navigation with the shared `PillTabs` in the split header, retain its scrolling and active-pill visibility, and use dock Search instead of a separate Chat search control.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering. Keep every joined public/private channel in All channels regardless of custom-section assignments.
   Hide section drag-handle icons; retain whole-heading drag-to-reorder and an icon-free reorder control in an out-of-flow wrapper revealed on keyboard focus without increasing header height. Preserve normal collapse clicks and exclude action buttons from dragging. Keep personal section order and route list navigation through the sectioned renderer's scroll handle, scrolling immediately with two rows of context clamped to the viewport.

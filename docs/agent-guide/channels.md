@@ -1328,16 +1328,15 @@ unread dots. Up to six loaded favorites retain their saved order in one sideways
 scrolling row. All is selected initially, followed by Direct messages and custom
 sections in personal display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
-and Decline actions. Other tabs retain their pinned members. The shared dynamic
-tab control scrolls and reveals the selected section. People and funnel icons
-match desktop.
+and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
+control lives in the floating split header, scrolls horizontally, and reveals the
+selected section. People and funnel icons match desktop.
 
-The search control expands inside Chat, without adding a route or replacing dock
-Search. It groups Not joined before Recent or matching Channels. Unjoined rows
-are dimmed and expose Join. Opening conversations retains latest-message
-navigation, top-level read marking, incoming-call actions, and pull-to-refresh.
+Search uses the existing dock Search; Chat has no separate search button or
+in-list search field. Opening conversations retains latest-message navigation,
+top-level read marking, incoming-call actions, and pull-to-refresh.
 
-Long-press a section tab, or use its visible options action, to open the shared
+Use the selected section's options button beside the pills to open the shared
 mobile sheet. Visible to, Sort, Display, and mute drill into the sheet with Back,
 not nested touch submenus. Sharing uses the verified current team, including when
 no other shared sections exist. **Edit section** closes the options sheet and opens
