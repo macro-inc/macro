@@ -1,0 +1,52 @@
+crates/contacts/Cargo.toml
+  s_8a3f6e5dc323ea::t_9c3e6606cdb147 25-33,44-51
+crates/contacts/src/inbound/user_picture_consumer/test.rs
+  s_8a3f6e5dc323ea::t_858f80339dfe75 1-63
+crates/contacts/src/inbound/user_picture_consumer.rs
+  s_8a3f6e5dc323ea::t_858f80339dfe75 1-105,107-113,115-195
+  s_8a3f6e5dc323ea::t_028b9a00ecb05f 106,114
+crates/contacts/src/outbound.rs
+  s_8a3f6e5dc323ea::t_9c3e6606cdb147 10-12
+crates/contacts/AGENTS.md
+  s_8a3f6e5dc323ea::t_21790e52c7c7d6 21
+services/document_storage_service/Cargo.toml
+  s_8a3f6e5dc323ea::t_21790e52c7c7d6 108
+crates/contacts/src/inbound.rs
+  s_8a3f6e5dc323ea::t_9c3e6606cdb147 4-6
+services/document_storage_service/src/server.rs
+  s_8a3f6e5dc323ea::t_96f8fa50ba0809 1428,1430
+  s_8a3f6e5dc323ea::t_21790e52c7c7d6 1424-1427,1429,1432-1471
+  s_8a3f6e5dc323ea::t_1245275174b04d 1431
+crates/contacts/src/domain/service.rs
+  s_8a3f6e5dc323ea::t_858f80339dfe75 21-22
+crates/contacts/src/domain/service/picture_fanout/test.rs
+  s_8a3f6e5dc323ea::t_9798a2935c935e 1-5,9-19,21-48,50-79,81-93,98-104,112-129,137-152,160-193,198-199
+  s_8a3f6e5dc323ea::t_644c49c22f37f4 6-8,20,49,80
+  s_8a3f6e5dc323ea::t_858f80339dfe75 94-97,105-111,130-136,153-159,194-197
+crates/contacts/src/outbound/picture_gateway.rs
+  s_8a3f6e5dc323ea::t_858f80339dfe75 43-45
+  s_8a3f6e5dc323ea::t_9798a2935c935e 1-42,46-48
+crates/contacts/src/domain/service/picture_fanout.rs
+  s_8a3f6e5dc323ea::t_9c3e6606cdb147 1-2,4-107
+  s_8a3f6e5dc323ea::t_9798a2935c935e 3
+crates/contacts/src/domain/ports.rs
+  s_8a3f6e5dc323ea::t_9c3e6606cdb147 114-124
+Cargo.lock
+  s_8a3f6e5dc323ea::t_23659f2d524954 5190,5193,5197,5199,5202,5214
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f5292782bc174c20ba1ac9e1c3e1e83d18b5fac7",
+  "prompts": {},
+  "sessions": {
+    "s_8a3f6e5dc323ea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "50718e21-7238-4ae9-a3f1-47fb5fb869b0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
