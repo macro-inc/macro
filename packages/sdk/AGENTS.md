@@ -160,7 +160,7 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
-- Every public method carries one MCP hint tag (`@readonly`, `@write` or
+- Every public method carries one MCP hint tag (`@readonly`, `@write`, `@send` or
   `@destructive`, plus `@openworld`/`@idempotent` when true) or
   `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
   by them and fails on an untagged method. A new or changed public method
