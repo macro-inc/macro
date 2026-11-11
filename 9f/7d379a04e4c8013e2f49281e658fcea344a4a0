@@ -1,0 +1,55 @@
+apps/web/src/features/channel/Call/CallTeamShareChangePrompt.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 1-48
+apps/docs/support.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 49
+apps/web/src/features/channel/Call/tests/call-events.test.ts
+  s_e28579a043217e::t_fcfc4a753d47a4 141-158
+apps/web/src/features/channel/Call/tests/team-share.test.ts
+  s_e28579a043217e::t_fcfc4a753d47a4 10,20-25,38,51,57-71
+apps/docs/getting-started.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 50
+apps/web/src/features/block-call/component/sidepanel/CallSidePanelSections.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 4-5,133-134,138-140,143-151,157-163,165,176,179,183,208
+apps/web/src/lib/core/component/TopBar/ShareButton.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 21,78-79,1526-1531
+apps/web/src/features/channel/Call/call-events.ts
+  s_e28579a043217e::t_fcfc4a753d47a4 84-89,97-100,110,200-205,220-222,285-288
+apps/docs/security.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 53
+apps/web/src/features/channel/Call/use-toggle-share-with-team.ts
+  s_e28579a043217e::t_fcfc4a753d47a4 1-2,5,10-15,20,28,31-33,36-48
+apps/docs/AI/mcp/tools/update-call-record.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 10,18
+apps/web/src/features/channel/Call/CallControls/CallSharingMenu.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 6,54-57,72,74,98-120,125,134
+apps/web/src/features/channel/Call/use-call-team-share-change.ts
+  s_e28579a043217e::t_fcfc4a753d47a4 1-58
+apps/docs/permissions.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 64
+apps/docs/product/calls.mdx
+  s_e28579a043217e::t_fcfc4a753d47a4 18,20
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 39,41,776,780-792
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 122-129
+apps/web/src/lib/core/component/TopBar/ShareButton.test.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 90,283-285,454-457,1074-1077,1079,1085-1104,1114-1117,1119
+apps/web/src/features/channel/Call/CallControls/CallTeamShareChangeStatus.tsx
+  s_e28579a043217e::t_fcfc4a753d47a4 1-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9f7d379a04e4c8013e2f49281e658fcea344a4a0",
+  "prompts": {},
+  "sessions": {
+    "s_e28579a043217e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "490a404d-4c83-41f2-b737-127d76ca9d95",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
