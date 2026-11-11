@@ -51,8 +51,9 @@ only, behind `enable-ideas`.
   move, to the end. The server decides what is done: accepting anything but a
   background idea makes it `done`. An `accepted` background idea with no run
   was taken on for the person by an agent; it stays open and Run starts it.
-- Accept sends the idea's `updatedAt` as the card read it. If the idea was
-  rewritten since, the server refuses (409): the source reads the feed again
+- Accept sends the idea's `updatedAt` as the card read it. The server checks
+  it only when the accept starts a background run: if the idea was rewritten
+  since, it refuses (409), the source reads the feed again
   and answers `changed`, and the card shows the new text with a note, so Run
   never starts text the person didn't see.
 - The page follows the chosen design frames: one column; a card is a tile,
