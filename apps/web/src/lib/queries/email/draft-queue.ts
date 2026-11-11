@@ -415,9 +415,19 @@ export async function saveEmailDraftQueued(
     }
     return { kind: 'queued' };
   }
+  refreshAfterCommittedSave(input, outcome.threadId);
+  return {
+    kind: 'committed',
+    draftId: outcome.draftId,
+    threadId: outcome.threadId,
+  };
+}
+
+/** A committed save's cache effects; a failure here never fails the save. */
+function refreshAfterCommittedSave(input: QueuedSaveInput, threadId: string) {
   try {
-    markThreadDraftSaved(outcome.threadId);
-    if (input.previousThreadId && input.previousThreadId !== outcome.threadId) {
+    markThreadDraftSaved(threadId);
+    if (input.previousThreadId && input.previousThreadId !== threadId) {
       markThreadDraftSaved(input.previousThreadId);
       invalidateSoupEntity(input.previousThreadId);
       void refetchSoupEntity(input.previousThreadId, 'emailThread').catch(
@@ -426,18 +436,11 @@ export async function saveEmailDraftQueued(
     }
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
-      void refetchSoupEntity(outcome.threadId, 'emailThread').catch(
-        reportError
-      );
+      void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
     }
   } catch (error) {
     reportError(error);
   }
-  return {
-    kind: 'committed',
-    draftId: outcome.draftId,
-    threadId: outcome.threadId,
-  };
 }
 
 /** Deletes over the queue; a commit mirrors useDeleteDraftMutation's cache effects. */
