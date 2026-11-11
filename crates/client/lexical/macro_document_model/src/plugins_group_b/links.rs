@@ -14,6 +14,7 @@ struct Policy(AutoLinkMode);
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
 enum LinkAction {
+    Prepare,
     Insert { url: String, label: String },
     Update { url: String, label: String },
     Url { url: Option<String> },
@@ -108,6 +109,17 @@ impl Plugin for Links {
     }
 }
 fn apply(tx: &mut Transaction<'_>, action: &LinkAction) -> Result<Handled, Error> {
+    if let LinkAction::Prepare = action {
+        if tx
+            .selection()
+            .and_then(Selection::as_range)
+            .is_none_or(|range| range.is_collapsed())
+        {
+            return Ok(Handled::No);
+        }
+        toggle_link(tx, Some(""), ToggleLinkAttributes::default())?;
+        return Ok(Handled::Yes);
+    }
     if let LinkAction::Unlink = action {
         unlink(tx)?;
         return Ok(Handled::Yes);
@@ -334,3 +346,6 @@ fn append_match(
     tx.get_mut::<LinkNode>(previous)?.url = found.url;
     Ok(())
 }
+
+#[cfg(test)]
+mod prepare_test;
