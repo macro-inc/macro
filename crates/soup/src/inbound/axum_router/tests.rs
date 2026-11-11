@@ -2356,7 +2356,7 @@ async fn property_cursor_with_missing_key_is_not_restarted() {
         limit: 10,
         val: CursorVal {
             sort_type: sort,
-            last_val: sort.position(None, chrono::DateTime::default()),
+            last_val: sort.position(None, None, chrono::DateTime::default()),
         },
         filter: ApiEntityFilterAst::default(),
     })

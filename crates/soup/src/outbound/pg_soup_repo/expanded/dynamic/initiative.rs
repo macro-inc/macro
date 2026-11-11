@@ -126,6 +126,7 @@ pub(super) fn initiative_top_clause(
     sort: SimpleSortMethod,
     grouped: bool,
     property_sort: bool,
+    name_sort: bool,
     filter: Option<&Expr<InitiativeLiteral>>,
 ) -> String {
     let sort_ts = match sort {
@@ -153,9 +154,10 @@ pub(super) fn initiative_top_clause(
     } else {
         INITIATIVE_LISTING_ACCESS.to_owned()
     };
+    let name_column = super::name_sort_column(name_sort, "i.name");
     format!(
         r#"SELECT 'initiative'::text as item_type, i.id::text as id,
-        {sort_ts}::timestamptz as sort_ts {group_columns}
+        {sort_ts}::timestamptz as sort_ts {group_columns}{name_column}
         FROM initiative i
         {history_join}
         WHERE {access}"#

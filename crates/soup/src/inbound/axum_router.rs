@@ -95,7 +95,8 @@ pub struct Params {
     limit: Option<u16>,
     /// Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
     /// Missing definitions, unsupported types, and mismatched values sort as missing.
-    /// Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+    /// `name` orders by the item's own name, case-insensitively, unnamed last.
+    /// Flat property and name sorts omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Defaults to viewed_at.
     #[serde(default)]
     sort_method: Option<SoupApiSort>,
@@ -159,6 +160,10 @@ pub enum SoupApiSort {
     /// Flat reads omit calendar events, email, channels, calls, companies, and agent sessions.
     /// Grouped reads retain calendar events.
     Property,
+    /// Sort by the item's own name, case-insensitively, with unnamed items
+    /// last, then newest update and ID. Database rows have no name here and
+    /// always sort last. Omits the same sources a flat property sort does.
+    Name,
 }
 
 impl SoupApiSort {
@@ -178,6 +183,10 @@ impl SoupApiSort {
                     property_definition_id: property.ok_or(SoupHandlerErr::Expand)?,
                     direction,
                 },
+                filters,
+            )),
+            Self::Name => SoupQuery::Property(models_pagination::Query::Sort(
+                DynamicSort::name(direction),
                 filters,
             )),
             Self::ViewedAt => SoupQuery::new_sort_simple(SimpleSortMethod::ViewedAt, filters),
@@ -209,6 +218,9 @@ pub enum GroupedSoupSort {
     /// Missing definitions and unsupported types use update-time ordering.
     /// Email, channels, calls, companies, and agent sessions never appear.
     Property,
+    /// Sort each bin by the item's own name, case-insensitively, with unnamed
+    /// items last, then newest update and ID.
+    Name,
 }
 
 impl GroupedSoupSort {
@@ -225,6 +237,11 @@ impl GroupedSoupSort {
         }
         if property.is_some() {
             return Err(SoupHandlerErr::Expand);
+        }
+        if matches!(self, Self::Name) {
+            return Ok(DynamicSort::name(
+                direction.map(Into::into).unwrap_or_default(),
+            ));
         }
         self.into_model().map(Into::into)
     }
