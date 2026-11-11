@@ -321,6 +321,7 @@ async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent(
         let event = IncomingEvent {
             event_id: generate_uuid_v7(),
             schema_version: 1,
+            routine_id: None,
             payload: crate::domain::event_trigger::EventPayload::Github(
                 github::broker::GithubWebhookTopicEvent::Received(delivery),
             ),
