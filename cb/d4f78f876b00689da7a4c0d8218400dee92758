@@ -1,0 +1,28 @@
+crates/channels/src/domain/side_effects/test.rs
+  s_1d87757ab57cf0::t_450b40472ae7c5 786,789,795-796,819,823,876
+docs/agent-guide/calls.md
+  s_1d87757ab57cf0::t_bf224193ab45b8 99-100
+crates/channels/src/domain/side_effects.rs
+  s_1d87757ab57cf0::t_280222d03dab72 816,841-842,878,894,1054-1056
+  s_1d87757ab57cf0::t_3d83c928a82c8e 748
+  s_1d87757ab57cf0::t_a88334850769a2 139-140
+  s_1d87757ab57cf0::t_77d274cc183197 703-714,719-720,722-724
+docs/design/call-chat-in-channel.md
+  s_1d87757ab57cf0::t_bf224193ab45b8 111-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cbd4f78f876b00689da7a4c0d8218400dee92758",
+  "prompts": {},
+  "sessions": {
+    "s_1d87757ab57cf0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40ca39f-98af-4021-8e4a-3bbd8c1d134d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
