@@ -1,0 +1,188 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/desktop_qa_macos.rs
+name: Desktop QA macOS
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch, tag or sha) of macro-inc/macro to build and test
+        required: true
+        type: string
+      suite:
+        description: smoke = launch checks; full = smoke plus DevTools probe, longer soak and cargo test
+        required: true
+        type: choice
+        default: smoke
+        options:
+        - smoke
+        - full
+      report:
+        description: Optional work item key of the factory (echoed into the run name and summary)
+        required: false
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  qa-macos:
+    name: QA on macOS
+    runs-on:
+    - nscloud-macos-sequoia-arm64-12x28-with-cache
+    - nscloud-cache-tag-macro-desktop-macos
+    - nscloud-cache-size-100gb
+    env:
+      DESKTOP_NIX_CACHE_SIZE_GB: '100'
+      QA_SUITE: ${{ inputs.suite }}
+      QA_REF: ${{ inputs.ref }}
+      QA_REPORT: ${{ inputs.report }}
+    timeout-minutes: 120
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ inputs.ref }}
+        persist-credentials: 'false'
+    - name: Checkout QA harness
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        ref: ${{ github.sha }}
+        path: .qa-harness
+        sparse-checkout: apps/web/tests/macos
+        persist-credentials: 'false'
+    - name: Record tested commit
+      run: |-
+        echo "QA_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        echo "QA_OUT=$RUNNER_TEMP/qa-out" >> "$GITHUB_ENV"
+      shell: bash
+    - name: Assert arm64 runner
+      run: |
+        set -euo pipefail
+        if [ "$(uname -m)" != "arm64" ]; then
+          echo "macOS DMG builds must run on an arm64/aarch64 runner, got $(uname -m)" >&2
+          exit 1
+        fi
+      shell: bash
+    - name: Mount macOS Nix binary cache
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: ~/.cache/macro-desktop-nix
+      continue-on-error: true
+    - name: Install Nix
+      run: |
+        set -euo pipefail
+        if ! command -v nix >/dev/null 2>&1; then
+          curl --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+            --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
+            sh -s -- install macos --no-confirm \
+            --extra-conf "experimental-features = nix-command flakes" \
+            --extra-conf "sandbox = false" \
+            --extra-conf "trusted-users = root runner"
+        fi
+        echo "/nix/var/nix/profiles/default/bin" >> "$GITHUB_PATH"
+        echo "NIX_REMOTE=daemon" >> "$GITHUB_ENV"
+        export PATH="/nix/var/nix/profiles/default/bin:$PATH"
+        export NIX_REMOTE=daemon
+        nix --version
+      shell: bash
+    - id: nix-cache
+      name: Configure macOS Nix binary cache
+      run: |
+        set -euo pipefail
+
+        # The Apple linker/SDK live outside Nix. Do not reuse their outputs after the
+        # runner image changes its macOS or Xcode version.
+        toolchain_key=$(
+          { xcodebuild -version && sw_vers -buildVersion; } |
+            shasum -a 256 | awk '{print $1}'
+        )
+        cache_root="$HOME/.cache/macro-desktop-nix"
+        cache_dir="$cache_root/$toolchain_key"
+        mkdir -p "$cache_dir"
+        cache_url="file://$cache_dir?compression=zstd&trusted=true&priority=10"
+
+        # The mounted cache root is a symlink; the trailing slash measures its contents.
+        du -sk "$cache_root/" | awk '{printf "Restored macOS Nix cache: %.2f GiB\n", $1 / 1048576}'
+
+        # Initialize an empty cache before adding it as a substituter. Only this local,
+        # repository-specific cache accepts unsigned paths; public caches still require
+        # signatures. Keep the normal /nix store and its daemon-managed permissions.
+        nix store info --store "$cache_url" --json
+        {
+          echo "DESKTOP_NIX_CACHE_ROOT=$cache_root"
+          echo "DESKTOP_NIX_CACHE_DIR=$cache_dir"
+          echo "DESKTOP_NIX_CACHE_URL=$cache_url"
+          echo "NIX_CONFIG<<DESKTOP_NIX_CONFIG_EOF"
+          printf '%s\n' "${NIX_CONFIG:-}"
+          echo "extra-substituters = $cache_url"
+          echo "DESKTOP_NIX_CONFIG_EOF"
+        } >> "$GITHUB_ENV"
+      shell: bash
+      continue-on-error: true
+    - name: Build macOS app with Nix
+      run: |
+        set -euo pipefail
+
+        # The unsigned Chromium (CEF) app the DMG is made from: everything the QA
+        # needs, without the signing identity, notarization or PostHog secrets the
+        # release build requires. Built without --impure, so no telemetry key is
+        # embedded and nothing the app does here reaches PostHog.
+        nix build --option sandbox false --print-build-logs \
+          --out-link "$RUNNER_TEMP/qa-app-result" \
+          ".#tauri-desktop-cef-app"
+
+        # Nix outputs are read-only and live in /nix/store; run a writable copy.
+        app_dir="$RUNNER_TEMP/macro-qa"
+        rm -rf "$app_dir"
+        mkdir -p "$app_dir"
+        cp -a "$RUNNER_TEMP/qa-app-result/Macro.app" "$app_dir/Macro.app"
+        chmod -R u+w "$app_dir/Macro.app"
+
+        # The copy moved the bundle, so seal it again. Ad-hoc is enough to launch a
+        # locally built app; the release signing identity is not needed for QA.
+        codesign --force --deep --sign - "$app_dir/Macro.app" ||
+          echo "::warning::ad-hoc codesign failed; the bundle-codesign check will say why"
+
+        echo "QA_APP=$app_dir/Macro.app" >> "$GITHUB_ENV"
+        du -sh "$app_dir/Macro.app"
+      shell: bash
+    - name: cargo test (src-tauri)
+      if: inputs.suite == 'full'
+      run: |
+        set -uo pipefail
+
+        # The Rust unit tests of src-tauri on macOS. Best effort: the result is
+        # recorded either way and the QA harness reports it as the `cargo-test` check.
+        mkdir -p "$QA_OUT"
+        # tauri::generate_context! needs the frontend directory to exist; the unit
+        # tests do not use its contents.
+        mkdir -p apps/web/dist
+        [ -e apps/web/dist/index.html ] || echo '<!doctype html>' > apps/web/dist/index.html
+
+        nix develop --command cargo test \
+          --manifest-path apps/web/tauri/Cargo.toml -p app --lib --locked \
+          > "$QA_OUT/cargo-test.log" 2>&1
+        status=$?
+        echo "$status" > "$QA_OUT/cargo-test.status"
+        tail -n 30 "$QA_OUT/cargo-test.log"
+        exit 0
+      shell: bash
+      continue-on-error: true
+    - name: Launch the app and run the QA checks
+      run: |
+        set -uo pipefail
+
+        # Runs the harness from the workflow's own commit (checked out beside the tree
+        # under test), so older refs can be QA'd with today's checks.
+        nix develop --command bun .qa-harness/apps/web/tests/macos/qa.mjs \
+          --app "$QA_APP" --out "$QA_OUT" --suite "$QA_SUITE" \
+          --ref "$QA_REF" --sha "$QA_SHA" --report "$QA_REPORT"
+      shell: bash
+    - name: Upload QA results
+      if: '!cancelled()'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: macos-qa-${{ github.run_id }}
+        path: ${{ runner.temp }}/qa-out
+        if-no-files-found: warn
+        retention-days: '14'
+run-name: macOS QA ${{ inputs.suite }} ${{ inputs.ref }}${{ inputs.report && format(' [{0}]', inputs.report) || '' }}
