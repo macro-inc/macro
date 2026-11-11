@@ -1,6 +1,8 @@
 //! Per-delivery link maintenance, using the existing health and lifecycle services.
 
 mod ports;
+/// Incremental physical mailbox purge and its persistence contracts.
+pub mod purge;
 #[cfg(test)]
 mod test;
 

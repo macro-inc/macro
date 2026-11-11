@@ -18,6 +18,7 @@ mod ingest;
 mod lifecycle;
 mod progress;
 mod projection;
+mod purge;
 mod settings;
 #[cfg(test)]
 mod test;

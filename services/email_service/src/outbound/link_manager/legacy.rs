@@ -1,4 +1,4 @@
-//! Temporary physical-deletion bridge, kept verbatim until the purge extraction.
+//! Temporary outer deletion workflow; incremental purge is delegated to the domain.
 
 use crate::outbound::email_api::GmailApi;
 use crate::pubsub::context::{CrmServiceType, PubSubEventBroker};
@@ -10,7 +10,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use crm::domain::service::CrmService;
 use email::domain::events::{EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata};
 use email::domain::mailbox::link_manager::LegacyLinkDeletion;
-use email_db_client::links::delete::PurgePacing;
+use email::domain::mailbox::link_manager::purge::{LinkPurgeService, PurgePacing};
 use models_email::api::refresh::RefreshEmailEvent;
 use models_email::service::link::Link;
 use models_email::service::pubsub::DeletionReason;
@@ -18,6 +18,7 @@ use sqlx::PgPool;
 
 pub(crate) struct LegacyLinkDeletionAdapter {
     pub db: PgPool,
+    pub purge: LinkPurgeService<email::outbound::mailbox_pg::PgMailboxSync>,
     pub email_api: GmailApi,
     pub auth_service_client: AuthServiceClient,
     pub redis_client: RedisClient,
@@ -88,7 +89,8 @@ async fn handle_delete(
 
     // finally, delete the link and all of its email data in bounded batches; a redelivered
     // message resumes the purge where an interrupted one stopped
-    email_db_client::links::delete::purge_link(&ctx.db, link.id, PurgePacing::default())
+    ctx.purge
+        .purge_link(link.id, PurgePacing::default())
         .await
         .context("Failed to purge link in background task")?;
 

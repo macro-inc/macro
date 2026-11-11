@@ -35,7 +35,9 @@ tools — hexagonal, heavily feature-gated.
 - `src/domain/mailbox/link_manager.rs` (feature `mailbox`): link-maintenance
   delivery disposition, probe timeout, and reconnect notification recipients. It
   reuses the mailbox health and lifecycle services; physical deletion remains
-  behind the temporary `LegacyLinkDeletion` port during extraction.
+  behind the temporary `LegacyLinkDeletion` port during extraction. Its `purge`
+  service owns incremental deletion order, cursors, batching, pacing and counters;
+  `outbound/mailbox_pg/purge.rs` holds its transaction adapter.
 - `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
   disposition, provider-error routing, message deletion, and label reconciliation.
   It also owns history/catalog reconciliation, recovery backfills, provider-message

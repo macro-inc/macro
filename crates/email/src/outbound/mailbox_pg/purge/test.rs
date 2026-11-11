@@ -1,6 +1,10 @@
 use super::*;
-use crate::links::insert::upsert_link;
-use crate::links::update::update_link_sync_status;
+use crate::domain::mailbox::link_manager::purge::{
+    LinkPurgeService, MessageBatch, PurgePacing, PurgeSummary,
+};
+use email_db_client::links::delete::mark_link_deleting;
+use email_db_client::links::insert::upsert_link;
+use email_db_client::links::update::update_link_sync_status;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -8,6 +12,7 @@ use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tracing::field::{Field, Visit};
 use tracing_subscriber::layer::{Context, SubscriberExt as _};
 use tracing_subscriber::registry::LookupSpan;
@@ -159,7 +164,10 @@ fn gmail_link(email: &str) -> anyhow::Result<Link> {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn purge_removes_all_link_data_in_batches(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert_eq!(link_rows(&pool, PURGED).await?, LinkRows::FULL);
@@ -185,7 +193,10 @@ async fn purge_removes_all_link_data_in_batches(pool: Pool<Postgres>) -> anyhow:
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn purge_pauses_between_batches(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // 30 messages in batches of 20 take one full batch and one partial one; threads and
@@ -256,7 +267,10 @@ impl Visit for IntegerFields<'_> {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn purge_phases_record_their_batches_and_pauses(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let recorded = RecordedFields::default();
@@ -308,7 +322,10 @@ async fn purge_phases_record_their_batches_and_pauses(pool: Pool<Postgres>) -> a
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn purge_resumes_after_an_interrupted_run(pool: Pool<Postgres>) -> anyhow::Result<()> {
     // A worker that crashed partway through the message phase. Threads hold 3 messages, so
@@ -354,7 +371,10 @@ async fn purge_resumes_after_an_interrupted_run(pool: Pool<Postgres>) -> anyhow:
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn message_batches_keep_a_thread_until_its_last_message_is_gone(
     pool: Pool<Postgres>,
@@ -382,7 +402,10 @@ async fn message_batches_keep_a_thread_until_its_last_message_is_gone(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("purge_link"))
+    fixtures(
+        path = "../../../../../email_db_client/fixtures",
+        scripts("purge_link")
+    )
 )]
 async fn concurrent_purges_of_one_link_both_succeed(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let (first, second) = tokio::try_join!(
@@ -454,4 +477,28 @@ async fn purge_of_a_missing_link_is_a_no_op(pool: Pool<Postgres>) -> anyhow::Res
     );
 
     Ok(())
+}
+
+async fn purge_link(
+    pool: &Pool<Postgres>,
+    link_id: Uuid,
+    pacing: PurgePacing,
+) -> anyhow::Result<PurgeSummary> {
+    LinkPurgeService {
+        repository: PgMailboxSync::new(pool.clone()),
+    }
+    .purge_link(link_id, pacing)
+    .await
+}
+async fn purge_message_batch(
+    pool: &Pool<Postgres>,
+    link_id: Uuid,
+    cursor: Uuid,
+    limit: NonZeroU32,
+) -> anyhow::Result<MessageBatch> {
+    LinkPurgeService {
+        repository: PgMailboxSync::new(pool.clone()),
+    }
+    .purge_message_batch(link_id, cursor, limit)
+    .await
 }
