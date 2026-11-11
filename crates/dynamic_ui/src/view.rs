@@ -86,6 +86,15 @@ pub enum Widget {
         title: Option<String>,
         tags: Vec<TagNode>,
     },
+    /// A card with one Connect button, for an app or MCP server the user must
+    /// connect before you can continue. Present it instead of telling them to
+    /// open settings; once they connect, an agent session continues by itself.
+    /// Only for an app that is not connected yet.
+    Connect {
+        /// The app's display name, e.g. "Linear".
+        name: String,
+        target: ConnectTarget,
+    },
     /// A nestable flex container of widgets.
     Container {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -205,6 +214,18 @@ pub struct TagNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[specta(optional, type = Vec<TagNode>)]
     pub children: Option<Vec<TagNode>>,
+}
+
+/// What a connect card connects.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Type)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum ConnectTarget {
+    /// An app by the app_slug DiscoverConnectors or a not-connected tool
+    /// result returned.
+    #[serde(rename_all = "camelCase")]
+    App { app_slug: String },
+    /// A remote MCP server by its https URL.
+    Server { url: String },
 }
 
 /// Where a list's items come from.

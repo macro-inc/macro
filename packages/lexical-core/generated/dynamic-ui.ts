@@ -52,6 +52,16 @@ export type CardItemType =
   | 'form'
   | 'initiative';
 
+/**  What a connect card connects. */
+export type ConnectTarget =
+  /**
+   *  An app by the app_slug DiscoverConnectors or a not-connected tool
+   *  result returned.
+   */
+  | { kind: 'app'; appSlug: string }
+  /**  A remote MCP server by its https URL. */
+  | { kind: 'server'; url: string };
+
 /**  Bounds on a timestamp, as ISO 8601 strings. */
 export type DateRangeFilter =
   | DateRangeFilter_Serialize
@@ -589,8 +599,10 @@ export type Widget_Deserialize =
       justify?: never;
       limit?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -611,8 +623,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -638,7 +652,9 @@ export type Widget_Deserialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -659,8 +675,10 @@ export type Widget_Deserialize =
       justify?: never;
       limit?: never;
       markdown?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -681,8 +699,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -704,8 +724,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -727,7 +749,38 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
+      target?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card with one Connect button, for an app or MCP server the user must
+   *  connect before you can continue. Present it instead of telling them to
+   *  open settings; once they connect, an agent session continues by itself.
+   *  Only for an app that is not connected yet.
+   */
+  | ({
+      type: 'connect';
+      /**  The app's display name, e.g. "Linear". */
+      name: string;
+      target: ConnectTarget;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -749,8 +802,10 @@ export type Widget_Deserialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
     });
 
 /**
@@ -774,8 +829,10 @@ export type Widget_Serialize =
       justify?: never;
       limit?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -792,8 +849,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -819,7 +878,9 @@ export type Widget_Serialize =
       justify?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**  A single channel message with surrounding context. */
@@ -840,8 +901,10 @@ export type Widget_Serialize =
       justify?: never;
       limit?: never;
       markdown?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       title?: never;
       wrap?: never;
     })
@@ -862,8 +925,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -885,8 +950,10 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
       wrap?: never;
     })
   /**
@@ -908,7 +975,38 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
+      target?: never;
+      wrap?: never;
+    })
+  /**
+   *  A card with one Connect button, for an app or MCP server the user must
+   *  connect before you can continue. Present it instead of telling them to
+   *  open settings; once they connect, an agent session continues by itself.
+   *  Only for an app that is not connected yet.
+   */
+  | ({
+      type: 'connect';
+      /**  The app's display name, e.g. "Linear". */
+      name: string;
+      target: ConnectTarget;
+    } & {
+      align?: never;
+      channelId?: never;
+      children?: never;
+      direction?: never;
+      events?: never;
+      gap?: never;
+      groupBy?: never;
+      items?: never;
+      justify?: never;
+      limit?: never;
+      markdown?: never;
+      messageId?: never;
+      source?: never;
+      tags?: never;
+      title?: never;
       wrap?: never;
     })
   /**  A nestable flex container of widgets. */
@@ -930,6 +1028,8 @@ export type Widget_Serialize =
       limit?: never;
       markdown?: never;
       messageId?: never;
+      name?: never;
       source?: never;
       tags?: never;
+      target?: never;
     });

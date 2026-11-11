@@ -251,6 +251,16 @@ export type CardItem = {
 /**  The kinds of workspace item a card shows. */
 export type CardItemType = "document" | "email_thread" | "calendar_event" | "project" | "channel" | "routine" | "form" | "initiative";
 
+/**  What a connect card connects. */
+export type ConnectTarget =
+/**
+ *  An app by the app_slug DiscoverConnectors or a not-connected tool
+ *  result returned.
+ */
+{ kind: "app"; appSlug: string } |
+/**  A remote MCP server by its https URL. */
+{ kind: "server"; url: string };
+
 /**  A session control operation shown in the conversation timeline. */
 export type Control =
 /**  The runtime was asked to switch models. */
@@ -2857,9 +2867,9 @@ export type Widget_Deserialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; title?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; title?: string; events: TimelineEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
@@ -2868,19 +2878,19 @@ export type Widget_Deserialize =
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
-limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
+limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; name?: never; tags?: never; target?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
 ({ type: "channelMessage";
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
-messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; name?: never; source?: never; tags?: never; target?: never; title?: never; wrap?: never } |
 /**
  *  A calendar agenda: the events grouped by day with their times, places
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; title?: string; events: AgendaEvent_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2888,18 +2898,27 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; target?: never; wrap?: never } |
+/**
+ *  A card with one Connect button, for an app or MCP server the user must
+ *  connect before you can continue. Present it instead of telling them to
+ *  open settings; once they connect, an agent session continues by itself.
+ *  Only for an app that is not connected yet.
+ */
+({ type: "connect";
+/**  The app's display name, e.g. "Linear". */
+name: string; target: ConnectTarget }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
-gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Deserialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };
+gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Deserialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never };
 
 /**
  *  One block of a view. Layout is order-driven; nesting is achieved with the
@@ -2910,9 +2929,9 @@ export type Widget_Serialize =
  *  Markdown text: the narrative between the other widgets. Its type is
  *  "md", never "markdown".
  */
-({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+({ type: "md"; markdown: string }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; title?: never; wrap?: never } |
 /**  A chronological sequence of events. Great for "what happened" answers. */
-({ type: "timeline"; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "timeline"; title?: string; events: TimelineEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  A list of workspace items, fetched by a filter query or given as a
  *  fixed set of entity references.
@@ -2921,19 +2940,19 @@ export type Widget_Serialize =
 /**  Group rows by a facet. */
 groupBy?: GroupBy;
 /**  Cap the number of rows shown. */
-limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; tags?: never; wrap?: never } |
+limit?: number }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; items?: never; justify?: never; markdown?: never; messageId?: never; name?: never; tags?: never; target?: never; wrap?: never } |
 /**  A single channel message with surrounding context. */
 ({ type: "channelMessage";
 /**  The channel the message belongs to. */
 channelId: string;
 /**  The message to render. */
-messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; source?: never; tags?: never; title?: never; wrap?: never } |
+messageId: string }) & { align?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; name?: never; source?: never; tags?: never; target?: never; title?: never; wrap?: never } |
 /**
  *  A calendar agenda: the events grouped by day with their times, places
  *  and attendees, loaded live from the user's calendars. Use it whenever
  *  an answer is about calendar events instead of listing them in text.
  */
-({ type: "events"; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "events"; title?: string; events: AgendaEvent_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  Rich cards for the one to four specific items the answer is about: a
  *  document or spreadsheet, an email thread, a calendar event, a project,
@@ -2941,15 +2960,24 @@ messageId: string }) & { align?: never; children?: never; direction?: never; eve
  *  item, and a routine's card can pause it or run it now. Use a list
  *  widget for longer sets.
  */
-({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; wrap?: never } |
+({ type: "cards"; title?: string; items: CardItem[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never; wrap?: never } |
 /**
  *  Tags as coloured pills, nested to any depth: the user's tags, a
  *  taxonomy the answer proposes, or any other ontology of tags, each with
  *  what it is for. Use it whenever an answer is about tags, instead of a
  *  table or a list in markdown.
  */
-({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; wrap?: never } |
+({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; target?: never; wrap?: never } |
+/**
+ *  A card with one Connect button, for an app or MCP server the user must
+ *  connect before you can continue. Present it instead of telling them to
+ *  open settings; once they connect, an agent session continues by itself.
+ *  Only for an app that is not connected yet.
+ */
+({ type: "connect";
+/**  The app's display name, e.g. "Linear". */
+name: string; target: ConnectTarget }) & { align?: never; channelId?: never; children?: never; direction?: never; events?: never; gap?: never; groupBy?: never; items?: never; justify?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**  A nestable flex container of widgets. */
 ({ type: "container"; direction?: Direction;
 /**  Tailwind-ish gap step, 0-8. Defaults to 3. */
-gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Serialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never };
+gap?: Gap; wrap?: boolean; align?: Align; justify?: Justify; title?: string; children: Widget_Serialize[] }) & { channelId?: never; events?: never; groupBy?: never; items?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; tags?: never; target?: never };
