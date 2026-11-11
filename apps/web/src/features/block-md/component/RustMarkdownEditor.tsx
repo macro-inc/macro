@@ -32,6 +32,8 @@ import {
   createNativeSnapshotContext,
   createNativeSnapshotViews,
 } from '@core/component/LexicalMarkdown/decorator-host/native-snapshot-views';
+import { createNativeTagMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-host';
+import { createNativeTagMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-views';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import {
@@ -102,6 +104,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
+  const tagMentionContext = createNativeTagMentionContext(theme);
+  overlayLifecycle.add(() => tagMentionContext.dispose());
   const pullRequestMentionContext =
     createNativePullRequestMentionContext(theme);
   overlayLifecycle.add(() => pullRequestMentionContext.dispose());
@@ -224,6 +228,7 @@ export default function RustMarkdownEditor(props: {
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
+                  ...createNativeTagMentionViews(tagMentionContext),
                   ...createNativePullRequestMentionViews(
                     pullRequestMentionContext
                   ),

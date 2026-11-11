@@ -1,11 +1,7 @@
-import type { DecoratorSelectionHost } from './selection-host';
+import type { NormalEnterHost } from './native-enter-host';
 
 /** Contact's real UI dependencies; selection is the published component state. */
-export interface ContactMentionHost extends DecoratorSelectionHost {
-  registerNormalEnter(
-    listener: (event: KeyboardEvent | null) => boolean
-  ): () => void;
-}
+export type ContactMentionHost = NormalEnterHost;
 export interface ContactMentionHostProp {
   readonly host?: ContactMentionHost;
 }

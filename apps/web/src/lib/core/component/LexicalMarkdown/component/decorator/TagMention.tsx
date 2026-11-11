@@ -18,6 +18,7 @@ import {
 } from 'lexical';
 import { createEffect, createMemo, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { TagMentionHostProp } from '../../decorator-host/tag-mention-host';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
@@ -35,7 +36,9 @@ function optionLabel(value: unknown): string | undefined {
   return undefined;
 }
 
-export function TagMention(props: TagMentionDecoratorProps) {
+export function TagMention(
+  props: TagMentionDecoratorProps & TagMentionHostProp
+) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -45,6 +48,7 @@ export function TagMention(props: TagMentionDecoratorProps) {
   const isAuthenticated = useIsAuthenticated();
 
   const isSelectedAsNode = createMemo(() => {
+    if (props.host) return props.host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
@@ -77,6 +81,15 @@ export function TagMention(props: TagMentionDecoratorProps) {
       return;
     }
 
+    if (props.host) {
+      props.host.setTagInfo(props.key, {
+        propertyDefinitionId: tag.propertyDefinitionId,
+        scope: tag.scope,
+        name: tag.name,
+        color: tag.color,
+      });
+      return;
+    }
     editor?.update(
       () => {
         const node = $getNodeByKey(props.key);
@@ -102,17 +115,20 @@ export function TagMention(props: TagMentionDecoratorProps) {
     navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
   };
 
-  if (editor) {
+  const onEnter = (event: KeyboardEvent | null) => {
+    if (!isSelectedAsNode()) return false;
+    event?.preventDefault();
+    event?.stopPropagation();
+    open();
+    return true;
+  };
+  if (props.host) {
+    autoRegister(props.host.registerNormalEnter(onEnter));
+  } else if (editor) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (event) => {
-          if (!isSelectedAsNode()) return false;
-          event?.preventDefault();
-          event?.stopPropagation();
-          open();
-          return true;
-        },
+        onEnter,
         COMMAND_PRIORITY_NORMAL
       )
     );
