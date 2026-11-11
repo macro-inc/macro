@@ -45,6 +45,7 @@ import {
   outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import { lexicalOutlineSource, nativeOutlineSource } from './outline-source';
 import { SkillDescriptionField } from './SkillDescriptionField';
 import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
@@ -121,8 +122,13 @@ export function Notebook(props: {
   const [contentInset, setContentInset] = createSignal(0);
   const commentBreakpoints = createSizeBreakpoints(width, CommentBreakpoints);
   const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
+  const outlineSource = createMemo(() => {
+    if (md.editor) return lexicalOutlineSource(md.editor);
+    const view = md.nativeRuntime?.view;
+    return view ? nativeOutlineSource(view) : undefined;
+  });
   const outline = useMarkdownOutline({
-    editor: () => md.editor,
+    source: outlineSource,
     enabled: () => outlineFitsGutter(contentInset()) && !isMobile(),
   });
 
@@ -384,7 +390,7 @@ export function Notebook(props: {
           }}
         >
           <MarkdownOutline
-            editor={() => md.editor}
+            source={outlineSource}
             outline={outline}
             portalMount={outlinePortalMount}
             scrollContainer={() => md.scrollContainer}
