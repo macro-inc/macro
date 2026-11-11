@@ -42,6 +42,13 @@ Pulumi stacks; they do not host extra agent processes.
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+  `/brain/anthropic/*` serves agent teammates' brains the same way, but
+  authenticates the agent's own Macro API key (`anthropic_gateway/brain.rs`)
+  and counts usage against the agent account, with no session entity.
+- `src/computers/agent_enrollment.rs`: the operator's `AgentEnrollmentSource`;
+  every computer creation asks the auth service's internal
+  `/internal/team_agent_enrollment` route, so an agent computer never enrolls
+  without its agent.
 - `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects

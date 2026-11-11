@@ -27,7 +27,9 @@ key issuance, and account merge/link flows.
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout, and Macro computer purchase and
   billing (the `hosted_runtimes` team and internal routers, mounted with a
-  `ComputerService` built here).
+  `ComputerService` built here), and agent teammates (`crates/team_agents`
+  at `/team_agents`, plus its internal enrollment route; computer-facing
+  addresses come from `outbound/agent_addresses.rs`).
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
