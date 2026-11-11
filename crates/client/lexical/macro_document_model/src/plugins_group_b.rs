@@ -30,6 +30,7 @@ mod markdown_unwrap;
 mod media;
 mod media_properties;
 mod paste_actions;
+mod pinned_properties;
 mod pr_mention_actions;
 mod tag_mention_actions;
 pub use media_properties::{MediaMountAction, media_mount_action};
@@ -115,7 +116,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = date_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
     let builder = gif_insert::register(builder);
-    title_handoff::register(builder)
+    let builder = title_handoff::register(builder);
+    pinned_properties::register(builder)
 }
 
 #[cfg(test)]
@@ -220,6 +222,9 @@ pub fn decode_command(
     if let Some(command) = title_handoff::decode(name, json)? {
         return Ok(Some(command));
     }
+    if let Some(command) = pinned_properties::decode(name, json)? {
+        return Ok(Some(command));
+    }
     if name == "group-b.select-all" {
         return Ok(Some(Command::SelectAll(event.cloned())));
     }
@@ -274,7 +279,10 @@ pub fn query(
     if let Some(reply) = decorator_content_actions::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
-    table::query(name, data, generation, state)
+    if let Some(reply) = table::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
+    pinned_properties::query(name, data, state)
 }
 
 /// Whether an application key route claims the browser default before dispatch.
