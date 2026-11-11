@@ -76,10 +76,13 @@ Bare URLs, common bare domains, and email addresses are clickable in opened
 messages, including agent/API messages and older messages. Explicit Markdown
 links still use their label. Inline code, code blocks, and escaped URLs stay
 literal. Removing a link in the composer remains effective after sending and
-reopening the message for editing.
+reopening the message for editing. A message sent while its URL is still plain
+text (a URL pasted or typed and sent at once) opens with that URL linked,
+including underscores and other Markdown punctuation in it.
 
 Verify a bare App Store URL on desktop and mobile, a percent-encoded URL, a URL
-containing Markdown punctuation, and Remove link → send → reopen. Channel and
+containing Markdown punctuation, a URL with `_` sent right after pasting it,
+and Remove link → send → reopen. Channel and
 Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
