@@ -140,6 +140,7 @@ function patchBar(
 
 /** Applies native presentation edits only. It never derives filters, rows or counts. */
 export class NativeChecklistPlanState {
+  private retired = false;
   private sequence: bigint | undefined;
   private previousReceipt: string | undefined;
   private generation: number | undefined;
@@ -150,10 +151,18 @@ export class NativeChecklistPlanState {
     return this.lists;
   }
 
+  /** Terminal UI cleanup; the native producer retains its own delivery authority. */
+  retire(): void {
+    this.retired = true;
+    this.lists = new Map();
+    this.previousReceipt = undefined;
+  }
+
   receive(
     value: unknown,
     currentGeneration: number
   ): 'updated' | 'duplicate' | 'different-generation' {
+    if (this.retired) throw new Error('Checklist presentation is retired');
     const delivery = nativeChecklistDelivery.parse(value);
     const sequence = BigInt(delivery.sequence);
     const receipt = JSON.stringify(delivery);

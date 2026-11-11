@@ -31,7 +31,9 @@ and reports the cause while the document's normal output and IO continue.
 Unsupported planner results and non-string stored assignee identities have no
 fallback bar. They remain explicit consumer coverage gaps.
 
-The host and renderer leaves are not an installer activation. Bind them only to
-a matching sidecar producer and real providers. Pure DTO tests are not native
-receipt/transfer proof; the ordinary-session lifetime tests exercise ownership
-and cleanup without claiming sidecar support from an older module.
+Bind the host and renderer only to a matching sidecar producer and real
+providers. Retirement releases the flat presentation data; it never acknowledges
+or deletes native delivery authority. Pure DTO tests are not native
+receipt/transfer proof. Ordinary-session lifetime tests exercise ownership and
+cleanup; refresh controls require the matching producer and compare its real
+receipts against the Source collector and planner.

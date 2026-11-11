@@ -1,9 +1,11 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import {
   type Accessor,
+  createComponent,
   createEffect,
   createMemo,
   createSignal,
+  ErrorBoundary,
   For,
   onCleanup,
   Show,
@@ -18,12 +20,45 @@ import { createTaskListNames, createTaskListTaskInfo } from './task-list-facts';
 
 /** Runs the same actual contact/task providers, without calling the Source planner. */
 export function NativeChecklistFacts(props: { host: NativeChecklistPlanHost }) {
+  return (
+    <ErrorBoundary
+      fallback={(error) => {
+        props.host.fail(error);
+        return null;
+      }}
+    >
+      {createComponent(ChecklistProvider, { host: props.host })}
+    </ErrorBoundary>
+  );
+}
+function ChecklistProvider(props: { host: NativeChecklistPlanHost }) {
   const { nameById } = createTaskListNames();
   const tasks = createTaskListTaskInfo(props.host.taskIds);
   createEffect(() =>
     props.host.updateFacts({ tasks: tasks(), names: nameById() })
   );
   return null;
+}
+
+/** Each optional overlay owns its Solid effects; failure leaves native output alone. */
+export function NativeChecklistOverlay(props: {
+  view: EditorView;
+  host: NativeChecklistPlanHost;
+}) {
+  return (
+    <ErrorBoundary
+      fallback={(error) => {
+        props.host.fail(error);
+        return null;
+      }}
+    >
+      {createComponent(NativeTaskListControls, {
+        view: props.view,
+        host: props.host,
+        report: props.host.fail,
+      })}
+    </ErrorBoundary>
+  );
 }
 
 /** Portals only native planned bars; malformed/missing plans never acquire fallback policy. */

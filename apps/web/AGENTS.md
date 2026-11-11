@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Grant `local-network-access` in fresh Chromium contexts for the local HTTPS preview before waiting for document initialization; a blocked WebSocket is a harness failure.
+
 - Share checklist bar markup through TaskListBar and real contact/task queries through task-list-facts; keep planning in the Source renderer or native producer and pass only raw Date observations across the native facts boundary. Keep the native metadata host session-owned across visual remounts, reject a second host for that session, and defer facts inputs until after the construction-time observer returns and the actual Initialize readiness fence opens.
 
 - Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope. Hide action rows until their native handler or document-owned request callback is installed, and check that capability before removing search text.

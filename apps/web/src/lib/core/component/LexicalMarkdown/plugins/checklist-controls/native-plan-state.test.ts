@@ -254,4 +254,11 @@ describe('native checklist delivery metadata', () => {
       )
     ).toThrow('stale key');
   });
+  it('releases terminal presentation data without reopening a retired receiver', () => {
+    const state = new NativeChecklistPlanState();
+    state.receive(initial, 1);
+    state.retire();
+    expect(state.current().size).toBe(0);
+    expect(() => state.receive(initial, 1)).toThrow('presentation is retired');
+  });
 });

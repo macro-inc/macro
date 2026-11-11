@@ -44,6 +44,7 @@ export function installNativeMarkdownOverlays(
     readonly tags?: NativeTagsOptions;
     readonly formatting?: Component;
     readonly comments?: boolean;
+    readonly checklist?: Component;
   }
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
@@ -314,6 +315,20 @@ export function installNativeMarkdownOverlays(
           },
           get children() {
             return createComponent(Formatting, {});
+          },
+        })
+      );
+    }
+    if (options.checklist) {
+      const Checklist = options.checklist;
+      overlays.push(() =>
+        createComponent(Show, {
+          keyed: true,
+          get when() {
+            return renderActive();
+          },
+          get children() {
+            return createComponent(Checklist, {});
           },
         })
       );

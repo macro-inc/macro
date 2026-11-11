@@ -69,8 +69,12 @@ export function createNativeChecklistPlanHost(
     }
     release = [];
     dates.clear();
+    setDueStrings([]);
+    state.retire();
     listTaskIds.clear();
     provider = undefined;
+    providerSignature = undefined;
+    calendarDay = undefined;
     pending = undefined;
     view = undefined;
     setTaskIds([]);
@@ -274,6 +278,7 @@ export function createNativeChecklistPlanHost(
   };
   return {
     observer,
+    fail: unavailable,
     plans,
     taskIds,
     presentation,

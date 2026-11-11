@@ -4,6 +4,10 @@ import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageC
 import { URL_PARAMS } from '@block-md/constants';
 import { NativeLocationHighlight } from '@core/component/LexicalMarkdown/component/core/NativeLocationHighlight';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
+import {
+  NativeChecklistFacts,
+  NativeChecklistOverlay,
+} from '@core/component/LexicalMarkdown/component/task-list/NativeTaskListControls';
 import { DecoratorHostContext } from '@core/component/LexicalMarkdown/context/DecoratorHostContext';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
@@ -67,6 +71,7 @@ import {
   nativeGoToLocation,
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
+import { createNativeChecklistPlanHost } from '@core/component/LexicalMarkdown/plugins/checklist-controls/native-plan-host';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
@@ -146,6 +151,10 @@ export default function RustMarkdownEditor(props: {
   const canEdit = () => ready() && permissions.canEdit();
   const userMentionContext = createNativeUserMentionContext(theme);
   const overlayLifecycle = createNativeListenerScope();
+  const checklist = createNativeChecklistPlanHost((error) => {
+    Telemetry.error(error, { surface: 'native-checklist-controls' });
+  });
+  overlayLifecycle.add(checklist.dispose);
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
@@ -351,7 +360,7 @@ export default function RustMarkdownEditor(props: {
             const mounted = await createRustEditorSession({
               module,
               root: element,
-              latestPublished: [formatting.observer],
+              latestPublished: [formatting.observer, checklist.observer],
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry()).replace(
                   'diff',
@@ -400,6 +409,9 @@ export default function RustMarkdownEditor(props: {
                   const installed = installNativeMarkdownOverlays(view, {
                     canEdit,
                     formatting: formatting.Overlay,
+                    checklist: () => (
+                      <NativeChecklistOverlay view={view} host={checklist} />
+                    ),
                     mentions: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,
@@ -584,6 +596,9 @@ export default function RustMarkdownEditor(props: {
               setReady(true);
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
+              checklist.ready(mounted.view);
+              if (abort.signal.aborted) return;
+              if (lastError) throw lastError;
               props.onRuntime?.(mounted);
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
@@ -612,6 +627,7 @@ export default function RustMarkdownEditor(props: {
   });
   return (
     <>
+      <NativeChecklistFacts host={checklist} />
       <div
         ref={root}
         role="textbox"

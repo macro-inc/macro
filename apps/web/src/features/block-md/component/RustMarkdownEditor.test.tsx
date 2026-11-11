@@ -84,6 +84,25 @@ vi.mock('../context/markdown-document-context', () => ({
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: { error: control.report },
 }));
+// Readiness-shell controls isolate optional overlays; native checklist behavior
+// is exercised separately against the actual generated module and real view.
+vi.mock(
+  '@core/component/LexicalMarkdown/component/task-list/NativeTaskListControls',
+  () => ({
+    NativeChecklistFacts: () => null,
+    NativeChecklistOverlay: () => null,
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/plugins/checklist-controls/native-plan-host',
+  () => ({
+    createNativeChecklistPlanHost: () => ({
+      observer: { published() {}, unavailable() {}, retired() {} },
+      ready() {},
+      dispose() {},
+    }),
+  })
+);
 vi.mock('@app/observability/editor', () => ({
   startEditorScrollTelemetry: () => () => {},
 }));
