@@ -17,7 +17,7 @@ and operation waiting.
 
 ## Start here
 
-- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, custom block volumes for computer data disks (create, attach, delete), `rebuild` from a new image, and `run_operation`.
+- `src/client.rs`: every method the fleet adapter calls, including non-interactive root `exec` with checked exit status, `exec_attached` (stdio over websockets, see `src/attached_exec.rs`), custom block volumes for computer data disks (create, attach, delete), `rebuild` from a new image, and `run_operation`.
 - `src/error.rs`: `IncusError`; `NotFound` is how callers detect drift.
 - `spec/patch.py`: the endpoint allowlist and the reshaping progenitor needs.
 
@@ -81,3 +81,10 @@ and operation waiting.
   success (volume create is sync, rebuild is async).
 - Deleting an instance leaves attached custom volumes; `delete_volume` them
   after the instance.
+- `exec_attached` connects all four operation websockets (`control`, `0`, `1`,
+  `2`) with the API's mTLS identity before Incus starts the program; the secret
+  rides in the URL, so never log it. Stdin ends with a close frame; output ends
+  with a close frame (older servers send a text barrier). Dropping `exit`
+  unresolved sends `{"command":"signal","signal":9}` on the control socket.
+  `exit` waits on the operation as `run_operation` does, so a program outliving
+  `operation_waits × operation_wait_secs` reports `OperationTimedOut`.
