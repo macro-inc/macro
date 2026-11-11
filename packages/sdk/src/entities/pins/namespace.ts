@@ -16,13 +16,22 @@ export type { PinnedItem, ReorderPinRequest };
 export class PinsNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** The user's pinned items, with their pin indices. */
+  /**
+   * The user's pinned items, with their pin indices.
+   *
+   * @readonly
+   */
   async list(): Promise<PinnedItem[]> {
     const { data } = unwrap(await this.client.storage.getPinsHandler({}));
     return data?.recent ?? [];
   }
 
-  /** Pin an entity to a slot. `index` is the slot to put it in. */
+  /**
+   * Pin an entity to a slot. `index` is the slot to put it in.
+   *
+   * @write
+   * @idempotent
+   */
   async add(
     entity: FavoritableEntity<unknown>,
     opts: { index: number },
@@ -35,7 +44,12 @@ export class PinsNamespace {
     );
   }
 
-  /** Unpin an entity. */
+  /**
+   * Unpin an entity.
+   *
+   * @write
+   * @idempotent
+   */
   async remove(entity: FavoritableEntity<unknown>): Promise<void> {
     unwrap(
       await this.client.storage.removePinHandler({
@@ -45,7 +59,12 @@ export class PinsNamespace {
     );
   }
 
-  /** Reorder pins: pass each pinned item with its type and new index. */
+  /**
+   * Reorder pins: pass each pinned item with its type and new index.
+   *
+   * @write
+   * @idempotent
+   */
   async reorder(pins: ReorderPinRequest[]): Promise<void> {
     unwrap(await this.client.storage.reorderPinsHandler({ body: pins }));
   }
