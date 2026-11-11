@@ -1,31 +1,40 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { catalog } from './generated/catalog';
 import { buildTools, type Tool, type ToolGrouping } from './tools';
 
-/** A copy of `value` without `description` strings. */
-function withoutDescriptions(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutDescriptions);
+/** `value` without `description` strings, with object keys sorted. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
   if (typeof value !== 'object' || value === null) return value;
   return Object.fromEntries(
     Object.entries(value)
       .filter(
         ([key, item]) => key !== 'description' || typeof item !== 'string'
       )
-      .map(([key, item]) => [key, withoutDescriptions(item)])
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, item]) => [key, canonical(item)])
   );
 }
 
 /**
- * What MCP's `tools/list` sends for each tool: names, schemas and hints.
- * Descriptions are the SDK's TSDoc and would make every doc edit a snapshot
- * update, so they are left out.
+ * What MCP's `tools/list` sends for each tool: its name, title and hints, the
+ * operations it carries, and a hash of its input schema, so a schema change
+ * shows as a changed hash without snapshotting every schema. Descriptions are
+ * the SDK's TSDoc and would make every doc edit a snapshot update, so they
+ * are left out of the hash too. One line per tool keeps diffs to the tools
+ * that changed.
  */
 function listed(tools: readonly Tool[]) {
-  return tools.map(({ name, title, inputSchema, annotations }) => ({
+  return tools.map(({ name, title, inputSchema, annotations, operations }) => ({
     name,
     title,
     annotations,
-    inputSchema: withoutDescriptions(inputSchema),
+    operations: [...operations.keys()],
+    schema: createHash('sha256')
+      .update(JSON.stringify(canonical(inputSchema)))
+      .digest('hex')
+      .slice(0, 16),
   }));
 }
 
@@ -33,7 +42,9 @@ describe('buildTools', () => {
   for (const grouping of ['entity', 'method'] satisfies ToolGrouping[]) {
     test(`the ${grouping} tool list matches its snapshot`, async () => {
       await expect(
-        `${JSON.stringify(listed(buildTools(catalog, grouping)), null, 2)}\n`
+        `[\n${listed(buildTools(catalog, grouping))
+          .map((tool) => JSON.stringify(tool))
+          .join(',\n')}\n]\n`
       ).toMatchFileSnapshot(`./__snapshots__/tools.${grouping}.json`);
     });
   }

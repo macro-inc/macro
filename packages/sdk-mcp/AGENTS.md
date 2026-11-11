@@ -16,8 +16,9 @@ caller, so no tool is handwritten.
 - `src/tools.ts` turns operations into tools. `entity` grouping (default):
   `<entity>_read` / `_write` / `_delete`, one `op` discriminated union each.
   `method` grouping: one tool per operation (`document-edit`). Both are
-  snapshotted in `src/__snapshots__/` (names, schemas and hints; not the
-  TSDoc descriptions, so doc edits don't churn them).
+  snapshotted in `src/__snapshots__/`, one line per tool: name, hints, its
+  operations and a hash of its input schema (descriptions left out, so doc
+  edits don't churn them).
 - `src/call.ts` validates input with the Zod schemas `src/validate.ts` builds
   from the same catalog, mints the handles references name (an id, a Macro
   URL, or the ids a nested `byId` takes), calls the method and returns its
