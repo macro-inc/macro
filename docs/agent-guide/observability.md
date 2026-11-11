@@ -131,12 +131,13 @@ A slow recorder or push provider should not hold the creator on Connecting.
 
 ## Sharing
 
-Press **Share** in an item's Share dialog after adding recipients, or **Share**
-or **Retry** in `Share N items` for selected rows (see
+Press **Share** or **Retry** in `Share N items` for selected rows (see
 [Entity action dialogs](navigation.md#entity-action-dialogs)). Search Tempo for
 `{ name="share.submit" }`; `{ name="share.submit" && span.entity.ids = "<item id>" }`
 finds the shares of one item, and `{ span.message.id = "<message id>" }` the
-share that sent one message. Each press is one browser trace:
+share that sent one message. An item's own Share dialog traces separately, as
+`share.forward` with a `share.deliver` per recipient. Each press is one browser
+trace:
 
 | Span | What it measures |
 | --- | --- |
@@ -147,8 +148,7 @@ share that sent one message. Each press is one browser trace:
 | `http …` under `share.target` | One channel access grant, such as `http PATCH /dss/documents/<id>`. With `enable-graphql-soup` on, a grant for a document, folder, chat, or email thread is an `entity.update_share_policy` span (`entity.type`, `entity.id`) around the `UpdateEntitySharePolicies` mutation instead. |
 
 Each `http …` span continues into the backend trace. The root records
-`share.location` (`forward_to_channel` for one item's Share dialog, `bulk_share`
-for selected rows), `entity.ids`, the `share.items` and `share.targets` counts,
+`share.location` (`bulk_share`), `entity.ids`, the `share.items` and `share.targets` counts,
 `share.retry` for a press after a partial share, and the outcome
 (`share.complete`, `share.retryable`). Each `share.target` records
 `channel.id`, its planned `share.messages` and `share.pending_grants`,
