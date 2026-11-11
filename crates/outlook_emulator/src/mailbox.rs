@@ -264,13 +264,33 @@ pub(crate) struct Change {
     pub(crate) etag: String,
 }
 
+/// The delegated permissions a seeded mailbox has already granted Macro:
+/// the ones a mail consent asks for.
+pub(crate) const SEEDED_SCOPES: [&str; 6] = [
+    "User.Read",
+    "Mail.ReadWrite",
+    "Mail.Send",
+    "MailboxSettings.ReadWrite",
+    "Contacts.Read",
+    "offline_access",
+];
+
 pub(crate) struct Mailbox {
     pub(crate) user_id: String,
     pub(crate) tenant_id: String,
     pub(crate) email: String,
     pub(crate) name: String,
+    /// The refresh token the grant started with. Refreshing hands out
+    /// further ones, which the state holds.
     pub(crate) refresh_token: String,
     pub(crate) revoked: bool,
+    /// How many grants the mailbox has had: one, plus one per consent that
+    /// followed a revocation.
+    pub(crate) grants: u32,
+    /// The delegated permissions the grant covers.
+    pub(crate) scopes: Vec<String>,
+    /// Whether ID tokens say Microsoft verified the address's domain.
+    pub(crate) email_domain_verified: bool,
     /// The sequence number of the last change.
     pub(crate) seq: u64,
     /// Bumped when the mailbox's sync state is dropped, which expires every
@@ -311,6 +331,9 @@ impl Mailbox {
                 .unwrap_or_else(|| format!("refresh-{email}")),
             email,
             revoked: false,
+            grants: 1,
+            scopes: SEEDED_SCOPES.iter().map(|scope| scope.to_string()).collect(),
+            email_domain_verified: !seed.unverified_email_domain,
             seq: 0,
             delta_epoch: 0,
             delta_token_lifetime_ms: seed

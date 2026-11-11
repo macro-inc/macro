@@ -3,7 +3,10 @@
 //! Microsoft access tokens from.
 
 use axum::extract::{Query, State as AxumState};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use base64::Engine;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
+use sha2::{Digest, Sha256};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
@@ -13,22 +16,33 @@ use serde_json::json;
 use crate::OutlookEmulator;
 use crate::fault::Route;
 use crate::graph::{logged, response};
+use crate::mailbox::SEEDED_SCOPES as SCOPES;
 use crate::render;
-use crate::state::State;
-
-const SCOPES: [&str; 6] = [
-    "User.Read",
-    "Mail.ReadWrite",
-    "Mail.Send",
-    "MailboxSettings.ReadWrite",
-    "Contacts.Read",
-    "offline_access",
-];
+use crate::sign_in::{OFFLINE_ACCESS_SCOPE, grants_id_token, id_token};
+use crate::signing_key::SigningKey;
+use crate::state::{CodeError, State};
 
 #[derive(Deserialize)]
 struct TokenRequest {
     grant_type: String,
     refresh_token: Option<String>,
+    code: Option<String>,
+    redirect_uri: Option<String>,
+    code_verifier: Option<String>,
+    /// Absent when the client authenticates with a Basic header instead.
+    client_id: Option<String>,
+}
+
+/// The client id of a Basic `Authorization` header.
+fn basic_client_id(headers: &HeaderMap) -> Option<String> {
+    let encoded = headers
+        .get(header::AUTHORIZATION)?
+        .to_str()
+        .ok()?
+        .strip_prefix("Basic ")?;
+    let decoded = String::from_utf8(STANDARD.decode(encoded).ok()?).ok()?;
+    let (client_id, _secret) = decoded.split_once(':')?;
+    Some(client_id.to_string())
 }
 
 /// Azure AD's error body for a refused token request.
@@ -51,60 +65,191 @@ fn fault(state: &mut State, mailbox: Option<&str>) -> Option<Response> {
     Some(response(Err(error), state.now()))
 }
 
-/// `POST /{tenant}/oauth2/v2.0/token` with a refresh token grant.
+/// The body of a granted token request.
+fn granted(
+    access_token: &str,
+    scopes: &[String],
+    refresh_token: Option<&str>,
+    id_token: Option<&str>,
+) -> Response {
+    let mut body = json!({
+        "token_type": "Bearer",
+        "scope": scopes.join(" "),
+        "expires_in": State::access_token_lifetime_seconds(),
+        "ext_expires_in": State::access_token_lifetime_seconds(),
+        "access_token": access_token,
+    });
+    if let Some(refresh_token) = refresh_token {
+        body["refresh_token"] = json!(refresh_token);
+    }
+    if let Some(id_token) = id_token {
+        body["id_token"] = json!(id_token);
+    }
+    Json(body).into_response()
+}
+
+/// The refresh token grant: a new access token, and a further refresh
+/// token, until the grant is revoked.
+fn refresh(state: &mut State, request: &TokenRequest) -> (Option<String>, Response) {
+    let owner = request
+        .refresh_token
+        .as_deref()
+        .and_then(|token| state.refresh_token_owner(token))
+        .map(|mailbox| (mailbox.email.clone(), mailbox.revoked, mailbox.scopes.clone()));
+    let Some((email, revoked, scopes)) = owner else {
+        let answered = refused(
+            state,
+            "invalid_grant",
+            70000,
+            "The provided value for the input parameter 'refresh_token' is not valid.",
+        );
+        return (None, answered);
+    };
+    if let Some(answered) = fault(state, Some(&email)) {
+        return (Some(email), answered);
+    }
+    let issued = match revoked {
+        true => None,
+        false => state.issue_access_token(&email).ok(),
+    };
+    let answered = match issued {
+        None => refused(
+            state,
+            "invalid_grant",
+            50173,
+            "The provided grant has expired due to it being revoked, a fresh auth token is needed.",
+        ),
+        Some(access_token) => {
+            let refresh_token = state.rotate_refresh_token(&email);
+            granted(&access_token, &scopes, Some(&refresh_token), None)
+        }
+    };
+    (Some(email), answered)
+}
+
+/// The authorization code grant: the tokens of the consent the code stands
+/// for.
+fn exchange(
+    state: &mut State,
+    request: &TokenRequest,
+    client_id: Option<&str>,
+    key: &SigningKey,
+) -> (Option<String>, Response) {
+    let (Some(code), Some(client_id), Some(redirect_uri)) =
+        (&request.code, client_id, &request.redirect_uri)
+    else {
+        let answered = refused(
+            state,
+            "invalid_request",
+            900144,
+            "The request body must contain the following parameters: 'code', 'client_id', 'redirect_uri'.",
+        );
+        return (None, answered);
+    };
+    let challenge = request
+        .code_verifier
+        .as_deref()
+        .map(|verifier| URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes())));
+
+    let redeemed = match state.redeem_code(code, client_id, redirect_uri, challenge.as_deref()) {
+        Ok(redeemed) => redeemed,
+        Err(error) => {
+            let (code, description) = match error {
+                CodeError::Unknown => (
+                    70000,
+                    "The provided authorization code is not valid or was already redeemed.",
+                ),
+                CodeError::Expired => (70008, "The provided authorization code has expired."),
+                CodeError::Client => (
+                    700005,
+                    "The provided authorization code was issued to another client.",
+                ),
+                CodeError::RedirectUri => (
+                    500112,
+                    "The reply address does not match the reply address provided when requesting the authorization code.",
+                ),
+                CodeError::Verifier => (
+                    501481,
+                    "The code_verifier does not match the code_challenge supplied in the authorization request.",
+                ),
+            };
+            return (None, refused(state, "invalid_grant", code, description));
+        }
+    };
+    let email = redeemed.email;
+    if let Some(answered) = fault(state, Some(&email)) {
+        return (Some(email), answered);
+    }
+
+    let scopes = &redeemed.consent.scopes;
+    let signed = match (grants_id_token(scopes), state.mailboxes.get(&email)) {
+        (true, Some(mailbox)) => id_token(key, mailbox, &redeemed.consent).map(Some),
+        _ => Ok(None),
+    };
+    let answered = match (signed, state.issue_access_token(&email)) {
+        (Ok(id_token), Ok(access_token)) => {
+            let refresh_token = scopes
+                .iter()
+                .any(|scope| scope == OFFLINE_ACCESS_SCOPE)
+                .then(|| state.rotate_refresh_token(&email));
+            // Like Microsoft, the response names the permissions granted,
+            // not the request to stay signed in.
+            let named: Vec<String> = scopes
+                .iter()
+                .filter(|scope| *scope != OFFLINE_ACCESS_SCOPE)
+                .cloned()
+                .collect();
+            granted(
+                &access_token,
+                &named,
+                refresh_token.as_deref(),
+                id_token.as_deref(),
+            )
+        }
+        (Err(error), _) => {
+            tracing::error!(error = ?error, "ID token could not be signed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+        (_, Err(_)) => refused(
+            state,
+            "invalid_grant",
+            50173,
+            "The provided grant has expired due to it being revoked, a fresh auth token is needed.",
+        ),
+    };
+    (Some(email), answered)
+}
+
+/// `POST /{tenant}/oauth2/v2.0/token`: the authorization code and refresh
+/// token grants. Any client id and secret are accepted, in the form or as a
+/// Basic header.
 async fn token(
     AxumState(emulator): AxumState<OutlookEmulator>,
+    headers: HeaderMap,
     Form(request): Form<TokenRequest>,
 ) -> Response {
-    let (mailbox, answered) = emulator.with_state(|state| {
-        if request.grant_type != "refresh_token" {
+    let key = match emulator.signing_key().await {
+        Ok(key) => key,
+        Err(error) => {
+            tracing::error!(error = ?error, "no ID token signing key");
+            let unavailable = StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return logged(unavailable, Some(Route::OauthToken), None);
+        }
+    };
+    let client_id = request.client_id.clone().or_else(|| basic_client_id(&headers));
+
+    let (mailbox, answered) = emulator.with_state(|state| match request.grant_type.as_str() {
+        "refresh_token" => refresh(state, &request),
+        "authorization_code" => exchange(state, &request, client_id.as_deref(), key),
+        _ => {
             let answered = refused(
                 state,
                 "unsupported_grant_type",
                 70003,
-                "The emulator supports only the refresh_token grant.",
+                "The emulator supports only the authorization_code and refresh_token grants.",
             );
-            return (None, answered);
+            (None, answered)
         }
-        let owner = request
-            .refresh_token
-            .as_deref()
-            .and_then(|token| state.refresh_token_owner(token))
-            .map(|mailbox| (mailbox.email.clone(), mailbox.revoked, mailbox.refresh_token.clone()));
-        let Some((email, revoked, refresh_token)) = owner else {
-            let answered = refused(
-                state,
-                "invalid_grant",
-                70000,
-                "The provided value for the input parameter 'refresh_token' is not valid.",
-            );
-            return (None, answered);
-        };
-        if let Some(answered) = fault(state, Some(&email)) {
-            return (Some(email), answered);
-        }
-        let issued = match revoked {
-            true => None,
-            false => state.issue_access_token(&email).ok(),
-        };
-        let answered = match issued {
-            None => refused(
-                state,
-                "invalid_grant",
-                50173,
-                "The provided grant has expired due to it being revoked, a fresh auth token is needed.",
-            ),
-            Some(access_token) => Json(json!({
-                "token_type": "Bearer",
-                "scope": SCOPES.join(" "),
-                "expires_in": State::access_token_lifetime_seconds(),
-                "ext_expires_in": State::access_token_lifetime_seconds(),
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-            }))
-            .into_response(),
-        };
-        (Some(email), answered)
     });
     logged(answered, Some(Route::OauthToken), mailbox)
 }

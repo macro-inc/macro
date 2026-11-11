@@ -4,6 +4,7 @@ mod control;
 mod drafts;
 mod faults;
 mod mail;
+mod sign_in;
 mod subscriptions;
 mod sync;
 
