@@ -22,6 +22,7 @@ pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
 pub mod initialization;
 pub mod lifecycle;

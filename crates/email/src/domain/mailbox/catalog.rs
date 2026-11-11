@@ -28,6 +28,25 @@ pub trait InboxCatalogRepository: Send + Sync + 'static {
         actor: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<InboxCatalogFacts>, MailboxError>> + Send;
 }
+
+/// Raw address lookup for provider notifications, without caller-access filtering.
+pub trait InboxAddressLookup: Send + Sync + 'static {
+    type Err: std::error::Error + Send + Sync + 'static;
+    fn by_provider_email(
+        &self,
+        email_address: &str,
+        provider: UserProvider,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+}
+
+/// Inboxes attached to a credential owner, in the repository's existing order.
+pub trait InboxCredentialOwnerLookup: Send + Sync + 'static {
+    type Err: std::error::Error + Send + Sync + 'static;
+    fn by_credential_owner(
+        &self,
+        owner: &str,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+}
 pub struct InboxCatalogService<R>(pub R);
 impl<R: InboxCatalogRepository> InboxCatalogService<R> {
     pub async fn list(

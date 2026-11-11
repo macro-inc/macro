@@ -18,6 +18,9 @@ tools — hexagonal, heavily feature-gated.
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
   and settings patches.
+- `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
+  push-token rotation retry and notification intake; lifecycle also owns ordered
+  deletion requests for a deleted user's inboxes.
 - `src/domain/mailbox/connection.rs` (feature `mailbox`): inbox connection,
   completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
   Reuses mailbox initialization and backfill-job services.
