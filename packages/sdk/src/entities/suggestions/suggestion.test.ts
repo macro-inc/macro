@@ -30,7 +30,9 @@ describe('Suggestion drafts', () => {
       scheduledAction: {
         attachSuggestionDraft: async (request: unknown) => {
           requests.push(request);
-          return { data: { ok: true, problems: [], suggestion: REPLY_SUGGESTION } };
+          return {
+            data: { ok: true, problems: [], suggestion: REPLY_SUGGESTION },
+          };
         },
       },
     } as unknown as MacroClient;
@@ -53,7 +55,9 @@ describe('Suggestion drafts', () => {
 
   test('a reply suggestion names its draft as a handle; other suggestions have none', () => {
     const client = {} as MacroClient;
-    expect(Suggestion.from(client, REPLY_SUGGESTION).draft).toBeInstanceOf(EmailDraft);
+    expect(Suggestion.from(client, REPLY_SUGGESTION).draft).toBeInstanceOf(
+      EmailDraft,
+    );
     expect(
       Suggestion.from(client, { ...REPLY_SUGGESTION, draft: null }).draft,
     ).toBeUndefined();
