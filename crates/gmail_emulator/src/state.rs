@@ -5,12 +5,13 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::{DateTime, Utc};
 
+use crate::calendar::{Calendar, ChannelNotification, WriteOptions};
 use crate::error::ApiError;
 use crate::fault::{Fault, FaultError, Route};
 use crate::mailbox::{Ids, Mailbox};
 use crate::mime;
-use crate::seed::{NewMessage, PushConfig, Seed, SeedError, SeedMailbox};
-use crate::{Delivered, EmulatorError, PushDelivery, RequestRecord};
+use crate::seed::{NewMessage, PushConfig, Seed, SeedCalendar, SeedError, SeedMailbox};
+use crate::{ChannelDelivery, Delivered, EmulatorError, PushDelivery, RequestRecord};
 
 /// Google access tokens last an hour.
 pub(crate) const ACCESS_TOKEN_LIFETIME_SECONDS: i64 = 3599;
@@ -72,10 +73,15 @@ pub(crate) enum CodeRefusal {
 
 /// A push notification waiting to be delivered.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct PushJob {
-    pub(crate) email: String,
-    pub(crate) history_id: u64,
-    pub(crate) topic: String,
+pub(crate) enum PushJob {
+    /// A Gmail watch notification, posted to the push endpoint.
+    Mailbox {
+        email: String,
+        history_id: u64,
+        topic: String,
+    },
+    /// A Calendar notification, posted to its channel's address.
+    Channel(ChannelNotification),
 }
 
 #[derive(Debug, Default)]
@@ -92,6 +98,11 @@ pub(crate) struct State {
     pub(crate) requests: Vec<RequestRecord>,
     pub(crate) push: Option<PushConfig>,
     pub(crate) deliveries: Vec<PushDelivery>,
+    /// Calendar notifications owed for something other than a change, such
+    /// as the `sync` message of a new channel.
+    pub(crate) channel_notifications: Vec<ChannelNotification>,
+    pub(crate) channel_deliveries: Vec<ChannelDelivery>,
+    calendars_added: u64,
 }
 
 impl State {
@@ -151,7 +162,48 @@ impl State {
             };
             self.deliver(&email, &seeded)?;
         }
+
+        for calendar in &seed.calendars {
+            self.add_calendar(&email, calendar)?;
+        }
+        self.invite_to_existing_meetings(&email);
         Ok(())
+    }
+
+    /// Adds a calendar to a user's list with its seeded events. An entry
+    /// without an id describes the user's primary calendar, which every
+    /// user has.
+    pub(crate) fn add_calendar(
+        &mut self,
+        email: &str,
+        seed: &SeedCalendar,
+    ) -> Result<String, EmulatorError> {
+        self.calendars_added += 1;
+        let generated = format!("c_{:026x}@group.calendar.google.com", self.calendars_added);
+        let mailbox = self.mailbox_mut(email)?;
+        let email = mailbox.email.clone();
+        let id = seed.id.clone().unwrap_or_else(|| match seed.secondary {
+            true => generated,
+            false => email.clone(),
+        });
+
+        let calendar = match mailbox.calendars.remove(&id) {
+            Some(calendar) if calendar.events.is_empty() => calendar.described_by(seed),
+            Some(calendar) => {
+                mailbox.calendars.insert(id.clone(), calendar);
+                return Err(EmulatorError::Rejected {
+                    status: 409,
+                    message: format!("calendar `{id}` already exists"),
+                });
+            }
+            None => Calendar::secondary(id.clone(), seed),
+        };
+        mailbox.calendars.insert(id.clone(), calendar);
+
+        for event in &seed.events {
+            self.insert_event(&email, &id, event.0.clone(), WriteOptions::publisher())?;
+        }
+        Ok(id)
     }
 
     pub(crate) fn mailbox_mut(&mut self, email: &str) -> Result<&mut Mailbox, EmulatorError> {
@@ -445,17 +497,29 @@ impl State {
     /// The notifications owed to watches whose mailbox changed.
     pub(crate) fn take_notifications(&mut self) -> Vec<PushJob> {
         let now_ms = self.now_ms();
-        self.mailboxes
+        let mut jobs: Vec<PushJob> = self
+            .mailboxes
             .values_mut()
             .filter_map(|mailbox| {
                 let history_id = mailbox.take_notification(now_ms)?;
-                Some(PushJob {
+                Some(PushJob::Mailbox {
                     email: mailbox.email.clone(),
                     history_id,
                     topic: mailbox.watch.as_ref()?.topic.clone(),
                 })
             })
-            .collect()
+            .collect();
+
+        let opened = std::mem::take(&mut self.channel_notifications);
+        let changed = self.mailboxes.values_mut().flat_map(|mailbox| {
+            let email = mailbox.email.clone();
+            mailbox
+                .calendars
+                .values_mut()
+                .flat_map(move |calendar| calendar.take_notifications(&email, now_ms))
+        });
+        jobs.extend(opened.into_iter().chain(changed).map(PushJob::Channel));
+        jobs
     }
 
     /// Answers an injected error, when a fault matches.
@@ -487,6 +551,23 @@ impl State {
                 ApiError::permission_denied("Request had insufficient authentication scopes.")
             }
             FaultError::NotFound => ApiError::not_found(),
+            FaultError::InsufficientPermissions => ApiError::calendar(
+                403,
+                "insufficientPermissions",
+                "Request had insufficient authentication scopes.",
+            ),
+            FaultError::UsageLimits => ApiError {
+                domain: "usageLimits",
+                ..ApiError::calendar(403, "quotaExceeded", "Calendar usage limits exceeded.")
+            },
+            FaultError::Gone => ApiError::calendar(
+                410,
+                "fullSyncRequired",
+                "Sync token is no longer valid, a full sync is required.",
+            ),
+            FaultError::PreconditionFailed => {
+                ApiError::calendar(412, "conditionNotMet", "Precondition check failed.")
+            }
         })
     }
 }

@@ -32,6 +32,8 @@
 
 #![deny(missing_docs)]
 
+mod calendar;
+mod calendar_routes;
 mod control;
 mod error;
 mod fault;
@@ -60,11 +62,12 @@ use tokio::sync::{OnceCell, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-pub use control::MessageSummary;
+pub use calendar::{AccessRole, CalendarSummary, ChannelSummary, ResourceState};
+pub use control::{AttendeeResponse, MessageSummary};
 pub use fault::{Fault, FaultError, Route};
 pub use seed::{
-    DEFAULT_PUSH_AUDIENCE, NewAttachment, NewMessage, PushConfig, Seed, SeedContact, SeedError,
-    SeedLabel, SeedMailbox, SeedSendAs,
+    DEFAULT_PUSH_AUDIENCE, NewAttachment, NewEvent, NewMessage, PushConfig, Seed, SeedCalendar,
+    SeedContact, SeedError, SeedLabel, SeedMailbox, SeedReminder, SeedSendAs,
 };
 
 use crate::error::ApiError;
@@ -160,6 +163,33 @@ pub struct PushDelivery {
     pub attempts: u8,
 }
 
+/// One Calendar push notification the emulator sent, or failed to send.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct ChannelDelivery {
+    /// When delivery finished, by the emulator's clock.
+    pub at: DateTime<Utc>,
+    /// The user whose calendar is watched.
+    pub mailbox: String,
+    /// The watched calendar.
+    pub calendar_id: String,
+    /// The channel, `X-Goog-Channel-ID`.
+    pub channel_id: String,
+    /// The watched resource, `X-Goog-Resource-ID`.
+    pub resource_id: String,
+    /// `sync` for a new channel, `exists` for a change.
+    pub resource_state: ResourceState,
+    /// The notification's number on its channel, from 1.
+    pub message_number: u64,
+    /// The webhook it was posted to.
+    pub address: String,
+    /// The webhook's last status, when it answered.
+    pub status: Option<u16>,
+    /// The transport error of the last attempt, when it did not answer.
+    pub error: Option<String>,
+    /// How many times it was posted.
+    pub attempts: u8,
+}
+
 /// A mailbox at a glance.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct MailboxSummary {
@@ -224,6 +254,7 @@ impl GmailEmulator {
 
         let app = control::router()
             .merge(gmail_routes::router())
+            .merge(calendar_routes::router())
             .merge(google_routes::router())
             .merge(sign_in::router())
             .layer(axum::middleware::from_fn_with_state(
@@ -270,6 +301,12 @@ impl GmailEmulator {
     /// The People API base, in place of `https://people.googleapis.com/v1`.
     pub fn people_url(&self) -> String {
         format!("{}/people/v1", self.base_url())
+    }
+
+    /// The Calendar REST base, in place of
+    /// `https://www.googleapis.com/calendar/v3`.
+    pub fn calendar_url(&self) -> String {
+        format!("{}{}", self.base_url(), calendar_routes::BASE_PATH)
     }
 
     /// The certificates that verify push tokens, in place of
@@ -546,7 +583,7 @@ impl GmailEmulator {
                 status: 400,
                 message: "mailbox has no watch".to_string(),
             })?;
-            PushJob {
+            PushJob::Mailbox {
                 email: mailbox.email.clone(),
                 history_id: mailbox.history_id,
                 topic: watch.topic.clone(),

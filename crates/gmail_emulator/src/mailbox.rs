@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde_json::{Value, json};
 
+use crate::calendar::Calendar;
 use crate::error::ApiError;
 use crate::mime::{self, Format, Parsed};
 use crate::people::ContactBook;
@@ -154,6 +155,8 @@ pub(crate) struct Mailbox {
     pub(crate) contacts: ContactBook,
     pub(crate) other_contacts: ContactBook,
     pub(crate) watch: Option<Watch>,
+    /// The user's calendar list, by calendar id.
+    pub(crate) calendars: BTreeMap<String, Calendar>,
     quota_units_per_minute: Option<u32>,
     quota_spent: VecDeque<(i64, u32)>,
 }
@@ -193,6 +196,10 @@ impl Mailbox {
             contacts: ContactBook::new("people/c", &seed.contacts),
             other_contacts: ContactBook::new("otherContacts/c", &seed.other_contacts),
             watch: None,
+            calendars: BTreeMap::from([(
+                seed.email.to_lowercase(),
+                Calendar::primary(&seed.email.to_lowercase()),
+            )]),
             quota_units_per_minute: seed.quota_units_per_minute,
             quota_spent: VecDeque::new(),
         };

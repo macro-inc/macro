@@ -3903,6 +3903,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
+ "macro_service_urls",
  "macro_user_id",
  "model-entity",
  "model_notifications",
@@ -9194,7 +9195,9 @@ dependencies = [
  "askama",
  "axum",
  "base64 0.22.1",
+ "calendar_events",
  "chrono",
+ "chrono-tz",
  "clap",
  "email_api_client",
  "fusionauth",
@@ -9207,6 +9210,7 @@ dependencies = [
  "models_email",
  "nom 8.0.0",
  "reqwest 0.13.4",
+ "rrule",
  "rsa",
  "serde",
  "serde_json",
@@ -17518,6 +17522,19 @@ dependencies = [
  "hashbrown 0.14.5",
  "rustc-hash 1.1.0",
  "text-size",
+]
+
+[[package]]
+name = "rrule"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "720acfb4980b9d8a6a430f6d7a11933e701ebbeba5eee39cc9d8c5f932aaff74"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "log",
+ "regex",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
