@@ -17,7 +17,7 @@ export type BenefitScene =
   | 'property-event'
   | 'search'
   | 'agent-search'
-  | 'search-history';
+  | 'parallel-search';
 
 type BenefitPage = {
   tutorial: TutorialVideoId;
@@ -202,10 +202,10 @@ export const BENEFIT_PAGES: Record<string, BenefitPage> = {
       },
       {
         id: 'search-history',
-        title: 'Piece together what happened.',
+        title: 'Search in parallel across your workspace.',
         description:
-          'Find the customer’s request, the team’s discussion, and the task that followed. Timestamps put each result in context, and links take you back to the original work.',
-        scene: 'search-history',
+          'Agents run parallel search tool calls across email, chat, docs, tasks, and call transcripts. Multiple queries retrieve context at once, then the agent combines the results into one answer with links to its sources.',
+        scene: 'parallel-search',
       },
     ],
   },

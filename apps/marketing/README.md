@@ -1139,7 +1139,7 @@ and grain behind the player.
 Main benefits use `BenefitPage` on their existing `/docs/...` URLs. Keep these
 as centered marketing overviews with action-oriented sections and annotated,
 translucent HTML illustrations. `benefit-pages.ts` owns the overview copy;
-`BenefitGraphic` owns the illustrations. Keep the original MDX in the expandable
+`BenefitGraphic` owns the static illustrations. The final Unified search section uses `AgentParallelSearchStory` in the shared agent session: start all five search tool calls together, reveal results before the answer, and let visitors expand results and inspect their sources. Keep its existing `search-history` anchor and the short outline label “Parallel search.” Reduced motion shows the completed answer immediately. Keep the original MDX in the expandable
 Setup and reference guide, including its existing deep links. Explain concrete
 workflows using the founder's supplied language. Describe channel access as a
 channel grant, and label event-driven agent actions as configured routines.

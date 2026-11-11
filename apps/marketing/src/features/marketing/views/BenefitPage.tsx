@@ -1,6 +1,8 @@
-import { For } from 'solid-js';
+import { For, Match, Switch } from 'solid-js';
 import { FeatureGuide } from '../../documentation/components/FeatureGuide';
+import { AgentParallelSearchStory } from '../components/agents/AgentParallelSearchStory';
 import { BenefitGraphic } from '../components/benefits/BenefitGraphic';
+import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageSection } from '../components/FeaturePage';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { BENEFIT_PAGES } from '../core/benefit-pages';
@@ -24,11 +26,30 @@ export function BenefitPage(props: { slug: string }) {
               id={section.id}
               title={section.title}
               description={section.description}
+              demo={
+                section.scene === 'parallel-search'
+                  ? { tone: 'agents' }
+                  : undefined
+              }
             >
-              <BenefitGraphic
-                scene={section.scene}
-                label={`${section.title} ${section.description}`}
-              />
+              <Switch>
+                <Match when={section.scene === 'parallel-search'}>
+                  <DemoInteractionBoundary
+                    class="feature-page-visual"
+                    render={() => <AgentParallelSearchStory />}
+                  />
+                </Match>
+                <Match
+                  when={section.scene !== 'parallel-search' && section.scene}
+                >
+                  {(scene) => (
+                    <BenefitGraphic
+                      scene={scene()}
+                      label={`${section.title} ${section.description}`}
+                    />
+                  )}
+                </Match>
+              </Switch>
             </FeaturePageSection>
           )}
         </For>

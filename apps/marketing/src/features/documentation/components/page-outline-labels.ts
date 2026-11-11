@@ -85,7 +85,7 @@ export const pageOutlineLabels: Record<string, string> = {
   'property-events-title': 'Call follow-ups',
   'search-workspace-title': 'Workspace search',
   'agent-search-title': 'Agent search',
-  'search-history-title': 'Work history',
+  'search-history-title': 'Parallel search',
   'import-from-notion': 'Notion import',
   'import-from-linear': 'Linear import',
   'import-from-slack': 'Slack import',

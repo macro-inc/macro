@@ -54,7 +54,13 @@ export type SearchHit = {
 
 export type AgentToolCall =
   | { kind: 'thought'; text: string }
-  | { kind: 'search'; query: string; hits: SearchHit[] }
+  | {
+      kind: 'search';
+      query: string;
+      hits: SearchHit[];
+      pending?: boolean;
+      scope?: SearchHit['kind'];
+    }
   | { kind: 'read-channel'; channel: string; count: number }
   | { kind: 'read-call' }
   | { kind: 'read-document'; title: string }
@@ -193,7 +199,7 @@ function SearchRow(props: {
   const count = () => props.call.hits.length;
   return (
     <ToolRow
-      icon={MagnifyingGlass}
+      icon={props.call.scope ? HIT_ICONS[props.call.scope] : MagnifyingGlass}
       response={
         <Show when={open()}>
           <div class="max-h-120 overflow-y-auto">
@@ -251,25 +257,33 @@ function SearchRow(props: {
         </Show>
       }
     >
-      <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+      <div
+        class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden"
+        data-search-scope={props.call.scope}
+      >
         <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
           <span class="min-w-0 truncate">
             Search <span class="text-ink"> {props.call.query} </span>
           </span>
         </div>
-        <Button
-          type="button"
-          variant="plain"
-          size="sm"
-          noTouchResize
-          aria-expanded={open()}
-          class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
-          data-search-toggle
-          onClick={toggle}
+        <Show
+          when={!props.call.pending}
+          fallback={<span class="magic-chip-shimmer text-xs">Searching…</span>}
         >
-          <span>{count() === 1 ? '1 hit' : `${count()} hits`}</span>
-          <CaretRight aria-hidden="true" class={open() ? 'rotate-90' : ''} />
-        </Button>
+          <Button
+            type="button"
+            variant="plain"
+            size="sm"
+            noTouchResize
+            aria-expanded={open()}
+            class="shrink-0 whitespace-nowrap px-1 text-ink-extra-muted hover:text-ink-muted"
+            data-search-toggle
+            onClick={toggle}
+          >
+            <span>{count() === 1 ? '1 hit' : `${count()} hits`}</span>
+            <CaretRight aria-hidden="true" class={open() ? 'rotate-90' : ''} />
+          </Button>
+        </Show>
       </div>
     </ToolRow>
   );

@@ -41,7 +41,10 @@ function blockStyle(kind: keyof typeof blockPalettes) {
   };
 }
 
-const sceneBlocks: Record<BenefitScene, keyof typeof blockPalettes> = {
+const sceneBlocks: Record<
+  Exclude<BenefitScene, 'parallel-search'>,
+  keyof typeof blockPalettes
+> = {
   'pr-channel': 'chat',
   'task-email': 'email',
   references: 'doc',
@@ -58,7 +61,6 @@ const sceneBlocks: Record<BenefitScene, keyof typeof blockPalettes> = {
   'property-event': 'call',
   search: 'email',
   'agent-search': 'agent',
-  'search-history': 'email',
 };
 
 function Tag(props: { label: string; color?: string }) {
@@ -330,9 +332,7 @@ function SharedTagsGraphic() {
   );
 }
 
-function SearchGraphic(props: {
-  mode: 'search' | 'tag' | 'agent' | 'history';
-}) {
+function SearchGraphic(props: { mode: 'search' | 'tag' | 'agent' }) {
   return (
     <div class="benefit-search-scene">
       <Show when={props.mode === 'agent'}>
@@ -364,29 +364,17 @@ function SearchGraphic(props: {
           <Item
             kind="email"
             title="Checkout keeps timing out"
-            detail={
-              props.mode === 'history'
-                ? 'Monday · 9:41 AM · Customer reports the issue'
-                : 'Sam · Northwind · Our customers can’t finish their orders…'
-            }
+            detail="Sam · Northwind · Our customers can’t finish their orders…"
           />
           <Item
             kind="chat"
             title="Engineering"
-            detail={
-              props.mode === 'history'
-                ? 'Monday · 10:24 AM · Team discusses the Safari error'
-                : 'Julia · I can reproduce the Safari error.'
-            }
+            detail="Julia · I can reproduce the Safari error."
           />
           <Item
             kind="task"
             title="Fix checkout timeout"
-            detail={
-              props.mode === 'history'
-                ? 'Tuesday · 2:10 PM · Fix completed'
-                : 'Priya · In progress · Linked to the customer email'
-            }
+            detail="Priya · In progress · Linked to the customer email"
           />
         </div>
         <div class="benefit-search-footer">
@@ -398,9 +386,7 @@ function SearchGraphic(props: {
           ? 'Urgency across the workspace'
           : props.mode === 'agent'
             ? 'The same search for people and agents'
-            : props.mode === 'history'
-              ? 'One history, with the original context'
-              : 'One query across your work'}
+            : 'One query across your work'}
       </Callout>
     </div>
   );
@@ -554,7 +540,10 @@ function EventGraphic(props: { mode: keyof typeof eventExamples }) {
 }
 
 /** Editorial illustrations using Paper's annotation and translucent surface language. */
-export function BenefitGraphic(props: { scene: BenefitScene; label: string }) {
+export function BenefitGraphic(props: {
+  scene: Exclude<BenefitScene, 'parallel-search'>;
+  label: string;
+}) {
   return (
     <div
       class="benefit-graphic"
@@ -610,8 +599,7 @@ export function BenefitGraphic(props: { scene: BenefitScene; label: string }) {
             when={
               props.scene === 'search' ||
               props.scene === 'tag-filter' ||
-              props.scene === 'agent-search' ||
-              props.scene === 'search-history'
+              props.scene === 'agent-search'
             }
           >
             <SearchGraphic
@@ -620,9 +608,7 @@ export function BenefitGraphic(props: { scene: BenefitScene; label: string }) {
                   ? 'tag'
                   : props.scene === 'agent-search'
                     ? 'agent'
-                    : props.scene === 'search-history'
-                      ? 'history'
-                      : 'search'
+                    : 'search'
               }
             />
           </Match>
