@@ -183,7 +183,7 @@ impl State {
         let cached = self.link_tokens.get(&link_id).filter(|token| {
             self.tokens
                 .get(*token)
-                .is_some_and(|access| access.expires_at > fresh_until)
+                .is_some_and(|access| access.email == email && access.expires_at > fresh_until)
         });
         if let (Some(token), false) = (cached, force_refresh) {
             let revoked = self

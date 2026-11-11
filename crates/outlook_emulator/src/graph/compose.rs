@@ -110,6 +110,10 @@ fn store_draft(
         .ok_or_else(folder_not_found)?;
     let mut draft = blank(mailbox, folder_id, now);
     apply_fields(&mut draft, fields)?;
+    for attachment in fields["attachments"].as_array().into_iter().flatten() {
+        let attachment = file_attachment(mailbox, attachment, now)?;
+        draft.attachments.push(attachment);
+    }
     draft.conversation_id = mailbox.conversation_of(&replies_to(&draft));
     Ok(mailbox.insert(draft))
 }
@@ -144,6 +148,36 @@ fn prefixed(prefix: &str, subject: &str) -> String {
     match subject.to_ascii_uppercase().starts_with(prefix) {
         true => subject.to_string(),
         false => format!("{prefix} {subject}"),
+    }
+}
+
+/// Who a reply goes to: the parent's `replyTo` when it names anyone,
+/// otherwise its sender.
+fn reply_recipients(parent: &Message) -> Vec<Address> {
+    match parent.reply_to.is_empty() {
+        true => parent.from.iter().cloned().collect(),
+        false => parent.reply_to.clone(),
+    }
+}
+
+/// The body Graph starts a reply or forward with: the comment, then the
+/// message being answered.
+fn quoted(parent: &Message, comment: &str) -> (BodyType, String) {
+    match parent.body_type {
+        BodyType::Html => (
+            BodyType::Html,
+            format!(
+                "<html><body><div>{comment}</div><hr>{}</body></html>",
+                parent.body
+            ),
+        ),
+        BodyType::Text => (
+            BodyType::Text,
+            format!(
+                "{comment}\r\n\r\n________________________________\r\n{}",
+                parent.body
+            ),
+        ),
     }
 }
 
@@ -187,9 +221,9 @@ pub(crate) fn create_response(ctx: &mut Ctx<'_>, id: &str, kind: Kind, send_now:
                 })
                 .collect();
         }
-        Kind::Reply => draft.to = parent.from.iter().cloned().collect(),
+        Kind::Reply => draft.to = reply_recipients(&parent),
         Kind::ReplyAll => {
-            draft.to = parent.from.iter().cloned().collect();
+            draft.to = reply_recipients(&parent);
             draft.to.extend(parent.to.iter().filter(not_own).cloned());
             draft.cc = parent.cc.iter().filter(not_own).cloned().collect();
         }
@@ -207,9 +241,7 @@ pub(crate) fn create_response(ctx: &mut Ctx<'_>, id: &str, kind: Kind, send_now:
             references.trim().to_string(),
         );
     }
-    if let Some(comment) = body["comment"].as_str() {
-        draft.body = comment.to_string();
-    }
+    (draft.body_type, draft.body) = quoted(&parent, body["comment"].as_str().unwrap_or_default());
     if let Some(recipients) = body.get("toRecipients") {
         apply_fields(&mut draft, &json!({"toRecipients": recipients}))?;
     }
@@ -226,9 +258,13 @@ pub(crate) fn create_response(ctx: &mut Ctx<'_>, id: &str, kind: Kind, send_now:
     Ok(Reply::Empty(202))
 }
 
-pub(crate) fn add_attachment(ctx: &mut Ctx<'_>, id: &str) -> Handled {
-    let body = ctx.json_body()?;
-    let now = ctx.now;
+/// A file attachment built from its JSON, as posted to a message or carried
+/// in a new message's `attachments`.
+fn file_attachment(
+    mailbox: &mut Mailbox,
+    body: &Value,
+    now: DateTime<Utc>,
+) -> Result<Attachment, GraphError> {
     let invalid = |what: &str| GraphError::bad_request(&format!("The attachment needs {what}."));
     let name = body["name"].as_str().ok_or_else(|| invalid("a name"))?;
     let encoded = body["contentBytes"]
@@ -242,9 +278,7 @@ pub(crate) fn add_attachment(ctx: &mut Ctx<'_>, id: &str) -> Handled {
             "The attachment is too large; use an upload session for attachments of 3 MB or more.",
         ));
     }
-
-    let mailbox = ctx.mailbox()?;
-    let attachment = Attachment {
+    Ok(Attachment {
         id: mailbox.new_id("attachment"),
         name: name.to_string(),
         content_type: body["contentType"]
@@ -255,7 +289,17 @@ pub(crate) fn add_attachment(ctx: &mut Ctx<'_>, id: &str) -> Handled {
         content_id: body["contentId"].as_str().map(str::to_string),
         inline: body["isInline"] == true,
         modified: now,
-    };
+    })
+}
+
+pub(crate) fn add_attachment(ctx: &mut Ctx<'_>, id: &str) -> Handled {
+    let body = ctx.json_body()?;
+    let now = ctx.now;
+    let mailbox = ctx.mailbox()?;
+    if !mailbox.messages.contains_key(id) {
+        return Err(GraphError::item_not_found());
+    }
+    let attachment = file_attachment(mailbox, &body, now)?;
     let rendered = render::attachment(&attachment, &Query::default())?;
     let message = mailbox
         .messages

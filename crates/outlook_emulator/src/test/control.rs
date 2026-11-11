@@ -235,3 +235,108 @@ async fn unsupported_queries_and_paths_fail_loudly() {
         "InvalidAuthenticationToken"
     );
 }
+
+#[tokio::test]
+async fn send_mail_replies_and_forwards_behave_as_graph_documents() {
+    let seed = "mailboxes:\n  - email: ada@example.com\n    messages:\n      - subject: Hello\n        from: Carol <carol@example.com>\n        text: Original words.\n  - email: bob@example.com\n";
+    let (emulator, _) = start(seed).await;
+    let http = reqwest::Client::new();
+    let token = emulator.access_token(ADA).unwrap();
+    let post = |path: String, body: Value| {
+        http.post(format!("{}/{path}", emulator.graph_url()))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+    };
+    let recipient = json!([{"emailAddress": {"address": BOB}}]);
+
+    // sendMail carries its attachments.
+    let mail = json!({"message": {
+        "subject": "With a file",
+        "toRecipients": recipient,
+        "attachments": [{"@odata.type": "#microsoft.graph.fileAttachment", "name": "a.txt", "contentBytes": "aGk="}],
+    }});
+    assert_eq!(
+        post("me/sendMail".into(), mail).await.unwrap().status(),
+        202
+    );
+    let received = emulator.messages(BOB).unwrap();
+    assert_eq!(received[0].attachments, vec!["a.txt".to_string()]);
+
+    // A forward keeps the original body under the comment.
+    let hello = emulator.messages(ADA).unwrap()[0].id.clone();
+    let forward = json!({"comment": "FYI", "toRecipients": recipient});
+    let draft = body(
+        post(format!("me/messages/{hello}/createForward"), forward)
+            .await
+            .unwrap(),
+    )
+    .await;
+    let content = draft["body"]["content"].as_str().unwrap();
+    assert!(content.starts_with("FYI") && content.ends_with("Original words."));
+    assert_eq!(draft["subject"], "FW: Hello");
+
+    // A reply goes to replyTo when the parent names one.
+    let reply = body(
+        post(format!("me/messages/{hello}/createReply"), json!({}))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        reply["toRecipients"][0]["emailAddress"]["address"],
+        "carol@example.com"
+    );
+    let patch = json!({"replyTo": [{"emailAddress": {"address": "desk@example.com"}}]});
+    http.patch(format!("{}/me/messages/{hello}", emulator.graph_url()))
+        .bearer_auth(&token)
+        .json(&patch)
+        .send()
+        .await
+        .unwrap();
+    let reply = body(
+        post(format!("me/messages/{hello}/createReply"), json!({}))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(
+        reply["toRecipients"][0]["emailAddress"]["address"],
+        "desk@example.com"
+    );
+
+    // A batch that asks for ordering is refused, not run out of order.
+    let batch =
+        json!({"requests": [{"id": "1", "method": "GET", "url": "/me", "dependsOn": ["0"]}]});
+    assert_eq!(post("$batch".into(), batch).await.unwrap().status(), 400);
+}
+
+#[tokio::test]
+async fn a_link_bound_to_another_mailbox_gets_that_mailboxs_token() {
+    let seed = "mailboxes:\n  - email: ada@example.com\n  - email: bob@example.com\n";
+    let (emulator, _) = start(seed).await;
+    let http = reqwest::Client::new();
+    let link = "0195a000-0000-7000-8000-00000000a11c";
+    let url = format!(
+        "{}/internal/microsoft_access_token?link_id={link}",
+        emulator.authentication_service_url()
+    );
+    let owner = async |token: &Value| {
+        let me = http
+            .get(format!("{}/me", emulator.graph_url()))
+            .bearer_auth(token["access_token"].as_str().unwrap())
+            .send()
+            .await
+            .unwrap();
+        body(me).await["mail"].clone()
+    };
+
+    emulator.link_mailbox(link, ADA).unwrap();
+    let first = body(http.get(&url).send().await.unwrap()).await;
+    assert_eq!(owner(&first).await, ADA);
+
+    emulator.link_mailbox(link, BOB).unwrap();
+    let second = body(http.get(&url).send().await.unwrap()).await;
+    assert_eq!(second["cached"], false);
+    assert_eq!(owner(&second).await, BOB);
+}

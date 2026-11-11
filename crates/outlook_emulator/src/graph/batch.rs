@@ -30,6 +30,11 @@ fn step(
         .and_then(|method| method.parse().ok())
         .ok_or_else(|| invalid("a method"))?;
     let url = request["url"].as_str().ok_or_else(|| invalid("a url"))?;
+    if request.get("dependsOn").is_some() {
+        return Err(GraphError::bad_request(
+            "The emulator does not order batch requests with dependsOn.",
+        ));
+    }
     let (path, query) = match url.split_once('?') {
         Some((path, query)) => (path, Some(query)),
         None => (url, None),
