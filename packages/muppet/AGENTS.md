@@ -58,6 +58,9 @@ in `packages/sdk`:
   provides both. A program a utility needs on the system (chromium, ffmpeg,
   sops) is provided by the agent's image (`nix/macro-box`), not by a flake
   here.
+- Temporal comes from `temporal-polyfill`, installed by `utilities/time` and
+  each package's `bunfig.toml` preload: the repo's Bun (1.3) has none. A new
+  entry point that uses Temporal imports `utilities/time` or the polyfill.
 - Its own style wins over the web rules where they differ: Bun APIs and
   Temporal are used on purpose (`STYLE.md`).
 - A capability is a module of ordinary typed functions: the context first,

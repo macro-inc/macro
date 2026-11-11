@@ -127,8 +127,9 @@ restart can find them.
   and returns actions, and is where the tests are. Tests sit in
   `capabilities/<area>/test/*.test.ts`, use `bun:test`, never touch the
   network, and never sleep: time is a `Clock` you move.
-- **Time goes through Temporal** (`@macro-inc/muppet/utilities/time`; Bun has
-  `Temporal` built in, with types from `temporal-spec`). No `Date`, no epoch
+- **Time goes through Temporal** (`@macro-inc/muppet/utilities/time`;
+  `temporal-polyfill` installs it, since this Bun has none, with types from
+  `temporal-spec`). No `Date`, no epoch
   arithmetic, no comparing ISO strings.
 - **Secrets come from `credentials.get(name)`** and go no further: never
   printed, logged, written to state, or put in a process's arguments. A child
