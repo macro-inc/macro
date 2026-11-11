@@ -280,6 +280,8 @@ Assemble mention hosts at the shared controller's original initialization point;
 capture Source selection handlers once while root/close reads stay dynamic.
 Keep emoji insertion as Source REMOVE then INSERT_TEXT after usage recording;
 preserve the existing enclosed-shortcode transform's editor lifetime.
+Keep snippet fetching lazy in the real Source command payload; shared analytics
+runs before host dispatch and the snippet plugin retains async insertion policy.
 Run the behavior-inventory link browser checks and compare raw DOM/JSON before
 and after a host extraction; Source preservation alone does not establish native acceptance.
 Register attached Source roots through `createLexicalWrapper`'s actual root

@@ -4,7 +4,6 @@ import type { EntityItem } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { debouncedDependent } from '@core/util/debounce';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { fetchSnippetRaw } from '@queries/storage/snippets';
 import { Surface } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import {
@@ -15,13 +14,12 @@ import {
   onMount,
   Show,
   Suspense,
+  splitProps,
   untrack,
 } from 'solid-js';
 import { floatWithSelection } from '../../../directive/floatWithSelection';
-import {
-  CLOSE_SNIPPET_SEARCH_COMMAND,
-  INSERT_SNIPPET_COMMAND,
-} from '../../../plugins/snippets';
+import { createLexicalSnippetMenuHost } from '../../../editing/overlay-hosts/lexical-snippets';
+import type { SnippetMenuHost } from '../../../editing/overlay-hosts/snippets';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import { MentionsMenuItem } from '../MentionsMenu/components/MentionsMenuItem';
 import { useEntityMention } from '../MentionsMenu/hooks/useEntityMention';
@@ -34,8 +32,7 @@ false && floatWithSelection;
 const PANEL_DECORATION_HEIGHT = 18;
 const MAX_CONTENT_HEIGHT = 256;
 
-type SnippetsMenuProps = {
-  editor: LexicalEditor;
+type SnippetsMenuOptions = {
   menu: MenuOperations;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
   useBlockBoundary?: boolean;
@@ -43,12 +40,25 @@ type SnippetsMenuProps = {
   sourceDocumentId?: string;
 };
 
+type SnippetsMenuProps = SnippetsMenuOptions & { editor: LexicalEditor };
+type HostedSnippetsMenuProps = SnippetsMenuOptions & { host: SnippetMenuHost };
+
 /**
  * Typeahead menu opened by typing `;` in a markdown area. Lists snippet
  * documents the user can access (their own + team-shared); selecting one
  * inserts the snippet's markdown body at the cursor.
  */
 export function SnippetsMenu(props: SnippetsMenuProps) {
+  const [model, options] = splitProps(props, ['editor']);
+  return (
+    <HostedSnippetsMenu
+      {...options}
+      host={createLexicalSnippetMenuHost(() => model.editor)}
+    />
+  );
+}
+
+export function HostedSnippetsMenu(props: HostedSnippetsMenuProps) {
   return (
     <Suspense>
       <SnippetsMenuInner {...props} />
@@ -56,7 +66,7 @@ export function SnippetsMenu(props: SnippetsMenuProps) {
   );
 }
 
-function SnippetsMenuInner(props: SnippetsMenuProps) {
+function SnippetsMenuInner(props: HostedSnippetsMenuProps) {
   const analytics = useAnalytics();
 
   const searchTerm = debouncedDependent(props.menu.searchTerm, 60);
@@ -109,17 +119,13 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   });
 
   const closeMenu = () => {
-    props.editor.dispatchCommand(CLOSE_SNIPPET_SEARCH_COMMAND, undefined);
+    props.host.closeSearch();
     setMenuOpen(false);
   };
 
   const insertSnippet = (item: EntityItem) => {
     analytics.track('snippets_menu_use', {});
-    props.editor.dispatchCommand(INSERT_SNIPPET_COMMAND, {
-      documentId: item.id,
-      sourceDocumentId: props.sourceDocumentId,
-      fetchSnippet: () => fetchSnippetRaw({ documentId: item.id }),
-    });
+    props.host.insertSnippet(item.id, props.sourceDocumentId);
   };
 
   const itemAction = (item: EntityItem) => {
@@ -201,7 +207,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
-            reactiveOnContainer: props.editor.getRootElement(),
+            reactiveOnContainer: props.host.root(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
             fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,

@@ -216,6 +216,14 @@ for keyboard choice and enclosed-shortcode resolution using the actual loaded
 emoji catalog. `OVERLAY_EMOJI_CAPTURE` writes per-project files for exact host
 comparison alongside the seven existing emoji interaction cases. These controls
 do not establish a native shortcode transform or native picker installation.
+The separate `snippets.html` fixture uses supplied Quick Access snippet rows
+and a fresh real query-cache result. With `VITE_ENABLE_SNIPPETS=true`, the real
+Source menu, command, fetch helper and extraction/parse/replacement pipeline
+perform cached insertion. `OVERLAY_SNIPPET_CAPTURE` retains raw stages for
+keyboard and pointer/touch; tests wait for actual filtering before selection.
+This proves cached Source behavior, not permission-token/download services or
+native request/bookmark/completion support. Existing sequential-state tests
+separately retain empty/malformed extraction-cache behavior.
 The opt-in `/?controls` route mounts the actual checklist collector/store and
 TaskListControlsRenderer with production query and user providers. Its cases
 exercise plain/task progress, task-only filter availability, status selection
