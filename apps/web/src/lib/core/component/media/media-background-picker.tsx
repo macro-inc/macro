@@ -1,28 +1,36 @@
 import type { BackgroundEffect } from '@core/media/background-effect';
-import CaretDown from '@phosphor/caret-down.svg';
-import Image from '@phosphor/image.svg';
-import Prohibit from '@phosphor/prohibit.svg';
-import Upload from '@phosphor/upload-simple.svg';
-import { Dropdown, SingleSelectCheck } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Image from '@icon/system/regular/image.svg';
+import { Dropdown } from '@ui';
+import { createUniqueId, For, type JSX, Show } from 'solid-js';
+import { RecentBackgroundImages } from './recent-background-images';
 
-export function BlurIcon(props: { strong?: boolean }) {
-  const count = () => (props.strong ? 5 : 3);
-  const dots = () =>
-    Array.from({ length: count() ** 2 }, (_, index) => ({
-      x: 4 + (index % count()) * (16 / (count() - 1)),
-      y: 4 + Math.floor(index / count()) * (16 / (count() - 1)),
-    }));
+export function BackgroundPreview(props: { blur?: number }) {
+  const filter = createUniqueId();
   return (
     <svg
-      viewBox="0 0 24 24"
-      class="size-4 shrink-0"
-      fill="currentColor"
+      viewBox="0 0 120 90"
       aria-hidden="true"
+      class="aspect-[4/3] w-full rounded-lg overflow-hidden ring-1 ring-edge-muted group-data-checked:ring-2 group-data-checked:ring-accent"
     >
-      <For each={dots()}>
-        {(dot) => <circle cx={dot.x} cy={dot.y} r="1.2" />}
-      </For>
+      <defs>
+        <filter id={filter}>
+          <feGaussianBlur stdDeviation={props.blur ?? 0} />
+        </filter>
+      </defs>
+      <rect width="120" height="90" fill="#494e56" />
+      <g filter={`url(#${filter})`}>
+        <rect x="8" y="7" width="38" height="39" rx="2" fill="#a6b5c5" />
+        <path d="M27 7v39" stroke="#494e56" stroke-width="4" />
+        <rect x="77" y="20" width="37" height="5" rx="1" fill="#2d333a" />
+        <rect x="83" y="5" width="8" height="15" rx="1" fill="#b59673" />
+        <rect x="94" y="9" width="7" height="11" rx="1" fill="#8197b4" />
+        <rect x="91" y="67" width="13" height="19" rx="2" fill="#777c76" />
+        <circle cx="97" cy="63" r="12" fill="#788f77" />
+        <path d="M0 76h120v14H0z" fill="#393d43" />
+      </g>
+      <circle cx="60" cy="43" r="12" fill="#c5cbd2" />
+      <path d="M39 90V78a21 21 0 0 1 42 0v12z" fill="#c5cbd2" />
     </svg>
   );
 }
@@ -73,58 +81,55 @@ export function MediaBackgroundPicker(props: {
         >
           {(trigger) => trigger}
         </Show>
-        <Dropdown.Content class="min-w-48">
-          <Dropdown.RadioGroup value={selected()} onChange={select}>
-            <Dropdown.RadioItem
-              value="none"
-              closeOnSelect
-              disabled={props.disabled || props.uploading}
+        <Dropdown.Content class="min-w-72">
+          <Dropdown.RadioGroup
+            class="grid grid-cols-3 gap-2"
+            value={selected()}
+            onChange={select}
+          >
+            <For
+              each={[
+                { value: 'none', label: 'None', caption: 'None', blur: 0 },
+                {
+                  value: 'light',
+                  label: 'Light blur',
+                  caption: 'Light',
+                  blur: 2,
+                },
+                {
+                  value: 'heavy',
+                  label: 'Strong blur',
+                  caption: 'Strong',
+                  blur: 5,
+                },
+              ]}
             >
-              <Prohibit class="size-4" />
-              <span class="flex-1">None</span>
-              <SingleSelectCheck active={selected() === 'none'} />
-            </Dropdown.RadioItem>
-            <Dropdown.RadioItem
-              value="light"
-              closeOnSelect
-              disabled={props.disabled || props.uploading}
-            >
-              <BlurIcon />
-              <span class="flex-1">Light blur</span>
-              <SingleSelectCheck active={selected() === 'light'} />
-            </Dropdown.RadioItem>
-            <Dropdown.RadioItem
-              value="heavy"
-              closeOnSelect
-              disabled={props.disabled || props.uploading}
-            >
-              <BlurIcon strong />
-              <span class="flex-1">Strong blur</span>
-              <SingleSelectCheck active={selected() === 'heavy'} />
-            </Dropdown.RadioItem>
-            <Show when={props.effect.type === 'image'}>
-              <Dropdown.RadioItem
-                value="image"
-                closeOnSelect
-                disabled={props.disabled || props.uploading}
-              >
-                <Image class="size-4" />
-                <span class="flex-1">Custom background</span>
-                <SingleSelectCheck active />
-              </Dropdown.RadioItem>
-            </Show>
+              {(option) => (
+                <Dropdown.RadioItem
+                  class="group flex-col gap-1 p-0 text-center text-xs"
+                  value={option.value}
+                  aria-label={option.label}
+                  closeOnSelect
+                  disabled={props.disabled || props.uploading}
+                >
+                  <BackgroundPreview blur={option.blur} />
+                  <span>{option.caption}</span>
+                </Dropdown.RadioItem>
+              )}
+            </For>
           </Dropdown.RadioGroup>
           <Show when={props.onUpload}>
             <Dropdown.Separator />
-            <Dropdown.Item
+            <RecentBackgroundImages
+              effect={props.effect}
               disabled={props.disabled || props.uploading}
-              onSelect={() => input?.click()}
-            >
-              <Upload class="size-4" />
-              <span>
-                {props.uploading ? 'Loading image…' : 'Upload an image'}
-              </span>
-            </Dropdown.Item>
+              uploading={props.uploading}
+              onSelect={(effect) => {
+                props.onSelect(effect);
+                return true;
+              }}
+              onUploadClick={() => input?.click()}
+            />
           </Show>
         </Dropdown.Content>
       </Dropdown>

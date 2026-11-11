@@ -3,9 +3,11 @@
 #[cfg(test)]
 mod test;
 
+mod channel_startup;
 mod guest_chat;
 mod meeting_invites;
 mod meetings;
+mod orphan_rooms;
 mod reconcile;
 
 use connection::domain::ports::ConnectionService;
@@ -46,6 +48,9 @@ use crate::domain::models::{
     CallRecordPage, EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
     VoipPushPayloadRequest,
 };
+use crate::domain::notification_events::{
+    CallNotificationEvent, CallNotificationMacroEvent, CallNotificationMetadata,
+};
 
 use super::meetings::{
     ActiveMeeting, CreateMeetingRequest, GuestJoinRequest, InviteMeetingUsersRequest, Meeting,
@@ -56,11 +61,14 @@ use super::models::{
     CallPeople, CallRecord, CallRecordTranscriptSegment, CallTokenResponse,
     CallTranscriptCustomSpeakerResult, EgressS3Config, EnrichedCallTranscript,
     GetBatchCallRecordPreviewRequest, GetBatchCallRecordPreviewResponse, GetCallRecordsRequest,
-    LeaveCallResponse, RingStatus, RingStatusResponse, TranscriptSegmentRequest,
+    JoinCallRequest, LeaveCallResponse, LiveCallKind, LiveCallParticipantsResponse,
+    LiveCallSummary, LiveCallsResponse, OnOtherCall, RingStatus, RingStatusResponse,
+    TranscriptSegmentRequest,
 };
 use super::ports::{
     CallRecordQueryService, CallRecordReader, CallRepository, CallRtcClient, CallService,
-    CallSummarizer, NoOpVoiceRepository, RecordingStorage, VoiceRepository,
+    CallStartLimiter, CallSummarizer, NoOpVoiceRepository, ProgrammaticCallGate, RecordingDownload,
+    RecordingStorage, VoiceRepository,
 };
 
 /// The concrete call service implementation.
@@ -78,18 +86,21 @@ pub struct CallServiceImpl<
 > {
     repo: R,
     rtc_client: Arc<C>,
-    connection_service: Cn,
+    connection_service: Arc<Cn>,
     entity_access_service: E,
-    notification_ingress: N,
+    notification_ingress: Arc<N>,
     recording_storage: S,
     server_url: String,
     egress_s3_config: Option<EgressS3Config>,
     internal_call_secret: Option<String>,
     summarizer: Option<Sm>,
-    voip_push_sender: V,
+    voip_push_sender: Arc<V>,
     voice_repo: Vr,
     ring_status_base_url: Option<String>,
     event_broker: B,
+    channel_threads: Option<Arc<dyn crate::domain::ports::ChannelThreads>>,
+    start_limiter: Option<Arc<dyn CallStartLimiter>>,
+    programmatic_call_gate: Option<Arc<dyn ProgrammaticCallGate>>,
 }
 
 impl<
@@ -115,18 +126,21 @@ impl<
         Self {
             repo,
             rtc_client: Arc::new(rtc_client),
-            connection_service,
+            connection_service: Arc::new(connection_service),
             entity_access_service,
-            notification_ingress,
+            notification_ingress: Arc::new(notification_ingress),
             recording_storage,
             server_url: server_url.into(),
             egress_s3_config: None,
             internal_call_secret: None,
             summarizer: None,
-            voip_push_sender: (),
+            voip_push_sender: Arc::new(()),
             voice_repo: NoOpVoiceRepository,
             ring_status_base_url: None,
             event_broker: NoopMacroEventBroker,
+            channel_threads: None,
+            start_limiter: None,
+            programmatic_call_gate: None,
         }
     }
 }
@@ -144,6 +158,27 @@ impl<
     B: MacroEventBroker,
 > CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    /// Let new channel calls discuss in a thread in their channel.
+    pub fn with_channel_threads(
+        mut self,
+        channel_threads: Arc<dyn crate::domain::ports::ChannelThreads>,
+    ) -> Self {
+        self.channel_threads = Some(channel_threads);
+        self
+    }
+
+    /// Attach a per-account budget for calls that ring others.
+    pub fn with_start_limiter(mut self, limiter: impl CallStartLimiter + 'static) -> Self {
+        self.start_limiter = Some(Arc::new(limiter));
+        self
+    }
+
+    /// Attach the per-caller switch for explicit programmatic call routes.
+    pub fn with_programmatic_call_gate(mut self, gate: impl ProgrammaticCallGate) -> Self {
+        self.programmatic_call_gate = Some(Arc::new(gate));
+        self
+    }
+
     /// Enable auto-recording with the given S3 configuration.
     pub fn with_egress(mut self, s3_config: EgressS3Config) -> Self {
         self.egress_s3_config = Some(s3_config);
@@ -188,10 +223,13 @@ impl<
             egress_s3_config: self.egress_s3_config,
             internal_call_secret: self.internal_call_secret,
             summarizer: self.summarizer,
-            voip_push_sender: sender,
+            voip_push_sender: Arc::new(sender),
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            channel_threads: self.channel_threads,
+            start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
@@ -215,6 +253,9 @@ impl<
             voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker: self.event_broker,
+            channel_threads: self.channel_threads,
+            start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
@@ -238,11 +279,18 @@ impl<
             voice_repo: self.voice_repo,
             ring_status_base_url: self.ring_status_base_url,
             event_broker,
+            channel_threads: self.channel_threads,
+            start_limiter: self.start_limiter,
+            programmatic_call_gate: self.programmatic_call_gate,
         }
     }
 
     fn publish_call_event(&self, event: &CallMacroEvent) {
         publish_call_event(&self.event_broker, event);
+    }
+
+    fn publish_call_notification(&self, event: CallNotificationEvent) {
+        publish_call_notification(&self.event_broker, event);
     }
 
     /// Authorize an explicit (`teamShareAccessLevel`) or legacy (`shareWithTeam`)
@@ -325,8 +373,17 @@ impl<
                 participants,
                 has_recording: archived.has_recording,
                 archive_reason,
+                channel_thread: archived.channel_thread,
             },
         ));
+        self.publish_call_notification(CallNotificationEvent::Ended(
+            CallNotificationMetadata::new(archived.call_id, archived.channel_id),
+        ));
+        if archived.has_recording {
+            self.publish_call_notification(CallNotificationEvent::RecordingReady(
+                CallNotificationMetadata::new(archived.call_id, None),
+            ));
+        }
     }
 
     /// Send a call event to all channel members (best-effort).
@@ -421,6 +478,10 @@ impl<
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) {
+        let mut metadata = CallNotificationMetadata::new(*call_id, *channel_id);
+        metadata.user_id = Some(user_id.to_string());
+        metadata.recipient_user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::Answered(metadata));
         let _ = self
             .connection_service
             .send_channel_message(
@@ -447,6 +508,10 @@ impl<
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) {
+        let mut metadata = CallNotificationMetadata::new(*call_id, *channel_id);
+        metadata.user_id = Some(user_id.to_string());
+        metadata.recipient_user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::Declined(metadata));
         let _ = self
             .connection_service
             .send_channel_message(
@@ -639,6 +704,8 @@ impl NotificationExtIos for CallStartedNotification {
             push_notification_data: PushNotificationData {
                 notification_id,
                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                recipient_id: None,
+                navigation: None,
             },
         })
     }
@@ -657,6 +724,13 @@ impl<
     B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    async fn programmatic_calls_enabled(&self, caller: MacroUserIdStr<'_>) -> bool {
+        match &self.programmatic_call_gate {
+            Some(gate) => gate.enabled_for(caller).await,
+            None => false,
+        }
+    }
+
     async fn prepare_meeting(
         &self,
         actor: MacroUserIdStr<'_>,
@@ -757,7 +831,35 @@ impl<
         token: MeetingToken,
         actor: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
-        self.join_invitation(token, actor).await
+        self.join_invitation(
+            token,
+            actor,
+            JoinCallRequest {
+                on_other_call: OnOtherCall::Switch,
+                replace: true,
+                ..Default::default()
+            },
+            false,
+            false,
+        )
+        .await
+    }
+    async fn join_meeting_with_options(
+        &self,
+        token: MeetingToken,
+        actor: MacroUserIdStr<'_>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+        agent_attributed: bool,
+    ) -> Result<CallTokenResponse, CallError> {
+        self.join_invitation(
+            token,
+            actor,
+            request,
+            credential_is_program,
+            agent_attributed,
+        )
+        .await
     }
     async fn join_meeting_guest(
         &self,
@@ -809,14 +911,16 @@ impl<
             .list_active_calls()
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
-        for call in calls {
-            self.reconcile_call(&call, now)
+        for call in &calls {
+            self.reconcile_call(call, now)
                 .await
                 .inspect_err(|error| {
                     tracing::warn!(call_id = %call.id, error = ?error, "failed to reconcile call")
                 })
                 .ok();
         }
+        // A failed sweep is recorded on its span and retried next interval.
+        self.sweep_orphan_rooms(&calls, now).await.ok();
         Ok(())
     }
 
@@ -840,13 +944,13 @@ impl<
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<CallTokenResponse, CallError> {
-        let call = match self
+        let (call, started) = match self
             .repo
             .get_call_by_channel_id(channel_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
         {
-            Some(existing) => existing,
+            Some(existing) => (existing, false),
             None => {
                 let call_id = Uuid::now_v7();
                 // Room grants must expire with this session, even in a channel.
@@ -858,40 +962,40 @@ impl<
                     .await
                     .map_err(CallError::Internal)?;
 
+                // Decided before the row exists, so nobody can read this call
+                // and see a discussion it will not keep.
+                let channel_thread = match &self.channel_threads {
+                    Some(channel_threads) => channel_threads.enabled_for(user_id.copied()).await,
+                    None => false,
+                };
+
                 // Try to create call record; if another request won the race
                 // the ON CONFLICT returns None — re-read the existing call.
                 match self
                     .repo
-                    .create_call(&call_id, channel_id, &room_name, user_id.copied())
+                    .create_call(
+                        &call_id,
+                        channel_id,
+                        &room_name,
+                        user_id.copied(),
+                        channel_thread,
+                    )
                     .await?
                 {
                     Some(call) => {
-                        // We are the creator — dispatch transcription agent (best-effort).
-                        self.rtc_client
-                            .dispatch_transcription_agent(&room_name)
-                            .await
-                            .inspect_err(|e| {
-                                tracing::error!(error=?e, "failed to dispatch transcription agent")
-                            })
-                            .ok();
-
-                        // Start recording if configured.
-                        if let Some(s3_config) = &self.egress_s3_config {
-                            match self
-                                .rtc_client
-                                .start_room_composite_egress(&room_name, s3_config)
+                        // Never blocks the call: the first reply retries it.
+                        if channel_thread && let Some(channel_threads) = &self.channel_threads {
+                            channel_threads
+                                .ensure_root(call.id)
                                 .await
-                            {
-                                Ok(egress_id) => {
-                                    self.repo
-                                        .set_egress_id(&call.id, &egress_id)
-                                        .await
-                                        .map_err(|e| CallError::Internal(e.into()))?;
-                                }
-                                Err(e) => {
-                                    tracing::error!(error=?e, "failed to start egress recording");
-                                }
-                            }
+                                .inspect_err(|error| {
+                                    tracing::error!(
+                                        error = ?error,
+                                        call_id = %call.id,
+                                        "failed to create the call's thread root"
+                                    );
+                                })
+                                .ok();
                         }
 
                         match MacroUserIdStr::parse_from_str(&call.created_by) {
@@ -905,6 +1009,12 @@ impl<
                                         recording_enabled: self.egress_s3_config.is_some(),
                                     },
                                 ));
+                                let mut metadata =
+                                    CallNotificationMetadata::new(call.id, call.channel_id);
+                                metadata.created_by = Some(call.created_by.clone());
+                                self.publish_call_notification(CallNotificationEvent::Started(
+                                    metadata,
+                                ));
                             }
                             Err(error) => {
                                 tracing::error!(
@@ -915,184 +1025,28 @@ impl<
                             }
                         }
 
-                        // Notify channel members about the new call (best-effort).
-                        self.send_call_event(
-                            &Some(*channel_id),
-                            "call_started",
-                            &serde_json::json!({
-                                "channel_id": channel_id,
-                                "call_id": call.id,
-                                "created_by": user_id,
-                            }),
-                            Some(user_id.copied()),
-                        )
-                        .await;
-
-                        // Send push notification and VoIP push to channel members (best-effort).
-                        let _: Result<(), anyhow::Error> = async {
-                            let channel_id_str = channel_id.to_string();
-                            let recipient_ids: HashSet<MacroUserIdStr<'_>> = self
-                                .entity_access_service
-                                .get_users_by_entity(&channel_id_str, EntityType::Channel)
-                                .await?
-                                .into_iter()
-                                .filter(|u| u.as_ref() != user_id.as_ref())
-                                .collect();
-                            if recipient_ids.is_empty() {
-                                return Ok(());
-                            }
-
-                            // Resolve the channel name from each recipient's
-                            // perspective: a DM is named after the other
-                            // participant, so the caller's view of the name
-                            // would be the callee's own name.
-                            let recipient_vec: Vec<MacroUserIdStr<'static>> = recipient_ids
-                                .iter()
-                                .cloned()
-                                .map(CowLike::into_owned)
-                                .collect();
-                            let channel_names_by_recipient = self
-                                .repo
-                                .resolve_channel_name_for_viewers(channel_id, &recipient_vec)
-                                .await
-                                .map_err(Into::into)?;
-
-                            let sender_profile_picture_url = self
-                                .repo
-                                .get_user_profile_picture(user_id.copied())
-                                .await
-                                .ok()
-                                .flatten();
-
-                            let caller_name = self
-                                .repo
-                                .get_user_display_name(user_id.copied())
-                                .await
-                                .ok()
-                                .flatten()
-                                .unwrap_or_else(|| user_id.email_str().to_string());
-
-                            // Try native call pushes first; ordinary alerts remain fallbacks
-                            // independently for iOS and Android.
-
-                            // Resolve VoIP endpoints before minting tokens:
-                            // users without PushKit endpoints should not get
-                            // LiveKit tokens minted for them. If endpoint
-                            // resolution fails, fall back to normal APNS for
-                            // everyone rather than dropping the notification.
-                            let voip_targets = match self
-                                .voip_push_sender
-                                .get_voip_push_targets(&recipient_vec)
-                                .await
-                            {
-                                Ok(targets) => targets,
-                                Err(e) => {
-                                    tracing::error!(
-                                        error=?e,
-                                        "failed to resolve VoIP push targets; falling back to APNS"
-                                    );
-                                    Vec::new()
-                                }
-                            };
-                            let ring_status_url =
-                                self.ring_status_base_url.as_deref().map(|base| {
-                                    format!(
-                                        "{}/call/ring-status/{}",
-                                        base.trim_end_matches('/'),
-                                        call.id
-                                    )
-                                });
-                            // One payload batch per distinct channel name, so
-                            // each recipient's native sheet shows the name they
-                            // know the channel by.
-                            let mut payloads_by_recipient: HashMap<
-                                MacroUserIdStr<'static>,
-                                VoipPushPayload,
-                            > = HashMap::new();
-                            let voip_groups = group_recipients_by_channel_name(
-                                voip_targets
-                                    .iter()
-                                    .map(|target| target.recipient_id.clone()),
-                                &channel_names_by_recipient,
-                            );
-                            for (voip_channel_name, voip_group_recipients) in voip_groups {
-                                let voip_group_recipients: Vec<MacroUserIdStr<'static>> =
-                                    voip_group_recipients.into_iter().collect();
-                                let payloads = self
-                                    .rtc_client
-                                    .build_voip_push_payloads(VoipPushPayloadRequest {
-                                        recipients: &voip_group_recipients,
-                                        room_name: &call.room_name,
-                                        call_id: call.id,
-                                        channel_id: &channel_id_str,
-                                        channel_name: voip_channel_name.as_deref().unwrap_or(""),
-                                        caller_name: &caller_name,
-                                        livekit_server_url: &self.server_url,
-                                        ring_status_url: ring_status_url.as_deref(),
-                                    })
-                                    .await;
-                                payloads_by_recipient.extend(payloads);
-                            }
-                            // Rejoin resolved endpoints with successfully
-                            // minted payloads. A failed token mint skips only
-                            // that recipient's VoIP push.
-                            let pushes = voip_targets
-                                .into_iter()
-                                .filter_map(|target| {
-                                    payloads_by_recipient
-                                        .remove(&target.recipient_id)
-                                        .map(|payload| (target, payload))
-                                })
-                                .collect();
-
-                            let native_delivery =
-                                self.voip_push_sender.send_voip_pushes(pushes).await;
-
-                            let apns_recipient_ids = exclude_voip_recipients(
-                                recipient_ids,
-                                &native_delivery.fully_delivered,
-                            );
-
-                            // Persist and alert only recipients with an unhandled platform.
-                            // Suppress ordinary alerts on platforms reached natively. One
-                            // request per distinct channel name, so the alert
-                            // title and stored metadata match what each
-                            // recipient calls the channel.
-                            let apns_groups = group_recipients_by_channel_name(
-                                apns_recipient_ids,
-                                &channel_names_by_recipient,
-                            );
-                            for (channel_name, apns_group_recipients) in apns_groups {
-                                let req = SendNotificationRequestBuilder {
-                                    notification_entity: EntityType::Channel
-                                        .with_entity_string(channel_id_str.clone()),
-                                    secondary_notification_entity: None,
-                                    notification: CallStartedNotification {
-                                        sender_profile_picture_url: sender_profile_picture_url
-                                            .clone(),
-                                        channel_name,
-                                    },
-                                    sender_id: Some(user_id.copied()),
-                                    recipient_ids: apns_group_recipients,
-                                }
-                                .into_request()
-                                .with_apns()
-                                .with_mobile_push_exclusions(native_delivery.delivered.clone());
-
-                                self.notification_ingress
-                                    .send_notification(req)
-                                    .await
-                                    .map_err(|e| anyhow::anyhow!(e))?;
-                            }
-
-                            Ok(())
+                        // Only the allocation winner starts media and ringing. Schedule
+                        // before subsequent join steps, so a failed first join cannot
+                        // strand the room without recording or notifications.
+                        channel_startup::ChannelCallStartup {
+                            repo: self.repo.clone(),
+                            rtc_client: self.rtc_client.clone(),
+                            connection_service: self.connection_service.clone(),
+                            entity_access_service: self.entity_access_service.clone(),
+                            notification_ingress: self.notification_ingress.clone(),
+                            voip_push_sender: self.voip_push_sender.clone(),
+                            server_url: self.server_url.clone(),
+                            ring_status_base_url: self.ring_status_base_url.clone(),
+                            egress_s3_config: self.egress_s3_config.clone(),
+                            event_broker: self.event_broker.clone(),
                         }
-                        .await
-                        .inspect_err(|e| {
-                            tracing::error!(error=?e, "failed to send call started notification");
-                        });
+                        .spawn(
+                            call.clone(),
+                            *channel_id,
+                            user_id.clone().into_owned(),
+                        );
 
-                        call
+                        (call, true)
                     }
                     None => {
                         // A concurrent request owns the active session. Our empty
@@ -1100,11 +1054,14 @@ impl<
                         self.rtc_client.delete_room(&room_name).await
                             .inspect_err(|error| tracing::error!(error=?error, "failed to remove unused channel call room")).ok();
                         // Another request created the call — read the existing one.
-                        self.repo
-                            .get_call_by_channel_id(channel_id)
-                            .await
-                            .map_err(|e| CallError::Internal(e.into()))?
-                            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?
+                        (
+                            self.repo
+                                .get_call_by_channel_id(channel_id)
+                                .await
+                                .map_err(|e| CallError::Internal(e.into()))?
+                                .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?,
+                            false,
+                        )
                     }
                 }
             }
@@ -1137,6 +1094,13 @@ impl<
             }
         }
 
+        // A person may rejoin a row a program of theirs marked. Reset it, or the
+        // program-only rule could end the call while they're in it.
+        self.repo
+            .set_participant_client(&call.id, user_id.as_ref(), "person")
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+
         // Tell the user's other devices the call was answered here so they
         // can stop showing the incoming-call UI (best-effort).
         self.send_call_answered_event(&Some(*channel_id), &call.id, user_id.copied())
@@ -1150,6 +1114,7 @@ impl<
             .map_err(CallError::Internal)?;
 
         Ok(CallTokenResponse {
+            started,
             call_id: call.id,
             channel_id: Some(*channel_id),
             participant_id: user_id.to_string(),
@@ -1160,24 +1125,431 @@ impl<
         })
     }
 
+    #[tracing::instrument(name = "call.start", err, skip(self, user_id, request), fields(call.id, principal.kind, call.client, outcome))]
+    async fn start_call(
+        &self,
+        channel_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> Result<CallTokenResponse, CallError> {
+        tracing::Span::current().record(
+            "call.client",
+            if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record(
+            "principal.kind",
+            if credential_is_program {
+                "program"
+            } else {
+                "user"
+            },
+        );
+        if let Some(call) = self
+            .repo
+            .get_call_by_channel_id(channel_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+        {
+            let result = self
+                .join_call(&call.id, user_id, request, credential_is_program)
+                .await;
+            tracing::Span::current().record("call.id", call.id.to_string());
+            tracing::Span::current()
+                .record("outcome", if result.is_ok() { "joined" } else { "failed" });
+            return result;
+        }
+        if matches!(request.on_other_call, OnOtherCall::Fail)
+            && self
+                .repo
+                .find_active_call_for_user(user_id.copied())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?
+                .is_some()
+        {
+            tracing::Span::current().record("outcome", "in_other_call");
+            return Err(CallError::InOtherCall);
+        }
+        if let Some(limiter) = &self.start_limiter {
+            limiter.check(user_id.as_ref()).await?;
+        }
+        let mut response = self
+            .get_or_create_call(channel_id, user_id.copied())
+            .await
+            .map_err(|error| match error {
+                CallError::AlreadyInCall(_) => CallError::InOtherCall,
+                other => other,
+            })?;
+        let agent = self
+            .repo
+            .is_agent_account(user_id.as_ref())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        if credential_is_program || agent {
+            let program = if agent { "agent" } else { "api_key" };
+            self.repo
+                .set_participant_client(&response.call_id, user_id.as_ref(), program)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            response.token = self
+                .rtc_client
+                .generate_program_token(&response.room_name, user_id, program, request.name.clone())
+                .await
+                .map_err(CallError::Internal)?;
+        } else if let Some(name) = request.name.as_deref() {
+            response.token = self
+                .rtc_client
+                .generate_named_token(&response.room_name, user_id, name)
+                .await
+                .map_err(CallError::Internal)?;
+        }
+        tracing::Span::current().record("call.id", response.call_id.to_string());
+        tracing::Span::current().record(
+            "call.client",
+            if agent {
+                "agent"
+            } else if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record("outcome", "joined");
+        Ok(response)
+    }
+
+    #[tracing::instrument(name = "call.join", err, skip(self, user_id, request), fields(call.id = %call_id, principal.kind, call.client, outcome))]
+    async fn join_call(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+        request: JoinCallRequest,
+        credential_is_program: bool,
+    ) -> Result<CallTokenResponse, CallError> {
+        tracing::Span::current().record(
+            "call.client",
+            if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record(
+            "principal.kind",
+            if credential_is_program {
+                "program"
+            } else {
+                "user"
+            },
+        );
+        let call = self
+            .repo
+            .get_call_by_id(call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| {
+                tracing::Span::current().record("outcome", "ended");
+                CallError::Ended
+            })?;
+        if !self
+            .repo
+            .can_join_call(call_id, user_id.as_ref())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+        {
+            return Err(CallError::Forbidden(
+                "not a call participant or invitee".to_string(),
+            ));
+        }
+        if let Some((other_id, _)) = self
+            .repo
+            .find_active_call_for_user(user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            && other_id != *call_id
+        {
+            if matches!(request.on_other_call, OnOtherCall::Fail) {
+                tracing::Span::current().record("outcome", "in_other_call");
+                return Err(CallError::InOtherCall);
+            }
+            self.leave_other_active_call(user_id.copied(), *call_id)
+                .await?;
+        }
+        let connected = self
+            .rtc_client
+            .list_participant_identities(&call.room_name)
+            .await
+            .map_err(CallError::Internal)?
+            .unwrap_or_default();
+        if !request.replace
+            && connected
+                .iter()
+                .any(|identity| identity == user_id.as_ref())
+        {
+            tracing::Span::current().record("outcome", "already_connected");
+            return Err(CallError::AlreadyConnected);
+        }
+        let add = if call.channel_id.is_some() {
+            self.repo.add_participant(call_id, user_id.copied()).await
+        } else {
+            self.repo
+                .add_meeting_participant(call_id, user_id.copied())
+                .await
+        };
+        match add {
+            Ok(_) => {}
+            Err(AddParticipantError::UserAlreadyActive) => return Err(CallError::InOtherCall),
+            Err(AddParticipantError::Repository(error)) => return Err(CallError::Internal(error)),
+        }
+        let agent = self
+            .repo
+            .is_agent_account(user_id.as_ref())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        let client = if agent {
+            "agent"
+        } else if credential_is_program {
+            "api_key"
+        } else {
+            "person"
+        };
+        self.repo
+            .set_participant_client(call_id, user_id.as_ref(), client)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        let token = if agent || credential_is_program {
+            let program = if agent { "agent" } else { "api_key" };
+            self.rtc_client
+                .generate_program_token(
+                    &call.room_name,
+                    user_id.copied(),
+                    program,
+                    request.name.clone(),
+                )
+                .await
+        } else if let Some(name) = request.name.as_deref() {
+            self.rtc_client
+                .generate_named_token(&call.room_name, user_id.copied(), name)
+                .await
+        } else {
+            self.rtc_client
+                .generate_token(&call.room_name, user_id.copied())
+                .await
+        }
+        .map_err(CallError::Internal)?;
+        tracing::Span::current().record(
+            "call.client",
+            if agent {
+                "agent"
+            } else if credential_is_program {
+                "api_key"
+            } else {
+                "person"
+            },
+        );
+        tracing::Span::current().record("outcome", "joined");
+        let share_token = self
+            .repo
+            .get_meeting_for_call(call_id, false)
+            .await?
+            .map(|meeting| meeting.share_token.into());
+        self.send_call_answered_event(&call.channel_id, call_id, user_id.copied())
+            .await;
+        Ok(CallTokenResponse {
+            started: false,
+            call_id: *call_id,
+            channel_id: call.channel_id,
+            participant_id: user_id.to_string(),
+            share_token,
+            token,
+            room_name: call.room_name,
+            server_url: self.server_url.clone(),
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn leave_call(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<LeaveCallResponse, CallError> {
+        let call = self
+            .repo
+            .get_call_by_id(call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+        self.repo
+            .remove_participant(call_id, user_id.copied())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        if self.finish_empty_call(&call).await? {
+            return Ok(LeaveCallResponse { call_ended: true });
+        }
+        self.rtc_client
+            .remove_participant(&call.room_name, user_id)
+            .await
+            .map_err(CallError::Internal)?;
+        Ok(LeaveCallResponse { call_ended: false })
+    }
+
+    async fn get_call_ring_state(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<RingStatusResponse, CallError> {
+        let call = self
+            .repo
+            .get_call_by_id(call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        let (is_participant, has_declined) = if call.is_some() {
+            let joined = self
+                .repo
+                .is_participant(call_id, user_id.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            let declined = self
+                .repo
+                .has_declined(call_id, user_id.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            (joined, declined)
+        } else {
+            (false, false)
+        };
+        Ok(RingStatusResponse {
+            status: resolve_ring_status(call.as_ref(), call_id, is_participant, has_declined),
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, user_id))]
+    async fn get_live_calls(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<LiveCallsResponse, CallError> {
+        let calls = self
+            .repo
+            .list_joinable_calls(user_id.as_ref())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?;
+        let mut summaries = Vec::with_capacity(calls.len());
+        for call in calls {
+            let meeting = self.repo.get_meeting_for_call(&call.id, false).await?;
+            let participant_count = self
+                .repo
+                .get_participant_count(&call.id)
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            let joined = self
+                .repo
+                .is_participant(&call.id, user_id.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            let declined = self
+                .repo
+                .has_declined(&call.id, user_id.as_ref())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?;
+            let ringing = matches!(
+                resolve_ring_status(Some(&call), &call.id, joined, declined),
+                RingStatus::Ringing
+            );
+            summaries.push(LiveCallSummary {
+                call_id: call.id,
+                kind: if call.channel_id.is_some() {
+                    LiveCallKind::Channel
+                } else {
+                    LiveCallKind::Standalone
+                },
+                channel_id: call.channel_id,
+                meeting_id: meeting.as_ref().map(|meeting| meeting.id),
+                share_token: meeting
+                    .as_ref()
+                    .map(|meeting| meeting.share_token.as_str().to_string()),
+                title: meeting.map(|meeting| meeting.title),
+                created_by: call.created_by,
+                created_at: call.created_at,
+                participant_count,
+                ringing,
+            });
+        }
+        Ok(LiveCallsResponse { calls: summaries })
+    }
+
+    #[tracing::instrument(err, skip(self, user_id), fields(call.id = %call_id))]
+    async fn get_call_participants(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<LiveCallParticipantsResponse, CallError> {
+        let call = self
+            .repo
+            .get_call_by_id(call_id)
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+        if !self
+            .repo
+            .can_join_call(call_id, user_id.as_ref())
+            .await
+            .map_err(|e| CallError::Internal(e.into()))?
+        {
+            return Err(CallError::Forbidden(
+                "not a call participant or invitee".to_string(),
+            ));
+        }
+        let mut participants = self
+            .rtc_client
+            .list_live_participants(&call.room_name)
+            .await
+            .map_err(CallError::Internal)?
+            .unwrap_or_default();
+        for participant in &mut participants {
+            if let Some(identity) = &participant.user_id {
+                let user = MacroUserIdStr::parse_from_str(identity)
+                    .map_err(|e| CallError::Internal(e.into()))?;
+                participant.display_name = self
+                    .repo
+                    .get_user_display_name(user)
+                    .await
+                    .map_err(|e| CallError::Internal(e.into()))?
+                    .unwrap_or_else(|| "Macro user".to_string());
+            }
+        }
+        Ok(LiveCallParticipantsResponse { participants })
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn leave_or_end_call(
         &self,
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<LeaveCallResponse, CallError> {
-        let call = self
+        let Some(call) = self
             .repo
             .get_call_by_channel_id(channel_id)
             .await
             .map_err(|e| CallError::Internal(e.into()))?
-            .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
+        else {
+            // A stale token may still hold the user in the last call's room.
+            self.leave_archived_channel_room(channel_id, user_id).await;
+            return Err(CallError::NotFound(channel_id.to_string()));
+        };
 
         // Remove participant from DB (idempotent — no-op if already removed by webhook).
         self.repo
             .remove_participant(&call.id, user_id.copied())
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
+        let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+        metadata.identity = Some(user_id.to_string());
+        metadata.user_id = Some(user_id.to_string());
+        self.publish_call_notification(CallNotificationEvent::ParticipantLeft(metadata));
 
         // Kick from LiveKit. The resulting participant_left webhook
         // handles archival and room deletion.
@@ -1281,11 +1653,22 @@ impl<
             .await?;
         }
 
+        // Log the participant kind without exposing its identity.
+        let participant_kind = match (
+            &event.participant_identity,
+            &event.guest_identity,
+            &event.bot_identity,
+        ) {
+            (Some(_), _, _) => "user",
+            (None, Some(_), _) => "guest",
+            (None, None, Some(_)) => "bot",
+            (None, None, None) => "none",
+        };
         tracing::info!(
             event_type = %event.event,
             event_id = %event.id,
             room_name = ?event.room_name,
-            participant = ?event.participant_identity,
+            participant_kind,
             "processing call webhook event"
         );
 
@@ -1324,14 +1707,45 @@ impl<
                 }
             }
             "participant_joined" => {
+                if let (Some(room), Some(identity)) = (&event.room_name, event.bot_identity) {
+                    if self
+                        .repo
+                        .get_call_by_room_name(room)
+                        .await
+                        .map_err(|error| CallError::Internal(error.into()))?
+                        .is_none()
+                    {
+                        self.evict_from_untracked_room(
+                            room,
+                            orphan_rooms::RoomParticipant::Bot(identity),
+                        )
+                        .await?;
+                    }
+                    return Ok(());
+                }
                 if let (Some(room), Some(identity)) = (&event.room_name, &event.guest_identity) {
-                    if let Some(call) = self
+                    match self
                         .repo
                         .get_call_by_room_name(room)
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?
                     {
-                        self.repo.reconcile_guest(&call.id, *identity, true).await?;
+                        Some(call) => {
+                            self.repo.reconcile_guest(&call.id, *identity, true).await?;
+                            let mut metadata =
+                                CallNotificationMetadata::new(call.id, call.channel_id);
+                            metadata.identity = Some(identity.to_string());
+                            self.publish_call_notification(
+                                CallNotificationEvent::ParticipantJoined(metadata),
+                            );
+                        }
+                        None => {
+                            self.evict_from_untracked_room(
+                                room,
+                                orphan_rooms::RoomParticipant::Guest(*identity),
+                            )
+                            .await?;
+                        }
                     }
                     return Ok(());
                 }
@@ -1351,7 +1765,12 @@ impl<
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
                 else {
-                    return Ok(());
+                    return self
+                        .evict_from_untracked_room(
+                            room_name,
+                            orphan_rooms::RoomParticipant::User(participant_identity.copied()),
+                        )
+                        .await;
                 };
 
                 // Reconcile: idempotent upsert (handles reconnect/race conditions).
@@ -1379,6 +1798,12 @@ impl<
                             participant_identity.copied(),
                         )
                         .await;
+                        let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                        metadata.identity = Some(participant_identity.to_string());
+                        metadata.user_id = Some(participant_identity.to_string());
+                        self.publish_call_notification(CallNotificationEvent::ParticipantJoined(
+                            metadata,
+                        ));
                     }
                     Err(AddParticipantError::UserAlreadyActive) => {
                         tracing::warn!(
@@ -1393,6 +1818,9 @@ impl<
                 }
             }
             "participant_left" => {
+                if event.bot_identity.is_some() {
+                    return Ok(());
+                }
                 let Some(room_name) = &event.room_name else {
                     return Ok(());
                 };
@@ -1415,10 +1843,21 @@ impl<
                         .remove_participant(&call.id, participant_identity.copied())
                         .await
                         .map_err(|e| CallError::Internal(e.into()))?;
+                    let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                    metadata.identity = Some(participant_identity.to_string());
+                    metadata.user_id = Some(participant_identity.to_string());
+                    self.publish_call_notification(CallNotificationEvent::ParticipantLeft(
+                        metadata,
+                    ));
                 } else if let Some(identity) = &event.guest_identity {
                     self.repo
                         .reconcile_guest(&call.id, *identity, false)
                         .await?;
+                    let mut metadata = CallNotificationMetadata::new(call.id, call.channel_id);
+                    metadata.identity = Some(identity.to_string());
+                    self.publish_call_notification(CallNotificationEvent::ParticipantLeft(
+                        metadata,
+                    ));
                 }
 
                 self.finish_empty_call(&call).await?;
@@ -1481,6 +1920,9 @@ impl<
                             call_id,
                             channel_id,
                         },
+                    ));
+                    self.publish_call_notification(CallNotificationEvent::RecordingReady(
+                        CallNotificationMetadata::new(call_id, None),
                     ));
                 } else {
                     // Call not yet archived — store on the active call so
@@ -1548,6 +1990,23 @@ impl<
         };
 
         Ok(record)
+    }
+
+    #[tracing::instrument(err, skip(self, receipt), fields(call.id = %receipt.entity().entity_id))]
+    async fn get_call_recording(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<RecordingDownload, CallError> {
+        let record = authorized_call_record(&self.repo, &receipt).await?;
+        let key = record
+            .recording_key
+            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))?;
+
+        self.recording_storage
+            .open_recording(&key)
+            .await
+            .map_err(CallError::Internal)?
+            .ok_or_else(|| CallError::NotFound(record.call_id.to_string()))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1981,6 +2440,9 @@ impl<
                     ai_name_generated,
                 },
             ));
+            self.publish_call_notification(CallNotificationEvent::Summarized(
+                CallNotificationMetadata::new(*call_id, None),
+            ));
         }
 
         Ok(())
@@ -2109,6 +2571,10 @@ impl<
                         ai_name_generated,
                     }),
                 );
+                publish_call_notification(
+                    &event_broker,
+                    CallNotificationEvent::Summarized(CallNotificationMetadata::new(call_id, None)),
+                );
             }
         });
     }
@@ -2133,6 +2599,19 @@ pub(crate) fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &
     drop(event_broker.send_event(event).inspect_err(|error| {
         tracing::error!(error = ?error, "failed to schedule call lifecycle event");
     }));
+}
+
+pub(crate) fn publish_call_notification<B: MacroEventBroker>(
+    event_broker: &B,
+    event: CallNotificationEvent,
+) {
+    drop(
+        event_broker
+            .send_event(&CallNotificationMacroEvent::new(event))
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to schedule call notification");
+            }),
+    );
 }
 
 /// Replace guest speaker ids with their display names for the summarizer's

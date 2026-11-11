@@ -5,10 +5,15 @@ use sqlx::{postgres::PgArguments, query::Query};
 
 const DOCUMENTS: usize = 5_000;
 const NOTIFICATIONS: usize = 50_000;
+const UNRELATED_NOTIFICATIONS: usize = 500_000;
 const PAGE_SIZE: i64 = 100;
 
-// Both alternatives use the production query's bindings and access scopes.
+// Every alternative uses the production query's bindings and access scopes.
 // The SQL is generated from AST gates, so this cannot use a static SQLx macro.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "binds SQL generated from AST gates"
+)]
 fn bind_query(sql: &str) -> Query<'_, Postgres, PgArguments> {
     let links = vec![Uuid::parse_str(LINK_1).unwrap()];
     let sources = sources();
@@ -39,11 +44,16 @@ fn keys_with_timestamps(rows: &[sqlx::postgres::PgRow]) -> Vec<(String, String, 
 fn plan_nodes(plan: &Value, nodes: &mut Vec<Value>) {
     nodes.push(serde_json::json!({
         "node": plan["Node Type"],
+        "relation": plan["Relation Name"],
+        "index": plan["Index Name"],
+        "index_condition": plan["Index Cond"],
         "strategy": plan["Strategy"],
         "rows": plan["Actual Rows"],
         "loops": plan["Actual Loops"],
         "sort_kb": plan["Sort Space Used"],
         "hash_kb": plan["Peak Memory Usage"],
+        "shared_hit_blocks": plan["Shared Hit Blocks"],
+        "shared_read_blocks": plan["Shared Read Blocks"],
     }));
     if let Some(children) = plan["Plans"].as_array() {
         for child in children {
@@ -53,9 +63,10 @@ fn plan_nodes(plan: &Value, nodes: &mut Vec<Value>) {
 }
 
 /// Explicit local diagnostic: SQLx supplies an isolated, migrated database.
-/// Compare complete candidate queries, including access gates, using the dev
-/// replica's 16 MiB work_mem and no forced plans or timing assertions. The setting
-/// is session-only. Never point the test harness at hosted data.
+/// Compare complete candidate queries, including access gates and notifications
+/// belonging to another recipient, using hosted planner settings. No forced
+/// plans or timing assertions; all settings are session-only. Never point the
+/// test harness at hosted data.
 #[sqlx::test(
     fixtures(path = "../../../../../fixtures", scripts("notified_at")),
     migrator = "MACRO_DB_MIGRATIONS"
@@ -104,9 +115,33 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
     )
     .execute(&pool)
     .await?;
+    let unrelated_notification_ids = (0..UNRELATED_NOTIFICATIONS)
+        .map(|_| Uuid::now_v7())
+        .collect::<Vec<_>>();
+    sqlx::query!(
+        r#"INSERT INTO notification (id, notification_event_type, event_item_id, event_item_type, service_sender, created_at)
+        SELECT id, 'document_comment', $2, 'document', 'test', timestamp '2024-06-03'
+        FROM unnest($1::uuid[]) id"#,
+        &unrelated_notification_ids,
+        DOC_A,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO user_notification (user_id, notification_id, created_at, sent, state) SELECT 'macro|user-2@test.com', id, created_at, TRUE, 'unseen' FROM notification WHERE id = ANY($1::uuid[])",
+        &unrelated_notification_ids,
+    )
+    .execute(&pool)
+    .await?;
     sqlx::query!("ANALYZE").execute(&pool).await?;
     let mut connection = pool.acquire().await?;
     sqlx::query!("SET work_mem = '16MB'")
+        .execute(&mut *connection)
+        .await?;
+    sqlx::query!("SET random_page_cost = 1.1")
+        .execute(&mut *connection)
+        .await?;
+    sqlx::query!("SET jit = off")
         .execute(&mut *connection)
         .await?;
     let version = sqlx::query_scalar!("SELECT version()")
@@ -116,7 +151,7 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
         .fetch_one(&mut *connection)
         .await?;
     println!(
-        "database={version:?}; work_mem={work_mem:?}; documents={DOCUMENTS}; notifications={NOTIFICATIONS}"
+        "database={version:?}; work_mem={work_mem:?}; documents={DOCUMENTS}; notifications={NOTIFICATIONS}; unrelated_notifications={UNRELATED_NOTIFICATIONS}"
     );
 
     let filter = EntityFilterAst {
@@ -127,10 +162,15 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
     };
     for (label, filter) in [("unfiltered", None), ("unseen", Some(&filter))] {
         let grouped = build_query(filter);
+        let plain_join = grouped.replace(
+            "CROSS JOIN LATERAL (\n        SELECT event_item_type, secondary_event_item_type,\n            event_item_id, secondary_event_item_id\n        FROM notification\n        WHERE id = un.notification_id\n        OFFSET 0\n    ) n",
+            "JOIN notification n ON n.id = un.notification_id",
+        );
+        assert_ne!(plain_join, grouped);
         // Reconstruct only the previous deduplication stage. All joins, gates,
         // cursor handling, and bindings are identical to the optimized query.
         let window = grouped
-            .replace("un.created_at,", "un.created_at, n.id AS notification_id,")
+            .replace("un.created_at,", "un.created_at, un.notification_id,")
             .replace(
                 "max(created_at) AS created_at",
                 "created_at, row_number() OVER (PARTITION BY entity_type, entity_id ORDER BY created_at DESC, notification_id DESC) AS rn",
@@ -141,13 +181,24 @@ async fn notified_query_explain_local(pool: Pool<Postgres>) -> anyhow::Result<()
             keys_with_timestamps(&bind_query(&window).fetch_all(&mut *connection).await?);
         let actual = keys_with_timestamps(&bind_query(&grouped).fetch_all(&mut *connection).await?);
         assert_eq!(actual, expected);
+        let plain_join_rows =
+            keys_with_timestamps(&bind_query(&plain_join).fetch_all(&mut *connection).await?);
+        assert_eq!(actual, plain_join_rows);
         assert_eq!(actual.len(), PAGE_SIZE as usize);
 
         for repetition in 0..5 {
             let variants = if repetition % 2 == 0 {
-                [("window", &window), ("group_max", &grouped)]
+                [
+                    ("window", &window),
+                    ("plain_join", &plain_join),
+                    ("group_max", &grouped),
+                ]
             } else {
-                [("group_max", &grouped), ("window", &window)]
+                [
+                    ("group_max", &grouped),
+                    ("plain_join", &plain_join),
+                    ("window", &window),
+                ]
             };
             for (variant, sql) in variants {
                 let explain = format!("EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {sql}");

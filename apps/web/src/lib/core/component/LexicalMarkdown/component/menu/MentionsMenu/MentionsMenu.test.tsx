@@ -11,18 +11,29 @@ import * as mobileSort from './utils/mobileSort';
 
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
+  whatsappEnabled: false,
+  whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
+  contactSourceEnabled: undefined as (() => boolean) | undefined,
+  setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
   loadMoreContacts: vi.fn(async () => {}),
+  calendarEvents:
+    [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
-  useCrmContactMentionSource: () => {
+  useCrmContactMentionSource: (
+    _search: () => string,
+    enabled: () => boolean
+  ) => {
     mocks.requestedBuckets.push('crm_contact');
+    mocks.contactSourceEnabled = enabled;
     return {
       entities: () => mocks.contacts,
+      users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
       isLoadingMore: () => false,
@@ -31,21 +42,92 @@ vi.mock('@app/features/crm/record-adapter', () => ({
   },
 }));
 
+vi.mock('@app/features/routines/routine-mentions', () => ({
+  useRoutineMentionSource:
+    (_searchTerm: () => string, enabled: () => boolean) => () =>
+      enabled()
+        ? [
+            {
+              kind: 'routine',
+              id: 'routine-1',
+              data: { id: 'routine-1', name: 'Weekly digest' },
+            },
+          ]
+        : [],
+}));
+
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@app/lib/analytics/posthog', async () => {
+  const { createSignal } = await import('solid-js');
+  const [disabled, setDisabled] = createSignal(false);
+  mocks.setContactSearchDisabled = setDisabled;
+  return {
+    useFeatureFlag: () => () => ({ enabled: disabled(), loading: false }),
+  };
+});
 vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: () => null }));
 vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: {},
-  isFeatureEnabled: () => mocks.crmEnabled,
-  ENABLE_BEARER_TOKEN_AUTH: false,
+vi.mock('@core/constant/featureFlags', () => {
+  const disableCrmContactSearch = { name: 'disable-crm-contact-search' };
+  const enableCrm = { name: 'crm' };
+  const enableWhatsappLinked = { name: 'whatsapp' };
+  return {
+    disableCrmContactSearch,
+    enableCrm,
+    enableWhatsappLinked,
+    isFeatureEnabled: (flag: unknown) => {
+      if (flag === enableWhatsappLinked) return mocks.whatsappEnabled;
+      return mocks.crmEnabled;
+    },
+    ENABLE_BEARER_TOKEN_AUTH: false,
+  };
+});
+vi.mock('@app/features/external-chat/queries/production-api', () => ({
+  externalChatApi: {},
+}));
+vi.mock('@queries/gate', () => ({
+  queryReadyGate: (query: { isSuccess: boolean }) => query.isSuccess,
+}));
+vi.mock('@queries/external-chats', () => ({
+  useExternalChatsQuery: (_api: unknown, userId: () => string) => ({
+    get isSuccess() {
+      mocks.whatsappUserIds.push(userId());
+      return userId() !== '';
+    },
+    data: [
+      {
+        id: 'group-1',
+        name: 'Design Crit',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      {
+        id: 'group-2',
+        name: 'Launch Room',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      // Shared with the viewer: only its owner may share it on.
+      {
+        id: 'group-3',
+        name: 'Design Review',
+        ownerId: 'macro|ana@macro.com',
+        unreadCount: 0,
+        canSend: false,
+      },
+    ],
+  }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
+    interactionForUser: () => undefined,
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
@@ -68,6 +150,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|gab@macro.com',
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
@@ -96,23 +179,51 @@ vi.mock('./hooks/useBookingLinkMention', () => ({
     isLoading: () => false,
   }),
 }));
+vi.mock('./hooks/useCalendarEventMention', () => ({
+  useCalendarEventMention: () => ({ events: () => mocks.calendarEvents }),
+}));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  Button: (
+    props: ParentProps<{ onClick?: () => void; disabled?: boolean }>
+  ) => (
+    <button onClick={props.onClick} disabled={props.disabled}>
+      {props.children}
+    </button>
+  ),
   cn: (...classes: unknown[]) =>
     classes.filter((c) => typeof c === 'string').join(' '),
 }));
 
 const originalScrollIntoView = Element.prototype.scrollIntoView;
+const mockNoEmails = () =>
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  });
+const manyUsers: IUser[] = Array.from({ length: 20 }, (_, i) => ({
+  id: `macro|person${i}@macro.com`,
+  name: `Person ${i}`,
+  email: `person${i}@macro.com`,
+}));
 
 afterEach(() => {
   mocks.crmEnabled = false;
+  mocks.whatsappEnabled = false;
+  mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
   mocks.contacts = [];
+  mocks.contactSourceEnabled = undefined;
+  mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
   mocks.loadMoreContacts.mockClear();
+  mocks.calendarEvents = [];
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -227,6 +338,89 @@ it.each([false, true])(
   }
 );
 
+it('closes the mobile menu on the first Escape', () => {
+  mocks.mobile = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText(/View all/)).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+  expect(screen.queryByText(/View all/)).toBeNull();
+});
+
+it('leaves a category list on the first desktop Escape and closes on the second', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={createEditor()}
+      users={() => manyUsers}
+      sources={['users']}
+    />
+  ));
+
+  menu.openMenu();
+  fireEvent.keyDown(document, { key: 'ArrowRight' });
+  expect(screen.getByText('Back to everything')).toBeTruthy();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(true);
+  expect(screen.queryByText('Back to everything')).toBeNull();
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(menu.isOpen()).toBe(false);
+});
+
+it('opens an empty continuation and keeps the editor menu open while paging', async () => {
+  mocks.crmEnabled = true;
+  mocks.hasMoreContacts = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  const editor = createEditor();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={editor}
+      users={() => []}
+      sources={['crm']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(screen.queryByText('No results')).toBeNull();
+  fireEvent.click(screen.getByText('View all'));
+  const next = screen.getByText('Next options');
+  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
+  const pointer = new MouseEvent('pointerdown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(pointer);
+  expect(pointer.defaultPrevented).toBe(true);
+  const mouse = new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(mouse);
+  expect(mouse.defaultPrevented).toBe(true);
+  fireEvent.click(next);
+
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
+  expect(menu.isOpen()).toBe(true);
+});
+
 it('only paginates an open mobile menu and resumes on reopen', async () => {
   mocks.mobile = true;
   mocks.crmEnabled = true;
@@ -246,8 +440,7 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
       menu={menu}
       editor={editor}
       users={() => []}
-      sources={['users']}
-      includeContacts
+      sources={['crm']}
     />
   ));
   expect(mocks.loadMoreContacts).not.toHaveBeenCalled();
@@ -286,6 +479,83 @@ it('offers CRM companies and contacts', () => {
   ));
   expect(mocks.requestedBuckets).toContain('crm_company');
   expect(mocks.requestedBuckets).toContain('crm_contact');
+});
+
+it('stops contact queries and results when the kill switch turns on while open', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  mocks.crmEnabled = true;
+  mocks.contacts = [
+    {
+      kind: 'entity',
+      bucket: 'crm_contact',
+      id: 'contact-1',
+      searchText: 'Acme contact',
+      sortTimestamp: 0,
+      timestamps: {},
+      data: {
+        type: 'crm_contact',
+        id: 'contact-1',
+        ownerId: 'team',
+        companyId: 'company',
+        name: 'Acme contact',
+        email: 'contact@example.com',
+        hidden: false,
+        lastInteraction: '2026-01-01T00:00:00Z',
+      },
+    },
+  ];
+  mockNoEmails();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      sources={['crm']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Acme contact')).toBeTruthy();
+  expect(mocks.contactSourceEnabled?.()).toBe(true);
+
+  mocks.setContactSearchDisabled(true);
+
+  expect(menu.isOpen()).toBe(true);
+  expect(mocks.contactSourceEnabled?.()).toBe(false);
+  expect(screen.queryByText('Acme contact')).toBeNull();
+});
+
+it('offers calendar events and picks one', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  mocks.calendarEvents = [
+    {
+      kind: 'calendarEvent',
+      id: 'event-1',
+      data: { eventId: 'event-1', title: 'Planning', when: 'Mon, Oct 26' },
+    },
+  ];
+  const onPick = vi.fn();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+  expect(screen.getByText('Calendar events')).toBeTruthy();
+  fireEvent.click(screen.getByText('Planning'));
+  expect(onPick).toHaveBeenCalledWith(mocks.calendarEvents[0]);
 });
 
 it('opens cell pickers without replaying the menu entrance animation', () => {
@@ -329,4 +599,108 @@ it('records mentions against the editing source outside a legacy block', () => {
   expect(createItemHandler).toHaveBeenCalledWith(
     expect.objectContaining({ blockId: 'doc-1' })
   );
+});
+
+it("offers the viewer's own WhatsApp chats to share by mention, only in channel composers", () => {
+  mocks.whatsappEnabled = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  menu.setSearchTerm('design');
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('WhatsApp chats')).toBeTruthy();
+  expect(screen.getByText('Design Crit')).toBeTruthy();
+  expect(screen.queryByText('Launch Room')).toBeNull();
+  expect(screen.queryByText('Design Review')).toBeNull();
+  cleanup();
+
+  mocks.whatsappUserIds = [];
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('WhatsApp chats')).toBeNull();
+  expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
+});
+
+it("offers the viewer's routines to share by mention, only in channel composers", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Routines')).toBeTruthy();
+  expect(screen.getByText('Weekly digest')).toBeTruthy();
+  cleanup();
+
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('Routines')).toBeNull();
+});
+
+it('marks an offline agent and refuses to mention it', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  const offlineAgent: IUser = {
+    id: 'bot|agent-1',
+    name: 'Dev box agent',
+    email: 'Dev box agent',
+    offline: true,
+  };
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [offlineAgent]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+
+  expect(screen.getByText('Offline')).toBeTruthy();
+  fireEvent.click(screen.getByTitle('Dev box agent — offline'));
+  expect(onPick).not.toHaveBeenCalled();
+  expect(menu.isOpen()).toBe(true);
 });

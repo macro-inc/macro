@@ -1,17 +1,27 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
+import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { UserGroup } from '@core/component/UserGroup';
+import { useChannel } from '@core/context/channels';
+import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Telemetry } from '@macro-inc/observability';
-import PhoneIcon from '@phosphor/phone-call.svg';
-import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
-import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
-import { ActiveCallLink } from './ActiveCallLink';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { CallOverlay } from './CallOverlay';
-import { getCallExitPath } from './call-exit';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
+import { CallDiscussionContent } from './discussion/CallDiscussionContent';
+import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
+import { ActiveCallHeader } from './views/ActiveCallHeader';
 
 function ParticipantFirstName(props: { id: string }) {
   const name = createMemo(() => {
@@ -52,7 +62,7 @@ function JoinCallEmptyState(props: {
   onJoin: () => void;
 }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
-  const callRecordQuery = useCallRecordQuery(
+  const callRecordQuery = useLiveCallRecordQuery(
     () => activeCallQuery.data?.callId ?? ''
   );
   const participantIds = createMemo(
@@ -79,7 +89,7 @@ function JoinCallEmptyState(props: {
       </div>
 
       <Button
-        variant="cta"
+        variant="primary"
         size="lg"
         class="px-5"
         onClick={props.onJoin}
@@ -103,8 +113,6 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
-  const navigate = useNavigate();
-  const location = useLocation();
   let leaving = false;
 
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
@@ -115,6 +123,14 @@ export function ChannelCallTab(props: {
     onLeave: () => setActiveTab(getCallLeaveTab()),
   });
 
+  const record = useLiveCallRecordQuery(
+    () => call.callCtx.activeCallId() ?? ''
+  );
+  const discussion = () =>
+    callDiscussionOf(record, call.callCtx.activeCallId());
+  const channel = useChannel(props.channelId);
+  const [outsideCount, setOutsideCount] = createSignal(0);
+
   async function handleJoin() {
     try {
       await call.joinCall();
@@ -123,35 +139,17 @@ export function ChannelCallTab(props: {
     }
   }
 
+  // Leaving keeps the user in this channel (onLeave switches to Messages),
+  // even when their hangup ends the call.
   async function handleLeave() {
     if (leaving) return;
     leaving = true;
     const callId = call.callCtx.activeCallId();
-    const channelId = props.channelId;
-    const from = location.key;
     try {
       await Telemetry.span('call.leave', async (span) => {
         if (callId) span.setAttr('call.id', callId);
         const result = await call.leaveCall();
         span.setAttr('call.leave.ended', result?.callEnded ?? false);
-        if (
-          props.channelId !== channelId ||
-          location.key !== from ||
-          call.callCtx.isInCall() ||
-          !result?.callEnded
-        )
-          return;
-        // Leaving switches to Messages and unmounts this tab before cleanup
-        // settles. The route key keeps that expected teardown distinct from
-        // the user navigating elsewhere while the server responds.
-        navigate(
-          getCallExitPath({
-            authenticated: true,
-            callId,
-            channelId,
-            callEnded: true,
-          })
-        );
       });
     } finally {
       leaving = false;
@@ -169,13 +167,37 @@ export function ChannelCallTab(props: {
       }
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
-        <div class="flex size-full min-h-0 flex-col">
-          <div class="px-2 pt-2">
-            <ActiveCallLink />
-          </div>
-          <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={handleLeave} />
-          </div>
+        <div class="size-full min-h-0">
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
+              <ActiveCallHeader channelId={props.channelId} />
+            </SplitHeaderRight>
+          </Show>
+          <CallOverlay
+            onLeave={handleLeave}
+            sharingChannelName={
+              discussion()?.kind === 'channel_thread'
+                ? (channel()?.name ?? undefined)
+                : undefined
+            }
+            discussion={{
+              label: () =>
+                discussion()?.kind === 'channel_thread'
+                  ? (channel()?.name ?? undefined)
+                  : undefined,
+              opensByDefault: () =>
+                !isMobile() && discussion()?.kind === 'channel_thread',
+              hasUpdates: () => outsideCount() > 0,
+              render: (panel) => (
+                <CallDiscussionContent
+                  discussion={discussion}
+                  panel={panel}
+                  onViewChannel={() => setActiveTab('messages')}
+                  onOutsideCountChange={setOutsideCount}
+                />
+              ),
+            }}
+          />
         </div>
       </Match>
       <Match when={call.joinError()}>

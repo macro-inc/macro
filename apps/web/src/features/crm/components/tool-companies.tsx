@@ -1,5 +1,5 @@
 import { Tool } from '@core/component/AI/component/tool/Tool';
-import Buildings from '@phosphor-icons/core/regular/buildings.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
 import { For, Show } from 'solid-js';
 
 type CompanyListItem = {

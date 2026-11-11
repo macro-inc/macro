@@ -6,17 +6,21 @@ import {
   openDesktopAuthSession,
 } from '@core/auth/native-auth';
 import { toast } from '@core/component/Toast/Toast';
-import { SERVER_HOSTS } from '@core/constant/servers';
+import { SERVER_HOSTS, usesLocalStackProxy } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { RedirectLocation } from '@core/util/authRedirect';
+import { syncLoginStorage } from '@core/util/cookies';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isPlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
+import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
 import { authServiceClient } from '@service-auth/client';
 import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
+import { desktopAuthCallbackUrl } from './core/post-auth-target';
 
 /**
  * Run the hosted flow in the system browser and return through the `macro://`
@@ -33,7 +37,16 @@ async function startDesktopSso(
   authUrl: URL,
   originalLocation: RedirectLocation['originalLocation'] | undefined
 ) {
-  authUrl.searchParams.set('original_url', DESKTOP_AUTH_CALLBACK_URL);
+  // `/login?redirect=` deep links (invites, meetings) ride the callback, so
+  // the login page can open them once signed in, before onboarding for an
+  // invite.
+  authUrl.searchParams.set(
+    'original_url',
+    desktopAuthCallbackUrl(
+      DESKTOP_AUTH_CALLBACK_URL,
+      new URL(window.location.href).searchParams.get('redirect')
+    )
+  );
 
   // The callback route sends the user home, so park the destination they were
   // headed for; BasePathComponent restores it after sign-in.
@@ -49,7 +62,79 @@ async function startDesktopSso(
   }
 }
 
-export function useSsoLogin(opts?: { signupMode?: boolean }) {
+type NativeSignInOutcome = 'canceled' | 'failed' | 'redeem_failed' | 'success';
+
+type EmailLinks = ReturnType<typeof useEmailLinks>;
+
+/** Run the hosted flow in the native auth sheet and redeem its session code. */
+async function nativeSsoLogin(
+  span: Span,
+  authUrl: URL,
+  initEmailLink: EmailLinks['initEmailLink']
+): Promise<NativeSignInOutcome> {
+  const session = createNativeAuthSession('login');
+  authUrl.searchParams.set('original_url', session.callbackUrl);
+  const result = await session.authenticate(authUrl.toString());
+  const sessionCode = result.token;
+
+  if (!result.success || !sessionCode) {
+    // A canceled sheet is a deliberate user action, not a failure.
+    if (result.error === 'User canceled login') return 'canceled';
+    console.error('Authentication failed:', result.error);
+    toast.failure('Sign-in failed. Please try again.');
+    return 'failed';
+  }
+
+  const res = await span.run(() =>
+    authServiceClient.sessionLogin({ session_code: sessionCode })
+  );
+
+  if (res.isErr()) {
+    console.error('Failed to redeem session code', res.error);
+    toast.failure('Sign-in failed. Please try again.');
+    return 'redeem_failed';
+  }
+
+  // The session cookies are set. From here a reloaded document must check
+  // identity rather than show sign-in, so leave the hint now instead of
+  // waiting for the identity refetch below to write it.
+  syncLoginStorage(true);
+  // Reset token state only after the session cookies have actually
+  // changed — resetting before sessionLogin opens a window where a
+  // visibility-triggered refresh re-latches under the new generation.
+  unsetTokenPromise();
+  await invalidateAllAfterLogin();
+  await initEmailLink().match(
+    () => {},
+    (err) => {
+      if (err.tag !== 'AlreadyInitialized') {
+        console.error('Failed to init email link on login', err);
+      }
+    }
+  );
+  return 'success';
+}
+
+/**
+ * The hosted OAuth callback sets cookies on macro.com. A proxied browser, and
+ * every native shell, needs the session-code handoff to establish cookies
+ * locally instead. A local stack's callback runs on the auth service's own
+ * port, where its cookies would reach every stack on the machine, so its proxy
+ * ignores them and needs the handoff too.
+ */
+function needsSessionCodeHandoff(authUrl: URL): boolean {
+  return (
+    isNativeMobilePlatform() ||
+    usesLocalStackProxy() ||
+    authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
+  );
+}
+
+export function useSsoLogin(opts?: {
+  signupMode?: boolean;
+  /** Started on the agent signup page: a new account becomes an agent. */
+  isAgent?: boolean;
+}) {
   const analytics = useAnalytics();
   const location = useLocation<RedirectLocation>();
   const { initEmailLink } = useEmailLinks();
@@ -71,58 +156,40 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
       );
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
+    if (opts?.isAgent) authUrl.searchParams.set('is_agent', 'true');
 
     const desktop = isPlatform('desktop');
 
-    // The hosted OAuth callback sets cookies on macro.com. A proxied browser,
-    // and every native shell, needs the session-code handoff to establish
-    // cookies locally instead.
-    if (
-      isNativeMobilePlatform() ||
-      desktop ||
-      authUrl.pathname.startsWith(`${DEVELOPMENT_PROXY_PREFIX}/`)
-    ) {
+    if (desktop || needsSessionCodeHandoff(authUrl)) {
       authUrl.searchParams.set('is_mobile', 'true');
     }
 
     if (isNativeMobilePlatform()) {
-      const session = createNativeAuthSession('login');
-      authUrl.searchParams.set('original_url', session.callbackUrl);
-      const result = await session.authenticate(authUrl.toString());
-
-      if (!result.success || !result.token) {
-        // A canceled sheet is a deliberate user action, not a failure.
-        if (result.error !== 'User canceled login') {
-          console.error('Authentication failed:', result.error);
-          toast.failure('Sign-in failed. Please try again.');
-        }
-        return;
-      }
-
-      const res = await authServiceClient.sessionLogin({
-        session_code: result.token,
-      });
-
-      if (res.isOk()) {
-        // Reset token state only after the session cookies have actually
-        // changed — resetting before sessionLogin opens a window where a
-        // visibility-triggered refresh re-latches under the new generation.
-        unsetTokenPromise();
-        await invalidateAllAfterLogin();
-        await initEmailLink().match(
-          () => {},
-          (err) => {
-            if (err.tag !== 'AlreadyInitialized') {
-              console.error('Failed to init email link on login', err);
-            }
+      // The sheet's result reaches only this document, and a document loaded
+      // before the login hint is down never checks identity. A reload at any
+      // point in the sign-in, not only while the sheet is open, shows sign-in
+      // again over the session the user just created.
+      const releaseReloadHold = holdAutomaticReload();
+      try {
+        const outcome = await Telemetry.span(
+          'auth.native_sign_in',
+          async (span) => {
+            const outcome = await nativeSsoLogin(span, authUrl, initEmailLink);
+            span.setAttr('auth.native_sign_in.outcome', outcome);
+            return outcome;
           }
         );
-      } else {
-        console.error('Failed to redeem session code', res.error);
-        toast.failure('Sign-in failed. Please try again.');
-      }
 
-      analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
+        if (outcome === 'success' || outcome === 'redeem_failed') {
+          analytics.track(
+            analyticsEvent,
+            { method: idp_name },
+            analyticsProviders
+          );
+        }
+      } finally {
+        releaseReloadHold();
+      }
 
       return;
     }
@@ -146,6 +213,11 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 
+    // The hosted callback sets only HttpOnly cookies, which the app cannot
+    // see, and the return load probes identity only behind the login hint.
+    // Leave the hint now so that load checks the new session instead of
+    // showing sign-in again; a sign-in that did not complete 401s and clears it.
+    syncLoginStorage(true);
     window.location.href = authUrl.toString();
   };
 }

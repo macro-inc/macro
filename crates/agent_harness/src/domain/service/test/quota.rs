@@ -53,6 +53,8 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             id,
             owner_id: owner,
@@ -82,6 +84,7 @@ fn action(action: AgentAction) -> DeliverAction {
         actor: Some(staff_sender()),
         announce: None,
         context: None,
+        client: None,
     }
 }
 
@@ -120,6 +123,7 @@ async fn denied_or_unavailable_trigger_open_has_no_side_effects() {
             for origin in [
                 open.origin.clone(),
                 SessionOrigin::TaskAssignment(crate::domain::model::TaskAssignmentOrigin {
+                    trigger_origin: trigger_context::TriggerOrigin::Unknown,
                     parent: MessageParent::parse("document", "assigned-task").unwrap(),
                     discussion_id: macro_uuid::generate_uuid_v7(),
                     actor: staff_sender(),
@@ -176,6 +180,8 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
         let id = AgentSessionId::new();
         let result = service
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
+                origin: trigger_context::TriggerOrigin::Unknown,
                 id: Some(id),
                 owner: Owner::User(sender()),
                 repo_url: None,
@@ -187,6 +193,8 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
                     bot_id: bot_id::MACRO_CODER_BOT_ID,
                     profile: None,
                 }),
+                source: agent_session::domain::model::SessionSource::User,
+                visibility: agent_session::domain::model::SessionVisibility::Listed,
             })
             .await;
         assert!(matches!(result, Err(AgentSessionError::Admission(error)) if error == failure));
@@ -224,7 +232,7 @@ async fn spending_actions_charge_the_persisted_owner_not_the_actor() {
 
 #[tokio::test]
 async fn externally_funded_runtimes_accept_spending_actions_without_quota_io() {
-    for harness in ["cursor", "codex-cloud", "claude-cloud", "macrod", "custom"] {
+    for harness in ["cursor", "codex-cloud", "macrod", "custom"] {
         let (service, repo, admission) = bench(Some(denied()));
         let id = session(&repo, BotId::TEST_A, harness, Owner::User(staff_sender())).await;
         service.inner.busy.admit(id);
@@ -418,6 +426,7 @@ async fn enqueue_waiting(service: &TestHarness, id: AgentSessionId) -> Vec<Agent
 
 fn turn_ended() -> HarnessCommand {
     HarnessCommand::Turn(TurnSignal::TurnEnded {
+        notification_noop: false,
         turn: agent_fold::domain::model::TurnId(0),
         action_id: None,
         stop: agent_fold::domain::model::StopReason::EndTurn,
@@ -723,6 +732,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             announced: Some(macro_uuid::generate_uuid_v7()),
             created_at: chrono::Utc::now(),
             context: None,
+            client: None,
         };
         let stored = entry.to_stored().unwrap();
         let mut sessions = MockAgentSessionService::new();
@@ -757,7 +767,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             sessions,
             MockContainerManager::new(),
             AnnouncerMock::new(),
-            TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            TestConnections::new(MirrorBindings::default(), RuntimeRegistry::new()),
             PromptContextMock::default(),
             PromptComposerMock::default(),
             EgressProvisionerMock::new(),

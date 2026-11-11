@@ -1,3 +1,5 @@
+import { reloadApp } from '@app/observability/reload';
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import {
   SplitHeaderBadge,
@@ -33,6 +35,9 @@ export type EmailComposeViewProps = Pick<
   | 'onRecipientsChange'
   | 'initialTo'
   | 'initialInboxId'
+  | 'initialSubject'
+  | 'initialBodyText'
+  | 'initialAttachments'
 > & { context: EmailComposeContext };
 export function EmailComposeView(props: EmailComposeViewProps) {
   // The split mounts one composer per initial draft. Keep this content load
@@ -133,12 +138,15 @@ function LoadedEmailComposeView(
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
     initialInboxId: props.initialInboxId,
+    initialSubject: props.initialSubject,
+    initialBodyText: props.initialBodyText,
+    initialAttachments: props.initialAttachments,
   });
   const sync = createDraftSyncStatus({
     drafts: composeContext.drafts,
+    connectivity: composeContext.connectivity,
     draftId: state.draftId,
     localSaveState: state.localSaveState,
-    acknowledgeSaved: state.acknowledgeSaved,
     retry: state.retryDraft,
     discard: state.deleteDraftAndReset,
   });
@@ -154,6 +162,7 @@ function LoadedEmailComposeView(
   } = state;
   const ctxValue: ComposeContextValue = {
     ...state.context,
+    createRecipientSource: composeContext.createRecipientSource,
     bodyActions: {
       focusSibling: props.host?.focusSibling,
       recipientAdded: (email) =>
@@ -169,6 +178,7 @@ function LoadedEmailComposeView(
     },
     isMobile: composeContext.presentation.isMobile,
     scheduleEnabled: composeContext.presentation.scheduleEnabled,
+    calendarEvents: composeContext.calendarEvents,
     onUpgrade: composeContext.presentation.onUpgrade,
     viewerLoading: composeContext.presentation.viewerLoading,
     signaturePreview: () => (
@@ -222,6 +232,15 @@ function LoadedEmailComposeView(
     setDraftBackMenuOpen(false);
     props.host?.goBack?.();
   };
+  const reloadForRecovery = async () => {
+    try {
+      await state.flushLocal();
+    } catch (error) {
+      composeContext.notices.reportError(error);
+      return;
+    }
+    reloadApp('user_recovery');
+  };
 
   const SyncStatus = () => (
     <DraftSyncStatus
@@ -229,12 +248,18 @@ function LoadedEmailComposeView(
       busy={sync.busy()}
       error={sync.error()}
       onRetry={sync.retry}
+      onReload={() => fireAndForget(reloadForRecovery(), 'email-compose')}
       onKeepEditing={sync.keepEditing}
     />
   );
 
   return (
     <ComposeProvider value={ctxValue}>
+      {/* On touch devices the composer fills the screen and keeps its send
+          actions in the header, so it holds the bottom accessory slot empty
+          and the page's New button cannot float over the message. Persistent
+          prompts wait too, as they do over the full-screen reply composer. */}
+      <FloatRegion region="accessory" />
       <Show when={!composeContext.presentation.isMobile()}>
         <SplitHeaderLeft>
           <StaticSplitLabel
@@ -250,7 +275,10 @@ function LoadedEmailComposeView(
           />
         </SplitHeaderLeft>
       </Show>
-      <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
+      <div
+        class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm"
+        data-holds-prompts
+      >
         <Show when={state.operationSource}>
           {(source) => (
             <MessageOperationRecovery
@@ -265,10 +293,8 @@ function LoadedEmailComposeView(
         </Show>
         {/* No overflow clipping on desktop: the card clips its own content, and
             clipping here would slice the composer shadow flat at the top and
-            bottom while the side padding lets it show. Full-frame mobile/tablet
-            carries the bottom inset here so the body, signature and attachment
-            pills rest above the floating chrome (ComposeLayout owns the top). */}
-        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 touch:pb-(--mobile-content-inset-bottom) touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
+            bottom while the side padding lets it show. */}
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => (
               // The same card as the chat composer and the thread's message
@@ -287,17 +313,30 @@ function LoadedEmailComposeView(
                   operation={ctxValue.schedule.operation()}
                   onSelectTime={ctxValue.schedule.onSelect}
                   onCancelSchedule={ctxValue.schedule.onCancel}
+                  onCheckStatus={ctxValue.schedule.onCheckStatus}
                   class="-mt-6 rounded-b-[20px] border border-t-0 border-edge-muted px-4 pt-8 pb-2"
                 />
               </div>
             )}
           >
             <ComposeLayout
-              toolbar={
-                <EmailComposeToolbar editor={editor} status={<SyncStatus />} />
+              toolbar={<EmailComposeToolbar editor={editor} />}
+              notice={
+                // A missing inbox must not hide a draft that only this
+                // device holds, so both notices can show together.
+                hasInboxError() || sync.state() ? (
+                  <div class="flex flex-col gap-2">
+                    <Show when={hasInboxError()}>
+                      <EmailPermissionsBanner />
+                    </Show>
+                    <SyncStatus />
+                  </div>
+                ) : undefined
               }
-              notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
-              class="size-full p-4 touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
+              // Full-frame mobile/tablet: the surface runs under the floating
+              // chrome while the body, signature and attachment pills rest
+              // above it (ComposeLayout owns the top inset).
+              class="size-full p-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)] touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

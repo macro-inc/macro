@@ -11,7 +11,7 @@ the original byte limit. Cancellation and cleanup still work during recovery.
 Deleted or replaced scratch databases fail the old import instead of silently
 continuing with incomplete history; its cleanup must leave a replacement intact.
 
-In **Team → Connections**, **Import from Slack** appears only for team admins
+In **Integrations → Accounts**, the **Slack export** row appears only for team admins
 and owners with `enable-slack-archive-import` enabled. Production rollout stays
 off until explicitly enabled. Select an export ZIP, filter the grouped conversation
 picker, optionally show archived conversations, and use Space to toggle focused
@@ -60,29 +60,85 @@ live-backend release gates and documents staging retention and recovery.
 
 ### Email signatures
 
-Open **Settings → Email → Signatures**. Each owned inbox has a visible editor;
-there is no expand/collapse control. Format the text, add links or images, and
-choose **Save signature**. **Clear signature** removes only the signature, while
+Open **Settings → Email → Signatures**. Each inbox you can send from, shared
+inboxes included, opens in **Preview**, using the same isolated HTML renderer
+as the email composer. A shared inbox has one signature, so its row says it is
+shared and a save changes the signature for everyone who sends from it. **HTML** lets you
+paste or edit a custom signature without flattening its tables or spacing.
+**Rich text** offers text formatting, links, and image uploads; opening a custom
+HTML layout there asks before converting it. Switching views alone never changes
+the saved signature. Pasting a custom layout into Rich text preserves its HTML
+and opens Preview (ask to replace first when the editor already has content).
+Choose **Save signature** to save edits and return to the canonical preview.
+**Clear signature** removes the saved signature and the current unsaved draft;
+after clearing, reopening Rich text starts empty. It leaves the inbox connected, while
 **Remove inbox** in Accounts uses the existing inbox removal confirmation.
 **Add to replies & forwards** saves that preference immediately. On desktop,
-**Import from Gmail** in each inbox's header fetches that account's Gmail
+**Import from Gmail** in each Gmail inbox's header fetches that account's Gmail
 signature and saves it right away, replacing any unsaved draft; a toast reports
-when Gmail has no signature. Unsaved drafts
-survive switching settings pages. On phones, signature editing remains desktop-only;
-the replies/forwards toggle and clear action are available.
-Email accounts can also be managed from **Integrations**. Its **Email settings**
-link opens the dedicated page, and Email links to Notifications and Calendar.
+when Gmail has no signature. Outlook inboxes offer Rich text and HTML editing
+without a Gmail import action. The import action uses the inbox's provider,
+not its email domain. Unsaved drafts
+survive switching settings pages. On phones, the signature preview, replies/forwards
+toggle, and clear action are available; editing and import remain desktop-only.
+Accounts list each inbox as its own row, followed by **Connect another Google
+Workspace account** and **Connect an Outlook account**; Integrations shows the
+same rows. Outlook appears only once `/link/email/providers` offers it to the
+account (the `enable-outlook` flag); Integrations keeps an Outlook row with
+Manage alone for an account that already has an Outlook inbox. Its **Email settings**
+gear opens the dedicated page, and Email links to Notifications and Calendar.
+Outlook is in beta: the Connect email chooser's Outlook option, each Outlook
+inbox row, **Connect an Outlook account**, and the Integrations Outlook row
+carry a **Beta** badge (`OutlookBetaBadge`).
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
 offline and confirm it uses the saved settings.
 
+Regression check: import a nested-table signature, edit its source in HTML,
+preview, save, leave settings, and reopen. Confirm the tables, spacing, and image
+sizes survive in both settings and the new-message preview. Cancel a Rich text
+conversion and verify the saved HTML is unchanged. Check the preview on a phone
+and ensure a wide signature scrolls inside its own preview instead of the page.
+Save a signature created in Rich text, reopen settings, and confirm Rich text
+editing resumes without a conversion prompt.
+With Gmail and Outlook inboxes connected, confirm only Gmail offers import
+(including Gmail accounts on a custom domain), while both support HTML and Rich
+text editing. Empty Outlook signatures must not suggest Gmail import.
+Gmail keeps images pasted into its signature editor from a message as
+`mail.google.com` URLs only that mailbox's session can load; import reads them
+from the inbox's own mailbox (the message, or for sent mail its thread) through
+the Gmail API and rehosts them. An image the mailbox doesn't hold still shows
+the image import error; a rate-limited or transient Gmail read failure shows
+the generic "try again" error instead.
+Type an unsaved Rich text draft and clear it, both with and without an existing
+saved signature. Reopen settings and confirm the editor stays empty and the
+composer no longer includes a signature. A delayed clear must preserve a newer
+draft, even if its text matches the old draft. HTML with `!important` styles must
+still ask before conversion to Rich text. The backend-free browser suite uses
+the real form, Quill, settings mutations, account-list remounts, query cache,
+and composer preview with fixture services:
+`bunx playwright test --config src/features/settings/browser-test/signatures/playwright.config.ts`.
+Trace signature actions under `email.signature.save`, `email.signature.clear`,
+or `email.signature.import`; the REST write and `email.settings.refresh` run
+under that action, including the account catalog's durable refresh.
+
+### Email read receipts
+
+Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+receipts** lists each owned inbox with a switch that saves immediately. It is
+on by default, and the section's only copy is "See when recipients open
+messages you send." Messages sent from an inbox with it on carry an invisible
+pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
 ### Notification permission prompt
 
-After onboarding, an eligible desktop app user sees **Enable Desktop
-Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The web prompt
-continues to say **Enable Browser Notifications** and uses browser permissions.
-Select **Hide** to dismiss the prompt.
+After onboarding, eligible desktop, Android, and web users see **Enable
+notifications**. Select **Enable** to request permission through the native
+notification provider on desktop and Android, or browser permissions on the web;
+macOS uses its system permission dialog. **Not now** dismisses the prompt and
+stops it returning on the next load, as does swiping it away on phones. It appears
+with other persistent prompts; on phones it stays under open sheets and their
+pickers.
 
 ### Notification snoozes
 
@@ -94,10 +150,11 @@ under **Muted items**, with **Snooze instead** to replace one with a timed pause
 The Chat detail pane also supplies these commands for its current channel or DM;
 focus the conversation before opening the command menu.
 
-To snooze an entity, right-click its row (long-press on mobile) and choose
-**Snooze notifications…**, or select/open the entity and search for that command
-in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
-Use arrow keys and Enter, click a preset, or type a future date/time such as
+To mute an entity, right-click its row (long-press on mobile) and choose
+**Mute notifications**. Select **Until I turn it off**, a timed preset, or
+**Custom…** to open the searchable time picker. Multi-selection applies the choice
+to all selected items. Cmd/Ctrl+K retains **Snooze notifications** as a direct
+shortcut to that picker. Use arrow keys and Enter, click a preset, or type a future date/time such as
 `2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
 preset resumes on Monday at 9 AM. The picker displays the exact local date and
 time before saving. Escape closes the picker; before choosing a time, it makes
@@ -112,9 +169,10 @@ save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
-On phones, long-press opens the entity actions drawer. The snooze time picker
-uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
-with larger touch targets and tap instructions. Swipe the preset list when the
+On phones, long-press opens the entity actions drawer. Mute opens the same
+choices in a drill-in page; Back returns without changing notifications.
+The custom time picker uses the same responsive `Dialog`, width, and
+`CommandMenuShell` as Cmd/Ctrl+K, with larger touch targets and tap instructions. Swipe the preset list when the
 viewport is short. In **More views → Settings → Notifications**, item names and
 deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
 returns to the settings sheet. Start new snoozes from an entity's actions or
@@ -131,6 +189,8 @@ auto-join must keep working beyond five members and the former stage-plan limits
 Free-team joins do not create a paid subscription, bill a seat, or grant premium
 roles. Teams with an existing paid subscription retain their per-seat billing;
 enterprise teams retain their billing bypass.
+A team created or invited from while its owner is on a Pro trial bills through
+that trial, so members who join get Pro, like on an active subscription.
 
 On a local stack started with `--no-doppler`, verify free-team creation from a
 fresh passwordless signup. It must work without Stripe credentials.
@@ -140,11 +200,35 @@ starts with the team's **Invite link**: **Create link** makes one and copies it,
 **Copy link** copies it after that. Anyone signed in who opens
 `/app/team-invite?link=<token>` sees **Join <team>** and joins as a member with
 the same billing and channel effects as an emailed invite; users already on
-another team are told to leave it first. Team admins and owners also see
-**Reset link** (the old link stops working and a new one is copied) and
-**Turn off**, each behind a confirmation. Anyone who may invite can copy the
+another team are told to leave it first. Team admins and owners also get a
+settings (gear) menu beside **Copy link** with **Reset link** (the old link
+stops working and a new one is copied) and **Turn off**, each behind a
+confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before.
+as before. The dialog no longer offers agent invites; send them with
+`team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
+grants a Pro seat (an enterprise team, or one with a subscription), otherwise
+**Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
+[mobile](media/team-invite-email/mobile.png).
+After a person invite sends, the dialog's second step, **Let them know it's
+coming**, lists the addresses and offers **Copy invite link** (creating the
+first link when there is none) and **Done**. **Team → Members** also shows **Copy invite link** beside **Invite**,
+and onboarding's team confirmation asks a creator who just invited teammates
+to send them the link too.
+A signed-out invitee who opens an emailed or link invite is sent to
+`/app/login?redirect=/team-invite?…`; once signed in or signed up (including
+desktop Google sign-in, whose `macro:///login` callback carries the redirect)
+they return to the invite before onboarding, so they join first and onboarding
+opens on the team. Channel invites (`/channel-invite`) also open before
+onboarding. Other `?redirect=` deep links, such as meetings, return there after
+sign-in, or after onboarding for a new account.
+An unanswered invite gets up to two reminder emails, with subjects starting
+**Reminder:**, 3 days after the last email and 4 days after that. Invites more
+than 14 days old, already-members, and invites whose sender left the team get none.
+**Pending invites** on **Team → Members** lists each invite with when it was
+last sent, for owners and admins, who can **Resend**, copy the invite link,
+or cancel it. Resend unlocks an hour after the last email, the email's rate
+limit; re-inviting the address from **Invite** follows the same rule.
 
 Under **Team → Members** (**Invite settings**), owners/admins can turn
 **Auto-join on domain** off and can restrict invitations to admins with
@@ -162,7 +246,8 @@ page. The main page has a profile shortcut and the same grouped Team, Blocks, Pe
 and Developer sections as desktop, plus enabled admin settings. Search finds
 individual settings; selecting a result opens its page and reveals the section. Tap a row to open that settings
 page inside the sheet; **Back to settings** returns to the grouped list at its
-previous scroll position. `API Keys` is desktop-only and has no row here.
+previous scroll position. `API Keys` is desktop-only and has no row here; `Account Managers` has one, so
+access can be revoked from a phone.
 **Close settings** at the top right, Escape, an
 outside tap, or a downward swipe dismisses the sheet. A tap that dismisses a
 menu opened inside the sheet leaves the sheet itself open. Opening Settings again
@@ -175,10 +260,11 @@ like any other rail item, and Shift-click opens it in a new split.
 `/app/settings/<tab>` opens it as the only split with the app rail still
 visible, and `/app/home/~/settings/<tab>` places it beside Home. Its inner
 sidebar matches Email and Tasks: a **Settings** title bar, a rounded
-**Search settings** field, the grouped section pills, and a team action pinned
-to the bottom: **Invite your team** (opens the invite dialog; hidden for members
-when the team limits invites to admins) or, with no team, **Create a team**
-(opens the create-team dialog). Unlike other views, it cannot be hidden at
+**Search settings** field, a team action at the top of the list (hidden while
+searching): **Invite your team** with its icon and label in a soft pink-to-indigo gradient (opens the invite dialog;
+hidden for members when the team limits invites to admins) or, with no team,
+**Create a team** (opens the create-team dialog), then the grouped section
+pills. Unlike other views, it cannot be hidden at
 desktop widths: there is no **Hide navigation** toggle and `Cmd .` does
 nothing, even if it was hidden before. Below 720px the sidebar becomes an overlay opened from **Show
 navigation** (or `Cmd .`), which starts closed. Escape closes a
@@ -186,10 +272,14 @@ settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.
 
-Settings pages use the email composer’s raised surfaces on the page background.
-Section headings and controls share a white surface in light mode and the
-composer border in dark mode, with subtle row separators. The compact sidebar
-uses the shared workspace width.
+Settings cards use the email composer's raised surface (`SettingsSurface`) with
+subtle row separators: a fine beveled edge and small ambient shadow on desktop,
+the composer card on touch. Integrations uses the same content width and side
+padding as the other settings pages. Section headings sit above the cards, with
+more space between major sections and compact spacing within each group.
+Controls share rounded shapes. Nested rows share one surface instead of adding
+another box or shadow; never hand-build a flat card.
+The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
@@ -228,29 +318,40 @@ Left nav (feature and platform gates still apply):
 - **Team · <team name>** (just **Team** without a team): General (name, slug,
   GitHub autolink, default link sharing, Delete Team), Members (member list,
   roles and seat plans, **Invite**, pending invites, auto-join and
-  members-can-invite), Connections (Slack import, GitHub App). Without a team
-  only General shows, with pending invitations or **Create Team**. Search
-  finds these by `invite`, `members`, `teammates`, `slack`, and similar terms;
-  results name their group, e.g. **Team · Members**.
-- **Blocks**: Email, Calendar, Agents, CRM.
+  members-can-invite). Without a team only General shows, with pending
+  invitations or **Create Team**. Search finds these by `invite`, `members`,
+  `teammates`, and similar terms; results name their group, e.g.
+  **Team · Members**. The team Slack export import and the GitHub App live in
+  Integrations; `/app/settings/team-connections` opens Integrations.
+- **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
+  sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
-- **Workspace**: Tags, Integrations (personal Gmail/GitHub accounts).
-- **Developer**: Agent connections, Runtimes, MCP server, API Keys, Bots.
+- **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
+- **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact version and build-date card in the
-desktop app. The date is when the running app bundle was built, not when it was
-installed on the computer. In the browser it links to the latest desktop release
+**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
+date card in the desktop app. Build date is when the running JavaScript was
+built, not when it was installed on the computer. Bundle date is when the active
+OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
+the app's embedded bundle runs. In the browser it links to the latest desktop release
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app** and offers a QR code
-to download **Macro** from the App Store.
+The **Mobile App** page is titled **Mobile app**. In a desktop browser an
+**iPhone** / **Android** switch picks which phone and QR code to show (App Store
+or Google Play), with **Copy link** for that store's URL. Phone browsers get a
+store button instead, with no QR codes: **App Store** on an iPhone, **Google
+Play** on an Android phone, and both when the user agent names neither. The
+page description names the store shown, or says "your app store" with both. Inside the
+iOS and Android apps it shows the same Version, Build date, and Bundle date card
+as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
-that page, scrolls to its section or row, and briefly highlights it. Try
-`singature`, `email digest`, `calendar color`, or `cursor`. Arrow Down from search
+that page, scrolls to its section or row, and briefly highlights it. Each
+built-in integration is a result that highlights its Integrations row. Try
+`singature`, `email digest`, `calendar color`, `granola`, or `cursor`. Arrow Down from search
 focuses the first result; Tab moves through controls normally. Escape in the
 search field clears the query. Clearing search restores the grouped navigation. Keyboard shortcuts are listed
 by category with the action on the left and keys on the right; expand **Keyboard
@@ -259,7 +360,26 @@ Appearance starts with visual **System**, **Light**, and **Dark** mode choices.
 The previews use the saved themes; System follows the device and exposes both
 per-mode theme selectors. Light or Dark shows its own theme selector. Each selector
 retains theme search, editing, copying, custom theme creation, and importing
-themes from the clipboard.
+themes from the clipboard. The pencil beside a theme pill opens the inline theme
+editor under that row: a custom theme is edited in place, a default theme opens
+as a `<name> copy` fork. `features/settings/Appearance.test.tsx` covers opening
+it for both default themes, whose hex grays once crashed the editor's color pickers.
+
+The default Macro Dark theme uses a neutral `#0E0E0E` outer background and
+`#121212` inset content panels. The app rail follows the outer background;
+text and accent colors retain their existing palette.
+
+Macro Light uses `#F5F5F5` outside `#FCFCFC` content panels, white controls,
+`#E4E4E4` frame borders, and `#EDEDED` button borders. Its controls use
+`#2E2E2E` ink. Macro Light and Macro Dark share the same muted blue accent
+(`oklch(0.7 0.12 250deg)`); light mode does not switch the accent to orange.
+
+The theme editor's **Status** section exposes **Priority Urgent** separately
+from **Warning**. It defaults to the theme's orange palette color; changing it
+recolors urgent-priority badges without changing in-progress task status.
+The separate **Task statuses** section exposes a color for Not Started, In Progress,
+In Review, Completed, and Canceled. Each color controls its task icons and matching
+group-header tints without changing the global warning, success, or accent colors.
 
 ### Theme mentions
 
@@ -297,8 +417,24 @@ and applied immediately. Copy a theme with the clipboard button beside any
 theme pill, then import it on another device or share it in a message for
 others to copy and import.
 
+Appearance ends with **Language**. On a team, **Team language** sets the default
+interface language for every member; only admins and owners can change it, and
+others see it disabled with an explanation. It starts at **Automatic (each
+person's browser language)**. **Your language** starts at **Use team language
+(…)**, or **Automatic (…)** naming the browser's language when the team has none
+or there is no team, and overrides the team language for the signed-in person
+only; without a team it is the only dropdown. A browser language the app isn't
+offered in falls back to English. Menus, navigation, the command and
+create menus, and settings navigation switch language as soon as the setting
+saves; page contents and user data stay as written. The choice is remembered on
+the device, so the next launch starts in the same language. Once that resolved
+language has loaded, PostHog stores it on the person as `interface_language`
+(a tag such as `en` or `zh-Hans`). A usage pie is a Trends insight on
+`$pageview`, unique users, broken down by the person property
+`interface_language`.
+
 Existing settings URLs remain valid; `connections` still opens Integrations,
-`agent-connections` opens Agent connections, and `harness` aliases Runtimes.
+`agent-connections` aliases Integrations, and `harness` aliases Machines (tab id `Harness`, slug `runtimes`).
 
 `Usage` appears directly above Billing, including for Free accounts. In
 production, the `enable-ai-usage-billing` PostHog flag controls activation. While
@@ -309,12 +445,19 @@ the flag off. The production usage-limit dialog follows the same flag. Its
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
-**Need more usage?** with `$25` / `$50` / `$100` / `Other`. Supported amounts
-redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
-accounts see `View plans` instead of purchase or reload controls; paid team
-members who are not the payer see only “Usage credits are managed by your team.”
-Their credit balance and automatic reload row are hidden, with no
-credit-purchase action.
+**Need more usage?** with `$25` / `$50` / `$100` / `Other`. **Buy $25 in
+credits** charges the card on file right away (no Stripe Checkout redirect),
+shows an `Added $25 in credits.` toast, and reports a declined card inline;
+unsupported custom amounts are disabled. Without a card on file, or with a card
+that needs 3-D Secure, the payer is sent to Stripe Checkout for the same pack
+instead, and a team member is asked to have the owner add or update the card. Free accounts see `View plans` instead
+of purchase or reload controls. Paid team members who are not the payer see the
+shared balance with `Add more`, described as “Shared team balance. You can add
+$X more this month, within your team's $Y limit.” Their purchases charge the
+team owner's card and are capped by the team's monthly credit limit: the owner's
+Auto-Reload monthly limit, or the plan default ($200 Pro, $1,000 Max) when the
+owner set none. Packs over what is left are refused, and `Add more` is disabled
+once no pack fits. Members never see the automatic reload row.
 Team owners who pay for their team's seats manage the shared credit balance and
 automatic reload here in Usage, including purchases, balance thresholds, the
 monthly reload cap, and payment methods. Team payers see **Team Usage
@@ -329,8 +472,9 @@ or automatic reload. The development paid-plan preview can still display
 those controls, with purchases disabled.
 
 The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
-It contains Minimum balance (default `$10`), Target balance (default `$100`),
-optional Maximum monthly spend (`No limit`), a payment-method management link,
+It contains Minimum balance (default `$5`), Target balance (default `$25`),
+optional Maximum monthly spend (prefilled `$200` on Pro and `$1,000` on Max while
+Auto-Reload is off; blank means no limit), a payment-method management link,
 and the automatic-charge warning. The dialog saves for paid payers:
 `Turn on auto-reload` enables automatic credit purchases with those thresholds,
 `Save` updates them while on, and `Turn off` disables automatic reload. The monthly
@@ -408,7 +552,9 @@ Reference captures from the isolated billing fixture: [returning customer](media
 and [subscription recovery](media/billing/subscription-recovery.png). These show
 phone-width layouts; payment-provider interactions are covered separately.
 
-`Get Max` keeps standard paid terms. Prices read `/ month` for solo users and
+`Get Max` keeps standard paid terms and never offers a trial. A Pro trial that
+upgrades to Max is charged today; the card says `Charged today. The Pro trial ends.`
+A paid Pro upgrade stays prorated for the rest of the period. Prices read `/ month` for solo users and
 `per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
 the price when narrow. Free lists 2 connected email accounts; Pro and Max list
 unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
@@ -447,11 +593,13 @@ Team members who cannot manage billing see the notice without its action.
 
 `Team → Members` (`/app/settings/team-members`; on a paid team each row shows the seat's plan,
 and admins/owners can move a seat between Pro and Max with the `Seat plan`
-menu; Max upgrades are immediate and prorated, Pro downgrades start at renewal.
+menu; Max upgrades are immediate and prorated, except the first Max seat on a
+trialing team, which ends the trial and bills Max for a new cycle today.
+Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
-once enabled, a `Stages` section for the company Stage options that new pipelines
+scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
@@ -463,12 +611,12 @@ connected) or `Specific apps`, which reveals a `Search connectors` box over the 
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
 with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
 that opens the Pipedream Connect flow inside the web page. Native apps open
-consent in the system browser; choose **Return to Macro** after authorization
-to save the connection in the waiting app. Unconnected picks never block
+consent in the system browser, which returns to the waiting app on its own after
+authorization (**Return to Macro** is the fallback link). Unconnected picks never block
 saving; each teammate connects their own account. An agent session that calls a picked
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Agents → Connections for that app. The same page
-is also available as Settings → Agent connections.
+is also available as Settings → Integrations.
 
 Reference captures from an isolated browser fixture: [native waiting dialog](media/pipedream/native-waiting.png)
 and [browser return page](media/pipedream/browser-return.png). The fixture uses
@@ -483,22 +631,74 @@ the picture after reopening settings and after a page reload, then type `@` and
 the agent's name in a channel to check its mention-menu picture. Team agents
 available in all channels should refresh there without reloading the channel.
 
-With `pipedream-mcp` enabled, Connections (in Agents or Settings) has `Connected` and `Discover`
-tabs. Connected groups GitHub, Linear, Notion, and Slack tool grants by provider,
-lists other catalog connections alongside them, and puts custom MCP servers in
-a separate section. Discover offers featured providers, a searchable catalog,
-and `Add custom MCP`. Pipedream Slack OAuth is available in production and
+![Integrations overview with example connections](assets/settings-integrations.png)
+
+With `pipedream-mcp` enabled, Settings → Integrations is one searchable list
+styled like the Drive and Tasks lists, spanning nearly the full settings page
+width. Rows are separated by faint dividers and have Name (icon, name, an
+`mcp` or `native` badge, and a smaller, fainter second line on what it does in
+Macro or which accounts are connected), Category (tag pills like email tags; several per row, e.g. Email,
+Calendar), Status, and the row's actions. There is one row per integration; custom MCP
+servers come first, then integrations in use (connected, off, or needing
+attention), then the rest, then the app catalog. Below a 640px list width Category and Status hide and a status
+dot sits beside the name.
+
+- **Gmail** and **Outlook**: one row each; connected accounts appear as the
+  description. **Connect** (or **Add account** with multi-inbox) starts that
+  provider's flow; Outlook checks availability first. **Manage** opens Email
+  settings, where each inbox is managed.
+- **GitHub**: one row for the account link (pull request reviews and status)
+  and agent tools. Its menu has **Configure GitHub App**, **Agent tools** (the
+  GitHub provider page) and **Disconnect**.
+- **Slack**, **Linear**, **Notion**: agent tools, with **Connect**/**Manage**
+  opening the provider page and **Import** beside it. Slack's Import opens the
+  Slack export importer for team admins with archive import enabled, otherwise
+  the connector import dialog.
+- **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
+  **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
+  Hermes; opens Machines within Integrations and follows the Machines
+  availability gate; Back returns to Integrations).
+- Installed catalog apps and custom MCP servers, with their More menus.
+- The catalog: every Pipedream app not yet connected, tagged with its directory
+  categories. Apps Macro can import from show **Import** beside **Connect**.
+
+The search filters every row by name, description and category and also searches
+the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
+Sheets are hidden from the catalog because Macro syncs email and calendars
+natively. LinkedIn never appears in the catalog or its search: the backend
+hides it. Scrolling toward the end loads the next catalog page; a failed page
+keeps loaded apps and offers Retry.
+Overlaid catalog apps (the `mcp_overlays` table, served at
+`GET /pipedream/mcp/overlays`) look the same in the catalog but never open
+Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
+tab (system browser on native) and the row turns connected once that server is
+authorized, after which it lists as that catalog app (its icon, Agent tools
+category) among the integrations in use, not with the custom MCP servers at
+the top; native servers wait for the overlay list before rendering so one never
+jumps. Verify with an overlaid app such as Sentry or Asana; completing a
+Pipedream connection for one answers 409.
+GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
+authorized by the GitHub account link (the same GitHub App), so connecting
+GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
+provider page) runs the account link, and a linked account shows GitHub
+connected for Macro AI with no second consent. Disconnecting GitHub on its AI
+provider page unlinks the account. Verify by linking GitHub from its row and
+checking the GitHub catalog entry reads connected.
+The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
+and `Add Custom`. Pipedream Slack OAuth is available in production and
 development from the featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.
-Provider Back returns to the tab that opened it; navigation is local to each
-Connections page and starts at Connected on a fresh visit.
+Provider Back returns to the combined integrations overview; navigation
+is local to each mounted Integrations page.
 
 Macro agents and external AI clients using Macro's MCP server can run
-`ImportNotionPage` and the shared import ledger tools against the user's
+`ImportNotionPage`, `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`
+and the shared import ledger tools against the user's
 connections saved in Macro.
 Verify a Notion import returns a document and a repeated import returns the
-existing document; Linear imports recorded with `CreateImportEntity` should
-appear in `ListImportEntities`. These calls must not report that import tracking
+existing document. For Linear/Jira workspace imports, verify planning writes no
+Macro tasks before approval, source-specific reviews show task/project totals,
+and an approved import preserves task fields, comments, labels and relationships. These calls must not report that import tracking
 is unavailable.
 On hosts without Pipedream credentials, saved Pipedream accounts must not hide
 native Notion, Linear, or Slack connections when selecting import tools.
@@ -507,6 +707,11 @@ Provider and custom-server More menus contain Disable, Reconnect, and Disconnect
 custom servers also offer Rename. Disabled grants show Enable. Unauthenticated
 custom servers show Connect and Remove. Disconnect/Remove require confirmation.
 Adding a custom MCP saves its name and URL; Connect on its row starts OAuth.
+In chat and agent sessions, the agent can add one for the user with the
+`ConnectMcpServer` tool: it must be a public `https` URL, the row appears here
+unauthenticated, and the user still clicks Connect to sign in. Re-adding a URL
+the user already has leaves that row and its sign-in unchanged.
+The Add MCP Server dialog uses the same 24px padding above its title as on its sides.
 Enabled custom servers are offered to the owner's agent sessions (Cursor, Claude,
 Codex, macrod, in-memory) alongside connected apps, through the same session
 egress path: the sandbox sees the server under its name and a URL key, never the
@@ -516,20 +721,32 @@ have the owner use Reconnect under Custom MCP; there is no `Connect` chip for
 custom servers. Agents configured with a fixed app selection do not receive the
 owner's custom servers.
 An agent reply's `Connect <app>` chip still starts that app's connection flow.
-Cursor stays in Agents → Runtimes with its API key and default model controls; it is not
-featured or offered in the Connections catalog. Personal Gmail and GitHub account
-links remain in Settings → Integrations. The native-only Connections page remains
+Cursor stays in Agents → Machines with its API key, default model and default effort controls; it is not
+featured or offered in the Connections catalog. Settings → Integrations lists
+Email, Accounts and AI apps above the agent tools and app catalog. The native-only integrations section remains
 available when `pipedream-mcp` is disabled.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
 `Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
+edit form offers `Delete agent` to the agent's creator, the team owner, and
+team admins for team agents. Confirming removes it from channels and returns
+to the agent list; Cancel keeps the edit form open. Other team members can edit
+the agent but cannot delete it. The
 `Instructions` field is a Lexical contenteditable textbox, not a textarea. It
 supports Markdown headings, lists, emphasis, code, links, and the normal `@`
 mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
-Under the runtime, `Answering a mention` chooses between `Coding agent` (a
+Under `In Macro`, an Anthropic or OpenAI model shows an optional
+`<Provider> API key · Optional` row with `Add key`; the agent runs on Macro
+usage without one. `Add key` reveals the write-only field (`Cancel` hides it
+again); a saved key starts expanded with `Remove`. On plans without agent keys
+the row only explains that keys are part of Premium and Max.
+`Advanced` starts collapsed on desktop and mobile, showing only its heading,
+summary, and `Show` action, without an empty card beneath it. `Show` reveals the
+settings; `Hide` collapses them again and preserves the selected options.
+Under `Advanced`, `Answering a mention` chooses between `Coding agent` (a
 channel mention is answered with a magic chip that opens into the live session)
 and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
 agent's own setting and always saved: a new form starts from the selected runtime
@@ -546,9 +763,15 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, Claude, and Codex configuration, followed by paired macrod runtimes. Claude's card appears only with the `claude-cloud` flag, and Codex's only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents (Claude Code, Codex, OpenCode, OpenClaw), offers a workspace folder and a Full access checkbox, and `Start running agents here` configures, pairs, and starts the daemon — the pairing is approved automatically, no code is typed. While running the card shows the agent and workspace with a `Stop` action; a set-up-but-stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Pending requests`, at the top and only while any wait, lists teammates' requests to use machines the viewer owns (`<person> requested to use <machine>`, with `Deny` and `Approve`) and the viewer's own requests on teammates' machines (`Your access: Requested`, whose `Requested` button cancels); the `Machines` entry in the settings sidebar and the phone settings sheet shows how many incoming requests wait. `Your machines` lists every machine the viewer owns, offline ones included. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. These notifications are filed under the machine and listed in Notifications (Access); clicking the row opens what its newest notification opens. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
-the same live model discovery and retains its existing save action.
+the same live model discovery and retains its existing save action. Beside it,
+the composer's speedometer effort control (the bottom sheet on touch) offers the
+selected default model's own effort stops and saves on change; it is hidden for a
+model with fewer than two stops. Changing the default model clears the saved
+effort, and a saved effort the model no longer offers shows, and starts
+sessions on, the model's default. New Cursor sessions on the default model start
+on the saved effort; an effort picked in the composer still overrides it.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
 as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
@@ -593,8 +816,9 @@ how to add the bot to channels and use its token with the Macro SDK. **Create
 bot** keeps Profile and Channels visible. **Advanced** starts collapsed on both
 desktop and mobile and contains:
 
-- **Agent → Show in model selector**: makes the bot available when starting an
-  AI chat; connect an agent such as Codex or Hermes to handle requests. This
+- **Agent → Enable AI agent**: makes the bot available in the model selector
+  and lets it respond to mentions, using a chat agent or a connected external
+  runtime. Saving an agent configuration enables it regardless of harness. This
   section remains gated by the agents rollout.
 - **Ownership → Mentionable**: lets teammates find and @mention the bot and
   creates it under team ownership. With the switch off, the creator owns it.

@@ -12,12 +12,13 @@ use crate::{
         models::{UpdateError, UpdateStatus},
         ports::AutoUpdateService,
         service::{ApplyUpdateResult, Service},
+        startup::{BundleStartup, StartupSelection},
     },
     outbound::{
         api_client::BundleClient,
         fs::FileSystem,
         runtime::TauriTaskSpawner,
-        system_info::{SystemInfo, native_build},
+        system_info::{SystemInfo, bundle_storage_dir, native_build},
     },
 };
 
@@ -27,12 +28,46 @@ pub type PluginService = Service<FileSystem>;
 const EVENT_NAME: &str = "bundle-update-status";
 const WIFI_RETRY_INTERVAL: Duration = Duration::from_secs(30);
 
+#[test]
+fn diagnostic_wire_types() {
+    let generated = specta_typescript::Typescript::default()
+        .export(
+            &specta::Types::default()
+                .register::<BundleReloadDiagnostics>()
+                .register::<BundleStartup>(),
+            specta_serde::Format,
+        )
+        .expect("export bundle updater types");
+    let generated = generated
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src/observability/generated/bundle-updater.ts");
+    if std::env::var_os("UPDATE_NATIVE_DIAGNOSTIC_TYPES").is_some() {
+        std::fs::create_dir_all(output.parent().expect("generated directory"))
+            .expect("create directory");
+        std::fs::write(&output, &generated).expect("write types");
+    }
+    assert_eq!(
+        std::fs::read_to_string(output).expect("generated types"),
+        generated
+    );
+}
+
 /// Launch-scoped reload dispatches, retained across replacement documents.
 #[derive(Clone, Default, Serialize)]
+#[cfg_attr(test, derive(specta::Type))]
 #[serde(rename_all = "camelCase")]
 pub struct BundleReloadDiagnostics {
+    #[cfg_attr(test, specta(type = specta_typescript::Number))]
     dispatches: u64,
     last_source: Option<&'static str>,
+    last_reload_id: Option<String>,
+    #[cfg_attr(test, specta(type = Option<specta_typescript::Number>))]
+    last_dispatch_ms: Option<u64>,
 }
 
 /// Read reload evidence without waiting for the updater's async service lock.
@@ -44,12 +79,27 @@ pub fn bundle_reload_diagnostics<R: Runtime>(
     Some(diagnostics.clone())
 }
 
+/// Read how startup chose this launch's bundle. `None` when startup did not
+/// consult bundle storage: automatic updates are disabled or the storage
+/// directory is unavailable.
+pub fn bundle_startup<R: Runtime>(app: &tauri::AppHandle<R>) -> Option<BundleStartup> {
+    app.try_state::<BundleStartup>()
+        .map(|startup| startup.inner().clone())
+}
+
 fn record_reload_dispatch<R: Runtime>(app: &tauri::AppHandle<R>, source: &'static str) {
     if let Some(state) = app.try_state::<std::sync::Mutex<BundleReloadDiagnostics>>()
         && let Ok(mut diagnostics) = state.lock()
     {
         diagnostics.dispatches += 1;
         diagnostics.last_source = Some(source);
+        diagnostics.last_reload_id = Some(uuid::Uuid::new_v4().to_string());
+        diagnostics.last_dispatch_ms = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+        );
     }
     tracing::info!(source, "Dispatching bundle update WebView reload");
 }
@@ -261,10 +311,7 @@ pub async fn apply_completed_update_from<R: Runtime>(
         .try_state::<Mutex<PluginService>>()
         .ok_or_else(|| "Bundle updater plugin not initialized".to_string())?;
 
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(app_handle).map_err(|e| e.to_string())?;
 
     // Keep application and reload dispatch in one critical section. Native
     // installation holds this same lock while shutting down the webview/cache.
@@ -279,6 +326,10 @@ pub async fn apply_completed_update_from<R: Runtime>(
         }
         result
     };
+
+    if apply_result == ApplyUpdateResult::Held {
+        tracing::info!(source, "[bundle-update] page is holding reloads");
+    }
 
     if apply_result == ApplyUpdateResult::ReloadNeeded {
         // Reload to pick up the new bundle. Using location.reload() instead of
@@ -314,6 +365,21 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
     apply_completed_update(&app_handle).await
 }
 
+/// Hold or release automatic reloads for work the page would lose to one.
+///
+/// A native auth sheet returns its result only to the document that opened it,
+/// and this process applies completed updates on foreground without asking
+/// that document, so the hold has to live here. Each document sends its state
+/// on mount, which clears a hold left by one that died holding.
+#[tauri::command]
+pub async fn set_bundle_reload_hold(
+    service: tauri::State<'_, Mutex<PluginService>>,
+    held: bool,
+) -> Result<(), String> {
+    service.lock().await.set_reload_held(held);
+    Ok(())
+}
+
 /// Acknowledge that the webview mounted after an applied bundle update reload.
 #[tauri::command]
 pub async fn ack_bundle_update_reload<R: Runtime>(
@@ -321,10 +387,7 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
     app_handle: tauri::AppHandle<R>,
     loaded_bundle_build: u64,
 ) -> Result<bool, String> {
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(&app_handle).map_err(|e| e.to_string())?;
     service
         .lock()
         .await
@@ -377,10 +440,7 @@ pub async fn clear_bundle<R: Runtime>(
     service: tauri::State<'_, Mutex<PluginService>>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(), String> {
-    let cache_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?;
+    let cache_dir = bundle_storage_dir(&app_handle).map_err(|e| e.to_string())?;
 
     let mut service = service.lock().await;
     let apply_result = {
@@ -446,10 +506,12 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
         let mut start_update_check = false;
         if !self.auto_update {
             tracing::info!("[bundle-update] automatic bundle updates are disabled in this build");
-        } else if let Ok(cache_dir) = app.path().app_cache_dir() {
-            let restored_pending = tauri::async_runtime::block_on(async {
+        } else if let Ok(cache_dir) = bundle_storage_dir(app) {
+            let startup = tauri::async_runtime::block_on(async {
                 service.load_bundle_root(&cache_dir, native_build).await
             });
+            let restored_pending = startup.selection == StartupSelection::CompletedDownload;
+            app.manage(startup);
             if restored_pending {
                 match tauri::async_runtime::block_on(async {
                     service.apply_update(&cache_dir).await
@@ -460,7 +522,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                     Ok(ApplyUpdateResult::ReloadAlreadyDispatched) => {
                         acknowledge_setup_apply = true;
                     }
-                    Ok(ApplyUpdateResult::NoUpdate) => {
+                    Ok(ApplyUpdateResult::NoUpdate | ApplyUpdateResult::Held) => {
                         tracing::warn!(
                             "[bundle-update] restored pending bundle had no update to apply during plugin initialization"
                         );
@@ -478,7 +540,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
             }
         } else {
             tracing::warn!(
-                "[bundle-update] failed to read app cache dir during plugin initialization"
+                "[bundle-update] failed to prepare bundle storage during plugin initialization"
             );
             start_update_check = true;
         }
@@ -498,7 +560,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                 return Ok(());
             };
             if acknowledge_setup_apply {
-                match app.path().app_cache_dir() {
+                match bundle_storage_dir(app) {
                     Ok(cache_dir) => {
                         let loaded_bundle_build =
                             tauri::async_runtime::block_on(service.bundle_build())
@@ -512,7 +574,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                         }
                     }
                     Err(e) => tracing::warn!(
-                        "[bundle-update] failed to read cache dir for setup acknowledgement: {e}"
+                        "[bundle-update] failed to prepare bundle storage for setup acknowledgement: {e}"
                     ),
                 }
             } else if let Err(e) = service.start() {

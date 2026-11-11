@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT action_id FROM agent_session_notification WHERE session_id = $1 AND delivered_at IS NULL AND (lease_until IS NULL OR lease_until < now()) AND ($2 OR wake OR action_id IS NOT NULL) ORDER BY (action_id IS NULL), created_at, id LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "5f5f31f620e002e201603d6d14f9662b985626906d0888df4e9eba9d200ebfd9"
+}

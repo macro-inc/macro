@@ -1,4 +1,4 @@
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { cn, Layer } from '@ui';
 import {
   type Component,

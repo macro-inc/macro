@@ -15,6 +15,44 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
 }
 
 #[test]
+fn calendar_join_requests_name_the_requester_and_the_event() {
+    let request = CalendarEventJoinRequestMetadata {
+        request_id: Uuid::nil(),
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    };
+    let event: NotifEvent = serde_json::from_value(
+        serde_json::to_value(NotifEvent::CalendarEventJoinRequest(request.clone())).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(event, NotifEvent::CalendarEventJoinRequest(_)));
+    assert_eq!(
+        request
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join Design review"
+    );
+    assert_eq!(request.format_body(None).unwrap(), "Design review");
+    let untitled = CalendarEventJoinRequestMetadata {
+        title: String::new(),
+        ..request
+    };
+    assert_eq!(untitled.format_body(None).unwrap(), "(No title)");
+}
+
+#[test]
+fn calendar_join_requests_store_the_key_their_retirement_reads() {
+    let request_id = Uuid::now_v7();
+    let stored = serde_json::to_value(CalendarEventJoinRequestMetadata {
+        request_id,
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    })
+    .unwrap();
+    assert_eq!(stored["requestId"], request_id.to_string());
+}
+
+#[test]
 fn view_access_notifications_preserve_permission_and_format_copy() {
     let request = EntityAccessRequestedMetadata {
         request_id: Uuid::nil(),
@@ -45,6 +83,40 @@ fn view_access_notifications_preserve_permission_and_format_copy() {
             .format_title(Some(uid("macro|owner@macro.com")))
             .unwrap()
             .contains("granted you view access")
+    );
+}
+
+#[test]
+fn runtime_access_removal_names_the_owner_the_runtime_and_the_stopped_agents() {
+    let stopped = |names: &[&str]| RuntimeAccessRemovedMetadata {
+        runtime_name: "Studio Mac".into(),
+        agents: names
+            .iter()
+            .map(|name| StoppedAgent {
+                bot_id: Uuid::nil(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
+    };
+    let owner = || Some(uid("macro|owner@macro.com"));
+
+    assert_eq!(
+        stopped(&["Scout"]).format_title(owner()).unwrap(),
+        "owner@macro.com removed your access to Studio Mac"
+    );
+    assert_eq!(
+        stopped(&["Scout"]).format_body(owner()).unwrap(),
+        "Scout has stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger"]).format_body(owner()).unwrap(),
+        "Scout and Ranger have stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger", "Pilot"])
+            .format_body(owner())
+            .unwrap(),
+        "Scout and 2 others have stopped."
     );
 }
 
@@ -107,6 +179,30 @@ fn channel_reaction_round_trips_as_notif_event() {
     });
     let event: NotifEvent = serde_json::from_value(value).unwrap();
     assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
+}
+
+#[test]
+fn channel_access_request_round_trips_and_names_the_channel() {
+    let value = serde_json::json!({
+        "tag": "channel_access_requested",
+        "content": {
+            "requestId": "00000000-0000-0000-0000-000000000001",
+            "channelType": "private",
+            "channelName": "design",
+        },
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    let NotifEvent::ChannelAccessRequested(request) = &event else {
+        panic!("expected a channel access request, got {event:?}");
+    };
+    assert_eq!(request.request_id, Uuid::from_u128(1));
+    assert_eq!(
+        event
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join #design"
+    );
+    assert_eq!(event.format_body(None).unwrap(), "#design");
 }
 
 fn github_pr_common() -> GithubPrNotificationCommon {
@@ -1261,6 +1357,74 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
 }
 
 #[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn alerts_show_nameless_mentions_as_their_kind() {
+    // Agents leave documentName empty or omit it; the app fills in live names.
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one is <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"0195c94f-3b0c-79f0-8558-e5e509ac9dd9"}}</m-document-mention>, about <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dda","blockName":"task","blockParams":{}}</m-document-mention>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one is <message>, about <task>."
+    );
+
+    let channel = ChannelMessageSendMetadata {
+        message_content: r#"I made <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention> from <m-document-mention>{"documentId":"d2","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>."#.to_string(),
+        ..bot_channel_message_send()
+    };
+    assert_eq!(
+        channel.format_body(None).unwrap(),
+        "I made <document> from <database>."
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
 fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     use notification::domain::models::NotificationExtEmail;
     let metadata = CalendarEventReminderMetadata {
@@ -1282,4 +1446,34 @@ fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     let mut second = metadata.clone();
     second.minutes_before = 5;
     assert_ne!(first.as_bytes(), second.rate_limit_key().as_bytes());
+}
+
+#[test]
+fn routine_run_finished_names_the_routine_and_its_outcome() {
+    let failed = RoutineRunFinishedMetadata {
+        routine_id: Uuid::nil(),
+        routine_name: "Morning brief".to_string(),
+        outcome: RoutineRunOutcome::Failed,
+    };
+    let succeeded = RoutineRunFinishedMetadata {
+        outcome: RoutineRunOutcome::Succeeded,
+        ..failed.clone()
+    };
+
+    let value = serde_json::to_value(&failed).unwrap();
+    assert_eq!(value["routineId"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(value["routineName"], "Morning brief");
+    assert_eq!(value["outcome"], "failed");
+    assert_eq!(failed.format_title(None).unwrap(), "Morning brief failed");
+    assert_eq!(
+        succeeded.format_title(None).unwrap(),
+        "Morning brief finished"
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "routine_run_finished",
+        "content": value,
+    }))
+    .unwrap();
+    assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }

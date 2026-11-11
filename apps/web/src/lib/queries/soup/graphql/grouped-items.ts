@@ -13,7 +13,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import type { GroupByField } from '@queries/soup/grouped/types';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { GroupSoupDocument } from '@service-storage/graphql/generated/graphql';
 import type { CombinedError } from '@urql/core';
 import {
@@ -36,7 +35,7 @@ import {
   createGraphqlSoupAstItemsQuery,
   type GraphqlSoupAstItemsQuery,
 } from './items';
-import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
@@ -57,8 +56,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   args: Accessor<GraphqlGroupedSoupAstItemsQueryArgs>,
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
@@ -148,7 +146,6 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     grouped.data,
     () => args().groupBy,
     () => ({
-      instructionsIdQuery,
       showSupportedForeignEntities: options().showSupportedForeignEntities,
     })
   );
@@ -221,7 +218,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
         cachedMail() ?? projected(),
         pendingDone(),
         excludesDone(),
-        pendingDeleteIds()
+        pendingDeleteKeys()
       )
     ),
     error,
@@ -239,10 +236,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     resetToInitialPage: grouped.paging.resetToInitialPage,
     refresh: async () => {
       if (input() === undefined) return;
-      await query.refetch({
-        requestPolicy: 'network-only',
-        throwOnError: true,
-      });
+      await grouped.refresh();
     },
   };
 }

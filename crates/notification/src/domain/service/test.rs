@@ -2,6 +2,7 @@
 
 mod access_request_delivery;
 mod android;
+mod ios_navigation;
 mod status_updates;
 
 use crate::domain::models::apple::APNSPushNotification;
@@ -82,10 +83,7 @@ impl NotificationExtIos for TestNotification {
 
 impl NotificationExtEmail for TestNotification {
     fn format_email(&self) -> crate::domain::models::queue_message::EmailContent {
-        EmailContent {
-            subject: "Test".to_string(),
-            body: self.message.clone(),
-        }
+        EmailContent::new("Test".to_string(), self.message.clone())
     }
 
     fn rate_limit_config() -> RateLimitConfig {
@@ -1417,6 +1415,7 @@ impl EmailSender for MockEmailSender {
     async fn send_email(
         &self,
         _recipient: MacroUserIdStr<'_>,
+        _notification_type: &str,
         _content: &crate::domain::models::queue_message::EmailContent,
     ) -> Result<(), Report> {
         Ok(())

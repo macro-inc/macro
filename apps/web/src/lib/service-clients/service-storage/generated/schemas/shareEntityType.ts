@@ -21,4 +21,6 @@ export const ShareEntityType = {
   call: 'call',
   email_thread: 'email_thread',
   agent_session: 'agent_session',
+  external_chat: 'external_chat',
+  harness: 'harness',
 } as const;

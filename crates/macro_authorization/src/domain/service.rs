@@ -10,8 +10,9 @@ use tracing::Level;
 
 use super::{
     models::{
-        BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
-        InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError, ValidatedIdentity,
+        AuthorizedUserApiKey, BotActingUserClaims, BotAuthentication, BotScope,
+        HarnessAuthentication, InternalAuthConfig, InternalIdentityClaims, MacroAuthorizationError,
+        ValidatedCredential,
     },
     ports::{
         BotAuthorizer, HarnessAuthorizer, JwtValidator, MacroAuthorizationService,
@@ -53,8 +54,13 @@ where
     }
 }
 
-type UserApiKeyAuthorizationFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<UserContext, Report<MacroAuthorizationError>>> + Send + 'a>>;
+type UserApiKeyAuthorizationFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>>>
+            + Send
+            + 'a,
+    >,
+>;
 
 trait DynUserApiKeyAuthorizer: Send + Sync {
     fn authorize_user_api_key<'a>(&'a self, api_key: &'a str) -> UserApiKeyAuthorizationFuture<'a>;
@@ -159,8 +165,8 @@ where
     async fn authorize_identity(
         &self,
         jwt: &str,
-    ) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        self.validator.validate(jwt)
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.validator.validate_credential(jwt)
     }
 
     #[tracing::instrument(
@@ -210,14 +216,17 @@ where
     async fn authorize_user_api_key(
         &self,
         api_key: &str,
-    ) -> Result<UserContext, Report<MacroAuthorizationError>> {
-        let user = self
+    ) -> Result<AuthorizedUserApiKey, Report<MacroAuthorizationError>> {
+        let authorized = self
             .user_api_key_authorizer
             .authorize_user_api_key(api_key)
             .await?;
 
-        tracing::Span::current().record("user_id", tracing::field::display(&user.user_id));
-        Ok(user)
+        tracing::Span::current().record(
+            "user_id",
+            tracing::field::display(&authorized.user_context.user_id),
+        );
+        Ok(authorized)
     }
 
     #[tracing::instrument(

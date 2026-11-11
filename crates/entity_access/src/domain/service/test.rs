@@ -46,6 +46,9 @@ struct MockRepo {
     form_access_callers: Arc<Mutex<Vec<Option<String>>>>,
     form_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     form_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
+    external_chat_access: Arc<Mutex<Option<AccessLevel>>>,
+    external_chat_access_callers: Arc<Mutex<Vec<Option<String>>>>,
+    harness_access: Arc<Mutex<Option<AccessLevel>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -104,6 +107,9 @@ impl MockRepo {
             form_access_callers: Arc::default(),
             form_users: Arc::default(),
             form_access_list: Arc::default(),
+            external_chat_access: Arc::default(),
+            external_chat_access_callers: Arc::default(),
+            harness_access: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_agent_session_access: Arc::default(),
@@ -193,6 +199,11 @@ impl MockRepo {
 
     fn with_form_access(mut self, level: AccessLevel) -> Self {
         self.form_access = Arc::new(Mutex::new(Some(level)));
+        self
+    }
+
+    fn with_external_chat_access(mut self, level: AccessLevel) -> Self {
+        self.external_chat_access = Arc::new(Mutex::new(Some(level)));
         self
     }
 
@@ -469,6 +480,26 @@ impl AccessRepository for MockRepo {
             .await
             .push(user_id.map(|user_id| user_id.as_ref().to_string()));
         Ok(*self.form_access.lock().await)
+    }
+
+    async fn get_harness_access(
+        &self,
+        _harness_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(*self.harness_access.lock().await)
+    }
+
+    async fn get_external_chat_access(
+        &self,
+        _group_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        self.external_chat_access_callers
+            .lock()
+            .await
+            .push(user_id.map(|user_id| user_id.as_ref().to_string()));
+        Ok(*self.external_chat_access.lock().await)
     }
 
     async fn list_form_access(
@@ -969,6 +1000,33 @@ async fn test_get_entity_permission_document_returns_access_level() {
 
     let result = service
         .get_entity_permission(Some(&user_id), "doc-1", EntityType::Document, None)
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit
+        }
+    ));
+}
+
+/// A runtime someone else owns, reached through a grant: the grant's level,
+/// not a refusal for an unsupported type.
+#[tokio::test]
+async fn get_entity_permission_harness_returns_a_granted_level() {
+    let repo = MockRepo::new();
+    *repo.harness_access.lock().await = Some(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            "0198a805-3e22-75b2-97eb-d9c6b91accb0",
+            EntityType::Harness,
+            None,
+        )
         .await
         .unwrap();
 
@@ -3024,5 +3082,38 @@ async fn pipeline_receipts_use_their_own_grants() {
             )
             .await
             .is_err()
+    );
+}
+
+const EXTERNAL_CHAT_ID: &str = "0199b1f2-3e22-75b2-97eb-d9c6b91accb1";
+
+#[tokio::test]
+async fn a_external_chat_permission_is_the_repository_group_access() {
+    let repo = MockRepo::new()
+        .with_external_chat_access(AccessLevel::View)
+        .with_form_access(AccessLevel::Edit);
+    let callers = repo.external_chat_access_callers.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+
+    let result = service
+        .get_entity_permission(
+            Some(&user_id),
+            EXTERNAL_CHAT_ID,
+            EntityType::ExternalChat,
+            None,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        result,
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+    assert_eq!(
+        *callers.lock().await,
+        vec![Some(user_id.as_ref().to_string())]
     );
 }

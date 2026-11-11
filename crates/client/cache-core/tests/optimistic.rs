@@ -88,6 +88,61 @@ impl ClaimFailingStorage {
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        Ok(self.inner.read_people_sql(viewer, plan).await.unwrap())
+    }
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        Ok(self
+            .inner
+            .scan_contact_records(after, limit, visit)
+            .await
+            .unwrap())
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.inner.visit_name_search(read).await.unwrap();
+        Ok(())
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .visit_contact_records(query, visit)
+            .await
+            .unwrap();
+        Ok(())
+    }
+
+    async fn visit_search_documents(
+        &self,
+        profile: cache_core::search::SearchProfile,
+        bucket: &str,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(cache_core::search::SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .visit_search_documents(profile, bucket, query, visit)
+            .await
+            .unwrap();
+        Ok(())
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         Ok(self.inner.get_batch(keys).await.unwrap())
     }
@@ -1104,6 +1159,74 @@ fn pending_uuid_replacement_moves_to_tail_and_keeps_only_latest_layer() {
         );
         let data = read_hit(&mut engine, None).await;
         assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+    });
+}
+
+#[test]
+fn pending_uuid_replacement_keeps_the_first_enqueue_time() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a01";
+        const Y: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a02";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 100).await;
+        begin_value(&mut engine, X, "b", 250).await;
+        // A clock that moved backwards cannot make the replacement look newer.
+        begin_value(&mut engine, Y, "c", 500).await;
+        begin_value(&mut engine, Y, "d", 400).await;
+
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(
+            queued
+                .iter()
+                .map(|row| row.mutation.created_at_ms)
+                .collect::<Vec<_>>(),
+            [100, 400]
+        );
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(
+            inspected
+                .iter()
+                .map(|item| item.enqueued_at_ms)
+                .collect::<Vec<_>>(),
+            [Some(100), Some(400)]
+        );
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert_eq!(wire["enqueuedAtMs"], json!(100));
+    });
+}
+
+#[test]
+fn active_uuid_replacement_keeps_its_own_enqueue_time() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a03";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 100).await;
+        let (_, _) = claim_head(&mut engine, "runner", 110).await;
+        begin_value(&mut engine, X, "b", 300).await;
+
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert!(queued[0].superseded);
+        assert_eq!(
+            queued
+                .iter()
+                .map(|row| row.mutation.created_at_ms)
+                .collect::<Vec<_>>(),
+            [100, 300]
+        );
+    });
+}
+
+#[test]
+fn enqueue_time_outside_the_javascript_safe_range_is_unknown() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a04";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 1 << 60).await;
+
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected[0].enqueued_at_ms, None);
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert!(wire.get("enqueuedAtMs").is_none());
     });
 }
 

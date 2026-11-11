@@ -22,6 +22,7 @@ State ownership, reactivity, and async error handling.
   setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
   a value should also clear related UI, blur a control, or scroll.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
+- **FE-70** Keep related state that changes together in one createStore, not parallel signals.
 - **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
   return `Result` (FE-36) rather than being wrapped in `try`/`catch`. Enforced
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
@@ -50,6 +51,8 @@ State ownership, reactivity, and async error handling.
 
 ## Solid patterns
 
+- Use `Switch`/`Match` for mutually exclusive render states instead of nested `Show` fallbacks.
+
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems
   (DOM APIs, third-party libs). If you're using it to derive state or trigger
   updates, use a derived signal or wrap the setter instead.
@@ -62,6 +65,7 @@ State ownership, reactivity, and async error handling.
   expensive. Cheap derivations (() => a() + b()) don't need it regardless of
   subscriber count.
 - Before rolling your own reactive utility, check solid-primitives first.
+- Never store `Set` or `Map` in signals; use arrays for small selections and reactive collections for keyed data.
 - Never read a solid-query `query.data` unguarded from a component body or an
   eager `createMemo`. `data` is a resource read: while the query is pending it
   suspends the caller's nearest `<Suspense>`, which detaches and re-attaches
@@ -77,3 +81,21 @@ State ownership, reactivity, and async error handling.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
+- **FE-58** A memo that builds an array or object must not recompute on
+  unrelated changes: read each input through its own memo first, so the result
+  keeps its identity while its contents do. A prop that looks like a plain
+  string often reaches you from an accessor that rereads the whole editor
+  state, and a fresh `options` array makes a Kobalte `Select` re-assert its
+  selection and call `onChange` again. Pair it with setters that write nothing
+  when nothing changed (`setReminderMinutes` and `setField` in
+  `create-calendar-event-form-controller.ts`): without both, the control's
+  answer edits the state that produced it and the loop only ends in a stack
+  overflow that takes the app down.
+- **FE-59** Browser callbacks (observers, timers, listeners) run without a
+  Solid owner: `onCleanup` there never runs, and computations created there,
+  including the memo behind a `cond && value` prop read, are never disposed.
+  Wait for an element to enter the document with `onElementConnect` from
+  `@core/util/onElementConnect`, which runs the callback under the caller's
+  owner, and register cleanup for setup-time resources (plugins, debounced
+  saves) at setup, not in that callback. Enforced by ast-grep
+  `ts-/tsx-no-ownerless-element-connect`, CI error.

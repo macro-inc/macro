@@ -9,16 +9,19 @@ use crate::domain::{
         ParticipantRole, PatchChannelRequest, ReferencedShareItem, Sender,
     },
     ports::{
-        ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, MockChannelRepo,
+        ChannelEventDispatcher, ChannelReferenceSharePermissions, ChannelRepo, CommentParentAccess,
+        MockChannelRepo,
     },
 };
 use chrono::Utc;
-use entity_access::domain::models::ParticipantRole as AccessRole;
+use entity_access::domain::models::{ParticipantRole as AccessRole, TeamRole};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
+
+mod deletion;
 
 fn empty_repo() -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();
@@ -42,6 +45,8 @@ struct FakeMutationRepoState {
     channel_type: ChannelType,
     channel_team_id: Option<Uuid>,
     direct_agent: bool,
+    team_roles: HashMap<(String, Uuid), TeamRole>,
+    deleted_channels: Vec<Uuid>,
     user_team_id: Option<Uuid>,
     user_team_id_lookups: usize,
     join_code: Option<Uuid>,
@@ -67,6 +72,8 @@ impl FakeMutationRepo {
                 channel_type: ChannelType::Private,
                 channel_team_id: None,
                 direct_agent: false,
+                team_roles: HashMap::new(),
+                deleted_channels: vec![],
                 user_team_id: None,
                 user_team_id_lookups: 0,
                 join_code: None,
@@ -207,6 +214,13 @@ impl ChannelRepo for FakeMutationRepo {
         Ok("Project".to_string())
     }
 
+    async fn get_user_display_names(
+        &self,
+        _user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<std::collections::HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
+        Ok(std::collections::HashMap::new())
+    }
+
     async fn user_has_team(&self, _user_id: String, _team_id: Uuid) -> Result<bool, Self::Err> {
         Ok(true)
     }
@@ -311,7 +325,22 @@ impl ChannelRepo for FakeMutationRepo {
         Ok(())
     }
 
-    async fn delete_channel(&self, _channel_id: Uuid, _user_id: String) -> Result<(), Self::Err> {
+    async fn user_is_team_admin(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .team_roles
+            .get(&(user_id.to_string(), team_id))
+            .is_some_and(|role| *role >= TeamRole::Admin))
+    }
+
+    async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().deleted_channels.push(channel_id);
         Ok(())
     }
 
@@ -556,6 +585,115 @@ async fn returns_empty_participants_list() {
     let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
 
     assert!(participants.is_empty());
+}
+
+/// Grants parent access to an explicit list of `(parent type, parent id)` pairs.
+struct FakeCommentParentAccess(Vec<(&'static str, &'static str)>);
+
+#[async_trait::async_trait]
+impl CommentParentAccess for FakeCommentParentAccess {
+    async fn can_view_parent(
+        &self,
+        _viewer: &str,
+        parent_entity_type: &str,
+        parent_entity_id: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(self.0.contains(&(parent_entity_type, parent_entity_id)))
+    }
+}
+
+fn comment_reference(
+    parent_entity_type: &str,
+    parent_entity_id: &str,
+) -> AttachmentEntityReference {
+    AttachmentEntityReference::Comment(crate::domain::models::AttachmentCommentReference {
+        parent_entity_type: parent_entity_type.to_string(),
+        parent_entity_id: parent_entity_id.to_string(),
+        message_id: Uuid::nil(),
+        thread_id: None,
+        sender_id: "macro|user-a@test.com".to_string(),
+        message_content: "see the doc".to_string(),
+        message_created_at: Utc::now(),
+        attachment_created_at: Utc::now(),
+    })
+}
+
+fn references_repo() -> MockChannelRepo {
+    let mut repo = empty_repo();
+    repo.expect_get_attachment_references()
+        .returning(|_, _, _| {
+            Box::pin(async {
+                Ok(vec![
+                    AttachmentEntityReference::Channel(
+                        crate::domain::models::AttachmentChannelReference {
+                            channel_id: Uuid::nil(),
+                            channel_name: None,
+                            message_id: Uuid::nil(),
+                            thread_id: None,
+                            sender_id: "macro|user-a@test.com".to_string(),
+                            message_content: "in a channel".to_string(),
+                            message_created_at: Utc::now(),
+                            attachment_created_at: Utc::now(),
+                        },
+                    ),
+                    comment_reference("initiative", "init-1"),
+                    comment_reference("document", "doc-1"),
+                    AttachmentEntityReference::Generic(
+                        crate::domain::models::AttachmentGenericReference {
+                            source_entity_type: "document".to_string(),
+                            source_entity_id: "src-doc".to_string(),
+                            entity_type: "document".to_string(),
+                            entity_id: "target".to_string(),
+                            user_id: None,
+                            created_at: Utc::now(),
+                        },
+                    ),
+                ])
+            })
+        });
+    repo
+}
+
+#[tokio::test]
+async fn attachment_references_keep_comments_only_on_viewable_parents() {
+    let svc = ChannelServiceImpl::new(references_repo()).with_comment_parent_access(Arc::new(
+        FakeCommentParentAccess(vec![("initiative", "init-1")]),
+    ));
+    let refs = svc
+        .get_attachment_references(
+            "document".to_string(),
+            "target".to_string(),
+            "macro|user-a@test.com".to_string(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(refs.len(), 3);
+    assert!(matches!(refs[0], AttachmentEntityReference::Channel(_)));
+    assert!(matches!(
+        &refs[1],
+        AttachmentEntityReference::Comment(comment) if comment.parent_entity_id == "init-1"
+    ));
+    assert!(matches!(refs[2], AttachmentEntityReference::Generic(_)));
+}
+
+#[tokio::test]
+async fn attachment_references_withhold_comments_without_parent_access() {
+    let svc = ChannelServiceImpl::new(references_repo());
+    let refs = svc
+        .get_attachment_references(
+            "document".to_string(),
+            "target".to_string(),
+            "macro|user-a@test.com".to_string(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(refs.len(), 2);
+    assert!(
+        refs.iter()
+            .all(|r| !matches!(r, AttachmentEntityReference::Comment(_)))
+    );
 }
 
 // --- center_window tests ---

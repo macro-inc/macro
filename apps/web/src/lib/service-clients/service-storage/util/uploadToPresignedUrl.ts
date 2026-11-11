@@ -1,6 +1,8 @@
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
+import { differenceInSeconds, isValid, parseISO } from 'date-fns';
 import { err, ok, type Result } from 'neverthrow';
 
 type UploadResult = Result<void, ResultError<'SERVER_ERROR'>[]>;
@@ -42,6 +44,7 @@ export async function uploadToPresignedUrl({
   }
 
   onProgress?.(null);
+  const sentAt = Date.now();
   const response = await platformFetch(presignedUrl, {
     method: 'PUT',
     body: blob,
@@ -50,11 +53,46 @@ export async function uploadToPresignedUrl({
   });
 
   if (!response.ok) {
-    const message = await response.text();
-    return err([{ code: 'SERVER_ERROR', message: message }]);
+    return rejected({
+      presignedUrl,
+      sentAt,
+      status: response.status,
+      body: await response.text(),
+    });
   }
 
   return ok(undefined);
+}
+
+/**
+ * S3 error bodies can echo the access key, signature, and session token, so
+ * only allowlisted fields reach the log and none reach the caller.
+ */
+function rejected(input: {
+  presignedUrl: string;
+  sentAt: number;
+  status: number;
+  body: string;
+}): UploadResult {
+  const element = (name: string) =>
+    input.body.match(new RegExp(`<${name}>([^<]*)</${name}>`))?.[1];
+  const query = new URL(input.presignedUrl).searchParams;
+  const signedAt = parseISO(query.get('X-Amz-Date') ?? '');
+  Telemetry.warn('storage_upload.rejected', {
+    'storage_upload.status': input.status,
+    'storage_upload.s3_code': element('Code'),
+    'storage_upload.s3_message': element('Message'),
+    'storage_upload.s3_request_id': element('RequestId'),
+    'storage_upload.url_age_seconds': isValid(signedAt)
+      ? differenceInSeconds(input.sentAt, signedAt)
+      : undefined,
+    'storage_upload.url_expires_seconds':
+      Number(query.get('X-Amz-Expires')) || undefined,
+    'storage_upload.credential_prefix': query
+      .get('X-Amz-Credential')
+      ?.slice(0, 4),
+  });
+  return err([{ code: 'SERVER_ERROR', message: 'Upload failed' }]);
 }
 
 /** `fetch` can't report upload progress, so the browser path uses XHR. */
@@ -73,6 +111,7 @@ function uploadWithXhr({
 }): Promise<UploadResult> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    const sentAt = Date.now();
     const abort = () => xhr.abort();
     const settle = () => signal?.removeEventListener('abort', abort);
 
@@ -83,7 +122,14 @@ function uploadWithXhr({
         onProgress(blob.size);
         resolve(ok(undefined));
       } else {
-        resolve(err([{ code: 'SERVER_ERROR', message: xhr.responseText }]));
+        resolve(
+          rejected({
+            presignedUrl,
+            sentAt,
+            status: xhr.status,
+            body: xhr.responseText,
+          })
+        );
       }
     };
     // Mirror fetch, which rejects on network failure and abort.

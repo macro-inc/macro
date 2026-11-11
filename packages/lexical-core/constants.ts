@@ -55,6 +55,12 @@ export const PASTE_TAG = 'paste';
 export const COLLABORATION_TAG = 'collaboration';
 
 /**
+ * Indicates that the update puts this peer's own selection back after a
+ * remote change, rather than the person moving it
+ */
+export const COLLAB_SELECTION_TAG = 'collab-selection';
+
+/**
  * Indicates that the update should skip collaborative sync
  */
 export const SKIP_COLLAB_TAG = 'skip-collab';
@@ -74,3 +80,9 @@ export const SKIP_DOM_SELECTION_TAG = 'skip-dom-selection';
  * The update was triggered by editor.focus()
  */
 export const FOCUS_TAG = 'focus';
+
+/**
+ * The marker a chat agent's reply carries while its turn runs, read as text
+ * in notification excerpts, search, and plain-text previews.
+ */
+export const PENDING_REPLY_TEXT = 'Thinking…';

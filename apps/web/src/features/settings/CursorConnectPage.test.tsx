@@ -5,7 +5,7 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CursorConnectPage } from './CursorConnectPage';
-import { chooseSelectOption } from './tests/select-helpers';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     data: {
       registered: false,
       defaultModelId: null as string | null,
+      defaultEffort: null as string | null,
       updatedAt: null as string | null,
     },
   },
@@ -42,6 +43,19 @@ const mocks = vi.hoisted(() => ({
   setDefaultModel: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
+  capabilityTargets: [] as unknown[],
+  composerEffort: {
+    id: 'reasoning_effort',
+    name: 'Reasoning effort',
+    description: null,
+    category: 'thought_level',
+    type: 'select' as const,
+    currentValue: 'low',
+    options: [
+      { name: 'Low', value: 'low', description: null, group: null },
+      { name: 'High', value: 'high', description: null, group: null },
+    ],
+  },
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -61,6 +75,22 @@ vi.mock('@queries/agents/models', () => ({
   useAgentModelsQuery: () => mocks.models,
 }));
 
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: (
+    target: () => { harness: string; model?: string } | undefined
+  ) => ({
+    isPending: false,
+    get data() {
+      const request = target();
+      mocks.capabilityTargets.push(request);
+      return {
+        configOptions:
+          request?.model === 'composer' ? [mocks.composerEffort] : [],
+      };
+    },
+  }),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.toastSuccess, failure: mocks.toastFailure },
 }));
@@ -77,8 +107,10 @@ beforeEach(() => {
   mocks.status.data = {
     registered: false,
     defaultModelId: null,
+    defaultEffort: null,
     updatedAt: null,
   };
+  mocks.capabilityTargets = [];
   mocks.save.mockResolvedValue(undefined);
   mocks.disconnect.mockResolvedValue(undefined);
   mocks.setDefaultModel.mockResolvedValue(undefined);
@@ -133,6 +165,7 @@ describe('CursorConnectPage', () => {
     mocks.status.data = {
       registered: true,
       defaultModelId: null,
+      defaultEffort: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
     const onClose = vi.fn();
@@ -142,9 +175,11 @@ describe('CursorConnectPage', () => {
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
 
-    chooseSelectOption(screen.getByLabelText('Default model'), 'Composer');
+    chooseModelOption(screen.getByLabelText('Default model'), 'Composer');
     await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('composer');
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith({
+        modelId: 'composer',
+      });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
     });
 
@@ -156,5 +191,57 @@ describe('CursorConnectPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('offers the effort stops of the default model and saves an effort with it', async () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: 'composer',
+      defaultEffort: 'ultra',
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    render(() => <CursorConnectPage onClose={vi.fn()} />);
+
+    expect(mocks.capabilityTargets).toContainEqual({
+      harness: 'cursor',
+      model: 'composer',
+    });
+    // `ultra` is not one of this model's stops, so its default shows instead.
+    const trigger = screen.getByRole('button', { name: 'Effort: Low' });
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const high = await screen.findByRole('menuitem', { name: 'High' });
+    high.focus();
+    fireEvent.keyDown(high, { key: 'Enter' });
+    await waitFor(() => {
+      expect(mocks.setDefaultModel).toHaveBeenCalledWith({
+        modelId: 'composer',
+        effort: 'high',
+      });
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Default effort updated');
+    });
+  });
+
+  it('shows a saved effort the default model offers', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: 'composer',
+      defaultEffort: 'high',
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    render(() => <CursorConnectPage onClose={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Effort: High' })).toBeTruthy();
+  });
+
+  it('has no effort control for a model without effort stops', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: 'default-model',
+      defaultEffort: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    render(() => <CursorConnectPage onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /^Effort:/ })).toBeNull();
   });
 });

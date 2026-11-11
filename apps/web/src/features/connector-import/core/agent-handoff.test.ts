@@ -15,22 +15,39 @@ describe('agent import handoff', () => {
     expect(handoff.instructions).toContain('never edit or delete');
   });
 
-  it('creates tasks as task documents', () => {
+  it("imports the Notion workspace through Macro's importer", () => {
+    const files = IMPORT_CATEGORIES.files;
+    const notion = files.providers.find((p) => p.appSlug === 'notion')!;
+    const handoff = agentImportHandoff(files, notion);
+    expect(handoff.input).toBe('Import my Notion workspace into Macro.');
+    expect(handoff.instructions).toContain('ImportFromNotion');
+    expect(handoff.instructions).not.toContain('CreateImportEntity');
+  });
+
+  it('uses the reviewed Linear importer', () => {
+    const tasks = IMPORT_CATEGORIES.tasks;
+    const linear = tasks.providers.find((p) => p.appSlug === 'linear')!;
+    const { instructions } = agentImportHandoff(tasks, linear);
+    expect(instructions).toContain('ImportFromLinear');
+    expect(instructions).not.toContain('CreateImportEntity');
+  });
+
+  it('uses the reviewed Jira importer', () => {
     const tasks = IMPORT_CATEGORIES.tasks;
     const jira = tasks.providers.find((p) => p.appSlug === 'jira')!;
     expect(agentImportHandoff(tasks, jira).instructions).toContain(
-      'isTask true'
+      'ImportFromJira'
     );
   });
 });
 
 describe('import catalog', () => {
-  it('gives every category unique providers led by a native source where one exists', () => {
+  it('gives every category unique providers led by a ledger source where one exists', () => {
     for (const config of Object.values(IMPORT_CATEGORIES)) {
       const slugs = config.providers.map((p) => p.appSlug);
       expect(new Set(slugs).size).toBe(slugs.length);
-      const native = config.providers.findIndex((p) => p.native);
-      expect(native === -1 || native === 0).toBe(true);
+      const ledger = config.providers.findIndex((p) => p.ledger);
+      expect(ledger === -1 || ledger === 0).toBe(true);
     }
   });
 });

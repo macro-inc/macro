@@ -1,0 +1,9 @@
+{
+  "identifier": "desktop-capability",
+  "description": "permissions the desktop app needs, kept out of the mobile binaries",
+  "platforms": ["macOS", "windows", "linux"],
+  "windows": ["main"],
+  "permissions": [
+    "core:webview:allow-set-webview-zoom"
+  ]
+}

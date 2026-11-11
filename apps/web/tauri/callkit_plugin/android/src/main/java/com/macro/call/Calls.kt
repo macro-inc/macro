@@ -5,21 +5,28 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.telecom.*
 import androidx.core.content.ContextCompat
 import app.tauri.plugin.Channel
 import app.tauri.plugin.JSObject
+import com.twilio.audioswitch.AudioDevice
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.participant.Participant
+import io.livekit.android.room.participant.RemoteParticipant
 import io.livekit.android.room.track.LocalVideoTrack
 import io.livekit.android.room.track.RemoteAudioTrack
 import io.livekit.android.room.track.Track
+import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -27,9 +34,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.context.Context as TraceContext
 
 /** Main-thread owner shared by Telecom, FCM, service, Activity and the WebView. */
 internal object Calls {
+    var trace: CallTrace? = null
+        private set
+    fun stopTracing(outcome: String) {
+        val previous = trace
+        trace = null
+        previous?.finish(outcome)
+    }
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var offer: CallOffer? = null
         private set
@@ -43,9 +59,17 @@ internal object Calls {
     var video = false
         private set
     var error: String? = null
+    /** After repeated denials Android stops asking, so only the app's settings page can grant a permission. */
+    fun openAppSettings(ctx: Context) {
+        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+    }
+    /** Where the call UI is, as on iOS: the drawer (expanded), the in-app thumbnail (minimized), or an edge tab (hidden). */
     var overlay = "hidden"
+        private set
     var pendingAnswered: String? = null
     var changed: (() -> Unit)? = null
+    var miniWindowChanged: (() -> Unit)? = null
+    private var spotlightId: String? = null
     private var session: Job? = null
     private var poller: Job? = null
     private var held = false
@@ -60,6 +84,10 @@ internal object Calls {
     private var telecomMuted = false
     private var telecomFocusLost = false
     private var desiredAudioType: String? = null
+    private var selectedCommunicationDevice = false
+    private var communicationDeviceListener: AudioManager.OnCommunicationDeviceChangedListener? = null
+    private var remoteAudioSilenced = false
+    private var publishedIdentities: String? = null
     private val audioMutex = Mutex()
     private val videoMutex = Mutex()
     var recipient: String? = null
@@ -80,8 +108,147 @@ internal object Calls {
         )
         return handle
     }
-    fun watch(name: String, channel: Channel) { watchers[name] = channel }
+    fun watch(name: String, channel: Channel) { watchers[name] = channel; publishedIdentities = null }
     fun unwatch() { watchers.clear() }
+
+    // The call ID scopes every read, selection and notification to the current session.
+    fun outputState(ctx: Context): JSObject? {
+        val call = offer?.takeIf { accepted } ?: return null
+        val endpoints = if (Build.VERSION.SDK_INT >= 34)
+            (connection as? TelecomService.MacroConnection)?.availableEndpoints().orEmpty()
+        else emptyList()
+        val outputs = JSONArray()
+        var selectedId: String? = null
+        if (endpoints.isNotEmpty()) {
+            val currentEndpoint = (connection as? TelecomService.MacroConnection)?.currentEndpointId()
+            for (endpoint in endpoints) {
+                val id = endpoint.identifier.toString()
+                outputs.put(JSONObject().put("id", id).put("label", endpoint.endpointName.toString()))
+                val type = when (endpoint.endpointType) {
+                    CallEndpoint.TYPE_SPEAKER -> "Speakerphone"
+                    CallEndpoint.TYPE_BLUETOOTH -> "BluetoothHeadset"
+                    CallEndpoint.TYPE_WIRED_HEADSET -> "WiredHeadset"
+                    else -> "Earpiece"
+                }
+                if (currentEndpoint == id || (currentEndpoint == null && audioRoute == type)) selectedId = id
+            }
+        } else if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            audio.availableCommunicationDevices.forEach { device ->
+                val id = "device:${device.id}"
+                val label = when (device.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speaker"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Phone"
+                    else -> device.productName.toString()
+                }
+                outputs.put(JSONObject().put("id", id).put("label", label))
+                if (audio.communicationDevice?.id == device.id) selectedId = id
+            }
+        } else {
+            val handler = room?.audioSwitchHandler
+            handler?.availableAudioDevices?.forEach { device ->
+                val type = audioType(device) ?: return@forEach
+                outputs.put(JSONObject().put("id", type).put("label", when (device) {
+                    is AudioDevice.BluetoothHeadset -> device.name
+                    is AudioDevice.WiredHeadset -> device.name
+                    is AudioDevice.Speakerphone -> "Speaker"
+                    else -> "Phone"
+                }))
+            }
+            selectedId = audioRoute
+        }
+        return JSObject().apply { put("callId", call.callId); put("selectedId", selectedId ?: JSONObject.NULL); put("outputs", outputs) }
+    }
+
+    fun publishAudioOutput(ctx: Context) { outputState(ctx)?.let { emit("audioOutput", it) } }
+
+    fun outputRequiresBluetooth(ctx: Context, id: String): Boolean {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val endpoint = (connection as? TelecomService.MacroConnection)?.availableEndpoints()?.firstOrNull { it.identifier.toString() == id }
+            if (endpoint != null) return endpoint.endpointType == CallEndpoint.TYPE_BLUETOOTH
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            val type = ctx.getSystemService(AudioManager::class.java).availableCommunicationDevices.firstOrNull { "device:${it.id}" == id }?.type
+            return type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || type == AudioDeviceInfo.TYPE_BLE_HEADSET
+        }
+        return false
+    }
+
+    fun selectOutput(ctx: Context, callId: String, id: String): Boolean {
+        if (!AudioOutputSelection.allowed(offer?.callId, callId, accepted && room != null)) return false
+        if (Build.VERSION.SDK_INT >= 34) {
+            val connection = connection as? TelecomService.MacroConnection
+            if (connection?.availableEndpoints()?.isNotEmpty() == true) return connection.selectEndpoint(id)
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            val device = audio.availableCommunicationDevices.firstOrNull { "device:${it.id}" == id } ?: return false
+            val selected = audio.setCommunicationDevice(device)
+            if (selected) {
+                selectedCommunicationDevice = true
+                desiredAudioType = when (device.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speakerphone"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Earpiece"
+                    AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> "WiredHeadset"
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET -> "BluetoothHeadset"
+                    else -> null
+                }
+                publishAudioOutput(ctx)
+            }
+            return selected
+        }
+        val handler = room?.audioSwitchHandler ?: return false
+        val device = handler.availableAudioDevices.firstOrNull { audioType(it) == id } ?: return false
+        desiredAudioType = id
+        handler.selectDevice(device)
+        publishAudioOutput(ctx)
+        return true
+    }
+    // Agents such as the transcriber join the room but are not call participants.
+    fun remoteHumans(media: Room): List<RemoteParticipant> =
+        media.remoteParticipants.values.filter { it.kind != Participant.Kind.AGENT }
+    fun participantId(participant: Participant) = participant.identity?.value ?: participant.sid.value
+    fun displayName(participant: Participant): String {
+        val id = participantId(participant)
+        return displayNames[id] ?: participant.name?.takeIf { it.isNotBlank() } ?: id.substringAfter('|')
+    }
+    // Same rule as the iOS call UI, so fallback identities don't render as "M" for "macro|...".
+    fun initials(name: String) = name.split(' ', '@', '.', '|').filter { it.isNotBlank() && !it.equals("macro", true) }
+        .take(2).joinToString("") { it.take(1).uppercase() }.ifEmpty { "?" }
+    fun localName(media: Room) = displayNames[participantId(media.localParticipant)] ?: "You"
+    fun cameraTrack(participant: Participant): VideoTrack? =
+        participant.getTrackPublication(Track.Source.CAMERA)?.takeUnless { it.muted }?.track as? VideoTrack
+    /** PiP and the mini-window show the active speaker, keeping the last one through pauses. */
+    fun spotlight(media: Room): RemoteParticipant? {
+        val humans = remoteHumans(media)
+        val speaking = media.activeSpeakers.map(::participantId).firstNotNullOfOrNull { id -> humans.firstOrNull { participantId(it) == id } }
+        return (speaking ?: humans.firstOrNull { participantId(it) == spotlightId } ?: humans.firstOrNull())
+            .also { spotlightId = it?.let(::participantId) }
+    }
+    fun setOverlay(mode: String) {
+        if (overlay == mode) return
+        overlay = mode
+        publish()
+    }
+    fun openDrawer(ctx: Context) {
+        val call = offer ?: return
+        setOverlay("expanded")
+        ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        emit("drawer", JSObject().apply { put("channelId", call.channelId) })
+    }
+    /** Re-renders native call surfaces without notifying JS. */
+    fun refresh() {
+        changed?.invoke()
+        miniWindowChanged?.invoke()
+    }
+    // Release builds obfuscate audioswitch class names, so match device types.
+    private fun audioType(device: AudioDevice?): String? = when (device) {
+        is AudioDevice.BluetoothHeadset -> "BluetoothHeadset"
+        is AudioDevice.WiredHeadset -> "WiredHeadset"
+        is AudioDevice.Earpiece -> "Earpiece"
+        is AudioDevice.Speakerphone -> "Speakerphone"
+        null -> null
+    }
     fun emit(name: String, payload: JSObject) { watchers[name]?.send(payload) }
     fun snapshot(): JSObject? = offer?.takeIf { accepted }?.let {
         JSObject().apply {
@@ -92,13 +259,17 @@ internal object Calls {
     }
     private fun identities(): JSONArray = JSONArray().apply {
         room?.localParticipant?.identity?.value?.let { put(it) }
-        room?.remoteParticipants?.values?.forEach { it.identity?.value?.let { id -> put(id) } }
+        room?.let { remoteHumans(it).forEach { participant -> participant.identity?.value?.let { id -> put(id) } } }
     }
     private fun interrupted(): Boolean = held || focusLost || telecomFocusLost
     private fun syncRemoteAudio() {
+        // setVolume blocks on LiveKit's RTC thread; only touch tracks while silencing or restoring.
+        val silence = interrupted()
+        if (!silence && !remoteAudioSilenced) return
+        remoteAudioSilenced = silence
         room?.remoteParticipants?.values?.forEach { participant ->
             participant.trackPublications.values.forEach { publication ->
-                (publication.track as? RemoteAudioTrack)?.setVolume(if (interrupted()) 0.0 else 1.0)
+                (publication.track as? RemoteAudioTrack)?.setVolume(if (silence) 0.0 else 1.0)
             }
         }
     }
@@ -107,8 +278,13 @@ internal object Calls {
         val payload = snapshot() ?: JSObject()
         payload.put("state", if (accepted) state else "disconnected")
         emit("connection", payload)
-        emit("participants", JSObject().apply { put("identities", identities()) })
-        changed?.invoke()
+        // JS re-sends every display name when identities arrive; repeating unchanged ones floods the bridge.
+        val identities = identities()
+        if (identities.toString() != publishedIdentities) {
+            publishedIdentities = identities.toString()
+            emit("participants", JSObject().apply { put("identities", identities) })
+        }
+        refresh()
     }
     fun prepareJoin(ctx: Context, channelId: String): String {
         check(joinLease == null) { "A call join is already pending" }
@@ -149,11 +325,26 @@ internal object Calls {
     }
     fun receive(ctx: Context, data: Map<String, String>, sentTime: Long) {
         if (android.os.Build.VERSION.SDK_INT < 26) return
-        if (data["recipientId"] != ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null)) return
-        val next = runCatching { CallOffer.parse(data["payload"] ?: return, sentTime) }.getOrNull() ?: return
-        if (!CallOffer.fresh(sentTime, System.currentTimeMillis())) return
-        if (ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE).getLong(next.callId, 0) > System.currentTimeMillis() - 120_000) return
-        if (offer != null) return
+        val next = runCatching { CallOffer.parse(data["payload"].orEmpty(), sentTime) }.getOrNull()
+        val incomingTrace = next?.let { CallTracing.start(ctx, it) }
+        val receipt = incomingTrace?.phase("call.push.receive")
+        val now = System.currentTimeMillis()
+        // Log only the reason: payloads carry LiveKit credentials.
+        val ignored = when {
+            data["recipientId"] != ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null) -> "another_account"
+            next == null -> "invalid_payload"
+            !CallOffer.fresh(sentTime, now) -> "stale"
+            ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE).getLong(next.callId, 0) > now - 120_000 -> "recently_ended"
+            offer != null -> "duplicate_or_busy"
+            else -> null
+        }
+        if (ignored != null || next == null) {
+            val outcome = ignored ?: "invalid_payload"
+            receipt?.end(outcome); incomingTrace?.finish(outcome)
+            android.util.Log.i("MacroCall", "Ignored call push: $outcome"); return
+        }
+        receipt?.end("accepted")
+        trace = incomingTrace
         recipient = ctx.getSharedPreferences("macro_push", Context.MODE_PRIVATE).getString("recipient", null)
         title = next.title
         offer = next; state = "ringing"; accepted = false
@@ -166,29 +357,45 @@ internal object Calls {
             }
             poller = scope.launch {
                 while (offer === next && room == null) {
-                    if (!CallOffer.fresh(next.sentTime, ringTime())) { end(ctx, next.callId); break }
+                    if (!CallOffer.fresh(next.sentTime, ringTime())) { end(ctx, next.callId, outcome = "expired"); break }
                     val status = ringStatus(next)
                     if (offer !== next || joinLease?.channelId == next.channelId) break
-                    if (RingPolicy.decide(next.sentTime, ringTime(), status) == RingPolicy.Decision.RESOLVE) { end(ctx, next.callId); break }
+                    if (RingPolicy.decide(next.sentTime, ringTime(), status) == RingPolicy.Decision.RESOLVE) {
+                        end(ctx, next.callId, outcome = when (status) { "answered" -> "answered_elsewhere"; "invalid" -> "invalid"; else -> "ended_remotely" }); break
+                    }
                     delay(1000)
                 }
             }
-        } catch (_: Exception) { end(ctx, next.callId) }
+        } catch (error: Exception) {
+            android.util.Log.w("MacroCall", "Incoming call failed: ${error.javaClass.simpleName}")
+            end(ctx, next.callId, outcome = "telecom_error", failed = true)
+        }
     }
-    private suspend fun ringStatus(next: CallOffer): String? = withContext(Dispatchers.IO) {
-        runCatching {
+    internal suspend fun ringStatus(next: CallOffer, parent: TraceContext? = null): String? = withContext(Dispatchers.IO) {
+        val owner = trace?.takeIf { it.callId == next.callId }
+        val phase = owner?.phase("call.ring_status", parent ?: owner.context, SpanKind.CLIENT)
+        phase?.attribute("http.request.method", "GET")
+        try {
             val http = URL(next.ringUrl ?: return@withContext null).openConnection() as HttpURLConnection
             try {
                 http.instanceFollowRedirects = false
                 http.connectTimeout = 5000; http.readTimeout = 5000
                 http.setRequestProperty("Authorization", "Bearer ${next.token}")
-                when (http.responseCode) {
+                phase?.let { CallTracing.inject(it.context).forEach { (key, value) -> http.setRequestProperty(key, value) } }
+                val code = http.responseCode
+                phase?.attribute("http.response.status_code", code.toLong())
+                val status = when (code) {
                     200 -> JSONObject(http.inputStream.bufferedReader().use { it.readText() }).getString("status")
                     401, 403, 404 -> "invalid"
                     else -> null
                 }
+                phase?.end(when (status) { "ringing", "answered", "ended", "invalid" -> status; else -> "retry" }, code >= 500)
+                status
             } finally { http.disconnect() }
-        }.getOrNull()
+        } catch (error: Exception) {
+            phase?.end("network_error", failed = true, error = error)
+            null
+        } finally { phase?.end("unavailable") }
     }
     fun outgoing(ctx: Context, next: CallOffer, leaseId: String? = null) {
         if (leaseId != null) check(joinLease?.let { it.id == leaseId && it.channelId == next.channelId } == true) { "Call join was cancelled" }
@@ -218,52 +425,83 @@ internal object Calls {
     }
     fun showIncoming(ctx: Context) {
         try { CallService.start(ctx); publish() }
-        catch (_: Exception) { end(ctx) }
+        catch (error: Exception) {
+            // Background starts can be denied, e.g. when FCM delivered the push without high priority.
+            android.util.Log.w("MacroCall", "Incoming call UI failed: ${error.javaClass.simpleName}")
+            end(ctx, outcome = "notification_error", failed = true)
+        }
     }
-    fun answer(ctx: Context, id: String, verify: suspend (CallOffer) -> String? = ::ringStatus) {
+    fun answer(ctx: Context, id: String, verify: (suspend (CallOffer) -> String?)? = null) {
         val next = offer ?: return
         if (next.callId != id || room != null || answering) return
+        val attempt = trace?.phase("call.answer")
         answering = true
         scope.launch {
-            // Recheck immediately before answer to close the answered-elsewhere race.
-            val status = verify(next)
-            if (offer !== next) return@launch
-            answering = false
-            if (joinLease?.channelId == next.channelId) return@launch
-            if (room != null || accepted) return@launch
-            when (RingPolicy.decide(next.sentTime, ringTime(), status)) {
-                RingPolicy.Decision.RESOLVE -> { end(ctx, id); return@launch }
-                RingPolicy.Decision.RETRY -> { error = "Could not verify this call. Check your connection and try again."; publish(); return@launch }
-                RingPolicy.Decision.RING -> error = null
-            }
-            if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                if (!beginMicrophonePermission(id)) return@launch
-                runCatching {
-                    ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("answer", id))
-                }.onFailure { finishMicrophonePermission(id) }
-                return@launch
-            }
-            poller?.cancel(); poller = null
-            accepted = true; state = "connecting"
-            pendingAnswered = next.channelId
-            connect(ctx)
-            emit("answered", JSObject().apply { put("channelId", next.channelId); put("nativeMedia", true) })
+            try {
+                // Recheck immediately before answer to close the answered-elsewhere race.
+                val status = if (verify == null) ringStatus(next, attempt?.context) else verify(next)
+                if (offer !== next) return@launch
+                answering = false
+                if (joinLease?.channelId == next.channelId) return@launch
+                if (room != null || accepted) return@launch
+                when (RingPolicy.decide(next.sentTime, ringTime(), status)) {
+                    RingPolicy.Decision.RESOLVE -> { attempt?.end("resolved"); end(ctx, id, outcome = "resolved_before_answer"); return@launch }
+                    RingPolicy.Decision.RETRY -> { attempt?.end("verification_unavailable", failed = true); error = "Could not verify this call. Check your connection and try again."; publish(); return@launch }
+                    RingPolicy.Decision.RING -> error = null
+                }
+                if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    if (!beginMicrophonePermission(id)) return@launch
+                    runCatching {
+                        val intent = Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("answer", id)
+                        trace?.write(intent)
+                        ctx.startActivity(intent)
+                    }.onFailure { attempt?.end("permission_activity_error", failed = true, error = it); finishMicrophonePermission(id) }
+                    attempt?.end("permission_required")
+                    return@launch
+                }
+                poller?.cancel(); poller = null
+                accepted = true; state = "connecting"
+                pendingAnswered = next.channelId
+                attempt?.end("accepted")
+                connect(ctx)
+                emit("answered", JSObject().apply { put("channelId", next.channelId); put("nativeMedia", true) })
+            } catch (error: CancellationException) {
+                attempt?.end("cancelled")
+                throw error
+            } catch (error: Exception) {
+                attempt?.end("answer_error", failed = true, error = error)
+                throw error
+            } finally { attempt?.end("superseded") }
         }
     }
     fun connect(ctx: Context) {
         val next = offer ?: return
         if (room != null) return
         if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) { end(ctx, next.callId); return }
-        val media = LiveKit.create(ctx.applicationContext)
+        val connecting = trace?.phase("call.connect", kind = SpanKind.CLIENT)
+        val media = try { LiveKit.create(ctx.applicationContext) } catch (error: Exception) {
+            connecting?.end("initialization_error", failed = true, error = error)
+            end(ctx, next.callId, outcome = "connection_error", failed = true)
+            return
+        }
         room = media
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            val listener = AudioManager.OnCommunicationDeviceChangedListener {
+                if (room === media) publishAudioOutput(ctx)
+            }
+            communicationDeviceListener = listener
+            audio.addOnCommunicationDeviceChangedListener(ctx.mainExecutor, listener)
+        }
         media.audioSwitchHandler?.loggingEnabled = false
         media.audioSwitchHandler?.registerAudioDeviceChangeListener { devices, selected ->
             scope.launch {
                 if (room !== media) return@launch
-                audioRoute = selected?.javaClass?.simpleName
+                audioRoute = audioType(selected)
                 publish()
-                if (selected?.javaClass?.simpleName != desiredAudioType) {
-                    devices.firstOrNull { it.javaClass.simpleName == desiredAudioType }?.let { media.audioSwitchHandler?.selectDevice(it) }
+                publishAudioOutput(ctx)
+                if (audioRoute != desiredAudioType) {
+                    devices.firstOrNull { audioType(it) == desiredAudioType }?.let { media.audioSwitchHandler?.selectDevice(it) }
                 }
             }
         }
@@ -293,18 +531,22 @@ internal object Calls {
                 media.connect(next.serverUrl, next.token)
                 if (room !== media) return@launch
                 media.localParticipant.setMicrophoneEnabled(!muted && !interrupted())
-                state = "connected"; connection?.setActive(); publish()
+                connecting?.end("connected")
+                trace?.takeIf { it.callId == next.callId }?.finish("connected")
+                state = "connected"; connection?.setActive(); overlay = "expanded"; publish()
                 ctx.startActivity(Intent(ctx, CallActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (_: CancellationException) {
                 // end() already owns teardown.
+                connecting?.end("cancelled")
             } catch (error: Exception) {
+                connecting?.end("connection_error", failed = true, error = error)
                 // Exception messages can contain the signaling URL/token; log types only.
                 android.util.Log.w("MacroCall", "Native media failed: ${error.javaClass.simpleName}; cause=${error.cause?.javaClass?.simpleName}")
                 if (offer === next) {
                     android.widget.Toast.makeText(ctx, "Could not connect the call. Please try again.", android.widget.Toast.LENGTH_LONG).show()
-                    end(ctx, next.callId)
+                    end(ctx, next.callId, outcome = "connection_error", failed = true)
                 }
-            }
+            } finally { connecting?.end("superseded") }
         }
     }
     suspend fun microphone(enabled: Boolean) = audioMutex.withLock {
@@ -331,11 +573,17 @@ internal object Calls {
         media.localParticipant.setCameraEnabled(enabled)
         if (room === media) { video = enabled; CallService.start(ctx, media = true, camera = enabled); publish() }
     }
+    /** Stops capture once no call surface (drawer, PiP or mini-window) is visible. */
+    fun stopCamera(ctx: Context) {
+        val media = room ?: return
+        if (!video) return
+        scope.launch { if (room === media) runCatching { camera(ctx, false, media) } }
+    }
     fun switchCamera() { (room?.localParticipant?.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera() }
     private fun selectAudio(type: String) {
         desiredAudioType = type
         val handler = room?.audioSwitchHandler ?: return
-        handler.availableAudioDevices.firstOrNull { it.javaClass.simpleName == type }?.let { handler.selectDevice(it) }
+        handler.availableAudioDevices.firstOrNull { audioType(it) == type }?.let { handler.selectDevice(it) }
     }
     fun telecomAudio(audio: CallAudioState) {
         scope.launch {
@@ -368,10 +616,11 @@ internal object Calls {
         })
     }
     fun route(route: Int) { (connection as? TelecomService.MacroConnection)?.route(route) }
-    fun end(ctx: Context, id: String? = offer?.callId,
+    fun end(ctx: Context, id: String? = offer?.callId, outcome: String = "ended", failed: Boolean = false,
         disconnectConnection: (Connection) -> Unit = { it.setDisconnected(DisconnectCause(DisconnectCause.LOCAL)) }) {
         val next = offer ?: return
         if (next.callId != id) return
+        trace?.finish(outcome, failed); trace = null
         val preferences = ctx.getSharedPreferences("macro_calls", Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         runCatching {
@@ -388,7 +637,16 @@ internal object Calls {
         session?.cancel(); session = null
         val media = room; room = null
         val telecomConnection = connection; connection = null
-        offer = null; pendingAnswered = null; state = "disconnected"; title = null; recipient = null; displayNames.clear(); error = null; muted = false; video = false; held = false; answering = false; accepted = false; focusLost = false; telecomMuted = false; telecomFocusLost = false; desiredAudioType = null; audioRoute = null; overlay = "hidden"
+        offer = null; pendingAnswered = null; state = "disconnected"; title = null; recipient = null; displayNames.clear(); error = null; muted = false; video = false; held = false; answering = false; accepted = false; focusLost = false; telecomMuted = false; telecomFocusLost = false; desiredAudioType = null; remoteAudioSilenced = false; audioRoute = null; overlay = "hidden"; spotlightId = null
+        if (Build.VERSION.SDK_INT >= 31) {
+            val audio = ctx.getSystemService(AudioManager::class.java)
+            communicationDeviceListener?.let { listener -> runCatching { audio.removeOnCommunicationDeviceChangedListener(listener) } }
+            communicationDeviceListener = null
+            if (selectedCommunicationDevice) {
+                selectedCommunicationDevice = false
+                runCatching { audio.clearCommunicationDevice() }
+            }
+        }
         // Native/SDK callbacks may fail or reenter; no resource owns the cleared session.
         // Release each resource independently so one failure cannot leave a phantom call.
         runCatching { media?.disconnect() }

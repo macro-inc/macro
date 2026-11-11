@@ -1,4 +1,4 @@
-import ShieldCheck from '@phosphor/shield-check.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
 import { Show } from 'solid-js';
 import {
   PermissionOptions,

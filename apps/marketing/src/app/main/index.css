@@ -308,7 +308,7 @@ a:not(.dummy-workspace a, .site-header a, .macro-homepage a){
   content: none;
 }
 
-/* Main conversion links use the white Open app treatment. */
+/* Main conversion links use the white Sign Up treatment. */
 a:is(
   .email-cta-button,
   .agents-cta-button,

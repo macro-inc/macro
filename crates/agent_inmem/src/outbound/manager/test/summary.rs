@@ -111,6 +111,8 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             repo_branch: None,
             id,
@@ -130,6 +132,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
         .await
         .expect("the session row should create");
     let on_model = |acp_session_id| SessionFacts {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         model: MODEL.to_owned(),
         acp_session_id,
         ..facts(id)
@@ -210,7 +213,7 @@ async fn a_restarted_manager_reads_a_summary_in_place_of_the_turns_it_covered() 
     let read: Vec<String> = engine.requests()[0]
         .messages
         .iter()
-        .map(|message| label(message))
+        .map(|message| label(without_invocation_context(message)))
         .collect();
     assert_eq!(
         read,

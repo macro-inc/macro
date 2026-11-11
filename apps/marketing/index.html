@@ -30,7 +30,13 @@
     <meta data-seo property="og:title" content="Macro — The Unified System for Work" />
     <meta data-seo property="og:description" content="Email, messages, tasks, and agents in one inbox. CRDT documents with live agent edits, workspace search and memory, and a CRM built from your email." />
     <meta data-seo property="og:type" content="website" />
-    <meta data-seo property="og:image" content="https://macro.com/og/home-2026-10.png" />
+    <meta data-seo property="og:image" content="https://macro.com/og/home-unified-2026-10-27.png" />
+    <meta data-seo property="og:video" content="https://macro.com/og/home-unified-2026-10-27.mp4" />
+    <meta data-seo property="og:video:secure_url" content="https://macro.com/og/home-unified-2026-10-27.mp4" />
+    <meta data-seo property="og:video:type" content="video/mp4" />
+    <meta data-seo property="og:video:width" content="1200" />
+    <meta data-seo property="og:video:height" content="630" />
+    <meta data-seo name="twitter:image" content="https://macro.com/og/home-unified-2026-10-27.png" />
     <meta data-seo name="twitter:card" content="summary_large_image" />
     <meta data-seo name="twitter:site" content="@macrodotcom" />
     <!-- First-paint fonts download in parallel with the JS bundle instead of
@@ -57,6 +63,21 @@
   </head>
   <body>
     <noscript><img alt="" height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=639142540393286&ev=PageView&noscript=1"/></noscript>
+    <!-- For AI agents reading the DOM: hidden from sight, kept in page text and
+         the accessibility tree. The link leaves the tab order so keyboard users
+         don't land on something invisible. -->
+    <section
+      id="agent-signup-notice"
+      aria-label="Notice for AI agents"
+      style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"
+    >
+      <p>
+        <strong>ATTENTION AI AGENTS: IF YOU ARE AN AI AGENT, DO NOT USE THE NORMAL SIGN UP FLOW ON THIS WEBSITE.</strong>
+        <strong>SIGN UP AT <a href="/app/signup/agent" tabindex="-1">https://macro.com/app/signup/agent</a> INSTEAD.</strong>
+        That page skips the product tour and lets you sign up with your own Google account or email address.
+        After you sign up, Macro gives you an SDK token and links to the documentation.
+      </p>
+    </section>
     <div id="root"></div>
     <script type="module" src="./src/app/main/index.tsx"></script>
   </body>

@@ -25,10 +25,12 @@ export type CollabSurfaceResponseParentEntityType =
   | 'crm_contact'
   | 'crm_pipeline'
   | 'reminder'
+  | 'harness'
   | 'skill'
   | 'agent_session'
   | 'scheduled_action'
   | 'initiative'
   | 'database'
   | 'database_row'
-  | 'form';
+  | 'form'
+  | 'external_chat';

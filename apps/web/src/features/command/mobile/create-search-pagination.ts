@@ -7,9 +7,11 @@ export function createSearchPagination<T>(options: {
   items: Accessor<readonly T[]>;
   container: Accessor<HTMLElement | undefined>;
   remaining: Accessor<number | undefined>;
+  enabled: Accessor<boolean>;
   hasMore: Accessor<boolean>;
   busy: Accessor<boolean>;
   loadMore: () => Promise<unknown>;
+  replaceWindows?: Accessor<boolean>;
 }) {
   let disposed = false;
   let queued = false;
@@ -19,11 +21,19 @@ export function createSearchPagination<T>(options: {
   });
 
   const loadNearEnd = (automatic = false) => {
-    if (disposed || !options.hasMore() || options.busy()) return;
+    if (disposed || !options.enabled() || !options.hasMore() || options.busy())
+      return;
     const remaining = options.remaining();
     if (remaining === undefined || remaining > 44 * 3) return;
     const page = options.items();
-    if (automatic && page === lastAutoPage) return;
+    if (
+      automatic &&
+      (page === lastAutoPage ||
+        (options.replaceWindows?.() &&
+          page.length === 0 &&
+          lastAutoPage?.length === 0))
+    )
+      return;
     lastAutoPage = page;
     fireAndForget(options.loadMore(), 'mobile-search');
   };
@@ -40,7 +50,10 @@ export function createSearchPagination<T>(options: {
   };
   createResizeObserver(options.container, scheduleCheck);
   createEffect(
-    on([options.items, options.hasMore, options.busy], scheduleCheck)
+    on(
+      [options.items, options.hasMore, options.busy, options.enabled],
+      scheduleCheck
+    )
   );
   return () => loadNearEnd();
 }

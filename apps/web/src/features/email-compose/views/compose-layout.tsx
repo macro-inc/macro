@@ -14,7 +14,12 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
-import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { ComposeHotkeyScope } from '../context/compose-hotkey-scope';
+import {
+  registerCcBccHotkeys,
+  revealRecipientField,
+} from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { ComposeBody } from './compose-body';
 import { ComposeRecipients } from './compose-recipients';
 import { ComposeSubject } from './compose-subject';
@@ -27,6 +32,38 @@ type ComposeLayoutRefs = {
   subjectInput: HTMLElement | undefined;
   messageInput: HTMLElement | undefined;
 };
+
+function ComposeSender() {
+  const ctx = useCompose();
+  return (
+    <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+      <span class="w-14 shrink-0 text-sm text-ink-placeholder">From</span>
+      <Show
+        when={ctx.fromInboxes?.().length}
+        fallback={
+          <Show
+            when={ctx.fromAddress?.() || !ctx.inboxesLoading?.()}
+            fallback={
+              <span class="h-6 w-40 rounded-full bg-skeleton skeleton-shimmer" />
+            }
+          >
+            <span class="truncate text-sm">{ctx.fromAddress?.()}</span>
+          </Show>
+        }
+      >
+        <FromInboxSelector
+          pill
+          class="min-w-0"
+          disabled={ctx.disabled()}
+          links={ctx.fromInboxes?.() ?? []}
+          activeInboxId={ctx.selectedInboxId?.()}
+          activeEmail={ctx.fromAddress?.()}
+          onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
+        />
+      </Show>
+    </div>
+  );
+}
 
 /**
  * Pure UI layout for the email compose form.
@@ -93,17 +130,20 @@ export function ComposeLayout(props: {
     shouldReturnFocusOnClose: false,
   });
 
+  const ccField = {
+    reveal: () => setShowCc(true),
+    input: () => refs().ccRecipientsSelector,
+  };
+  const bccField = {
+    reveal: () => setShowBcc(true),
+    input: () => refs().bccRecipientsSelector,
+  };
+
   registerCcBccHotkeys({
     scopeId: composeHotkeyScope,
     disabled: ctx.disabled,
-    cc: {
-      reveal: () => setShowCc(true),
-      input: () => refs().ccRecipientsSelector,
-    },
-    bcc: {
-      reveal: () => setShowBcc(true),
-      input: () => refs().bccRecipientsSelector,
-    },
+    cc: ccField,
+    bcc: bccField,
   });
 
   registerHotkey({
@@ -132,6 +172,14 @@ export function ComposeLayout(props: {
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.message,
     shouldReturnFocusOnClose: false,
+  });
+
+  registerDraftActionHotkeys({
+    scopeId: composeHotkeyScope,
+    disabled: ctx.disabled,
+    discardDisabled: ctx.deleteDisabled,
+    discard: () => ctx.onDelete?.(),
+    attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
   });
 
   registerHotkey({
@@ -182,42 +230,18 @@ export function ComposeLayout(props: {
             when={
               props.header ||
               (!ctx.isMobile() &&
-                (ctx.fromInboxes?.().length || ctx.fromAddress?.()))
+                (ctx.fromInboxes?.().length ||
+                  ctx.fromAddress?.() ||
+                  ctx.inboxesLoading?.()))
             }
           >
             <div
               role="group"
               aria-label="Sending inbox"
+              aria-busy={ctx.inboxesLoading?.() || undefined}
               class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
             >
-              <Show
-                when={props.header}
-                fallback={
-                  <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
-                    <span class="w-14 shrink-0 text-sm text-ink-placeholder">
-                      From
-                    </span>
-                    <Show
-                      when={ctx.fromInboxes?.().length}
-                      fallback={
-                        <span class="truncate text-sm">
-                          {ctx.fromAddress?.()}
-                        </span>
-                      }
-                    >
-                      <FromInboxSelector
-                        pill
-                        class="min-w-0"
-                        disabled={ctx.disabled()}
-                        links={ctx.fromInboxes?.() ?? []}
-                        activeInboxId={ctx.selectedInboxId?.()}
-                        activeEmail={ctx.fromAddress?.()}
-                        onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
-                      />
-                    </Show>
-                  </div>
-                }
-              >
+              <Show when={props.header} fallback={<ComposeSender />}>
                 {props.header}
               </Show>
             </div>
@@ -250,8 +274,9 @@ export function ComposeLayout(props: {
               <div class="flex shrink-0 items-center">
                 <Show when={!isCcVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setShowCc(true)}
+                    onClick={() => revealRecipientField(ccField)}
                     disabled={ctx.disabled()}
                   >
                     Cc
@@ -259,8 +284,9 @@ export function ComposeLayout(props: {
                 </Show>
                 <Show when={!isBccVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
-                    onClick={() => setShowBcc(true)}
+                    onClick={() => revealRecipientField(bccField)}
                     disabled={ctx.disabled()}
                   >
                     Bcc
@@ -283,7 +309,9 @@ export function ComposeLayout(props: {
           mobileScrollRef={() => mobileScrollRef}
           onAddFiles={ctx.onAddAttachments}
         />
-        {props.toolbar}
+        <ComposeHotkeyScope.Provider value={composeHotkeyScope}>
+          {props.toolbar}
+        </ComposeHotkeyScope.Provider>
       </div>
     </Dynamic>
   );

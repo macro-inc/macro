@@ -96,9 +96,9 @@ export function RouteTasks() {
     <ProductPage>
       <div class="tasks-page">
         <ProductHero
-          tutorial="tasks"
           tutorialBackdrop
           cta="tasks_hero_get_started"
+          tutorial="tasks"
           product="Tasks"
           title="Tasks for people and agents."
           description="Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests."

@@ -2,7 +2,8 @@
 
 How an automated agent (driving a real browser via the chrome-devtools MCP server, or
 observing via the Grafana MCP server) should operate the Macro web app. Everything here was
-verified live against a local stack (`just run_local`).
+verified live against a local stack (`just run_local`, which needs no terminal: see
+[Run without a terminal](../development/running-locally.md#run-without-a-terminal)).
 
 | File | Contents |
 | --- | --- |
@@ -12,7 +13,6 @@ verified live against a local stack (`just run_local`).
 | [databases.md](databases.md) | Properties, records, kanban boards, saved views, AI questions, live answers |
 | [forms.md](forms.md) | Forms: create doors, builder (drag and drop, gates), respond route, Responses grid, sharing, polls |
 | [ai-chat.md](ai-chat.md) | Standalone and doc-scoped AI chat |
-| [claude-cloud-demo.md](../runbooks/claude-cloud-demo.md) | Claude in Harness settings, encrypted saved connection, Open in Claude, and cloud-side transcript polling |
 | [channels.md](channels.md) | Channels: create, invite, message, participants, bots |
 | [tasks.md](tasks.md) | Task list and creation dialog |
 | [view-tours.md](view-tours.md) | Desktop feature flyovers, dismissal, targeting, and embedded videos |
@@ -27,8 +27,9 @@ verified live against a local stack (`just run_local`).
 | [pull-requests.md](pull-requests.md) | Pull request review |
 | [activity.md](activity.md) | Activity |
 | [notifications.md](notifications.md) | Notifications |
+| [external.md](external.md) | External tab: linking WhatsApp by QR, adding and sharing external chats, mocking `/whatsapp` and `/external-chats` |
 | [settings.md](settings.md) | Settings sections, including Slack import and team membership |
-| [onboarding.md](onboarding.md) | Onboarding bypass and setup plan |
+| [onboarding.md](onboarding.md) | Onboarding resume links, bypass, and setup plan |
 | [setup-cards.md](setup-cards.md) | Sidebar import and setup cards, the connector import dialog, and permanent dismissal |
 | [canvas.md](canvas.md) | Canvas colors and link paste |
 | [soup-live-updates.md](soup-live-updates.md) | Live updates in flat Soup lists |
@@ -103,3 +104,7 @@ Projects are part of Tasks: `/projects` and the former Projects guide redirect t
 Main benefits starts with Replace 27+ apps (`/replace-apps`), followed by Company graph, AI tagging, Automatic permissions, Workspace events, and Unified search. The replacement page reuses the pricing savings calculator below a compact wall of app logos; check seat changes, tool toggles, and plan selection on desktop and mobile. The other benefit routes render centered feature-style overviews and annotated graphics on black with faint localized glow, without colored poster frames. Check all five on desktop and mobile, and confirm playing a demo replaces the diagram with a visible video. The original MDX remains available under Setup and reference. Verify the overview, expand the guide, and test a legacy heading fragment. Existing guide URLs remain valid; the event overview is at `/docs/concepts/event-system` and links to the routine trigger reference.
 
 On `/pricing`, verify Free ($0), Pro ($40), and Max ($200) prices, signup links, the expandable plan comparison, and shared FAQ keyboard toggles. Test calculator seats and tool selection on desktop and mobile. The customer story uses a native video with an accessible play button.
+
+Agent API hosting: chat, routines, preview control, and public MCP share the
+agent harness service; browser gateway paths remain unchanged. See the
+[service consolidation guide](../guides/consolidate-agent-services.md).

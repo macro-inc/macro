@@ -42,6 +42,12 @@ Keep PR bodies concise and write them yourself. A few sentences covering what
 changed and why, a link to the issue, and anything a reviewer needs to know.
 No generated boilerplate, no exhaustive file-by-file change lists.
 
+Describe the code change only. Leave out names of people and customers,
+contact details, @mentions, and references to support channels, tickets, or
+conversations; state the reason in general terms. The `PR Privacy Check`
+workflow fails PRs whose title, body, or commits contain contact details,
+mentions, or support links; run `just pr-privacy` to check before pushing.
+
 ## Development setup
 
 You do not need the local stack if you only change the frontend.

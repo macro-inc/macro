@@ -1,7 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';
@@ -170,11 +171,29 @@ export function SentEmailResponse(props: {
           initialData={props.args}
           messageId={props.messageId}
           toolCallId={props.toolCallId}
-          readOnly
           header={<div class="text-xs text-ink-extra-muted/60">Email sent</div>}
         />
       </div>
     </details>
+  );
+}
+
+/** A send with no result: still in flight, or failed. */
+export function SendEmailCall(props: {
+  args: SendEmail;
+  renderContext: Parameters<typeof BaseTool>[0]['renderContext'];
+}) {
+  return (
+    <BaseTool
+      icon={PaperPlaneTilt}
+      renderContext={props.renderContext}
+      type="call"
+    >
+      <span class="min-w-0 truncate">
+        Send email to{' '}
+        <span class="text-ink">{getRecipientsLabel(props.args)}</span>
+      </span>
+    </BaseTool>
   );
 }
 
@@ -229,14 +248,10 @@ const handler = createToolRenderer({
               initialData={ctx.tool.data}
               messageId={ctx.message_id}
               toolCallId={ctx.tool.id}
-              streamLocked={ctx.renderContext.isStreaming}
               header={
-                ctx.renderContext.isStreaming ? (
-                  <div class="text-xs text-ink-extra-muted/60">
-                    Waiting for the response to finish before this email can be
-                    edited.
-                  </div>
-                ) : undefined
+                <div class="text-xs text-ink-extra-muted/60">
+                  Email not sent
+                </div>
               }
             />
           </Match>

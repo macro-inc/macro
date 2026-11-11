@@ -25,6 +25,42 @@ pub struct Prepared {
 fn fail(code: Code, path: &str, message: &str) -> AuthoringError {
     AuthoringError::new(code, path, message)
 }
+/// What a set of rules decides, which names its refusals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RulesOf {
+    /// A gate's rules: who may continue.
+    Gate,
+    /// A questions section's show-when rules: whether it is shown.
+    ShowWhen,
+}
+impl RulesOf {
+    fn path(self) -> &'static str {
+        match self {
+            RulesOf::Gate => "rules",
+            RulesOf::ShowWhen => "showWhen",
+        }
+    }
+    fn later_question(self) -> AuthoringError {
+        match self {
+            RulesOf::Gate => fail(
+                Code::GateReferencesLaterQuestion,
+                "rules",
+                "Gates may only reference questions in earlier sections.",
+            ),
+            RulesOf::ShowWhen => fail(
+                Code::ShowWhenReferencesLaterQuestion,
+                "showWhen",
+                "showWhen may only reference questions in earlier sections, not its own.",
+            ),
+        }
+    }
+    fn invalid_rule(self, reason: String) -> AuthoringError {
+        match self {
+            RulesOf::Gate => AuthoringError::new(Code::InvalidGateRule, "rules", reason),
+            RulesOf::ShowWhen => AuthoringError::new(Code::InvalidShowWhenRule, "showWhen", reason),
+        }
+    }
+}
 /// Validate bounded text using the same character units as Forms.
 pub fn text(value: &str, max: usize, path: &str) -> Result<(), AuthoringError> {
     if value.chars().count() > max {
@@ -94,7 +130,32 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
         let id = FormSectionId::new();
         result.keys.sections.insert(section_key.clone(), id);
         let resolved = match section {
-            Section::Questions { questions, .. } => {
+            Section::Questions {
+                questions,
+                show_when,
+                ..
+            } => {
+                let show_when = show_when
+                    .as_ref()
+                    .map(|rules| {
+                        let rules = resolve_rules(
+                            rules,
+                            &earlier,
+                            0,
+                            &mut condition_count,
+                            RulesOf::ShowWhen,
+                        )?;
+                        check_rules(
+                            &rules,
+                            &earlier
+                                .values()
+                                .map(|(_, c, _)| c.clone())
+                                .collect::<Vec<_>>(),
+                            RulesOf::ShowWhen,
+                        )?;
+                        Ok::<_, AuthoringError>(rules)
+                    })
+                    .transpose()?;
                 let mut placements = vec![];
                 for question in questions {
                     key(
@@ -250,17 +311,19 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
                     title: title.clone(),
                     description: description.clone(),
                     questions: placements,
+                    show_when,
                 }
             }
             Section::Gate { rules, message, .. } => {
                 text(message, 10_000, section_key)?;
-                let rules = resolve_rules(rules, &earlier, 0, &mut condition_count)?;
+                let rules = resolve_rules(rules, &earlier, 0, &mut condition_count, RulesOf::Gate)?;
                 check_rules(
                     &rules,
                     &earlier
                         .values()
                         .map(|(_, c, _)| c.clone())
                         .collect::<Vec<_>>(),
+                    RulesOf::Gate,
                 )?;
                 FormSection::Gate {
                     id,
@@ -307,18 +370,26 @@ fn resolve_rules(
     earlier: &References,
     depth: usize,
     count: &mut usize,
+    of: RulesOf,
 ) -> Result<FilterGroup, AuthoringError> {
     if rules.conditions.is_empty() {
         return Err(fail(
             Code::EmptyScreeningGroup,
-            "rules",
-            "Add a condition or remove the screener; an empty group qualifies everyone.",
+            of.path(),
+            match of {
+                RulesOf::Gate => {
+                    "Add a condition or remove the gate; an empty group qualifies everyone."
+                }
+                RulesOf::ShowWhen => {
+                    "Add a condition or omit showWhen; an empty group always shows the section."
+                }
+            },
         ));
     }
     if depth >= 8 {
         return Err(fail(
             Code::ScreeningTooDeep,
-            "rules",
+            of.path(),
             "Use at most eight levels.",
         ));
     }
@@ -327,14 +398,14 @@ fn resolve_rules(
         .iter()
         .map(|rule| match rule {
             Rule::Group(group) => {
-                resolve_rules(group, earlier, depth + 1, count).map(FilterNode::Group)
+                resolve_rules(group, earlier, depth + 1, count, of).map(FilterNode::Group)
             }
             Rule::Condition { question, test } => {
                 *count += 1;
                 if *count > 200 {
                     return Err(fail(
                         Code::TooManyConditions,
-                        "rules",
+                        of.path(),
                         "Use at most 200 conditions.",
                     ));
                 }
@@ -344,13 +415,7 @@ fn resolve_rules(
                         earlier.values().find(|(question, _, _)| question == id)
                     }
                 }
-                .ok_or_else(|| {
-                    fail(
-                        Code::GateReferencesLaterQuestion,
-                        "rules.question",
-                        "Reference a question in an earlier section.",
-                    )
-                })?;
+                .ok_or_else(|| of.later_question())?;
                 let (_, column, options_by_key) = found;
                 let test = match test {
                     Predicate::Value { test } => test.clone(),
@@ -363,7 +428,7 @@ fn resolve_rules(
                                     options_by_key.get(key).copied().ok_or_else(|| {
                                         fail(
                                             Code::UnknownOption,
-                                            "rules.options",
+                                            of.path(),
                                             "Use an option key declared on this question.",
                                         )
                                     })
@@ -386,7 +451,7 @@ fn resolve_rules(
     })
 }
 /// Validate canonical rules against the current schema, including option membership.
-pub fn check_rules(rules: &FilterGroup, columns: &[Column]) -> Result<(), AuthoringError> {
+fn check_rules(rules: &FilterGroup, columns: &[Column], of: RulesOf) -> Result<(), AuthoringError> {
     let schema = columns
         .iter()
         .map(|c| {
@@ -412,7 +477,7 @@ pub fn check_rules(rules: &FilterGroup, columns: &[Column]) -> Result<(), Author
         &ViewLayout::Table { columns: vec![] },
         &schema,
     )
-    .map_err(|e| AuthoringError::new(Code::InvalidGateRule, "rules", e.to_string()))
+    .map_err(|e| of.invalid_rule(e.to_string()))
 }
 
 fn finite_number(label: &str) -> Option<f64> {
@@ -466,8 +531,15 @@ pub fn canonical_preserving(
             .sections
             .iter()
             .map(|section| match section {
-                FormSection::Gate { rules, .. } => rules.conditions().len(),
-                _ => 0,
+                FormSection::Gate { rules, .. }
+                | FormSection::Questions {
+                    show_when: Some(rules),
+                    ..
+                } => rules.conditions().len(),
+                FormSection::Questions {
+                    show_when: None, ..
+                }
+                | FormSection::Booking { .. } => 0,
             })
             .sum()
     };
@@ -495,10 +567,20 @@ pub fn canonical_preserving(
                 title,
                 description,
                 questions,
+                show_when,
                 ..
             } => {
                 text(title, 200, "section.title")?;
                 text(description, 10_000, "section.description")?;
+                if let Some(rules) = show_when {
+                    let unchanged = previous.is_some_and(|layout| {
+                        layout.sections.iter().any(|old| {
+                            matches!(old, FormSection::Questions { id, show_when: Some(previous_rules), .. }
+                                if *id == section.id() && previous_rules == rules)
+                        })
+                    });
+                    rules_fit(rules, unchanged, &asked, columns, RulesOf::ShowWhen)?;
+                }
                 for q in questions {
                     count += 1;
                     if count > 500 && count > previous_questions.len() {
@@ -568,22 +650,7 @@ pub fn canonical_preserving(
                 text(message, 10_000, "gate.message")?;
                 let unchanged_rules = previous.is_some_and(|layout| layout.sections.iter().any(|old| matches!(old,
                     FormSection::Gate { id, rules: previous_rules, .. } if *id == section.id() && previous_rules == rules)));
-                if !unchanged_rules {
-                    let mut conditions = 0;
-                    nonempty(rules, 0, &mut conditions)?;
-                }
-                if rules
-                    .conditions()
-                    .iter()
-                    .any(|c| !asked.contains(&c.column))
-                {
-                    return Err(fail(
-                        Code::GateReferencesLaterQuestion,
-                        "rules",
-                        "Screeners may only reference questions in earlier sections.",
-                    ));
-                }
-                check_rules(rules, columns)?;
+                rules_fit(rules, unchanged_rules, &asked, columns, RulesOf::Gate)?;
             }
             FormSection::Booking {
                 title, description, ..
@@ -602,31 +669,60 @@ pub fn canonical_preserving(
     }
     Ok(())
 }
-fn nonempty(rules: &FilterGroup, depth: usize, count: &mut usize) -> Result<(), AuthoringError> {
+/// Check canonical rules over the columns `asked` before their section:
+/// authored rules must be nonempty and bounded (rules an editor left
+/// `unchanged` keep whatever shape they have), and every rule names an
+/// earlier question and fits its column.
+fn rules_fit(
+    rules: &FilterGroup,
+    unchanged: bool,
+    asked: &HashSet<ColumnId>,
+    columns: &[Column],
+    of: RulesOf,
+) -> Result<(), AuthoringError> {
+    if !unchanged {
+        let mut conditions = 0;
+        nonempty(rules, 0, &mut conditions, of)?;
+    }
+    if rules
+        .conditions()
+        .iter()
+        .any(|c| !asked.contains(&c.column))
+    {
+        return Err(of.later_question());
+    }
+    check_rules(rules, columns, of)
+}
+fn nonempty(
+    rules: &FilterGroup,
+    depth: usize,
+    count: &mut usize,
+    of: RulesOf,
+) -> Result<(), AuthoringError> {
     if rules.conditions.is_empty() {
         return Err(fail(
             Code::EmptyScreeningGroup,
-            "rules",
+            of.path(),
             "Remove the empty group or add a condition.",
         ));
     }
     if depth >= 8 {
         return Err(fail(
             Code::ScreeningTooDeep,
-            "rules",
+            of.path(),
             "Use at most eight levels.",
         ));
     }
     for node in &rules.conditions {
         match node {
-            FilterNode::Group(g) => nonempty(g, depth + 1, count)?,
+            FilterNode::Group(g) => nonempty(g, depth + 1, count, of)?,
             FilterNode::Condition(_) => *count += 1,
         }
     }
     if *count > 200 {
         return Err(fail(
             Code::TooManyConditions,
-            "rules",
+            of.path(),
             "Use at most 200 conditions.",
         ));
     }
@@ -674,6 +770,7 @@ pub fn additions(
                     widget: None,
                 })
                 .collect(),
+            show_when: None,
         }],
     };
     let prepared = prepare(&draft, existing)?;

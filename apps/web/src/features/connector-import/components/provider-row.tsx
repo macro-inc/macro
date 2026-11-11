@@ -1,5 +1,5 @@
-import CheckCircleIcon from '@phosphor/check-circle.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -9,7 +9,7 @@ export type ProviderRowState =
   /** Connections are still loading; no action is offered yet. */
   'unknown' | 'disconnected' | 'connecting' | 'connected';
 
-/** One app in the import dialog: connect it, then import from it. */
+/** One app in the import dialog: connect it, then import with the agent. */
 export function ProviderRow(props: {
   provider: ImportProvider;
   state: ProviderRowState;
@@ -18,7 +18,6 @@ export function ProviderRow(props: {
   onConnect(): void;
   onImport(): void;
 }) {
-  const native = () => props.provider.native !== undefined;
   return (
     <li class="flex items-center gap-3 py-2.5">
       <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-dialog">
@@ -33,6 +32,7 @@ export function ProviderRow(props: {
           {props.provider.name}
           <Show when={props.state === 'connected'}>
             <CheckCircleIcon
+              aria-hidden={false}
               class="size-3.5 text-success"
               aria-label="Connected"
             />
@@ -40,14 +40,13 @@ export function ProviderRow(props: {
         </span>
         <span class="block truncate text-xs text-ink-muted">
           {props.provider.detail}
-          {native() ? '' : ' · with the agent'}
         </span>
       </span>
       <Show
         when={props.state === 'connected'}
         fallback={
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={
               props.disabled ||
@@ -62,15 +61,16 @@ export function ProviderRow(props: {
         }
       >
         <Button
-          variant="strong"
+          variant="primary"
           size="sm"
           disabled={props.disabled}
           aria-label={`Import from ${props.provider.name}`}
           onClick={() => props.onImport()}
         >
-          <Show when={!native()}>
-            <SparkleIcon aria-hidden="true" />
-          </Show>
+          <SparkleIcon
+            class="size-3 touch:size-6 shrink-0 pointer-events-none"
+            aria-hidden="true"
+          />
           Import
         </Button>
       </Show>

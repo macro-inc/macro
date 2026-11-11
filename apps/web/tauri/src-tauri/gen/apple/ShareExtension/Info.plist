@@ -17,9 +17,9 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.10</string>
+	<string>CFBundleShortVersionString</string>
 	<key>CFBundleVersion</key>
-	<string>189</string>
+	<string>CFBundleVersion</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>macro</string>

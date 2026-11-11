@@ -50,12 +50,20 @@ export function markdownToSerializedEditorState(
   ) as SerializedEditorState;
 }
 
+/** A new document's snapshot holding `state`, seeded from the golden base. */
+export function serializedEditorStateToLoroSnapshot(
+  state: SerializedEditorState
+): Promise<Uint8Array | undefined> {
+  return rawMarkdownStateToLoroSnapshot(state as any, MARKDOWN_GOLDEN);
+}
+
 export async function markdownToLoroSnapshot(
   markdown: string
 ): Promise<Uint8Array | undefined> {
   // Blank markdown is exactly the golden — return it verbatim so all empty docs
   // share identical bytes and skip the mirror round-trip.
   if (markdown === '') return MARKDOWN_GOLDEN;
-  const state = markdownToSerializedEditorState(markdown);
-  return rawMarkdownStateToLoroSnapshot(state as any, MARKDOWN_GOLDEN);
+  return serializedEditorStateToLoroSnapshot(
+    markdownToSerializedEditorState(markdown)
+  );
 }

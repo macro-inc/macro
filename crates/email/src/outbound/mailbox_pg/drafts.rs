@@ -196,10 +196,14 @@ impl DraftRepository for PgMailboxSync {
     }
 
     async fn release_draft(&self, lease: &DraftLease, seconds: u32) -> Result<(), MailboxError> {
+        // A discard that arrived during this lease restarts from inspection,
+        // which deletes whichever version Outlook holds; this step's
+        // checkpoint can expect a version a lost response never confirmed.
         let changed = sqlx::query!(r#"
-            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision)
+            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision),
+                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END
             WHERE message_id = $1 AND lease_id = $2 AND lease_until > now() AND state = 'running'
-        "#,lease.message_id,lease.lease_id,f64::from(seconds)).execute(&self.db).await.map_err(db_error)?.rows_affected();
+        "#,lease.message_id,lease.lease_id,f64::from(seconds),lease.delete_requested).execute(&self.db).await.map_err(db_error)?.rows_affected();
         if changed != 1 {
             return Err(MailboxError::Stale);
         }
@@ -213,7 +217,16 @@ impl DraftRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
-        sqlx::query!("UPDATE email_mailbox_drafts SET state = $2,error_code = $3,lease_id = NULL,lease_until = NULL,updated_at = now() WHERE message_id = $1",lease.message_id,failure.state(),failure.code()).execute(&mut *tx).await.map_err(db_error)?;
+        // A discard that arrived during this lease runs next instead, as it
+        // would have after the failure (see `delete_draft_message`).
+        sqlx::query!(r#"
+            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,updated_at = now(),
+                state = CASE WHEN delete_requested AND NOT $4 THEN 'pending' ELSE $2 END,
+                error_code = CASE WHEN delete_requested AND NOT $4 THEN NULL ELSE $3 END,
+                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END,
+                available_at = CASE WHEN delete_requested AND NOT $4 THEN now() ELSE available_at END
+            WHERE message_id = $1
+        "#,lease.message_id,failure.state(),failure.code(),lease.delete_requested).execute(&mut *tx).await.map_err(db_error)?;
         if matches!(failure, DraftFailure::Invalid) {
             // A deterministic save rejection never submitted the message. Let
             // the user correct it without leaving a committed schedule behind.
@@ -319,12 +332,13 @@ impl DraftRepository for PgMailboxSync {
         let message = sqlx::query!(r#"
             UPDATE email_messages SET is_draft = false,is_sent = true,
                 mailbox_state = (COALESCE(mailbox_state,'{}'::jsonb) - 'provider_missing') || '{"is_draft":false}'::jsonb,
-                sent_at = now(),updated_at = now()
+                sent_at = now(),internal_date_ts = now(),updated_at = now()
             WHERE id = $1 RETURNING thread_id
         "#,lease.message_id).fetch_one(&mut *tx).await.map_err(db_error)?;
         sqlx::query!("UPDATE email_scheduled_messages SET sent = true,processing = false,updated_at = now() WHERE message_id = $1 AND link_id = $2",lease.message_id,lease.mailbox.link_id).execute(&mut *tx).await.map_err(db_error)?;
         sqlx::query!("UPDATE email_mailbox_drafts SET state = 'sent',base_version = $2,error_code = NULL,lease_id = NULL,lease_until = NULL,updated_at = now() WHERE message_id = $1",lease.message_id,draft.version).execute(&mut *tx).await.map_err(db_error)?;
-        let payload = serde_json::json!({"kind":"message","message_id":lease.message_id,"thread_id":message.thread_id,"provider_id":draft.id.as_str(),"is_import":false,"is_new":false,"is_new_thread":false,"was_draft":true,"is_draft":false,"is_sent":true,"version":draft.version,"calendar_parts":[],"actor":checkpoint.submission_started.then_some(&checkpoint.actor_id)});
+        let correlation = sqlx::query_scalar!("SELECT agent_correlation_id FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2", lease.message_id, lease.mailbox.link_id).fetch_optional(&mut *tx).await.map_err(db_error)?.flatten();
+        let payload = serde_json::json!({"kind":"message","message_id":lease.message_id,"thread_id":message.thread_id,"provider_id":draft.id.as_str(),"is_import":false,"is_new":false,"is_new_thread":false,"was_draft":true,"is_draft":false,"is_sent":true,"version":draft.version,"calendar_parts":[],"actor":checkpoint.submission_started.then_some(&checkpoint.actor_id),"agent_correlation_id":correlation});
         let dedupe = format!("send/{}/{}", lease.mailbox.link_id, lease.message_id);
         sqlx::query!("INSERT INTO email_projection_outbox (id,link_id,generation,payload,dedupe_key) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (dedupe_key) DO NOTHING",macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,payload,dedupe).execute(&mut *tx).await.map_err(db_error)?;
         // Reconcile attachments and the provider's authoritative sent timestamp.

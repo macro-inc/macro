@@ -1,13 +1,16 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
-import Bell from '@phosphor/bell.svg';
+import Bell from '@icon/system/regular/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '../notification-settings';
+import { notificationsBlockedMessage } from '../notifications-blocked-message';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -38,9 +41,8 @@ function NotificationToastTrigger(props: {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: isPlatform('desktop')
-          ? 'Enable Desktop Notifications'
-          : 'Enable Browser Notifications',
+        title: 'Enable notifications',
+        dismissLabel: t('common.notNow'),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -50,17 +52,13 @@ function NotificationToastTrigger(props: {
         ),
         actions: [
           {
-            label: 'Hide',
-            onClick: () => {
-              props.settings.dismissPrompt();
-              toast.dismiss(toastId);
-            },
-          },
-          {
             label: 'Enable',
             onClick: async () => {
               try {
                 await props.settings.toggle(true);
+                if (!props.settings.isEnabled()) {
+                  toast.failure(notificationsBlockedMessage());
+                }
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }
@@ -69,7 +67,12 @@ function NotificationToastTrigger(props: {
           },
         ],
       },
-      { persistent: true }
+      {
+        persistent: true,
+        region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+        // Closing the prompt is a decline, so don't ask again on the next load.
+        onUserDismiss: () => props.settings.dismissPrompt(),
+      }
     );
   });
 

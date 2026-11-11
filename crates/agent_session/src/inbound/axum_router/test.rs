@@ -98,13 +98,20 @@ const TEAM_ID: Uuid = Uuid::from_u128(0x7EA3);
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
-        Ok(ValidatedIdentity {
-            agent_id: None,
-            user_id: jwt.to_string(),
-            fusion_user_id: "fusion-user".to_string(),
-            organization_id: None,
-            permissions: None,
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        Ok(macro_authorization::ValidatedCredential {
+            origin: macro_authorization::CredentialOrigin::Session,
+            identity: ValidatedIdentity {
+                agent_id: None,
+                agent_via: None,
+                user_id: jwt.to_string(),
+                fusion_user_id: "fusion-user".to_string(),
+                organization_id: None,
+                permissions: None,
+            },
         })
     }
 }
@@ -128,7 +135,9 @@ impl BotAuthorizer for SelfBotAuthorizer {
                 let macro_user_id = MacroUserIdStr::try_from(user_id.clone())
                     .map_err(|_| Report::new(MacroAuthorizationError::ActingUserNotAuthorized))?;
                 Some(MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
+                    agent_via: None,
                     macro_user_id,
                     user_context: model_user::UserContext {
                         user_id,
@@ -175,7 +184,9 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
                 user_id: user_id.clone(),
             },
             acting_user: MacroUserAuthentication {
+                origin: macro_authorization::CredentialOrigin::Harness,
                 agent_id: None,
+                agent_via: None,
                 macro_user_id,
                 user_context: model_user::UserContext {
                     user_id,
@@ -210,12 +221,13 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         session_owner_user(&request.owner)?;
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
             thread_parent: request.thread.as_ref().map(|thread| thread.parent.clone()),
@@ -233,6 +245,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.opened.lock().unwrap().push(request);
         Ok(session)
@@ -248,12 +262,13 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: request.owner.clone(),
             thread_id: None,
             thread_parent: None,
@@ -271,6 +286,8 @@ impl SessionOpener for RecordingOpener {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.managed.lock().unwrap().push(request);
         Ok(session)
@@ -432,7 +449,7 @@ impl BotDirectory for OneBotDirectory {
 
 /// What a requester says when no runtime creates the session.
 const RUNTIME_UNAVAILABLE_REASON: &str =
-    "this agent's runtime did not open the session; make sure macrod is running and up to date";
+    "this agent's machine did not open the session; make sure macrod is running and up to date";
 
 /// Stands in for the bot's runtime: records what was asked and answers with
 /// a session under the requested id, as macrod would have created it.
@@ -465,12 +482,13 @@ impl ExternalSessionRequester for RecordingRequester {
             ));
         }
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
-            is_archived: false,
+            archived: None,
             owner_id: Owner::User(request.owner.clone()),
             thread_id: None,
             thread_parent: None,
@@ -491,6 +509,8 @@ impl ExternalSessionRequester for RecordingRequester {
             status: SessionStatus::NoMessages,
             created_at: Utc::now(),
             modified_at: Utc::now(),
+            source: crate::domain::model::SessionSource::User,
+            visibility: crate::domain::model::SessionVisibility::Listed,
         };
         self.requested.lock().unwrap().push(request);
         Ok(session)
@@ -1070,6 +1090,58 @@ async fn a_managed_open_carries_its_instructions() {
     );
 }
 
+/// The first prompt keeps the id the caller already shows it under and the
+/// files attached to it, so creating and prompting take one round trip.
+#[tokio::test]
+async fn a_managed_open_carries_its_first_prompts_id_and_attachments() {
+    let action_id = AgentActionId::mint();
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "prompt": "summarize this",
+            "promptActionId": action_id,
+            "promptAttachments": [{ "uri": "macro://sfs/report.pdf", "name": "report.pdf" }],
+        })
+        .to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let [open] = managed.as_slice() else {
+        panic!("expected one managed open, got {managed:?}");
+    };
+    let prompt = open.prompt.as_ref().expect("the first prompt is carried");
+    assert_eq!(prompt.action_id, Some(action_id));
+    assert_eq!(prompt.prompt, "summarize this");
+    assert_eq!(
+        prompt
+            .attachments
+            .iter()
+            .map(|attachment| attachment.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["report.pdf"]
+    );
+}
+
+/// A prompt's id or files mean nothing without the prompt, and dropping them
+/// would leave the caller showing a prompt nobody sent.
+#[tokio::test]
+async fn a_first_prompts_details_without_a_prompt_are_refused() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "promptActionId": AgentActionId::mint() }).to_string(),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
 #[tokio::test]
 async fn an_owner_can_select_a_managed_persona() {
     let opener = Arc::new(RecordingOpener::default());
@@ -1250,6 +1322,23 @@ async fn a_stranger_cannot_start_someone_elses_macrod_agent() {
 }
 
 #[tokio::test]
+async fn an_unknown_managed_persona_is_a_404() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_B.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_stranger_cannot_select_someone_elses_managed_persona() {
     let opener = Arc::new(RecordingOpener::default());
     let request = as_user(
@@ -1333,6 +1422,8 @@ async fn an_external_open_carries_its_instructions() {
 mod coding_preferences;
 mod owned_purge;
 mod read;
+mod task;
+mod updates;
 mod user_cleanup;
 
 /// The client speculates under an id it mints and sends it alongside the
@@ -1370,6 +1461,7 @@ fn an_unnamed_control_request_omits_the_field() {
         action_id: None,
         action: AgentAction::Stop,
         context: None,
+        client_id: None,
     })
     .expect("a control request serializes");
 
@@ -1463,3 +1555,85 @@ async fn macrod_rejects_an_unsupported_base_before_dispatch() {
 }
 
 mod tool_actions;
+
+#[tokio::test]
+async fn internal_notifications_use_the_session_mount_once() {
+    use crate::inbound::notifications::{NotificationRouterState, notification_router};
+    let authorization = MacroAuthorizationState::new(Arc::new(MacroAuthorizationServiceImpl::new(
+        FakeJwtValidator,
+        InternalAuthConfig {
+            api_key: "test-internal-key".into(),
+            default_user_id: None,
+        },
+        SelfBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    )));
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://user:password@localhost/macrodb")
+        .unwrap();
+    let service = Arc::new(crate::domain::notifications::NotificationService(Arc::new(
+        crate::outbound::notifications::PgNotificationStore(pool),
+    )));
+    let app = Router::new().nest(
+        "/agent-sessions",
+        notification_router(NotificationRouterState {
+            authorization,
+            service,
+        }),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agent-sessions/internal/notifications")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// An agent's program using a person's credential is a `Program`, which may
+/// not name an app tab; the app itself, on a session or a bearer token, is the
+/// `User`.
+#[test]
+fn an_agents_program_is_not_a_user_principal() {
+    use crate::domain::control::ControlPrincipal;
+    use macro_authorization::{CODE_EXECUTION_HEADER, CredentialOrigin};
+
+    let user = |origin: CredentialOrigin, agent: bool| {
+        UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+            origin,
+            agent_id: agent.then_some(BotId::TEST_A),
+            agent_via: None,
+            macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            user_context: model_user::UserContext {
+                user_id: "macro|owner@example.com".to_owned(),
+                fusion_user_id: "fusion-owner".to_owned(),
+                permissions: None,
+                organization_id: None,
+            },
+        })
+    };
+    let plain = axum::http::HeaderMap::new();
+    let mut program = axum::http::HeaderMap::new();
+    program.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+
+    for origin in [CredentialOrigin::Session, CredentialOrigin::MacroApiJwt] {
+        assert!(matches!(
+            control_principal(&user(origin, false), &plain),
+            ControlPrincipal::User
+        ));
+    }
+    for (caller, headers) in [
+        (user(CredentialOrigin::Session, false), &program),
+        (user(CredentialOrigin::MacroApiJwt, false), &program),
+        (user(CredentialOrigin::MacroApiJwt, true), &plain),
+    ] {
+        assert!(matches!(
+            control_principal(&caller, headers),
+            ControlPrincipal::Program
+        ));
+    }
+}

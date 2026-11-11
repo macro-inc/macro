@@ -11,6 +11,9 @@ on stock OpenSSH reverse forwarding.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: lease/authorization
   policy, independent of HTTP and SSH.
+- `src/domain/storage.rs` + `src/outbound/postgres.rs`: shared metadata,
+  credential hashes and fenced SSH ownership; live transports stay local.
+- `src/inbound/peer.rs`: one-hop streaming HTTP/WebSocket forwarding.
 - `src/inbound/ssh.rs`: accepts the sandbox's reverse SSH tunnel.
 - `src/inbound/http.rs`: serves the proxied preview to viewers.
 - `src/outbound/ssh_tunnel.rs`: the SSH transport implementation.
@@ -25,7 +28,7 @@ on stock OpenSSH reverse forwarding.
 ## Boundaries
 
 - Depends on: `agent_egress` (shares the sandbox's egress credential path).
-- Used by: `preview_gateway` (its sole host).
+- Used by: `agent_harness_service` (its sole host).
 
 ## Recipes
 
@@ -38,8 +41,13 @@ on stock OpenSSH reverse forwarding.
 
 ## Gotchas
 
-- Vite's module fan-out must be queued, not refused as `text/plain`, or HMR
-  breaks silently (see git history on `src/inbound/http.rs`).
+- Every host must heartbeat its private HTTP endpoint every 10 seconds; expired
+  owners are offline after 45 seconds. Preview IDs fence replacement/cleanup.
+- Public peers must be mutually reachable; destinations come only from the
+  shared replica registry. A hop marker only prevents loops and never grants auth.
+- Queue owner-side per-preview HTTP streams for Vite module fan-out (see
+  `src/inbound/http.rs`); replica-wide unauthenticated forwarding admission
+  rejects overload before dialing to bound waiting requests and sockets.
 
 ## Related
 

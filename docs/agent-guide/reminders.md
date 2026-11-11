@@ -8,10 +8,22 @@ recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
 
 On one selected email or an open conversation, press **H**, choose **Remind me**
 in its menu, or activate its bell. The shared command menu's input placeholder
-reads `Remind me: <subject>`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
-**Next week**. Type a future time such as `in 2 hours` or `tomorrow 9am` in
-**Remind me when**. Up/Down changes the selection; Enter or clicking a choice
-saves immediately. **Cancel** (footer, bottom left) or Escape closes without
+reads `Type a time, like tomorrow 9am`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
+**Next week**. Type a future time such as `in 2 hours`, `tomorrow 9am` or
+`next friday at 3` in **Remind me when**.
+Up/Down changes the selection; Enter or clicking a choice saves immediately.
+
+Typed text is read by the `natural_time` crate in the browser, at the browser's
+local time; a date without a time is at 9 AM. The typed time is the first
+choice, labeled with the text as typed and showing its exact date and time.
+Matching presets follow it, without repeating its time. Guessed parts are noted
+after the time: `PM assumed` or `AM assumed`, `year assumed`, `default time`.
+When am or pm is guessed (`tmrw at 3`), the guess is first and the other half
+of the day (3 AM) is the second choice. A phrase it can't read, a time that has
+passed, a repeating phrase (`every friday`) or a time daylight saving skips
+offers no choice of its own. When no preset matches either, the list says why,
+and Enter does nothing. A repeated fall-back hour takes its earlier time, and
+the time shows its zone. **Cancel** (footer, bottom left) or Escape closes without
 saving. The **If no reply** / **Regardless** toggle sits in the footer's bottom
 right. There is no
 separate title, note, or recurrence step.
@@ -63,8 +75,9 @@ Archived conversations remain here while snoozed. Each row has one clock; click,
 tap, or keyboard-activate it to reopen that conversation's reminder menu.
 Opening the row itself opens the email.
 
-Inbox, Read, Done, Calendar, Tags, and attachment filters apply to the original
-conversation before pagination. Text search is unavailable in this view.
+Inbox, Read status, Done, Has (calendar invite), Attachments, and Tags filters
+apply to the original conversation before pagination. Text search is
+unavailable in this view.
 Back/forward and reload retain the Email tab and inbox scope. Other Email and
 Soup views do not make reminder collection requests.
 

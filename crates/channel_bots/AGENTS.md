@@ -46,6 +46,9 @@ decides whether to trigger, authorizes, and delivers a reply.
 
 - Implicit (non-mention) triggers go through the fast-model classifier, not the
   main agent model — keep that path cheap; it runs on every message.
+- Attributed bot messages trigger like human ones (mention or inferred), never
+  Macro AI's own; `messages::domain::agent_hops::MAX_AGENT_HOPS` is checked
+  first, before any classifier call. Unattributed bot posts trigger nothing.
 
 ## Related
 

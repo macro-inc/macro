@@ -29,6 +29,14 @@ pub trait SessionAuthority: Send + Sync {
         &self,
         token: &SessionToken,
     ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
+
+    /// The same grant, read by session id for an in-process caller that has
+    /// already authorized its request against the session itself. Refuses a
+    /// closed session exactly as [`Self::authorize`] does.
+    fn authorize_session(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
 }
 
 /// Resolve an MCP destination to a live upstream call.
@@ -39,6 +47,9 @@ pub trait SessionAuthority: Send + Sync {
 /// OAuth.
 pub trait McpCredentials: Send + Sync {
     /// The upstream and credential for `destination`, on behalf of `owner`.
+    /// `agent` is the session's bound agent: Macro's own server signs it into
+    /// the credential so tool writes are attributed to it; connected and
+    /// custom servers ignore it.
     ///
     /// Resolution is scoped to `owner`: a slug that names somebody else's
     /// server is never somebody else's server. [`McpResolution::Connected`]
@@ -49,6 +60,8 @@ pub trait McpCredentials: Send + Sync {
     fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
 }
@@ -188,4 +201,19 @@ pub trait ToolApprovalAnnouncer: Send + Sync + 'static {
 
     /// A held call was resolved.
     fn resolved(&self, approval: &ToolApproval) -> impl Future<Output = ()> + Send;
+}
+
+/// An independently authenticated MCP exchange. Implementations must never reuse
+/// an upstream session opened with another account's credentials.
+// Object-safe because the composition root supplies an Arc<dyn ActorMcpTransport>.
+#[async_trait::async_trait]
+pub trait ActorMcpTransport: Send + Sync {
+    /// List tools or call a tool, returning the MCP result payload.
+    async fn exchange(
+        &self,
+        session: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
+        upstream: UpstreamCall,
+        request: serde_json::Value,
+    ) -> Result<serde_json::Value, EgressError>;
 }

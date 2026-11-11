@@ -1,3 +1,5 @@
+mod description;
+
 use models_databases::{ColumnId, DatabaseId, RowId};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -901,8 +903,24 @@ const DOUBLED: Uuid = Uuid::from_u128(0x0d);
 const FOLLOW_UP: Uuid = Uuid::from_u128(0x0e);
 
 #[test]
-fn derived_columns_are_computed_filtered_and_sorted_in_the_fold() {
-    let source = source(deals());
+fn derived_columns_read_their_stored_cells_like_any_other() {
+    // The writer stores formula cells; the fold reads them as it reads any
+    // cell, and never computes them.
+    let mut rows = deals();
+    for row in &mut rows {
+        let stored = match row.id {
+            ACME => vec![(DOUBLED, Cell::Number(24000.0))],
+            GLOBEX => vec![(DOUBLED, Cell::Number(6000.0))],
+            HOOLI => vec![(
+                FOLLOW_UP,
+                Cell::Date(Utc.with_ymd_and_hms(2026, 9, 22, 0, 0, 0).unwrap()),
+            )],
+            INITECH => vec![(DOUBLED, Cell::Number(14000.0))],
+            _ => vec![],
+        };
+        row.cells.extend(stored);
+    }
+    let source = source(rows);
     let sink = FakeSink::new();
 
     let outcome = pollster::block_on(run(
@@ -957,5 +975,133 @@ fn derived_columns_cannot_be_written() {
         error.to_string(),
         "\"doubled\" is computed by its formula and can't be written; write the columns it reads instead"
     );
+    assert!(sink.applied.lock().unwrap().is_empty());
+}
+
+const CONTRACT: Uuid = Uuid::from_u128(0x0f);
+
+/// `crm.deals` with a `contract` date range.
+fn catalog_with_contract() -> Catalog {
+    let mut catalog = catalog();
+    let deals = catalog
+        .tables
+        .iter_mut()
+        .find(|table| table.id == DEALS)
+        .unwrap();
+    deals.columns.push(crate::catalog::Column {
+        id: CONTRACT,
+        placement: ColumnId::from_uuid(CONTRACT),
+        name: "contract".into(),
+        kind: crate::catalog::ColumnKind::DateRange,
+        formula: None,
+    });
+    catalog
+}
+
+#[test]
+fn date_ranges_compare_to_dates_and_sort_by_start() {
+    let august = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+    };
+    let july_into_august = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 7, 25, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap(),
+    };
+    let october = models_databases::DateRange {
+        start: Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 10, 3, 0, 0, 0).unwrap(),
+    };
+    let mut rows = deals();
+    rows[0].cells.insert(CONTRACT, Cell::DateRange(august));
+    rows[1].cells.insert(CONTRACT, Cell::DateRange(october));
+    rows[2]
+        .cells
+        .insert(CONTRACT, Cell::DateRange(july_into_august));
+    let source = source(rows);
+    let sink = FakeSink::new();
+
+    // Overlapping August: ends on or after its first day, starts on or
+    // before its last. Initech has no contract and fails both.
+    let outcome = pollster::block_on(run(
+        &catalog_with_contract(),
+        "SELECT name, contract FROM crm.deals WHERE contract >= '2026-08-01' AND contract <= '2026-08-31' ORDER BY contract",
+        &source,
+        &sink,
+    ))
+    .unwrap();
+    assert_eq!(
+        outcome.rows,
+        vec![
+            vec![
+                Some(Cell::Text("Hooli".into())),
+                Some(Cell::DateRange(july_into_august)),
+            ],
+            vec![
+                Some(Cell::Text("Acme".into())),
+                Some(Cell::DateRange(august)),
+            ],
+        ]
+    );
+    assert_eq!(outcome.columns[1].kind, OutcomeKind::DateRange);
+
+    let containing = pollster::block_on(run(
+        &catalog_with_contract(),
+        "SELECT name FROM crm.deals WHERE contract = '2026-08-15'",
+        &source,
+        &sink,
+    ))
+    .unwrap();
+    assert_eq!(containing.rows, vec![vec![Some(Cell::Text("Acme".into()))]]);
+}
+
+#[test]
+fn a_date_range_is_written_as_an_interval_or_one_day() {
+    let sink = FakeSink {
+        inserted: vec![NEW_ROW, SECOND_NEW_ROW],
+        ..FakeSink::new()
+    };
+    pollster::block_on(run(
+        &catalog_with_contract(),
+        "INSERT INTO crm.deals (name, contract) VALUES ('Acme', '2026-08-10/2026-08-20'), ('Globex', '2026-09-01')",
+        &source(vec![]),
+        &sink,
+    ))
+    .unwrap();
+    let applied = sink.applied.lock().unwrap();
+    let DatabaseOp::Rows {
+        change: RowsChange::Insert { rows },
+        ..
+    } = &applied[0].1[0]
+    else {
+        panic!("an insert sends rows");
+    };
+    assert_eq!(
+        rows[0][1].value,
+        CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        })
+    );
+    assert_eq!(
+        rows[1][1].value,
+        CellValue::DateRange(models_databases::DateRange {
+            start: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
+        })
+    );
+}
+
+#[test]
+fn a_date_range_ending_before_it_starts_is_refused() {
+    let sink = FakeSink::new();
+    let error = pollster::block_on(run(
+        &catalog_with_contract(),
+        "UPDATE crm.deals SET contract = '2026-08-20/2026-08-10' WHERE name = 'Acme'",
+        &source(deals()),
+        &sink,
+    ))
+    .unwrap_err();
+    assert!(error.to_string().contains("date range"), "{error}");
     assert!(sink.applied.lock().unwrap().is_empty());
 }

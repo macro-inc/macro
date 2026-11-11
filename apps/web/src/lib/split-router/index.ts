@@ -13,6 +13,12 @@ export type {
   HistoryAdapter,
   InterceptHandler,
 } from './history/types';
+export type {
+  PaneLayout,
+  SplitAxis,
+  SplitPath,
+  SplitSide,
+} from './panes/layout-tree';
 export { createMemoryPaneStore } from './panes/memory-store';
 export type {
   OpenIntent,
@@ -22,6 +28,12 @@ export type {
 } from './panes/types';
 export type { ClaimHolder } from './router/claims';
 export { createSplitRouter } from './router/create-router';
+export type {
+  LayoutPane,
+  LayoutSnapshot,
+  RestoreLayoutOptions,
+  ShowLayoutOptions,
+} from './router/layout';
 export { PANE_LEVEL } from './router/leave-guards';
 export type {
   SplitRouterMiddleware,
@@ -43,6 +55,7 @@ export type {
   SplitRouterOptions,
 } from './router/types';
 export {
+  decodePanes,
   formatLocation,
   formatPanePath,
   parseLocation,

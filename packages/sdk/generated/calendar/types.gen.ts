@@ -52,6 +52,549 @@ export type AvailabilityCalendarsResponse = {
 };
 
 /**
+ * Public booking details, also visible to authorized profile members.
+ */
+export type Booking = {
+    /**
+     * Answers keyed by question identity.
+     */
+    answers: {
+        [key: string]: string;
+    };
+    /**
+     * Explicit attendance outcome; existing booking records default to unknown.
+     */
+    attendance?: BookingAttendance;
+    /**
+     * Booker's email.
+     */
+    email: string;
+    /**
+     * Absolute meeting end.
+     */
+    endsAt: string;
+    /**
+     * Booking link identity.
+     */
+    eventTypeId: string;
+    /**
+     * Assigned hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Booking identity.
+     */
+    id: string;
+    /**
+     * Final location or conference URL.
+     */
+    location: string;
+    /**
+     * Booker's name.
+     */
+    name: string;
+    /**
+     * Original labels for answers, independent of later event-type edits.
+     */
+    questionLabels?: {
+        [key: string]: string;
+    };
+    /**
+     * Number of successfully completed moves to a different start time.
+     */
+    rescheduleCount?: number;
+    /**
+     * When the most recent successful reschedule completed.
+     */
+    rescheduledAt?: string | null;
+    /**
+     * Absolute meeting start.
+     */
+    startsAt: string;
+    /**
+     * Current lifecycle state.
+     */
+    status: BookingStatus;
+    /**
+     * Booker's display time zone.
+     */
+    timeZone: string;
+    /**
+     * Snapshot of the meeting title.
+     */
+    title: string;
+};
+
+/**
+ * Attendance recorded by an assigned host or profile administrator after a meeting.
+ */
+export type BookingAttendance = 'unknown' | 'attended' | 'guestNoShow' | 'hostNoShow';
+
+/**
+ * A host's requested change to a booked meeting.
+ */
+export type BookingChange = {
+    action: 'approve';
+} | {
+    action: 'cancel';
+} | {
+    action: 'attendance';
+    /**
+     * Recorded outcome.
+     */
+    attendance: BookingAttendance;
+} | {
+    action: 'reschedule';
+    /**
+     * Absolute start chosen from available replacement slots.
+     */
+    startsAt: string;
+};
+
+/**
+ * Replacement availability for one date.
+ */
+export type BookingDateOverride = {
+    /**
+     * Local date in the schedule zone.
+     */
+    date: string;
+    /**
+     * Empty means unavailable all day.
+     */
+    windows: Array<BookingTimeWindow>;
+};
+
+/**
+ * A reusable booking link.
+ */
+export type BookingEventType = {
+    /**
+     * Protected time after a meeting.
+     */
+    afterMinutes: number;
+    /**
+     * Protected time before a meeting.
+     */
+    beforeMinutes: number;
+    /**
+     * Maximum bookings for this event on one schedule-local day.
+     */
+    dailyLimit?: number | null;
+    /**
+     * Public description.
+     */
+    description: string;
+    /**
+     * Meeting duration.
+     */
+    durationMinutes: number;
+    /**
+     * Whether new bookings are accepted.
+     */
+    enabled: boolean;
+    /**
+     * Generate a Google Meet conference. Mutually exclusive with a Macro call.
+     */
+    googleMeet: boolean;
+    /**
+     * Maximum days ahead.
+     */
+    horizonDays: number;
+    /**
+     * Current Macro user identities selected as hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Stable identity.
+     */
+    id: string;
+    /**
+     * Spacing of offered start times.
+     */
+    intervalMinutes: number;
+    /**
+     * Meeting location.
+     */
+    location: string;
+    /**
+     * Generate a Macro call and attach its join link when someone books.
+     * Mutually exclusive with Google Meet. Omitted on links saved before
+     * Macro calls were a booking option, which keep their previous conference.
+     */
+    macroCall?: boolean;
+    /**
+     * Host assignment policy.
+     */
+    mode: SchedulingMode;
+    /**
+     * Minimum notice in minutes.
+     */
+    noticeMinutes: number;
+    /**
+     * Additional form fields.
+     */
+    questions: Array<BookingQuestion>;
+    /**
+     * Hold bookings for host approval.
+     */
+    requiresConfirmation: boolean;
+    /**
+     * Referenced availability schedule.
+     */
+    scheduleId: string;
+    /**
+     * Unique link segment within a profile.
+     */
+    slug: string;
+    /**
+     * Public title.
+     */
+    title: string;
+};
+
+/**
+ * Current and equally long preceding local-calendar periods.
+ */
+export type BookingInsights = {
+    /**
+     * Time at which completion was evaluated.
+     */
+    asOf: string;
+    /**
+     * Requested period.
+     */
+    current: InsightPeriod;
+    /**
+     * Comparison period, using identical filters and definitions.
+     */
+    previous: InsightPeriod;
+    /**
+     * Preceding period's first local date.
+     */
+    previousFrom: string;
+    /**
+     * Preceding period's last local date.
+     */
+    previousTo: string;
+};
+
+/**
+ * Saved link with actual identities and revision for subsequent edits.
+ */
+export type BookingLink = {
+    /**
+     * Full editable configuration.
+     */
+    draft: BookingLinkDraft;
+    /**
+     * Stable link identity.
+     */
+    eventTypeId: string;
+    /**
+     * Owning profile.
+     */
+    profileId: string;
+    /**
+     * Profile revision to supply when editing.
+     */
+    revision: number;
+};
+
+/**
+ * Complete proposal reviewed and validated before saving.
+ */
+export type BookingLinkDraft = {
+    /**
+     * Public details, hosts, booking rules and questions.
+     */
+    event: BookingLinkEvent;
+    /**
+     * Weekly hours, IANA time zone, and date overrides for this link.
+     */
+    schedule: BookingLinkSchedule;
+};
+
+/**
+ * All editable rules for one link. Personal links must use the authenticated user as host.
+ */
+export type BookingLinkEvent = {
+    /**
+     * Protected time after a meeting.
+     */
+    afterMinutes: number;
+    /**
+     * Protected time before a meeting.
+     */
+    beforeMinutes: number;
+    /**
+     * Maximum bookings for this event on one schedule-local day.
+     */
+    dailyLimit?: number | null;
+    /**
+     * Public description.
+     */
+    description: string;
+    /**
+     * Meeting duration.
+     */
+    durationMinutes: number;
+    /**
+     * Whether new bookings are accepted.
+     */
+    enabled: boolean;
+    /**
+     * Generate a Google Meet conference. Mutually exclusive with `macroCall`.
+     */
+    googleMeet: boolean;
+    /**
+     * Maximum days ahead.
+     */
+    horizonDays: number;
+    /**
+     * Current Macro user identities selected as hosts.
+     */
+    hosts: Array<string>;
+    /**
+     * Spacing of offered start times.
+     */
+    intervalMinutes: number;
+    /**
+     * Meeting location.
+     */
+    location: string;
+    /**
+     * Attach a Macro call when someone books. A join link is created for that
+     * booking and written onto the calendar invitation. Mutually exclusive
+     * with `googleMeet`. Prefer this for a Macro booking; omit or false when
+     * the link should use Google Meet or no video. False is omitted so drafts
+     * saved before this field still round-trip unchanged.
+     */
+    macroCall?: boolean;
+    /**
+     * Host assignment policy.
+     */
+    mode: SchedulingMode;
+    /**
+     * Minimum notice in minutes.
+     */
+    noticeMinutes: number;
+    /**
+     * Additional form fields.
+     */
+    questions: Array<BookingQuestion>;
+    /**
+     * Hold bookings for host approval.
+     */
+    requiresConfirmation: boolean;
+    /**
+     * Unique link segment within a profile.
+     */
+    slug: string;
+    /**
+     * Public title.
+     */
+    title: string;
+};
+
+/**
+ * Authorized discovery results including reusable availability.
+ */
+export type BookingLinkListing = {
+    /**
+     * Links whose title, slug or description matches the search, including paused links.
+     */
+    links: Array<BookingLink>;
+    /**
+     * Owning profile identity, including unsaved new profiles.
+     */
+    profileId: string;
+    /**
+     * Current revision.
+     */
+    revision: number;
+    /**
+     * Reusable schedules, even when no links match.
+     */
+    schedules: Array<BookingSchedule>;
+    /**
+     * Current team identities that can be used to discover team links.
+     */
+    teamIds: Array<string>;
+    /**
+     * Current authenticated host identity for personal drafts.
+     */
+    userId: string;
+};
+
+/**
+ * Availability copied into a dedicated schedule when it changes; other links retain their hours.
+ */
+export type BookingLinkSchedule = {
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Date-specific replacements.
+     */
+    overrides: Array<BookingDateOverride>;
+    /**
+     * IANA time zone.
+     */
+    timeZone: string;
+    /**
+     * Weekly windows.
+     */
+    weekly: Array<BookingWeeklyDay>;
+};
+
+/**
+ * Editable configuration for a person or team.
+ */
+export type BookingProfile = {
+    /**
+     * Personal hours used by team events; absent legacy profiles use their first schedule.
+     */
+    defaultScheduleId?: string | null;
+    /**
+     * Public introduction.
+     */
+    description: string;
+    /**
+     * Booking links.
+     */
+    eventTypes: Array<BookingEventType>;
+    /**
+     * Public, opaque profile identity.
+     */
+    id: string;
+    /**
+     * Display name on the public page.
+     */
+    name: string;
+    /**
+     * Optimistic concurrency version.
+     */
+    revision: number;
+    /**
+     * Reusable schedules.
+     */
+    schedules: Array<BookingSchedule>;
+};
+
+/**
+ * A question on the booking form.
+ */
+export type BookingQuestion = {
+    /**
+     * Stable identity.
+     */
+    id: string;
+    /**
+     * Public question label.
+     */
+    label: string;
+    /**
+     * Whether an answer is mandatory.
+     */
+    required: boolean;
+};
+
+/**
+ * One booking after a change.
+ */
+export type BookingResponse = {
+    /**
+     * The saved booking.
+     */
+    booking: Booking;
+};
+
+/**
+ * Reusable hours, with DST interpreted in an IANA zone.
+ */
+export type BookingSchedule = {
+    /**
+     * Stable schedule identity.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Date-specific replacements.
+     */
+    overrides: Array<BookingDateOverride>;
+    /**
+     * IANA time zone.
+     */
+    timeZone: string;
+    /**
+     * Weekly windows.
+     */
+    weekly: Array<BookingWeeklyDay>;
+};
+
+/**
+ * Available slot and the hosts who can satisfy it.
+ */
+export type BookingSlot = {
+    /**
+     * Absolute end.
+     */
+    endsAt: string;
+    /**
+     * Absolute start.
+     */
+    startsAt: string;
+};
+
+/**
+ * Booking lifecycle state.
+ */
+export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'processing' | 'failed';
+
+/**
+ * A wall-clock window in an availability schedule.
+ */
+export type BookingTimeWindow = {
+    /**
+     * Exclusive HH:MM end.
+     */
+    end: string;
+    /**
+     * Inclusive HH:MM start.
+     */
+    start: string;
+};
+
+/**
+ * Availability for one weekday.
+ */
+export type BookingWeeklyDay = {
+    /**
+     * Sunday is zero.
+     */
+    day: number;
+    /**
+     * Non-overlapping local windows.
+     */
+    windows: Array<BookingTimeWindow>;
+};
+
+/**
+ * Bookings of one profile.
+ */
+export type BookingsResponse = {
+    /**
+     * Every matching booking.
+     */
+    bookings: Array<Booking>;
+};
+
+/**
  * An attendee on a calendar event.
  */
 export type CalendarAttendee = {
@@ -117,6 +660,10 @@ export type CalendarCapabilities = {
      */
     emailReminders: boolean;
     /**
+     * Whether the organizer can set what guests may do.
+     */
+    guestPolicy: boolean;
+    /**
      * Whether an existing conference can be detached.
      */
     removeConference: boolean;
@@ -178,11 +725,10 @@ export type CalendarEvent = {
      */
     eventType?: EventType;
     /**
-     * What the organizer lets guests do. Skipped when it is Google's
-     * default so projections stored before the policy was modeled still
-     * compare equal.
+     * What the organizer lets guests do: the canonical copy's values, or
+     * Google's defaults for an event synced before the policy was modeled.
      */
-    guestPolicy?: GuestPolicy;
+    guestPolicy: GuestPolicy;
     /**
      * RFC 5545 UID used to reconcile provider and email sources.
      */
@@ -195,6 +741,12 @@ export type CalendarEvent = {
      * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
+    /**
+     * Whether this is a snapshot of a meeting shared with the owner, which
+     * Macro added to their calendar as a private copy: the meeting's changes
+     * never reach it, and nothing done to it reaches the meeting.
+     */
+    isSnapshot: boolean;
     /**
      * Optional physical or virtual location label.
      */
@@ -254,10 +806,10 @@ export type CalendarEvent = {
     updatedAt: string;
     /**
      * What the viewing requester may do with the event. Resolved only on
-     * the read path, alongside each attendee's `is_self`, so stored
-     * projections omit it.
+     * the read path, alongside each attendee's `is_self`; nothing when no
+     * viewer is known. Source projections never store it.
      */
-    viewerCan?: ViewerCapabilities;
+    viewerCan: ViewerCapabilities;
     /**
      * Event visibility.
      */
@@ -331,6 +883,61 @@ export type CalendarEventSourceContent = {
 };
 
 /**
+ * A guest added to an event.
+ */
+export type CalendarGuestInputBody = {
+    /**
+     * Guest email address.
+     */
+    email: string;
+    /**
+     * Whether attendance is optional.
+     */
+    optional?: boolean;
+};
+
+/**
+ * A channel member's request to be added as a guest of an event they see
+ * only through a channel share.
+ */
+export type CalendarJoinRequest = {
+    /**
+     * When the request was made.
+     */
+    createdAt: string;
+    /**
+     * The sharer's event entity that was shared with the channel.
+     */
+    eventId: string;
+    /**
+     * Request identifier.
+     */
+    id: string;
+    /**
+     * Address the sharer invites when accepting.
+     */
+    requesterEmail: string;
+    /**
+     * Macro user asking to join.
+     */
+    requesterId: string;
+    /**
+     * Where the request stands.
+     */
+    status: CalendarJoinRequestStatus;
+};
+
+/**
+ * How a sharer answers a request to join their event.
+ */
+export type CalendarJoinRequestDecision = 'accept' | 'decline';
+
+/**
+ * Lifecycle of a request to be added as a guest of a shared event.
+ */
+export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
+
+/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -347,7 +954,7 @@ export type CalendarMutationApiError = {
 /**
  * Machine-readable failure category for calendar mutations.
  */
-export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed';
+export type CalendarMutationErrorCode = 'not_found' | 'occurrence_not_found' | 'read_only' | 'no_writable_calendar' | 'not_attendee' | 'not_organizer' | 'guests_cannot_invite' | 'guest_list_hidden' | 'guests_cannot_modify' | 'already_on_calendar' | 'join_request_open' | 'copy_refused' | 'snapshot' | 'invalid_input' | 'reauth_required' | 'provider_rejected' | 'retryable' | 'persist_failed' | 'macro_call_failed' | 'copy_choice_required' | 'confirmation_required';
 
 /**
  * Provider selected from the persisted calendar account and email binding.
@@ -442,6 +1049,31 @@ export type ConferenceChange = 'provider_default' | 'microsoft_teams' | 'google_
 export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 
 /**
+ * Request body adding a shared event to the requester's calendar.
+ */
+export type CopyCalendarEventRequest = {
+    /**
+     * Google calendar to add the copy to; defaults to the requester's
+     * primary inbox's primary calendar.
+     */
+    calendarId?: string | null;
+};
+
+/**
+ * A new booking link, saved after the user approved it.
+ */
+export type CreateBookingLinkRequest = {
+    /**
+     * Full booking rules and availability the user approved.
+     */
+    draft: BookingLinkDraft;
+    /**
+     * The user's reply approving this proposal, quoted verbatim.
+     */
+    userConfirmation: string;
+};
+
+/**
  * Request body creating a calendar event on the requester's calendar.
  */
 export type CreateCalendarEventRequest = {
@@ -464,6 +1096,7 @@ export type CreateCalendarEventRequest = {
      * to the requester's primary inbox.
      */
     emailLinkId?: string | null;
+    guestPolicy?: null | GuestPolicy;
     /**
      * Stable retry identity, scoped to the authenticated organizer.
      */
@@ -494,6 +1127,24 @@ export type CreateCalendarEventRequest = {
     title: string;
     transparency?: null | EventTransparency;
     visibility?: null | EventVisibility;
+};
+
+/**
+ * Replacement configuration for one booking link, saved after the user approved it.
+ */
+export type EditBookingLinkRequest = {
+    /**
+     * Full edited booking rules and availability the user approved.
+     */
+    draft: BookingLinkDraft;
+    /**
+     * Profile revision the edit was prepared from; a newer revision conflicts.
+     */
+    expectedRevision: number;
+    /**
+     * The user's reply approving this proposal, quoted verbatim.
+     */
+    userConfirmation: string;
 };
 
 /**
@@ -603,6 +1254,130 @@ export type GuestPolicy = {
 };
 
 /**
+ * Counts can overlap: a rescheduled event can also be completed or cancelled.
+ */
+export type InsightCounts = {
+    /**
+     * Cancelled bookings, grouped by their scheduled start.
+     */
+    cancelled: number;
+    /**
+     * Confirmed, ended bookings excluding explicit no-shows.
+     */
+    completed: number;
+    /**
+     * Explicit guest no-shows only.
+     */
+    guestNoShow: number;
+    /**
+     * Explicit host no-shows only.
+     */
+    hostNoShow: number;
+    /**
+     * Bookings with at least one completed reschedule, counted once.
+     */
+    rescheduled: number;
+    /**
+     * All bookings except failed and processing requests.
+     */
+    total: number;
+};
+
+/**
+ * One complete period of metrics and chart data, with no guest contact information.
+ */
+export type InsightPeriod = {
+    /**
+     * Average scheduled duration of all confirmed bookings, including future ones.
+     */
+    averageMinutes: number;
+    /**
+     * Summary event counts.
+     */
+    counts: InsightCounts;
+    /**
+     * Local-date counts, including dates with zero bookings.
+     */
+    days: {
+        [key: string]: InsightCounts;
+    };
+    /**
+     * Booking counts by link identity.
+     */
+    eventCounts: {
+        [key: string]: number;
+    };
+    /**
+     * Booking counts by host; collective bookings count once for each host.
+     */
+    hostCounts: {
+        [key: string]: number;
+    };
+    /**
+     * Booking counts by local hour, indexed from 0 to 23.
+     */
+    hours: Array<number>;
+    /**
+     * Scheduled minutes of completed meetings, not actual call duration.
+     */
+    meetingMinutes: number;
+};
+
+/**
+ * Inclusive local dates and optional booking/host filters.
+ */
+export type InsightQuery = {
+    /**
+     * Restrict to one booking link; omit for all links.
+     */
+    eventTypeId?: string | null;
+    /**
+     * First local date, inclusive.
+     */
+    from: string;
+    /**
+     * Restrict to one assigned host; omit for all hosts.
+     */
+    hostId?: string | null;
+    /**
+     * IANA zone used for dates and hour-of-day grouping.
+     */
+    timeZone: string;
+    /**
+     * Last local date, inclusive; maximum 366 days.
+     */
+    to: string;
+};
+
+/**
+ * Request body adding guests to an event without touching anyone already
+ * invited.
+ */
+export type InviteCalendarEventGuestsRequest = {
+    /**
+     * Calendar whose copy of the event is written, for an event synced from
+     * more than one calendar. Omit to write the canonical copy.
+     */
+    calendarId?: string | null;
+    /**
+     * Guests to add; anyone already on the event is skipped.
+     */
+    guests: Array<CalendarGuestInputBody>;
+    /**
+     * Inbox address holding the copy this request changes. An agent run
+     * must name it when the meeting is on more than one of the requester's
+     * inboxes, and it must be the inbox holding the addressed copy; a
+     * mismatch is refused whoever sends it.
+     */
+    inbox?: string | null;
+    /**
+     * Original-start key of the occurrence the guests are added to.
+     */
+    recurrenceId?: string | null;
+    scope?: null | CalendarUpdateScopeParam;
+};
+
+/**
  * Calendars visible to the requester across connected and delegated inboxes.
  */
 export type ListCalendarsResponse = {
@@ -653,6 +1428,34 @@ export type PrepareCalendarReplacementRequest = {
 };
 
 /**
+ * Booking settings of one profile.
+ */
+export type ProfileResponse = {
+    /**
+     * Full settings, including the revision to save against.
+     */
+    profile: BookingProfile;
+};
+
+/**
+ * A booking with its booker management capability.
+ */
+export type ReceiptResponse = {
+    /**
+     * The booking.
+     */
+    booking: Booking;
+    /**
+     * IANA time zone of the booking's availability schedule.
+     */
+    scheduleTimeZone: string;
+    /**
+     * Bearer capability for the booker's receipt, reschedule and cancel pages.
+     */
+    token: string;
+};
+
+/**
  * Realtime signal that a connected inbox's calendar projection changed.
  */
 export type RefreshCalendarEvent = {
@@ -671,12 +1474,28 @@ export type RefreshCalendarEvent = {
      * True for sharing changes and any possibly affected OOO projection.
      */
     team_ooo_changed: boolean;
+} | {
+    event: 'join_request_answered';
+    /**
+     * The shared event they asked to join.
+     */
+    event_id: string;
 };
 
 /**
  * User-visible workflow state.
  */
 export type ReplacementStatus = 'needs_confirmation' | 'in_progress' | 'complete';
+
+/**
+ * Request body answering a join request.
+ */
+export type RespondToJoinRequestRequest = {
+    /**
+     * The sharer's answer.
+     */
+    decision: CalendarJoinRequestDecision;
+};
 
 /**
  * Request body setting the requester's RSVP on an event.
@@ -693,6 +1512,7 @@ export type RsvpCalendarEventRequest = {
     recurrenceId?: string | null;
     /**
      * The owned connected address whose attendance is changed. Validated by the domain.
+     * Omit to answer as the inbox the addressed copy syncs through.
      */
     respondingEmail?: string | null;
     /**
@@ -700,6 +1520,21 @@ export type RsvpCalendarEventRequest = {
      */
     response: AttendeeResponseStatus;
     scope?: null | CalendarRsvpScopeParam;
+};
+
+/**
+ * Team host assignment policy.
+ */
+export type SchedulingMode = 'individual' | 'collective' | 'roundRobin';
+
+/**
+ * Available start times.
+ */
+export type SlotsResponse = {
+    /**
+     * Every available slot.
+     */
+    slots: Array<BookingSlot>;
 };
 
 /**
@@ -735,6 +1570,14 @@ export type UpdateCalendarEventRequest = {
      * Replacement description; an empty string clears it.
      */
     description?: string | null;
+    guestPolicy?: null | GuestPolicy;
+    /**
+     * Inbox address holding the copy this request changes. An agent run
+     * must name it when the meeting is on more than one of the requester's
+     * inboxes, and it must be the inbox holding the addressed copy; a
+     * mismatch is refused whoever sends it.
+     */
+    inbox?: string | null;
     /**
      * Replacement location; an empty string clears it.
      */
@@ -772,6 +1615,11 @@ export type ViewerCapabilities = {
      */
     inviteGuests: boolean;
     /**
+     * Act as the event's organizer: replace its whole guest list and manage
+     * its conferencing.
+     */
+    organize: boolean;
+    /**
      * Remove guests.
      */
     removeGuests: boolean;
@@ -780,7 +1628,7 @@ export type ViewerCapabilities = {
      */
     rsvp: boolean;
     /**
-     * Change the event's guest policy.
+     * Change the event's guest policy, which only Google calendars have.
      */
     setGuestPolicy: boolean;
 };
@@ -797,6 +1645,13 @@ export type VisibleCalendar = {
      * Provider color.
      */
     color?: string | null;
+    /**
+     * Whether this calendar counts toward the requester's busy time: their
+     * setting, by default only the primary calendars of inboxes they own.
+     * The nearest thing to "this is the requester's own": a provider's
+     * access role only says what they may do, on a colleague's calendar too.
+     */
+    contributesToAvailability?: boolean;
     /**
      * Default reminders applied to events that keep `useDefault`.
      */
@@ -916,7 +1771,7 @@ export type CreateCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * Calendar is read-only or needs reauthorization
+     * Calendar is read-only or needs reauthorization, or an agent's program asked to create without a review or confirmation
      */
     403: CalendarMutationApiError;
     /**
@@ -962,6 +1817,13 @@ export type DeleteCalendarEventData = {
          * Original-start key of the occurrence a scoped deletion targets.
          */
         recurrenceId?: string;
+        /**
+         * Inbox address holding the copy this request deletes. An agent run
+         * must name it when the meeting is on more than one of the requester's
+         * inboxes, and it must be the inbox holding the addressed copy; a
+         * mismatch is refused whoever sends it.
+         */
+        inbox?: string;
     };
     url: '/events/{event_id}';
 };
@@ -1022,7 +1884,7 @@ export type UpdateCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * Calendar is read-only or needs reauthorization
+     * Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting
      */
     403: CalendarMutationApiError;
     /**
@@ -1049,6 +1911,106 @@ export type UpdateCalendarEventResponses = {
 };
 
 export type UpdateCalendarEventResponse = UpdateCalendarEventResponses[keyof UpdateCalendarEventResponses];
+
+export type CopyCalendarEventData = {
+    body: CopyCalendarEventRequest;
+    path: {
+        /**
+         * Shared calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/events/{event_id}/copy';
+};
+
+export type CopyCalendarEventErrors = {
+    /**
+     * The event cannot be copied, or the calendar is not a Google calendar
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only or needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event not found or not shared with the requester
+     */
+    404: CalendarMutationApiError;
+    /**
+     * Already on the requester's calendar, a request to join it is pending or accepted, no writable calendar, or the provider refused the copy
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type CopyCalendarEventError = CopyCalendarEventErrors[keyof CopyCalendarEventErrors];
+
+export type CopyCalendarEventResponses = {
+    /**
+     * The copy on the requester's calendar
+     */
+    201: CalendarEvent;
+};
+
+export type CopyCalendarEventResponse = CopyCalendarEventResponses[keyof CopyCalendarEventResponses];
+
+export type InviteCalendarEventGuestsData = {
+    body: InviteCalendarEventGuestsRequest;
+    path: {
+        /**
+         * Calendar event entity id
+         */
+        event_id: string;
+    };
+    query?: never;
+    url: '/events/{event_id}/guests';
+};
+
+export type InviteCalendarEventGuestsErrors = {
+    /**
+     * Invalid guests or scope
+     */
+    400: CalendarMutationApiError;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Event or occurrence not found
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The connected account neither organizes nor attends the event
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type InviteCalendarEventGuestsError = InviteCalendarEventGuestsErrors[keyof InviteCalendarEventGuestsErrors];
+
+export type InviteCalendarEventGuestsResponses = {
+    /**
+     * The updated calendar event
+     */
+    200: CalendarEvent;
+};
+
+export type InviteCalendarEventGuestsResponse = InviteCalendarEventGuestsResponses[keyof InviteCalendarEventGuestsResponses];
 
 export type CalendarEventProviderUrlData = {
     body?: never;
@@ -1119,7 +2081,7 @@ export type RsvpCalendarEventErrors = {
      */
     401: unknown;
     /**
-     * Calendar is read-only or needs reauthorization
+     * Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting
      */
     403: CalendarMutationApiError;
     /**
@@ -1162,6 +2124,52 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type RespondToJoinRequestData = {
+    body: RespondToJoinRequestRequest;
+    path: {
+        /**
+         * Join request id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/join-requests/{request_id}';
+};
+
+export type RespondToJoinRequestErrors = {
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization
+     */
+    403: CalendarMutationApiError;
+    /**
+     * Request not found or its event cannot be changed by the requester
+     */
+    404: CalendarMutationApiError;
+    /**
+     * The provider rejected the new guest
+     */
+    409: CalendarMutationApiError;
+    /**
+     * Transient provider failure
+     */
+    503: CalendarMutationApiError;
+};
+
+export type RespondToJoinRequestError = RespondToJoinRequestErrors[keyof RespondToJoinRequestErrors];
+
+export type RespondToJoinRequestResponses = {
+    /**
+     * The answered join request
+     */
+    200: CalendarJoinRequest;
+};
+
+export type RespondToJoinRequestResponse = RespondToJoinRequestResponses[keyof RespondToJoinRequestResponses];
 
 export type DiscardCalendarReplacementData = {
     body?: never;
@@ -1225,6 +2233,263 @@ export type ConfirmCalendarReplacementResponses = {
 };
 
 export type ConfirmCalendarReplacementResponse = ConfirmCalendarReplacementResponses[keyof ConfirmCalendarReplacementResponses];
+
+export type ListBookingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for personal bookings.
+         */
+        teamId?: string;
+        /**
+         * Inclusive start; supply together with `to`, at most 733 days apart.
+         */
+        from?: string;
+        /**
+         * Exclusive end; supply together with `from`.
+         */
+        to?: string;
+    };
+    url: '/scheduling/bookings';
+};
+
+export type ListBookingsErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type ListBookingsResponses = {
+    200: BookingsResponse;
+};
+
+export type ListBookingsResponse = ListBookingsResponses[keyof ListBookingsResponses];
+
+export type ChangeBookingData = {
+    body: BookingChange;
+    path: {
+        /**
+         * Booking identity
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduling/bookings/{id}/change';
+};
+
+export type ChangeBookingErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+};
+
+export type ChangeBookingResponses = {
+    200: BookingResponse;
+};
+
+export type ChangeBookingResponse = ChangeBookingResponses[keyof ChangeBookingResponses];
+
+export type GetManagedBookingData = {
+    body?: never;
+    path: {
+        /**
+         * Booking identity
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduling/bookings/{id}/manage';
+};
+
+export type GetManagedBookingErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetManagedBookingResponses = {
+    200: ReceiptResponse;
+};
+
+export type GetManagedBookingResponse = GetManagedBookingResponses[keyof GetManagedBookingResponses];
+
+export type ListBookingRescheduleSlotsData = {
+    body?: never;
+    path: {
+        /**
+         * Booking identity
+         */
+        id: string;
+    };
+    query: {
+        /**
+         * Date in the booking's schedule time zone.
+         */
+        date: string;
+    };
+    url: '/scheduling/bookings/{id}/slots';
+};
+
+export type ListBookingRescheduleSlotsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type ListBookingRescheduleSlotsResponses = {
+    200: SlotsResponse;
+};
+
+export type ListBookingRescheduleSlotsResponse = ListBookingRescheduleSlotsResponses[keyof ListBookingRescheduleSlotsResponses];
+
+export type GetBookingInsightsData = {
+    body: InsightQuery;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for the caller's personal booking links.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/insights';
+};
+
+export type GetBookingInsightsErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type GetBookingInsightsResponses = {
+    200: BookingInsights;
+};
+
+export type GetBookingInsightsResponse = GetBookingInsightsResponses[keyof GetBookingInsightsResponses];
+
+export type ListBookingLinksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for personal links.
+         */
+        teamId?: string;
+        /**
+         * Text matched against link title, slug and description; omit for all links.
+         */
+        query?: string;
+    };
+    url: '/scheduling/links';
+};
+
+export type ListBookingLinksErrors = {
+    403: unknown;
+};
+
+export type ListBookingLinksResponses = {
+    200: BookingLinkListing;
+};
+
+export type ListBookingLinksResponse = ListBookingLinksResponses[keyof ListBookingLinksResponses];
+
+export type CreateBookingLinkData = {
+    body: CreateBookingLinkRequest;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for the caller's personal booking links.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/links';
+};
+
+export type CreateBookingLinkErrors = {
+    400: unknown;
+    403: unknown;
+    409: unknown;
+};
+
+export type CreateBookingLinkResponses = {
+    200: BookingLink;
+};
+
+export type CreateBookingLinkResponse = CreateBookingLinkResponses[keyof CreateBookingLinkResponses];
+
+export type EditBookingLinkData = {
+    body: EditBookingLinkRequest;
+    path: {
+        /**
+         * Booking link (event type) identity
+         */
+        id: string;
+    };
+    query?: {
+        /**
+         * Existing Macro team; omit for the caller's personal booking links.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/links/{id}';
+};
+
+export type EditBookingLinkErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+};
+
+export type EditBookingLinkResponses = {
+    200: BookingLink;
+};
+
+export type EditBookingLinkResponse = EditBookingLinkResponses[keyof EditBookingLinkResponses];
+
+export type GetBookingSettingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for the caller's personal booking links.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/settings';
+};
+
+export type GetBookingSettingsErrors = {
+    403: unknown;
+    404: unknown;
+};
+
+export type GetBookingSettingsResponses = {
+    200: ProfileResponse;
+};
+
+export type GetBookingSettingsResponse = GetBookingSettingsResponses[keyof GetBookingSettingsResponses];
+
+export type SaveBookingSettingsData = {
+    body: BookingProfile;
+    path?: never;
+    query?: {
+        /**
+         * Existing Macro team; omit for the caller's personal booking links.
+         */
+        teamId?: string;
+    };
+    url: '/scheduling/settings';
+};
+
+export type SaveBookingSettingsErrors = {
+    400: unknown;
+    403: unknown;
+    409: unknown;
+};
+
+export type SaveBookingSettingsResponses = {
+    200: ProfileResponse;
+};
+
+export type SaveBookingSettingsResponse = SaveBookingSettingsResponses[keyof SaveBookingSettingsResponses];
 
 export type GetTeamSharingData = {
     body?: never;

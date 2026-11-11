@@ -18,11 +18,16 @@ pub mod draft_attachment_storage;
 
 /// Authorized provider attachment downloads and document storage.
 pub mod attachment_access;
+
 pub mod contact_photos;
 pub mod inbox_catalog;
 pub mod inbox_health;
 pub mod inbox_lifecycle;
+/// Authorized provider downloads of original message source (`.eml`).
+pub mod message_source;
 
 /// Forwarded-attachment persistence facts.
 pub mod forwarded_attachments;
 pub mod mailbox_settings;
+/// Provider reads of a user's newest inbox messages.
+pub mod recent_inbox;

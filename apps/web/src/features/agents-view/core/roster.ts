@@ -34,6 +34,8 @@ export type PersistedAgentLike = {
   };
   harness: string;
   harness_id?: string | null;
+  /** Coding agents run the prompter's instructions; others live on the machine. */
+  is_coding?: boolean;
   default_model: string;
 };
 
@@ -42,6 +44,7 @@ export type RuntimeLike = {
   id: string;
   name: string;
   connected: boolean;
+  access?: 'owner' | 'user' | 'read' | 'none';
 };
 
 type RosterShare = 'system' | 'team' | 'private';
@@ -66,8 +69,16 @@ export type RosterAgent = {
   ownerId?: string;
   /** Why it cannot be started from the composer right now, when it cannot. */
   unavailableReason?: string;
+  /**
+   * Its paired machine is not connected. Distinct from an unconfigured
+   * built-in runtime: there is nothing to set up, the computer is just away,
+   * so surfaces mark it "Offline" rather than offering a connect flow.
+   */
+  offline?: boolean;
   /** An unavailable agent with a setup action stays clickable. */
   connectLabel?: string;
+  /** The viewer must be given access to its runtime before prompting it. */
+  needsRuntimeAccess?: boolean;
   /** The persisted record behind a user-made agent; absent for system ones. */
   persisted?: PersistedAgentLike;
 };
@@ -94,12 +105,10 @@ export function runtimeLabel(
       return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
-    case 'claude-cloud':
-      return 'Claude Cloud';
     case 'macrod':
       return (
         runtimes.find((runtime) => runtime.id === harnessId)?.name ??
-        'Disconnected runtime'
+        'Disconnected machine'
       );
     default:
       return harness;
@@ -135,6 +144,14 @@ function persistedAgent(
 ): RosterAgent {
   const harnessId = agent.harness_id ?? undefined;
   const connected = runtimeConnected(agent.harness, harnessId, input);
+  // A resident answers anyone who can reach it; a coding agent needs the person
+  // prompting it to have access to its machine.
+  const runtimeAccess = input.runtimes.find(
+    (runtime) => runtime.id === harnessId
+  )?.access;
+  const needsRuntimeAccess =
+    agent.is_coding !== false &&
+    (runtimeAccess === 'none' || runtimeAccess === 'read');
   return {
     id: agent.bot.id,
     botId: agent.bot.id,
@@ -155,15 +172,20 @@ function persistedAgent(
       agent.bot.owner?.type === 'user'
         ? agent.bot.owner.user_id
         : (agent.bot.created_by ?? undefined),
+    offline: agent.harness === 'macrod' && !connected,
+    needsRuntimeAccess,
     connectLabel:
       agent.harness === 'cursor' && input.cursorNeedsConnection
         ? 'Connect Cursor'
-        : agent.harness === 'macrod' && !connected
-          ? 'Reconnect runtime'
-          : undefined,
-    unavailableReason:
-      agent.harness === 'macrod' && !connected
-        ? 'Its runtime is disconnected'
+        : needsRuntimeAccess
+          ? 'Request access'
+          : agent.harness === 'macrod' && !connected
+            ? 'Reconnect machine'
+            : undefined,
+    unavailableReason: needsRuntimeAccess
+      ? 'You need access to its machine'
+      : agent.harness === 'macrod' && !connected
+        ? 'Its machine is disconnected'
         : agent.harness === 'cursor' && !connected
           ? 'Connect Cursor to start it'
           : undefined,

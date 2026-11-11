@@ -85,10 +85,9 @@ pub const INTERNAL_AUTH_KEY: &str = "local";
 
 /// Localhost OAuth redirect URI for a service published on `port`.
 ///
-/// FusionAuth's kickstart authorizes both authentication_service and
-/// document_cognition_service this way so a named instance's host port cannot
-/// drift from the registered callback. Auth-service also reads the auth-port
-/// variant as `FUSIONAUTH_OAUTH_REDIRECT_URI`.
+/// FusionAuth's kickstart authorizes authentication_service at the instance's
+/// auth port. Agent MCP callbacks instead use the instance's HTTPS proxy.
+/// Auth-service reads this value as `FUSIONAUTH_OAUTH_REDIRECT_URI`.
 pub fn oauth_redirect_uri(port: u16) -> String {
     format!("http://localhost:{port}/oauth/redirect")
 }

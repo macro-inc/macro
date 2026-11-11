@@ -83,7 +83,9 @@ const traces = vi.hoisted(() => {
   const spans: RecordedSpan[] = [];
   return spans;
 });
-vi.mock('@macro-inc/observability', () => {
+vi.mock('@macro-inc/observability', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@macro-inc/observability')>();
   async function runSpan<T>(
     name: string,
     parent: string | undefined,
@@ -113,7 +115,9 @@ vi.mock('@macro-inc/observability', () => {
     }
   }
   return {
+    ...actual,
     Telemetry: {
+      ...actual.Telemetry,
       span: <T>(name: string, operation: (span: ObservedSpan) => Promise<T>) =>
         runSpan(name, undefined, operation),
     },
@@ -316,3 +320,6 @@ it('does not open project notifications when the rollout is disabled', async () 
   expect(open).not.toHaveBeenCalled();
   expect(activate).not.toHaveBeenCalled();
 });
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));

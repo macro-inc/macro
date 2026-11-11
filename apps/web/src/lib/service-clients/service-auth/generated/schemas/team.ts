@@ -6,6 +6,7 @@
  */
 import type { TeamAutoJoinDomain } from './teamAutoJoinDomain';
 import type { TeamDefaultLinkShare } from './teamDefaultLinkShare';
+import type { TeamLanguage } from './teamLanguage';
 
 /**
  * The Team struct
@@ -17,8 +18,8 @@ true; admins can turn it off so only admins/owners may invite. */
   /** The email domain new users are automatically joined to this team
 with, when automatic domain joining is enabled (None otherwise). */
   auto_join_domain?: TeamAutoJoinDomain;
-  /** Whether the CRM is enabled for this team (from `team_crm_settings`;
-`false` when no row exists). */
+  /** CRM record availability, always true for teams. This compatibility
+field does not indicate whether any mailbox contributes emails. */
   crm_enabled: boolean;
   default_link_share?: TeamDefaultLinkShare;
   /** Whether this team is on an enterprise license. Enterprise teams are
@@ -26,6 +27,7 @@ billed out-of-band; membership changes skip all Stripe subscription
 bookkeeping (no seat counts, no subscription backfill, no paying check). */
   enterprise: boolean;
   id: string;
+  language?: TeamLanguage;
   name: string;
   owner_id: string;
   slug: string;

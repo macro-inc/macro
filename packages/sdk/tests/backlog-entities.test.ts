@@ -3,10 +3,11 @@ import type { ParsedMessage } from '../generated/email/types.gen';
 import type {
   AccessiblePipeline,
   AccessRequest,
+  CardPosition,
   Meeting,
   TableDetail,
 } from '../generated/storage/types.gen';
-import { DraftAttachment, Macro } from '../src/macro';
+import { DraftAttachment, Macro, PipelineView } from '../src/macro';
 import { MacroApiError } from '../src/utils';
 
 const originalFetch = globalThis.fetch;
@@ -22,6 +23,7 @@ const draftMessage: ParsedMessage = {
   cc: [],
   to: [],
   labels: [],
+  draft_generation: 2,
 };
 
 test('draft editing encodes Unicode HTML and every write stays in the draft inbox', async () => {
@@ -33,13 +35,13 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
       writes.push(request);
       if (request.headers.get('X-Email-Link-Id') !== 'secondary-inbox')
         return Response.json({ error: 'wrong inbox' }, { status: 403 });
-      if (request.url.endsWith('/attachments'))
+      if (new URL(request.url).pathname.endsWith('/attachments'))
         return Response.json({
           attachment_id: 'attachment-1',
           upload_url: 'https://uploads.test/file',
           content_type: 'text/plain',
         });
-      if (request.url.endsWith('/forwarded-attachments'))
+      if (new URL(request.url).pathname.endsWith('/forwarded-attachments'))
         return Response.json({ attachment_id: 'attachment-2' });
       if (request.url.endsWith('/drafts'))
         return Response.json({
@@ -58,6 +60,7 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
     hosts: { email: 'https://email.test' },
   });
   const draft = macro.email.draftById('draft-1');
+  expect(await draft.draftGeneration()).toBe(2);
   await draft.update({
     subject: 'Updated',
     bodyHtml: '<p>café ☕</p>',
@@ -67,6 +70,7 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
   expect(await writes[0].json()).toEqual({
     draft: {
       db_id: 'draft-1',
+      draft_generation: 2,
       subject: 'Updated',
       body_html: Buffer.from('<p>café ☕</p>').toString('base64url'),
       thread_db_id: 'thread-1',
@@ -90,10 +94,18 @@ test('draft editing encodes Unicode HTML and every write stays in the draft inbo
   await draft.delete();
   expect(writes).toHaveLength(9);
   expect(
+    writes
+      .slice(1)
+      .every(
+        (request) =>
+          new URL(request.url).searchParams.get('draft_generation') === '2',
+      ),
+  ).toBe(true);
+  expect(
     writes.every((r) => r.headers.get('X-Email-Link-Id') === 'secondary-inbox'),
   ).toBe(true);
   expect(JSON.stringify(upload.attachment)).toBe(
-    '{"id":"attachment-1","draftId":"draft-1","forwarded":false}',
+    '{"id":"attachment-1","draftId":"draft-1","forwarded":false,"draftGeneration":2}',
   );
 });
 
@@ -512,5 +524,40 @@ test('chat send receipts expose a scoped response message and cancellation never
   expect(await requests[2].json()).toEqual({
     chat_id: 'chat-1',
     stream_id: 'stream-1',
+  });
+});
+
+test('pipeline view positions use the pipeline route and reject foreign handles before a request', async () => {
+  const requests: Request[] = [];
+  const positions: CardPosition[] = [
+    { row: 'row-1', lane: { kind: 'none' }, position: '80' },
+  ];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.url.endsWith('/positions')) return Response.json(positions);
+      return Response.json(tableRecord);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'token',
+    hosts: { storage: 'https://storage.test' },
+  });
+  const pipeline = macro.crm.pipelines.byId('pipeline-1');
+  const view = PipelineView.byId(await pipeline.table(), 'view-1');
+  expect(await view.positions()).toEqual(positions);
+  expect(new URL(requests[1].url).pathname).toBe(
+    '/crm/pipelines/pipeline-1/views/view-1/positions',
+  );
+  await expect(
+    macro.crm.pipelines.byId('pipeline-2').viewPositions(view),
+  ).rejects.toThrow('another pipeline');
+  expect(requests).toHaveLength(2);
+  expect(view.toJSON()).toEqual({
+    id: 'view-1',
+    tableId: 'table-1',
+    pipelineId: 'pipeline-1',
   });
 });

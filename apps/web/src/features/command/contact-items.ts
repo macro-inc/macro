@@ -7,21 +7,44 @@ import {
   resolveContactPeople,
   toCrmContactItem,
 } from '@core/context/quickAccess/crm-contacts';
+import { emailToMacroId } from '@core/user/macroId';
 import type { CrmContactEntity } from '@entity';
+import { crmContactEmailKey } from '@entity/types/entity';
 import type { CommandMenuItem } from './useCommandItems';
 
+function directMessageRecipient(
+  item: CommandMenuItem,
+  viewerId: string | undefined
+) {
+  if (item.kind !== 'entity' || item.data.type !== 'channel') return;
+  if (item.data.channelType !== 'direct_message') return;
+  const others = (item.data.participantIds ?? []).filter(
+    (id) => id !== viewerId
+  );
+  return others.length === 1 ? others[0] : undefined;
+}
+
+/** A person keeps their search position when opening them creates a DM. */
+export function commandSearchResultKey(
+  item: CommandMenuItem,
+  viewerId: string | undefined
+): string {
+  return (
+    ('searchKey' in item ? item.searchKey : undefined) ??
+    directMessageRecipient(item, viewerId) ??
+    item.id
+  );
+}
+
 function directMessagesByUser(
-  directMessages: readonly QuickAccessItem[],
+  directMessages: readonly CommandMenuItem[],
   viewerId: string | undefined
 ) {
   const byUser = new Map<string, EntityItem>();
   for (const item of directMessages) {
     if (item.kind !== 'entity' || item.data.type !== 'channel') continue;
-    if (item.data.channelType !== 'direct_message') continue;
-    const others = (item.data.participantIds ?? []).filter(
-      (id) => id !== viewerId
-    );
-    if (others.length === 1) byUser.set(others[0], item);
+    const recipient = directMessageRecipient(item, viewerId);
+    if (recipient) byUser.set(recipient, item);
   }
   return byUser;
 }
@@ -32,15 +55,25 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
   directMessages: readonly QuickAccessItem[],
   viewerId: string | undefined
 ): (T | EntityItem)[] {
-  const conversations = directMessagesByUser(directMessages, viewerId);
+  // Typed search can find DMs outside the bounded recent list.
+  const searchedConversations = directMessagesByUser(items, viewerId);
+  const recentConversations = directMessagesByUser(directMessages, viewerId);
   const merged = new Map<string, T | EntityItem>();
   for (const item of items) {
     if (item.kind === 'user' && item.id === viewerId) continue;
     const conversation =
-      item.kind === 'user' ? conversations.get(item.id) : undefined;
+      item.kind === 'user'
+        ? (searchedConversations.get(item.id) ??
+          item.commandTarget ??
+          recentConversations.get(item.id))
+        : undefined;
     const resolved = conversation
       ? {
           ...conversation,
+          ...(item.kind === 'user' ? { personOrder: item.personOrder } : {}),
+          ...('searchKey' in item && item.searchKey
+            ? { searchKey: item.searchKey }
+            : {}),
           searchText: `${conversation.searchText} | ${item.searchText}`,
         }
       : item;
@@ -50,6 +83,9 @@ export function mergeCommandPeople<T extends CommandMenuItem>(
       previous
         ? {
             ...resolved,
+            ...('personOrder' in previous && previous.personOrder !== undefined
+              ? { personOrder: previous.personOrder }
+              : {}),
             searchText: `${previous.searchText} | ${resolved.searchText}`,
           }
         : resolved
@@ -74,9 +110,14 @@ export function contactCommandItems(options: {
     options.contacts.map(toCrmContactItem),
     options.users
   ).map(({ contact, user }) => {
-    if (!user) return contact;
+    const email = contact.data.email;
+    const searchKey =
+      (email ? emailToMacroId(crmContactEmailKey(email)) : undefined) ??
+      contact.id;
+    if (!user) return { ...contact, searchKey };
     return {
       ...user,
+      searchKey,
       searchText: `${user.searchText} | ${contact.searchText}`,
     };
   });

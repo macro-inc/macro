@@ -9,22 +9,26 @@ import {
   useNavigate,
   useParams,
 } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { markNotificationsForEntityAsRead } from '@notifications/notification-helpers';
 import { useCalendarOccurrencesQuery } from '@queries/calendar/occurrences';
 import deepEqual from 'fast-deep-equal';
 import {
   type Accessor,
   createEffect,
   createMemo,
+  type JSX,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
-import { resolveCalendarTarget } from './calendar-target';
+import { createCalendarFocusTarget } from './calendar-target';
 import { createCalendarTargetAim } from './calendar-target-request';
 import { calendarSearch, calendarSearchTarget } from './calendar-url';
 import { CalendarViewSkeleton } from './calendar-view-skeleton';
@@ -48,6 +52,7 @@ export type CalendarViewProps = {
   route: { id: string };
   /** A new value re-aims at the URL's event without a navigation. */
   refocus?: Accessor<unknown>;
+  headerLeading?: JSX.Element;
 };
 
 /** Route-backed Calendar view, hosted by its own route or inline under another. */
@@ -56,6 +61,7 @@ export function CalendarView(props: CalendarViewProps) {
   const posthog = usePosthog();
   const userId = useUserId();
   const analytics = useAnalytics();
+  const notificationSource = useGlobalNotificationSource();
   const panel = useSplitPanelOrThrow();
   const navigate = useNavigate();
   const routeParams = useParams<{ period: CalendarPeriodView }>();
@@ -175,13 +181,21 @@ export function CalendarView(props: CalendarViewProps) {
       };
     }
   );
-  const focusTarget = createMemo(() => {
-    const request = targetRequest();
-    if (!request || !occurrencesQuery.isSuccess) {
-      return undefined;
-    }
-    return resolveCalendarTarget(occurrencesQuery.data?.items ?? [], request);
-  });
+  usePending('calendar.target', () => occurrencesQuery.isLoading);
+  const focusTarget = createCalendarFocusTarget(
+    targetRequest,
+    occurrencesQuery
+  );
+
+  const markEventRead = (eventId: string) => {
+    fireAndForget(
+      markNotificationsForEntityAsRead(notificationSource, {
+        type: 'calendar_event',
+        id: eventId,
+      }),
+      'calendar-notification-read'
+    );
+  };
 
   const setFocusedEventId = (eventId: string | undefined) => {
     const next = eventId ?? '';
@@ -189,8 +203,18 @@ export function CalendarView(props: CalendarViewProps) {
       if (!next) return;
       const landed = next === aimingEventId;
       aimingEventId = undefined;
-      if (landed) return;
+      if (landed) {
+        // List activation already marks its row; landing must not send a second
+        // overlapping read write that could interfere with optimistic rollback.
+        // A link has no row behind it, so its landing marks the event instead.
+        const openedByLink =
+          !panel.isInlinePreview &&
+          contentTarget().focusRequestId === undefined;
+        if (openedByLink) markEventRead(next);
+        return;
+      }
     }
+    if (eventId) markEventRead(eventId);
     // Inline, a dismissed popover is not a destination change: the host's
     // selection still names this event, and clearing it would make the next
     // request for the same event a navigation.
@@ -229,7 +253,7 @@ export function CalendarView(props: CalendarViewProps) {
           onPeriodViewChange={setPeriodView}
           onFocusedEventIdChange={setFocusedEventId}
         >
-          <Workspace />
+          <Workspace headerLeading={props.headerLeading} />
         </CalendarViewContextProvider>
       </CalendarFocusContextProvider>
     </Show>

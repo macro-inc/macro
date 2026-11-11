@@ -1,7 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import Dialog from '@corvu/dialog';
-import Check from '@phosphor/check.svg';
-import Trash from '@phosphor/trash-simple.svg';
+import Check from '@icon/system/regular/check.svg';
+import Trash from '@icon/system/regular/trash-simple.svg';
 import { Button, cn } from '@ui';
 import SignaturePad from 'signature_pad';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
@@ -166,8 +166,7 @@ function SignatureEditor(props: SignatureEditorProps) {
         <Dialog.Content
           class={cn(
             'fixed z-modal w-[426px] max-w-[calc(100vw-2rem)] p-3',
-            'bg-surface shadow',
-            'rounded-lg border border-edge',
+            'elevated-surface',
             'flex-col justify-start inline-flex gap-3',
             'dialog-content-open-animation'
           )}
@@ -191,21 +190,23 @@ function SignatureEditor(props: SignatureEditorProps) {
           />
           <div class="flex flex-row w-full justify-center items-center border-t border-edge">
             <Button
+              aria-label="Use signature"
+              tooltip="Use signature"
               variant="ghost"
               size="icon-md"
-              label="Use signature"
               disabled={!hasStrokes()}
               onClick={updatePlaceable}
             >
-              <Check />
+              <Check class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button
+              aria-label="Cancel signature"
+              tooltip="Cancel signature"
               variant="ghost"
               size="icon-md"
-              label="Cancel signature"
               onClick={cancel}
             >
-              <Trash />
+              <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
         </Dialog.Content>

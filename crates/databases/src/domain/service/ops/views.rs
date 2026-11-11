@@ -470,7 +470,7 @@ fn stored_layout(
                 index,
                 None,
                 None,
-                "the table has no column to title a board's cards by",
+                "the table has no column to title a board's cards or a timeline's bars by",
             )
         })
 }

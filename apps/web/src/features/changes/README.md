@@ -109,6 +109,10 @@ in that split's search params (`s0.changes.pane`, `s0.changes.style`), so the
 split router drops them when the split closes or navigates away; anywhere else,
 such as a preview, they are local signals.
 
+New captures expand files with at most 40 additions + deletions and collapse larger
+files, on desktop and mobile. Saved collapse choices for the same capture take
+precedence; selecting a file opens it.
+
 ## Lifecycle boundaries
 
 - `createChangesModel` owns source enablement and retains displayed patch text for

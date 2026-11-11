@@ -1,18 +1,25 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
 import { createSignal, Show } from 'solid-js';
 import type {
   EmailDraftStorage,
   SaveEmailDraft,
+  SendEmailDraft,
 } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
+import type { LocalDraft } from '../core/local-draft';
 import { createEmailComposer } from '../primitives/email-composer';
 import { createEmailEditor, setEmailEditorText } from '../tests/editor';
 
-/** Real controller and toast UI, with an injected durable-save transport. */
-function RecoveryEditor() {
+/**
+ * Real controller and toast UI, with an injected durable-save transport.
+ * `durable` adds the outbox and an in-memory working copy, as in production.
+ */
+function RecoveryEditor(props: { durable: boolean }) {
   const [saved, setSaved] = createSignal<SaveEmailDraft[]>([]);
+  const [sent, setSent] = createSignal<SendEmailDraft[]>([]);
+  let local: LocalDraft | undefined;
   let changed: Parameters<NonNullable<EmailDraftStorage['watchDrafts']>>[0] =
     () => {};
   const editor = createEmailEditor();
@@ -24,6 +31,25 @@ function RecoveryEditor() {
         attachments: [],
       }),
       readDraft: async () => undefined,
+      saveLocalDraft: props.durable
+        ? async (input) => {
+            const draftId = input.clientHandles?.draftId ?? input.draft.db_id!;
+            local = {
+              key: draftId,
+              draftId,
+              threadId: input.clientHandles?.threadId,
+              accountId: 'owner',
+              generation: 'generation',
+              revision: (local?.revision ?? 0) + 1,
+              acknowledgedRevision: 0,
+              status: 'dirty',
+              updatedAt: Date.now(),
+              content: input.draft,
+              attachments: [],
+            };
+            return local;
+          }
+        : undefined,
       watchDrafts: (callback) => {
         changed = callback;
         return () => {
@@ -50,7 +76,11 @@ function RecoveryEditor() {
       removeForwardedAttachment: async () => {},
     },
     delivery: {
-      sendMessage: async () => ({ inboxId: 'inbox' }),
+      queueActive: () => props.durable,
+      sendMessage: async (input) => {
+        setSent((previous) => [...previous, input]);
+        return { inboxId: 'inbox' };
+      },
       unschedule: async () => {},
       schedule: async () => {},
       archive: async () => {},
@@ -71,11 +101,11 @@ function RecoveryEditor() {
               {
                 title: message,
                 content: () => options.subtext,
-                icon: ExclamationIcon,
-                color: 'var(--color-failure)',
+                icon: FileTextIcon,
+                color: 'var(--color-accent)',
                 actions: options.actions,
               },
-              { persistent: true }
+              { persistent: true, dismissStyle: 'icon' }
             );
           toast.failure(message, options);
           return undefined;
@@ -100,6 +130,7 @@ function RecoveryEditor() {
     recipients: () => [],
     recipientName: (id) => id,
     initialTo: ['colleague@example.com'],
+    initialSubject: props.durable ? 'Review' : undefined,
   });
   state.context.captureEditor(editor);
   state.context.onContentChange('');
@@ -141,12 +172,20 @@ function RecoveryEditor() {
       <button onClick={() => toast.success('Copied')}>
         Show transient notice
       </button>
+      <button onClick={() => state.context.onSend()}>Send</button>
       <output data-testid="save-count">{saved().length}</output>
+      <output data-testid="has-draft">
+        {String(state.context.hasDraft())}
+      </output>
       <output data-testid="saved-draft-ids">
         {JSON.stringify(saved().map((input) => input.clientHandles?.draftId))}
       </output>
       <output data-testid="saved-body">
         {decodeBase64Utf8(saved().at(-1)?.draft.body_html ?? '')}
+      </output>
+      <output data-testid="send-count">{sent().length}</output>
+      <output data-testid="sent-body">
+        {sent().at(-1)?.message.body_text ?? ''}
       </output>
     </section>
   );
@@ -158,7 +197,9 @@ export function DraftRecoveryFixture() {
     <main class="min-h-screen bg-surface p-4 text-ink">
       <button onClick={() => setOpen(false)}>Close composer</button>
       <Show when={open()}>
-        <RecoveryEditor />
+        <RecoveryEditor
+          durable={new URLSearchParams(location.search).has('durable')}
+        />
       </Show>
       <ToastRegion />
     </main>

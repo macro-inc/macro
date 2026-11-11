@@ -8,3 +8,4 @@ mod test_predefined_model;
 mod test_rig_invariants;
 mod test_router;
 mod test_tool_adapter;
+mod test_tool_result_limit;

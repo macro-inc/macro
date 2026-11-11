@@ -1,8 +1,11 @@
-import type { ImportSource, ImportState } from '@service-cognition/import';
 import type { Accessor } from 'solid-js';
 import type { AgentImportHandoff } from '../core/agent-handoff';
 
-export type ConnectOutcome = 'connected' | 'closed' | 'unsupported';
+/**
+ * `started` means authorization continues in another tab; the connection
+ * shows up in `createConnections` once it finishes.
+ */
+export type ConnectOutcome = 'connected' | 'started' | 'closed' | 'unsupported';
 
 /** The user's connected apps; `ready` is false until the answer is known. */
 type ConnectionsSource = {
@@ -10,26 +13,17 @@ type ConnectionsSource = {
   ready: Accessor<boolean>;
 };
 
-/** Import pipeline state; `ready` is false while serving a placeholder. */
-type ImportStateSource = {
-  state: Accessor<ImportState>;
-  ready: Accessor<boolean>;
-};
-
 export type ConnectorImportContext = {
   /** Called inside an open dialog so its queries live only that long. */
   createConnections(): ConnectionsSource;
-  createImportState(): ImportStateSource;
-  /** Connect through Pipedream; `container` keeps the iframe usable in a modal. */
+  /**
+   * Connect through the app's native MCP server when it has one, otherwise
+   * Pipedream; `container` keeps Pipedream's iframe usable in a modal.
+   */
   connect(
-    app: { appSlug: string; name: string },
+    app: { appSlug: string; name: string; mcpUrl?: string },
     container?: HTMLElement
   ): Promise<ConnectOutcome>;
-  /** Start finding items for a native source. */
-  discover(source: ImportSource): Promise<void>;
-  /** Accept staged rows; completion arrives through the import state. */
-  runImport(importIds: string[]): Promise<void>;
-  /** Hand a provider without a native importer to an agent chat. */
+  /** Hand the import to an agent chat in a split beside the current view. */
   startAgentImport(handoff: AgentImportHandoff): Promise<void>;
-  entityHref(entity: { id: string; type: string }): string;
 };

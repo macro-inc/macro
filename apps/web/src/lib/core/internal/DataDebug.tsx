@@ -1,21 +1,22 @@
 import { Bar } from '@core/component/TopBar/Bar';
-import { useContacts } from '@core/user';
-import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
-import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
+import Refresh from '@icon/system/regular/arrow-clockwise.svg?component-solid';
+import Copy from '@icon/system/regular/copy.svg?component-solid';
+import { useContactDirectoryWindow } from '@queries/contacts/use-directory';
 import { useHistoryQuery } from '@queries/history/history';
 import { Button, Layer } from '@ui';
-import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
+import { type Component, For, type JSX, Show } from 'solid-js';
+import { ContactDirectoryInspector } from './ContactDirectoryInspector';
 
-interface SignalDebugCardProps {
+interface SignalDebugCardProps<T> {
   title: string;
-  data: any[];
-  renderItem: (item: any) => JSX.Element;
+  data: T[];
+  renderItem: (item: T) => JSX.Element;
 }
 
-function SignalDebugCard(props: SignalDebugCardProps) {
-  const formatJson = (data: any) => {
+function SignalDebugCard<T>(props: SignalDebugCardProps<T>) {
+  const formatJson = (data: unknown) => {
     try {
-      return JSON.stringify(data, null, 2);
+      return JSON.stringify(data, null, 2) ?? String(data);
     } catch (_e) {
       return String(data);
     }
@@ -72,14 +73,10 @@ function SignalDebugCard(props: SignalDebugCardProps) {
 }
 
 const DataDebug: Component = () => {
-  const contacts = useContacts();
+  const contacts = useContactDirectoryWindow();
   const historyQuery = useHistoryQuery();
 
-  const [_, setRefreshKey] = createSignal(0);
-
-  const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1);
-  };
+  const handleRefresh = () => contacts.restart();
 
   return (
     <div class="flex flex-col size-full">
@@ -90,23 +87,15 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <Button variant="outline" onClick={handleRefresh}>
-            <Refresh /> Refresh
+          <Button variant="secondary" onClick={handleRefresh}>
+            <Refresh class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+            Refresh
           </Button>
         }
       ></Bar>
       <div class="flex flex-col gap-6 p-6 overflow-scroll">
         <div class="grid grid-cols-2 @max-md/split:grid-cols-1 gap-6">
-          <SignalDebugCard
-            title="useContacts()"
-            data={contacts()}
-            renderItem={(contact) => (
-              <div class="bg-panel p-2 rounded text-sm">
-                <div class="font-medium">{contact.email}</div>
-                <div class="text-ink-muted">ID: {contact.id}</div>
-              </div>
-            )}
-          />
+          <ContactDirectoryInspector directory={contacts} />
 
           <SignalDebugCard
             title="useHistoryQuery()"

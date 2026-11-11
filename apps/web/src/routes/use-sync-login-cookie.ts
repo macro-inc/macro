@@ -5,6 +5,7 @@ import {
 } from '@core/util/cookies';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { useUserInfoQuery } from '@queries/auth/user-info';
+import { setEmailOutboxSession } from '@queries/email/outbox-session';
 import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { createEffect, on } from 'solid-js';
 
@@ -19,14 +20,16 @@ export function useSyncLoginCookie() {
         if (thrownResultErrorHasCode(query.error, 'UNAUTHORIZED')) return false;
         // Loading and transient failures must preserve offline session state.
         if (!query.isSuccess) return undefined;
-        return query.data.authenticated ?? false;
+        return query.data.authenticated ? query.data.id : false;
       },
-      (authenticated) => {
-        if (authenticated === undefined) return;
+      (accountId) => {
+        if (accountId === undefined) return;
+        const authenticated = accountId !== false;
         const { value, ...options } = getLoginCookieOptions(authenticated);
         updateCookie('login', value, options);
         syncLoginStorage(authenticated);
         setGraphqlSoupSessionActive(authenticated);
+        setEmailOutboxSession(accountId || undefined);
       }
     )
   );

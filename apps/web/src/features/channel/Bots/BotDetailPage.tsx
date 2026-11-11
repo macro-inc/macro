@@ -6,7 +6,7 @@ import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import {
   useBotChannelsQuery,
   useBotQuery,
@@ -14,7 +14,11 @@ import {
   useUpdateBotMutation,
 } from '@queries/bots/bots';
 import { useSyncBotChannelsMutation } from '@queries/channel/channel-bots';
-import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import {
+  useCurrentTeamQuery,
+  useIsTeamAdmin,
+  useIsTeamOwner,
+} from '@queries/team/teams';
 import { Button } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -47,6 +51,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
   const currentUserId = useUserId();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
+  const isTeamAdmin = useIsTeamAdmin();
   const botQuery = useBotQuery(() => props.botId);
   const botChannelsQuery = useBotChannelsQuery(() => props.botId);
   const updateBotMutation = useUpdateBotMutation();
@@ -122,7 +127,8 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         bot,
         currentUserId(),
         currentTeamQuery.data?.team.id,
-        isTeamOwner()
+        isTeamOwner(),
+        isTeamAdmin()
       )
     );
   };
@@ -210,7 +216,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
             disabled={pending()}
             onClick={leave}
           >
-            <CaretLeftIcon />
+            <CaretLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Back to bots
           </Button>
           <Show
@@ -259,7 +265,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       class="ml-auto"
                       disabled={agentDm?.pending()}
                       onClick={() =>

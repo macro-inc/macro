@@ -7,9 +7,15 @@ use serde_json::Value;
 use utoipa::ToSchema;
 
 /// Caller-selected UUID persisted in tool input before execution begins.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema, specta::Type,
+)]
 #[serde(transparent)]
-pub struct ExecutionId(#[schemars(with = "String")] Uuid);
+pub struct ExecutionId(
+    #[schemars(with = "String")]
+    #[specta(type = String)]
+    Uuid,
+);
 
 impl ExecutionId {
     /// Mint an execution identity.
@@ -32,14 +38,16 @@ impl std::fmt::Display for ExecutionId {
     }
 }
 
-/// Identity copied from the authenticated session, never from program arguments.
+/// Trusted session identity and the explicit, unresolved account choice.
 #[derive(Clone)]
 pub struct ExecutionIdentity {
     /// Run identity supplied by the session execution service.
     pub execution: ExecutionId,
+    /// Explicit account choice for this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
     /// Session whose owner authorized this execution.
     pub session: AgentSessionId,
-    /// User whose permissions the tools enforce.
+    /// Session owner; credential issuance resolves acting_as against the verified turn.
     pub owner: MacroUserIdStr<'static>,
     /// Agent from the authenticated session, used to attribute SDK messages.
     pub agent_id: bot_id::BotId,
@@ -104,6 +112,12 @@ pub enum RecordedCallStatus {
 pub struct ExecutionRecord {
     /// Execution identity.
     pub execution_id: ExecutionId,
+    /// Account choice bound to this saved execution; absent on historical records.
+    #[serde(default)]
+    pub acting_as: Option<ai_toolset::actor::ToolActor>,
+    /// Original turn, preventing another requester from replaying a saved result.
+    #[serde(default)]
+    pub turn_id: Option<Uuid>,
     /// The submitted JavaScript module.
     pub source: String,
     /// Overall execution state.
@@ -151,6 +165,10 @@ pub enum CodeModeError {
     /// No record belongs to this session and execution pair.
     #[error("code execution not found")]
     NotFound,
+    /// A connected app's server could not be reached or broke the exchange.
+    /// Upstream details stay in server diagnostics.
+    #[error("the connected app could not be reached; try again later")]
+    ConnectedAppUnreachable,
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,

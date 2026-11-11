@@ -4,22 +4,23 @@ import {
   type ComposerAddMenuGroup,
 } from '@channel/Input/ComposerAddMenu';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { isMobile } from '@core/mobile/isMobile';
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectedAppIcon } from '@core/pipedream/ConnectedAppIcon';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import PlugsIcon from '@icon/system/regular/plugs.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import BooksIcon from '@phosphor/books.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import PlugsIcon from '@phosphor/plugs.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
+import { agentAttachmentItems } from '../../block-agent/ui/attachment-menu';
 import type { ProviderId } from '../../settings/connections/model';
 import { providerIcon } from '../../settings/connections/provider-meta';
 import { useConnectionsModel } from '../../settings/connections/use-connections-model';
 
-const ConnectionsPage = lazy(async () => ({
-  default: (await import('../../settings/connections/ConnectionsPage'))
-    .ConnectionsPage,
+const IntegrationsView = lazy(async () => ({
+  default: (await import('../../settings/connections/integrations-view'))
+    .IntegrationsView,
 }));
 const LeftoverRow = lazy(async () => ({
   default: (await import('../../settings/connections/leftover-row'))
@@ -34,6 +35,8 @@ type Target =
 /** Shared composer actions plus the owner's existing connection settings. */
 export function AgentComposerAddMenu(props: {
   openFiles: () => void;
+  openImages: () => void;
+  imageUnsupportedReason?: string;
   openLibrary: () => void;
   openSkills: () => void;
   getEditor: () => HTMLElement | null | undefined;
@@ -42,6 +45,7 @@ export function AgentComposerAddMenu(props: {
 }) {
   const connections = useConnectionsModel();
   const settings = useSettingsState();
+  const isTabAvailable = useSettingsTabAvailable();
   const [drawerOpen, setDrawerOpen] = createSignal(false);
   const [target, setTarget] = createSignal<Target>();
   const openTarget = (next: Target) => {
@@ -52,13 +56,11 @@ export function AgentComposerAddMenu(props: {
   const groups = (): ComposerAddMenuGroup[] => [
     {
       items: [
-        {
-          id: 'upload',
-          label: 'Add photos & files',
-          description: 'Upload from your device',
-          icon: <PaperclipIcon />,
-          onSelect: props.openFiles,
-        },
+        ...agentAttachmentItems(
+          props.openFiles,
+          props.openImages,
+          props.imageUnsupportedReason
+        ),
         {
           id: 'library',
           label: 'Add from library',
@@ -109,7 +111,7 @@ export function AgentComposerAddMenu(props: {
             : 'Disabled · Open settings',
           icon:
             connection.kind === 'pipedream' ? (
-              <PipedreamConnectorIcon appSlug={connection.appSlug} />
+              <ConnectedAppIcon appSlug={connection.appSlug} />
             ) : (
               <PlugsIcon />
             ),
@@ -203,18 +205,27 @@ export function AgentComposerAddMenu(props: {
               <Show
                 when={selected.kind === 'other' ? selected : undefined}
                 fallback={
-                  <ConnectionsPage
-                    initialMode={
-                      selected.kind === 'overview' ? selected.mode : undefined
-                    }
+                  <IntegrationsView
                     initialProvider={
                       selected.kind === 'provider'
                         ? selected.provider
                         : undefined
                     }
+                    onOpenLocalAgents={
+                      isTabAvailable('Harness')
+                        ? () => {
+                            setTarget(undefined);
+                            settings.openSettings('Harness');
+                          }
+                        : undefined
+                    }
                     onOpenMacroMcp={() => {
                       setTarget(undefined);
                       settings.openSettings('Agent');
+                    }}
+                    onOpenEmailSettings={() => {
+                      setTarget(undefined);
+                      settings.openSettings('Email');
                     }}
                   />
                 }

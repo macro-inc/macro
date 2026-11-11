@@ -8,6 +8,8 @@ import {
   SplitLayoutProvider,
 } from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
 import { LIKELY_NEXT_VIEWS } from './lazy-route-views';
@@ -21,6 +23,9 @@ function useDismissBootShell() {
 /** Sign-in, onboarding, invite, and handoff pages: the page alone. */
 export function AuthShell(): JSX.Element {
   useDismissBootShell();
+  onMount(() =>
+    fireAndForget(releaseNotificationCover(), 'notification-launch')
+  );
   return (
     <PageContent>
       <ImperativeDialogHost />

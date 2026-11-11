@@ -78,6 +78,7 @@ const calendar: CalendarFieldsFragment = {
     emailReminders: true,
     removeConference: true,
     resetRsvp: true,
+    guestPolicy: true,
   },
   id: 'calendar-1',
   linkId: 'link-1',

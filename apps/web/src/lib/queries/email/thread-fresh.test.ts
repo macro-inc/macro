@@ -16,6 +16,7 @@ import { fetchFreshEmailThread } from './thread';
 
 function message(dbId: string): ApiMessage {
   return {
+    draft_generation: 0,
     attachments: [],
     attachments_draft: [],
     attachments_forwarded: [],
@@ -42,6 +43,7 @@ function thread(messages: ApiMessage[]): ApiThread {
     created_at: '2026-09-21T00:00:00Z',
     db_id: 'thread',
     inbox_visible: true,
+    has_received_mail: true,
     is_read: true,
     link_id: 'inbox',
     messages,

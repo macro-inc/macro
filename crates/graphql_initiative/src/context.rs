@@ -12,7 +12,7 @@ use entity_access::domain::{
 use initiative::domain::{
     models::{CreateInitiativeRequest, InitiativeDetail, InitiativeError, UpdateInitiativeRequest},
     ports::InitiativeService,
-    reads::{InitiativePageRow, InitiativeTasksPage, InitiativeTasksRequest},
+    reads::{InitiativePageRow, InitiativeRead, InitiativeTasksPage, InitiativeTasksRequest},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -23,8 +23,8 @@ pub(crate) type ApiFuture<'a, T> =
 
 /// Transport-facing service bundle; implementations mint receipts and delegate policy.
 pub(crate) trait InitiativeApi: Send + Sync {
-    fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow>;
-    fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail>;
+    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead>;
+    fn summarize<'a>(&'a self, read: &'a InitiativeRead) -> ApiFuture<'a, InitiativePageRow>;
     fn ensure_description_surface(
         &self,
         user: MacroUserIdStr<'static>,
@@ -96,24 +96,18 @@ struct InitiativeApiAdapter<S, A> {
 }
 
 impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for InitiativeApiAdapter<S, A> {
-    fn summary(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativePageRow> {
+    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
             let receipt = self
                 .access
                 .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
                 .await?;
-            self.service.summary(receipt).await
+            self.service.read(receipt).await
         })
     }
 
-    fn get(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeDetail> {
-        Box::pin(async move {
-            let receipt = self
-                .access
-                .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
-                .await?;
-            self.service.get(receipt).await
-        })
+    fn summarize<'a>(&'a self, read: &'a InitiativeRead) -> ApiFuture<'a, InitiativePageRow> {
+        Box::pin(self.service.summarize(read))
     }
 
     fn ensure_description_surface(

@@ -1,7 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ModelEffortMenu } from '@core/component/AI/component/input/ModelEffortMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import Check from '@phosphor/check.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button, Dropdown, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type {
@@ -19,7 +18,6 @@ export function EffortSelector(props: {
   onCloseAutoFocus?: (event: Event) => void;
 }) {
   const [open, setOpen] = createSignal(false);
-  let content: HTMLElement | undefined;
   const changeOpen = (value: boolean) => {
     setOpen(value);
     props.onOpenChange?.(value);
@@ -91,35 +89,19 @@ export function EffortSelector(props: {
                 {contents()}
               </Dropdown.Trigger>
             </Tooltip>
-            <Dropdown.Content
-              ref={content}
-              onOpenAutoFocus={(event) => {
-                // This menu contains a slider rather than roving menu items.
-                event.preventDefault();
-                content?.querySelector<HTMLElement>('[role="slider"]')?.focus();
-              }}
-              class="w-64 rounded-2xl"
-              aria-label="Reasoning effort"
-              onCloseAutoFocus={props.onCloseAutoFocus}
-            >
-              <ModelEffortMenu
-                effortOnly
-                label="Reasoning effort"
-                config={props.config}
-                value={value()}
-                disabled={props.disabled}
-                onChange={(next) => {
-                  const choice = choices().find(
-                    (choice) => choice.value === next
-                  );
-                  if (props.config && choice)
-                    props.onChange({
-                      configId: props.config.id,
-                      value: choice.value,
-                      name: choice.name,
-                    });
-                }}
-              />
+            <Dropdown.Content class="w-48" aria-label="Reasoning effort">
+              <Dropdown.Group>
+                <For each={choices()}>
+                  {(choice) => (
+                    <Dropdown.Item
+                      disabled={props.disabled}
+                      onSelect={() => choose(choice)}
+                    >
+                      {optionLabel(choice)}
+                    </Dropdown.Item>
+                  )}
+                </For>
+              </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>
         }

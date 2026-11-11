@@ -23,6 +23,31 @@ function Actions(
 }
 
 describe('email row actions', () => {
+  it('restores folder mail without also offering archive or activating the row', () => {
+    const restore = vi.fn();
+    const openThread = vi.fn();
+    render(() => (
+      <div onClick={openThread}>
+        <EmailRowActions
+          archived
+          canArchive={false}
+          canUnarchive={false}
+          pending={false}
+          restore={{ label: 'Not spam', run: restore }}
+          onArchive={vi.fn()}
+          onCommands={vi.fn()}
+          onFocus={vi.fn()}
+        />
+      </div>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Not spam' }));
+    expect(restore).toHaveBeenCalledOnce();
+    expect(openThread).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: 'Unarchive email' })
+    ).toBeNull();
+  });
+
   it('runs the clicked action without activating or dragging the row', () => {
     const openThread = vi.fn();
     const startDrag = vi.fn();
@@ -39,6 +64,7 @@ describe('email row actions', () => {
           starred={false}
           archived={false}
           canArchive
+          canUnarchive
           pending={false}
           onStar={onStar}
           onArchive={onArchive}
@@ -71,6 +97,7 @@ describe('email row actions', () => {
         starred={starred()}
         archived={archived()}
         canArchive={canArchive()}
+        canUnarchive
         pending={pending()}
         onStar={() => setStarred(!starred())}
         onArchive={() => setArchived(!archived())}
@@ -113,6 +140,7 @@ describe('email row actions', () => {
           starred={false}
           archived={false}
           canArchive
+          canUnarchive
           pending={false}
           onStar={() => {}}
           onArchive={() => {}}

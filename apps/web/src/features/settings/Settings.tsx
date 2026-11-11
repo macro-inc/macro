@@ -1,5 +1,6 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   useParams,
   useNavigate as useSplitNavigate,
@@ -23,6 +24,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import {
   createMemo,
   createRenderEffect,
@@ -91,6 +93,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const outlook = useOutlookAvailable();
 
   const activeNavigationTab = activeTabId;
 
@@ -100,6 +103,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const searchResults = createMemo(() =>
     searchSettings(searchGroups(), searchQuery(), {
       emailSignatures: signatures().enabled,
+      outlook: outlook(),
     })
   );
 
@@ -130,7 +134,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register Escape key to close settings
   registerHotkey({
     keyDownHandler: handleEscapeKey,
-    description: 'Close settings',
+    description: () => t('settingsNav.closeSettings'),
     scopeId: settingsHotkeyScope,
     hotkey: 'escape',
   });
@@ -165,7 +169,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       return navigateToTabIndex(keyNum - 1);
     }
     registerHotkey({
-      description: `Go to settings tab ${keyNum}`,
+      description: () => t('settingsNav.goToTab', { number: keyNum }),
       hotkey: `${keyNum}` as ValidHotkey,
       keyDownHandler: handleNumberKey,
       scopeId: settingsHotkeyScope,
@@ -261,7 +265,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                   onSearchQueryChange={setSearchQuery}
                   isItemActive={isItemActive}
                   onSelect={selectRoutedTab}
-                  footer={<TeamSidebarAction />}
+                  action={<TeamSidebarAction />}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>

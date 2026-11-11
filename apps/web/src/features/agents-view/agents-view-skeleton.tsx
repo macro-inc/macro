@@ -8,7 +8,7 @@ export function AgentsViewSkeleton() {
       aside={{ min: 224, max: 380, preserveDuringResize: false }}
       main={{ min: 280, preferredWidth: 640 }}
     >
-      <ViewSkeleton.Sidebar title="Agents" />
+      <ViewSkeleton.Sidebar title="Agents" createLabel="New" />
       <ViewSkeleton.Main>
         <div class="flex-1" />
       </ViewSkeleton.Main>

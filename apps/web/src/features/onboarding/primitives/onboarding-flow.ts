@@ -12,6 +12,7 @@ import type {
   Viewer,
 } from '../context/onboarding-context';
 import type { CheckoutReturn } from '../core/checkout';
+import type { SignupProvider } from '../core/signup-draft';
 import {
   nextOnboardingStep,
   ONBOARDING_STEPS,
@@ -48,6 +49,8 @@ export function createOnboardingFlow(
   context: FlowCapabilities,
   options: {
     checkoutReturn: Accessor<CheckoutReturn | undefined>;
+    /** Raw `?step` from the entry link. Unknown values are ignored. */
+    requestedStep: Accessor<string | undefined>;
     record: Accessor<Loadable<OnboardingRecord>>;
     /** Whether the viewer signed up with Google (has an inbox) or an email code. */
     signupMethod: Accessor<'google' | 'email_code' | undefined>;
@@ -56,6 +59,9 @@ export function createOnboardingFlow(
   }
 ) {
   const [step, setStep] = createSignal<OnboardingStep>();
+  // Read once from the sign-up draft, which restore clears, so a later return
+  // (an inbox consent round-trip) does not repeat what it triggers.
+  const [signupProvider, setSignupProvider] = createSignal<SignupProvider>();
   const index = () => {
     const current = step();
     return current ? ONBOARDING_STEPS.indexOf(current) : -1;
@@ -67,18 +73,20 @@ export function createOnboardingFlow(
   };
   const needsOnboarding = () => viewer()?.tutorialComplete === false;
 
-  // Restore once per viewer: the signed-out draft's OAuth return wins, then
-  // saved progress; a checkout return always lands on the plan step.
+  // Restore once per viewer. Checkout, then a Google sign-up return, then
+  // saved progress, then a ?step link, then welcome.
   const restore = (userId: string | undefined) => {
     if (!userId || step()) return;
     const draft = readSignupDraft();
     const initial = restoreOnboardingStep(
       draft?.authenticating ? 'work' : readSavedStep(userId),
-      options.checkoutReturn() !== undefined
+      options.checkoutReturn() !== undefined,
+      options.requestedStep()
     );
     saveStep(userId, initial);
     if (draft?.authenticating && draft.accent)
       context.applyAccent(draft.accent, userId);
+    if (draft?.authenticating) setSignupProvider(draft.provider);
     clearSignupDraft();
     setStep(initial);
   };
@@ -161,5 +169,5 @@ export function createOnboardingFlow(
     return nextOnboardingStep(current, outcome);
   };
 
-  return { status, step, index, commit, leave };
+  return { status, step, index, commit, leave, signupProvider };
 }

@@ -1,3 +1,4 @@
+import type { ListFilterGroup } from '@app/components/view-shell';
 import type { CrmCompanyEntity } from '@entity';
 import {
   type Accessor,
@@ -5,6 +6,19 @@ import {
   createContext,
   useContext,
 } from 'solid-js';
+import type { SetStoreFunction, Store } from 'solid-js/store';
+import type { CrmActivityViewState } from '../core/activity-view';
+import type { CrmContact } from '../core/contact';
+
+export type ActivityFilters = {
+  groups: Accessor<ListFilterGroup<string, string>[]>;
+  activeCount: Accessor<number>;
+  isSelected(group: string, option: string): boolean;
+  selectedIds(group: string): string[];
+  setSelected(group: string, option: string, selected: boolean): void;
+  clear(): void;
+};
+
 import type {
   CrmDisplayOptions,
   CrmListColumnId,
@@ -13,6 +27,7 @@ import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
+  BlockedDomainsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -41,6 +56,15 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  createEmailPrivacy(): {
+    query: import('./crm-sources').CrmQuery<
+      import('../core/email-privacy').EmailPrivacy
+    >;
+    update: CrmMutation<
+      import('../core/email-privacy').EmailPrivacyChange,
+      import('../core/email-privacy').EmailPrivacy
+    >;
+  };
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
   PipelineEntries: PipelineEntriesView;
@@ -82,8 +106,27 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
-  createActivity(tab: Accessor<CrmActivityTab>): ItemListSource;
-  openTaskComposer(): void;
+  createActivity(
+    tab: Accessor<CrmActivityTab>,
+    options?: Accessor<CrmActivityViewState>
+  ): ItemListSource;
+  openCreateItem(kind: 'notes' | 'calls'): void;
+  openEmailComposer(recipient?: string): void;
+  createActivityState(
+    tab: CrmActivityTab
+  ): readonly [
+    Store<CrmActivityViewState>,
+    SetStoreFunction<CrmActivityViewState>,
+  ];
+  createActivityFilters(
+    tab: CrmActivityTab,
+    state: Store<CrmActivityViewState>,
+    setState: SetStoreFunction<CrmActivityViewState>
+  ): ActivityFilters;
+  ActivityTasks: Component<{ title?: import('solid-js').JSX.Element }>;
+  openTaskComposer(
+    options?: import('../../tasks-view/types').TaskCreateOptions
+  ): void;
   /** Newest mounted record source wins; cleanup restores the parent record source. */
   registerTaskComposerRecord(
     source: Accessor<CrmTaskRecord | undefined>
@@ -118,7 +161,7 @@ export type CrmContext = {
     query: { readonly isLoading: boolean };
   };
   createContactSuggestions(): {
-    contacts: Accessor<{ id: string; name: string; email: string }[]>;
+    contacts: Accessor<{ id: string; name: string; email?: string | null }[]>;
     query: { readonly isLoading: boolean };
   };
   exportCompanies(
@@ -132,33 +175,42 @@ export type CrmContext = {
   };
   openCreateCompany(): void;
   /** Without a company, the dialog asks which company the contact joins. */
-  openCreateContact(company?: { companyId: string; domain: string }): void;
+  openCreateContact(company?: { companyId: string }): void;
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
   createContactSource(id: Accessor<string>): ContactSource;
   createTeamSource(): TeamSource;
   createTeamConfigSource(): TeamConfigSource;
+  createBlockedDomains(): BlockedDomainsSource;
   createCapabilities(): CrmCapabilities;
   createDealStages(): DealStages;
   createPersonalViews(): PersonalViewsSource;
   createTeamViews(): TeamViewsSource;
   createLists(teamId: Accessor<string | undefined>): ListsSource;
   createCompany(): CrmMutation<
-    { name: string; domain: string },
+    { name: string; domain?: string },
     { id: string }
   >;
   createCompanyImporter(): CompanyImporter;
   createContact(): CrmMutation<
-    { companyId: string; name: string; email: string },
+    { companyId?: string; name: string; email?: string },
     { id: string }
   >;
   renameCompany(): CrmMutation<{ companyId: string; name: string }>;
   renameContact(): CrmMutation<{
     contactId: string;
-    companyId: string;
+    companyId?: string | null;
     name: string;
   }>;
+  editContactEmail(): CrmMutation<
+    { contact: CrmContact; email: string },
+    CrmContact
+  >;
+  editContactCompany(): CrmMutation<
+    { contact: CrmContact; companyId: string },
+    CrmContact
+  >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;
   hideContact(): CrmMutation<{ contactId: string; hidden: boolean }>;
   setEmailSync(): CrmMutation<{ companyId: string; emailSync: boolean }>;

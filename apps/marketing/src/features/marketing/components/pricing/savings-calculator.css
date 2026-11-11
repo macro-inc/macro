@@ -26,7 +26,7 @@
 .pricing-savings-stepper button:hover:not(:disabled) { background: var(--ps-hover); color: var(--ps-ink); }
 .pricing-savings-stepper button:disabled { opacity: .3; }
 .pricing-savings-stepper svg { width: 14px; height: 14px; }
-.pricing-savings-stepper input { width: 56px; border: 0; background: none; color: var(--ps-ink); font: 500 15px/1.5 Inter, body; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; -moz-appearance: textfield; }
+.pricing-savings-stepper input { width: 44px; height: 40px; border: 0; background: none; color: var(--ps-ink); font: 500 15px/1.5 Inter, body; font-variant-numeric: tabular-nums; text-align: center; appearance: textfield; -moz-appearance: textfield; }
 .pricing-savings-stepper input::-webkit-inner-spin-button, .pricing-savings-stepper input::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; }
 .pricing-savings-macro { display: flex; justify-content: space-between; gap: 16px; padding-top: 24px; border-top: 1px solid var(--ps-edge-muted); color: var(--ps-ink-muted); font: 370 14px/1.5 Inter, body; }
 .pricing-savings-macro span:last-child { color: var(--ps-ink); font-variant-numeric: tabular-nums; }
@@ -37,10 +37,13 @@
   .pricing-savings-body { grid-template-columns: minmax(0, 1fr); }
   .pricing-savings-summary { position: static; }
 }
-@media (max-width: 479px) {
-  .pricing-savings-tools > li { flex-wrap: wrap; gap: 8px 12px; padding: 8px 16px 12px 8px; }
-  .pricing-savings-toggle { flex-basis: 100%; min-height: 48px; }
-  .pricing-savings-plans { margin-left: 12px; }
-  .pricing-savings-price { width: auto; margin-left: auto; }
-  .pricing-savings-result strong { font-size: 44px; }
+
+.pricing-savings-scroll { max-height: 480px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--c1) 30%, transparent) transparent; scrollbar-gutter: stable; border-radius: 10px; }
+.pricing-savings-scroll::-webkit-scrollbar { display: block; width: 6px; }
+.pricing-savings-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--c1) 30%, transparent); border-radius: 999px; }
+.pricing-savings-table thead { position: sticky; top: 0; z-index: 1; background: var(--b0); }
+.pricing-savings-table thead th { padding-top: 12px; }
+.pricing-savings-note { margin-top: 16px; }
+@media (max-width: 600px) {
+  .pricing-savings-scroll { max-height: 425px; }
 }

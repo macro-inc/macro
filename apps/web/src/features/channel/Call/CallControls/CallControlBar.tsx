@@ -1,336 +1,345 @@
-import CaretUp from '@phosphor/caret-up.svg';
-import Image from '@phosphor/image.svg';
-import Microphone from '@phosphor/microphone.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import PhoneDisconnect from '@phosphor/phone-disconnect.svg';
-import Screencast from '@phosphor/screencast.svg';
-import VideoCamera from '@phosphor/video-camera.svg';
-import VideoCameraSlash from '@phosphor/video-camera-slash.svg';
-import { Button } from '@ui';
+import { t } from '@app/lib/i18n';
+import { isMobile } from '@core/mobile/isMobile';
+import CaretUp from '@icon/system/regular/caret-up.svg';
+import ExclamationMark from '@icon/system/regular/exclamation-mark.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
+import Screencast from '@icon/system/regular/screencast.svg';
+import VideoCamera from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
+import { Button, ButtonGroup, cn } from '@ui';
 import {
+  createContext,
   createSignal,
-  createUniqueId,
   type JSX,
-  onCleanup,
-  onMount,
+  type ParentProps,
   Show,
+  useContext,
 } from 'solid-js';
+import { CallSettingsMenu } from './CallSettingsMenu';
 
-export function CallControlButton(props: {
-  label: string;
-  pressed?: boolean;
-  disabled?: boolean;
-  danger?: boolean;
-  class?: string;
-  onClick: () => void;
-  children: JSX.Element;
-}) {
+export function callMediaButtonVariant(off: boolean, disabled: boolean) {
+  return off && !disabled ? 'danger' : 'secondary';
+}
+
+export function BlockedMediaBadge(props: { blocked: boolean }) {
   return (
-    <Button
-      size="icon-lg"
-      variant={props.danger ? 'danger' : 'ghost'}
-      label={props.label}
-      tooltipPlacement="top"
-      aria-pressed={props.pressed}
-      disabled={props.disabled}
-      onClick={props.onClick}
-      class={`size-10 @sm:size-12 ${props.class ?? ''}`}
+    <Show when={props.blocked}>
+      <span
+        aria-hidden="true"
+        data-call-permission-badge
+        class="absolute top-1 right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink"
+      >
+        <span class="grid size-full place-items-center rounded-full bg-warning-bg">
+          <ExclamationMark class="size-3" />
+        </span>
+      </span>
+    </Show>
+  );
+}
+
+type BarProps = ParentProps<{
+  compact?: boolean;
+  unframed?: boolean;
+  smallIcons?: boolean;
+  showShortcuts?: boolean;
+  disabled?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+}>;
+type BarContext = {
+  props: BarProps;
+  menuChanged: (device: string, open: boolean) => void;
+  iconClass: () => string;
+};
+const ControlBarContext = createContext<BarContext>();
+function useControlBar() {
+  const context = useContext(ControlBarContext);
+  if (!context)
+    throw new Error('Call control parts require CallControlBar.Root');
+  return context;
+}
+
+function Root(props: BarProps) {
+  const openMenus = new Set<string>();
+  const menuChanged = (device: string, open: boolean) => {
+    if (open) openMenus.add(device);
+    else openMenus.delete(device);
+    props.onSettingsOpenChange?.(openMenus.size > 0);
+  };
+  const frameClass = () => {
+    if (props.unframed) return 'flex-wrap gap-2 py-2';
+    return cn(
+      'gap-2 rounded-full',
+      isMobile() ? 'island p-1.5' : 'menu-surface p-2'
+    );
+  };
+  return (
+    <ControlBarContext.Provider
+      value={{
+        props,
+        menuChanged,
+        iconClass: () => (props.smallIcons ? 'size-3.5' : 'size-5'),
+      }}
+    >
+      <div
+        data-call-controls
+        class={cn(
+          'relative z-20 max-w-full',
+          props.unframed ? 'w-full' : 'w-fit'
+        )}
+      >
+        <div
+          class={cn(
+            'mx-auto flex w-fit max-w-full items-center justify-center text-ink',
+            frameClass()
+          )}
+        >
+          {props.children}
+        </div>
+      </div>
+    </ControlBarContext.Provider>
+  );
+}
+
+type MediaToggleProps = {
+  muted: boolean;
+  permission?: PermissionState;
+  onToggle: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  children: JSX.Element;
+  mobileContent: JSX.Element;
+};
+type SplitProps = {
+  device: string;
+  label: string;
+  toggleLabel: string;
+  tooltipLabel?: string;
+  shortcut?: string;
+  menuLabel: string;
+  disabled?: boolean;
+  off?: boolean;
+  blocked?: boolean;
+  pressed?: boolean;
+  onToggle: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
+  icon: JSX.Element;
+  children: JSX.Element;
+  mobileContent: JSX.Element;
+  hideMenu?: boolean;
+};
+
+function MediaSplitButton(props: SplitProps) {
+  const bar = useControlBar();
+  const [open, setOpen] = createSignal(false);
+  const variant = () =>
+    callMediaButtonVariant(!!props.off, !!props.disabled || !!props.blocked);
+  const toggleVariant = () => (props.pressed ? 'accent' : variant());
+  return (
+    <CallSettingsMenu
+      title={props.menuLabel}
+      open={open()}
+      onOpenChange={(value) => {
+        setOpen(value);
+        bar.menuChanged(props.device, value);
+      }}
+      mobileContent={props.mobileContent}
+      trigger={(triggerProps) => (
+        <div class="relative shrink-0">
+          <ButtonGroup
+            variant={variant()}
+            size={bar.props.compact ? 'icon-md' : 'icon-lg'}
+            aria-label={props.label}
+            class="shrink-0"
+          >
+            <ButtonGroup.Button
+              aria-label={props.toggleLabel}
+              variant={toggleVariant()}
+              tooltip={{
+                content: (
+                  <span class="whitespace-nowrap">
+                    {props.tooltipLabel ?? props.toggleLabel}
+                  </span>
+                ),
+                placement: 'top',
+                shortcut: props.shortcut,
+              }}
+              aria-pressed={props.pressed}
+              disabled={props.disabled}
+              onClick={props.onToggle}
+            >
+              {props.icon}
+              <BlockedMediaBadge blocked={!!props.blocked} />
+            </ButtonGroup.Button>
+            <Show when={!isMobile() && !props.hideMenu}>
+              <ButtonGroup.Divider />
+              <ButtonGroup.Button
+                {...triggerProps}
+                disabled={props.disabled}
+                variant={variant()}
+                size={bar.props.compact ? 'icon-md' : 'icon-lg'}
+                aria-label={props.menuLabel}
+                tooltip={{
+                  content: props.menuLabel,
+                  placement: 'top',
+                  disabled: open(),
+                }}
+                class={bar.props.compact ? 'w-4' : 'w-6'}
+              >
+                <CaretUp
+                  class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
+                  classList={{ 'rotate-180': open() }}
+                />
+              </ButtonGroup.Button>
+            </Show>
+          </ButtonGroup>
+        </div>
+      )}
     >
       {props.children}
+    </CallSettingsMenu>
+  );
+}
+
+function MicrophoneControl(props: MediaToggleProps) {
+  const bar = useControlBar();
+  const blocked = () => props.permission === 'denied';
+  const label = () => {
+    if (blocked()) return t('calls.microphoneBlocked');
+    return props.muted
+      ? t('calls.unmuteMicrophone')
+      : t('calls.muteMicrophone');
+  };
+  return (
+    <MediaSplitButton
+      device="microphone"
+      label="Microphone"
+      off={props.muted}
+      blocked={blocked()}
+      shortcut={bar.props.showShortcuts && !isMobile() ? 'cmd+d' : undefined}
+      toggleLabel={label()}
+      tooltipLabel={blocked() ? t('calls.microphoneBlockedTooltip') : undefined}
+      menuLabel="Audio settings"
+      mobileContent={props.mobileContent}
+      disabled={bar.props.disabled}
+      onToggle={props.onToggle}
+      icon={
+        <Show
+          when={props.muted || blocked()}
+          fallback={<Microphone class={bar.iconClass()} />}
+        >
+          <MicrophoneSlash
+            class={cn(bar.iconClass(), blocked() && 'text-ink-subtle')}
+          />
+        </Show>
+      }
+    >
+      {props.children}
+    </MediaSplitButton>
+  );
+}
+
+function CameraControl(props: MediaToggleProps) {
+  const bar = useControlBar();
+  const blocked = () => props.permission === 'denied';
+  const label = () => {
+    if (blocked()) return t('calls.cameraBlocked');
+    return props.muted ? t('calls.turnOnCamera') : t('calls.turnOffCamera');
+  };
+  return (
+    <MediaSplitButton
+      device="camera"
+      label="Camera"
+      off={props.muted}
+      blocked={blocked()}
+      shortcut={
+        bar.props.showShortcuts && !isMobile() ? 'shift+cmd+e' : undefined
+      }
+      toggleLabel={label()}
+      tooltipLabel={blocked() ? t('calls.cameraBlockedTooltip') : undefined}
+      menuLabel="Video settings"
+      mobileContent={props.mobileContent}
+      disabled={bar.props.disabled}
+      onToggle={props.onToggle}
+      icon={
+        <Show
+          when={props.muted || blocked()}
+          fallback={<VideoCamera class={bar.iconClass()} />}
+        >
+          <VideoCameraSlash
+            class={cn(bar.iconClass(), blocked() && 'text-ink-subtle')}
+          />
+        </Show>
+      }
+    >
+      {props.children}
+    </MediaSplitButton>
+  );
+}
+
+function ScreenControl(props: {
+  sharing: boolean;
+  unavailable?: boolean;
+  onToggle: () => void;
+  children: JSX.Element;
+  mobileContent: JSX.Element;
+}) {
+  const bar = useControlBar();
+  return (
+    <Show when={!isMobile()}>
+      <MediaSplitButton
+        device="screen"
+        label="Screen share"
+        hideMenu={bar.props.compact && !bar.props.unframed}
+        mobileContent={props.mobileContent}
+        toggleLabel={props.sharing ? 'Stop sharing screen' : 'Share screen'}
+        menuLabel="Screen share settings"
+        pressed={props.sharing}
+        disabled={bar.props.disabled || props.unavailable}
+        onToggle={props.onToggle}
+        icon={<Screencast class={bar.iconClass()} />}
+      >
+        {props.children}
+      </MediaSplitButton>
+    </Show>
+  );
+}
+
+function LeaveControl(props: { onLeave: () => void }) {
+  const bar = useControlBar();
+  return (
+    <Button
+      size={bar.props.compact ? 'icon-md' : 'icon-lg'}
+      variant="danger"
+      aria-label={t('calls.leave')}
+      class={cn(
+        'rounded-full',
+        !bar.props.unframed && (bar.props.compact ? 'min-w-11' : 'min-w-14')
+      )}
+      tooltip={{ content: t('calls.leave'), placement: 'top' }}
+      onClick={props.onLeave}
+    >
+      <PhoneDisconnect class={bar.iconClass()} />
     </Button>
   );
 }
 
-type SettingsSection = 'audio' | 'video' | 'background';
-const settingsLabels: Record<SettingsSection, string> = {
-  audio: 'Audio settings',
-  video: 'Camera settings',
-  background: 'Background settings',
-};
-
-/** Settings grow upward without moving the controls or resizing participant tiles. */
-export function CallControlBar(props: {
-  disabled: boolean;
-  audioMuted: boolean;
-  videoMuted: boolean;
-  screenSharing: boolean;
-  onToggleAudio: () => void;
-  onToggleVideo: () => void;
-  onToggleScreen: () => void;
-  onLeave: () => void;
-  menuOpen: boolean;
-  audioSettings: JSX.Element;
-  videoSettings: JSX.Element;
-  backgroundActive: boolean;
-  backgroundDisabled: boolean;
-  onToggleBackground: () => void;
-  backgroundSettings: JSX.Element;
-  error?: string;
-}) {
-  const [section, setSection] = createSignal<SettingsSection>();
-  const [pinned, setPinned] = createSignal(false);
-  const [lastSection, setLastSection] = createSignal<SettingsSection>('audio');
-  const displayedSection = () => section() ?? lastSection();
-  const id = createUniqueId();
-  let root!: HTMLDivElement;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let intentTimer: ReturnType<typeof setTimeout> | undefined;
-  const cancelIntent = () => clearTimeout(intentTimer);
-  const open = (next: SettingsSection) => {
-    cancelIntent();
-    setLastSection(next);
-    setSection(next);
-  };
-  const cancelClose = () => clearTimeout(timer);
-  const close = () => {
-    cancelIntent();
-    cancelClose();
-    setSection(undefined);
-    setPinned(false);
-  };
-  const scheduleClose = () => {
-    cancelIntent();
-    cancelClose();
-    timer = setTimeout(() => {
-      if (
-        !pinned() &&
-        !props.menuOpen &&
-        !root.contains(document.activeElement)
-      )
-        close();
-    }, 320);
-  };
-  const preview = (next: SettingsSection, event: PointerEvent) => {
-    cancelClose();
-    cancelIntent();
-    if (event.pointerType === 'mouse' && !pinned() && !props.menuOpen)
-      intentTimer = setTimeout(() => open(next), 140);
-  };
-  const toggle = (next: SettingsSection) => {
-    cancelIntent();
-    cancelClose();
-    if (section() === next && pinned()) close();
-    else {
-      open(next);
-      setPinned(true);
-    }
-  };
-  onMount(() => {
-    const dismiss = (event: PointerEvent) => {
-      if (
-        !props.menuOpen &&
-        event.target instanceof Node &&
-        !root.contains(event.target)
-      )
-        close();
-    };
-    document.addEventListener('pointerdown', dismiss);
-    onCleanup(() => document.removeEventListener('pointerdown', dismiss));
-  });
-  onCleanup(() => {
-    cancelClose();
-    cancelIntent();
-  });
-
-  function MediaGroup(group: {
-    kind: SettingsSection;
-    active: boolean;
-    label: string;
-    toggleLabel: string;
-    disabled?: boolean;
-    onToggle: () => void;
-    children: JSX.Element;
-  }) {
-    const expanded = () => section() === group.kind;
-    return (
-      <div
-        role="group"
-        aria-label={group.label}
-        class="flex items-center rounded-full border border-edge-muted bg-control"
-        onPointerEnter={(event) => preview(group.kind, event)}
-        onPointerLeave={cancelIntent}
-      >
-        <CallControlButton
-          class="rounded-r-none"
-          label={group.toggleLabel}
-          pressed={group.active}
-          disabled={props.disabled || group.disabled}
-          onClick={group.onToggle}
-        >
-          {group.children}
-        </CallControlButton>
-        <Button
-          size="icon-md"
-          tooltipDisabled
-          variant="ghost"
-          aria-label={settingsLabels[group.kind]}
-          aria-expanded={expanded()}
-          aria-controls={expanded() ? id : undefined}
-          onClick={(event) => {
-            toggle(group.kind);
-            if (event.detail === 0 && section() === group.kind) {
-              root
-                .querySelector<HTMLButtonElement>(
-                  '[data-settings-active="true"] button:not(:disabled)'
-                )
-                ?.focus();
-            }
-          }}
-          class="h-10 w-6 rounded-l-none border-l-edge-muted @sm:h-12 @sm:w-8"
-        >
-          <CaretUp
-            class="size-4 transition-transform duration-200 ease-out motion-reduce:transition-none"
-            classList={{ 'rotate-180': expanded() }}
-          />
-        </Button>
-      </div>
-    );
-  }
-
+function ErrorMessage(props: { children: JSX.Element }) {
   return (
-    <div
-      ref={root}
-      data-call-controls
-      class="@container relative z-20 w-full max-w-xl"
-      onPointerEnter={cancelClose}
-      onPointerLeave={scheduleClose}
-      onFocusOut={scheduleClose}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && !props.menuOpen) {
-          const active = section();
-          if (!active) return;
-          event.preventDefault();
-          root
-            .querySelector<HTMLButtonElement>(
-              `button[aria-label="${settingsLabels[active]}"]`
-            )
-            ?.focus();
-          close();
-        }
-      }}
-    >
-      <div
-        id={id}
-        role="region"
-        aria-label={settingsLabels[displayedSection()]}
-        aria-hidden={!section()}
-        inert={!section()}
-        data-state={section() ? 'open' : 'closed'}
-        class="absolute inset-x-0 bottom-full pb-2 transition-[opacity,translate,visibility] duration-200 ease-out motion-reduce:transition-none"
-        classList={{
-          'visible translate-y-0 opacity-100': !!section(),
-          'invisible translate-y-2 opacity-0 pointer-events-none': !section(),
-        }}
-        onPointerEnter={() => {
-          cancelClose();
-          cancelIntent();
-        }}
+    <Show when={props.children}>
+      <p
+        role="alert"
+        class="absolute inset-x-0 top-full rounded-lg bg-panel p-2 text-center text-xs text-failure mobile:top-auto mobile:bottom-full mobile:mb-2"
       >
-        <div class="rounded-xl bg-menu-glass text-ink glass">
-          <div
-            aria-hidden={displayedSection() !== 'audio'}
-            inert={displayedSection() !== 'audio'}
-            data-settings-active={displayedSection() === 'audio'}
-            class="grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none"
-            classList={{
-              'grid-rows-[1fr] opacity-100': displayedSection() === 'audio',
-              'grid-rows-[0fr] opacity-0': displayedSection() !== 'audio',
-            }}
-          >
-            <div class="min-h-0 overflow-hidden">
-              <div class="p-3">{props.audioSettings}</div>
-            </div>
-          </div>
-          <div
-            aria-hidden={displayedSection() !== 'video'}
-            inert={displayedSection() !== 'video'}
-            data-settings-active={displayedSection() === 'video'}
-            class="grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none"
-            classList={{
-              'grid-rows-[1fr] opacity-100': displayedSection() === 'video',
-              'grid-rows-[0fr] opacity-0': displayedSection() !== 'video',
-            }}
-          >
-            <div class="min-h-0 overflow-hidden">
-              <div class="p-3">{props.videoSettings}</div>
-            </div>
-          </div>
-          <div
-            aria-hidden={displayedSection() !== 'background'}
-            inert={displayedSection() !== 'background'}
-            data-settings-active={displayedSection() === 'background'}
-            class="grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none"
-            classList={{
-              'grid-rows-[1fr] opacity-100':
-                displayedSection() === 'background',
-              'grid-rows-[0fr] opacity-0': displayedSection() !== 'background',
-            }}
-          >
-            <div class="min-h-0 overflow-hidden">
-              <div class="p-3">{props.backgroundSettings}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl bg-menu-glass p-1.5 text-ink glass @sm:gap-2">
-        <MediaGroup
-          kind="audio"
-          active={!props.audioMuted}
-          label="Microphone controls"
-          toggleLabel={
-            props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
-          }
-          onToggle={props.onToggleAudio}
-        >
-          <Show when={props.audioMuted} fallback={<Microphone />}>
-            <MicrophoneSlash />
-          </Show>
-        </MediaGroup>
-        <MediaGroup
-          kind="video"
-          active={!props.videoMuted}
-          label="Camera controls"
-          toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
-          onToggle={props.onToggleVideo}
-        >
-          <Show when={props.videoMuted} fallback={<VideoCamera />}>
-            <VideoCameraSlash />
-          </Show>
-        </MediaGroup>
-        <MediaGroup
-          kind="background"
-          active={props.backgroundActive}
-          disabled={props.backgroundDisabled}
-          label="Background controls"
-          toggleLabel={
-            props.backgroundActive
-              ? 'Turn off background'
-              : 'Turn on background'
-          }
-          onToggle={props.onToggleBackground}
-        >
-          <Image />
-        </MediaGroup>
-        <CallControlButton
-          label={props.screenSharing ? 'Stop sharing screen' : 'Share screen'}
-          pressed={props.screenSharing}
-          disabled={props.disabled}
-          onClick={props.onToggleScreen}
-        >
-          <Screencast />
-        </CallControlButton>
-        <CallControlButton label="Leave call" danger onClick={props.onLeave}>
-          <PhoneDisconnect />
-        </CallControlButton>
-      </div>
-      <Show when={props.error}>
-        <p
-          role="alert"
-          class="absolute inset-x-0 top-full rounded-lg bg-panel p-2 text-center text-xs text-failure"
-        >
-          {props.error}
-        </p>
-      </Show>
-    </div>
+        {props.children}
+      </p>
+    </Show>
   );
 }
+
+export const CallControlBar = {
+  Root,
+  Microphone: MicrophoneControl,
+  Camera: CameraControl,
+  Screen: ScreenControl,
+  Leave: LeaveControl,
+  Error: ErrorMessage,
+};

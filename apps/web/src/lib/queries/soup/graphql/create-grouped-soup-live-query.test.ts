@@ -1,11 +1,18 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
+  CombinedError,
   type GraphQLRequest,
   makeOperation,
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
-import { createRoot, createSignal } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createRoot,
+  createSignal,
+} from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
@@ -20,6 +27,7 @@ import {
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import type {
+  GraphqlEntityFilterAst,
   GroupedSoupInput,
   GroupSoupQuery,
   GroupSoupQueryVariables,
@@ -34,21 +42,16 @@ vi.mock('../../../service-clients/service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: mocks.host,
   getGraphqlSoupClient: mocks.client,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    span: () => ({ setAttr: vi.fn(), end: vi.fn() }),
-    error: vi.fn(),
-  },
-}));
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-function setup() {
-  const executions: Array<{
+function setup(filters: GraphqlEntityFilterAst = {}) {
+  type Execution = {
     variables: GroupSoupQueryVariables;
+    context: Partial<OperationContext>;
     publish(
       data: GroupSoupQuery,
       persistence?: Promise<string | undefined>,
@@ -57,7 +60,10 @@ function setup() {
         | 'normalized-cache-hit'
         | 'normalized-cache-patch'
     ): void;
-  }> = [];
+    fail(): void;
+  };
+  const executions: Execution[] = [];
+  const waiting = new Map<number, (execution: Execution) => void>();
   const client = {
     executeQuery(
       request: GraphQLRequest<GroupSoupQuery, GroupSoupQueryVariables>,
@@ -70,8 +76,9 @@ function setup() {
         requestPolicy: 'cache-first',
         ...context,
       });
-      executions.push({
+      const execution: Execution = {
         variables: request.variables,
+        context,
         publish: (data, persistence, source = 'live-network') =>
           subject.next({
             operation,
@@ -82,7 +89,16 @@ function setup() {
               __macroNormalizedCache: { source, persistence },
             },
           }),
-      });
+        fail: () =>
+          subject.next({
+            operation,
+            error: new CombinedError({ networkError: new Error('Offline') }),
+            hasNext: false,
+            stale: false,
+          }),
+      };
+      executions.push(execution);
+      waiting.get(executions.length - 1)?.(execution);
       return subject.source;
     },
   } as Client;
@@ -133,7 +149,7 @@ function setup() {
           propertyDefinitionId: 'status-definition',
         },
         limit: 2,
-        filters: {},
+        filters,
       },
     });
     const query = createGroupedSoupLiveQuery(
@@ -143,7 +159,17 @@ function setup() {
     );
     return { query, setInput, dispose };
   });
-  return { ...state, executions, requests, listeners, generations };
+  return {
+    ...state,
+    executions,
+    requests,
+    listeners,
+    generations,
+    execution: (index: number): Promise<Execution> =>
+      executions[index]
+        ? Promise.resolve(executions[index])
+        : new Promise((resolve) => waiting.set(index, resolve)),
+  };
 }
 
 function page(
@@ -154,7 +180,16 @@ function page(
     user: {
       id: 'viewer',
       groupSoup: {
-        bins: [{ key: 'todo', items, totalCount: 20, nextCursor: cursor }],
+        bins: [
+          {
+            key: 'todo',
+            items,
+            displayOrder: null,
+            label: null,
+            totalCount: 20,
+            nextCursor: cursor,
+          },
+        ],
       },
     },
   };
@@ -190,6 +225,205 @@ const ids = (data: GroupSoupQuery | undefined) =>
   }));
 
 describe('grouped Soup live ownership', () => {
+  it('retains CRM membership dependencies on group continuations', async () => {
+    const state = setup({
+      crmCompanyFilter: {
+        literal: { id: '00000000-0000-0000-0000-000000000000' },
+      },
+      crmContactFilter: { literal: { hidden: false } },
+    });
+    const initial = await state.execution(0);
+    expect(initial.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    initial.publish(page([], 'next'));
+    const more = state.query.paging.fetchNextPage('todo');
+    const continuation = await state.execution(1);
+    expect(continuation.context.externalCacheWriteTypes).toEqual([
+      'GraphqlSoupCrmContact',
+    ]);
+    continuation.publish(page([], null));
+    await more;
+  });
+
+  it('does not refetch a continuation started automatically during the initial result', async () => {
+    const state = setup();
+    createRoot((dispose) => {
+      cleanups.push(dispose);
+      // A reader that requests the next page as soon as one is reported, as a
+      // group whose end is already on screen does.
+      createEffect(() => {
+        if (
+          state.query.paging.hasNextPage('todo') &&
+          !state.query.paging.isFetchingNextPage('todo')
+        )
+          fireAndForget(state.query.paging.fetchNextPage('todo'), 'test');
+      });
+    });
+    state.executions[0].publish(page([groupedDocument('a')]));
+    state.executions[1].publish(page([groupedDocument('b')], null));
+    await state.query.paging.fetchNextPage('todo');
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'b']);
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(false);
+    expect(state.executions).toHaveLength(2);
+  });
+
+  it('keeps all eleven rows mounted while refreshing the continuation', async () => {
+    const state = setup();
+    const initial = page(
+      Array.from({ length: 10 }, (_, i) => groupedDocument(`task-${i + 1}`))
+    );
+    initial.user.groupSoup.bins[0].totalCount = 11;
+    state.executions[0].publish(initial);
+    const next = state.query.paging.fetchNextPage('todo');
+    const last = page([groupedDocument('task-11')], null);
+    last.user.groupSoup.bins[0].totalCount = 11;
+    state.executions[1].publish(last);
+    await next;
+    const counts: number[] = [];
+    createRoot((dispose) => {
+      cleanups.push(dispose);
+      createComputed(() => {
+        counts.push(
+          state.query.data()?.user.groupSoup.bins[0].items.length ?? 0
+        );
+      });
+    });
+
+    state.executions[0].publish(initial);
+    expect(ids(state.query.data())?.[0].ids).toHaveLength(11);
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(true);
+    const refreshed = state.query.paging.fetchNextPage('todo');
+    state.executions[2].publish(last);
+    await refreshed;
+    expect(counts.every((count) => count === 11)).toBe(true);
+    expect(state.query.paging.hasNextPage('todo')).toBe(false);
+    expect(ids(state.query.data())?.[0].count).toBe(11);
+  });
+
+  it('rebuilds changed cursors through every loaded page before replacing rows', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const second = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('b')], 'third'));
+    await second;
+    const third = state.query.paging.fetchNextPage('todo');
+    state.executions[2].publish(page([groupedDocument('c')], null));
+    await third;
+
+    state.executions[0].publish(page([groupedDocument('a')], 'new-second'));
+    const refreshed = state.query.paging.fetchNextPage('todo');
+    expect(state.executions[3].variables.input.continuation?.cursor).toBe(
+      'new-second'
+    );
+    state.executions[3].publish(page([groupedDocument('new-b')], 'new-third'));
+    const last = await state.execution(4);
+    expect(last.variables.input.continuation?.cursor).toBe('new-third');
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'b', 'c']);
+    last.publish(page([groupedDocument('new-c')], null));
+    await refreshed;
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'new-b', 'new-c']);
+    expect(state.query.paging.hasNextPage('todo')).toBe(false);
+  });
+
+  it('retains a page whose load-more request was in flight when refresh started', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const second = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('b')], 'third'));
+    await second;
+    const third = state.query.paging.fetchNextPage('todo');
+    state.executions[0].publish(page([groupedDocument('a')], 'new-second'));
+    const refresh = state.query.paging.fetchNextPage('todo');
+    state.executions[2].publish(page([groupedDocument('c')], null));
+    await third;
+    (await state.execution(3)).publish(
+      page([groupedDocument('new-b')], 'new-third')
+    );
+    const last = await state.execution(4);
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'b', 'c']);
+    last.publish(page([groupedDocument('new-c')], null));
+    await refresh;
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'new-b', 'new-c']);
+  });
+
+  it('keeps the loaded chain on a later-page failure and replaces it on retry', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const second = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('b')], 'third'));
+    await second;
+    const third = state.query.paging.fetchNextPage('todo');
+    state.executions[2].publish(page([groupedDocument('c')], null));
+    await third;
+
+    const refresh = state.query.refresh();
+    const failure = expect(refresh).rejects.toThrow('Offline');
+    state.executions[3].publish(page([groupedDocument('a')], 'new-second'));
+    state.executions[4].publish(page([groupedDocument('new-b')], 'new-third'));
+    (await state.execution(5)).fail();
+    await failure;
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'b', 'c']);
+    expect(state.query.paging.error('todo')?.message).toContain('Offline');
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(false);
+
+    const retry = state.query.refresh();
+    state.executions[6].publish(page([groupedDocument('a')], 'retry'));
+    state.executions[7].publish(page([groupedDocument('replacement')], null));
+    await retry;
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'replacement']);
+    expect(state.query.paging.error('todo')).toBeNull();
+  });
+
+  it('drops obsolete rows when the refreshed initial page covers the whole group', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const next = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('removed')], null));
+    await next;
+    state.executions[0].publish(page([groupedDocument('a')], null));
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a']);
+    expect(state.query.paging.hasNextPage('todo')).toBe(false);
+    expect(state.executions).toHaveLength(2);
+  });
+
+  it('discards an in-flight replacement when the project filter changes', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const next = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('b')], null));
+    await next;
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const refresh = state.query.paging.fetchNextPage('todo');
+    state.setInput({
+      initial: {
+        sortMethod: 'UPDATED_AT',
+        groupBy: { field: 'PROJECT' },
+        filters: {},
+      },
+    });
+    state.executions[3].publish(page([groupedDocument('new-project')], null));
+    await refresh;
+    state.executions[2].publish(page([groupedDocument('obsolete')], null));
+    expect(ids(state.query.data())?.[0].ids).toEqual(['new-project']);
+    expect(state.query.paging.isFetchingNextPage('todo')).toBe(false);
+  });
+
+  it('does not restart continuation requests for normalized property updates', async () => {
+    const state = setup();
+    state.executions[0].publish(page([groupedDocument('a')]));
+    const next = state.query.paging.fetchNextPage('todo');
+    state.executions[1].publish(page([groupedDocument('b')], null));
+    await next;
+    state.executions[0].publish(
+      page([{ ...groupedDocument('a'), displayName: 'Renamed' }]),
+      undefined,
+      'normalized-cache-patch'
+    );
+    expect(ids(state.query.data())?.[0].ids).toEqual(['a', 'b']);
+    expect(state.executions).toHaveLength(2);
+  });
+
   it('clears grouping before an initial result without reading missing data', () => {
     const state = setup();
     state.setInput(undefined);
@@ -356,7 +590,9 @@ describe('grouped Soup live ownership', () => {
     const cached = page([groupedDocument('a', ['done'])]);
     cached.user.groupSoup.bins.push({
       key: 'done',
+      label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

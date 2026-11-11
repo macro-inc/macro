@@ -2,15 +2,14 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
-import HashIcon from '@phosphor/hash.svg';
-import InfoIcon from '@phosphor/info.svg';
-import LockIcon from '@phosphor/lock.svg';
-import XIcon from '@phosphor/x.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import InfoIcon from '@icon/system/regular/info.svg';
+import LockIcon from '@icon/system/regular/lock.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useAddBotToChannelMutation } from '@queries/channel/channel-bots';
 import {
@@ -18,6 +17,7 @@ import {
   usePatchChannelMutation,
 } from '@queries/channel/channels';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   Button,
@@ -44,7 +44,6 @@ export function CreateChannelModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
-  const { users: recipientOptions } = useCombinedRecipients();
   const agentsQuery = useAgentsQuery(
     () => newChannelModalOpen() && step() === 'invite'
   );
@@ -65,7 +64,6 @@ export function CreateChannelModal() {
   const [addedAgentIds, setAddedAgentIds] = createSignal<string[]>([]);
   const channelName = createMemo(() => name().trim());
   const inviteOptions = createMemo(() => [
-    ...recipientOptions(),
     ...(agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
       recipientEntityMapper('agent')(agent.bot)
     ),
@@ -285,10 +283,11 @@ export function CreateChannelModal() {
                 </Show>
               </div>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
                 disabled={
                   createChannelMutation.isPending ||
@@ -297,7 +296,7 @@ export function CreateChannelModal() {
                   addAgentMutation.isPending
                 }
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
 
@@ -391,6 +390,7 @@ export function CreateChannelModal() {
               <div class="flex flex-col gap-3">
                 <RecipientSelector<'user' | 'contact' | 'agent'>
                   options={inviteOptions}
+                  createSource={useContactRecipientSource}
                   selectedOptions={selectedRecipients()}
                   setSelectedOptions={setSelectedRecipients}
                   placeholder="Search people, agents, or email addresses"
@@ -456,7 +456,7 @@ export function CreateChannelModal() {
                     if (step() === 'invite')
                       fireAndForget(finishInvites(), 'create-channel');
                   }}
-                  variant="strong"
+                  variant="primary"
                   disabled={
                     (step() !== 'invite' && !channelName()) ||
                     createChannelMutation.isPending ||

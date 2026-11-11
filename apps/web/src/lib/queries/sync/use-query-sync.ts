@@ -25,11 +25,12 @@ import {
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
+import { handleChannelAccessRequestChanged } from '@queries/channel/access-requests';
 import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { invalidateContacts } from '@queries/contacts/contacts';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
@@ -47,11 +48,17 @@ import {
   invalidatePullRequestMentions,
 } from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
+import {
+  handleSystemStatusMessage,
+  invalidateCurrentSystemStatus,
+  SYSTEM_STATUS_MESSAGE_TYPE,
+} from '@queries/system-status/status';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/sync';
+import { handleUserPictureChanged } from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
@@ -87,6 +94,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
   );
+  ws.addEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus)
+  );
 
   createConnectionWebsocketEffect((data) => {
     match(data)
@@ -106,7 +117,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        fireAndForget(invalidateContacts(), 'websocket-query-sync');
+        requestContactRefresh();
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -127,6 +138,20 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleChannelPictureChanged
+        );
+      })
+      .with({ type: 'user_picture_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleUserPictureChanged
+        );
+      })
+      .with({ type: 'channel_access_request_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelAccessRequestChanged
         );
       })
       // One frame appended to a live agent session's log. Routed to the
@@ -208,6 +233,9 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         fireAndForget(invalidateFavorites(), 'websocket-query-sync');
         invalidateAllProperties();
         invalidateAllSoup();
+      })
+      .with({ type: SYSTEM_STATUS_MESSAGE_TYPE }, () => {
+        handleSystemStatusMessage(data.data);
       })
       .with({ type: 'task_duplicate_matches_updated' }, () => {
         withParsedWebsocketPayload(

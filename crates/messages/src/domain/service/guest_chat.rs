@@ -162,6 +162,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 parent: parent.clone(),
                 actor: actor.clone(),
                 guest_name: Some(access.name),
+                kind: MessageKind::Message,
+                triggered_via: None,
                 triggered_by: None,
                 input: PostMessage {
                     id: Some(input.id),

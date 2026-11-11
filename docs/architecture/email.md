@@ -53,13 +53,15 @@ may import a block package, `@core/block`, or block-related signal modules.
   resolved presentation values and event callbacks. Its caller provides the
   rendering context, selection, expansion, reply actions, and footer.
 - `email-thread/email-thread.tsx` constructs the existing shared thread query,
-  source adapter, viewer/contact capabilities, thread commands, composer capabilities,
+  source adapter, viewer/scoped-recipient capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
   supplied contexts. It imports no production entry point for a nested
   message or composer.
 - `email-compose/email-compose.tsx` supplies the production compose context and split-host
-  callbacks to `views/email-compose.tsx`. Inline replies use
+  callbacks to `views/email-compose.tsx`. Desktop mounts it in the Email view's
+  `mail-compose` route (`email-view/components/EmailComposeRouteView.tsx`);
+  touch keeps the `email-compose` component split. Inline replies use
   `views/reply-input.tsx` with explicit capabilities and a reply session.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
@@ -97,19 +99,19 @@ test exercises this ordering.
 | `EmailThreadContext` | Thread source, viewer and device state, recipients, and the command factory used by thread state and navigation |
 | `EmailThreadViewContext` | Thread and compose contexts, plus view callbacks and optional compose host behavior |
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
-| `EmailRenderingContextValue` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
+| `EmailRenderingContextValue` | Theme values, explicit image policy, Macro read-receipt pixel prefixes (hidden unless the thread lets a copy count an open), link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormContextInputs` | Viewer address and available inbox identities for recipient selection |
 | `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
-| `EmailDraftStorage` | Save/delete and restore an undone draft; inputs use domain inbox IDs and completion intent |
+| `EmailDraftStorage` | Save/delete and restore an undone draft, and drop a moved draft's working copy; inputs use domain inbox IDs and completion intent |
 | `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
-| `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations |
+| `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations, and each queued send's progress |
 | `EmailComposeFeedback` | User notices and error reporting |
 | `EmailComposeAccounts` | Inbox identities, availability, and the primary inbox |
 | `EmailComposePresentation` | View-only device state, signature visibility, upgrade action, and link preparation |
 | `EmailEditorFiles` | View-owned editor file upload and sharing integration |
 | `EmailComposeContext` | Compose capabilities supplied to views, which pass the narrow inputs each controller needs |
 | `PersistedEmailIdentity` | Successful save/send result: draft, thread, and inbox identity without a transport envelope |
-| `EmailComposeHost` | Optional navigation, back handling, and focus movement supplied by the host |
+| `EmailComposeHost` | Optional navigation, a moved draft's destination, the route's draft, back handling, and focus movement supplied by the host |
 
 Core types are owned by the features. Generated email service schemas and concrete
 query results stop at adapters. `email-thread/queries/thread-source.ts` uses
@@ -154,10 +156,10 @@ The compose controllers now assemble these smaller responsibilities:
 | Module | Responsibility and boundary |
 | --- | --- |
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
-| `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Scheduling saves the current draft and waits for its attachments even when a draft ID already exists; each operation retains its selected inbox. |
-| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; REST send, schedule, and uploads wait for a committed save. |
-| `send-readiness.ts` | Why an immediate send must be refused: offline, a draft the server cannot address yet (queued or unconfirmed handle), or an attachment whose upload never finished. Pure checks plus the one failure notice both controllers show. |
-| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
+| `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
+| `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
+| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. Each refusal logs `email_send.refused` with its reason. |
+| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
 | `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
@@ -238,6 +240,24 @@ context and view callbacks. State creates one retained thread snapshot
 and passes that accessor to the injected command factory, so commands and reading
 state cannot disagree because they retained separate snapshots.
 
+## Personal recipient suggestions
+
+Production compose and thread composition no longer fetch the complete personal
+contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
+To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+The field is required at composition boundaries, with explicit `undefined` for
+hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
+`recipients` and reply-session options contain scoped extras and thread addresses,
+not an address-book catalog. Controllers still own selected values independently
+of suggestions. Closing, paging, sender changes and failed reads cannot erase them.
+
+Scoped addresses and personal-directory users are deduplicated by canonical email
+after matching, preserving the selected representation when a custom address later
+matches a known user. Main new-email and reply/forward views forward the factory;
+AI inference's separate people pool is not reduced to a suggestion page. The real
+composer fixture covers late contacts and scoped/directory deduplication on desktop
+and phone via `recipient-directory.app.e2e.ts` in the app browser configuration.
+
 ## Async completion and naming
 
 TanStack remains in the production/query adapters. A write capability is a plain
@@ -264,6 +284,7 @@ its failure handling. Adapter tests therefore exercise real TanStack mutations.
 | --- | --- |
 | Draft save/delete or attachment write | Existing shared mutation reports the write failure; callers do not add a second schedule/save notice. |
 | Send | Composer reports the failed send once. A failed reply restores only its original still-mounted editor; a newer editor's work is preserved. |
+| Queued send that fails later | The send notice reports the failure; a reply that marked its thread done returns it to the inbox. |
 | Schedule/unschedule | Schedule workflow reports the failed request and keeps the last confirmed time. |
 | Post-send refresh/navigation/analytics | Report the presentation/cache error; do not report that delivery failed or enable a duplicate send. |
 | Archive after scheduling | Keep the confirmed schedule and identify the archive failure separately. |
@@ -274,7 +295,67 @@ error-reported refresh. A slow refresh must not delay Undo or leave an
 Undo-restored editor disabled. Each send owns its mentions, completion target,
 and undo handle; sending again must preserve the earlier notification's undo
 action. Standalone compose marks completion before its navigation callback, so
-disposal cannot autosave or resend the successful message.
+disposal cannot autosave or resend the successful message. Discard navigates
+first instead. It pauses autosave and cancels the pending edit, leaves, then
+finishes the in-flight save, the local flush, and the deletion in the
+background. A queued write can wait out the mutation queue's request and
+delivery timeouts, and the optimistic delete empties a draft-only thread
+around the composer, so leaving cannot wait on either. A host that fails to
+leave is reported, and the deletion still runs.
+
+The working copy and the mutation queue are separate stores, so a discard is
+first recorded beside its copy (`deleteAttemptId`), which stays listed and
+editable. The copy becomes `deleting`, hidden and closed to edits, only when the
+queue admits the delete, and the queue admits it only for the revision it was
+requested on: only an edit, which makes a new revision, withdraws the request.
+A save and a discard of one draft share a queue key, so the one queued last
+replaces the other. A save that finds a discard on record for its revision is
+therefore not queued, and logs `email_draft.save_yielded_to_discard`: a composer
+that closes flushes its last edit behind any save still on the wire, and that
+flush can run after the draft was reopened and discarded. The check is not
+atomic with the enqueue, so a save already past it can still land after the
+delete. A request whose delete never reached the queue keeps saves of that
+revision out until the next edit. A discard on its way to the server is never
+shown as a failure. **Retry discard** follows a server rejection or a delete the
+queue lost (`delete-failed`); every copy that starts needing a retry logs
+`email_draft.sync_failed` with its status, cause and error code.
+
+A save can still be on the wire when its draft is sent, and the server refuses
+it once the send is admitted. That send carries the draft's content, so the
+refusal is ignored: the working copy is not marked failed and nothing is shown.
+
+Failure UI is for a write the user has to act on. A server fault (`INTERNAL`)
+on a draft save or discard may pass, and both writes are safe to send again (a
+full-state upsert, an idempotent delete), so the queue retries it twice in a row
+before the copy is marked failed (`shouldRetryGraphqlMutation`). The budget is
+small because the queue's head blocks every write behind it, and it is counted
+per queued write, apart from the larger budget for an unavailable server. While
+the local cache restarts, which it retries by itself, the composer shows
+nothing; unsynced edits still waiting after 15 seconds get the quiet waiting
+notice, and only storage that needs a reload shows the alert.
+
+`DraftSyncStatus` reads its props directly rather than through a `<Show>`
+accessor: the accessor threw when a child re-evaluated as the state cleared,
+which left the banner on screen after a successful retry.
+
+`lib/queries/email/tests/draft-sync-world.ts` runs this whole client against a
+simulated server, cache queue and clock: the composer's session, persistence,
+autosave and status primitives, the draft queue, the working-copy store, the
+cache exchange with its queue runner, and the send journal, dispatcher and
+recovery. `draft-sync.scenarios.test.ts` holds one scenario per way a draft has
+gone wrong, and `draft-sync.fuzz.test.ts` runs random sessions of typing,
+discarding, sending, undoing and reloading under faults that pass by
+themselves, checking that nothing is reported to the user and that the server
+ends with exactly what they did. Add a scenario with every draft sync fix.
+
+The send notice follows each queued send through `EmailDelivery.watchSend`,
+which reads the device outbox. Undo stays on offer until the deadline the server
+returned with the accepted attempt. A reply whose send fails, is cancelled, or is
+restored reverses its mark-done through the same undo handle, including when
+marking done finishes later. A send can leave the outbox before the watcher reads
+it again, as when another tab delivers or restores it. The watcher then asks the
+server how the send ended. When the server cannot say, it reports the send as
+`untracked` and the notice withdraws Undo.
 
 `EmailThreadSource.refresh()` and `fetchOlder()` require `Promise<void>`. Their
 adapters await the underlying query, and callers that need fresh messages await
@@ -287,6 +368,14 @@ inbox ID is not a precomputed header: primary-inbox omission belongs to the adap
 Existing message/thread model fields retain their established snake_case spelling;
 this cleanup does not rename generated schemas or persisted URLs. In particular,
 the host still reads/writes the existing `draftID` compose route parameter.
+Those parameters live only in memory, so the compose route also records the
+composer's draft in its `email-compose.draft` pane search, replacing the
+current history entry, and reopens that draft ahead of `draftID`
+(`compose-route-draft.ts`). It records the draft the composer opened right
+away, since this device can read it while a save is queued, and records a draft
+the composer creates or moves to only once the server confirms it. A From switch that moves a draft keeps
+the compose route in place, while a thread route follows the moved draft to
+its new thread (`compose-host-adapter.ts`).
 
 `EmailThreadStateProvider` and `useEmailThreadState` name mounted thread state.
 `ThreadReplyInput` names the thread-owned reply entry point, while
@@ -350,6 +439,12 @@ sanitization/color helpers delegate to the package through `@core/email`.
 8. Renderer resources follow their Solid owner. Source changes or disposal release
    image blob URLs, resize observers and image listeners, and abort pending adapter
    work.
+9. A reopened reply draft seeds its composer through
+   `email-compose/core/draft-editor-html.ts`. A draft another client wrote
+   carries that client's quoted thread as plain markup; it seeds from the
+   server's replyless body, so the composer's own appended quote is the only one
+   sent. Bodies with a `.macro_quote` or only editor (`md-quote`) quotes seed
+   unchanged.
 
 ## Shared UI and explicit exceptions
 
@@ -499,3 +594,156 @@ occurrence and invitation caches, including email-only views. Failed older reque
 cannot roll back a newer selection or replace its feedback. Settlement revalidates both
 projections. The on-demand local-day agenda shares occurrence queries and handles DST
 boundaries and exclusive all-day ends without mounting a calendar grid.
+
+## Independent send outbox
+
+All immediate composer sends use a device email journal for Gmail and Outlook,
+independent of GraphQL normalized-cache availability and read transport. Send
+Later schedules the saved draft through the REST schedule endpoint, so it stays a
+draft listed by `/email/drafts/scheduled`; outbox admission makes a message
+non-draft, which that list excludes.
+`send-queue.ts` freezes approval and reserves the draft in IndexedDB before
+returning local acceptance. `outbox-session.ts` runs dispatch and recovery from
+the authenticated app shell; mounted composers only observe them.
+The general GraphQL queue owns draft autosaves and other ordinary mutations only;
+it has no send catalog or Send/Cancel replacement protocol. The former cache-queue
+send format was used only in local development and tests, so there is no deployed
+format to migrate. Unsupported journal records retain their contents and
+recognizable draft reservations for recovery.
+
+`email-send-dispatcher.ts` submits immediately online through the fetch-only
+GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+coordinate tabs, with bounded concurrency across unrelated messages. A lost
+response triggers a status read before resubmitting the identical attempt.
+A thread shows an approved send as sent before the provider confirms it, while
+the server still holds that message as a draft and refuses a reply to a draft.
+So a reply to a message this device is still delivering waits for it: the
+dispatcher submits the reply's send only once the target is delivered,
+cancelled or failed, and `draft-queue.ts` keeps the reply's latest save off the
+mutation queue until then.
+Cancellation requested before any submission claim stays local; after a claim it
+requires authoritative server cancellation. The exception is a definitive inbox-access
+rejection of the first exclusive submission: the journal records local cancellation
+and permits restoration. Timeouts, mixed/nested errors, and later status rejections
+never provide that proof. Retry backoff and authentication
+pauses do not discard approval. `email-send-restoration.ts` restores content,
+fences the prior local lifetime, and retires send authority atomically. Newer
+local edits and file bytes survive restoration. Removing a sent intent keeps the
+working-copy generation and revision it carried under the draft's IDs. A composer
+in another tab that sees the draft sent compares that version with its own last
+local write: text the send carried or a committed save holds goes with the sent
+draft, and anything newer is kept as a new draft. A send from another device
+carries no such version, so only text the server acknowledged counts. A composer
+that opened no working copy cannot overwrite one another tab wrote. Sign-out retains approved sends
+under their original account and stops dispatch; ordinary drafts retain their
+existing sign-out policy.
+Signing into another account without signing out ends the previous account's
+draft session the same way: the first page that opens draft storage with an
+identity it confirmed with the server retires the old epoch, starts a new one,
+clears the previous working copies, keeps approved sends, and discards draft
+saves the previous account queued before the takeover. Pages that already
+opened storage, or whose identity is only restored, stay fenced. When a page's
+draft session ends outside it (another tab's sign-out, expiry, or takeover,
+including one missed in the back/forward cache, or a different signed-in
+account), the outbox session reloads that page; a page signing itself out does
+not. A confirmed
+session expiry loads `/welcome` as a new page, as sign-out does, because a
+cleared draft session never reopens in the same page.
+
+The server accepts the frozen message, attachment set, send attempt, and delivery
+job in one Postgres transaction. The existing recovery scanner and Gmail/Outlook
+provider reconciliation continue delivery after browser closure. Attempt IDs
+provide idempotent admission, not a promise of exactly-once provider delivery:
+unknown provider outcomes remain locked and reconcile before any resend.
+Unrecognized GraphQL scheduled-delivery states map to `unconfirmed`, preserving
+the thread and its delivery lock when the server is newer than the client.
+Gmail submission checkpoints and Outlook coordinator revisions retain their
+provider-specific submission boundaries.
+
+Hard deletion of a message owned by a nonterminal send is deferred in
+`email_deferred_message_deletions` before any content compaction or attachment/job
+cascade. The retained provider ID and draft generation scope the deletion to that
+message lifetime. The recovery scanner also wakes terminal deferred deletions,
+even without a schedule. Workers discard markers superseded by Undo or a changed
+provider identity; matching terminal deletions use normal thread/CRM cleanup.
+Failed and unconfirmed attempts remain protected until cancellation or confirmed
+delivery. Explicit inbox removal revokes authority: links marked `deleting_at`
+permit batched purge, and direct inbox deletion permits its normal cascade.
+
+`email_messages.draft_generation` advances at acceptance and confirmed
+cancellation. Save, delete, schedule, transfer, and attachment edits compare the
+captured generation under the message lock. Stale autosaves return `DRAFT_VERSION_CONFLICT` and preserve local edits for recovery; they are not classified as an already-sent message. The attempt retains draft handles
+and source inbox namespaces after provider deletion, preventing old queued saves
+from recreating the submitted draft. Versioned approval fingerprints include the
+generation, frozen signature and Send Later deadline. An explicit new Send after
+Undo uses the returned generation and a fresh attempt ID. Draft reads prefer that
+newer working-copy generation over stale accepted cache records; an equal or newer
+server delivery generation still wins. REST parsed-message reads expose the same
+generation alongside message content; SDK draft actions carry that version, and
+attachment handles retain the generation captured at reservation.
+
+The status panel combines device intents with actor/inbox-authorized, cursor-paged
+`pendingEmailSends`, with batched message hydration. Server listing grants observation and cancellation authority,
+never automatic resubmission. Delivery state distinguishes local queueing,
+server acceptance, provider processing, sent, failed, and unconfirmed outcomes,
+but the panel stays silent for routine delivery: it lists a send only while it
+waits on this device, needs attention, or is scheduled. Thread surfaces project
+approved immediate sends from the journal as sent messages
+(`email-thread/primitives/optimistic-send.ts`) until the thread read shows them,
+and read the thread once when delivery is confirmed. Every surface reads one
+document-scoped journal snapshot (`queries/email/queued-sends.ts`). The outbox
+session reads it at sign-in and clears it on account change, the first mounted
+observer starts its watcher and poll, and Send refreshes it before the thread
+opens, so that thread mounts with the send already projected instead of its
+draft.
+
+Deploy schema/migrations and all generation-aware backend writers before
+releasing this frontend, including before applying `ios-update`: that workflow
+embeds the PR's frontend with production endpoints, and once Apple approves it
+the next prod deploy releases it. See the [iOS release flow](../../apps/web/docs/ios-releases.md).
+The outbox is unconditional; there is no feature flag or
+legacy send fallback. Old deployed writers do not enforce the new generation
+precondition. Verify cache failure, offline/reload, lost HTTP response, concurrent
+tabs, sign-out, Undo, stale writes, Send Later,
+completed attachments, both providers, and server sends from other devices before
+release. The separate cache-bootstrap recovery hotfix remains useful
+for draft synchronization and does not determine send availability.
+
+iOS 2.0.11 build 190 was released with the production rollout on 2026-10-22.
+Its source is `04063d2bb35d7369eae93900c2692f3ecccf882b`.
+The subsequent main merge through `93900478fb` preserves its native/web and
+email interfaces. Build 190 keeps its compiled format-3 native cache; the new
+format-4 compression in cache version 0.6.52 belongs to the cache engine, and
+only JSON crosses the native/web boundary. Browser OPFS storage is separate.
+New native diagnostics are optional, and the agent runtime/Chromium additions
+are desktop-only. The `skip-ios-update` exception records this compatibility
+review, not identical build provenance.
+Older iOS builds therefore remain compatible with the outbox; the iOS floor is
+190 only so that the next production deploy prompts them to update from the
+App Store.
+
+The format-4 browser cache starts a separate physical database. Old nonempty
+general mutation queues are retained but are not imported into it; verify their
+recovery separately during the cache rollout. The email journal is independent
+of these cache files and retains its draft working copies and send attempts.
+
+## Agent program sends
+
+An agent's program (a code-mode run, marked by `x-macro-code-execution`, or a
+token with agent attribution; `macro_authorization::is_agent_run`) never sends
+an email the user has not seen. The REST send (`POST /email/messages`) answers
+it 403. It sends through a session review (`execution.reviews.create({kind:
+'email'})`), whose card the user submits, or, for a prompt from a channel or
+document thread, on the user's quoted approval:
+
+- `macro.email.sendConfirmed` and `EmailMessage.forwardConfirmed` call the
+  harness's `POST /cognition/email/send-confirmed`, which runs the
+  `SendConfirmedEmail` tool with its Markdown rendering, inbox choice, reply
+  threading and document attachments. A forward is a new email quoting the
+  message under the forwarded-message header, with the message's attachments
+  as their Macro documents (`EmailMessage.forwardDraft` builds it, also for a
+  review).
+- `EmailDraft.send` and `EmailDraft.schedule` call the schedule route
+  (`PUT /email/drafts/scheduled/{id}`), which admits a program only with a
+  non-blank `user_confirmation`. `send` schedules a few seconds ahead, so the
+  scheduled sender delivers the saved draft within about a minute.

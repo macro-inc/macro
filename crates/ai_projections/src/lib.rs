@@ -15,14 +15,16 @@
 //! `ai_projection_queue` by default, or inline when the request sets
 //! `await: true`. Completed (or failed) materializations are pushed to the
 //! target's connected clients through the connection gateway as
-//! `ai_projection_updated` messages, so the frontend never polls.
+//! `ai_projection_updated` messages, so the frontend never polls. Reads recover
+//! loading instances with a missing or expired processing claim
+//! as cold, allowing generation to restart without discarding retained data.
 //!
 //! The definition's `prompt_hash` versions the whole generation recipe
 //! (prompt, optional `model` override, optional `output_schema`): re-upserting
 //! with any of those changed revises the definition and resets instances to
 //! cold on their next request. Worker writes are scoped to the message's hash
-//! so results for outdated versions are discarded. A scheduled refresh lambda
-//! (`ai_projections_refresh_handler`) deletes inactive instances and
+//! so results for outdated versions are discarded. Refresh tasks in
+//! `agent_harness_service::cognition` delete inactive instances and
 //! re-enqueues stale ones per cadence.
 //!
 //! When `output_schema` is set, generation is two-phase: the tool-enabled

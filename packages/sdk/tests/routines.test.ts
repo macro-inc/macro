@@ -12,6 +12,7 @@ const record: ScheduledActionResponse = {
   name: 'Daily report',
   kind: 'Agent',
   enabled: true,
+  run_visibility: 'unlisted',
   configuration_revision: 1,
   owner: 'macro|owner@example.test',
   created_at: '2026-10-19T00:00:00Z',
@@ -66,6 +67,87 @@ test('routine creation maps agent handles, seeds detail and uses shared auth and
     'scheduled-action.createScheduledAction:completed',
   ]);
   expect(JSON.stringify(routine)).not.toContain('mbot_test');
+});
+test('routine creation sends code and Ask AI steps that write as the user', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const steps = [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: 'export async function main() {}',
+    },
+    {
+      type: 'agent',
+      instructions: 'Summarize what the code posted.',
+      agent: macro.agents.byId('agent-1'),
+    },
+  ] as const;
+  const routine = await macro.routines.create({
+    name: 'Hello as me',
+    trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+    enabled: false,
+    steps,
+    dangerouslyOperateAsUser: true,
+  });
+  await routine.update({
+    name: 'Hello as the agent',
+    trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+    steps,
+  });
+  expect(bodies).toEqual([
+    {
+      name: 'Hello as me',
+      kind: 'Agent',
+      enabled: false,
+      trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+      task: {
+        steps: [
+          {
+            type: 'code',
+            title: 'Post hello',
+            source: 'export async function main() {}',
+          },
+          {
+            type: 'agent',
+            instructions: 'Summarize what the code posted.',
+            agent: { bot_id: 'agent-1' },
+          },
+        ],
+        dangerously_operate_as_user: true,
+      },
+    },
+    {
+      name: 'Hello as the agent',
+      kind: 'Agent',
+      trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+      task: {
+        steps: [
+          {
+            type: 'code',
+            title: 'Post hello',
+            source: 'export async function main() {}',
+          },
+          {
+            type: 'agent',
+            instructions: 'Summarize what the code posted.',
+            agent: { bot_id: 'agent-1' },
+          },
+        ],
+      },
+    },
+  ]);
 });
 test('routine writes invalidate detail only after success', async () => {
   let enabled = true;
@@ -138,4 +220,79 @@ test('routine execution returns typed transcript handles and scoped history', as
   const [run] = await routine.history();
   expect(run.routine).toBe(routine);
   expect(run.id).toBe('run-1');
+});
+
+test('routine options carry run visibility and updates that omit it keep it', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({ ...record, run_visibility: 'listed' });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const options = {
+    name: 'Daily report',
+    trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
+    prompt: 'Summarize',
+    userPrompt: 'Daily summary',
+  } as const;
+  const routine = await macro.routines.create({
+    ...options,
+    runVisibility: 'listed',
+  });
+  expect(await routine.runVisibility()).toBe('listed');
+  await routine.update(options);
+  expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
+  expect(bodies[1]).not.toHaveProperty('run_visibility');
+});
+
+test('a rejected routine create carries the server validation message', async () => {
+  const rejection =
+    'invalid routine task; select a model or agent and provide instructions';
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response(rejection, {
+        status: 400,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  await expect(
+    macro.routines.create({
+      name: 'Check in',
+      trigger: { type: 'cron', schedule: '0 */10 * * * *', timezone: 'UTC' },
+      prompt: 'Check in',
+      userPrompt: 'Check in',
+      model: 'model',
+    }),
+  ).rejects.toMatchObject({
+    name: 'MacroApiError',
+    status: 400,
+    message: `Macro API error 400: ${rejection}`,
+    data: rejection,
+  });
+});
+
+test('MacroApiError messages carry the message or error of a JSON body', () => {
+  expect(new MacroApiError(403, { message: 'Forbidden' }).message).toBe(
+    'Macro API error 403: Forbidden',
+  );
+  expect(new MacroApiError(409, { error: 'already running' }).message).toBe(
+    'Macro API error 409: already running',
+  );
+  expect(new MacroApiError(500, {}).message).toBe('Macro API error 500');
+  expect(new MacroApiError(502, 'x'.repeat(600)).message).toBe(
+    `Macro API error 502: ${'x'.repeat(500)}…`,
+  );
 });

@@ -1,0 +1,2 @@
+Explicit task status filters. Choose only from the supplied Status options. Open tasks means statuses representing unfinished work. Do not infer status from the topic. Use [] when absent. Never turn a negated status into a positive filter.
+For search in progress high priority tasks assigned to Person A, status is [In Progress]; priority and assignment do not replace the status filter.

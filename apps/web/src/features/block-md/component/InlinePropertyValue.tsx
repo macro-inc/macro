@@ -1,20 +1,33 @@
-import PushPinSlashIcon from '@phosphor/push-pin-slash.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import { t } from '@app/lib/i18n';
+import LinkBreakIcon from '@icon/system/regular/link-break.svg';
+import PushPinSlashIcon from '@icon/system/regular/push-pin-slash.svg';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import { hasValue, toPropertyApiValue } from '@property/utils';
+import { Button } from '@ui';
+import {
+  type Component,
+  type ComponentProps,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
-  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  /** Owning entity ID; a composer has no entity yet, so it passes none. */
   entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
   class?: string;
+  iconClass?: string;
+  showLabel?: boolean;
   canManage?: boolean;
+  /** The editor the pill opens; see `PropertyValuePill`. */
+  editor?: ComponentProps<typeof PropertyValuePill>['editor'];
 };
 
 /**
@@ -29,23 +42,48 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
   const ctx = usePropertiesContext();
   const usesInlineEditor = () =>
     ['STRING', 'NUMBER', 'BOOLEAN', 'LINK'].includes(props.property.valueType);
+  const canManage = () =>
+    props.canManage && ctx.canEdit && !props.property.isMetadata;
+  const canUnlink = () =>
+    canManage() &&
+    !props.property.isRequired &&
+    !props.property.propertyId.startsWith('pending:') &&
+    hasValue(props.property);
+  const [unlinking, setUnlinking] = createSignal(false);
+  const unlink = async () => {
+    if (unlinking()) return;
+    const cleared = toPropertyApiValue(props.property, null);
+    if (!cleared) return;
+    setUnlinking(true);
+    try {
+      await ctx.saveHandler.saveProperty(props.property, cleared);
+    } catch {
+      // The save handler reports the failure and keeps the value.
+    } finally {
+      setUnlinking(false);
+    }
+  };
 
   return (
     <PropertyValuePill
       property={props.property}
+      variant="secondary"
+      size="xs"
       showLabel={
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
-        !(
-          ctx.entityType === 'TASK' &&
-          (props.property.propertyDefinitionId ===
-            SYSTEM_PROPERTY_IDS.ASSIGNEES ||
-            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT)
-        )
+        props.showLabel ??
+        (props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
+          props.property.propertyDefinitionId !==
+            SYSTEM_PROPERTY_IDS.PRIORITY &&
+          !(
+            ctx.entityType === 'TASK' &&
+            (props.property.propertyDefinitionId ===
+              SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+              props.property.propertyDefinitionId ===
+                SYSTEM_PROPERTY_IDS.PROJECT)
+          ))
       }
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
-      onRefresh={ctx.onRefresh}
       onEdit={
         props.entityId && usesInlineEditor()
           ? (property, anchor) =>
@@ -64,55 +102,48 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           : undefined
       }
       class={props.class}
+      iconClass={props.iconClass ?? 'size-3 touch:size-4 shrink-0'}
       emptyLabel={props.emptyLabel}
+      opensProject={
+        props.entityId !== undefined &&
+        ctx.entityType === 'TASK' &&
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+      }
+      hoverTrailingAction={
+        <Show when={canManage()}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('entityActions.unpinProperty')}
+            disabled={unlinking()}
+            onClick={() =>
+              ctx.onPropertyUnpinned?.(
+                props.property.propertyId,
+                props.property.propertyDefinitionId
+              )
+            }
+          >
+            <PushPinSlashIcon class="size-3.5 shrink-0" />
+          </Button>
+        </Show>
+      }
       hoverActions={
-        <Show
-          when={props.canManage && ctx.canEdit && !props.property.isMetadata}
-        >
-          <InlinePropertyActions property={props.property} />
+        <Show when={canUnlink()}>
+          <button
+            type="button"
+            class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:opacity-50"
+            disabled={unlinking()}
+            onClick={unlink}
+          >
+            <LinkBreakIcon class="size-3.5 shrink-0" />
+            {unlinking()
+              ? t('entityActions.unlinking')
+              : t('entityActions.unlinkValue')}
+          </button>
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
+      editor={props.editor}
     />
   );
 };
-
-function InlinePropertyActions(props: { property: PropertyT }) {
-  const ctx = usePropertiesContext();
-  const [removing, setRemoving] = createSignal(false);
-  const remove = async () => {
-    if (!ctx.removeProperty || removing()) return;
-    setRemoving(true);
-    try {
-      await ctx.removeProperty(props.property.propertyId);
-      ctx.onPropertyUnpinned?.(props.property.propertyId);
-      ctx.onPropertyDeleted();
-    } catch {
-      // The shared removal mutation reports the failure and keeps the property.
-    } finally {
-      setRemoving(false);
-    }
-  };
-  return (
-    <div class="flex min-w-40 flex-col gap-0.5 text-ink">
-      <button
-        type="button"
-        class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left hover:bg-hover disabled:opacity-50"
-        disabled={removing()}
-        onClick={() => ctx.onPropertyUnpinned?.(props.property.propertyId)}
-      >
-        <PushPinSlashIcon class="size-3.5 shrink-0 text-ink-muted" />
-        Unpin
-      </button>
-      <button
-        type="button"
-        class="flex w-full min-w-0 items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-failure-ink hover:bg-hover disabled:opacity-50"
-        disabled={removing()}
-        onClick={remove}
-      >
-        <TrashIcon class="size-3.5 shrink-0" />
-        {removing() ? 'Deleting…' : 'Delete from item'}
-      </button>
-    </div>
-  );
-}

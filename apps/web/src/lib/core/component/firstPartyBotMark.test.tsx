@@ -1,4 +1,3 @@
-import { CLAUDE_BOT_PRINCIPAL_ID } from '@core/constant/claudeAgent';
 import { CODEX_BOT_PRINCIPAL_ID } from '@core/constant/codexAgent';
 import {
   CURSOR_BOT_ID,
@@ -8,7 +7,6 @@ import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_PRINCIPAL_ID } from '@core/constant/macroCoder';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import MacroLogo from '@icon/macro-logo.svg';
-import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -16,16 +14,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { firstPartyBotMark } from './firstPartyBotMark';
 import { UserIcon } from './UserIcon';
 
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit: vi.fn() }),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => vi.fn(),
 }));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutate: vi.fn() }),
+const nameReads = vi.hoisted(() => ({
+  parts: vi.fn(() => ({ firstName: '', lastName: '' })),
+  full: vi.fn(() => undefined),
+  initials: vi.fn(() => 'PN'),
 }));
 vi.mock('@core/user', () => ({
-  getDisplayName: () => undefined,
-  getDisplayNameParts: () => ({ firstName: '', lastName: '' }),
+  getDisplayName: nameReads.full,
+  getDisplayNameParts: nameReads.parts,
   getInitials: () => '?',
+  getInitialsFromName: nameReads.initials,
   macroIdToEmail: (id: string) => id,
   tryMacroId: () => undefined,
   useIsConnectedSecondaryInbox: () => () => false,
@@ -53,7 +54,6 @@ describe('firstPartyBotMark', () => {
   it('gives the partner agents their own marks', () => {
     expect(firstPartyBotMark(CURSOR_BOT_PRINCIPAL_ID)?.Icon).toBe(CursorIcon);
     expect(firstPartyBotMark(CURSOR_BOT_ID)?.Icon).toBe(CursorIcon);
-    expect(firstPartyBotMark(CLAUDE_BOT_PRINCIPAL_ID)?.Icon).toBe(ClaudeIcon);
     expect(firstPartyBotMark(CODEX_BOT_PRINCIPAL_ID)?.Icon).toBe(CodexIcon);
   });
 
@@ -64,6 +64,26 @@ describe('firstPartyBotMark', () => {
     expect(firstPartyBotMark('macro|peter@macro.com')).toBeUndefined();
     expect(firstPartyBotMark(undefined)).toBeUndefined();
   });
+});
+
+it('uses supplied contact names without populating the global name store', () => {
+  nameReads.parts.mockClear();
+  nameReads.full.mockClear();
+  const { container } = render(() => (
+    <UserIcon
+      id="macro|person@example.com"
+      name="Person Name"
+      suppressClick
+      showTooltip={false}
+    />
+  ));
+  expect(container.textContent).toContain('PN');
+  expect(nameReads.initials).toHaveBeenCalledWith(
+    'Person Name',
+    expect.any(String)
+  );
+  expect(nameReads.parts).not.toHaveBeenCalled();
+  expect(nameReads.full).not.toHaveBeenCalled();
 });
 
 describe('UserIcon for first-party bots', () => {

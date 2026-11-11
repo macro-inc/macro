@@ -13,12 +13,18 @@ session that results.
   — mention detection, admission, and dispatch.
 - `src/domain/sources.rs`: the trigger sources (explicit mention, implicit
   reply, task/project assignment).
+- `src/domain/broker_events.rs`: the events, and `NewAgentSessionEvent::origin`,
+  which says what opened the session (`trigger_context::TriggerOrigin`). Only `New`
+  events tell it: a runtime already has the sessions it is following up in.
 - `src/domain/context.rs`: structured context assembled for the agent
-  prompt (thread history, people, discussion).
+  prompt (thread history, people, discussion). Message attachments travel on
+  each `ContextMessage` so the prompt XML and ACP file links can see files
+  that were not on the mentioning message.
 - `src/domain/task_assignment.rs` / `src/domain/project_assignment.rs`:
   non-message trigger paths.
-- `src/outbound/fast_model_judge.rs`: the Haiku-class implicit-trigger
-  classifier.
+- `src/outbound/jev_judge.rs`: the Jev implicit-trigger judge — one yes/no
+  question per live agent in the thread; the domain routes to the single
+  agent at or above the threshold.
 
 ## Scope
 
@@ -30,7 +36,7 @@ session that results.
 ## Boundaries
 
 - Depends on: `agent_session`, `ai_billing` (admission, `admission`
-  feature), `messages`, `bots`.
+  feature), `messages`, `bots`, `jev` (`outbound`).
 - Used by: `agent_trigger_service` (its primary host) and `agent_harness`
   (routes triggers it receives via `agent_harness`'s `trigger_router`).
 
@@ -38,7 +44,7 @@ session that results.
 
 - Add a trigger source: `src/domain/sources.rs` → `src/domain/service.rs`
   (admission + dispatch) → `src/domain/context.rs` if it needs new context.
-- Change implicit-reply detection: `src/outbound/fast_model_judge.rs` →
+- Change implicit-reply detection: `src/outbound/jev_judge.rs` →
   `src/outbound/lexical_explicit_reply_extractor.rs`.
 
 ## Checks
@@ -47,8 +53,17 @@ session that results.
 
 ## Gotchas
 
+- Implicit replies need `TYPESAFE_API_KEY` in the host (`agent_trigger_service`,
+  `agent_harness_service`); while it is unset only mentions and explicit
+  replies reach agents. Image captions still use the fast vision model,
+  since Jev reads text only.
 - A new trigger variant must also be taught to `crates/webhook` ingestion
   and the SSE fan-out, or it will be silently dropped end to end.
+- Attributed bot messages (`MessagePostedMetadata::invoking_user`) trigger
+  exactly like human ones: explicit, reply-target and inferred. The agent hop
+  limit (`messages::domain::agent_hops`) is the loop guard and runs before any
+  routing or judge call; a bot's message never targets its own bot's session.
+  Unattributed bot posts trigger nothing.
 
 ## Related
 

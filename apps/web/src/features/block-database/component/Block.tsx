@@ -1,6 +1,8 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { toQuerySchema } from '@app/features/database-query/queries/query-source';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePending } from '@app/observability/flow';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -21,6 +23,7 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -47,7 +50,11 @@ import { DatabaseToolbar } from '../../database/components/database-toolbar';
 import type { DatabaseRelatedDestination } from '../../database/core/database-relations';
 import type { NewView } from '../../database/core/view-creation';
 import type { ViewChange } from '../../database/core/view-state';
-import { allRecordsView, boardLayout } from '../../database/core/views';
+import {
+  allRecordsView,
+  boardLayout,
+  timelineLayout,
+} from '../../database/core/views';
 import { databaseOpMessage } from '../../database/core/write-failure';
 import { createDatabaseSearch } from '../../database/primitives/database-search';
 import { createDatabaseUndo } from '../../database/primitives/undo-controller';
@@ -62,6 +69,7 @@ import {
   deleteDatabaseView,
   reorderDatabaseViews,
   showAsBoardWithStatusColumn,
+  showAsTimelineWithTimeRangeColumn,
   updateDatabaseView,
 } from '../queries/views';
 import { DatabaseGrid } from './DatabaseGrid';
@@ -85,6 +93,7 @@ const Block: Component = () => {
   );
   useDatabaseTableChangedSync(() => databaseId);
   const detailQuery = useDatabaseDetailQuery(() => databaseId);
+  usePending('database.detail', () => detailQuery.isLoading);
   let gridEntry:
     | {
         tableId: string;
@@ -226,7 +235,13 @@ const Block: Component = () => {
       onCleanup(stop);
     },
     offer: (label, undo) =>
-      toast.success(label, { actions: [{ label: 'Undo', onClick: undo }] }),
+      toast.success(label, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
+          { label: 'Undo', icon: ArrowCounterClockwise, onClick: undo },
+        ],
+      }),
   });
   // Without input focus, so a cell editor keeps Ctrl+Z for its own text.
   registerHotkey({
@@ -292,7 +307,7 @@ const Block: Component = () => {
     selectView(creation.view.id);
     return okAsync(undefined);
   }
-  /** Lay a stored view out as a table, or as a board grouped as asked. */
+  /** Lay a stored view out as a table, as a board grouped as asked, or as a timeline. */
   function showViewAs(target: DatabaseView, shown: ShownLayout) {
     return match(shown)
       .with({ kind: 'table' }, () =>
@@ -305,6 +320,14 @@ const Block: Component = () => {
       )
       .with({ kind: 'board', groupBy: { kind: 'new-status' } }, () =>
         showAsBoardWithStatusColumn(target, columns())
+      )
+      .with({ kind: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+        updateDatabaseView(target, {
+          layout: timelineLayout(range.columnId, columns()),
+        })
+      )
+      .with({ kind: 'timeline', range: { kind: 'new-column' } }, () =>
+        showAsTimelineWithTimeRangeColumn(target, columns())
       )
       .exhaustive()
       .map(() => undefined);
@@ -350,7 +373,7 @@ const Block: Component = () => {
                     : 'Please try opening it again.'}
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     reset();
                     fireAndForget(detailQuery.refetch(), 'database-view');
@@ -374,7 +397,7 @@ const Block: Component = () => {
                       It may be unavailable, or you may no longer have access.
                     </p>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() =>
                         fireAndForget(detailQuery.refetch(), 'database-view')
                       }
@@ -413,6 +436,7 @@ const Block: Component = () => {
                                   {databaseOpMessage(failure(), 'this view')}
                                 </span>
                                 <Button
+                                  variant="primary"
                                   size="sm"
                                   onClick={() =>
                                     creations.retry(shown().view.id)
@@ -421,6 +445,7 @@ const Block: Component = () => {
                                   Retry
                                 </Button>
                                 <Button
+                                  variant="ghost"
                                   size="sm"
                                   onClick={() => {
                                     creations.discard(shown().view.id);
@@ -433,6 +458,8 @@ const Block: Component = () => {
                             )}
                           </Show>
                           <DatabaseGrid
+                            host="block"
+                            schema="opened"
                             databaseId={databaseId}
                             table={table()}
                             canEdit={canEdit() && !activeCreation()}
@@ -546,12 +573,10 @@ function DatabaseSkeleton() {
       aria-label="Loading database"
     >
       <div class="mb-3 flex gap-2">
-        <For each={[0, 1]}>
-          {() => <div class="h-7 w-24 animate-pulse rounded-md bg-hover" />}
-        </For>
+        <For each={[0, 1]}>{() => <ListSkeleton.Bar class="h-8 w-24" />}</For>
       </div>
       <For each={[0, 1, 2, 3, 4, 5]}>
-        {() => <div class="h-9 animate-pulse rounded-md bg-hover" />}
+        {() => <ListSkeleton.Bar class="h-9 w-full rounded-lg" />}
       </For>
     </div>
   );

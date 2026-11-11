@@ -29,9 +29,11 @@ Try: **“Import our Linear workspace into Macro.”**
 
 Review the plan and sharing settings, then approve the import. Your Linear workspace stays unchanged. You can check progress or cancel an import; completed copies stay in Macro.
 
-## Import from Slack
+**To switch:**
 
-To bring over message history, use the Slack archive importer in **Settings → Team → Connections**. A team admin uploads a Slack export and selects the conversations to import. This option appears for teams with archive import enabled.
+1. On Home, click **Connect email** when the feed is empty, or open **Settings → Email** and click **Connect**.
+2. Choose Gmail or Outlook / Microsoft 365 and finish signing in.
+3. Your mail and history are already there because Macro syncs with that account directly.
 
 If you only need the channel structure, connect Slack and use **Import channels** to recreate channels with the members who are already on your Macro team. This imports channel names and membership, not messages.
 
@@ -47,26 +49,19 @@ Try: **“Bring our open ClickUp tasks into Macro. Show me how you'll map their 
 
 What can be moved depends on the tools the source's MCP server exposes. Start with one project, check the result, then bring over the rest. You can also leave older work where it is and keep the connection so agents can reference it.
 
-Use the Macro Agent with a connected source, or [connect your own agent to Macro through MCP](/AI/mcp/overview).
+**To switch:**
 
-<span id="core-blocks" />
-<span id="key-features" />
-<span id="bidirectional-linking" />
-<span id="intelligent-permissions" />
-<span id="built-for-speed" />
-<span id="1-connect-your-email" />
-<span id="2-learn-five-keys" />
-<span id="3-triage-from-one-inbox" />
-<span id="4-open-work-side-by-side" />
-<span id="5-create-a-team" />
-<span id="6-put-the-agent-to-work" />
-<span id="7-connect-your-tools" />
+1. Open **Settings → Integrations**.
+2. Under **MCP integrations**, click **Connect** on Notion and finish signing in.
+3. Open Agents, click **New conversation**, and ask it to import. For example:
 
-## Set up your workspace
+```text
+Import my Notion workspace. Show me the plan before you create anything.
+```
 
-[Open Macro](https://macro.com/app) or [get the iOS app](https://macro.com/download). Connect Gmail or Google Workspace to use email in Macro. Outlook and IMAP support are planned.
+Pages become docs, kept in the same folder tree. Databases become databases. Databases that we detect track work become tasks.
 
-Create a team from the workspace menu at the bottom left and invite your teammates. Create a channel with **C**, then **M**. New team tasks and calls are shared by default; review [sharing and permissions](/product/sharing) before bringing in private work.
+We have a dedicated Notion importer. It reads the connected workspace and shows a plan of the pages, databases, and task lists it found. You choose what to include and whether the team can see it. Nothing is created until you approve the plan, and anything already imported stays.
 
 [Home](/product/home) brings together your messages, email, tasks, and agent activity. Press **Cmd-K** for the command menu, or **/** to search. Find the full keyboard shortcut list in the app.
 

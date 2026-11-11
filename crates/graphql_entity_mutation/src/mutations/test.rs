@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_graphql::{
     Context, EmptySubscription, MaybeUndefined, Object, Request, Schema, SimpleObject, value,
@@ -11,6 +11,14 @@ use graphql_soup::SoupEntityEdges;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+use tracing::{
+    field::{Field, Visit},
+    span::{Attributes, Id, Record},
+};
+use tracing_subscriber::{
+    Layer, Registry,
+    layer::{Context as LayerContext, SubscriberExt},
+};
 
 /// Minimal composed Soup edge object used by the isolated mutation schema.
 #[derive(Clone, SimpleObject)]
@@ -128,7 +136,7 @@ impl QueryRoot {
         async_graphql::Json<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     > {
         super::validate_share_policy_inputs(std::slice::from_ref(&input))?;
-        Ok(async_graphql::Json(input.into_model().policy))
+        Ok(async_graphql::Json(input.into_model()?.policy))
     }
 
     /// Return a successful domain outcome whose deletion cannot be represented by Soup.
@@ -137,6 +145,21 @@ impl QueryRoot {
             effects: vec![EntityMutationEffect::deleted(
                 EntityType::User.with_entity_string("user-1".to_string()),
             )],
+            edges: std::marker::PhantomData,
+        }
+    }
+
+    /// Return a successful outcome whose effects touch only entities listed outside Soup.
+    async fn database_and_form_effects(&self) -> super::GraphqlMutationSuccess<TestSoupEdges> {
+        super::GraphqlMutationSuccess {
+            effects: vec![
+                EntityMutationEffect::updated(
+                    EntityType::Database.with_entity_string("database-1".to_string()),
+                ),
+                EntityMutationEffect::deleted(
+                    EntityType::Form.with_entity_string("form-1".to_string()),
+                ),
+            ],
             edges: std::marker::PhantomData,
         }
     }
@@ -218,6 +241,24 @@ async fn unsupported_soup_deletion_is_a_graphql_error() {
         response.errors[0]
             .message
             .contains("cannot be represented as a Soup cache deletion")
+    );
+}
+
+#[tokio::test]
+async fn database_and_form_effects_have_no_soup_patches() {
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(QueryRoot, async_graphql::EmptyMutation, EmptySubscription)
+        .finish()
+        .execute(Request::new("{ databaseAndFormEffects { effects { __typename } } }").data(actor))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({ "databaseAndFormEffects": { "effects": [] } })
     );
 }
 
@@ -455,4 +496,79 @@ fn share_policy_validation_requires_access_levels_for_channel_grants() {
     }];
     let error = super::validate_share_policy_inputs(&inputs).unwrap_err();
     assert!(error.message.contains("accessLevel is required"));
+}
+
+/// Captures every span field value, including values recorded after creation.
+#[derive(Clone, Default)]
+struct RecordedSpanFields(Arc<Mutex<Vec<(String, String)>>>);
+
+impl RecordedSpanFields {
+    fn get(&self, name: &str) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|(field, _)| field == name)
+            .map(|(_, value)| value.clone())
+    }
+}
+
+impl Visit for RecordedSpanFields {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((field.name().to_string(), format!("{value:?}")));
+    }
+}
+
+impl<S: tracing::Subscriber> Layer<S> for RecordedSpanFields {
+    fn on_new_span(&self, attrs: &Attributes<'_>, _id: &Id, _ctx: LayerContext<'_, S>) {
+        attrs.record(&mut self.clone());
+    }
+
+    fn on_record(&self, _id: &Id, values: &Record<'_>, _ctx: LayerContext<'_, S>) {
+        values.record(&mut self.clone());
+    }
+}
+
+#[tokio::test]
+async fn batch_span_records_per_item_failures() {
+    let fields = RecordedSpanFields::default();
+    let _guard = tracing::subscriber::set_default(Registry::default().with(fields.clone()));
+    let actor = EntityMutationActor {
+        user_id: MacroUserIdStr::parse_from_str("macro|graphql-test@example.com").unwrap(),
+        organization_id: Some(42),
+    };
+    let response = Schema::build(
+        QueryRoot,
+        crate::EntityMutationRoot::<UnavailableEntityMutationService, TestSoupEdges>::new(),
+        EmptySubscription,
+    )
+    .finish()
+    .execute(
+        Request::new(
+            r#"mutation {
+              trashEntities(entities: [
+                { type: DOCUMENT, id: "document-1" }
+                { type: DOCUMENT, id: "document-2" }
+              ]) { results { __typename } }
+            }"#,
+        )
+        .data(Arc::new(UnavailableEntityMutationService))
+        .data(actor),
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(fields.get("entity_mutation.count").as_deref(), Some("2"));
+    assert_eq!(
+        fields.get("entity_mutation.failed_count").as_deref(),
+        Some("2")
+    );
+    assert_eq!(
+        fields.get("entity_mutation.error_code").as_deref(),
+        Some("UnsupportedOperation")
+    );
 }

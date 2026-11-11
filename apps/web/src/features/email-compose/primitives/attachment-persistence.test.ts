@@ -106,11 +106,13 @@ describe('draft attachment persistence', () => {
     ];
     expect(state.form.attachments.list()).toEqual([]);
     expect(state.services.removeAttachment).toHaveBeenCalledWith({
+      draftGeneration: 0,
       draftId: 'draft',
       attachmentId: 'local',
       inboxId: 'secondary-inbox',
     });
     expect(state.services.removeForwardedAttachment).toHaveBeenCalledWith({
+      draftGeneration: 0,
       draftId: 'draft',
       attachmentId: 'forwarded',
       inboxId: 'secondary-inbox',

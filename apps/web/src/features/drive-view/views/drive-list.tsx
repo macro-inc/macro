@@ -8,11 +8,13 @@ import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
 } from '@app/features/soup';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
@@ -22,8 +24,8 @@ import {
   ListEntity,
   ListLayoutProvider,
 } from '@entity';
-import ArrowLeftIcon from '@phosphor/arrow-left.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, EmptyStatePanel } from '@ui';
 import {
@@ -81,8 +83,12 @@ export function DriveList() {
   const [grid, setGrid] = createSignal<HTMLDivElement>();
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  createScrollTopFade(viewport);
 
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // Rows above the virtualized ones (the tutorial row) shift its item offsets.
+  const [listStart, setListStart] = createSignal<HTMLDivElement>();
+  const listStartSize = createElementSize(listStart);
 
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -91,6 +97,11 @@ export function DriveList() {
   const selected = createMemo(() =>
     list.selection.items().map((row) => row.entity)
   );
+
+  const viewedFolderId = () => {
+    const { location } = state.value();
+    return location.kind === 'folder' ? (location.id ?? undefined) : undefined;
+  };
 
   const actionContext = () =>
     resolveEntityActionViewContext({
@@ -273,7 +284,7 @@ export function DriveList() {
             >
               Databases couldn’t be loaded.
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => fireAndForget(refresh(), 'drive-view')}
               >
                 Try again
@@ -286,7 +297,7 @@ export function DriveList() {
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>Files couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => fireAndForget(refresh(), 'drive-view')}
                   >
                     Try again
@@ -305,6 +316,7 @@ export function DriveList() {
                   class="grid min-h-0 flex-1 place-items-center text-ink-muted"
                 >
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading files"
                     class="size-5 animate-spin"
                   />
@@ -321,20 +333,23 @@ export function DriveList() {
                       <span>{emptyMessage()}</span>
                       <Show when={source.error()}>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => fireAndForget(refresh(), 'drive-view')}
                         >
                           Try again
                         </Button>
                       </Show>
                       <Show when={hasFilters()}>
-                        <Button variant="outline" onClick={state.clearFilters}>
+                        <Button
+                          variant="secondary"
+                          onClick={state.clearFilters}
+                        >
                           Clear filters
                         </Button>
                       </Show>
                       <Show when={!forceEmptyState() && source.hasMore()}>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           disabled={source.isFetching()}
                           onClick={() =>
                             fireAndForget(loadMore(), 'drive-view')
@@ -362,8 +377,16 @@ export function DriveList() {
               <Match when={true}>
                 <div
                   ref={setViewport}
-                  class="min-h-0 flex-1 overflow-auto overscroll-none"
+                  // `soup-list` lets the tutorial row above the rows quiet
+                  // the cursor row while it is hovered (TutorialEntries.css).
+                  class="soup-list min-h-0 flex-1 overflow-auto overscroll-none"
                 >
+                  {/* Outside the virtualized rows, so list focus skips it. */}
+                  <div ref={setListStart}>
+                    <Show when={state.value().location.kind === 'tab'}>
+                      <TutorialRow tutorial="drive" />
+                    </Show>
+                  </div>
                   <Suspense>
                     <Virtualizer
                       ref={(handle) => {
@@ -372,6 +395,7 @@ export function DriveList() {
                       }}
                       data={source.items()}
                       scrollRef={viewport()}
+                      startMargin={listStartSize.height ?? 0}
                       bufferSize={240}
                       itemSize={44}
                       keepMounted={
@@ -409,6 +433,7 @@ export function DriveList() {
                                 list={actionState}
                                 selectedEntities={selected}
                                 viewContext={actionContext()}
+                                viewedProjectId={viewedFolderId()}
                                 onOpenChange={(open) => {
                                   if (!open) return;
 
@@ -487,7 +512,7 @@ export function DriveList() {
                               >
                                 More files couldn’t be loaded.
                                 <Button
-                                  variant="outline"
+                                  variant="secondary"
                                   onClick={() =>
                                     fireAndForget(loadMore(), 'drive-view')
                                   }

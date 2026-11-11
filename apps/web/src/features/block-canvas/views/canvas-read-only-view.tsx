@@ -1,6 +1,13 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DocumentPreviewContent } from '@core/component/DocumentPreview';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { enableCanvasArtifacts } from '@core/constant/featureFlags';
 import type { GraphicsEditor } from '@macro-inc/graphics';
+import type { GraphicsPresence } from '@macro-inc/graphics/loro';
+import {
+  attachPresencePointer,
+  GraphicsPresenceOverlay,
+} from '@macro-inc/graphics/loro/solid';
 import {
   ConnectorView,
   EllipseView,
@@ -8,7 +15,9 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { ArtifactPresentation } from './artifact-presentation';
+import { CanvasArtifactView } from './artifact-view';
 import { CanvasDrawingToolbar, CanvasZoomToolbar } from './canvas-toolbars';
 import { CanvasMediaView } from './embedded-items';
 import { CanvasTextContent } from './text-content';
@@ -16,9 +25,13 @@ import { CanvasTextContent } from './text-content';
 /** Viewers get navigation without mounting editing handlers or embedded editors. */
 export function CanvasReadOnlyView(props: {
   editor: GraphicsEditor;
+  presence?: GraphicsPresence;
   fitOnLoad?: boolean;
 }) {
   const [tool, setTool] = createSignal<'select' | 'pan'>('select');
+  const [activeArtifact, setActiveArtifact] = createSignal<string>();
+  const [presenting, setPresenting] = createSignal<string>();
+  const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
   const [scale, setScale] = createSignal(props.editor.getCamera().scale);
   const [hasSelection, setHasSelection] = createSignal(
     props.editor.getSession().selectedIds.length > 0
@@ -50,6 +63,8 @@ export function CanvasReadOnlyView(props: {
       height: host.clientHeight,
     });
   onMount(() => {
+    if (props.presence)
+      onCleanup(attachPresencePointer(host, props.editor, props.presence));
     const observer = new ResizeObserver(([entry]) => {
       if (!entry?.contentRect.width || !entry.contentRect.height) return;
       if (props.fitOnLoad !== false) fit();
@@ -89,9 +104,25 @@ export function CanvasReadOnlyView(props: {
     >
       <GraphicsSurface
         editor={props.editor}
-        input={{ editing: false, tool }}
+        input={{
+          editing: false,
+          tool,
+          ignoreTarget: (target) =>
+            target instanceof Element &&
+            !!target.closest('[data-graphics-item]') &&
+            !!target.closest('button,a,input,select,textarea,[role="button"]'),
+        }}
         gridColor="transparent"
         renderers={{
+          artifact: (p) => (
+            <CanvasArtifactView
+              {...p}
+              active={activeArtifact() === p.item.id}
+              onEnter={() => setActiveArtifact(p.item.id)}
+              onExit={() => setActiveArtifact(undefined)}
+              onPresent={() => setPresenting(p.item.id)}
+            />
+          ),
           connector: (p) => (
             <ConnectorView {...p} contentView={CanvasTextContent} />
           ),
@@ -120,6 +151,26 @@ export function CanvasReadOnlyView(props: {
           ),
         }}
       />
+      <Show when={props.presence}>
+        {(presence) => (
+          <GraphicsPresenceOverlay
+            editor={props.editor}
+            presence={presence()}
+          />
+        )}
+      </Show>
+      <Show when={artifactsFlag().enabled ? presenting() : undefined} keyed>
+        {(startId) => (
+          <ArtifactPresentation
+            editor={props.editor}
+            startId={startId}
+            onExit={() => {
+              setPresenting(undefined);
+              focus();
+            }}
+          />
+        )}
+      </Show>
       <CanvasDrawingToolbar
         readOnly
         tool={tool()}

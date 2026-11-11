@@ -129,6 +129,22 @@ impl UserApiKeysRepo for FakeUserApiKeysRepo {
             .unwrap_or_default())
     }
 
+    async fn replace_keys_named(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        id: UserApiKeyId,
+        name: &str,
+        hash: &[u8; 32],
+    ) -> Result<UserApiKeyInfo, Self::Err> {
+        self.keys
+            .lock()
+            .expect("keys lock poisoned")
+            .entry(user_id.as_ref().to_string())
+            .or_default()
+            .retain(|stored| stored.name != name);
+        self.insert_key(user_id, id, name, hash).await
+    }
+
     async fn delete_key(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -369,4 +385,31 @@ fn list_metadata_json_is_id_name_and_created_at() {
         Some("CI")
     );
     assert!(created_json.get("createdAt").is_some());
+}
+
+#[tokio::test]
+async fn replace_key_leaves_one_live_key_with_that_name() {
+    let repo = FakeUserApiKeysRepo::default();
+    let service = UserApiKeyServiceImpl::new(repo.clone());
+    let other = service
+        .create_key(&user(USER_A), "other")
+        .await
+        .expect("create should succeed");
+    let first = service
+        .replace_key(&user(USER_A), "Agent signup")
+        .await
+        .expect("replace should succeed");
+    let second = service
+        .replace_key(&user(USER_A), "Agent signup")
+        .await
+        .expect("replace should succeed");
+
+    let live = service
+        .list_keys(&user(USER_A))
+        .await
+        .expect("list should succeed");
+    assert_eq!(live.len(), 2);
+    assert!(live.iter().any(|key| key.id == other.id));
+    assert!(live.iter().any(|key| key.id == second.id));
+    assert!(!live.iter().any(|key| key.id == first.id));
 }

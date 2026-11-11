@@ -20,3 +20,6 @@ pub mod forwarder;
 
 /// Held tool calls in Postgres, and the NOTIFY that wakes their holds.
 pub mod tool_approvals;
+
+/// MCP tool exchanges with credentials isolated per invocation.
+pub mod actor_mcp;

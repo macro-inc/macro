@@ -176,6 +176,8 @@ impl From<AttachmentForwarded> for ApiAttachmentForwarded {
 #[derive(Debug, Serialize, ToSchema)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
 pub struct ApiMessage {
+    /// Draft edit generation; changes at send and cancellation boundaries.
+    pub draft_generation: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_status: Option<super::ApiMessageOperation>,
     #[schema(required = false)]
@@ -200,6 +202,9 @@ pub struct ApiMessage {
     pub has_attachments: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheduled_send_time: Option<DateTime<Utc>>,
+    /// Delivery state, including failures and unresolved provider outcomes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scheduled_send_status: Option<crate::domain::models::ScheduledSendStatus>,
     pub from: Option<ApiContactInfo>,
     pub to: Vec<ApiContactInfo>,
     pub cc: Vec<ApiContactInfo>,
@@ -220,6 +225,7 @@ pub struct ApiMessage {
 impl From<Message> for ApiMessage {
     fn from(m: Message) -> Self {
         ApiMessage {
+            draft_generation: m.draft_generation,
             operation_status: m.operation_status.map(Into::into),
             calendar_invitations: m.calendar_invitations,
             db_id: m.db_id,
@@ -241,6 +247,7 @@ impl From<Message> for ApiMessage {
             is_draft: m.is_draft,
             has_attachments: m.has_attachments,
             scheduled_send_time: m.scheduled_send_time,
+            scheduled_send_status: m.scheduled_send_status,
             from: m.from.map(ApiContactInfo::from),
             to: m.to.into_iter().map(ApiContactInfo::from).collect(),
             cc: m.cc.into_iter().map(ApiContactInfo::from).collect(),

@@ -7,17 +7,22 @@ export type ImportIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 export type ImportCategory = 'files' | 'tasks' | 'crm' | 'channels';
 
 export type ImportProvider = {
-  /** Pipedream app slug the provider connects through. */
+  /** Pipedream app slug; also keys the provider's connection state. */
   appSlug: string;
   name: string;
   /** What comes over, in a few words. */
   detail: string;
   icon: ImportIcon;
   /**
-   * The import pipeline source that discovers and copies items without an
-   * agent. Providers without one hand off to an agent chat once connected.
+   * Macro's native MCP server for the app, connected with Macro's own OAuth
+   * instead of Pipedream. Agents prefer it over a Pipedream connection.
    */
-  native?: ImportSource;
+  mcpUrl?: string;
+  /**
+   * The import ledger source the agent records copies under, so the user
+   * and teammates are never handed a duplicate.
+   */
+  ledger?: ImportSource;
 };
 
 type ImportCategoryCopy = {

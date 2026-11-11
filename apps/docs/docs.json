@@ -3,23 +3,33 @@
   "theme": "maple",
   "name": "Macro",
   "appearance": {
-    "default": "dark",
+    "default": "system",
     "strict": true
   },
   "colors": {
-    "primary": "#ff8f05",
-    "light": "#ff8f05",
-    "dark": "#ff8f05"
+    "primary": "#000000",
+    "light": "#ffffff",
+    "dark": "#000000"
   },
   "background": {
     "color": {
-      "dark": "#090909"
+      "light": "#f5f1e8",
+      "dark": "#000000"
     }
   },
-  "favicon": {
-    "light": "/favicon.svg",
-    "dark": "/favicon.svg"
+  "fonts": {
+    "heading": {
+      "family": "Roboto Slab",
+      "source": "/fonts/roboto-slab-variable.woff2",
+      "format": "woff2"
+    },
+    "body": {
+      "family": "Inter",
+      "source": "/fonts/inter-variable.woff2",
+      "format": "woff2"
+    }
   },
+  "favicon": "/favicon.svg",
   "navigation": {
     "pages": [
       "switch-to-macro",
@@ -113,18 +123,6 @@
         ]
       }
     ]
-  },
-  "navbar": {
-    "primary": {
-      "type": "button",
-      "label": "Get Macro",
-      "href": "https://macro.com"
-    }
-  },
-  "description": "Product and technical documentation for Macro, the unified interface for email, messages, tasks, calls, agents, pull requests, docs, CRM \u2014 linked together with shared AI memory.",
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
   },
   "redirects": [
     {
@@ -2072,5 +2070,17 @@
       "destination": "https://macro.com/docs/:path*",
       "permanent": true
     }
-  ]
+  ],
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "Get Macro",
+      "href": "https://macro.com"
+    }
+  },
+  "description": "Product and technical documentation for Macro, the unified interface for email, messages, tasks, calls, agents, pull requests, docs, CRM \u2014 linked together with shared AI memory.",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  }
 }

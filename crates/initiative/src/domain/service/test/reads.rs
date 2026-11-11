@@ -6,7 +6,7 @@ use crate::domain::{
 use entity_access::domain::models::{Entity, EntityAccessAuth};
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Default)]
@@ -16,6 +16,10 @@ pub(super) struct FakeResources {
     tasks: Vec<String>,
     values: HashMap<String, InitiativePropertySnapshot>,
     fail_initialization: bool,
+    /// Every entity id passed to `view`, in call order.
+    checked: Arc<Mutex<Vec<String>>>,
+    /// Every entity id whose receipt reached `properties`, in call order.
+    read_properties: Arc<Mutex<Vec<String>>>,
 }
 
 impl InitiativeResources for FakeResources {
@@ -50,6 +54,7 @@ impl InitiativeResources for FakeResources {
         entity: Entity,
     ) -> ResourceFuture<'_, Option<EntityAccessReceipt<ViewAccessLevel>>> {
         Box::pin(async move {
+            self.checked.lock().unwrap().push(entity.entity_id.clone());
             if self.denied.contains(&entity.entity_id) {
                 return Ok(None);
             }
@@ -67,8 +72,13 @@ impl InitiativeResources for FakeResources {
     }
     fn properties(
         &self,
-        _receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
     ) -> ResourceFuture<'_, HashMap<String, InitiativePropertySnapshot>> {
+        self.read_properties.lock().unwrap().extend(
+            receipts
+                .into_iter()
+                .map(|receipt| receipt.entity().entity_id.clone()),
+        );
         Box::pin(async { Ok(self.values.clone()) })
     }
 }
@@ -97,6 +107,7 @@ async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties(
         .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
     let status = uuid::Uuid::from_u128(50);
     let project_id = detail(Vec::new()).id.to_string();
+    let checked = Arc::<Mutex<Vec<String>>>::default();
     let svc = service_with_resources(
         repo,
         FakeResources {
@@ -125,6 +136,7 @@ async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties(
                     },
                 ),
             ]),
+            checked: checked.clone(),
             ..Default::default()
         },
     );
@@ -132,6 +144,81 @@ async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties(
     assert_eq!(summary.task_count, 2);
     assert_eq!(summary.completed_task_count, 1);
     assert_eq!(summary.properties.status, Some(status));
+    assert_eq!(*checked.lock().unwrap(), ["open", "done", "hidden"]);
+}
+
+fn mixed_permission_tasks() -> FakeResources {
+    let completed = InitiativePropertySnapshot {
+        completed: true,
+        ..Default::default()
+    };
+    FakeResources {
+        denied: HashSet::from(["hidden-done".into(), "hidden-open".into()]),
+        tasks: vec![
+            "hidden-done".into(),
+            "open".into(),
+            "done".into(),
+            "hidden-open".into(),
+            "done-too".into(),
+        ],
+        values: HashMap::from([
+            ("hidden-done".into(), completed.clone()),
+            ("done".into(), completed.clone()),
+            ("done-too".into(), completed),
+        ]),
+        ..Default::default()
+    }
+}
+
+#[tokio::test]
+async fn summarized_read_counts_exactly_the_visible_task_set_after_one_access_check_each() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    let resources = mixed_permission_tasks();
+    let checked = resources.checked.clone();
+    let read_properties = resources.read_properties.clone();
+    let svc = service_with_resources(repo, resources);
+
+    let read = svc.read(view_receipt()).await.unwrap();
+    let summary = svc.summarize(&read).await.unwrap();
+
+    let visible = &read.detail().task_ids;
+    assert_eq!(visible, &["open", "done", "done-too"]);
+    assert_eq!(summary.task_count as usize, visible.len());
+    assert_eq!(summary.completed_task_count, 2);
+    assert_eq!(
+        *checked.lock().unwrap(),
+        ["hidden-done", "open", "done", "hidden-open", "done-too"],
+        "each associated task is checked exactly once"
+    );
+    let project_id = detail(Vec::new()).id.to_string();
+    assert_eq!(
+        *read_properties.lock().unwrap(),
+        [project_id.as_str(), "open", "done", "done-too"],
+        "properties are read only through the project and visible task receipts"
+    );
+}
+
+#[tokio::test]
+async fn summarized_read_with_no_visible_tasks_reports_zero_progress() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_detail()
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+    let mut resources = mixed_permission_tasks();
+    resources
+        .denied
+        .extend(["open".into(), "done".into(), "done-too".into()]);
+    let svc = service_with_resources(repo, resources);
+
+    let read = svc.read(view_receipt()).await.unwrap();
+    let summary = svc.summarize(&read).await.unwrap();
+
+    assert!(read.detail().task_ids.is_empty());
+    assert_eq!(summary.task_count, 0);
+    assert_eq!(summary.completed_task_count, 0);
 }
 
 #[tokio::test]

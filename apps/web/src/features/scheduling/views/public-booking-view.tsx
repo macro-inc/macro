@@ -32,11 +32,6 @@ export function PublicBookingView(props: {
               event={event()}
               source={props.source}
               onReceipt={props.onReceipt}
-              onChooseEvent={
-                props.profile.eventTypes.length > 1
-                  ? () => props.onEvent('')
-                  : undefined
-              }
             />
           )}
         </Show>

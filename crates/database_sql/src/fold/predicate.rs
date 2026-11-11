@@ -76,6 +76,7 @@ fn compare(cell: &Cell, value: &Value) -> Option<Ordering> {
         (Cell::Number(number), Value::Number(other)) => number.partial_cmp(other),
         (Cell::Bool(checked), Value::Bool(other)) => Some(checked.cmp(other)),
         (Cell::Date(date), Value::Date(other)) => Some(date.cmp(other)),
+        (Cell::DateRange(range), Value::Date(other)) => Some(range.compare_to(*other)),
         (Cell::Options(ids), Value::Option(id)) => single(ids).map(|only| only.cmp(id)),
         (Cell::Entities(ids), Value::Entity(id)) => {
             single(ids).map(|only| only.as_str().cmp(id.as_str()))
@@ -96,9 +97,8 @@ fn single<Member>(ids: &[Member]) -> Option<&Member> {
 /// SQL `LIKE` with `%` and `_`, ignoring case. The escape character makes
 /// the character after it literal.
 fn like(pattern: &str, escape: Option<char>, text: &str) -> bool {
-    let escape = escape.map(lowercase);
+    let (lowered, escape) = normalized_like(pattern, escape);
     let mut parts = Vec::new();
-    let lowered = pattern.to_lowercase();
     let mut characters = lowered.chars();
     while let Some(character) = characters.next() {
         parts.push(match character {
@@ -113,6 +113,11 @@ fn like(pattern: &str, escape: Option<char>, text: &str) -> bool {
     }
     let text: Vec<char> = text.to_lowercase().chars().collect();
     matches(&parts, &text)
+}
+
+/// Shared normalization for the in-memory fold and on-disk people compiler.
+pub(crate) fn normalized_like(pattern: &str, escape: Option<char>) -> (String, Option<char>) {
+    (pattern.to_lowercase(), escape.map(lowercase))
 }
 
 /// A character's lower case when it is one character, as `to_lowercase` of the

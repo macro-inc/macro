@@ -36,6 +36,58 @@ Denies the abort_join command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-can-use-full-screen-intent`
+
+</td>
+<td>
+
+Enables the can_use_full_screen_intent command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-can-use-full-screen-intent`
+
+</td>
+<td>
+
+Denies the can_use_full_screen_intent command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-configure-tracing`
+
+</td>
+<td>
+
+Enables the configure_tracing command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-configure-tracing`
+
+</td>
+<td>
+
+Denies the configure_tracing command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-end-active-call`
 
 </td>
@@ -140,6 +192,58 @@ Denies the get_voip_token command without any pre-configured scope.
 <tr>
 <td>
 
+`call-kit:allow-open-full-screen-intent-settings`
+
+</td>
+<td>
+
+Enables the open_full_screen_intent_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-open-full-screen-intent-settings`
+
+</td>
+<td>
+
+Denies the open_full_screen_intent_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-open-microphone-settings`
+
+</td>
+<td>
+
+Enables the open_microphone_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-open-microphone-settings`
+
+</td>
+<td>
+
+Denies the open_microphone_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
 `call-kit:allow-prepare-join`
 
 </td>
@@ -211,6 +315,32 @@ Enables the remove_listener command without any pre-configured scope.
 <td>
 
 Denies the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:allow-request-microphone-permission`
+
+</td>
+<td>
+
+Enables the request_microphone_permission command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`call-kit:deny-request-microphone-permission`
+
+</td>
+<td>
+
+Denies the request_microphone_permission command without any pre-configured scope.
 
 </td>
 </tr>

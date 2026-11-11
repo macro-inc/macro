@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Tauri
 import UIKit
@@ -23,6 +24,15 @@ struct WatchParticipantIdentitiesArgs: Decodable {
     let channel: Channel
 }
 
+struct SelectAudioOutputArgs: Decodable {
+    let callId: String
+    let id: String
+}
+
+struct WatchAudioOutputArgs: Decodable {
+    let channel: Channel
+}
+
 struct SetVideoEnabledArgs: Decodable {
     let enabled: Bool
 }
@@ -39,10 +49,17 @@ struct SetCallDrawerChannelTitleArgs: Decodable {
 class CallKitPlugin: Plugin, @unchecked Sendable {
     private var mediaSession: NativeLiveKitCallSession?
     private var callCoordinator: IncomingCallCoordinator!
-    private let videoOverlay = CallVideoOverlayController()
+    /// Created in `load(webview:)`, never in an initializer: Tauri constructs
+    /// plugins before `UIApplicationMain`. UIKit registers a gesture recognizer
+    /// with the running application when it's added to a view, so recognizers
+    /// created earlier keep a nil delayed-touch dispatcher, and UIKit aborts
+    /// (`insertObject:atIndex:` nil in `_delayTouchesForEvent:inPhase:`) the
+    /// first time one of them delays a touch, e.g. on touching the participant row.
+    private var videoOverlay: CallVideoOverlayController!
     private var pendingParticipantDisplayNamesByIdentity: [String: String] = [:]
 
     // Singleton channels avoid leaking listeners across webview reloads/HMR.
+    private var audioOutputChannel: Channel?
     private var callAnsweredChannel: Channel?
     private var callEndedChannel: Channel?
     private var connectionStateChannel: Channel?
@@ -57,14 +74,18 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     }
 
     override public func load(webview: WKWebView) {
-        print("[CallKit] Tauri CallKitPlugin loading")
+        callKitLog("Tauri CallKitPlugin loading")
+        if videoOverlay == nil {
+            videoOverlay = CallVideoOverlayController()
+        }
         callCoordinator = IncomingCallCoordinator(
             mediaSession: { [weak self] in
                 guard let self else {
-                    print("[CallKit] Media session requested after plugin deallocation; returning inert session")
+                    callKitLog("Media session requested after plugin deallocation; returning inert session")
                     return NativeLiveKitCallSession(
                         onSnapshotChanged: { _ in },
                         requestSystemEndCall: { _ in },
+                        requestEndActiveCall: { completion in completion() },
                         onDrawerOpened: { _ in },
                         onParticipantIdentitiesChanged: { _ in },
                         videoOverlay: CallVideoOverlayController()
@@ -76,21 +97,32 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 self?.mediaSession
             },
             onVoipTokenUpdated: { [weak self] token in
-                print("[CallKit] Emitting voip-token-updated event tokenLength=\(token.count)")
+                callKitLog("Emitting voip-token-updated event tokenLength=\(token.count)")
                 self?.trigger("voip-token-updated", data: ["token": token])
             },
-            onCallAnswered: { [weak self] channelId, nativeMedia in
-                let eventPayload: JSObject = ["channelId": channelId, "nativeMedia": nativeMedia]
-                print("[CallKit] Triggering call answered event channelId=\(channelId) nativeMedia=\(nativeMedia)")
+            onCallAnswered: { [weak self] answeredCall in
+                let callId = answeredCall.callUUID.uuidString
+                let eventPayload: JSObject = [
+                    "channelId": answeredCall.channelId,
+                    "nativeMedia": answeredCall.nativeMedia,
+                    "callId": callId,
+                    "answeredAtMs": answeredCall.answeredAtMs,
+                ]
+                callKitLog("Triggering call answered event channelId=\(answeredCall.channelId) callId=\(callId) nativeMedia=\(answeredCall.nativeMedia)")
                 self?.trigger("call-answered", data: eventPayload)
                 if let channel = self?.callAnsweredChannel {
-                    let channelPayload: JsonObject = ["channelId": channelId, "nativeMedia": nativeMedia]
+                    let channelPayload: JsonObject = [
+                        "channelId": answeredCall.channelId,
+                        "nativeMedia": answeredCall.nativeMedia,
+                        "callId": callId,
+                        "answeredAtMs": answeredCall.answeredAtMs,
+                    ]
                     channel.send(channelPayload)
                 }
             },
             onCallEnded: { [weak self] callId in
                 let eventPayload: JSObject = ["callId": callId]
-                print("[CallKit] Triggering call ended event callId=\(callId)")
+                callKitLog("Triggering call ended event callId=\(callId)")
                 self?.trigger("call-ended", data: eventPayload)
                 if let channel = self?.callEndedChannel {
                     let channelPayload: JsonObject = ["callId": callId]
@@ -101,7 +133,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         videoOverlay.attach(to: webview)
         callCoordinator.load()
         observeApplicationTermination()
-        print("[CallKit] Tauri CallKitPlugin loaded")
+        callKitLog("Tauri CallKitPlugin loaded")
     }
 
     private func observeApplicationTermination() {
@@ -113,7 +145,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("[CallKit] UIApplication will terminate")
+            callKitLog("UIApplication will terminate")
             self?.callCoordinator.handleApplicationWillTerminate()
         }
     }
@@ -121,7 +153,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func watchCallAnswered(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchCallAnsweredArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS registered call answered watcher")
+            callKitLog("JS registered call answered watcher")
             self?.callAnsweredChannel = args.channel
             invoke.resolve()
         }
@@ -130,7 +162,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func watchCallEnded(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchCallEndedArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS registered call ended watcher")
+            callKitLog("JS registered call ended watcher")
             self?.callEndedChannel = args.channel
             invoke.resolve()
         }
@@ -139,7 +171,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func watchConnectionState(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchConnectionStateArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS registered connection state watcher")
+            callKitLog("JS registered connection state watcher")
             self?.connectionStateChannel = args.channel
             invoke.resolve()
         }
@@ -148,7 +180,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func watchDrawerOpened(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchDrawerOpenedArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS registered drawer opened watcher")
+            callKitLog("JS registered drawer opened watcher")
             self?.drawerOpenedChannel = args.channel
             invoke.resolve()
         }
@@ -157,7 +189,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func watchParticipantIdentities(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(WatchParticipantIdentitiesArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS registered participant identities watcher")
+            callKitLog("JS registered participant identities watcher")
             self?.participantIdentitiesChannel = args.channel
             invoke.resolve()
         }
@@ -165,7 +197,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     @objc public func getVoipToken(_ invoke: Invoke) {
         onMain { [weak self] in
-            print("[CallKit] JS requested cached VoIP token")
+            callKitLog("JS requested cached VoIP token")
             invoke.resolve(["token": self?.callCoordinator.getVoipToken() as Any])
         }
     }
@@ -173,10 +205,12 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func getPendingAnsweredCall(_ invoke: Invoke) {
         onMain { [weak self] in
             let answeredCall = self?.callCoordinator.drainPendingAnsweredCall()
-            print("[CallKit] JS drained pending answered call channelId=\(answeredCall?.channelId ?? "nil") nativeMedia=\(answeredCall?.nativeMedia ?? false)")
+            callKitLog("JS drained pending answered call channelId=\(answeredCall?.channelId ?? "nil") callId=\(answeredCall?.callUUID.uuidString ?? "nil") nativeMedia=\(answeredCall?.nativeMedia ?? false)")
             invoke.resolve([
                 "channelId": answeredCall?.channelId as Any,
                 "nativeMedia": answeredCall?.nativeMedia as Any,
+                "callId": answeredCall?.callUUID.uuidString as Any,
+                "answeredAtMs": answeredCall?.answeredAtMs as Any,
             ])
         }
     }
@@ -184,12 +218,12 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func getActiveCallState(_ invoke: Invoke) {
         onMain { [weak self] in
             guard let snapshot = self?.mediaSession?.currentSnapshot() else {
-                print("[CallKit] JS requested active call state: none")
+                callKitLog("JS requested active call state: none")
                 invoke.resolve(["state": NSNull()])
                 return
             }
 
-            print("[CallKit] JS requested active call state: \(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+            callKitLog("JS requested active call state: \(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
             let participantIdentities = self?.mediaSession?.currentParticipantIdentities() ?? []
             invoke.resolve([
                 "state": [
@@ -208,11 +242,11 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func endActiveCall(_ invoke: Invoke) {
         onMain { [weak self] in
             guard let self else {
-                print("[CallKit] JS requested endActiveCall after plugin deallocation")
+                callKitLog("JS requested endActiveCall after plugin deallocation")
                 invoke.resolve()
                 return
             }
-            print("[CallKit] JS requested endActiveCall")
+            callKitLog("JS requested endActiveCall")
             self.callCoordinator.endActiveCall {
                 invoke.resolve()
             }
@@ -223,17 +257,17 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let args = try invoke.parseArgs(StartOutgoingCallArgs.self)
         onMain { [weak self] in
             guard let self else {
-                print("[CallKit] JS requested startOutgoingCall after plugin deallocation")
+                callKitLog("JS requested startOutgoingCall after plugin deallocation")
                 invoke.reject("CallKit plugin is not available")
                 return
             }
             guard let uuid = UUID(uuidString: args.callId) else {
-                print("[CallKit] JS requested startOutgoingCall with invalid callId=\(args.callId)")
+                callKitLog("JS requested startOutgoingCall with invalid callId=\(args.callId)")
                 invoke.reject("Invalid callId")
                 return
             }
 
-            print("[CallKit] JS requested startOutgoingCall uuid=\(uuid.uuidString) channelId=\(args.channelId)")
+            callKitLog("JS requested startOutgoingCall uuid=\(uuid.uuidString) channelId=\(args.channelId)")
             self.callCoordinator.startOutgoingCall(
                 uuid: uuid,
                 channelId: args.channelId,
@@ -251,10 +285,70 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         }
     }
 
+    @objc public func getAudioOutput(_ invoke: Invoke) {
+        onMain { [weak self] in
+            invoke.resolve(["state": (self?.mediaSession?.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func selectAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(SelectAudioOutputArgs.self)
+        onMain { [weak self] in
+            guard let session = self?.mediaSession,
+                  session.currentSnapshot()?.callId.lowercased() == args.callId.lowercased(),
+                  session.selectAudioOutput(args.id) else {
+                invoke.reject("Audio output is unavailable for this call")
+                return
+            }
+            invoke.resolve(["state": (session.audioOutputState() as Any?) ?? NSNull()])
+        }
+    }
+
+    @objc public func watchAudioOutput(_ invoke: Invoke) throws {
+        let args = try invoke.parseArgs(WatchAudioOutputArgs.self)
+        onMain { [weak self] in
+            self?.audioOutputChannel = args.channel
+            if let state = self?.mediaSession?.audioOutputState() {
+                args.channel.send(state)
+            }
+            invoke.resolve()
+        }
+    }
+    /// Asked before the join so the prompt appears over the call the user just
+    /// started, not after the room connects, possibly behind the lock screen.
+    @objc public func requestMicrophonePermission(_ invoke: Invoke) {
+        let session = AVAudioSession.sharedInstance()
+        guard session.recordPermission == .undetermined else {
+            invoke.resolve(["granted": session.recordPermission == .granted])
+            return
+        }
+        callKitLog("JS requested microphone permission before joining")
+        session.requestRecordPermission { granted in
+            callKitLog("Microphone permission request before joining completed granted=\(granted)")
+            invoke.resolve(["granted": granted])
+        }
+    }
+
+    @objc public func openMicrophoneSettings(_ invoke: Invoke) {
+        onMain {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else {
+                invoke.reject("Unable to open microphone settings")
+                return
+            }
+            UIApplication.shared.open(url) { opened in
+                if opened {
+                    invoke.resolve()
+                } else {
+                    invoke.reject("Unable to open microphone settings")
+                }
+            }
+        }
+    }
+
     @objc public func setVideoEnabled(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetVideoEnabledArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS requested native video enabled=\(args.enabled)")
+            callKitLog("JS requested native video enabled=\(args.enabled)")
             self?.mediaSession?.setVideoEnabled(args.enabled)
             invoke.resolve()
         }
@@ -264,7 +358,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let args = try invoke.parseArgs(SetVideoOverlayModeArgs.self)
         onMain { [weak self] in
             let mode = CallVideoOverlayMode(rawValue: args.mode) ?? .minimized
-            print("[CallKit] JS requested native video overlay mode=\(mode.rawValue)")
+            callKitLog("JS requested native video overlay mode=\(mode.rawValue)")
             self?.mediaSession?.setVideoOverlayMode(mode)
             invoke.resolve()
         }
@@ -273,7 +367,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func setCallDrawerChannelTitle(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetCallDrawerChannelTitleArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS requested call drawer channelTitle=\(args.channelTitle ?? "nil")")
+            callKitLog("JS requested call drawer channelTitle hasTitle=\(args.channelTitle != nil)")
             self?.videoOverlay.setChannelTitle(args.channelTitle)
             invoke.resolve()
         }
@@ -302,7 +396,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
     @objc public func setParticipantDisplayName(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(SetParticipantDisplayNameArgs.self)
         onMain { [weak self] in
-            print("[CallKit] JS requested participant display name identity=\(args.identity) displayName=\(args.displayName ?? "nil")")
+            callKitLog("JS requested participant display name hasDisplayName=\(args.displayName != nil)")
             self?.setParticipantDisplayName(
                 identity: args.identity,
                 displayName: args.displayName
@@ -313,7 +407,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     @objc public func switchCamera(_ invoke: Invoke) {
         onMain { [weak self] in
-            print("[CallKit] JS requested native camera switch")
+            callKitLog("JS requested native camera switch")
             self?.mediaSession?.switchCamera()
             invoke.resolve()
         }
@@ -323,7 +417,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let eventPayload: JSObject
         let channelPayload: JsonObject
         if let snapshot {
-            print("[CallKit] Sending connection state channel message state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
+            callKitLog("Sending connection state channel message state=\(snapshot.connectionState) channelId=\(snapshot.channelId) callId=\(snapshot.callId)")
             if snapshot.connectionState == "connected",
                let uuid = UUID(uuidString: snapshot.callId) {
                 callCoordinator.reportNativeCallConnected(uuid: uuid)
@@ -345,7 +439,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 "videoOverlayMode": snapshot.videoOverlayMode,
             ]
         } else {
-            print("[CallKit] Sending connection state channel message state=disconnected")
+            callKitLog("Sending connection state channel message state=disconnected")
             eventPayload = [
                 "state": "disconnected",
                 "channelId": NSNull(),
@@ -371,7 +465,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     private func emitDrawerOpened(channelId: String) {
         let eventPayload: JSObject = ["channelId": channelId]
-        print("[CallKit] Triggering drawer opened event channelId=\(channelId)")
+        callKitLog("Triggering drawer opened event channelId=\(channelId)")
         trigger("drawer-opened", data: eventPayload)
         if let channel = drawerOpenedChannel {
             let channelPayload: JsonObject = ["channelId": channelId]
@@ -381,7 +475,7 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     private func emitParticipantIdentities(_ identities: [String]) {
         let eventPayload: JSObject = ["identities": identities]
-        print("[CallKit] Triggering participant identities event identities=\(identities)")
+        callKitLog("Triggering participant identities event count=\(identities.count)")
         trigger("participant-identities", data: eventPayload)
         if let channel = participantIdentitiesChannel {
             let channelPayload: JsonObject = ["identities": identities]
@@ -391,17 +485,24 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
 
     private func getMediaSession() -> NativeLiveKitCallSession {
         if let mediaSession {
-            print("[CallKit] Reusing NativeLiveKitCallSession")
+            callKitLog("Reusing NativeLiveKitCallSession")
             return mediaSession
         }
 
-        print("[CallKit] Creating NativeLiveKitCallSession")
+        callKitLog("Creating NativeLiveKitCallSession")
         let mediaSession = NativeLiveKitCallSession(
             onSnapshotChanged: { [weak self] snapshot in
                 self?.emitConnectionState(snapshot)
             },
             requestSystemEndCall: { [weak self] uuid in
                 self?.callCoordinator.requestEndCall(uuid: uuid)
+            },
+            requestEndActiveCall: { [weak self] completion in
+                guard let self else {
+                    completion()
+                    return
+                }
+                self.callCoordinator.endActiveCall(completion: completion)
             },
             onDrawerOpened: { [weak self] channelId in
                 self?.emitDrawerOpened(channelId: channelId)
@@ -411,6 +512,9 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
             },
             videoOverlay: videoOverlay
         )
+        mediaSession.onAudioOutputChanged = { [weak self] state in
+            self?.audioOutputChannel?.send(state)
+        }
         self.mediaSession = mediaSession
         replayPendingParticipantDisplayNames(to: mediaSession)
         return mediaSession
@@ -425,17 +529,17 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
         let trimmedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let trimmedName, !trimmedName.isEmpty {
             pendingParticipantDisplayNamesByIdentity[identity] = trimmedName
-            print("[CallKit] Cached participant display name until native session exists identity=\(identity) displayName=\(trimmedName)")
+            callKitLog("Cached participant display name until native session exists count=\(pendingParticipantDisplayNamesByIdentity.count)")
         } else {
             pendingParticipantDisplayNamesByIdentity.removeValue(forKey: identity)
-            print("[CallKit] Cleared pending participant display name before native session exists identity=\(identity)")
+            callKitLog("Cleared pending participant display name before native session exists count=\(pendingParticipantDisplayNamesByIdentity.count)")
         }
     }
 
     private func replayPendingParticipantDisplayNames(to mediaSession: NativeLiveKitCallSession) {
         guard !pendingParticipantDisplayNamesByIdentity.isEmpty else { return }
 
-        print("[CallKit] Replaying pending participant display names count=\(pendingParticipantDisplayNamesByIdentity.count)")
+        callKitLog("Replaying pending participant display names count=\(pendingParticipantDisplayNamesByIdentity.count)")
         for (identity, displayName) in pendingParticipantDisplayNamesByIdentity {
             mediaSession.setParticipantDisplayName(identity: identity, displayName: displayName)
         }

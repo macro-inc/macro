@@ -11,6 +11,9 @@ crate that produces or consumes an SQS queue.
 - `src/queue.rs`: the `SQS` transport (`send_fifo_message`, `receive_messages`,
   delete/visibility) every feature module calls into.
 - `src/message_attribute.rs`: typed SQS message attributes shared across queues.
+- `src/email/trace_context.rs`: optional W3C context on backfill messages and
+  deferrals; consumers adopt it before dispatching work. Missing or malformed
+  context does not change job behavior.
 - One module per feature (`chat`, `document`, `email`, `gmail`,
   `organization_retention`, `search`, `upload_extractor`): each defines its own
   enqueue function and message shape for one downstream consumer.
@@ -25,8 +28,10 @@ crate that produces or consumes an SQS queue.
 
 ## Boundaries
 
-- Depends on: `aws-sdk-sqs`; optional `email`, `model`, `models_email`,
-  `models_ai_projection` behind their matching features.
+- Depends on: `aws-sdk-sqs`; optional `model`, `models_email`,
+  `models_ai_projection` behind their matching features. Never a domain crate:
+  ports implemented for `SQS` live with their trait, such as `email`'s `sqs`
+  feature, so this crate stays at the bottom of the compile chain.
 - Used by: most SQS-producing services (`document_storage_service`,
   `email_service`, `search_processing_service`, `authentication_service`,
   the `*_handler`/`*_trigger` Lambda services) and `crates/teams`,
@@ -47,6 +52,13 @@ crate that produces or consumes an SQS queue.
 - `cargo test -p sqs_client` (`SQLX_OFFLINE` unset).
 - `cargo test -p sqs_client --no-default-features --features <area>` when
   changing a single feature's gating.
+
+## Gotchas
+
+- A new message type for a queue reaches workers that may not decode it yet:
+  producers and consumers deploy in parallel. Keep producing the old form until
+  every consumer is rolled out, behind a deployment switch (see
+  `gmail_label_write_batches` and its test against the released worker format).
 
 ## Related
 

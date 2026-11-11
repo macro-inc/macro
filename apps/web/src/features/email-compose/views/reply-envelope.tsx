@@ -1,16 +1,20 @@
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import ChevronDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
 import type { Accessor } from 'solid-js';
-import { Show } from 'solid-js';
+import { createUniqueId, Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { RecipientDropRow } from '../components/recipient-drop-row';
-import type { EmailInbox } from '../context/compose-capabilities';
+import type {
+  EmailInbox,
+  EmailRecipientSourceFactory,
+} from '../context/compose-capabilities';
 import type { EmailRecipient, RecipientFieldId } from '../core/email-recipient';
 import { getRecipientDisplayName } from '../core/email-recipient';
 import { fromInboxOptions } from '../core/email-sender';
 import type { ReplyType } from '../core/reply-type';
+import { subjectLimitHint } from '../core/subject-limit';
 import type { EmailFormRecipients } from '../primitives/email-form-state';
 import type { createReplyRecipientFields } from '../primitives/reply-recipient-fields';
 
@@ -18,6 +22,7 @@ type ReplyEnvelopeProps = {
   fields: ReturnType<typeof createReplyRecipientFields>;
   values: Accessor<EmailFormRecipients>;
   options: Accessor<EmailRecipient[]>;
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   inboxes: Accessor<EmailInbox[]>;
   activeInboxId: Accessor<string | undefined>;
   senderEmail: Accessor<string | undefined>;
@@ -62,6 +67,24 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
     const suffix = recipients.length > 1 ? ` + ${recipients.length - 1}` : '';
     return `${action} ${getRecipientDisplayName(first)}${suffix}`;
   };
+  const limitHintId = createUniqueId();
+  const limitHint = () => {
+    const inboxId = props.activeInboxId();
+    const inbox = props.inboxes().find((inbox) => inbox.id === inboxId);
+    return subjectLimitHint(props.subject(), inbox?.provider);
+  };
+  const LimitHint = (hint: { class: string }) => (
+    <Show when={limitHint()}>
+      {(text) => (
+        <div
+          id={limitHintId}
+          class={cn('w-full text-failure-ink text-sm', hint.class)}
+        >
+          {text()}
+        </div>
+      )}
+    </Show>
+  );
   const RecipientInput = (field: {
     field: RecipientFieldId;
     mobile?: boolean;
@@ -82,6 +105,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             : setBccRef
       }
       options={props.options}
+      createSource={props.createRecipientSource}
       selfEmail={props.senderEmail()}
       selectedOptions={props.values()[field.field]}
       setSelectedOptions={(values) =>
@@ -96,6 +120,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
       }
       onChipDragEnd={handleChipDragEnd}
       hideMenuOnEscape
+      showChipAddresses
     />
   );
   return (
@@ -146,6 +171,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                   <div class="flex items-center ml-auto shrink-0">
                     <Show when={!showCc()}>
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={props.disabled()}
                         onClick={() => {
@@ -158,6 +184,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                     </Show>
                     <Show when={!showBcc()}>
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={props.disabled()}
                         onClick={() => {
@@ -215,7 +242,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
           </div>
           <div
             class={cn(
-              'flex-row items-center',
+              'flex-row flex-wrap items-center',
               props.showSubject ? 'flex' : 'hidden'
             )}
           >
@@ -234,7 +261,10 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
               }}
               placeholder="Subject"
               disabled={props.disabled()}
+              aria-invalid={limitHint() ? true : undefined}
+              aria-describedby={limitHint() ? limitHintId : undefined}
             />
+            <LimitHint class="pl-4 pt-1" />
           </div>
         </>
       }
@@ -315,7 +345,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
           />
         </div>
 
-        <div class="min-h-14 border-b border-edge-muted/70 flex items-center">
+        <div class="min-h-14 border-b border-edge-muted/70 flex flex-wrap items-center">
           <input
             type="text"
             class="w-full bg-transparent outline-none border-0 text-[17px] leading-6 text-ink placeholder:text-ink-placeholder"
@@ -330,7 +360,10 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             }}
             placeholder="Subject:"
             disabled={props.disabled()}
+            aria-invalid={limitHint() ? true : undefined}
+            aria-describedby={limitHint() ? limitHintId : undefined}
           />
+          <LimitHint class="pb-2" />
         </div>
       </div>
     </Show>

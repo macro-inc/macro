@@ -1,10 +1,10 @@
 import { SidePanel } from '@components/app/side-panel';
-import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useChannelName } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import HashIcon from '@phosphor/hash.svg';
+import { openExternalUrl } from '@core/util/url';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {
@@ -12,17 +12,21 @@ import {
   type PrLinks,
   priorityTaskName,
 } from '../../data/pr-links';
+import { PR_ORIGIN_LABELS, type PrOrigin } from '../../data/pr-origin';
 import { prLinksTarget, usePrLinksQuery } from '../../queries/pr-links-query';
-import { PrOriginBadge, PrPriorityIcon, prOriginDescription } from '../PrLinks';
+import { PrOriginIcon, PrPriorityIcon, prOriginDescription } from '../PrLinks';
+import { useOpenFromSidePanel } from './open-from-side-panel';
+import { useAgentSessionLabel } from './PrAgentSessionsSection';
 
 function LinkRow(props: {
   icon?: Component<{ class?: string }>;
   leading?: JSX.Element;
-  content: SplitContent;
+  /** The item to open, or a handler for one that opens outside Macro. */
+  content: SplitContent | (() => void);
   children: JSX.Element;
   class?: string;
 }) {
-  const layout = useSplitLayout();
+  const open = useOpenFromSidePanel();
   return (
     <button
       type="button"
@@ -30,11 +34,11 @@ function LinkRow(props: {
         'flex h-6 w-full min-w-0 items-center gap-2 rounded text-left hover:text-ink',
         props.class
       )}
-      onClick={(event) =>
-        layout?.openWithSplit(props.content, {
-          preferNewSplit: event.shiftKey,
-        })
-      }
+      onClick={(event) => {
+        const content = props.content;
+        if (typeof content === 'function') content();
+        else open(content, event.shiftKey);
+      }}
     >
       <Show when={props.icon} fallback={props.leading}>
         {(icon) => {
@@ -44,6 +48,52 @@ function LinkRow(props: {
       </Show>
       <span class="min-w-0 truncate">{props.children}</span>
     </button>
+  );
+}
+
+function SessionOriginRow(props: { origin: PrOrigin; sessionId: string }) {
+  const { label } = useAgentSessionLabel(() => props.sessionId);
+  return (
+    <LinkRow
+      leading={<PrOriginIcon tool={props.origin.tool} class="size-3.5" />}
+      content={{ type: 'agent', id: props.sessionId }}
+    >
+      {label()}
+    </LinkRow>
+  );
+}
+
+/**
+ * Where the pull request was started: the Macro agent session by name, the
+ * external session link, or just the tool when nothing links to it.
+ */
+function OriginRow(props: { origin: PrOrigin }) {
+  const tool = () => PR_ORIGIN_LABELS[props.origin.tool];
+  return (
+    <Switch
+      fallback={
+        <div class="flex h-6 min-w-0 items-center gap-2">
+          <PrOriginIcon tool={props.origin.tool} class="size-3.5" />
+          <span class="min-w-0 truncate">{tool()}</span>
+        </div>
+      }
+    >
+      <Match when={props.origin.sessionId}>
+        {(sessionId) => (
+          <SessionOriginRow origin={props.origin} sessionId={sessionId()} />
+        )}
+      </Match>
+      <Match when={props.origin.url}>
+        {(url) => (
+          <LinkRow
+            leading={<PrOriginIcon tool={props.origin.tool} class="size-3.5" />}
+            content={() => openExternalUrl(url())}
+          >
+            {tool()}
+          </LinkRow>
+        )}
+      </Match>
+    </Switch>
   );
 }
 
@@ -87,7 +137,6 @@ export function PrLinkedWorkSection(props: {
     authorLogin?: string | null;
   };
 }) {
-  const layout = useSplitLayout();
   const target = () =>
     props.pullRequest ? prLinksTarget(props.pullRequest) : undefined;
   const query = usePrLinksQuery(() => {
@@ -123,16 +172,7 @@ export function PrLinkedWorkSection(props: {
               <Show when={current().origin}>
                 {(origin) => (
                   <LinkGroup label="Started from">
-                    <div class="flex h-6 items-center">
-                      <PrOriginBadge
-                        origin={origin()}
-                        onOpen={(content, newSplit) =>
-                          layout?.openWithSplit(content, {
-                            preferNewSplit: newSplit,
-                          })
-                        }
-                      />
-                    </div>
+                    <OriginRow origin={origin()} />
                     <div class="text-ink-placeholder">
                       {prOriginDescription(origin())}
                     </div>

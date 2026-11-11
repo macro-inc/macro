@@ -1,6 +1,7 @@
 export type ChannelsTab = 'browse' | 'recents' | 'threads';
 
-export type ChannelsGroup = 'channels' | 'direct_messages';
+/** The All tab's conversation lists, each its own paginated query. */
+export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
 
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 
@@ -9,6 +10,16 @@ export type ChannelsSortGroup = ChannelsGroup | 'threads';
 
 /** Collapsible sections of the All tab. */
 export type ChannelsRailSection = 'favorites' | ChannelsGroup;
+
+export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
+export type ChannelSectionPreferences = {
+  sort?: ChannelListSort | 'name' | 'manual';
+  unreadOnly?: boolean;
+  /** Keep unread conversations visible below a collapsed heading; on by default. */
+  unreadWhenCollapsed?: boolean;
+  /** Preferred expanded body height in pixels; absent means size to content. */
+  height?: number;
+};
 
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 
@@ -27,7 +38,11 @@ export type ChannelsViewState = {
    */
   threadsChannelId: string | undefined;
   sortBy: Record<ChannelsSortGroup, ChannelListSort>;
-  asideWidth: number;
+  sectionPreferences: Partial<
+    Record<ChannelSectionKey, ChannelSectionPreferences>
+  >;
+  /** Personal display order, independent of shared section membership. */
+  sectionOrder: ChannelSectionKey[];
 };
 
 export type ChannelsViewStateOptions = Partial<

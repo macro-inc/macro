@@ -70,7 +70,6 @@ it('scopes tasks to the Project property and disables the shared source immediat
         entityId: 'project',
       });
       expect(mock.options?.enabled?.()).toBe(true);
-      expect(mock.options?.loadAll).toBe(true);
       expect(mock.options?.board?.()).toBe(false);
       setBoard(true);
       expect(mock.options?.board?.()).toBe(true);

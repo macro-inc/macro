@@ -9,7 +9,10 @@
  * open starts from a log as complete as the last one ended.
  */
 
-import { traceCacheWrite } from '@core/agent-session/load-telemetry';
+import {
+  traceCacheWrite,
+  traceFollowResumed,
+} from '@core/agent-session/load-telemetry';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -33,7 +36,7 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { type OperationResult, stringifyDocument } from '@urql/core';
-import { pipe, subscribe } from 'wonka';
+import { onEnd, pipe, subscribe } from 'wonka';
 
 /** What the fold needs: the agent and the raw rows. */
 export type SessionLogSnapshot = {
@@ -92,8 +95,8 @@ export type SessionLogWatch = {
 /**
  * How a watch follows the session after the fetch: each run of frames the
  * harness appends, in log order, as the harness flushed it. `gap` means
- * rows may have been missed - the subscription fell behind or the socket
- * reconnected - and the caller must refetch the log.
+ * rows may have been missed - the subscription ended and was reopened, or a
+ * run could not be read - and the caller must refetch the log.
  */
 export type SessionLogFollow = {
   rows: (rows: AgentSessionLogEntryDto[]) => void;
@@ -112,6 +115,7 @@ export function canFollowAgentSessionLog(): boolean {
 const DIRECTIONS: ReadonlySet<string> = new Set<LogDirectionDto>([
   'to_server',
   'to_runtime',
+  'notification',
 ]);
 
 function isDirection(value: string): value is LogDirectionDto {
@@ -281,45 +285,95 @@ export function watchAgentSessionLog(
 }
 
 /**
+ * Waits before reopening a subscription that ended, by how many times in a
+ * row it has: the first reopens at once, for a server that closed a
+ * subscriber which fell behind; the rest back off, for one that keeps
+ * refusing.
+ */
+const RESUBSCRIBE_DELAYS_MS = [0, 1_000, 3_000, 10_000, 30_000];
+
+/**
  * Subscribe to the session's appended frames. Every run reaches `follow`
- * at once; the appender hears it too, to keep the cached log in step. An
- * error or an end from the server is a gap: the subscription fell behind,
- * and the rows it dropped are only in the durable log.
+ * at once; the appender hears it too, to keep the cached log in step.
+ *
+ * A subscription that ends - an error, or the server completing it - is
+ * reopened, and then reported as a gap: the rows it dropped are only in the
+ * durable log, and the refetch starts after the new subscription so the two
+ * overlap. Left ended, the session would hear nothing more until it was
+ * opened again, and a control the runtime answered would wait on a reread.
  */
 function followAppended(
   sessionId: string,
   follow: SessionLogFollow,
   appender: Appender | undefined
 ): () => void {
-  const { unsubscribe } = pipe(
-    getGraphqlSoupClient().subscription<
-      AgentSessionLogAppendedSubscription,
-      AgentSessionLogAppendedSubscriptionVariables
-    >(AgentSessionLogAppendedDocument, { sessionId }),
-    subscribe((result) => {
-      if (result.error) {
-        console.warn(
-          '[agent-session] log subscription interrupted',
-          result.error
-        );
+  let stopped = false;
+  let failures = 0;
+  let unsubscribe: (() => void) | undefined;
+  let reopen: ReturnType<typeof setTimeout> | undefined;
+
+  const open = () => {
+    let ended = false;
+    const end = (reason: 'error' | 'ended') => {
+      if (ended || stopped) return;
+      ended = true;
+      const delay =
+        RESUBSCRIBE_DELAYS_MS[
+          Math.min(failures, RESUBSCRIBE_DELAYS_MS.length - 1)
+        ];
+      failures += 1;
+      traceFollowResumed(sessionId, reason, failures, delay);
+      // Reopened from a timer, never inside the ending source's own callback.
+      reopen = setTimeout(() => {
+        reopen = undefined;
+        unsubscribe?.();
+        if (stopped) return;
+        open();
         follow.gap();
-        return;
-      }
-      const entries = result.data?.agentSessionLogAppended;
-      if (!entries || entries.length === 0) return;
-      let rows: AgentSessionLogEntryDto[];
-      try {
-        rows = entries.map((entry) => toRow(sessionId, entry));
-      } catch (error) {
-        console.warn('[agent-session] log subscription row unreadable', error);
-        follow.gap();
-        return;
-      }
-      appender?.appended(rows);
-      follow.rows(rows);
-    })
-  );
-  return unsubscribe;
+      }, delay);
+    };
+    ({ unsubscribe } = pipe(
+      getGraphqlSoupClient().subscription<
+        AgentSessionLogAppendedSubscription,
+        AgentSessionLogAppendedSubscriptionVariables
+      >(AgentSessionLogAppendedDocument, { sessionId }),
+      onEnd(() => end('ended')),
+      subscribe((result) => {
+        if (ended) return;
+        if (result.error) {
+          console.warn(
+            '[agent-session] log subscription interrupted',
+            result.error
+          );
+          end('error');
+          return;
+        }
+        const entries = result.data?.agentSessionLogAppended;
+        if (!entries || entries.length === 0) return;
+        failures = 0;
+        let rows: AgentSessionLogEntryDto[];
+        try {
+          rows = entries.map((entry) => toRow(sessionId, entry));
+        } catch (error) {
+          console.warn(
+            '[agent-session] log subscription row unreadable',
+            error
+          );
+          follow.gap();
+          return;
+        }
+        appender?.appended(rows);
+        follow.rows(rows);
+      })
+    ));
+  };
+  open();
+
+  return () => {
+    stopped = true;
+    clearTimeout(reopen);
+    unsubscribe?.();
+  };
 }
 
 type Appender = {

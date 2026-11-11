@@ -1,5 +1,6 @@
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentConnections } from '@app/features/block-agent/component/AgentConnections';
 import { AgentPreviewBanner } from '@app/features/block-agent/component/AgentPreviewBanner';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { AgentSessionReadMarker } from '@app/features/block-agent/component/AgentSessionReadMarker';
@@ -9,6 +10,7 @@ import {
 } from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentTaskChip } from '@app/features/block-agent/component/AgentTaskChip';
 import { ArchivedSessionFooter } from '@app/features/block-agent/component/ArchivedSessionFooter';
+import { useAutoArchiveFileOperations } from '@app/features/block-agent/component/auto-archive-file-operations';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import { useAgentSession } from '@app/features/block-agent/context/AgentSessionContext';
@@ -21,7 +23,10 @@ import {
   ReviewNotesDock,
 } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
-import { SidePanel } from '@components/app/side-panel';
+import { SessionAgentRuntime } from '@app/features/runtime-sharing/views/SessionAgentRuntime';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitTitleFileMenu,
@@ -37,18 +42,42 @@ import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { enableAgentSessionActivity } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import type { NotificationSource } from '@notifications/notification-source';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { EmptyStatePanel } from '@ui';
-import { Show } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
+
+function SessionClearance(
+  props: ParentProps<{
+    class: string;
+    enabled: boolean;
+    holdsPrompts?: boolean;
+  }>
+) {
+  const sidePanel = useSidePanel();
+  return (
+    <div
+      class={props.class}
+      data-holds-prompts={props.holdsPrompts ? '' : undefined}
+      style={{
+        '--details-clearance': `${props.enabled && sidePanel?.isOpen() && !isTouchDevice() ? SidePanel.FLOATING_CLEARANCE_PX : 0}px`,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function SessionCommands(props: {
   entity: AgentSessionEntity;
@@ -81,6 +110,8 @@ function SessionContent(props: {
   const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
+  const activityFlag = useFeatureFlag(enableAgentSessionActivity);
+  const persistentFloating = () => activityFlag().enabled;
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
   const permissions = () =>
@@ -97,7 +128,8 @@ function SessionContent(props: {
       type: 'agent_session',
       id,
       name: title(),
-      isArchived: current.isArchived,
+      archivedBy: current.archivedBy,
+      archivedAt: current.archivedAt,
       ownerId: current.ownerId,
       botId: current.botId,
       status:
@@ -123,8 +155,15 @@ function SessionContent(props: {
     const id = sessionId();
     const current = session();
     if (!id || !current) return;
-    await changeSessionArchiveState(id, !current.isArchived);
+    await changeSessionArchiveState(id, !isSessionArchived(current));
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER &&
+      session() !== undefined &&
+      !isSessionArchived(session()),
+  });
   return (
     <>
       <AgentSessionReadMarker
@@ -132,7 +171,12 @@ function SessionContent(props: {
         active={panel.isPanelActive()}
         notificationSource={props.notificationSource}
       />
-      <SidePanel.Root floating defaultOpen={false} persistKey="agent">
+      <SidePanel.Root
+        floating
+        persistentFloating={persistentFloating()}
+        defaultOpen={false}
+        persistKey="agent"
+      >
         <Topbar
           title={title()}
           titleContent={
@@ -176,14 +220,13 @@ function SessionContent(props: {
                         ops={agentSessionFileOperations(
                           session(),
                           permissions(),
-                          setArchived
+                          setArchived,
+                          autoArchive()
                         )}
                         tools={[
                           {
                             label: () => {
                               const provider = session()?.external?.provider;
-                              if (provider === 'claude-cloud')
-                                return 'Open in Claude';
                               return provider
                                 ? `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
                                 : 'Open externally';
@@ -229,10 +272,14 @@ function SessionContent(props: {
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
-          <SidePanel.Layout headerToggle={false} floating>
+          <SidePanel.Layout
+            headerToggle={false}
+            floating
+            persistentFloating={persistentFloating()}
+          >
             <AgentSidePanelSections />
             <section
-              class="page pane size-full min-w-0"
+              class="page pane size-full min-w-0 @container/agent-session"
               data-active
               aria-label="Agent session"
             >
@@ -270,21 +317,39 @@ function SessionContent(props: {
                 }
               >
                 <AgentPreviewBanner />
-                <div class="transcript-host">
-                  <Transcript searchTarget={searchTarget()} />
-                </div>
-                <div class="dock">
+                <SessionClearance
+                  enabled={persistentFloating()}
+                  class="transcript-host @min-[900px]/agent-session:pr-(--details-clearance)"
+                >
+                  <AgentConnections>
+                    <Transcript searchTarget={searchTarget()} />
+                  </AgentConnections>
+                </SessionClearance>
+                {/* The pane's last row on desktop, where the corner prompt sits. */}
+                <SessionClearance
+                  enabled={persistentFloating()}
+                  holdsPrompts={!isTouchDevice()}
+                  class="dock @min-[900px]/agent-session:pr-(--details-clearance)"
+                >
                   <div class="composer-anchor flex flex-col gap-2">
                     <Show
-                      when={!session()?.isArchived}
+                      when={!isSessionArchived(session())}
                       fallback={
-                        <Show when={sessionId()}>
-                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        <Show when={session()}>
+                          {(current) => (
+                            <ArchivedSessionFooter session={current()} />
+                          )}
                         </Show>
                       }
                     >
                       <ChangesHandoff />
                       <ReviewNotesDock />
+                      <LocalRuntimePrompt />
+                      <Show when={session()?.botId}>
+                        {(botId) => (
+                          <SessionAgentRuntime botId={botId()} class="px-1" />
+                        )}
+                      </Show>
                       <AgentComposer
                         autofocus={!searchTarget()}
                         input={ChatSessionInput}
@@ -292,7 +357,7 @@ function SessionContent(props: {
                       />
                     </Show>
                   </div>
-                </div>
+                </SessionClearance>
               </Show>
             </section>
           </SidePanel.Layout>

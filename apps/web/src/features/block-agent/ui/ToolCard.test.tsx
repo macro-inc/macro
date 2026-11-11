@@ -5,29 +5,25 @@ import { createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ToolCard } from './ToolCard';
 
-vi.mock('@phosphor/caret-right.svg', () => ({ default: () => <svg /> }));
+vi.mock('@icon/system/regular/caret-right.svg', () => ({
+  default: () => <svg />,
+}));
 
 afterEach(cleanup);
 
 describe('ToolCard', () => {
-  it('shows a result summary and only shimmers while the tool is active', async () => {
+  it('says only a failure and only shimmers while the tool is active', async () => {
     const [status, setStatus] = createSignal<
       'running' | 'completed' | 'failed'
     >('running');
     const view = render(() => (
-      <ToolCard
-        title="Search"
-        status={status()}
-        icon={<svg data-testid="search-icon" />}
-      >
+      <ToolCard title="Search" status={status()}>
         Search results
       </ToolCard>
     ));
-    expect(view.getByTestId('search-icon')).toBeTruthy();
-    expect(view.queryByText('Succeeded')).toBeNull();
     expect(view.container.querySelector('.magic-chip-shimmer')).toBeTruthy();
     setStatus('completed');
-    expect(view.getByText('Succeeded')).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Search' })).toBeTruthy();
     await waitFor(() =>
       expect(view.container.querySelector('.magic-chip-shimmer')).toBeNull()
     );

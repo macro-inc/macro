@@ -4,7 +4,9 @@
 //! their rows - every session gets it, because every session's owner is a
 //! Macro user. What has to be resolved per owner is the credential:
 //! `mcp_service` authenticates a *user*, so the proxy exchanges the session
-//! owner's identity for a short-lived Macro API token and stamps that.
+//! owner's identity for a short-lived Macro API token and stamps that. The
+//! token also carries the session's bound agent as its signed `agent_id`
+//! claim, so the tools write as that agent rather than the generic Macro bot.
 //!
 //! The exchange is local signing with the same RS256 key
 //! `authentication_service` uses - this process holds a key that can
@@ -13,6 +15,7 @@
 //! network; what limits the blast radius is that every token minted here is
 //! single-user, scoped to the session's owner, and minutes from expiry.
 
+use bot_id::BotId;
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
 use lru::LruCache;
 use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
@@ -37,10 +40,12 @@ const EXPIRY_MARGIN_MINUTES: i64 = 5;
 /// Implementations own the whole exchange - including finding whatever else
 /// the minting side needs to know about the owner beyond their id.
 pub trait MacroApiTokens: Send + Sync {
-    /// A token that acts as `owner`, and nobody else.
+    /// A token that acts as `owner`, and nobody else, attributed to `agent`.
     fn mint(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        session: uuid::Uuid,
     ) -> impl Future<Output = Result<String, EgressError>> + Send;
 }
 
@@ -56,11 +61,11 @@ pub struct WithMacroMcp<Inner, Tokens> {
     /// Whether [`UpstreamCall::bearer_over_local_cleartext`] is permitted.
     /// Set only by a composition root that has checked `ENVIRONMENT=local`.
     local_cleartext: bool,
-    /// Keyed by owner: the token *is* the owner's identity, so a cache hit
-    /// for one owner can never answer for another. Bounded, so the map cannot
-    /// grow with every owner ever seen; freshness still comes from each
-    /// token's own expiry, never from cache residency.
-    cached: Mutex<LruCache<MacroUserIdStr<'static>, CachedToken>>,
+    /// Keyed by owner, agent, and session: a cached credential cannot attribute
+    /// another session's code-mode invocation to this one. Bounded, so
+    /// the map cannot grow with every owner ever seen; freshness still comes
+    /// from each token's own expiry, never from cache residency.
+    cached: Mutex<LruCache<(MacroUserIdStr<'static>, BotId, uuid::Uuid), CachedToken>>,
 }
 
 /// How many owners' tokens are kept at once. Far past any real concurrency;
@@ -109,10 +114,16 @@ where
         })
     }
 
-    async fn token(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
+    async fn token(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        session: uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        let key = (owner.clone(), agent, session);
         {
             let mut cached = self.cached.lock().expect("token cache poisoned");
-            match usable(cached.get(owner).cloned()) {
+            match usable(cached.get(&key).cloned()) {
                 Some(live) => {
                     tracing::debug!(%owner, "macro api token cache hit");
                     return Ok(live.token);
@@ -120,16 +131,16 @@ where
                 // A stale entry is evicted now rather than on capacity
                 // pressure: there is no reason to keep a dead credential.
                 None => {
-                    let expired = cached.pop(owner).is_some();
+                    let expired = cached.pop(&key).is_some();
                     tracing::debug!(%owner, expired, "macro api token cache miss; minting");
                 }
             }
         }
 
-        let token = self.tokens.mint(owner).await?;
+        let token = self.tokens.mint(owner, agent, session).await?;
         let expires_at = token_expiry(&token)?;
         self.cached.lock().expect("token cache poisoned").put(
-            owner.clone(),
+            key,
             CachedToken {
                 token: token.clone(),
                 expires_at,
@@ -145,17 +156,19 @@ where
     Inner: McpCredentials,
     Tokens: MacroApiTokens,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, ?destination))]
+    #[tracing::instrument(skip_all, err, fields(%owner, %agent, ?destination))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         if *destination != McpDestination::Macro {
-            return self.inner.resolve(owner, destination).await;
+            return self.inner.resolve(owner, agent, session, destination).await;
         }
 
-        let token = BearerToken::new(self.token(owner).await?);
+        let token = BearerToken::new(self.token(owner, agent, session).await?);
         // Every session has Macro's own server; there is no grant to lack.
         let call = if self.local_cleartext && self.url.scheme() != "https" {
             UpstreamCall::bearer_over_local_cleartext(self.url.clone(), token)
@@ -228,7 +241,7 @@ pub struct MacroApiTokenSigner {
 /// How long a minted token lives. Short on purpose - the cache re-mints
 /// freely - so a token that leaks out of a response somewhere is stale before
 /// anyone can do much with it.
-const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
+pub const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
 
 impl MacroApiTokenSigner {
     /// Build the signer over the database holding user rows, the token
@@ -254,17 +267,66 @@ impl MacroApiTokenSigner {
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
     ) -> Result<String, EgressError> {
-        self.mint_for_agent(owner, lifetime_seconds, None).await
+        self.mint_for_agent(owner, lifetime_seconds, None, None, None, None)
+            .await
     }
 
-    /// Mint an owner credential with signed agent attribution for SDK messages.
-    #[tracing::instrument(skip_all, err, fields(?agent_id))]
+    /// Mint an owner credential with signed agent attribution for SDK messages,
+    /// and the client label (`agent_via`) the agent's posts are shown under.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, ?agent_via))]
     pub async fn mint_for_agent(
         &self,
         owner: &MacroUserIdStr<'static>,
         lifetime_seconds: usize,
         agent_id: Option<macro_uuid::Uuid>,
+        agent_via: Option<String>,
+        agent_session_id: Option<uuid::Uuid>,
+        agent_correlation_id: Option<uuid::Uuid>,
     ) -> Result<String, EgressError> {
+        let claims = SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            routine_id: None,
+        };
+        self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    /// Mint an owner credential for one run of `routine_id`, signed with that
+    /// routine so the events its writes produce never trigger routines.
+    /// `agent_id` attributes writes to an agent; `None` writes as the owner.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id))]
+    pub async fn mint_for_routine(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        agent_id: Option<macro_uuid::Uuid>,
+        routine_id: macro_uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        let claims = SignedClaims {
+            agent_id,
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            routine_id: Some(routine_id),
+        };
+        self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    async fn sign(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        claims: SignedClaims,
+    ) -> Result<String, EgressError> {
+        let SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            routine_id,
+        } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
                 "invalid token lifetime"
@@ -298,6 +360,8 @@ impl MacroApiTokenSigner {
         })?;
 
         encode_macro_api_token(EncodeMacroApiTokenArgs {
+            agent_correlation_id,
+            agent_session_id,
             fusionauth_id: fusion_root_id.to_string(),
             macro_user_id,
             organization_id,
@@ -305,6 +369,8 @@ impl MacroApiTokenSigner {
             private_key: self.private_key.clone(),
             expiry_seconds: lifetime_seconds,
             agent_id,
+            agent_via,
+            routine_id,
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
@@ -314,8 +380,30 @@ impl MacroApiTokenSigner {
     }
 }
 
+/// The optional claims a minted token signs besides the owner.
+struct SignedClaims {
+    agent_id: Option<macro_uuid::Uuid>,
+    agent_via: Option<String>,
+    agent_session_id: Option<uuid::Uuid>,
+    agent_correlation_id: Option<uuid::Uuid>,
+    routine_id: Option<macro_uuid::Uuid>,
+}
+
 impl MacroApiTokens for MacroApiTokenSigner {
-    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
-        self.mint_for(owner, MINTED_TOKEN_LIFETIME_SECONDS).await
+    async fn mint(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        session: uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        self.mint_for_agent(
+            owner,
+            MINTED_TOKEN_LIFETIME_SECONDS,
+            Some(agent.as_uuid()),
+            None,
+            Some(session),
+            None,
+        )
+        .await
     }
 }

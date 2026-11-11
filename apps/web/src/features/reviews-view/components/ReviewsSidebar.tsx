@@ -4,6 +4,10 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { ViewCreateMenu } from '@app/features/command/view-create-menu';
+import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
@@ -14,19 +18,23 @@ import {
 } from '@block-pr/data/queries';
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
-import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import BrowserTabIcon from '@icon/system/regular/tabs.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import SplitIcon from '@phosphor/columns.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StarIcon from '@phosphor/star.svg';
-import UserIcon from '@phosphor/user.svg';
-import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
 import {
   useFavoritesData,
@@ -39,7 +47,6 @@ import { TagDot } from '@ui';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   REVIEWS_SCOPES,
-  type ReviewsLayout,
   type ReviewsScope,
   type ReviewsStatusTabId,
 } from '../reviews-types';
@@ -84,22 +91,34 @@ function ReviewFavoriteRow(props: {
             />
           </ViewSidebar.Icon>
           <span class="truncate">{name()}</span>
+          <FavoriteUnreadIndicator favorite={props.favorite} />
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent class="min-w-56 max-w-[22rem] text-xs text-ink-muted">
           <MenuItem
             icon={SplitIcon}
-            text="Open in new split"
+            text={t('entityActions.openInNewSplit')}
             disabled={!globalSplitManager()?.canAppendSplit()}
             onClick={() => {
               if (globalSplitManager()?.canAppendSplit())
                 props.onOpenReview(props.favorite.entityId, true);
             }}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              icon={BrowserTabIcon}
+              text={t('entityActions.openInNewTab')}
+              onClick={() =>
+                openInNewTab(() =>
+                  props.onOpenReview(props.favorite.entityId, false)
+                )
+              }
+            />
+          </Show>
           <MenuItem
             icon={StarIcon}
-            text="Remove from favorites"
+            text={t('entityActions.removeFromFavorites')}
             onClick={() =>
               removeFavorite.mutate({
                 entityType: 'foreign_entity',
@@ -237,7 +256,9 @@ function ReviewAgents(props: {
             <For each={props.tools}>
               {(tool) => (
                 <ViewSidebar.Item
-                  title={`Started from ${PR_ORIGIN_LABELS[tool]}`}
+                  title={t('viewMenus.startedFrom', {
+                    origin: PR_ORIGIN_LABELS[tool],
+                  })}
                   active={props.activeTools.includes(tool)}
                   onClick={() =>
                     props.onActiveToolsChange(
@@ -262,8 +283,6 @@ function ReviewAgents(props: {
 export function ReviewsSidebar(props: {
   search: string;
   onSearchChange: (search: string) => void;
-  layout: ReviewsLayout;
-  onLayoutChange: (layout: ReviewsLayout) => void;
   /** The status toggle; omitted when the status selection is custom or the board shows. */
   status?: {
     value: ReviewsStatusTabId | undefined;
@@ -292,49 +311,52 @@ export function ReviewsSidebar(props: {
 
   return (
     <ViewSidebar.Root aria-label="Reviews navigation">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search reviews"
+        search={() => (
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            onEscape={() => props.onSearchChange('')}
+          />
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Reviews</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
-      <ViewSidebar.Primary class="flex flex-col gap-2">
-        <SearchBar
-          label="Search reviews"
-          placeholder="Search reviews"
-          autocomplete="off"
-          value={props.search}
-          onValueChange={props.onSearchChange}
-          class="border-0 bg-ink/5 shadow-none"
-          onEscape={() => props.onSearchChange('')}
-        />
-        {/* Touch layouts list pull requests; the board needs a pointer to drag. */}
-        <Show when={!isTouchDevice()}>
-          <TabsInset
-            aria-label="Pull request layout"
-            fullWidth
-            class="h-auto"
-            labelClass="py-1.5"
-            list={[
-              { value: 'board', label: 'Board' },
-              { value: 'list', label: 'List' },
-            ]}
-            value={props.layout}
-            onChange={(layout) =>
-              props.onLayoutChange(layout === 'board' ? 'board' : 'list')
-            }
+      <Show when={!isTouchDevice()}>
+        <ViewSidebar.Primary>
+          <ViewCreateMenu presentation="sidebar" />
+        </ViewSidebar.Primary>
+      </Show>
+      <Show when={isTouchDevice()}>
+        <ViewSidebar.Primary class="flex flex-col gap-2">
+          <SearchBar
+            label="Search reviews"
+            placeholder="Search reviews"
+            autocomplete="off"
+            value={props.search}
+            onValueChange={props.onSearchChange}
+            class="border-0 bg-ink/5 shadow-none"
+            onEscape={() => props.onSearchChange('')}
           />
-        </Show>
-        <Show when={props.status}>
-          {(status) => (
-            <ReviewsStatusTabs
-              value={status().value}
-              onChange={status().onChange}
-            />
-          )}
-        </Show>
-      </ViewSidebar.Primary>
+          <Show when={props.status}>
+            {(status) => (
+              <ReviewsStatusTabs
+                value={status().value}
+                onChange={status().onChange}
+              />
+            )}
+          </Show>
+        </ViewSidebar.Primary>
+      </Show>
       <ViewSidebar.Content>
+        <SidebarRoutineSuggestions surface="reviews" />
         <ViewSidebar.Nav aria-label="Pull request views">
           <For each={REVIEWS_SCOPES}>
             {(scope) => {

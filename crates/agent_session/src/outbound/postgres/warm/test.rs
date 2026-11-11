@@ -1,7 +1,7 @@
 use crate::domain::agent_conversation::{AgentConversation, AgentConversationRepo};
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::SessionPurpose;
 use crate::domain::model::SessionStatus;
+use crate::domain::model::{SessionPurpose, SessionVisibility};
 use crate::domain::ports::AgentSessionRepo;
 use crate::domain::warm::{WarmClaim, WarmMissReason, WarmSessionLifecycle};
 use crate::outbound::postgres::test::{OWNER, create_test_bot, new_session, test_repo};
@@ -53,9 +53,16 @@ async fn dm_contexts_stay_hidden_and_cannot_be_claimed_or_expired(pool: PgPool) 
         );
         assert_eq!(repo.get(id).await.unwrap().id, id);
         assert_eq!(
-            repo.claim(id, &dm.owner_id, bot, &dm.model, None)
-                .await
-                .unwrap(),
+            repo.claim(
+                id,
+                &dm.owner_id,
+                bot,
+                &dm.model,
+                None,
+                &trigger_context::TriggerOrigin::Unknown
+            )
+            .await
+            .unwrap(),
             WarmClaim::Missed(WarmMissReason::NotWarm)
         );
     }
@@ -78,9 +85,16 @@ async fn dm_contexts_stay_hidden_and_cannot_be_claimed_or_expired(pool: PgPool) 
         let dm = repo.get(id).await.unwrap();
         assert_eq!(dm.status, SessionStatus::NoMessages);
         assert_eq!(
-            repo.claim(id, &dm.owner_id, bot, &dm.model, None)
-                .await
-                .unwrap(),
+            repo.claim(
+                id,
+                &dm.owner_id,
+                bot,
+                &dm.model,
+                None,
+                &trigger_context::TriggerOrigin::Unknown
+            )
+            .await
+            .unwrap(),
             WarmClaim::Missed(WarmMissReason::NotWarm)
         );
     }
@@ -130,9 +144,18 @@ fn warm_policy_rejects_message_provenance() {
         SessionPurpose::Warm.for_creation(false, false).unwrap(),
         SessionPurpose::Warm
     );
-    assert!(SessionPurpose::AgentDm.list_hidden(bot_id::MACRO_NEW_BOT_ID, None, true));
-    assert!(!SessionPurpose::AgentDm.list_hidden(bot_id::MACRO_NEW_BOT_ID, None, false));
-    assert!(!SessionPurpose::Standalone.list_hidden(bot_id::MACRO_NEW_BOT_ID, None, true));
+    assert_eq!(
+        SessionPurpose::AgentDm.visibility(None, true),
+        SessionVisibility::Hidden
+    );
+    assert_eq!(
+        SessionPurpose::AgentDm.visibility(None, false),
+        SessionVisibility::Listed
+    );
+    assert_eq!(
+        SessionPurpose::Standalone.visibility(None, true),
+        SessionVisibility::Listed
+    );
 }
 
 #[sqlx::test(migrations = false)]
@@ -191,6 +214,10 @@ async fn migration_preserves_old_writers_and_stages_dm_visibility(pool: PgPool) 
             .unwrap()
     );
     // Once the old reapers are gone, the domain policy backfills both contexts.
+    // It writes `visibility`, which a later migration adds and keeps
+    // `list_hidden` in step with.
+    sqlx::raw_sql(include_str!("../../../../../macro_db_client/migrations/20261022031656_agent_session_source_and_visibility.sql"))
+        .execute(&pool).await.unwrap();
     let repo = test_repo(&pool);
     crate::domain::list_visibility::SessionListPolicy {
         hide_agent_dms: false,
@@ -249,9 +276,16 @@ async fn an_old_claimant_cannot_leave_a_visible_session_eligible_for_cleanup(poo
     .await
     .unwrap();
     assert_eq!(
-        repo.claim(session.id, &session.owner_id, bot, &session.model, None)
-            .await
-            .unwrap(),
+        repo.claim(
+            session.id,
+            &session.owner_id,
+            bot,
+            &session.model,
+            None,
+            &trigger_context::TriggerOrigin::Unknown
+        )
+        .await
+        .unwrap(),
         WarmClaim::Missed(WarmMissReason::NotWarm)
     );
     sqlx::query!(

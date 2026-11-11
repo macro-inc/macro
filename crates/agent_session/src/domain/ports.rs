@@ -7,7 +7,7 @@ use super::session::StopReason;
 use crate::domain::events::AgentSessionLifecycleEvent;
 use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_fold::domain::model::TurnSignal;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
@@ -129,6 +129,12 @@ pub struct RequestedExternalSession {
     pub model: Option<String>,
     /// Remote repository selected for this external coding session.
     pub repo_url: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
+    /// What opened the session, told to the runtime on the event.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Validate the base branch supported by external repository provisioning.
@@ -293,6 +299,9 @@ pub struct OpenExternalAgentSession {
     pub thread: Option<SessionThread>,
     /// Instructions the session's runtime works under, when any were stated.
     pub instructions: Option<String>,
+    /// What opened the session, as the runtime was told on the trigger event.
+    /// A description only: it never decides visibility or notifications.
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// Everything needed to open a session the server hosts itself.
@@ -314,16 +323,58 @@ pub struct OpenManagedSession {
     pub owner: Owner,
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
-    pub prompt: Option<String>,
+    pub prompt: Option<FirstPrompt>,
     /// A selected persona's authoritative runtime profile. `None` uses the
-    /// deployment's default managed coding persona.
+    /// deployment's default managed coding persona, or Cursor when a
+    /// repository is selected — the only managed persona that honors one.
     pub profile: Option<SelectedManagedPersona>,
-    /// Ad-hoc instructions for the default managed persona. Ignored when a
-    /// persisted persona profile is selected.
+    /// Instructions the session's runtime works under. Outranks a persisted
+    /// persona's when both are set.
     pub instructions: Option<String>,
     /// Model to run on instead of the persona's own. The session's model from
     /// creation, so its runtime starts on it and nothing is sent to change it.
     pub model: Option<String>,
+    /// Who is starting the session.
+    pub source: SessionSource,
+    /// Whether a routine run is listed; a person's session always is.
+    pub visibility: SessionVisibility,
+    /// What opened the session.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    /// Only an in-process session reads it; a non-billable session never
+    /// claims a warm session, whose row is billable.
+    pub billing: crate::domain::model::SessionBilling,
+}
+
+/// The prompt a managed session opens with, delivered as soon as it can run.
+#[derive(Debug, Clone)]
+pub struct FirstPrompt {
+    /// The id the caller already shows the prompt under, so the logged row
+    /// confirms it in place. `None` mints one.
+    pub action_id: Option<AgentActionId>,
+    /// What to tell the agent.
+    pub prompt: String,
+    /// Files the prompt refers to, in the order the user attached them.
+    pub attachments: Vec<PromptAttachment>,
+}
+
+impl FirstPrompt {
+    /// A plain text prompt under a minted id.
+    pub fn text(prompt: impl Into<String>) -> Self {
+        Self {
+            action_id: None,
+            prompt: prompt.into(),
+            attachments: Vec::new(),
+        }
+    }
+
+    /// The action this prompt delivers, under its id.
+    pub fn into_action(self) -> (AgentActionId, AgentAction) {
+        (
+            self.action_id.unwrap_or_else(AgentActionId::mint),
+            AgentAction::prompt_with_attachments(self.prompt, self.attachments),
+        )
+    }
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -395,6 +446,18 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's persisted turn projection shows a turn that has
+    /// not finished: one starting, running, stopping, or blocked on an
+    /// answer, or one that was when the session disconnected. Durable, so it
+    /// holds for a turn any replica, or a process since restarted, started.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the session's in-process turns are billed to its owner.
+    fn billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
+
     /// The agent session with this id, or `None` when there is none.
     fn find(&self, id: AgentSessionId)
     -> impl Future<Output = Result<Option<AgentSession>>> + Send;
@@ -424,6 +487,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them. Idempotent; grants
+    /// nothing.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Who prompted the turn `id` is running or last ran; `None` before its
@@ -487,7 +559,8 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// stop rendering because its agent was removed.
     fn session_bot(&self, id: BotId) -> impl Future<Output = Result<SessionBot>> + Send;
 
-    /// Persist the agent-assigned ACP session id without replacing other session fields.
+    /// Persist the agent-assigned ACP session id without replacing other
+    /// session fields or reordering the session list.
     fn set_acp_session_id(
         &self,
         id: AgentSessionId,
@@ -512,14 +585,24 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_model(&self, id: AgentSessionId, model: &str)
     -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist the user-facing session name. Idempotent.
+    /// Record who started the session and where it is shown, for a session
+    /// whose runtime created the row without knowing either. Idempotent.
+    fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist a name a person chose. Idempotent. The name stops being
+    /// generated, so retitling never replaces it.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
     /// Archive or unarchive a session. Idempotent.
     fn set_archived(
         &self,
         id: AgentSessionId,
-        is_archived: bool,
+        archived: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Whether the session is an agent conversation's current one: the
@@ -535,6 +618,24 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The session's name while it is a generated one that retitling may
+    /// replace: `None` once a person named the session, while it still has
+    /// the default, or when it is archived.
+    fn generated_name(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+
+    /// Replace a generated name only while the session is still called
+    /// `current`, that name is still generated, and the session is not
+    /// archived. Whether the name changed.
+    fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
         name: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
@@ -642,9 +743,11 @@ pub const REPLICA_STALE_AFTER: std::time::Duration = std::time::Duration::from_s
 /// Claiming is a single conditional update (compare-and-swap): it succeeds
 /// when the session is unmanaged, already ours, or held by a replica whose
 /// heartbeat has gone stale, and every success increments the session's
-/// fence. There are deliberately no explicit locks anywhere in the contract -
-/// see [`ManagerFence`](super::model::ManagerFence) for why a fence, not a
-/// lock, is what neutralizes a stale holder.
+/// fence. Lease changes must not bump list recency: a reclaim, release, or
+/// stale takeover is not the conversation being used. There are deliberately
+/// no explicit locks anywhere in the contract - see
+/// [`ManagerFence`](super::model::ManagerFence) for why a fence, not a lock,
+/// is what neutralizes a stale holder.
 pub trait SessionOwnership: Send + Sync + 'static {
     /// Claim live management of a session for `replica`, registering the
     /// replica's heartbeat as a side effect so a claim can never dangle on a
@@ -1025,6 +1128,11 @@ pub trait SessionTurnObserver: Send + Sync + 'static {
     /// The session's live actor is gone - disconnect, teardown, or crash. Any
     /// in-flight turn went with it, without a [`TurnSignal::TurnEnded`].
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason);
+
+    /// The runtime reported, with `_session/closed`, that the person or agent
+    /// deliberately ended the runtime session backing this session. Never
+    /// told for a disconnect or crash; may be told again after a reconnect.
+    fn runtime_closed(&self, id: AgentSessionId);
 }
 
 impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
@@ -1034,6 +1142,10 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 
     fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         (**self).session_stopped(id, reason);
+    }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        (**self).runtime_closed(id);
     }
 }
 
@@ -1050,6 +1162,11 @@ impl<A: SessionTurnObserver, B: SessionTurnObserver> SessionTurnObserver for (A,
         self.0.session_stopped(id, reason.clone());
         self.1.session_stopped(id, reason);
     }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.0.runtime_closed(id);
+        self.1.runtime_closed(id);
+    }
 }
 
 /// A [`SessionTurnObserver`] for services with no queue above them: tests,
@@ -1061,6 +1178,8 @@ impl SessionTurnObserver for NoOpTurnObserver {
     fn signal(&self, _id: AgentSessionId, _signal: TurnSignal) {}
 
     fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
+
+    fn runtime_closed(&self, _id: AgentSessionId) {}
 }
 
 /// A [`SessionTurnObserver`] bound after construction, for the composition
@@ -1100,9 +1219,16 @@ impl SessionTurnObserver for LateBoundTurnObserver {
             observer.session_stopped(id, reason);
         }
     }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.runtime_closed(id);
+        }
+    }
 }
 
-/// Generates a concise display name from a session's first prompt.
+/// Generates a concise display name from a session's first prompt, and
+/// replaces it once the conversation has outgrown it.
 pub trait AgentSessionNameGenerator: Send + Sync + 'static {
     /// Generate a name, or `None` when naming is disabled for this service.
     fn generate_name(
@@ -1110,6 +1236,19 @@ pub trait AgentSessionNameGenerator: Send + Sync + 'static {
         session: &AgentSession,
         initial_prompt: &str,
     ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+
+    /// A name that describes the conversation better than `current`, or
+    /// `None` to keep it. Asked after every finished turn of a session whose
+    /// name was generated, so a name should change only when it has clearly
+    /// stopped fitting. Keeps every name by default.
+    fn retitle(
+        &self,
+        _session: &AgentSession,
+        _current: &str,
+        _conversation: &super::retitle::ConversationDigest,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Disables automatic agent-session naming.
@@ -1159,6 +1298,9 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
 }
 
 /// What accepting a control operation did with it.

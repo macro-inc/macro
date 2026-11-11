@@ -30,8 +30,8 @@ describe('composer model discovery', () => {
     ).toEqual({ harness: 'macrod', harnessId: 'paired-runtime' });
     expect(composerModelTarget({ harness: 'macrod' })).toBeUndefined();
     expect(composerModelTarget({ harness: 'sandbox' })).toBeUndefined();
-    expect(composerModelTarget({ harness: 'claude-cloud' })).toEqual({
-      harness: 'claude-cloud',
+    expect(composerModelTarget({ harness: 'macro-inmem' })).toEqual({
+      harness: 'in-memory',
     });
   });
 
@@ -49,8 +49,8 @@ describe('composer model discovery', () => {
       createComposerModels(agent);
       expect(discovery.enabled?.()).toBe(true);
       expect(discovery.target?.()).toEqual({ harness: 'cursor' });
-      setAgent({ ...agent(), harness: 'claude-cloud' });
-      expect(discovery.target?.()).toEqual({ harness: 'claude-cloud' });
+      setAgent({ ...agent(), harness: 'in-memory' });
+      expect(discovery.target?.()).toEqual({ harness: 'in-memory' });
       setAgent({ ...agent(), harness: 'macrod', harnessId: 'paired-runtime' });
       expect(discovery.target?.()).toEqual({
         harness: 'macrod',

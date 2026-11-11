@@ -1,8 +1,9 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
@@ -10,6 +11,10 @@ import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { DRIVE_TABS } from '../core/types';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
+import {
+  DriveFolderHierarchy,
+  useDriveFolderHierarchyVisible,
+} from './drive-folder-hierarchy';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
 import { DriveSidebar } from './drive-sidebar';
@@ -17,8 +22,22 @@ import { DriveSidebar } from './drive-sidebar';
 export function DriveLoading() {
   return (
     <div class="grid size-full place-items-center text-ink-muted">
-      <SpinnerIcon aria-label="Loading files" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-hidden={false}
+        aria-label="Loading files"
+        class="size-5 animate-spin"
+      />
     </div>
+  );
+}
+
+function DriveBrowser() {
+  const folderHierarchy = useDriveFolderHierarchyVisible();
+
+  return (
+    <Show when={folderHierarchy()} fallback={<DriveList />}>
+      <DriveFolderHierarchy />
+    </Show>
   );
 }
 
@@ -70,9 +89,11 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
                     {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
-                        <DriveFileDropzone onDrop={actions.dropFiles}>
-                          <DriveList />
-                        </DriveFileDropzone>
+                        <FolderDropZone folderId={state.projectId()}>
+                          <DriveFileDropzone onDrop={actions.dropFiles}>
+                            <DriveBrowser />
+                          </DriveFileDropzone>
+                        </FolderDropZone>
                       </Suspense>
                     </ViewShell.Content>
                   </>

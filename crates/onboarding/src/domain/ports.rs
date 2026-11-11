@@ -10,9 +10,6 @@ pub enum OnboardingError {
     /// Database failure.
     #[error("database error: {0}")]
     Db(rootcause::Report),
-    /// A failure in the import pipeline this flow drives.
-    #[error(transparent)]
-    Import(#[from] import::domain::ports::ImportError),
     /// Anything else.
     #[error(transparent)]
     Other(#[from] anyhow::Error),

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   hasLoginCookie: true,
   nativeMobile: false,
   navigate: vi.fn(),
+  reloadApp: vi.fn(),
+  tauri: false,
   routerSearch: (): string => '',
   setRouterSearch: (_value: string) => {},
 }));
@@ -27,6 +29,15 @@ vi.mock('@app/features/paywall/use-checkout-completion-listener', () => ({
 
 vi.mock('@core/auth/logout', () => ({
   clearLocalAuthSession: mocks.clearLocalAuthSession,
+}));
+
+vi.mock('@app/observability/reload', () => ({
+  reloadApp: mocks.reloadApp,
+}));
+
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isTauri: () => mocks.tauri,
 }));
 
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
@@ -83,6 +94,7 @@ vi.mock('@solidjs/router', async () => {
       mocks.navigate(props.href, { replace: true });
       return null;
     },
+    useNavigate: () => mocks.navigate,
     useLocation: () => ({
       get search() {
         return search();
@@ -105,6 +117,15 @@ vi.mock('@ui', () => ({
   ),
 }));
 
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));
+
+import {
+  receiveNotificationTap,
+  setPendingNotificationNavigationId,
+} from '@notifications/notification-navigation-intent';
+import { endNotificationOpen } from '@notifications/notification-open-trace';
 import { queryClient } from '@queries/client';
 import { BasePathComponent } from './BasePath';
 
@@ -146,6 +167,8 @@ function flush() {
 beforeEach(() => {
   mocks.hasLoginCookie = true;
   mocks.nativeMobile = false;
+  mocks.tauri = false;
+  mocks.reloadApp.mockReset();
   mocks.setRouterSearch('');
   mocks.navigate.mockReset();
   mocks.fetchUserInfo.mockReset();
@@ -159,11 +182,53 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   dispose?.();
   dispose = undefined;
+  setPendingNotificationNavigationId(undefined);
+  endNotificationOpen('test_complete');
 });
 
 describe('BasePathComponent', () => {
+  it('chooses the tapped message before Home or a saved destination after authentication', async () => {
+    mocks.nativeMobile = true;
+    setPostLoginRedirect('/channels/previous');
+    const recipientId = 'macro|test@example.com';
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        payload: {
+          notificationId: 'notification-1',
+          recipientId,
+          navigation: {
+            type: 'channel',
+            channelId: '11111111-1111-4111-8111-111111111111',
+            messageId: '22222222-2222-4222-8222-222222222222',
+            threadId: null,
+          },
+        },
+      },
+      vi.fn()
+    );
+    let resolveIdentity!: (identity: {
+      authenticated: true;
+      userId: string;
+    }) => void;
+    mocks.fetchUserInfo.mockReturnValue(
+      new Promise((resolve) => {
+        resolveIdentity = resolve;
+      })
+    );
+    renderRoute();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    resolveIdentity({ authenticated: true, userId: recipientId });
+    await vi.waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(
+        '/home/~/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222',
+        { replace: true }
+      )
+    );
+  });
   it.each([true, false])(
     'preserves a late native root query while authentication resolves (%s)',
     async (authenticated) => {
@@ -232,6 +297,7 @@ describe('BasePathComponent', () => {
 
   it('preserves native hash-router queries after confirmed session expiry', async () => {
     mocks.nativeMobile = true;
+    mocks.tauri = true;
     mocks.setRouterSearch('?referral_code=invite');
     window.history.replaceState({}, '', `/#/${mocks.routerSearch()}`);
     mocks.fetchUserInfo.mockRejectedValue(UNAUTHORIZED_ERROR());
@@ -246,6 +312,7 @@ describe('BasePathComponent', () => {
           replace: true,
         }
       );
+      expect(mocks.reloadApp).toHaveBeenCalledWith('logout');
     });
   });
 
@@ -312,7 +379,14 @@ describe('BasePathComponent', () => {
     expect(mocks.confirmSessionExpired).not.toHaveBeenCalled();
   });
 
-  it('clears the session and redirects on a confirmed expiry', async () => {
+  it('clears the session and loads welcome as a new page on a confirmed expiry', async () => {
+    const replace = vi.fn();
+    vi.stubGlobal(
+      'location',
+      Object.assign(new URL('https://macro.com/app/?referral_code=invite'), {
+        replace,
+      })
+    );
     mocks.fetchUserInfo.mockRejectedValue(UNAUTHORIZED_ERROR());
     mocks.confirmSessionExpired.mockResolvedValue(true);
 
@@ -320,9 +394,57 @@ describe('BasePathComponent', () => {
 
     await vi.waitFor(() => {
       expect(mocks.clearLocalAuthSession).toHaveBeenCalled();
-      expect(mocks.navigate).toHaveBeenCalledWith('/welcome', {
-        replace: true,
-      });
+      expect(replace).toHaveBeenCalledWith('/app/welcome?referral_code=invite');
+    });
+  });
+
+  // As clearLocalAuthSession does: the login hint goes first and the
+  // signed-out user info last, which unmounts the redirect before it resolves.
+  const signedOutClear = async () => {
+    mocks.hasLoginCookie = false;
+    await Promise.resolve();
+    queryClient.setQueryData(['auth', 'userInfo'], {
+      authenticated: false,
+      id: '',
+    });
+  };
+
+  it('loads welcome as a new page even when the clear unmounts the redirect', async () => {
+    const replace = vi.fn();
+    vi.stubGlobal(
+      'location',
+      Object.assign(new URL('https://macro.com/app/?referral_code=invite'), {
+        replace,
+      })
+    );
+    mocks.clearLocalAuthSession.mockImplementation(signedOutClear);
+    mocks.fetchUserInfo.mockRejectedValue(UNAUTHORIZED_ERROR());
+    mocks.confirmSessionExpired.mockResolvedValue(true);
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(replace).toHaveBeenCalledWith('/app/welcome?referral_code=invite');
+    });
+  });
+
+  it('reloads the native webview even when the clear unmounts the redirect', async () => {
+    mocks.nativeMobile = true;
+    mocks.tauri = true;
+    mocks.setRouterSearch('?referral_code=invite');
+    window.history.replaceState({}, '', `/#/${mocks.routerSearch()}`);
+    mocks.clearLocalAuthSession.mockImplementation(signedOutClear);
+    mocks.fetchUserInfo.mockRejectedValue(UNAUTHORIZED_ERROR());
+    mocks.confirmSessionExpired.mockResolvedValue(true);
+
+    renderRoute();
+
+    await vi.waitFor(() => {
+      expect(mocks.navigate).toHaveBeenCalledWith(
+        '/welcome?referral_code=invite',
+        { replace: true }
+      );
+      expect(mocks.reloadApp).toHaveBeenCalledWith('logout');
     });
   });
 

@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 
 use super::DocumentToolContext;
 
+#[cfg(test)]
+mod test;
+
 fn failed_to_create_document(error: DocumentError) -> ToolCallError {
     let description = match &error {
         DocumentError::BadRequest(message) => message.clone(),
@@ -47,19 +50,19 @@ pub struct CreateDocumentResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateDocument",
-    description = "Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor."
+    description = "Create a plaintext document or a native Macro spreadsheet or canvas. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. For a Canvas use fileExtension canvas, empty fileContent, and isTask false; then ReadCanvas and EditCanvas. Native documents are initialized before returning and work without an open editor. Markdown (md) content uses the same Markdown, citation and mention syntax as chat replies; other file types take raw content with no Markdown or mention tags. Images come from GenerateImage, Word documents from DuplicateItem and EditWordDocument, and decks from EditPresentation, not from this tool."
 )]
 pub struct CreateDocument {
     #[schemars(description = "The name of the document without the file extension")]
     pub document_name: String,
 
     #[schemars(
-        description = "The string content of a text document. Must be empty for a native spreadsheet."
+        description = "The string content of a text document. Must be empty for a native spreadsheet or canvas."
     )]
     pub file_content: String,
 
     #[schemars(
-        description = "The extension of a plaintext file, or spreadsheet for a native collaborative workbook."
+        description = "The extension of a plaintext file, or spreadsheet or canvas for a native collaborative document."
     )]
     pub file_extension: String,
 
@@ -92,13 +95,27 @@ where
         service_context: ServiceContext<DocumentToolContext<DSvc, ESvc, EDSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        tracing::info!(params=?self, "Create content");
+        // The name and content are the user's; log only their shape.
+        tracing::info!(
+            file_extension = %self.file_extension,
+            is_task = self.is_task,
+            in_project = self.project_id.is_some(),
+            content_bytes = self.file_content.len(),
+            "Create content"
+        );
 
         let parsed_file_type =
             FileType::from_str(&self.file_extension).map_err(|e| ToolCallError {
                 description: format!("invalid file extension {}", self.file_extension),
                 internal_error: e.into(),
             })?;
+        if parsed_file_type == FileType::Canvas
+            && (!self.file_content.trim().is_empty() || self.is_task)
+        {
+            return Err(failed_to_create_document(DocumentError::BadRequest(
+                "Create canvases with empty fileContent and isTask false, then use ReadCanvas and EditCanvas to populate the scene".to_string(),
+            )));
+        }
         let user_id: MacroUserIdStr<'static> = request_context.user_id.clone();
 
         // Mirrors the axum create route's project body extractor: creating

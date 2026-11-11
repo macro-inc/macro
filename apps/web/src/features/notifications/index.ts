@@ -1,11 +1,11 @@
 export { BrowserNotificationModal } from './components/BrowserNotificationModal';
 export {
   ChannelDebouncedNotificationReadMarker,
-  DebouncedNotificationReadMarker,
-  DocumentDebouncedNotificationReadMarker,
-  EmailDebouncedReadMarker,
+  DocumentNotificationReadMarker,
+  EmailReadMarker,
   makeDebouncedChannelNotificationReadMarker,
-} from './components/DebouncedNotificationReadMarker';
+  NotificationReadMarker,
+} from './components/NotificationReadMarker';
 export type {
   CreateAppNotificationInterface,
   NotificationUnsupported,
@@ -34,6 +34,7 @@ export {
   notificationIsOfEntity,
   notificationIsOfEntityType,
   notificationIsRead,
+  shownUnseenNotificationIds,
   useEntityHasUnreadNotifications,
   useEntityTypeNotifications,
   useNotificationsForEntity,

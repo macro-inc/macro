@@ -1,5 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
-import Globe from '@phosphor-icons/core/regular/globe.svg';
+import Globe from '@icon/system/regular/globe.svg';
 import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -9,10 +9,7 @@ const handler = createToolRenderer({
   name: 'WebSearch',
   render: (ctx) => {
     const [isExpanded, setIsExpanded] = createSignal(false);
-    const results = () => {
-      const content = ctx.response?.data.content;
-      return Array.isArray(content) ? content : [];
-    };
+    const results = () => ctx.response?.data.results ?? [];
     const hitCount = () => results().length;
     const hasResults = () => hitCount() > 0;
     const statusText = () => {
@@ -47,7 +44,8 @@ const handler = createToolRenderer({
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
           <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <span class="min-w-0 truncate">
-              Searched for <span class="text-ink">{ctx.tool.data.input}</span>
+              {ctx.response ? 'Searched for' : 'Search for'}{' '}
+              <span class="text-ink">{ctx.tool.data.query}</span>
             </span>
           </div>
           <Tool.ResultToggle

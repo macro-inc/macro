@@ -15,6 +15,8 @@ export function createChannelSearchSource(options: {
   scope: Accessor<ChannelsSourceScope>;
   source: Accessor<ChannelsDataSource>;
   additionalLocalChannels?: Accessor<readonly ChannelEntity[]>;
+  /** Section search also discovers authorized conversations outside membership. */
+  includeUnjoined?: Accessor<boolean>;
 }): ChannelsDataSource {
   const enabled = () => options.enabled?.() ?? true;
   const searching = () => options.text().trim().length > 0;
@@ -31,6 +33,7 @@ export function createChannelSearchSource(options: {
     return byId;
   });
   const search = createSearchState({
+    surface: () => 'channels',
     enabled,
     text: options.text,
     localPool: () => [...localChannels().values()].map((data) => ({ data })),
@@ -43,10 +46,11 @@ export function createChannelSearchSource(options: {
         filters: {
           ...QUERY_FILTERS_BASE,
           channel_filters: {
-            is_participant: true,
+            is_participant: options.includeUnjoined?.() ? undefined : true,
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
-              .with('channels', () => ['public', 'private', 'team'])
+              .with('team_channels', () => ['team'])
+              .with('channels', () => ['public', 'private'])
               .with('recents', 'search', 'threads', () => undefined)
               .exhaustive(() => undefined),
           },

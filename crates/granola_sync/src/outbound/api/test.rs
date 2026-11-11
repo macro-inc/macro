@@ -106,8 +106,9 @@ impl FakeProxy {
                     .into_iter()
                     .map(
                         |(status, body)| pipedream_mcp::domain::ports::ProxyResponse {
-                            status,
-                            body,
+                            status: http::StatusCode::from_u16(status).unwrap(),
+                            headers: http::HeaderMap::new(),
+                            body: body.to_string(),
                         },
                     )
                     .collect(),
@@ -116,13 +117,14 @@ impl FakeProxy {
         })
     }
 }
-impl ApiProxy for FakeProxy {
+impl ConnectedAppProxy for FakeProxy {
     async fn proxy(
         &self,
         connection: &PipedreamConnection,
-        _method: ProxyMethod,
+        _method: http::Method,
         url: &str,
-        _body: Option<Value>,
+        _headers: &http::HeaderMap,
+        _body: Option<&Value>,
     ) -> anyhow::Result<pipedream_mcp::domain::ports::ProxyResponse> {
         assert_eq!(connection.app_slug, "granola");
         assert_eq!(connection.account_id, "apn_account");

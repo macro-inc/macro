@@ -14,11 +14,15 @@ const detail: FormCollaboration['detail'] = {
     respondentColumnId: null,
     audience: 'members',
     tallyVisible: false,
+    responsesVisible: false,
+    anonymous: false,
     status: 'open',
     closesAt: null,
     confirmationMessage: 'Thank you',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     createdAt: '2026-10-05T09:00:00Z',
     updatedAt: '2026-10-05T09:00:00Z',
+    projectId: null,
     isHiddenInDrive: false,
   },
   access: 'edit',
@@ -46,7 +50,7 @@ const detail: FormCollaboration['detail'] = {
 };
 
 describe('publicationMessage', () => {
-  it('names the affected question and uses screener wording', () => {
+  it('names the affected question and uses gate wording', () => {
     expect(
       publicationMessage({
         detail,
@@ -55,7 +59,16 @@ describe('publicationMessage', () => {
           problem: { kind: 'gateNamesLaterColumn', column: 'column' },
         },
       })
-    ).toBe('“Name” must come before the screener that checks it.');
+    ).toBe('“Name” must come before the gate that checks it.');
+    expect(
+      publicationMessage({
+        detail,
+        publicationError: {
+          kind: 'layout',
+          problem: { kind: 'conditionNamesLaterColumn', column: 'column' },
+        },
+      })
+    ).toBe('“Name” must come before the section shown depending on it.');
     expect(
       publicationMessage({
         detail,

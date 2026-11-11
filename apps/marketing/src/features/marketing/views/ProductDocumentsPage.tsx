@@ -73,11 +73,11 @@ export function RouteDocuments() {
     <ProductPage>
       <div class="docs-page">
         <ProductHero
-          tutorial="docs"
           product="Docs"
           title="High speed agentic documents."
           description="Version-controlled markdown, @linked to your work. Edit alongside agents with live cursors."
           cta="documents_hero_get_started"
+          tutorial="docs"
         />
         <FeaturePageSection
           id="document-agents"

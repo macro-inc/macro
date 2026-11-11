@@ -119,9 +119,9 @@ fn checkbox_is_safe_to_text_and_never_to_anything_else() {
 }
 
 #[test]
-fn date_is_safe_to_text_and_never_to_anything_else() {
+fn date_is_safe_to_text_and_ranges_and_never_to_anything_else() {
     let date = CastKind::Date;
-    let never = Cast::Never("A date can only become text.");
+    let never = Cast::Never("A date can only become text or a date range.");
     assert_eq!(cast(date, CastKind::Text, Filled), Cast::Safe);
     assert_eq!(cast(date, CastKind::Number, Filled), never);
     assert_eq!(cast(date, CastKind::Boolean, Filled), never);
@@ -451,6 +451,7 @@ fn column_kinds_read_as_their_type_names() {
             "select",
             "select[]",
             "date",
+            "date_range",
             "boolean",
             "link",
             "entity(USER)",
@@ -517,4 +518,25 @@ fn a_spelled_column_type_serializes_as_its_sql_spelling() {
         serde_json::to_string(&spelled).unwrap(),
         r#"["text","select[]","select_number","entity(USER)","entity(DOCUMENT)[]"]"#
     );
+}
+
+#[test]
+fn date_range_is_safe_from_dates_checked_from_text_and_only_safe_to_text() {
+    let range = CastKind::DateRange;
+    assert_eq!(cast(CastKind::Date, range, Filled), Cast::Safe);
+    assert_eq!(cast(CastKind::Text, range, Filled), Cast::Checked);
+    assert_eq!(
+        cast(CastKind::Select { multi: false }, range, Filled),
+        Cast::Checked
+    );
+    assert_eq!(
+        cast(CastKind::Number, range, Filled),
+        Cast::Never("Numbers aren't dates.")
+    );
+    assert_eq!(cast(range, CastKind::Text, Filled), Cast::Safe);
+    assert_eq!(
+        cast(range, CastKind::Date, Filled),
+        Cast::Never("A date range can only become text.")
+    );
+    assert_eq!(cast(range, CastKind::Date, Empty), Cast::Safe);
 }

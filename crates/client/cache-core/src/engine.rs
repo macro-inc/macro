@@ -3,11 +3,15 @@
 //! Tauri) expose over RPC.
 
 mod calendar;
+mod hydration;
+mod people;
+pub use hydration::HydrationScope;
 #[cfg(test)]
 mod test;
 
 pub mod live_query;
 pub mod watch_query;
+mod window_observation;
 
 use crate::calendar::{CalendarError, EVENT_TYPENAME};
 use crate::denormalize::{DenormalizeError, ReadOutcome, ReadPlans, ReadSession, RecordSource};
@@ -51,8 +55,8 @@ use crate::record_selection::{
 };
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
-    SearchCatalogs, SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile,
-    SearchRequest, collect_search_changes, project_search_documents, rank_documents,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchError, SearchPage, SearchProfile,
+    SearchQuery, SearchRanker, SearchRequest, collect_search_changes, project_search_documents,
     snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
@@ -85,6 +89,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     RecordSelection(#[from] RecordSelectionError),
     #[error(transparent)]
     Search(#[from] SearchError),
+    /// Context-aware person lookup input or publication error.
+    #[error(transparent)]
+    People(#[from] crate::people::PeopleError),
     #[error(transparent)]
     Calendar(#[from] CalendarError),
     #[error("unknown or already-settled optimistic transaction {0}")]
@@ -109,6 +116,18 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Storage(#[source] S),
     #[error("cache revision overflow")]
     RevisionOverflow,
+    /// The local people SQL compiler rejected a read.
+    #[error(transparent)]
+    PeopleSql(#[from] database_sql::local_people::PeopleSqlError),
+    /// The background response belongs to an obsolete account or generation.
+    #[error("cache hydration scope changed")]
+    StaleHydrationScope,
+    /// Contact observations predate another accepted contact write or engine.
+    #[error("contact write fence changed")]
+    StaleContactFence,
+    /// Membership may only be written after a captured, scoped network read.
+    #[error("contact writes require a scoped read fence")]
+    UnfencedContactWrite,
 }
 
 /// Result of a cache read.
@@ -326,8 +345,10 @@ struct BegunOptimisticWrite {
 /// Reserved storage key holding the identity bound to this cache. The
 /// `__meta:` prefix can never collide with entity keys (typenames can't
 /// contain `:`).
-const IDENTITY_META_KEY: &str = "__meta:identity";
-const IDENTITY_VALUE_FIELD: &str = "identity";
+/// Stored account witness shared by the engine and scoped storage projections.
+pub const IDENTITY_META_KEY: &str = "__meta:identity";
+/// Account identity field in the stored witness.
+pub const IDENTITY_VALUE_FIELD: &str = "identity";
 const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
 
@@ -357,9 +378,12 @@ const DOCUMENT_CACHE_CAPACITY: usize = 128;
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
+    window_observations: window_observation::WindowObservations,
     query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
+    contact_fence: Uuid,
+    people_context_fence: Uuid,
     hot: LruCache<EntityKey<'static>, Record>,
     docs: LruCache<String, Document>,
     deps: DepIndex,
@@ -367,9 +391,6 @@ pub struct Engine<S: Storage> {
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
-    /// Compact durable catalogs are loaded lazily for text search. Empty
-    /// queries use the storage index directly and do not populate this map.
-    search_catalogs: SearchCatalogs,
 }
 
 impl<S: Storage> Engine<S> {
@@ -390,16 +411,18 @@ impl<S: Storage> Engine<S> {
         Engine {
             schema,
             live_queries: live_query::LiveQueries::default(),
+            window_observations: window_observation::WindowObservations::default(),
             query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
+            contact_fence: Uuid::now_v7(),
+            people_context_fence: Uuid::now_v7(),
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
-            search_catalogs: SearchCatalogs::default(),
         }
     }
 
@@ -427,15 +450,9 @@ impl<S: Storage> Engine<S> {
         &self.schema
     }
 
-    /// Returns the durable identity of the currently stored cache data.
-    ///
-    /// A fresh generation is installed when the marker is absent or malformed.
-    /// Existing records are preserved when upgrading a cache without this marker.
-    /// Logical clears, identity changes, and physical resets
-    /// remove the marker with the data, so old hydration checkpoints cannot resume.
-    /// Read storage each time: engine replacement and external resets must not
-    /// leave an in-memory generation that outlives its records.
-    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+    /// Reads without creating metadata so rejected background responses do not
+    /// change cleared storage. Do not memoize a generation beyond its records.
+    async fn stored_storage_generation(&self) -> Result<Option<Uuid>, EngineError<S::Error>> {
         let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let fetched = self
             .storage
@@ -447,9 +464,23 @@ impl<S: Storage> Engine<S> {
                 record.fields.get(STORAGE_GENERATION_VALUE_FIELD)
             && let Ok(generation) = Uuid::parse_str(value)
         {
+            return Ok(Some(generation));
+        }
+        Ok(None)
+    }
+
+    /// Returns the durable identity of the currently stored cache data.
+    ///
+    /// A fresh generation is installed when the marker is absent or malformed.
+    /// Existing records are preserved when upgrading a cache without this marker.
+    /// Logical clears, identity changes, and physical resets remove the marker
+    /// with the data, so old hydration checkpoints cannot resume. Engine
+    /// replacement with preserved data retains the same generation.
+    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+        if let Some(generation) = self.stored_storage_generation().await? {
             return Ok(generation);
         }
-
+        let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let generation = Uuid::now_v7();
         let mut record = Record::default();
         record.fields.insert(
@@ -624,6 +655,12 @@ impl<S: Storage> Engine<S> {
                 &identities,
             );
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let patches =
                 deduplicate_patches(&self.schema, &source.link_patches).map_err(|error| {
                     EngineError::InvalidQueuedMutation {
@@ -648,6 +685,12 @@ impl<S: Storage> Engine<S> {
                 &patches,
                 strict_tail != Some(queued.id),
             )?;
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let revalidations = deduplicate_revalidations(
                 source.revalidations.iter().cloned().chain(
                     source
@@ -946,7 +989,8 @@ impl<S: Storage> Engine<S> {
         selection: &RecordSelection,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<Vec<SelectedRecord>>, EngineError<S::Error>> {
-        let (records, _) = self.read_records_tracked(selection, keys).await?;
+        let (records, dependencies) = self.read_records_tracked(selection, keys).await?;
+        self.bind_window_dependencies(keys, &dependencies);
         Ok(self.revisioned(records))
     }
 
@@ -1186,7 +1230,7 @@ impl<S: Storage> Engine<S> {
     /// decoding normalized-record payloads.
     ///
     /// Empty queries fan out over the per-profile/per-bucket timestamp index.
-    /// Text queries lazily load only requested buckets and rank borrowed entries.
+    /// Text queries stream storage-filtered rows into one bounded ranker.
     /// Active optimistic layers are projected from their fully composed record
     /// values and overlaid explicitly on either durable path.
     pub async fn search(
@@ -1207,68 +1251,54 @@ impl<S: Storage> Engine<S> {
         };
         let bucket_set: BTreeSet<_> = buckets.iter().map(String::as_str).collect();
         let overlay = self.optimistic_search_overlay(request.profile).await?;
-        let trimmed_query = request.query.trim();
-
-        let browse_candidates: HashMap<EntityKey<'static>, SearchDocument> =
-            if trimmed_query.is_empty() {
-                // Fetch enough extra durable rows to compensate for optimistic
-                // replacements/removals without turning this into a record scan.
+        let query = SearchQuery::new(&request.query);
+        let mut ranker = SearchRanker::new(request, &query);
+        for bucket in &buckets {
+            if !request.profile.buckets().contains(&bucket.as_str()) {
+                continue;
+            }
+            // A shadow removes its durable counterpart even if its new value
+            // is deleted, moved to another bucket, or no longer matches.
+            let mut visit = |document: SearchDocumentRef<'_>| {
+                if !overlay.contains_key(document.record_key)
+                    && cursor_allows(request.cursor.as_ref(), document)
+                {
+                    ranker.push(document);
+                }
+            };
+            if request.query.trim().is_empty() {
                 let per_bucket_limit = request
                     .limit
                     .saturating_add(overlay.len())
                     .saturating_add(1);
-                let mut candidates = HashMap::new();
-                for bucket in &buckets {
-                    let rows = self
-                        .storage
-                        .browse_search_documents(
-                            request.profile,
-                            bucket,
-                            request.cursor.as_ref(),
-                            per_bucket_limit,
-                        )
-                        .await
-                        .map_err(EngineError::Storage)?;
-                    for document in rows {
-                        candidates.insert(document.record_key.clone(), document);
-                    }
+                let rows = self
+                    .storage
+                    .browse_search_documents(
+                        request.profile,
+                        bucket,
+                        request.cursor.as_ref(),
+                        per_bucket_limit,
+                    )
+                    .await
+                    .map_err(EngineError::Storage)?;
+                for document in rows {
+                    visit(document.as_borrowed());
                 }
-                candidates
             } else {
-                for bucket in &buckets {
-                    // Unknown (but syntactically valid) buckets have no projection.
-                    // Do not grow the catalog map with arbitrary empty names.
-                    if !request.profile.buckets().contains(&bucket.as_str()) {
-                        continue;
-                    }
-                    if self.search_catalogs.get(request.profile, bucket).is_none() {
-                        let documents = self
-                            .storage
-                            .load_search_documents(request.profile, bucket)
-                            .await
-                            .map_err(EngineError::Storage)?;
-                        self.search_catalogs
-                            .insert(request.profile, bucket.clone(), documents);
-                    }
-                }
-                HashMap::new()
-            };
-
-        let cached = buckets
-            .iter()
-            .filter(|_| !trimmed_query.is_empty())
-            .filter_map(|bucket| self.search_catalogs.get(request.profile, bucket))
-            .flat_map(|catalog| catalog.values());
-        // A shadow removes its durable counterpart even when the optimistic
-        // value is deleted, moved to another bucket, or excluded by the cursor.
-        let candidates = browse_candidates
-            .values()
-            .chain(cached)
-            .filter(|document| !overlay.contains_key(&document.record_key))
-            .chain(overlay.values().filter_map(Option::as_ref))
-            .filter(|document| bucket_set.contains(document.bucket.as_str()))
-            .filter(|document| cursor_allows(request.cursor.as_ref(), document));
-        Ok(rank_documents(request, candidates))
+                self.storage
+                    .visit_search_documents(request.profile, bucket, &query, visit)
+                    .await
+                    .map_err(EngineError::Storage)?;
+            }
+        }
+        for document in overlay.values().filter_map(Option::as_ref) {
+            if bucket_set.contains(document.bucket.as_str())
+                && cursor_allows(request.cursor.as_ref(), document.as_borrowed())
+            {
+                ranker.push(document.as_borrowed());
+            }
+        }
+        Ok(ranker.finish())
     }
 
     async fn optimistic_search_overlay(
@@ -1291,10 +1321,6 @@ impl<S: Storage> Engine<S> {
                 (key, document)
             })
             .collect())
-    }
-
-    fn update_loaded_search_catalogs(&mut self, entries: &[(EntityKey<'static>, Record)]) {
-        self.search_catalogs.update(entries);
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -1353,7 +1379,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.write_network(origin_op, registration, input, projections, true)
+        self.write_network(origin_op, registration, input, projections, true, false)
             .await
             .map(|(result, _)| result)
     }
@@ -1365,6 +1391,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
         retain_pages: bool,
+        allow_contacts: bool,
     ) -> Result<(WriteResult, BTreeSet<String>), EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let NetworkWrite {
@@ -1393,6 +1420,13 @@ impl<S: Storage> Engine<S> {
         let normalized =
             normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
+        if !allow_contacts
+            && updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         if !retain_pages {
             crate::page_retention::omit_hydration_pages(&mut updates);
         }
@@ -1566,7 +1600,7 @@ impl<S: Storage> Engine<S> {
     /// Stores a network response and returns only fields not marked
     /// `@cacheOnly`. Projection is taken directly from the validated network
     /// payload, so hydration never denormalizes the response back out of
-    /// storage. Soup page wrappers are transient; their normalized descendants
+    /// storage. Soup/contact page wrappers are transient; their normalized descendants
     /// and projections are persisted without retaining cursor-qualified pages.
     pub async fn hydrate_query(
         &mut self,
@@ -1597,6 +1631,36 @@ impl<S: Storage> Engine<S> {
         identity: Option<&str>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_fenced(
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+            },
+            projections,
+            None,
+        )
+        .await
+    }
+
+    async fn hydrate_query_fenced(
+        &mut self,
+        input: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        fence: Option<Uuid>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        if fence.is_some_and(|fence| fence != self.contact_fence) {
+            return Err(EngineError::StaleContactFence);
+        }
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = input;
         let projected = {
             let doc = Self::document(&mut self.docs, query)?;
             let op = doc.operation(operation_name)?;
@@ -1623,8 +1687,12 @@ impl<S: Storage> Engine<S> {
                 },
                 projections,
                 false,
+                fence.is_some(),
             )
             .await?;
+        if fence.is_some() {
+            self.contact_fence = Uuid::now_v7();
+        }
         Ok(HydrationWriteResult {
             write_result,
             search_changed_buckets,
@@ -1743,7 +1811,6 @@ impl<S: Storage> Engine<S> {
         }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
-        self.update_loaded_search_catalogs(&touched);
         for (key, record) in touched {
             self.hot.put(key, record);
         }
@@ -1866,12 +1933,19 @@ impl<S: Storage> Engine<S> {
                         queued.mutation.attempt_count > 0,
                         &queued.optimistic.optimistic_data_json,
                     ),
+                    queued.mutation.created_at_ms,
                 )
             });
         let expected_kind = match collision {
             None => MutationUpsertKind::Inserted,
-            Some((active_id, true)) => MutationUpsertKind::AppendedAfterActive { active_id },
-            Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
+            Some((active_id, true, _)) => MutationUpsertKind::AppendedAfterActive { active_id },
+            Some((removed_id, false, _)) => MutationUpsertKind::ReplacedPending { removed_id },
+        };
+        // The removed row never reached the server, so its wait carries over;
+        // an active row stays queued and keeps reporting its own.
+        let enqueued_at_ms = match collision {
+            Some((_, false, replaced_at_ms)) => replaced_at_ms.min(created_at_ms),
+            _ => created_at_ms,
         };
 
         let patches = deduplicate_patches(&self.schema, link_patches)?;
@@ -1908,7 +1982,7 @@ impl<S: Storage> Engine<S> {
                     variables_json: canonical_json(&Json::Object(variables.clone())),
                     identity,
                 },
-                created_at_ms,
+                enqueued_at_ms,
             ),
             optimistic: PersistedOptimisticLayer {
                 optimistic_data_json: encode_optimistic_source(&source),
@@ -2548,6 +2622,12 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
         let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
@@ -2602,6 +2682,12 @@ impl<S: Storage> Engine<S> {
             apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         revalidations
             .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         let (durable_changed, entries) = stage_updates(&bases, updates);
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
@@ -2635,7 +2721,6 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;
-        self.update_loaded_search_catalogs(&entries);
         for (key, record) in entries {
             self.hot.put(key, record);
         }
@@ -2931,10 +3016,10 @@ impl<S: Storage> Engine<S> {
         self.ensure_revision_can_advance()?;
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
-        self.search_catalogs.clear();
         // Another engine may have rebound the shared storage and changed the
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
@@ -2970,12 +3055,15 @@ impl<S: Storage> Engine<S> {
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
+            if key.typename() == Some("GraphqlContact") {
+                self.contact_fence = Uuid::now_v7();
+            }
+            if key.as_ref() == crate::people::CONTEXT_META {
+                self.people_context_fence = Uuid::now_v7();
+            }
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
-        // The durable projection was updated by the writing context. Reload
-        // only the compact catalog on the next text search.
-        self.search_catalogs.clear();
         affected
     }
 
@@ -2996,9 +3084,14 @@ impl<S: Storage> Engine<S> {
             .delete_batch(keys)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3009,12 +3102,13 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.storage.clear().await.map_err(EngineError::Storage)?;
+        self.contact_fence = Uuid::now_v7();
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
+        self.window_observations = window_observation::WindowObservations::default();
         self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
-        self.search_catalogs.clear();
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
@@ -3068,6 +3162,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let mut updates = RecordUpdates::new();
         for (key, record) in entries {
+            if key.typename() == Some("GraphqlContact") {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             updates.entry(key).or_default().merge(record);
         }
         let PersistedChanges {
@@ -3154,9 +3251,14 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .delete_batch_with_projection_changes(keys, projections)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3317,11 +3419,12 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey<'static>> {
         .collect()
 }
 
-fn cursor_allows(cursor: Option<&SearchCursor>, document: &SearchDocument) -> bool {
+fn cursor_allows(cursor: Option<&SearchCursor>, document: SearchDocumentRef<'_>) -> bool {
     cursor.is_none_or(|cursor| {
         document.timestamp_ms < cursor.timestamp_ms
             || (document.timestamp_ms == cursor.timestamp_ms
-                && document.record_key > cursor.record_key)
+                && crate::search::compare_record_keys(document.record_key, &cursor.record_key)
+                    .is_gt())
     })
 }
 

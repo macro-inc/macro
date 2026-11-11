@@ -25,7 +25,7 @@ import {
   withShapeLabel,
   worldMatrix,
 } from '@macro-inc/graphics';
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import {
   plainRichText,
   richTextPlainText,
@@ -41,6 +41,8 @@ export function createTextState(
     | { kind: 'text'; item: ShapeItem<'text'> }
     | { kind: 'label'; item: LabelShape };
   const [editing, setEditing] = createSignal<TextDraft>();
+  let original: string | undefined;
+  let existing = false;
   const draft = () => {
     const current = editing();
     if (current?.kind === 'label' && current.item.type === 'connector') {
@@ -67,6 +69,28 @@ export function createTextState(
     Pick<TextGeometry, 'fontSize' | 'fontFamily' | 'autoWidth'>
   >({ fontSize: 24, fontFamily: 'sans', autoWidth: true });
   let flush: (() => void) | undefined;
+  // Keep a typing draft attached to the current pose and never resurrect a
+  // remotely deleted item when the local editor later blurs or unmounts.
+  onCleanup(
+    editor.subscribeDocument(() => {
+      const current = editing();
+      if (!current || !existing) return;
+      const item = editor.document.items[current.item.id];
+      if (!item || item.type !== current.item.type) {
+        setEditing(undefined);
+        flush = undefined;
+        return;
+      }
+      const pose = {
+        placement: item.placement,
+        transform: item.transform,
+        appearance: item.appearance,
+      };
+      if (current.kind === 'text')
+        setEditing({ ...current, item: { ...current.item, ...pose } });
+      else setEditing({ ...current, item: { ...current.item, ...pose } });
+    })
+  );
   const resize = (geometry: TextGeometry) =>
     textDefinition.freezeGeometry({ ...geometry, ...measure(geometry) });
   function update(patch: Partial<TextGeometry>) {
@@ -105,6 +129,11 @@ export function createTextState(
     const current = editing();
     setEditing(undefined);
     flush = undefined;
+    const value =
+      current?.kind === 'text'
+        ? current.item.geometry
+        : current?.item.geometry.label;
+    if (existing && JSON.stringify(value) === original) return;
     if (current?.kind === 'text') {
       if (richTextPlainText(current.item.geometry.content).trim())
         editor.execute(setTextCommand, current.item);
@@ -156,6 +185,8 @@ export function createTextState(
   function begin(point: Point, width?: number) {
     finish();
     editor.select();
+    existing = false;
+    original = undefined;
     setEditing({
       kind: 'text',
       item: createItem(point, width, plainRichText()),
@@ -178,6 +209,10 @@ export function createTextState(
         : item.geometry.label?.content;
     if (content !== undefined && !validCanvasText(content)) return;
     editor.select(id);
+    existing = true;
+    original = JSON.stringify(
+      item.type === 'text' ? item.geometry : item.geometry.label
+    );
     if (item.type === 'text') setEditing({ kind: 'text', item });
     else {
       const content = plainRichText('', 'center');

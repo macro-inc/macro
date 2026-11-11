@@ -133,7 +133,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or an agent's program asked to create without a review or confirmation",
             "content": {
               "application/json": {
                 "schema": {
@@ -204,6 +204,15 @@
             "name": "recurrenceId",
             "in": "query",
             "description": "Original-start key of the occurrence a scoped deletion targets.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "inbox",
+            "in": "query",
+            "description": "Inbox address holding the copy this request deletes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it.",
             "required": false,
             "schema": {
               "type": "string"
@@ -310,7 +319,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting",
             "content": {
               "application/json": {
                 "schema": {
@@ -331,6 +340,194 @@
           },
           "409": {
             "description": "The provider rejected the update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/copy": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Add a snapshot of an event shared with one of the requester's channels to\none of their Google calendars and return the synced snapshot. The\nsnapshot keeps the meeting's iCalendar UID and organizer, lists only the\nrequester as a guest, and carries no join link; nobody is notified.\nWhile the requester's request to join the event is pending or accepted,\nthe copy is refused with `join_request_open`: the meeting reaches their\ncalendar as the invitation, which a copy would otherwise take in.",
+        "operationId": "copy_calendar_event",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Shared calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyCalendarEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The copy on the requester's calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The event cannot be copied, or the calendar is not a Google calendar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only or needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event not found or not shared with the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already on the requester's calendar, a request to join it is pending or accepted, no writable calendar, or the provider refused the copy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/{event_id}/guests": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Add guests to a calendar event without touching anyone already invited,\nand return its synced entity. The organizer, and guests the organizer lets\ninvite others, may call it; Google emails the new guests.",
+        "operationId": "invite_calendar_event_guests",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "description": "Calendar event entity id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCalendarEventGuestsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated calendar event",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid guests or scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only, only the organizer can invite guests, the event is a snapshot of a shared meeting, or the calendar needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Event or occurrence not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The connected account neither organizes nor attends the event",
             "content": {
               "application/json": {
                 "schema": {
@@ -503,7 +700,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only or needs reauthorization",
+            "description": "Calendar is read-only or needs reauthorization, or the event is a snapshot of a shared meeting",
             "content": {
               "application/json": {
                 "schema": {
@@ -557,6 +754,90 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/join-requests/{request_id}": {
+      "put": {
+        "tags": ["calendar_events"],
+        "summary": "Answer a request to join an event the requester can change and return\nwhere it now stands. Accepting adds the guest through the invite path; an\nalready answered request is returned unchanged.",
+        "operationId": "respond_to_join_request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "Join request id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondToJoinRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answered join request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarJoinRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request not found or its event cannot be changed by the requester",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The provider rejected the new guest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transient provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarMutationApiError"
                 }
               }
             }
@@ -675,6 +956,486 @@
         }
       }
     },
+    "/scheduling/bookings": {
+      "get": {
+        "tags": ["scheduling"],
+        "summary": "List the profile's bookings, optionally those starting in a half-open range.",
+        "operationId": "list_bookings",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for personal bookings.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Inclusive start; supply together with `to`, at most 733 days apart.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Exclusive end; supply together with `from`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/bookings/{id}/change": {
+      "post": {
+        "tags": ["scheduling"],
+        "summary": "Approve, cancel, record attendance for, or reschedule one booking.",
+        "operationId": "change_booking",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Booking identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/bookings/{id}/manage": {
+      "get": {
+        "tags": ["scheduling"],
+        "summary": "Read one booking as its personal owner, a host, or a team administrator.",
+        "operationId": "get_managed_booking",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Booking identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/bookings/{id}/slots": {
+      "get": {
+        "tags": ["scheduling"],
+        "summary": "Replacement start times for one booking on a schedule-local date.",
+        "operationId": "list_booking_reschedule_slots",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Booking identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Date in the booking's schedule time zone.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SlotsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/insights": {
+      "post": {
+        "tags": ["scheduling"],
+        "summary": "Booking statistics for a local date range and the equally long period before it.",
+        "operationId": "get_booking_insights",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for the caller's personal booking links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InsightQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingInsights"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/links": {
+      "get": {
+        "tags": ["scheduling"],
+        "summary": "List and search booking links with their full drafts and reusable schedules.",
+        "operationId": "list_booking_links",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for personal links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Text matched against link title, slug and description; omit for all links.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingLinkListing"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduling"],
+        "summary": "Create a booking link; an identical replay at the same slug returns the saved link.",
+        "operationId": "create_booking_link",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for the caller's personal booking links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBookingLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/links/{id}": {
+      "put": {
+        "tags": ["scheduling"],
+        "summary": "Replace one booking link's configuration at the profile revision it was read with.",
+        "operationId": "edit_booking_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Booking link (event type) identity",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for the caller's personal booking links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditBookingLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/scheduling/settings": {
+      "get": {
+        "tags": ["scheduling"],
+        "summary": "Read personal or team booking settings without creating them.",
+        "operationId": "get_booking_settings",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for the caller's personal booking links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "tags": ["scheduling"],
+        "summary": "Save booking settings at the revision they were read with.",
+        "operationId": "save_booking_settings",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Existing Macro team; omit for the caller's personal booking links.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingProfile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/team-sharing": {
       "get": {
         "tags": ["calendar_events"],
@@ -783,6 +1544,788 @@
           }
         }
       },
+      "Booking": {
+        "type": "object",
+        "description": "Public booking details, also visible to authorized profile members.",
+        "required": [
+          "id",
+          "eventTypeId",
+          "title",
+          "name",
+          "email",
+          "startsAt",
+          "endsAt",
+          "timeZone",
+          "hosts",
+          "status",
+          "location",
+          "answers"
+        ],
+        "properties": {
+          "answers": {
+            "type": "object",
+            "description": "Answers keyed by question identity.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "attendance": {
+            "$ref": "#/components/schemas/BookingAttendance",
+            "description": "Explicit attendance outcome; existing booking records default to unknown."
+          },
+          "email": {
+            "type": "string",
+            "description": "Booker's email."
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absolute meeting end."
+          },
+          "eventTypeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Booking link identity."
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Assigned hosts."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Booking identity."
+          },
+          "location": {
+            "type": "string",
+            "description": "Final location or conference URL."
+          },
+          "name": {
+            "type": "string",
+            "description": "Booker's name."
+          },
+          "questionLabels": {
+            "type": "object",
+            "description": "Original labels for answers, independent of later event-type edits.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "rescheduleCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of successfully completed moves to a different start time.",
+            "minimum": 0
+          },
+          "rescheduledAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the most recent successful reschedule completed."
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absolute meeting start."
+          },
+          "status": {
+            "$ref": "#/components/schemas/BookingStatus",
+            "description": "Current lifecycle state."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "Booker's display time zone."
+          },
+          "title": {
+            "type": "string",
+            "description": "Snapshot of the meeting title."
+          }
+        }
+      },
+      "BookingAttendance": {
+        "type": "string",
+        "description": "Attendance recorded by an assigned host or profile administrator after a meeting.",
+        "enum": ["unknown", "attended", "guestNoShow", "hostNoShow"]
+      },
+      "BookingChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Approve a legacy pending booking and send its calendar invitations.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["approve"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Cancel a booking and notify its attendees.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["cancel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Record or clear attendance after the meeting ends.",
+            "required": ["attendance", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["attendance"]
+              },
+              "attendance": {
+                "$ref": "#/components/schemas/BookingAttendance",
+                "description": "Recorded outcome."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Move the existing meeting to an available time; notify attendees.",
+            "required": ["startsAt", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["reschedule"]
+              },
+              "startsAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Absolute start chosen from available replacement slots."
+              }
+            }
+          }
+        ],
+        "description": "A host's requested change to a booked meeting."
+      },
+      "BookingDateOverride": {
+        "type": "object",
+        "description": "Replacement availability for one date.",
+        "required": ["date", "windows"],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Local date in the schedule zone."
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingTimeWindow"
+            },
+            "description": "Empty means unavailable all day."
+          }
+        }
+      },
+      "BookingEventType": {
+        "type": "object",
+        "description": "A reusable booking link.",
+        "required": [
+          "id",
+          "title",
+          "slug",
+          "description",
+          "durationMinutes",
+          "location",
+          "googleMeet",
+          "enabled",
+          "scheduleId",
+          "mode",
+          "hosts",
+          "beforeMinutes",
+          "afterMinutes",
+          "noticeMinutes",
+          "horizonDays",
+          "intervalMinutes",
+          "requiresConfirmation",
+          "questions"
+        ],
+        "properties": {
+          "afterMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Protected time after a meeting.",
+            "minimum": 0
+          },
+          "beforeMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Protected time before a meeting.",
+            "minimum": 0
+          },
+          "dailyLimit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Maximum bookings for this event on one schedule-local day.",
+            "minimum": 0
+          },
+          "description": {
+            "type": "string",
+            "description": "Public description."
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Meeting duration.",
+            "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether new bookings are accepted."
+          },
+          "googleMeet": {
+            "type": "boolean",
+            "description": "Generate a Google Meet conference. Mutually exclusive with a Macro call."
+          },
+          "horizonDays": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum days ahead.",
+            "minimum": 0
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Current Macro user identities selected as hosts."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity."
+          },
+          "intervalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Spacing of offered start times.",
+            "minimum": 0
+          },
+          "location": {
+            "type": "string",
+            "description": "Meeting location."
+          },
+          "macroCall": {
+            "type": "boolean",
+            "description": "Generate a Macro call and attach its join link when someone books.\nMutually exclusive with Google Meet. Omitted on links saved before\nMacro calls were a booking option, which keep their previous conference."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SchedulingMode",
+            "description": "Host assignment policy."
+          },
+          "noticeMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minimum notice in minutes.",
+            "minimum": 0
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingQuestion"
+            },
+            "description": "Additional form fields."
+          },
+          "requiresConfirmation": {
+            "type": "boolean",
+            "description": "Hold bookings for host approval."
+          },
+          "scheduleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Referenced availability schedule."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Unique link segment within a profile."
+          },
+          "title": {
+            "type": "string",
+            "description": "Public title."
+          }
+        }
+      },
+      "BookingInsights": {
+        "type": "object",
+        "description": "Current and equally long preceding local-calendar periods.",
+        "required": [
+          "asOf",
+          "previousFrom",
+          "previousTo",
+          "current",
+          "previous"
+        ],
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time at which completion was evaluated."
+          },
+          "current": {
+            "$ref": "#/components/schemas/InsightPeriod",
+            "description": "Requested period."
+          },
+          "previous": {
+            "$ref": "#/components/schemas/InsightPeriod",
+            "description": "Comparison period, using identical filters and definitions."
+          },
+          "previousFrom": {
+            "type": "string",
+            "format": "date",
+            "description": "Preceding period's first local date."
+          },
+          "previousTo": {
+            "type": "string",
+            "format": "date",
+            "description": "Preceding period's last local date."
+          }
+        }
+      },
+      "BookingLink": {
+        "type": "object",
+        "description": "Saved link with actual identities and revision for subsequent edits.",
+        "required": ["profileId", "eventTypeId", "revision", "draft"],
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/BookingLinkDraft",
+            "description": "Full editable configuration."
+          },
+          "eventTypeId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable link identity."
+          },
+          "profileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning profile."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Profile revision to supply when editing."
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingLinkDraft": {
+        "type": "object",
+        "description": "Complete proposal reviewed and validated before saving.",
+        "required": ["event", "schedule"],
+        "properties": {
+          "event": {
+            "$ref": "#/components/schemas/BookingLinkEvent",
+            "description": "Public details, hosts, booking rules and questions."
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/BookingLinkSchedule",
+            "description": "Weekly hours, IANA time zone, and date overrides for this link."
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingLinkEvent": {
+        "type": "object",
+        "description": "All editable rules for one link. Personal links must use the authenticated user as host.",
+        "required": [
+          "title",
+          "slug",
+          "description",
+          "durationMinutes",
+          "location",
+          "googleMeet",
+          "enabled",
+          "mode",
+          "hosts",
+          "beforeMinutes",
+          "afterMinutes",
+          "noticeMinutes",
+          "horizonDays",
+          "intervalMinutes",
+          "requiresConfirmation",
+          "questions"
+        ],
+        "properties": {
+          "afterMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Protected time after a meeting.",
+            "minimum": 0
+          },
+          "beforeMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Protected time before a meeting.",
+            "minimum": 0
+          },
+          "dailyLimit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Maximum bookings for this event on one schedule-local day.",
+            "minimum": 0
+          },
+          "description": {
+            "type": "string",
+            "description": "Public description."
+          },
+          "durationMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Meeting duration.",
+            "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether new bookings are accepted."
+          },
+          "googleMeet": {
+            "type": "boolean",
+            "description": "Generate a Google Meet conference. Mutually exclusive with `macroCall`."
+          },
+          "horizonDays": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum days ahead.",
+            "minimum": 0
+          },
+          "hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Current Macro user identities selected as hosts."
+          },
+          "intervalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Spacing of offered start times.",
+            "minimum": 0
+          },
+          "location": {
+            "type": "string",
+            "description": "Meeting location."
+          },
+          "macroCall": {
+            "type": "boolean",
+            "description": "Attach a Macro call when someone books. A join link is created for that\nbooking and written onto the calendar invitation. Mutually exclusive\nwith `googleMeet`. Prefer this for a Macro booking; omit or false when\nthe link should use Google Meet or no video. False is omitted so drafts\nsaved before this field still round-trip unchanged."
+          },
+          "mode": {
+            "$ref": "#/components/schemas/SchedulingMode",
+            "description": "Host assignment policy."
+          },
+          "noticeMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Minimum notice in minutes.",
+            "minimum": 0
+          },
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingQuestion"
+            },
+            "description": "Additional form fields."
+          },
+          "requiresConfirmation": {
+            "type": "boolean",
+            "description": "Hold bookings for host approval."
+          },
+          "slug": {
+            "type": "string",
+            "description": "Unique link segment within a profile."
+          },
+          "title": {
+            "type": "string",
+            "description": "Public title."
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingLinkListing": {
+        "type": "object",
+        "description": "Authorized discovery results including reusable availability.",
+        "required": [
+          "teamIds",
+          "userId",
+          "profileId",
+          "revision",
+          "schedules",
+          "links"
+        ],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingLink"
+            },
+            "description": "Links whose title, slug or description matches the search, including paused links."
+          },
+          "profileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owning profile identity, including unsaved new profiles."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current revision."
+          },
+          "schedules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingSchedule"
+            },
+            "description": "Reusable schedules, even when no links match."
+          },
+          "teamIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Current team identities that can be used to discover team links."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Current authenticated host identity for personal drafts."
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingLinkSchedule": {
+        "type": "object",
+        "description": "Availability copied into a dedicated schedule when it changes; other links retain their hours.",
+        "required": ["name", "timeZone", "weekly", "overrides"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingDateOverride"
+            },
+            "description": "Date-specific replacements."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone."
+          },
+          "weekly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingWeeklyDay"
+            },
+            "description": "Weekly windows."
+          }
+        },
+        "additionalProperties": false
+      },
+      "BookingProfile": {
+        "type": "object",
+        "description": "Editable configuration for a person or team.",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "schedules",
+          "eventTypes",
+          "revision"
+        ],
+        "properties": {
+          "defaultScheduleId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Personal hours used by team events; absent legacy profiles use their first schedule."
+          },
+          "description": {
+            "type": "string",
+            "description": "Public introduction."
+          },
+          "eventTypes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingEventType"
+            },
+            "description": "Booking links."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Public, opaque profile identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name on the public page."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optimistic concurrency version."
+          },
+          "schedules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingSchedule"
+            },
+            "description": "Reusable schedules."
+          }
+        }
+      },
+      "BookingQuestion": {
+        "type": "object",
+        "description": "A question on the booking form.",
+        "required": ["id", "label", "required"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity."
+          },
+          "label": {
+            "type": "string",
+            "description": "Public question label."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether an answer is mandatory."
+          }
+        }
+      },
+      "BookingResponse": {
+        "type": "object",
+        "description": "One booking after a change.",
+        "required": ["booking"],
+        "properties": {
+          "booking": {
+            "$ref": "#/components/schemas/Booking",
+            "description": "The saved booking."
+          }
+        }
+      },
+      "BookingSchedule": {
+        "type": "object",
+        "description": "Reusable hours, with DST interpreted in an IANA zone.",
+        "required": ["id", "name", "timeZone", "weekly", "overrides"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable schedule identity."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "overrides": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingDateOverride"
+            },
+            "description": "Date-specific replacements."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA time zone."
+          },
+          "weekly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingWeeklyDay"
+            },
+            "description": "Weekly windows."
+          }
+        }
+      },
+      "BookingSlot": {
+        "type": "object",
+        "description": "Available slot and the hosts who can satisfy it.",
+        "required": ["startsAt", "endsAt"],
+        "properties": {
+          "endsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absolute end."
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Absolute start."
+          }
+        }
+      },
+      "BookingStatus": {
+        "type": "string",
+        "description": "Booking lifecycle state.",
+        "enum": ["pending", "confirmed", "cancelled", "processing", "failed"]
+      },
+      "BookingTimeWindow": {
+        "type": "object",
+        "description": "A wall-clock window in an availability schedule.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "description": "Exclusive HH:MM end."
+          },
+          "start": {
+            "type": "string",
+            "description": "Inclusive HH:MM start."
+          }
+        }
+      },
+      "BookingWeeklyDay": {
+        "type": "object",
+        "description": "Availability for one weekday.",
+        "required": ["day", "windows"],
+        "properties": {
+          "day": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Sunday is zero.",
+            "minimum": 0
+          },
+          "windows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingTimeWindow"
+            },
+            "description": "Non-overlapping local windows."
+          }
+        }
+      },
+      "BookingsResponse": {
+        "type": "object",
+        "description": "Bookings of one profile.",
+        "required": ["bookings"],
+        "properties": {
+          "bookings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Booking"
+            },
+            "description": "Every matching booking."
+          }
+        }
+      },
       "CalendarAttendee": {
         "type": "object",
         "description": "An attendee on a calendar event.",
@@ -847,7 +2390,8 @@
           "autoDecline",
           "emailReminders",
           "customRecurrence",
-          "resetRsvp"
+          "resetRsvp",
+          "guestPolicy"
         ],
         "properties": {
           "autoDecline": {
@@ -872,6 +2416,10 @@
           "emailReminders": {
             "type": "boolean",
             "description": "Whether email reminders are delivered by the provider or Macro."
+          },
+          "guestPolicy": {
+            "type": "boolean",
+            "description": "Whether the organizer can set what guests may do."
           },
           "removeConference": {
             "type": "boolean",
@@ -904,6 +2452,9 @@
           "sequence",
           "isReadOnly",
           "attendees",
+          "guestPolicy",
+          "isSnapshot",
+          "viewerCan",
           "createdAt",
           "updatedAt"
         ],
@@ -958,7 +2509,7 @@
           },
           "guestPolicy": {
             "$ref": "#/components/schemas/GuestPolicy",
-            "description": "What the organizer lets guests do. Skipped when it is Google's\ndefault so projections stored before the policy was modeled still\ncompare equal."
+            "description": "What the organizer lets guests do: the canonical copy's values, or\nGoogle's defaults for an event synced before the policy was modeled."
           },
           "icalUid": {
             "type": "string",
@@ -972,6 +2523,10 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the canonical source's calendar prohibits editing it."
+          },
+          "isSnapshot": {
+            "type": "boolean",
+            "description": "Whether this is a snapshot of a meeting shared with the owner, which\nMacro added to their calendar as a private copy: the meeting's changes\nnever reach it, and nothing done to it reaches the meeting."
           },
           "location": {
             "type": ["string", "null"],
@@ -1036,7 +2591,7 @@
           },
           "viewerCan": {
             "$ref": "#/components/schemas/ViewerCapabilities",
-            "description": "What the viewing requester may do with the event. Resolved only on\nthe read path, alongside each attendee's `is_self`, so stored\nprojections omit it."
+            "description": "What the viewing requester may do with the event. Resolved only on\nthe read path, alongside each attendee's `is_self`; nothing when no\nviewer is known. Source projections never store it."
           },
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
@@ -1114,6 +2669,72 @@
           }
         }
       },
+      "CalendarGuestInputBody": {
+        "type": "object",
+        "description": "A guest added to an event.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Guest email address."
+          },
+          "optional": {
+            "type": "boolean",
+            "description": "Whether attendance is optional."
+          }
+        }
+      },
+      "CalendarJoinRequest": {
+        "type": "object",
+        "description": "A channel member's request to be added as a guest of an event they see\nonly through a channel share.",
+        "required": [
+          "id",
+          "eventId",
+          "requesterId",
+          "requesterEmail",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made."
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The sharer's event entity that was shared with the channel."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Request identifier."
+          },
+          "requesterEmail": {
+            "type": "string",
+            "description": "Address the sharer invites when accepting."
+          },
+          "requesterId": {
+            "type": "string",
+            "description": "Macro user asking to join."
+          },
+          "status": {
+            "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+            "description": "Where the request stands."
+          }
+        }
+      },
+      "CalendarJoinRequestDecision": {
+        "type": "string",
+        "description": "How a sharer answers a request to join their event.",
+        "enum": ["accept", "decline"]
+      },
+      "CalendarJoinRequestStatus": {
+        "type": "string",
+        "description": "Lifecycle of a request to be added as a guest of a shared event.",
+        "enum": ["pending", "accepted", "declined"]
+      },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
@@ -1138,12 +2759,22 @@
           "read_only",
           "no_writable_calendar",
           "not_attendee",
+          "not_organizer",
+          "guests_cannot_invite",
+          "guest_list_hidden",
+          "guests_cannot_modify",
+          "already_on_calendar",
+          "join_request_open",
+          "copy_refused",
+          "snapshot",
           "invalid_input",
           "reauth_required",
           "provider_rejected",
           "retryable",
           "persist_failed",
-          "macro_call_failed"
+          "macro_call_failed",
+          "copy_choice_required",
+          "confirmation_required"
         ]
       },
       "CalendarProvider": {
@@ -1247,6 +2878,33 @@
         "description": "The conferencing system backing an event's join URL.\n\nCalendars can create Google Meet or Microsoft Teams according to their\ncapabilities. Imported third-party conferences are labeled separately.\nOmitting a conference change preserves the current conference; explicit\nchanges still require provider and calendar capability validation.",
         "enum": ["microsoft_teams", "google_meet", "other"]
       },
+      "CopyCalendarEventRequest": {
+        "type": "object",
+        "description": "Request body adding a shared event to the requester's calendar.",
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Google calendar to add the copy to; defaults to the requester's\nprimary inbox's primary calendar."
+          }
+        }
+      },
+      "CreateBookingLinkRequest": {
+        "type": "object",
+        "description": "A new booking link, saved after the user approved it.",
+        "required": ["draft", "userConfirmation"],
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/BookingLinkDraft",
+            "description": "Full booking rules and availability the user approved."
+          },
+          "userConfirmation": {
+            "type": "string",
+            "description": "The user's reply approving this proposal, quoted verbatim."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateCalendarEventRequest": {
         "type": "object",
         "description": "Request body creating a calendar event on the requester's calendar.",
@@ -1283,6 +2941,17 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Connected inbox whose primary calendar receives the event; defaults\nto the requester's primary inbox."
+          },
+          "guestPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuestPolicy",
+                "description": "What guests may do; omit for Google's defaults (guests may invite\nothers and see the guest list, not modify the event). Google\ncalendars only."
+              }
+            ]
           },
           "idempotencyKey": {
             "type": ["string", "null"],
@@ -1357,6 +3026,27 @@
             ]
           }
         }
+      },
+      "EditBookingLinkRequest": {
+        "type": "object",
+        "description": "Replacement configuration for one booking link, saved after the user approved it.",
+        "required": ["expectedRevision", "draft", "userConfirmation"],
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/BookingLinkDraft",
+            "description": "Full edited booking rules and availability the user approved."
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Profile revision the edit was prepared from; a newer revision conflicts."
+          },
+          "userConfirmation": {
+            "type": "string",
+            "description": "The user's reply approving this proposal, quoted verbatim."
+          }
+        },
+        "additionalProperties": false
       },
       "EventReminderOverride": {
         "type": "object",
@@ -1490,6 +3180,199 @@
           }
         }
       },
+      "InsightCounts": {
+        "type": "object",
+        "description": "Counts can overlap: a rescheduled event can also be completed or cancelled.",
+        "required": [
+          "total",
+          "completed",
+          "rescheduled",
+          "cancelled",
+          "guestNoShow",
+          "hostNoShow"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Cancelled bookings, grouped by their scheduled start.",
+            "minimum": 0
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Confirmed, ended bookings excluding explicit no-shows.",
+            "minimum": 0
+          },
+          "guestNoShow": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Explicit guest no-shows only.",
+            "minimum": 0
+          },
+          "hostNoShow": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Explicit host no-shows only.",
+            "minimum": 0
+          },
+          "rescheduled": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Bookings with at least one completed reschedule, counted once.",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "All bookings except failed and processing requests.",
+            "minimum": 0
+          }
+        }
+      },
+      "InsightPeriod": {
+        "type": "object",
+        "description": "One complete period of metrics and chart data, with no guest contact information.",
+        "required": [
+          "counts",
+          "meetingMinutes",
+          "averageMinutes",
+          "days",
+          "hours",
+          "eventCounts",
+          "hostCounts"
+        ],
+        "properties": {
+          "averageMinutes": {
+            "type": "number",
+            "format": "double",
+            "description": "Average scheduled duration of all confirmed bookings, including future ones."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/InsightCounts",
+            "description": "Summary event counts."
+          },
+          "days": {
+            "type": "object",
+            "description": "Local-date counts, including dates with zero bookings.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/InsightCounts"
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "eventCounts": {
+            "type": "object",
+            "description": "Booking counts by link identity.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "hostCounts": {
+            "type": "object",
+            "description": "Booking counts by host; collective bookings count once for each host.",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "hours": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Booking counts by local hour, indexed from 0 to 23."
+          },
+          "meetingMinutes": {
+            "type": "number",
+            "format": "double",
+            "description": "Scheduled minutes of completed meetings, not actual call duration."
+          }
+        }
+      },
+      "InsightQuery": {
+        "type": "object",
+        "description": "Inclusive local dates and optional booking/host filters.",
+        "required": ["from", "to", "timeZone"],
+        "properties": {
+          "eventTypeId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Restrict to one booking link; omit for all links."
+          },
+          "from": {
+            "type": "string",
+            "format": "date",
+            "description": "First local date, inclusive."
+          },
+          "hostId": {
+            "type": ["string", "null"],
+            "description": "Restrict to one assigned host; omit for all hosts."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "IANA zone used for dates and hour-of-day grouping."
+          },
+          "to": {
+            "type": "string",
+            "format": "date",
+            "description": "Last local date, inclusive; maximum 366 days."
+          }
+        },
+        "additionalProperties": false
+      },
+      "InviteCalendarEventGuestsRequest": {
+        "type": "object",
+        "description": "Request body adding guests to an event without touching anyone already\ninvited.",
+        "required": ["guests"],
+        "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is written, for an event synced from\nmore than one calendar. Omit to write the canonical copy."
+          },
+          "guests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarGuestInputBody"
+            },
+            "description": "Guests to add; anyone already on the event is skipped."
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
+          },
+          "recurrenceId": {
+            "type": ["string", "null"],
+            "description": "Original-start key of the occurrence the guests are added to."
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarUpdateScopeParam",
+                "description": "How much of a recurring series gains the guests. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole event or series. An explicit\n`this_event` scope requires `recurrenceId`."
+              }
+            ]
+          }
+        }
+      },
       "ListCalendarsResponse": {
         "type": "object",
         "description": "Calendars visible to the requester across connected and delegated inboxes.",
@@ -1547,6 +3430,37 @@
           }
         }
       },
+      "ProfileResponse": {
+        "type": "object",
+        "description": "Booking settings of one profile.",
+        "required": ["profile"],
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/BookingProfile",
+            "description": "Full settings, including the revision to save against."
+          }
+        }
+      },
+      "ReceiptResponse": {
+        "type": "object",
+        "description": "A booking with its booker management capability.",
+        "required": ["booking", "token", "scheduleTimeZone"],
+        "properties": {
+          "booking": {
+            "$ref": "#/components/schemas/Booking",
+            "description": "The booking."
+          },
+          "scheduleTimeZone": {
+            "type": "string",
+            "description": "IANA time zone of the booking's availability schedule."
+          },
+          "token": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Bearer capability for the booker's receipt, reschedule and cancel pages."
+          }
+        }
+      },
       "RefreshCalendarEvent": {
         "oneOf": [
           {
@@ -1583,6 +3497,22 @@
                 "description": "True for sharing changes and any possibly affected OOO projection."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The viewer's request to join a shared event was answered.",
+            "required": ["event_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["join_request_answered"]
+              },
+              "event_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The shared event they asked to join."
+              }
+            }
           }
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
@@ -1591,6 +3521,17 @@
         "type": "string",
         "description": "User-visible workflow state.",
         "enum": ["needs_confirmation", "in_progress", "complete"]
+      },
+      "RespondToJoinRequestRequest": {
+        "type": "object",
+        "description": "Request body answering a join request.",
+        "required": ["decision"],
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/CalendarJoinRequestDecision",
+            "description": "The sharer's answer."
+          }
+        }
       },
       "RsvpCalendarEventRequest": {
         "type": "object",
@@ -1608,7 +3549,7 @@
           },
           "respondingEmail": {
             "type": ["string", "null"],
-            "description": "The owned connected address whose attendance is changed. Validated by the domain."
+            "description": "The owned connected address whose attendance is changed. Validated by the domain.\nOmit to answer as the inbox the addressed copy syncs through."
           },
           "response": {
             "$ref": "#/components/schemas/AttendeeResponseStatus",
@@ -1624,6 +3565,25 @@
                 "description": "How much of a recurring series the response covers. Omit to let\n`recurrenceId` decide: the identified occurrence alone when one is\nsupplied, otherwise the whole series. An explicit `this_event` scope\nrequires `recurrenceId`, so a scoped request is never silently\nwidened to the series."
               }
             ]
+          }
+        }
+      },
+      "SchedulingMode": {
+        "type": "string",
+        "description": "Team host assignment policy.",
+        "enum": ["individual", "collective", "roundRobin"]
+      },
+      "SlotsResponse": {
+        "type": "object",
+        "description": "Available start times.",
+        "required": ["slots"],
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BookingSlot"
+            },
+            "description": "Every available slot."
           }
         }
       },
@@ -1673,6 +3633,21 @@
           "description": {
             "type": ["string", "null"],
             "description": "Replacement description; an empty string clears it."
+          },
+          "guestPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuestPolicy",
+                "description": "Replacement guest policy; only the organizer of a Google event may\nchange it, for the whole event or series. Omit to leave it untouched."
+              }
+            ]
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "Inbox address holding the copy this request changes. An agent run\nmust name it when the meeting is on more than one of the requester's\ninboxes, and it must be the inbox holding the addressed copy; a\nmismatch is refused whoever sends it."
           },
           "location": {
             "type": ["string", "null"],
@@ -1769,7 +3744,8 @@
           "inviteGuests",
           "removeGuests",
           "setGuestPolicy",
-          "rsvp"
+          "rsvp",
+          "organize"
         ],
         "properties": {
           "editDetails": {
@@ -1779,6 +3755,10 @@
           "inviteGuests": {
             "type": "boolean",
             "description": "Add guests."
+          },
+          "organize": {
+            "type": "boolean",
+            "description": "Act as the event's organizer: replace its whole guest list and manage\nits conferencing."
           },
           "removeGuests": {
             "type": "boolean",
@@ -1790,7 +3770,7 @@
           },
           "setGuestPolicy": {
             "type": "boolean",
-            "description": "Change the event's guest policy."
+            "description": "Change the event's guest policy, which only Google calendars have."
           }
         }
       },
@@ -1817,6 +3797,10 @@
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",
@@ -1871,6 +3855,10 @@
     {
       "name": "calendar_events",
       "description": "Macro Calendar Service"
+    },
+    {
+      "name": "scheduling",
+      "description": "Booking links, bookings and booking settings"
     }
   ]
 }

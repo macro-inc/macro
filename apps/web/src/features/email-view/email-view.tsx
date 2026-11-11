@@ -3,42 +3,57 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import {
+  useSavedView,
+  useSavedViews,
+} from '@app/features/saved-views/queries/saved-views';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
-import { usePreference } from '@app/preferences/use-preference';
+import { TraceFlow } from '@app/observability/flow';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableReminders } from '@core/constant/featureFlags';
+import { enableEmailSavedViews } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createSignal,
   type JSX,
+  Match,
   onMount,
   type ParentProps,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
-import {
-  EmailHeader,
-  EmailTopBar,
-  EmailViewBreadcrumbItem,
-} from './components/EmailHeader';
+import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
+import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
+import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
+import {
+  READING_PANE_LIST_WIDTH,
+  useReadingPaneListWidth,
+} from './use-reading-pane-list-width';
+import { useVisibleEmailTab } from './use-visible-email-tab';
+import {
+  EmailSavedViewsPicker,
+  EmailSavedViewUnavailable,
+  EmailSavedViewWarning,
+} from './views/email-saved-views';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -68,7 +83,11 @@ function EmailViewBreadcrumbs(props: ParentProps) {
 function EmailListFallback() {
   return (
     <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-      <SpinnerIcon aria-label="Loading email" class="size-5 animate-spin" />
+      <SpinnerIcon
+        aria-hidden={false}
+        aria-label="Loading email"
+        class="size-5 animate-spin"
+      />
     </div>
   );
 }
@@ -82,10 +101,10 @@ function EmailPanes(props: {
   const shell = useViewShell();
   const listColumn = (beside?: 'reader') => (
     <>
-      <EmailTopBar tabOnly={beside === 'reader'} />
-      <ViewShell.Header>
-        <EmailHeader onSearchEscape={props.focusList} />
-      </ViewShell.Header>
+      <EmailHeader
+        tabOnly={beside === 'reader'}
+        onSearchEscape={props.focusList}
+      />
       <ViewTour tour={emailTour} />
       <ViewShell.Content>{props.list}</ViewShell.Content>
     </>
@@ -115,22 +134,15 @@ function EmailPanes(props: {
   );
 }
 
-/** The list column's width beside the reading pane, in pixels. */
-const LIST_WIDTH = { default: 440, min: 340, max: 720 };
-
 function EmailDesktopLayout(props: {
   list: JSX.Element;
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
-  const { readingPane } = useEmailView();
-  const [storedListWidth, setListWidth] = usePreference(
-    'macro:pref:email:reading-pane-list-width',
-    { default: LIST_WIDTH.default }
-  );
-  // A stored width from an older layout still fits the current bounds.
-  const listWidth = () =>
-    Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth()));
+  const { readingPane, composing } = useEmailView();
+  // A new email takes the list's place, so the reading pane folds away.
+  const readerBeside = () => readingPane() && !composing();
+  const [listWidth, setListWidth] = useReadingPaneListWidth();
 
   return (
     <ViewShell.Root
@@ -138,12 +150,12 @@ function EmailDesktopLayout(props: {
       resizable
       aside={{ preserveDuringResize: false }}
       main={
-        readingPane()
+        readerBeside()
           ? {
               preferredWidth: 640,
               width: listWidth(),
-              min: LIST_WIDTH.min,
-              max: LIST_WIDTH.max,
+              min: READING_PANE_LIST_WIDTH.min,
+              max: READING_PANE_LIST_WIDTH.max,
             }
           : { preferredWidth: 640 }
       }
@@ -154,7 +166,7 @@ function EmailDesktopLayout(props: {
         max: 4000,
         whenNarrow: 'hide',
       }}
-      detailOpen={readingPane()}
+      detailOpen={readerBeside()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
@@ -169,14 +181,20 @@ function EmailDesktopLayout(props: {
   );
 }
 
-const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = EMAIL_TABS.map((tab) => ({
+// Focus leads, as it does in the desktop Inbox tabs.
+const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
+  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
+  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
+].map((tab) => ({
   value: tab.id,
-  label: tab.label,
+  get label() {
+    return tab.label;
+  },
 }));
 
 function EmailMobileLayout(props: ParentProps) {
-  const reminders = useFeatureFlag(enableReminders);
-  const { state, setTab } = useEmailView();
+  const isVisible = useVisibleEmailTab();
+  const { state, setTab, savedViewActive } = useEmailView();
 
   return (
     <>
@@ -186,14 +204,14 @@ function EmailMobileLayout(props: ParentProps) {
             scrollable
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
-            leading={<EmailFilterDrawer />}
-            items={MOBILE_EMAIL_TABS.filter(
-              (tab) =>
-                tab.value !== 'reminders' ||
-                reminders().enabled ||
-                (reminders().loading && state.tab === 'reminders')
-            )}
-            value={state.tab}
+            leading={
+              <>
+                <EmailFilterDrawer />
+                <EmailSavedViewsPicker />
+              </>
+            }
+            items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
+            value={savedViewActive() ? undefined : state.tab}
             onChange={setTab}
           />
         </div>
@@ -213,7 +231,18 @@ function EmailMobileLayout(props: ParentProps) {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { readingPane, setReadingPane } = useEmailView();
+  const {
+    state,
+    setTab,
+    selectedThread,
+    composing,
+    list: listController,
+    readingPane,
+    setReadingPane,
+    savedViews,
+    savedViewScope,
+  } = useEmailView();
+  const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
@@ -227,10 +256,46 @@ function EmailViewRoot() {
     setReadingPane,
   });
 
+  useEmailViewHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+    tab: () => state.tab,
+    setTab,
+    // Beside the reading pane the list stays on screen with a thread open;
+    // without it a thread replaces the list, as a new email always does.
+    listHasKeyboard: () => {
+      const pane = listPane();
+      if (pane) return !pane.readerHasKeyboard();
+      return selectedThread() === undefined && !composing();
+    },
+    hasSelection: () => listController.selection.count() > 0,
+  });
+
+  const savedViewKind = () => savedViews?.view().kind;
   const list = () => (
-    <Suspense fallback={<EmailListFallback />}>
-      <EmailList ref={setListElement} pane={listPane()} />
-    </Suspense>
+    <Switch>
+      <Match when={savedViewKind() === 'unavailable'}>
+        <EmailSavedViewUnavailable />
+      </Match>
+      <Match when={savedViewKind() === 'loading'}>
+        <EmailListFallback />
+      </Match>
+      <Match when={true}>
+        <div class="flex size-full min-h-0 min-w-0 flex-col">
+          <EmailSavedViewWarning />
+          <div class="min-h-0 flex-1">
+            <Suspense fallback={<EmailListFallback />}>
+              <TraceFlow
+                name="email.list"
+                key={() => `${state.tab}:${savedViewKey() ?? ''}`}
+              >
+                <EmailList ref={setListElement} pane={listPane()} />
+              </TraceFlow>
+            </Suspense>
+          </div>
+        </div>
+      </Match>
+    </Switch>
   );
 
   return (
@@ -257,9 +322,21 @@ function EmailViewRoot() {
 
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
+  const savedViewsFlag = useFeatureFlag(enableEmailSavedViews);
+  const userId = useUserId();
+  // A loading flag is not off; it only keeps saved views hidden meanwhile.
+  const savedViewsEnabled = () => savedViewsFlag().enabled;
+  const viewerId = () => (savedViewsEnabled() ? userId() : undefined);
   return (
     <ListEntityMetadataQueryProvider>
-      <EmailViewProvider initialState={props.initialState}>
+      <EmailViewProvider
+        initialState={props.initialState}
+        savedViewsEnabled={savedViewsEnabled}
+        savedViewsSource={() =>
+          useSavedViews({ viewerId, kind: EMAIL_SAVED_VIEW_KIND })
+        }
+        savedViewSource={(id) => useSavedView({ viewerId, id })}
+      >
         <EmailViewBreadcrumbs>
           <EmailViewRoot />
         </EmailViewBreadcrumbs>

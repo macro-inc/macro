@@ -1,15 +1,30 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { modelLabel } from '@core/component/AI/constant/model-label';
+import { useHasPaidAccess } from '@core/auth/license';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableRoutineCodeSteps,
+  enableRoutineConditions,
+  enableRoutineStarterTemplates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
-import { createAgentRosterSource } from '../agents-view/queries/agent-roster-source';
+import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
+import {
+  featuredTemplates,
+  newRoutineDraft,
+  type RoutineTemplate,
+} from './core/routine-templates';
+import { useRoutineCatalog } from './queries/catalog';
 import { createRoutineListSource } from './queries/routine-sources';
 import { RoutineDetail } from './routine-detail';
+import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
+import { RoutineNew } from './routine-new';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
@@ -23,31 +38,44 @@ function RoutinesContent() {
       activate: true,
       search: {},
     });
-  let searchInput: HTMLInputElement | undefined;
+  let focusSearch: (() => void) | undefined;
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () => panel.isPanelActive() && !selectedId(),
     search: {
       description: 'Search routines',
       run: () => {
-        searchInput?.focus();
-        searchInput?.select();
+        focusSearch?.();
         return true;
       },
     },
   });
-  const roster = createAgentRosterSource();
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
+  const decisions = useFeatureFlag(enableRoutineConditions);
+  const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
+  const hasPaidAccess = useHasPaidAccess();
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const catalog = useRoutineCatalog();
+  const discover = useRoutinesDiscover();
+  /** New routine: describe it, pick a template, or start fresh. */
   function create() {
     layout.popoverSplit({
       type: 'component',
       id: 'routine-compose',
-      params: {
-        onCreated: (id: string) => open(id),
-      },
+      params: { onStart: () => open('new') },
     });
+  }
+  /** A template card skips New routine and opens its page already started. */
+  function startFrom(template: RoutineTemplate) {
+    startRoutineDraft(
+      newRoutineDraft(template, {
+        defaultModel: defaultModelForPlan(hasPaidAccess()),
+        codeSteps: codeSteps().enabled,
+      })
+    );
+    open('new');
   }
   return (
     <Show
@@ -57,31 +85,32 @@ function RoutinesContent() {
         <RoutinesListView
           source={source}
           userId={userId}
-          targetLabel={(target) =>
-            target.kind === 'agent'
-              ? (roster.roster().find((agent) => agent.botId === target.agentId)
-                  ?.name ?? 'Agent')
-              : modelLabel(target.model)
-          }
-          targetModel={(target) =>
-            target.kind === 'agent'
-              ? (target.modelOverride ??
-                roster.roster().find((agent) => agent.botId === target.agentId)
-                  ?.defaultModel)
-              : target.model
-          }
-          searchRef={(input) => (searchInput = input)}
-          onCreate={create}
+          registerSearchFocus={(focus) => (focusSearch = focus)}
+          onCreate={() => create()}
           onOpen={(id) => open(id)}
+          templates={
+            starterTemplates().enabled
+              ? featuredTemplates(catalog(), decisions().enabled)
+              : []
+          }
+          onTemplate={startFrom}
+          discover={discover()}
         />
       }
     >
       {(id) => (
-        <RoutineDetail
-          scheduleId={id}
-          onBack={() => open()}
-          onOpen={(id) => open(id)}
-        />
+        <Show
+          when={id !== 'new'}
+          fallback={
+            <RoutineNew onCreated={(id) => open(id)} onCancel={() => open()} />
+          }
+        >
+          <RoutineDetail
+            scheduleId={id}
+            onBack={() => open()}
+            onOpen={(id) => open(id)}
+          />
+        </Show>
       )}
     </Show>
   );

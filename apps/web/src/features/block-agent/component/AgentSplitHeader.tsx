@@ -1,10 +1,12 @@
 import { ChangesToggle } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -12,6 +14,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
+import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
@@ -19,15 +22,17 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import GitBranch from '@phosphor/git-branch.svg';
-import TrayIcon from '@phosphor/tray.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import GitBranch from '@icon/system/regular/git-branch.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { changeSessionArchiveState } from '../queries/change-session-archive-state';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { AgentTaskChip } from './AgentTaskChip';
+import { useAutoArchiveFileOperations } from './auto-archive-file-operations';
 import {
   harnessTitle,
   sessionHarnessTitle,
@@ -39,18 +44,21 @@ export { harnessTitle, sessionRepositoryUrl };
 export function agentSessionFileOperations(
   session: AgentSessionResponse | undefined,
   permissions: Permissions,
-  setArchived: () => void
+  setArchived: () => void,
+  autoArchive: FileOperation[]
 ): FileOperation[] {
   const repositoryUrl = sessionRepositoryUrl(session);
+  const archived = isSessionArchived(session);
   return [
-    ...(!session?.isArchived ? [{ op: 'rename' } as const] : []),
+    ...(!archived ? [{ op: 'rename' } as const] : []),
     ...(permissions === Permissions.OWNER
       ? [
           {
-            label: session?.isArchived ? 'Unarchive' : 'Archive',
+            label: archived ? 'Unarchive' : 'Archive',
             icon: TrayIcon,
             action: setArchived,
           },
+          ...autoArchive,
         ]
       : []),
     { op: 'delete' },
@@ -110,7 +118,8 @@ export function AgentSplitHeader(props: {
       type: 'agent_session',
       id,
       name: title(),
-      isArchived: session.isArchived,
+      archivedBy: session.archivedBy,
+      archivedAt: session.archivedAt,
       ownerId: session.ownerId,
       botId: session.botId,
       status:
@@ -149,7 +158,6 @@ export function AgentSplitHeader(props: {
     {
       label: () => {
         const provider = props.session?.external?.provider;
-        if (provider === 'claude-cloud') return 'Open in Claude';
         if (!provider) return 'Open externally';
         return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
       },
@@ -165,10 +173,22 @@ export function AgentSplitHeader(props: {
   const setArchived = async () => {
     const id = sessionId();
     if (!id || !props.session) return;
-    await changeSessionArchiveState(id, !props.session.isArchived);
+    await changeSessionArchiveState(id, !isSessionArchived(props.session));
   };
+  const autoArchive = useAutoArchiveFileOperations({
+    sessionId,
+    enabled: () =>
+      permissions() === Permissions.OWNER &&
+      props.session !== undefined &&
+      !isSessionArchived(props.session),
+  });
   const ops = () =>
-    agentSessionFileOperations(props.session, permissions(), setArchived);
+    agentSessionFileOperations(
+      props.session,
+      permissions(),
+      setArchived,
+      autoArchive()
+    );
 
   return (
     <>
@@ -184,12 +204,16 @@ export function AgentSplitHeader(props: {
         />
       </SplitHeaderLeft>
 
-      {/* Tools live on the header row itself — `ResponsiveBlockToolbar`
-          would push non-Share tools onto a second toolbar row. Markup
-          mirrors its own header-tools branch; on mobile the tools collapse
-          into the title menu via `menuTools` below instead. */}
+      {/* Session context stays next to the grouped header actions. */}
       <SplitHeaderRight>
-        <div class="order-[1000] flex items-center gap-1.5">
+        <Show when={props.session && sessionId()}>
+          {(id) => (
+            <HeaderIsland class="-order-1">
+              <BlockLiveIndicators entityId={id} />
+            </HeaderIsland>
+          )}
+        </Show>
+        <div class="order-[900] flex items-center gap-2 touch:gap-1.5">
           <Show when={props.session?.taskId}>
             {(taskId) => <AgentTaskChip taskId={taskId()} />}
           </Show>
@@ -198,13 +222,15 @@ export function AgentSplitHeader(props: {
           </Show>
           <Show when={!isTouchDevice()}>
             <ChangesToggle />
-            <For each={tools}>
-              {(tool) => (
-                <Show when={!tool.condition || tool.condition()}>
-                  <ToolButton tool={tool} />
-                </Show>
-              )}
-            </For>
+            <HeaderActionGroup label="Session actions">
+              <For each={tools}>
+                {(tool) => (
+                  <Show when={!tool.condition || tool.condition()}>
+                    <ToolButton tool={tool} grouped />
+                  </Show>
+                )}
+              </For>
+            </HeaderActionGroup>
           </Show>
         </div>
       </SplitHeaderRight>

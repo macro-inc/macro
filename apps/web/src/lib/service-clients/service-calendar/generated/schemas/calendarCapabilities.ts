@@ -17,6 +17,8 @@ export interface CalendarCapabilities {
   customRecurrence: boolean;
   /** Whether email reminders are delivered by the provider or Macro. */
   emailReminders: boolean;
+  /** Whether the organizer can set what guests may do. */
+  guestPolicy: boolean;
   /** Whether an existing conference can be detached. */
   removeConference: boolean;
   /** Whether an attendee can reset their RSVP to unanswered. */

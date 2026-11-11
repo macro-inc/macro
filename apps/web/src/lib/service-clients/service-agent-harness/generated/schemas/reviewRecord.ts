@@ -4,39 +4,10 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ReviewId } from './reviewId';
-import type { ReviewItem } from './reviewItem';
-import type { ReviewKind } from './reviewKind';
-import type { ReviewRecordExecutionId } from './reviewRecordExecutionId';
-import type { ReviewRecordNotificationAttemptAt } from './reviewRecordNotificationAttemptAt';
-import type { ReviewRecordNotificationId } from './reviewRecordNotificationId';
-import type { ReviewRecordPresentedAt } from './reviewRecordPresentedAt';
+import type { ReviewRecordAllOf } from './reviewRecordAllOf';
+import type { ReviewRecordAllOfTwo } from './reviewRecordAllOfTwo';
 
 /**
  * Full UI record, fetched outside the model context.
  */
-export interface ReviewRecord {
-  executionId?: ReviewRecordExecutionId;
-  /** Review identity. */
-  id: ReviewId;
-  /** Drafts and per-item outcomes. */
-  items: ReviewItem[];
-  /** Component kind. */
-  kind: ReviewKind;
-  /** Most recent delivery claim, allowing retry after a replica stops. */
-  notificationAttemptAt?: ReviewRecordNotificationAttemptAt;
-  /** Stable queued-action identity until the outcome has reached the session.
-A failed notification may be retried without repeating external actions. */
-  notificationId?: ReviewRecordNotificationId;
-  /** Durable presentation acknowledgment, separate from user decisions. */
-  presentedAt?: ReviewRecordPresentedAt;
-  /** Compare-and-swap revision for edits and submissions. */
-  revision: number;
-  /** Owning session. */
-  sessionId: string;
-  /** Stack label. */
-  title: string;
-  /** Milliseconds since epoch of the last state change. */
-  updatedAt: number;
-}
+export type ReviewRecord = ReviewRecordAllOf & ReviewRecordAllOfTwo;

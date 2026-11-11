@@ -1,3 +1,5 @@
+import { activeElement } from '@app/signal/focus';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { TagsMenu } from '@core/component/LexicalMarkdown/component/menu/TagsMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
@@ -18,11 +20,11 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { createRenameDssEntityMutation } from '@entity';
 import { mergeRegister } from '@lexical/utils';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import {
   $createParagraphNode,
@@ -35,6 +37,7 @@ import {
   KEY_ARROW_RIGHT_COMMAND,
   KEY_ENTER_COMMAND,
   KEY_ESCAPE_COMMAND,
+  KEY_TAB_COMMAND,
   type LexicalEditor,
 } from 'lexical';
 import {
@@ -49,6 +52,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 
 /**
  * Use the plugin architecture to set up command handlers on both the
@@ -124,6 +128,21 @@ function titleNavigationPlugin(
           return true;
         },
         COMMAND_PRIORITY_NORMAL
+      ),
+      // Press tab in the title. Without this the browser moves focus to the
+      // tag controls below the title instead of the body.
+      titleEditor.registerCommand(
+        KEY_TAB_COMMAND,
+        (event: KeyboardEvent) => {
+          if (ignoreArrows()) return true;
+          if (event.shiftKey) return false;
+
+          event.preventDefault();
+          documentEditor.getRootElement()?.focus({ preventScroll: true });
+          documentEditor.update($selectDocumentStart);
+          return true;
+        },
+        COMMAND_PRIORITY_NORMAL
       )
     );
 }
@@ -131,11 +150,13 @@ function titleNavigationPlugin(
 export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const {
     documentId,
+    element: blockElement,
     kind,
     documentSource,
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const canEdit = permissions.canEdit;
   const { md: mdData, setMd: setMdData } = documentState.editor;
   const renameDocumentMutation = createRenameDssEntityMutation();
@@ -190,6 +211,8 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   const debouncedFlushRename = debounce(flushPendingRename, 400);
+  // Unmount cancels the debounce timer, so save a pending rename now.
+  onCleanup(flushPendingRename);
 
   const [state, setState] = createSignal('');
   const [initialized, setInitialized] = createSignal(false);
@@ -201,6 +224,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       return canEdit() ?? false;
     }),
   });
+  onCleanup(cleanup);
 
   initializeEditorEmpty(editor);
 
@@ -266,9 +290,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     el.addEventListener('blur', onBlur);
     setRootConnected(true);
     onCleanup(() => {
-      debouncedFlushRename.clear();
-      flushPendingRename();
-      cleanup();
       el.removeEventListener('focus', onFocus);
       el.removeEventListener('blur', onBlur);
     });
@@ -343,11 +364,30 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
   );
 
-  // Autofocus the title if it is empty and we didn't navigate here via J/K.
+  // Autofocus a new document's empty title once its metadata has loaded.
+  let didAutoFocus = false;
   createEffect(() => {
-    if (props.autoFocusOnMount && rootConnected() && dataReady()) {
-      if (untrack(mdDocumentName) === '') {
-        editor.focus();
+    activeElement();
+    const name = mdDocumentName();
+    if (
+      !didAutoFocus &&
+      props.autoFocusOnMount &&
+      rootConnected() &&
+      dataReady() &&
+      name !== undefined
+    ) {
+      if (name === '') {
+        if (
+          shouldAutofocusDocument(
+            blockElement() ?? null,
+            panel?.panelRef() ?? null
+          )
+        ) {
+          didAutoFocus = true;
+          editor.focus();
+        }
+      } else {
+        didAutoFocus = true;
       }
     }
   });

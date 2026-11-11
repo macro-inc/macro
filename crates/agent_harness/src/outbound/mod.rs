@@ -4,6 +4,7 @@
 pub mod agent_prompt_composer;
 pub mod channel_announcer;
 pub mod channel_prompt_context;
+pub mod connected_apps;
 pub mod containers;
 /// Durable agent conversation turn journal.
 pub mod conversation_turns;
@@ -18,6 +19,7 @@ pub mod local;
 pub(crate) mod managed_containers;
 pub mod namespace;
 pub mod notifications;
+pub mod primary_calendar_time_zones;
 pub mod prompt_mentions;
 pub(crate) mod provision;
 pub mod routing;
@@ -30,6 +32,3 @@ pub mod tool_approvals;
 pub mod acp_pipe;
 /// Per-owner Codex cloud runtime.
 pub mod codex;
-
-/// Claude cloud container and model adapters.
-pub mod claude;

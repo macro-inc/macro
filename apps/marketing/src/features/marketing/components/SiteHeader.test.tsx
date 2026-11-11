@@ -97,7 +97,7 @@ it('keeps the mobile guide visible until navigation is opened', () => {
   expect(screen.queryByRole('navigation')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
   expect(screen.getByRole('navigation')).toBeTruthy();
-  fireEvent.click(screen.getByRole('link', { name: 'Billing & Plans' }));
+  fireEvent.click(screen.getByRole('link', { name: 'Pricing' }));
   expect(screen.queryByRole('navigation')).toBeNull();
 });
 

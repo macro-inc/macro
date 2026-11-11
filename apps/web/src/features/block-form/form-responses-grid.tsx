@@ -15,14 +15,24 @@ import { allRecordsView } from '../database/core/views';
 export function FormResponsesGrid(props: {
   databaseId: string;
   tableId: string;
+  hideColumnId?: string | null;
   onOpenRelated: (destination: DatabaseRelatedDestination) => void;
 }) {
   useDatabaseTableChangedSync(() => props.databaseId);
   const detail = useDatabaseDetailQuery(() => props.databaseId);
-  const table = () =>
-    detail.isSuccess
-      ? detail.data.tables.find((entry) => entry.table.id === props.tableId)
-      : undefined;
+  const table = () => {
+    if (!detail.isSuccess) return undefined;
+    const found = detail.data.tables.find(
+      (entry) => entry.table.id === props.tableId
+    );
+    if (!found || !props.hideColumnId) return found;
+    return {
+      ...found,
+      columns: found.columns.filter(
+        (column) => column.column.id !== props.hideColumnId
+      ),
+    };
+  };
   const canEdit = () =>
     detail.isSuccess &&
     (detail.data.grant === 'edit' || detail.data.grant === 'owner');
@@ -60,6 +70,8 @@ export function FormResponsesGrid(props: {
           return (
             <div class="@container/database flex min-h-0 flex-1 flex-col overflow-hidden">
               <DatabaseGrid
+                host="form"
+                schema="cached"
                 databaseId={props.databaseId}
                 table={shown()}
                 canEdit={canEdit()}

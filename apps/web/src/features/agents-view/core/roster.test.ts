@@ -99,9 +99,11 @@ describe('buildAgentRoster', () => {
       label: 'wolf-laptop',
       connected: false,
     });
-    expect(saved[2]?.unavailableReason).toBe('Its runtime is disconnected');
-    expect(saved[2]?.connectLabel).toBe('Reconnect runtime');
-    expect(saved[3]?.runtime.label).toBe('Disconnected runtime');
+    expect(saved[2]?.unavailableReason).toBe('Its machine is disconnected');
+    expect(saved[2]?.connectLabel).toBe('Reconnect machine');
+    expect(saved[2]?.offline).toBe(true);
+    expect(saved[1]?.offline).toBeFalsy();
+    expect(saved[3]?.runtime.label).toBe('Disconnected machine');
   });
 
   it('can start a saved agent on a connected macrod runtime from here', () => {
@@ -116,6 +118,37 @@ describe('buildAgentRoster', () => {
     });
     expect(roster.at(-1)?.unavailableReason).toBeUndefined();
   });
+
+  it.each(['none', 'read'] as const)(
+    'offers access to a coding agent whose runtime the viewer has as %s',
+    (access) => {
+      const roster = buildAgentRoster({
+        ...EMPTY,
+        runtimes: [{ id: 'h1', name: 'box', connected: true, access }],
+        agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
+      });
+      expect(roster.at(-1)?.needsRuntimeAccess).toBe(true);
+      expect(roster.at(-1)?.connectLabel).toBe('Request access');
+    }
+  );
+
+  it('lets anyone reach a resident, and users start a coding agent', () => {
+    const resident = buildAgentRoster({
+      ...EMPTY,
+      runtimes: [{ id: 'h1', name: 'box', connected: true, access: 'none' }],
+      agents: [
+        persisted({ harness: 'macrod', harness_id: 'h1', is_coding: false }),
+      ],
+    });
+    expect(resident.at(-1)?.needsRuntimeAccess).toBe(false);
+
+    const user = buildAgentRoster({
+      ...EMPTY,
+      runtimes: [{ id: 'h1', name: 'box', connected: true, access: 'user' }],
+      agents: [persisted({ harness: 'macrod', harness_id: 'h1' })],
+    });
+    expect(user.at(-1)?.needsRuntimeAccess).toBe(false);
+  });
 });
 
 describe('rosterForAgentPicker and kindForBot', () => {
@@ -126,7 +159,6 @@ describe('rosterForAgentPicker and kindForBot', () => {
       persisted({ harness: 'cursor' }),
       persisted({ harness: 'macrod' }),
       persisted({ harness: 'sandbox' }),
-      persisted({ harness: 'claude-cloud' }),
       persisted({ harness: 'codex-cloud' }),
       persisted({ harness: 'future-runtime' }),
       persisted({
@@ -155,14 +187,13 @@ describe('rosterForAgentPicker and kindForBot', () => {
       'bot-cursor',
       'bot-macrod',
       'bot-sandbox',
-      'bot-claude-cloud',
       'bot-codex-cloud',
       'bot-future-runtime',
       'saved-macro-name',
     ]);
   });
 
-  it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
+  it.each(['codex-cloud', 'future-runtime'])(
     'does not block an agent just because its runtime is %s',
     (harness) => {
       const agent = roster.find((entry) => entry.harness === harness);

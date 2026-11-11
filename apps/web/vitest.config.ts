@@ -281,6 +281,7 @@ export default defineConfig({
             'src/lib/analytics/**/*.{test,spec}.{ts,tsx}',
             'src/lib/constants/**/*.{test,spec}.{ts,tsx}',
             'src/lib/fullcalendar-solid/**/*.{test,spec}.{ts,tsx}',
+            'src/lib/i18n/**/*.{test,spec}.{ts,tsx}',
             'src/lib/persistence/**/*.{test,spec}.{ts,tsx}',
             'src/lib/utils/**/*.{test,spec}.{ts,tsx}',
             'src/lib/workers/slack-import/**/*.{test,spec}.{ts,tsx}',

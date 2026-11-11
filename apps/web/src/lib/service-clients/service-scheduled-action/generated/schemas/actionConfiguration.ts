@@ -5,18 +5,23 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ActionConfigurationTask } from './actionConfigurationTask';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RoutineTask } from './routineTask';
+import type { RunVisibility } from './runVisibility';
 
 /**
- * Canonical client configuration. Ownership and execution state are server-owned.
+ * Client configuration, the create body. Ownership and execution state are
+server-owned.
  */
 export interface ActionConfiguration {
+  /** What the routine is for, in the owner's words; empty when unset. */
+  description?: string;
   enabled: boolean;
   kind: ActionKind;
   name: string;
-  task: ActionConfigurationTask;
+  /** Omitted by clients that predate the setting; runs then start unlisted. */
+  run_visibility?: RunVisibility;
+  task: RoutineTask;
   trigger: ActionTrigger;
 }

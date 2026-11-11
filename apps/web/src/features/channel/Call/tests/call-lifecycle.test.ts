@@ -25,6 +25,7 @@ const token: CallTokenResponse = {
   token: 'token',
   serverUrl: 'ws://localhost',
   participantId: 'macro|test@example.com',
+  started: false,
   shareToken: null,
 } satisfies CallTokenResponse;
 const cleanups: (() => void)[] = [];
@@ -46,6 +47,7 @@ function setup(extra: Partial<Parameters<typeof createCallLifecycle>[0]> = {}) {
     beginJoin: vi.fn(),
     rollbackJoin: vi.fn(),
     setError: vi.fn(),
+    microphoneBlocked: vi.fn(),
     watch: vi.fn((_call, onDisconnect, onNativeEnd) => {
       disconnected = onDisconnect;
       nativeEnded = onNativeEnd;
@@ -217,7 +219,7 @@ describe('shared call lifecycle', () => {
     expect(ports.onJoined).not.toHaveBeenCalled();
     connection.resolve();
     await promise;
-    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call);
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call, 'user');
     expect(ports.watch).toHaveBeenCalledOnce();
   });
 
@@ -238,7 +240,7 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).not.toHaveBeenCalled();
     expect(ports.connect).not.toHaveBeenCalled();
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
-    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call);
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(call, 'user');
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -343,6 +345,25 @@ describe('shared call lifecycle', () => {
     }
   );
 
+  it('reports a microphone denial before requesting a token', async () => {
+    const denial = 'Microphone permission is required for calls';
+    const prepareToken =
+      vi.fn<(channelId: string) => Promise<() => Promise<void>>>();
+    prepareToken.mockRejectedValueOnce(denial);
+    const { lifecycle, ports } = setup({ prepareToken });
+    await expect(lifecycle.join(call.channelId)).rejects.toBe(denial);
+    expect(ports.requestToken).not.toHaveBeenCalled();
+    expect(ports.microphoneBlocked).toHaveBeenCalledOnce();
+  });
+
+  it('does not report a microphone denial for other join failures', async () => {
+    const error = new Error('Network unavailable');
+    const { lifecycle, ports } = setup();
+    ports.requestToken.mockRejectedValueOnce(error);
+    await expect(lifecycle.join(call.channelId)).rejects.toBe(error);
+    expect(ports.microphoneBlocked).not.toHaveBeenCalled();
+  });
+
   it('cancels a pending join when native confirms the session ended', async () => {
     const { lifecycle, ports } = setup();
     const pending = deferred<CallTokenResponse>();
@@ -436,8 +457,9 @@ describe('shared call lifecycle', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('leaves the channel view before slow media teardown completes', async () => {
-    const { lifecycle, ports, join } = setup();
+  it('leaves the channel view and the server before slow media teardown completes', async () => {
+    const leave = vi.fn(async () => ({ callEnded: true }));
+    const { lifecycle, ports, join } = setup({ leave });
     await join();
     const teardown = deferred<void>();
     ports.disconnect.mockReturnValueOnce(teardown.promise);
@@ -445,16 +467,24 @@ describe('shared call lifecycle', () => {
     lifecycle.onLeave(onLeave);
     const leaving = lifecycle.leave(call.channelId);
     expect(onLeave).toHaveBeenCalledExactlyOnceWith(call.channelId);
-    expect(ports.leave).not.toHaveBeenCalled();
+    // The last participant's RTC departure ends the call on the server, so a
+    // leave sent after teardown could not report it.
+    expect(leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
     teardown.resolve();
-    await leaving;
+    await expect(leaving).resolves.toEqual({ callEnded: true });
     expect(onLeave).toHaveBeenCalledOnce();
   });
 
   it('handles native call end through the same leave lifecycle', async () => {
     const { ports, nativeEnd, join } = setup();
     await join();
+    const teardown = deferred<void>();
+    ports.disconnect.mockReturnValueOnce(teardown.promise);
     nativeEnd();
+    await vi.advanceTimersByTimeAsync(0);
+    // A restored session may still supersede native-end cleanup.
+    expect(ports.leave).not.toHaveBeenCalled();
+    teardown.resolve();
     await vi.advanceTimersByTimeAsync(0);
     expect(ports.disconnect).toHaveBeenCalledExactlyOnceWith({
       endNativeCall: false,
@@ -583,10 +613,37 @@ describe('shared call lifecycle', () => {
       oldDisconnect.resolve();
       await vi.advanceTimersByTimeAsync(0);
       expect(ports.disconnect).toHaveBeenCalledTimes(2);
-      expect(ports.leave).toHaveBeenCalledOnce();
+      // Each hangup reaches the server before teardown; leaving is idempotent.
+      expect(ports.leave).toHaveBeenCalledTimes(2);
       expect(ports.onLeft).toHaveBeenCalledOnce();
     }
   );
+
+  it('still leaves the server when media teardown outlasts the leave timeout', async () => {
+    const { lifecycle, ports, join } = setup();
+    await join();
+    ports.disconnect.mockReturnValueOnce(new Promise(() => {}));
+    const failed = expect(lifecycle.leave(call.channelId)).rejects.toThrow(
+      'timed out'
+    );
+    await vi.advanceTimersByTimeAsync(LEAVE_TIMEOUT_MS);
+    await failed;
+    expect(ports.leave).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    expect(lifecycle.getState().t).toBe('idle');
+  });
+
+  it('records why each leave ran and which call it left', async () => {
+    const { lifecycle, ports, join, nativeEnd } = setup();
+    await join();
+    await lifecycle.leave(call.channelId);
+    await join();
+    nativeEnd();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.onLeft.mock.calls).toEqual([
+      [call, 'user_initiated'],
+      [call, 'native_ended'],
+    ]);
+  });
 
   it('times out a hung leave and permits a new join', async () => {
     const { lifecycle, ports, join } = setup();

@@ -51,9 +51,17 @@ export function createTauriNotificationInterface(
         // macOS will not prompt again after denial; permission must be changed
         // in System Settings.
         if (cur === 'denied') return 'denied';
-        return await invoke<NotificationPermission>(
-          'request_macos_notification_permission'
-        );
+        try {
+          return await invoke<NotificationPermission>(
+            'request_macos_notification_permission'
+          );
+        } catch (error) {
+          // UNErrorCodeNotificationsNotAllowed: only System Settings can
+          // allow this app again, for example after it was re-signed.
+          if (typeof error === 'string' && error.includes('(UNErrorDomain 1)'))
+            return 'denied';
+          throw error;
+        }
       }
       return await requestPermission();
     },
@@ -68,11 +76,19 @@ export function createTauriNotificationInterface(
       }
 
       if (isMacOS) {
+        const { sender, conversation } = data;
         try {
+          // macOS shows the sender as the title and the conversation beneath
+          // it; without a sender the title already names both.
           await invoke<void>('send_macos_notification', {
-            title: data.title,
+            title: sender?.name ?? data.title,
             body: data.options?.body,
             notificationId: data.notificationId,
+            subtitle: sender ? conversation?.name : undefined,
+            threadId: conversation?.id,
+            sender,
+            // Older native builds ignore this and keep the system sound.
+            silent: data.options?.silent,
           });
         } catch (error) {
           // OTA frontend updates can reach an older native app. Its legacy

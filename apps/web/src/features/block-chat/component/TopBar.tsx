@@ -9,8 +9,7 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockId } from '@core/block';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
-import { useChatInputContext } from '@core/component/AI/context';
-import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
+import type { Model } from '@core/component/AI/types';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -21,21 +20,18 @@ import { blockMetadataSignal } from '@core/signal/load';
 import { useGetPermissions } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import IconShared from '@icon/share.svg';
-import ChatDebugIcon from '@phosphor/chat-text.svg';
-import Notepad from '@phosphor/notepad.svg';
+import ChatDebugIcon from '@icon/system/regular/chat-text.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {
+  model: Model;
   showStreamDebug?: Accessor<boolean>;
   toggleStreamDebug?: () => void;
 }) {
   const blockId = useBlockId();
-  const input = useChatInputContext();
 
   const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const chatName = () => name();
-
-  const openInstructions = useOpenInstructionsMd();
 
   const permissions = useGetPermissions();
   const openShare = useShareModal(() => ({
@@ -48,11 +44,6 @@ export function TopBar(props: {
   }));
 
   const ops: FileOperation[] = [
-    {
-      label: 'Edit AI Instructions',
-      icon: Notepad,
-      action: openInstructions,
-    },
     ...(DEV_MODE_ENV && props.toggleStreamDebug
       ? [
           {
@@ -65,7 +56,6 @@ export function TopBar(props: {
         ]
       : []),
     { op: 'rename' },
-    { op: 'copy' },
     { op: 'moveToProject' },
     { op: 'delete' },
   ];
@@ -85,7 +75,7 @@ export function TopBar(props: {
     <>
       <SplitHeaderLeft>
         <BlockItemSplitLabel
-          icon={<ProviderIcon model={input.model()} class="size-4 shrink-0" />}
+          icon={<ProviderIcon model={props.model} class="size-4 shrink-0" />}
           fallbackName={DEFAULT_CHAT_NAME}
           lockRename={false}
         />

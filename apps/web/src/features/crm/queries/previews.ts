@@ -95,7 +95,7 @@ export async function fetchCrmContactPreviews(
       const result = await getContact({ contactId: id });
       if (result.isErr()) return { ...base, access: 'no_access' as const };
       const contact = result.value;
-      const name = contact.name?.trim() || contact.email;
+      const name = contact.name?.trim() || contact.email || '';
       return {
         ...base,
         access: 'access' as const,

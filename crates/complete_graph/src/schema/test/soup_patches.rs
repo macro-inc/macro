@@ -71,11 +71,11 @@ async fn subscription_responses_from(
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
     );
-    let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+    let hydration_loader = graphql_soup::PrimarySoupItemLoader::new(
         primary,
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema: RealtimeSchema = build_schema_with_services(
         replica,
         TestRealtimeSubscriptionService {
@@ -453,7 +453,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
         SoupItem::AgentSession(SoupAgentSession {
             id: session_id,
             name: "Linked session".into(),
-            is_archived: false,
+            archived_by: None,
+            archived_at: None,
             owner_id: model_owner::Owner::from_principal_str(VALID_USER_ID).unwrap(),
             bot_id: Uuid::now_v7(),
             harness: "claude".into(),
@@ -470,6 +471,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
             updated_at: now,
             viewed_at: None,
             extra: (),
+            source: models_soup::agent_session::AgentSessionSource::User,
+            visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
         }),
     ]);
     let calls = soup.raw_calls.clone();

@@ -19,15 +19,20 @@ mod test;
 mod admission;
 mod deliver;
 mod external_replies;
+mod idle;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod present;
 mod queue;
+mod reattach;
 mod session_mcp;
 mod warm;
 
+use futures::FutureExt as _;
 use std::sync::Arc;
+
+type NotificationDrain = futures::future::Shared<futures::future::BoxFuture<'static, ()>>;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::error::AgentSessionError;
@@ -131,6 +136,7 @@ struct AgentHarnessInner<
 > {
     sessions: Sessions,
     admission: Arc<dyn ai_billing::AiAdmissionService>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
     containers: Containers,
     announcer: Announcer,
     runtimes: Runtimes,
@@ -143,6 +149,18 @@ struct AgentHarnessInner<
     conversations: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     conversation_turns: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     external_replies: Option<Arc<dyn crate::domain::external_replies::ExternalReplyStore>>,
+    notification_store: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    /// Discovery advances past busy or unreachable sessions and wraps each cycle.
+    notification_cursor: tokio::sync::Mutex<Option<AgentSessionId>>,
+    notification_drains:
+        tokio::sync::Mutex<std::collections::HashMap<AgentSessionId, NotificationDrain>>,
+    notification_batches:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationBatch>,
+    notification_completions:
+        DashMap<AgentSessionId, agent_session::domain::notifications::NotificationOutcome>,
+    /// Bounded recent completions suppress duplicate observer callbacks.
+    notification_finished:
+        tokio::sync::Mutex<std::collections::VecDeque<(AgentSessionId, AgentActionId)>>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory working copy; the session store is the durable source.
@@ -151,6 +169,11 @@ struct AgentHarnessInner<
     /// in this process. A restart starts empty; resume and the first local
     /// command restore from the session store.
     hydrated: DashSet<AgentSessionId>,
+    /// Shared by every dial this replica serves: how many sessions may be
+    /// attaching and restoring at once.
+    reattach_permits: tokio::sync::Semaphore,
+    /// Each harness's latest dial, cancelled when the harness dials again.
+    dials: DashMap<harness_id::HarnessId, reattach::Dial>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -185,6 +208,9 @@ struct AgentHarnessInner<
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
     presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits.
+    worker_idle_timeout: std::time::Duration,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -351,6 +377,7 @@ where
             inner: Arc::new(AgentHarnessInner {
                 sessions,
                 admission: Arc::new(ai_billing::DisabledAiAdmissionService),
+                agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
                 containers,
                 announcer,
                 runtimes,
@@ -363,9 +390,17 @@ where
                 conversations,
                 conversation_turns: None,
                 external_replies: None,
+                notification_store: None,
+                notification_cursor: tokio::sync::Mutex::new(None),
+                notification_drains: Default::default(),
+                notification_batches: DashMap::new(),
+                notification_completions: DashMap::new(),
+                notification_finished: Default::default(),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
+                reattach_permits: tokio::sync::Semaphore::new(reattach::REATTACH_CONCURRENCY),
+                dials: DashMap::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,
@@ -373,6 +408,7 @@ where
                 projections: DashMap::new(),
                 typing_phases: DashMap::new(),
                 presented_shapes: DashMap::new(),
+                worker_idle_timeout: queue::WORKER_IDLE_TIMEOUT,
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
@@ -391,6 +427,104 @@ where
             .expect("configure journal before cloning the harness")
             .conversation_turns = Some(store);
         self
+    }
+
+    /// Release quiet sessions and retire their command workers after
+    /// `timeout` with no command, instead of
+    /// [`queue::WORKER_IDLE_TIMEOUT`]. Set before cloning the harness.
+    pub fn with_worker_idle_timeout(mut self, timeout: std::time::Duration) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure the idle timeout before cloning the harness")
+            .worker_idle_timeout = timeout;
+        self
+    }
+
+    /// Configure durable system-event delivery before cloning the harness.
+    pub fn with_notifications(
+        mut self,
+        store: Arc<dyn agent_session::domain::notifications::NotificationStore>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure outbox before cloning harness")
+            .notification_store = Some(store);
+        self
+    }
+
+    /// How many sessions have a command worker in this process right now.
+    #[must_use]
+    pub fn command_workers(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// How many sessions have their durable queue loaded in this process.
+    #[must_use]
+    pub fn hydrated_sessions(&self) -> usize {
+        self.inner.hydrated.len()
+    }
+
+    /// Reconcile durable events through the same routed worker as user prompts.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn recover_notifications(&self) -> Result<()> {
+        let Some(store) = &self.inner.notification_store else {
+            return Ok(());
+        };
+        let leases: Vec<_> = self
+            .inner
+            .notification_batches
+            .iter()
+            .map(|batch| batch.lease_id)
+            .collect();
+        for lease in leases {
+            if let Err(error) = store.renew(lease).await {
+                tracing::warn!(?error, %lease, "notification lease renewal failed");
+            }
+        }
+        let mut cursor = self.inner.notification_cursor.lock().await;
+        let mut sessions = store.pending_sessions(*cursor).await?;
+        if sessions.is_empty() && cursor.is_some() {
+            sessions = store.pending_sessions(None).await?;
+        }
+        *cursor = sessions.last().copied();
+        drop(cursor);
+        sessions.extend(
+            self.inner
+                .notification_completions
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.extend(
+            self.inner
+                .notification_batches
+                .iter()
+                .map(|entry| *entry.key()),
+        );
+        sessions.sort_by_key(AgentSessionId::as_uuid);
+        sessions.dedup();
+        // The command worker keeps running when the recovery budget expires.
+        // Retain its result future so the next tick neither queues a duplicate
+        // nor waits for a slow session before renewing other delivery leases.
+        let mut drains = self.inner.notification_drains.lock().await;
+        drains.retain(|_, drain| drain.peek().is_none());
+        for session in sessions {
+            drains.entry(session).or_insert_with(|| {
+                let drain = self.enqueue(session, HarnessCommand::DrainNotifications, true);
+                async move {
+                    if let Err(error) = drain.await {
+                        tracing::warn!(?error, %session, "system event delivery will retry");
+                    }
+                }
+                .boxed()
+                .shared()
+            });
+        }
+        let pending: Vec<_> = drains.values().cloned().collect();
+        drop(drains);
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            futures::future::join_all(pending),
+        )
+        .await;
+        Ok(())
     }
 
     /// Save a conversation message before acknowledging its broker event. Returns its
@@ -530,6 +664,19 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure admission before sharing the harness")
             .admission = admission;
+        self
+    }
+
+    /// Let in-memory sessions of agents with their own usable API key past
+    /// the allowance gate: their turns never run on Macro usage. Configure
+    /// before sharing the harness.
+    pub fn with_agent_keys(
+        mut self,
+        agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    ) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure agent keys before sharing the harness")
+            .agent_keys = agent_keys;
         self
     }
 

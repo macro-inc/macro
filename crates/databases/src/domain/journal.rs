@@ -16,8 +16,8 @@ use chrono::{DateTime, Utc};
 use models_databases::position::Position;
 use models_databases::views::{CardPosition, DatabaseView, ViewId};
 use models_databases::{
-    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityRef, OptionId,
-    OptionRef, RowId, TableId, TableVersion,
+    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, DateRange, EntityRef,
+    OptionId, OptionRef, RowId, TableId, TableVersion,
 };
 use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
@@ -455,6 +455,10 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
         PropertyValue::Num(number) => CellValue::Number(*number),
         PropertyValue::Bool(checked) => CellValue::Boolean(*checked),
         PropertyValue::Date(date) => CellValue::Date(*date),
+        PropertyValue::DateRange(range) => CellValue::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         PropertyValue::Link(urls) => CellValue::Link(urls.clone()),
         PropertyValue::SelectOption(options) => CellValue::Options(
             options
@@ -491,7 +495,8 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
 }
 
 /// A row's stored cells, by definition, as the before-image keeps them: by
-/// the column of its table each definition is bound to.
+/// the column of its table each definition is bound to. Derived columns'
+/// cells are left out: they follow the others, and no op writes them.
 pub fn row_cells(
     schema: &SchemaImage,
     table: TableId,
@@ -500,7 +505,9 @@ pub fn row_cells(
     cells
         .iter()
         .filter_map(|(definition, value)| {
-            let column = schema.column_for(table, *definition)?;
+            let column = schema
+                .column_for(table, *definition)
+                .filter(|column| column.formula.is_none())?;
             Some((column.id, cell_value(value)?))
         })
         .collect()

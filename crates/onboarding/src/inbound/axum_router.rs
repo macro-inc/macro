@@ -83,9 +83,7 @@ fn error_response(e: OnboardingError) -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
-/// Get the authenticated user's onboarding state. While the flow is active
-/// this also starts any gather runs that are due, so polling this endpoint
-/// is what keeps onboarding moving.
+/// Get the authenticated user's onboarding state.
 #[utoipa::path(
     get,
     path = "/onboarding",

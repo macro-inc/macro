@@ -1,10 +1,12 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
+import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { BackgroundEffect } from '@core/media/background-effect';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Phone from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Phone from '@phosphor/phone-call.svg';
-import { Button } from '@ui';
+import { Button, Input } from '@ui';
 import {
   type Accessor,
   createEffect,
@@ -16,6 +18,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CallLiveChip } from '../../channel/Call/components/CallLiveChip';
+import { PhoneAudioOutput } from '../../channel/Call/views/PhoneAudioOutput';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
 import {
@@ -27,11 +31,11 @@ import type {
   MeetingPageState,
   MeetingSessionCapabilities,
 } from '../context/meeting-session';
+import { useMeetingSessionOwner } from '../context/meeting-session-owner';
 import {
   createMeetingMedia,
   type MeetingMediaAccess,
 } from '../primitives/meeting-media';
-import { createMeetingSession } from '../primitives/meeting-session';
 import { MeetingMediaSetup } from './meeting-media-setup';
 
 export function MeetingPage(props: {
@@ -47,11 +51,14 @@ export function MeetingPage(props: {
   startCall?: boolean;
   url?: string;
   onCopy: () => Promise<void>;
+  startedAt?: Accessor<string | undefined>;
   onRename?: (title: string) => Promise<void>;
   /** The host keeps the URL in sync without replacing this session owner. */
   onCallStateChange?: (connected: boolean) => void;
   /** Explicit hangup, distinct from losing the connection or cancelling setup. */
   onLeave?: (path: string) => void;
+  /** Dismiss the route without leaving a connected call. */
+  onBack?: () => void;
   /** Supplied only for the creator's New Call setup flow. */
   renderInvite?: (joining: Accessor<boolean>) => JSX.Element;
   /** Login redirect for channel-linked calls, which are members-only. */
@@ -59,10 +66,14 @@ export function MeetingPage(props: {
   renderCall: (
     onLeave: () => void,
     name: Accessor<string>,
-    credentials: Accessor<MeetingCredentials | undefined>
+    credentials: Accessor<MeetingCredentials | undefined>,
+    copyButton: JSX.Element
   ) => JSX.Element;
 }) {
-  const session = createMeetingSession(props.session);
+  const owner = useMeetingSessionOwner();
+  const owned = owner.acquire(props.session);
+  const session = owned.session;
+  onCleanup(owned.detach);
   const [name, setName] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
   let disposed = false;
@@ -79,7 +90,9 @@ export function MeetingPage(props: {
   const membersOnly = () =>
     ready()?.channelId != null && props.authenticated() !== true;
   const displayName = () =>
-    props.authenticated() ? props.author() : name().trim();
+    props.authenticated()
+      ? props.author()
+      : (session.joinedName() ?? name().trim());
   const inCall = () =>
     session.joinedCallId() !== undefined &&
     props.session.activeCallId() === session.joinedCallId() &&
@@ -160,40 +173,84 @@ export function MeetingPage(props: {
   }
 
   return (
-    <main class="ph-no-capture flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6">
-      <header class="flex flex-wrap items-center gap-4 pb-4">
-        <Show when={!inCall()}>
-          <a
-            href="/app"
-            class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+    <main
+      class="ph-no-capture relative flex h-dvh min-h-0 flex-col bg-surface p-4 text-ink sm:p-6"
+      classList={{ 'mobile:p-0': inCall() }}
+      style={
+        isMobile() && inCall()
+          ? {
+              '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 72px)',
+            }
+          : undefined
+      }
+    >
+      <Show when={isMobile() && inCall()}>
+        <header class="absolute inset-x-0 top-[calc(var(--safe-top,0px)+12px)] z-30 flex items-center justify-between px-(--mobile-chrome-gutter)">
+          <HeaderIsland class="h-11 px-1">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              aria-label="Back"
+              onClick={props.onBack}
+            >
+              <ArrowLeft class="size-6" />
+            </Button>
+          </HeaderIsland>
+          <div class="flex items-center gap-2">
+            <PhoneAudioOutput />
+            <CallLiveChip bare hideWave startedAt={props.startedAt?.()} />
+            <Show when={props.url}>
+              {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
+            </Show>
+          </div>
+        </header>
+      </Show>
+      <Show when={!(isMobile() && inCall())}>
+        <header class="flex flex-wrap items-center gap-4 pb-4">
+          <Show
+            when={!inCall() && props.onBack}
+            fallback={
+              <Show when={!inCall()}>
+                <a
+                  href="/app"
+                  class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+                >
+                  <ArrowLeft class="size-4" />
+                  Back to Macro
+                </a>
+              </Show>
+            }
           >
-            <ArrowLeft class="size-4" />
-            Back to Macro
-          </a>
-        </Show>
-        <Show
-          when={inCall()}
-          fallback={
-            <div class="flex items-center gap-3">
-              <Phone class="size-6 text-accent" />
-              <div>
-                <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
-                <h1 class="text-lg font-semibold">
-                  {ready()?.title || 'Call'}
-                </h1>
-              </div>
-            </div>
-          }
-        >
-          <MeetingCallHeading
-            title={ready()?.title || 'Call'}
-            onRename={props.onRename}
-          />
-          <Show when={props.url}>
-            {(url) => <MeetingCopyButton url={url()} onCopy={props.onCopy} />}
+            <button
+              type="button"
+              onClick={props.onBack}
+              class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              <ArrowLeft class="size-4" />
+              Back to Macro
+            </button>
           </Show>
-        </Show>
-      </header>
+          <Show
+            when={inCall()}
+            fallback={
+              <div class="flex items-center gap-3">
+                <Phone class="size-6 text-accent" />
+                <div>
+                  <p class="text-xs font-medium text-ink-muted">Macro Calls</p>
+                  <h1 class="text-lg font-semibold">
+                    {ready()?.title || 'Call'}
+                  </h1>
+                </div>
+              </div>
+            }
+          >
+            <MeetingCallHeading
+              title={ready()?.title || 'Call'}
+              onRename={props.onRename}
+            />
+          </Show>
+        </header>
+      </Show>
       <Switch>
         <Match when={leaving()}>
           <div
@@ -208,7 +265,12 @@ export function MeetingPage(props: {
             {props.renderCall(
               () => fireAndForget(leave(), 'meetings'),
               displayName,
-              session.credentials
+              session.credentials,
+              <Show when={!isMobile() && props.url}>
+                {(url) => (
+                  <MeetingCopyButton url={url()} onCopy={props.onCopy} />
+                )}
+              </Show>
             )}
           </div>
         </Match>
@@ -246,112 +308,120 @@ export function MeetingPage(props: {
           </div>
         </Match>
         <Match when={ready()}>
-          <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
-            <MeetingMediaSetup
-              media={media}
-              name={displayName()}
-              avatar={props.avatar}
-              disabled={session.joining()}
-              readBackgroundImage={props.readBackgroundImage}
-              onUploading={setUploadingBackground}
-            />
-            <form
-              class="flex flex-col gap-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                fireAndForget(join(), 'meetings');
-              }}
-            >
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h2 class="text-2xl font-semibold">
-                    {session.hasLeft()
-                      ? 'You left the call'
-                      : props.startCall
-                        ? 'Ready to start?'
-                        : 'Ready to join?'}
-                  </h2>
-                  <Show when={ready()?.scheduledStart}>
-                    {(start) => (
-                      <p class="mt-2 text-sm text-ink-muted">
-                        {new Date(start()).toLocaleString([], {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        })}
-                      </p>
-                    )}
-                  </Show>
+          {/* Scrolls so Join stays reachable when setup is taller than the
+              viewport, as on phones. */}
+          <div class="flex min-h-0 flex-1 overflow-y-auto">
+            <div class="m-auto grid w-full max-w-6xl gap-8 py-6 md:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)] md:items-center">
+              <MeetingMediaSetup
+                media={media}
+                name={displayName()}
+                avatar={props.avatar}
+                disabled={session.joining()}
+                readBackgroundImage={props.readBackgroundImage}
+                onUploading={setUploadingBackground}
+              />
+              <form
+                class="flex flex-col gap-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  fireAndForget(join(), 'meetings');
+                }}
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 class="text-2xl font-semibold">
+                      {session.hasLeft()
+                        ? 'You left the call'
+                        : props.startCall
+                          ? 'Ready to start?'
+                          : 'Ready to join?'}
+                    </h2>
+                    <Show when={ready()?.scheduledStart}>
+                      {(start) => (
+                        <p class="mt-2 text-sm text-ink-muted">
+                          {new Date(start()).toLocaleString([], {
+                            weekday: 'short',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                      )}
+                    </Show>
+                  </div>
                 </div>
-              </div>
-              <Show when={props.participants}>
-                {(state) => <MeetingParticipants state={state()} />}
-              </Show>
-              <Show
-                when={!props.authenticated()}
-                fallback={
-                  <p class="text-sm text-ink-muted">
-                    Joining as {props.author()}
+                <Show when={props.participants}>
+                  {(state) => <MeetingParticipants state={state()} />}
+                </Show>
+                <Show
+                  when={!props.authenticated()}
+                  fallback={
+                    <p class="text-sm text-ink-muted">
+                      Joining as {props.author()}
+                    </p>
+                  }
+                >
+                  <label class="flex flex-col gap-2 text-sm font-medium">
+                    Your name
+                    <Input
+                      size="lg"
+                      placeholder="Enter your name"
+                      autocomplete="name"
+                      value={name()}
+                      maxLength={80}
+                      required
+                      disabled={session.joining()}
+                      onInput={(event) => setName(event.currentTarget.value)}
+                    />
+                  </label>
+                </Show>
+                <Show when={session.error()}>
+                  <p role="alert" class="text-sm text-failure">
+                    {session.error()}
                   </p>
-                }
-              >
-                <label class="flex flex-col gap-2 text-sm font-medium">
-                  Your name
-                  <input
-                    class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 text-ink placeholder:text-ink-placeholder outline-none focus:border-accent"
-                    placeholder="Enter your name"
-                    autocomplete="name"
-                    value={name()}
-                    maxLength={80}
-                    required
-                    disabled={session.joining()}
-                    onInput={(event) => setName(event.currentTarget.value)}
-                  />
-                </label>
-              </Show>
-              <Show when={session.error()}>
-                <p role="alert" class="text-sm text-failure">
-                  {session.error()}
+                </Show>
+                <Show
+                  when={session.joinedCallId() && !props.session.isInCall()}
+                >
+                  <p role="status" class="text-sm text-ink-muted">
+                    You were disconnected. Join again to reconnect.
+                  </p>
+                </Show>
+                <Show
+                  when={props.authenticated() === true && !session.hasLeft()}
+                >
+                  {props.renderInvite?.(session.joining)}
+                </Show>
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
+                  type="submit"
+                  disabled={
+                    session.joining() ||
+                    media.pending() ||
+                    uploadingBackground() ||
+                    (!props.authenticated() && !name().trim())
+                  }
+                >
+                  <Phone class="size-5" />
+                  {session.joining()
+                    ? props.startCall
+                      ? 'Starting…'
+                      : 'Joining…'
+                    : session.hasLeft()
+                      ? 'Rejoin call'
+                      : props.startCall
+                        ? 'Start call'
+                        : 'Join call'}
+                </Button>
+                <p class="text-xs text-ink-muted">
+                  Calls are recorded and transcribed for the organizer and Macro
+                  participants.
                 </p>
-              </Show>
-              <Show when={session.joinedCallId() && !props.session.isInCall()}>
-                <p role="status" class="text-sm text-ink-muted">
-                  You were disconnected. Join again to reconnect.
-                </p>
-              </Show>
-              <Show when={props.authenticated() === true && !session.hasLeft()}>
-                {props.renderInvite?.(session.joining)}
-              </Show>
-              <Button
-                variant="ghost"
-                size="lg"
-                class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
-                type="submit"
-                disabled={
-                  session.joining() ||
-                  media.pending() ||
-                  uploadingBackground() ||
-                  (!props.authenticated() && !name().trim())
-                }
-              >
-                <Phone class="size-5" />
-                {session.joining()
-                  ? props.startCall
-                    ? 'Starting…'
-                    : 'Joining…'
-                  : session.hasLeft()
-                    ? 'Rejoin call'
-                    : props.startCall
-                      ? 'Start call'
-                      : 'Join call'}
-              </Button>
-              <p class="text-xs text-ink-muted">
-                Calls are recorded and transcribed for the organizer and Macro
-                participants.
-              </p>
-            </form>
+              </form>
+            </div>
           </div>
         </Match>
       </Switch>

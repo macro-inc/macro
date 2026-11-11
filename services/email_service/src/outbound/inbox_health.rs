@@ -1,3 +1,4 @@
+use contacts::domain::ports::ContactsIngress;
 use email::domain::mailbox::{MailboxError, health::*};
 use email_api_client::domain::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
@@ -74,14 +75,17 @@ impl InboxHealthRepository for PgInboxHealth {
     }
 }
 
-pub struct ProviderInboxHealth<T, B> {
+pub struct ProviderInboxHealth<T, B, C> {
     pub gmail: crate::outbound::email_api::GmailApi,
     pub outlook: T,
     pub db: sqlx::PgPool,
     pub queue: sqs_client::SQS,
     pub broker: B,
+    pub contacts: std::sync::Arc<C>,
 }
-impl<T: MailboxTokenSource, B: MacroEventBroker> InboxHealthGateway for ProviderInboxHealth<T, B> {
+impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealthGateway
+    for ProviderInboxHealth<T, B, C>
+{
     async fn acquire(
         &self,
         binding: &InboxHealthBinding,
@@ -112,22 +116,25 @@ impl<T: MailboxTokenSource, B: MacroEventBroker> InboxHealthGateway for Provider
                 }),
         }
     }
-    async fn refresh_gmail(&self, link: &Link) -> Result<(), MailboxError> {
-        // Preserve contact refresh when a permanent watch configuration error
-        // prevents renewal. Transient failures retain the durable retry.
-        match self.gmail.register_subscription(link.id).await {
-            Ok(_) => (),
-            Err(EmailApiError::Permanent { .. } | EmailApiError::Forbidden) => {
-                tracing::warn!(link_id = %link.id, "Gmail watch renewal was rejected");
-            }
-            Err(error) => return Err(error.into()),
+    async fn renew_gmail_watch(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> Result<(), EmailApiError> {
+        match freshness {
+            TokenFreshness::Cached => self.gmail.register_subscription(link.id).await,
+            TokenFreshness::Fresh => self.gmail.register_subscription_without_cache(link).await,
         }
+        .map(|_| ())
+    }
+    async fn sync_gmail_contacts(&self, link: &Link) -> Result<(), MailboxError> {
         crate::util::sync_contacts::sync_contacts(
             link,
             &self.db,
             &self.gmail,
             &self.queue,
             &self.broker,
+            &*self.contacts,
         )
         .await
         .map_err(|_| MailboxError::Persistence)

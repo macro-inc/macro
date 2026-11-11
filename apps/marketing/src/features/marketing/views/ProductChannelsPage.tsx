@@ -23,11 +23,11 @@ export function RouteChannels() {
   return (
     <ProductPage>
       <ProductHero
-        tutorial="chat"
         product="Chat"
         title="Chat for people and agents."
         description="Macro Chat brings your people and agents together in channels. Share context and work on the same tasks."
         cta="channels_hero_get_started"
+        tutorial="chat"
       />
       <FeaturePageSection
         id="shared-work"

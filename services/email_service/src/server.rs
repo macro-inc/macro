@@ -9,7 +9,7 @@ use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
 use crate::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use anyhow::Context;
 use calendar_events::{
@@ -48,7 +48,12 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::task::TaskTracker;
 
 /// Build the service from the environment and serve until shutdown.
-pub async fn run() -> anyhow::Result<()> {
+// Not a `pub async fn`: see CS-73.
+pub fn run() -> impl Future<Output = anyhow::Result<()>> {
+    run_server()
+}
+
+async fn run_server() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
 
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -91,6 +96,7 @@ pub async fn run() -> anyhow::Result<()> {
         .gmail_inbox_sync_queue(&gmail_inbox_sync_queue)
         .gmail_inbox_sync_retry_queue(&gmail_inbox_sync_retry_queue)
         .gmail_ops_queue(&gmail_ops_queue)
+        .gmail_label_write_batches(config.gmail_label_write_batches_enabled)
         .email_backfill_queue(&backfill_queue)
         .email_scheduled_queue(&email_scheduled_queue)
         .sfs_uploader_queue(&sfs_uploader_queue)
@@ -121,8 +127,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     let redis_client = crate::util::redis::RedisClient::new(
         redis_inner_client,
-        config.redis_rate_limit_reqs,
-        config.redis_rate_limit_reqs_backfill,
         config.redis_rate_limit_window_secs,
     );
 
@@ -203,7 +207,12 @@ pub async fn run() -> anyhow::Result<()> {
             auth_service_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
         ),
-        RedisProviderRateLimiter::new(redis_client.clone(), RateBudget::Live),
+        RedisGmailRequestGate::new(
+            redis_client.inner.get_connection_manager().await.context(
+                "failed to get reconnecting redis connection for the gmail request gate",
+            )?,
+            RateBudget::Live,
+        ),
     );
     let redis_client = Arc::new(redis_client);
     let gmail_token_state = GmailTokenState::new(GmailTokenProviderImpl::new(
@@ -317,7 +326,28 @@ pub async fn run() -> anyhow::Result<()> {
             redis_client.as_ref().clone(),
             sqs_client.as_ref().clone(),
             macro_event_broker.clone(),
+            std::sync::Arc::new(contacts::domain::service::SqsContactsIngress {
+                queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                    aws_sdk_sqs::Client::new(&aws_config),
+                    macro_queues::ContactsQueue::new().to_string(),
+                ),
+            }),
         )),
+        recent_inbox: Arc::new(email::domain::recent_inbox::RecentInboxService::new(
+            crate::outbound::recent_inbox::PgRecentInboxes(db.clone()),
+            crate::outbound::recent_inbox::ProviderRecentInbox {
+                gmail: email_api.clone(),
+                outlook: outlook_api.clone(),
+            },
+        )),
+        message_sources: Arc::new(email::domain::message_source::MessageSourceService {
+            repository: EmailPgRepo::new(db.clone()),
+            provider: crate::outbound::message_source::ProviderMessageSource {
+                gmail: email_api.clone(),
+                outlook: outlook_api.clone(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        }),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
@@ -345,6 +375,16 @@ pub async fn run() -> anyhow::Result<()> {
             },
             access: entity_access_service.as_ref().clone(),
         }),
+        event_forward_sender: Arc::new(
+            email::domain::service::attachments::StagedAttachmentSender::new(
+                email_service.service(),
+                EmailPgRepo::new(db.clone()),
+                crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
+                    s3: s3_client.clone(),
+                    bucket: config.attachment_bucket.to_string(),
+                },
+            ),
+        ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
             repository: email::outbound::EmailPgRepo::new(db.clone()),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
@@ -362,6 +402,7 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .with_connections_enabled(config.outlook_connections_enabled),
         ),
+        read_receipts: crate::composition::read_receipts(db.clone(), env)?,
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.
         invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(

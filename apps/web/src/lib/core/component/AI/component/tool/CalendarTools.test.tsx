@@ -3,17 +3,17 @@ import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
+  addSharedCalendarEventHandler,
   createCalendarEventHandler,
   createConfirmedCalendarEventHandler,
+  readCalendarEventHandler,
 } from './CalendarTools';
+import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 const openToolCalendarEvent = vi.hoisted(() => vi.fn());
 vi.mock('./calendar/open-tool-event', () => ({
   openToolCalendarEvent,
   toolInputOpenTime: vi.fn(),
-}));
-vi.mock('./calendar/ChatCompose', () => ({
-  CalendarChatCompose: () => <div>calendar composer</div>,
 }));
 vi.mock('@ui', () => ({
   Layer: (props: ParentProps) => props.children,
@@ -33,8 +33,10 @@ afterEach(() => {
 });
 
 const handlers = {
+  AddSharedCalendarEvent: addSharedCalendarEventHandler,
   CreateCalendarEvent: createCalendarEventHandler,
   CreateConfirmedCalendarEvent: createConfirmedCalendarEventHandler,
+  ReadCalendarEvent: readCalendarEventHandler,
 };
 
 const draft = {
@@ -88,6 +90,24 @@ function tool(name: keyof typeof handlers, data: unknown, response?: unknown) {
   ));
 }
 
+function failedTool(
+  name: keyof typeof handlers,
+  data: unknown,
+  failure: ToolEnding
+) {
+  return render(() => (
+    <ToolErrorContext.Provider value={() => failure}>
+      <Dynamic
+        component={handlers[name].render as Component<Record<string, unknown>>}
+        tool={{ id: 'call-1', name, data }}
+        renderContext={{ isStreaming: false, grouped: true }}
+        chat_id="chat-1"
+        message_id="message-1"
+      />
+    </ToolErrorContext.Provider>
+  ));
+}
+
 it('shows a confirmed create in flight as the plain create card', () => {
   tool('CreateConfirmedCalendarEvent', {
     ...draft,
@@ -95,7 +115,6 @@ it('shows a confirmed create in flight as the plain create card', () => {
   });
   expect(screen.getByText('Create calendar event')).toBeTruthy();
   expect(screen.getByText('Board sync')).toBeTruthy();
-  expect(screen.queryByText('calendar composer')).toBeNull();
 });
 
 it('renders the created event directly, with no composer or pending state', () => {
@@ -105,7 +124,6 @@ it('renders the created event directly, with no composer or pending state', () =
     createdEvent
   );
   expect(screen.getByText('Done')).toBeTruthy();
-  expect(screen.queryByText('calendar composer')).toBeNull();
 
   fireEvent.click(screen.getByRole('button', { expanded: false }));
   expect(screen.getByText('1 attendee: guest@example.com')).toBeTruthy();
@@ -117,7 +135,50 @@ it('renders the created event directly, with no composer or pending state', () =
   );
 });
 
-it('still defers the plain create to the composer', () => {
+it('shows a pending create as an uncreated card with no actions', () => {
   tool('CreateCalendarEvent', draft, 'PendingUserExecution');
-  expect(screen.getByText('calendar composer')).toBeTruthy();
+  expect(screen.getByText('Not created')).toBeTruthy();
+  expect(screen.getByText('Board sync')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Create event' })).toBeNull();
+});
+
+it('keeps a failed call on its own card and reveals the reason on request', () => {
+  const reason =
+    "Adding a shared event to the user's calendar is not enabled for this deployment.";
+  failedTool(
+    'AddSharedCalendarEvent',
+    { eventId: '01992d2f-8444-7000-8000-000000000001' },
+    { kind: 'failed', reason }
+  );
+  expect(screen.getByText('Add to calendar')).toBeTruthy();
+  expect(screen.queryByText(reason)).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+  expect(screen.getByText(reason)).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+  expect(screen.queryByText(reason)).toBeNull();
+});
+
+it('offers nothing to open on a failed call without a reason', () => {
+  failedTool(
+    'ReadCalendarEvent',
+    { eventId: '01992d2f-8444-7000-8000-000000000001' },
+    { kind: 'failed' }
+  );
+  expect(screen.getByText('Read calendar event')).toBeTruthy();
+  expect(screen.getByText('Failed')).toBeTruthy();
+  expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('says a call its turn stopped was stopped, not failed', () => {
+  failedTool(
+    'ReadCalendarEvent',
+    { eventId: '01992d2f-8444-7000-8000-000000000001' },
+    { kind: 'stopped' }
+  );
+  expect(screen.getByText('Read calendar event')).toBeTruthy();
+  expect(screen.getByText('Stopped')).toBeTruthy();
+  expect(screen.queryByText('Failed')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
 });

@@ -13,7 +13,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
@@ -34,6 +34,7 @@ const taskContext = vi.hoisted(() => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    createNavigation: () => ({ openWithSplit: vi.fn() }),
     listsEnabled: () => () => false,
     pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
@@ -64,6 +65,10 @@ vi.mock('@components/app/side-panel', () => ({
   },
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
+vi.mock('./record-details-section', () => ({
+  RecordDetailsSection: () => null,
+}));
 vi.mock('./copy-link-button', () => ({ CrmCopyLinkButton: () => null }));
 vi.mock('../components/record-tabs', () => ({
   RecordTabs: (props: { onChange(section: CrmRecordSection): void }) => (
@@ -92,6 +97,8 @@ vi.mock('./use-crm', () => ({
       : undefined,
   }),
   useIsTeamAdmin: () => () => false,
+  useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
+  useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('./company-detail', async () => {
@@ -188,17 +195,25 @@ vi.mock('./contact-emails-section', () => ({
   ContactEmailsSection: () => null,
 }));
 vi.mock('./contact-header', () => ({ ContactHeader: () => null }));
-vi.mock('./contact-sharing-section', () => ({
-  ContactSharingSection: () => null,
-}));
 vi.mock('./record-associations', () => ({
   RecordCallsSection: () => null,
   RecordFilesSection: () => null,
   RecordReferencesSection: () => null,
 }));
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
   taskContext.recordError = () => false;

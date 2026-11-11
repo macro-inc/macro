@@ -261,6 +261,8 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -328,6 +330,34 @@ impl DocumentService for FakeDocumentService {
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         panic!("unexpected set_team_share call")
     }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
 }
 
 impl DocumentCreationService for FakeDocumentService {
@@ -338,6 +368,10 @@ impl DocumentCreationService for FakeDocumentService {
         _job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         panic!("unexpected create_document call")
+    }
+
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
     }
 
     async fn handle_task_properties(
@@ -539,13 +573,38 @@ pub(in crate::inbound::toolset) struct AddedCommentMark {
 }
 
 impl EditingWorkerService for FakeEditingWorker {
+    async fn canvas(
+        &self,
+        _: &str,
+        _: &DocumentPermissionToken,
+        _: &crate::domain::canvas::CanvasRequest,
+        _: bool,
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
+        panic!("unexpected canvas call")
+    }
+
     async fn spreadsheet(
         &self,
         _document_id: &str,
         _document_token: &DocumentPermissionToken,
         _request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
         panic!("unexpected spreadsheet call")
+    }
+
+    async fn spreadsheet_instructions(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet instructions call")
     }
 
     async fn word_document(
@@ -555,6 +614,24 @@ impl EditingWorkerService for FakeEditingWorker {
         _request: &crate::domain::word_document::WordDocumentRequest,
     ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
         panic!("unexpected word document call")
+    }
+
+    async fn read_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        panic!("unexpected read_markdown call")
+    }
+
+    async fn write_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _expected_revision: &str,
+        _markdown: &str,
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
+        panic!("unexpected write_markdown call")
     }
 
     async fn add_comment_mark(
@@ -628,6 +705,7 @@ impl EditingWorkerService for FakeEditingWorker {
             edits_applied: 1,
             usage: Vec::new(),
             clarification: None,
+            revision: None,
         })
     }
 
@@ -639,7 +717,7 @@ impl EditingWorkerService for FakeEditingWorker {
 type TestToolContext =
     DocumentToolContext<FakeDocumentService, FakeEntityAccessService, FakeEditingWorker>;
 
-fn tool_context(
+pub(in crate::inbound::toolset) fn tool_context(
     service: FakeDocumentService,
     editing: FakeEditingWorker,
 ) -> ServiceContext<TestToolContext> {
@@ -660,7 +738,7 @@ fn tool_context(
     ))
 }
 
-fn request_context() -> RequestContext {
+pub(in crate::inbound::toolset) fn request_context() -> RequestContext {
     RequestContext::new(
         MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("test user id should be valid"),
     )

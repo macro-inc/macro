@@ -34,6 +34,8 @@ export interface ApiDraftInput {
   cc?: ApiDraftInputCc;
   /** Existing message DB ID (for updating an existing draft). */
   db_id?: ApiDraftInputDbId;
+  /** Generation from the last loaded draft; legacy clients begin at zero. */
+  draft_generation?: number;
   headers_json?: ApiDraftInputHeadersJson;
   /** Per-message override for whether to include the signature on send:
 `Some(false)` to exclude (user dismissed it). Omit to use the inbox's

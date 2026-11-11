@@ -89,7 +89,9 @@ fn projector(policy: ContentPolicy) -> GenAiProjector {
 fn replay(projector: &mut GenAiProjector, jsonl: &str) {
     for mut entry in parse_log(jsonl) {
         match &mut entry.content {
-            Message::ToRuntime(message) => projector.on_outbound(message, None),
+            Message::Notification(message) | Message::ToRuntime(message) => {
+                projector.on_outbound(message, None)
+            }
             Message::ToServer(message) => projector.on_inbound(message),
         }
     }

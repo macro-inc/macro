@@ -5,6 +5,7 @@ export {
   bumpSoupEntityTouchedAt,
   getSoupEntityById,
   hasSoupEntity,
+  hydrateSoupEntity,
   invalidateAllSoup,
   invalidateSoupEntity,
   invalidateSoupQueriesReferencing,

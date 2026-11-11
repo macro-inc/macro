@@ -9,32 +9,6 @@ input_file: crates/folds/agent_fold/fixtures/real/command_invocation.jsonl
             0,
         ),
         author: User {
-            user_id: None,
-        },
-        request_id: Some(
-            AgentActionId(
-                b544d9a7-b4f6-4452-b797-dc15b0ee442e,
-            ),
-        ),
-        parts: NonEmpty {
-            inner: [
-                Control {
-                    control: SetModel {
-                        model: "opus[1m]",
-                    },
-                    outcome: Accepted,
-                },
-            ],
-        },
-        stop: None,
-        pending: false,
-        posted_at: None,
-    },
-    FoldedMessage {
-        id: TurnId(
-            1,
-        ),
-        author: User {
             user_id: Some(
                 macro|eric@example.com,
             ),
@@ -57,7 +31,7 @@ input_file: crates/folds/agent_fold/fixtures/real/command_invocation.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            1,
+            0,
         ),
         author: Agent,
         request_id: None,

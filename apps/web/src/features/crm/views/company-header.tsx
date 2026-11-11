@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import {
@@ -5,11 +6,12 @@ import {
   formatDateAndTime,
   formatRelativeTimestamp,
 } from '@entity';
-import ClockIcon from '@phosphor/clock.svg';
-import GlobeIcon from '@phosphor/globe.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
+import { CompanyVisibilityButton } from './company-visibility-button';
 import { useSetCompanyNameMutation } from './use-crm';
 
 function Description(props: { text: string }) {
@@ -77,15 +79,23 @@ function TitleEditor(props: { company: CrmCompanyEntity }) {
 export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
   return (
     <div>
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
         <div class="size-8 shrink-0">
           <EntityIcon targetType="crm_company" size="fill" />
         </div>
-        <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show when={props.company} fallback={'Loading company…'}>
+        <h1 class="min-w-0 max-w-full mobile:flex-1 text-2xl font-semibold">
+          <Show
+            when={props.company}
+            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+          >
             {(company) => <TitleEditor company={company()} />}
           </Show>
         </h1>
+        <Show when={props.company}>
+          {(company) => (
+            <CompanyVisibilityButton identity companyId={company().id} />
+          )}
+        </Show>
       </div>
       <Show when={props.company}>
         {(company) => (
@@ -95,7 +105,7 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
           >
             <For each={company().domains}>
               {(domain) => (
-                <Badge variant="outline" size="sm">
+                <Badge variant="ghost" size="sm">
                   <GlobeIcon class="size-3" />
                   {domain.domain}
                 </Badge>
@@ -106,7 +116,7 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
             <Show when={company().updatedAt}>
               {(lastInteraction) => (
                 <Tooltip label={formatDateAndTime(lastInteraction())}>
-                  <Badge variant="outline" size="sm">
+                  <Badge variant="ghost" size="sm">
                     <ClockIcon class="size-3" />
                     Last interacted {formatRelativeTimestamp(lastInteraction())}
                   </Badge>

@@ -42,7 +42,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
           }
           pending={
             props.context.autoReload.pending() ||
-            props.context.checkout.pending()
+            props.context.creditPurchase.pending()
           }
           onAdjust={(trigger) => {
             autoReloadTrigger = trigger;
@@ -72,7 +72,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
       </Show>
       <fieldset
         disabled={!props.context.available()}
-        class="flex min-w-0 flex-col gap-12 touch:gap-6"
+        class="flex min-w-0 flex-col gap-6"
         classList={{ 'opacity-50': !props.context.available() }}
       >
         <Show
@@ -88,8 +88,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <Show when={props.context.failed()}>
                   <Button
                     class="self-start"
-                    variant="outline"
-                    depth={3}
+                    variant="secondary"
                     onClick={props.context.refresh}
                   >
                     Try again
@@ -137,8 +136,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     description="Subscribe to a paid plan to keep going."
                   >
                     <Button
-                      variant="accent"
-                      depth={3}
+                      variant="primary"
                       size="sm"
                       onClick={props.context.openPlans}
                     >
@@ -195,8 +193,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                                 ref={(button) => {
                                   purchaseTrigger = button;
                                 }}
-                                variant="outline"
-                                depth={3}
+                                variant="secondary"
                                 size="sm"
                                 class="rounded-full px-4"
                                 onClick={() => setPurchaseOpen(true)}
@@ -260,9 +257,44 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     }
                   >
                     <SettingsCard>
-                      <p class="p-4 text-sm text-ink-muted">
-                        Usage credits are managed by your team.
-                      </p>
+                      <SettingsRow
+                        label={
+                          <span class="font-medium">
+                            {formatCreditBalance(summary().creditBalanceCents)}{' '}
+                            credits remaining
+                          </span>
+                        }
+                        description={
+                          <Show
+                            when={summary().purchaseLimit}
+                            fallback="Shared team balance"
+                          >
+                            {(limit) =>
+                              `Shared team balance. You can add ${formatCreditBalance(limit().remainingCents)} more this month, within your team's ${formatCreditBalance(limit().limitCents)} limit.`
+                            }
+                          </Show>
+                        }
+                      >
+                        <Button
+                          ref={(button) => {
+                            purchaseTrigger = button;
+                          }}
+                          variant="secondary"
+                          size="sm"
+                          class="rounded-full px-4"
+                          disabled={props.context.creditPurchase
+                            .supportedAmounts()
+                            .every(
+                              (cents) =>
+                                cents >
+                                (summary().purchaseLimit?.remainingCents ??
+                                  Number.POSITIVE_INFINITY)
+                            )}
+                          onClick={() => setPurchaseOpen(true)}
+                        >
+                          Add more
+                        </Button>
+                      </SettingsRow>
                     </SettingsCard>
                   </Show>
                 </SettingsSection>
@@ -282,8 +314,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <Show when={developer().openBillingLab}>
                   {(open) => (
                     <Button
-                      variant="accent"
-                      depth={3}
+                      variant="primary"
                       size="sm"
                       class="self-start"
                       onClick={open()}
@@ -295,9 +326,8 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                 <div class="flex flex-wrap gap-2">
                   <Button
                     variant={
-                      developer().plan() === 'free' ? 'accent' : 'outline'
+                      developer().plan() === 'free' ? 'primary' : 'secondary'
                     }
-                    depth={3}
                     size="sm"
                     aria-pressed={developer().plan() === 'free'}
                     onClick={() => developer().previewPlan('free')}
@@ -306,9 +336,8 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Button>
                   <Button
                     variant={
-                      developer().plan() === 'paid' ? 'accent' : 'outline'
+                      developer().plan() === 'paid' ? 'primary' : 'secondary'
                     }
-                    depth={3}
                     size="sm"
                     aria-pressed={developer().plan() === 'paid'}
                     onClick={() => developer().previewPlan('paid')}
@@ -316,8 +345,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Preview paid plan
                   </Button>
                   <Button
-                    variant="outline"
-                    depth={3}
+                    variant="secondary"
                     size="sm"
                     disabled={developer().beforeLaunch()}
                     onClick={() => developer().openLimitDialog('free')}
@@ -325,8 +353,7 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Open Free usage-limit dialog
                   </Button>
                   <Button
-                    variant="outline"
-                    depth={3}
+                    variant="secondary"
                     size="sm"
                     disabled={developer().beforeLaunch()}
                     onClick={() => developer().openLimitDialog('paid')}
@@ -334,8 +361,9 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                     Open paid usage-limit dialog
                   </Button>
                   <Button
-                    variant={developer().beforeLaunch() ? 'accent' : 'outline'}
-                    depth={3}
+                    variant={
+                      developer().beforeLaunch() ? 'primary' : 'secondary'
+                    }
                     size="sm"
                     aria-pressed={developer().beforeLaunch()}
                     onClick={developer().previewBeforeLaunch}
@@ -344,7 +372,6 @@ export function UsageSettingsView(props: { context: UsageContext }) {
                   </Button>
                   <Button
                     variant="ghost"
-                    depth={3}
                     size="sm"
                     disabled={!developer().active()}
                     onClick={developer().reset}

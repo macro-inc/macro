@@ -292,6 +292,28 @@ pub struct AttachmentChannelReference {
     pub attachment_created_at: DateTime<Utc>,
 }
 
+/// A reference to an attachment entity from a comment: a message on a
+/// document, initiative, CRM record, or call rather than on a channel.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachmentCommentReference {
+    /// Stored type of the entity the comment belongs to.
+    pub parent_entity_type: String,
+    /// Id of the entity the comment belongs to.
+    pub parent_entity_id: String,
+    /// Message that contains the reference.
+    pub message_id: Uuid,
+    /// If the message belongs to a thread this is the parent id.
+    pub thread_id: Option<Uuid>,
+    /// Sender of the message.
+    pub sender_id: String,
+    /// Full message content (might be used for preview/snippet).
+    pub message_content: String,
+    /// When the message itself was created.
+    pub message_created_at: DateTime<Utc>,
+    /// When the mention or attachment row was created.
+    pub attachment_created_at: DateTime<Utc>,
+}
+
 /// A reference to an attachment entity from any non-message source entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AttachmentGenericReference {
@@ -314,6 +336,8 @@ pub struct AttachmentGenericReference {
 pub enum AttachmentEntityReference {
     /// Referenced from a channel message.
     Channel(AttachmentChannelReference),
+    /// Referenced from a comment on a non-channel entity.
+    Comment(AttachmentCommentReference),
     /// Referenced from any non-message source entity.
     Generic(AttachmentGenericReference),
 }
@@ -374,7 +398,9 @@ pub struct ThreadReplyRow {
 }
 
 /// Type of channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -382,6 +408,7 @@ pub struct ThreadReplyRow {
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.
     Public,
@@ -391,17 +418,6 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
-}
-
-impl std::fmt::Display for ChannelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChannelType::Public => f.write_str("public"),
-            ChannelType::Private => f.write_str("private"),
-            ChannelType::DirectMessage => f.write_str("direct_message"),
-            ChannelType::Team => f.write_str("team"),
-        }
-    }
 }
 
 /// Request to add a user to all organization channels.
@@ -669,6 +685,8 @@ pub enum ReferencedShareItemType {
     CalendarEvent,
     /// Form entity: posting one lets the channel respond to it.
     Form,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -684,6 +702,7 @@ impl ReferencedShareItemType {
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
             "form" => Some(Self::Form),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -700,6 +719,7 @@ impl ReferencedShareItemType {
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
             Self::Form => "form",
+            Self::ExternalChat => "external_chat",
         }
     }
 
@@ -774,6 +794,76 @@ pub struct ReferenceShareResult {
     pub outcome: ReferenceShareOutcome,
 }
 
+/// Entity types a channel grant can cover.
+///
+/// Values are the stored entity types. `calendar` is accepted for a calendar
+/// chip, whose stored type is `calendar_event`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelShareEntityType {
+    /// A calendar event. A calendar chip's `documentId` is this id.
+    #[serde(alias = "calendar")]
+    CalendarEvent,
+    /// A document.
+    Document,
+    /// A project.
+    Project,
+    /// A database.
+    Database,
+    /// A form.
+    Form,
+    /// A call.
+    Call,
+    /// An email thread.
+    #[serde(rename = "thread", alias = "email", alias = "email_thread")]
+    EmailThread,
+    /// An agent session.
+    AgentSession,
+    /// An external chat (such as WhatsApp) added to Macro.
+    ExternalChat,
+}
+
+impl ChannelShareEntityType {
+    /// The referenced-item type the grant is written for.
+    pub fn to_domain(self) -> ReferencedShareItemType {
+        match self {
+            Self::CalendarEvent => ReferencedShareItemType::CalendarEvent,
+            Self::Document => ReferencedShareItemType::Document,
+            Self::Project => ReferencedShareItemType::Project,
+            Self::Database => ReferencedShareItemType::Database,
+            Self::Form => ReferencedShareItemType::Form,
+            Self::Call => ReferencedShareItemType::Call,
+            Self::EmailThread => ReferencedShareItemType::EmailThread,
+            Self::AgentSession => ReferencedShareItemType::AgentSession,
+            Self::ExternalChat => ReferencedShareItemType::ExternalChat,
+        }
+    }
+
+    /// Why sharing this kind of item was refused.
+    pub fn not_permitted(self) -> &'static str {
+        match self {
+            Self::CalendarEvent => {
+                "you can only share a calendar event you hold on your own calendar, and private or confidential events are not shared"
+            }
+            Self::AgentSession => "you can only share an agent session you own",
+            _ => "you need access to this item before it can be shared with the channel",
+        }
+    }
+}
+
+/// Request to share one item with a channel's current members.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct ShareWithChannelRequest {
+    /// Stored entity type of the item.
+    pub entity_type: ChannelShareEntityType,
+    /// Id of the item to share. For a calendar event, the event id.
+    pub entity_id: Uuid,
+}
+
 /// Request to add participants.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -813,6 +903,8 @@ pub struct MutatedMessage {
     pub sender_id: ChannelSender<'static>,
     /// For an agent (bot) message, the id of the user who triggered it.
     pub triggered_by: Option<String>,
+    /// The client the user triggered it through, such as "Claude Code".
+    pub triggered_via: Option<String>,
     /// Message body.
     pub content: String,
     /// Created timestamp.

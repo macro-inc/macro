@@ -1,3 +1,11 @@
+import { $isImageNode, $isVideoNode } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
+import {
+  $getRoot,
+  $isElementNode,
+  type LexicalEditor,
+  type LexicalNode,
+} from 'lexical';
 import type {
   EmailComposeFeedback,
   EmailConnectivity,
@@ -5,14 +13,11 @@ import type {
 import type { DraftIdentity } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 
-/**
- * Why an immediate send cannot proceed. Send is a REST call that resolves
- * server ids only and is never queued (it moves onto the durable queue in a
- * later change), so it needs the device online, a draft the server can
- * address, and every attachment uploaded.
- */
+/** Durable sends accept local handles; attachment uploads must already be complete. */
 export type SendRefusal =
   | 'offline'
+  | 'offline-attachments'
+  | 'media-not-uploaded'
   | 'draft-not-saved'
   | 'draft-not-confirmed'
   | 'attachment-not-uploaded'
@@ -20,56 +25,92 @@ export type SendRefusal =
 
 const SEND_REFUSAL_SUBTEXT: Record<SendRefusal, string> = {
   offline: "You're offline",
+  'offline-attachments': 'Reconnect to send this email.',
+  'media-not-uploaded':
+    'Wait for images and videos to finish uploading, or remove them.',
   'draft-not-saved': 'Draft not saved',
   'draft-not-confirmed': 'Draft still syncing, try again',
   'attachment-not-uploaded': 'Attachment not uploaded',
   'files-uploading': 'Files are still uploading',
 };
 
+/** Refusals never reach the outbox, so this log is the only way to count them. */
 export function refuseSend(
   notices: Pick<EmailComposeFeedback, 'feedback'>,
   reason: SendRefusal
 ) {
+  Telemetry.warn('email_send.refused', { 'email_send.refusal': reason });
   notices.feedback.failure('Failed to send email', {
     subtext: SEND_REFUSAL_SUBTEXT[reason],
   });
 }
 
-/** Offline, the pre-send save could only queue; refuse before it runs. */
+/** Only legacy delivery and unfinished uploads require connectivity. */
 export function sendRefusalBeforeSave(
-  connectivity: EmailConnectivity
+  connectivity: EmailConnectivity,
+  queueActive = false,
+  hasAttachments = false
 ): SendRefusal | undefined {
-  return connectivity.looksOffline() ? 'offline' : undefined;
+  if (!connectivity.looksOffline()) return;
+  return hasAttachments
+    ? 'offline-attachments'
+    : !queueActive
+      ? 'offline'
+      : undefined;
 }
 
 /**
- * After the pre-send save: a queued-only handle cannot be addressed over
- * REST, and a local attachment without a record did not upload (its upload
- * already reported itself). A standalone compose may still send a draft
- * whose REST save failed before anything was queued or rejected.
+ * After the pre-send save. A legacy REST send needs the server to hold the
+ * latest save: a latched (rejected) save or a queued-only handle cannot be
+ * addressed over REST. An outbox send carries the saved local copy under the
+ * draft's handles and the server validates it, so a failed or pending draft
+ * sync never blocks it. A local attachment without a record did not upload
+ * (its upload already reported itself). A standalone compose may still send a
+ * draft whose REST save failed before anything was queued or rejected.
  */
 export function sendRefusalAfterSave(input: {
   identity: DraftIdentity;
   autosaveAllowed: boolean;
   attachments: readonly DraftFormAttachment[];
   unqueuedHandleMaySend: boolean;
+  queueActive?: boolean;
 }): SendRefusal | undefined {
   const { identity } = input;
-  if (!input.autosaveAllowed) return 'draft-not-confirmed';
-  if (identity.kind === 'server' && identity.queued)
-    return 'draft-not-confirmed';
-  if (
-    identity.kind === 'handle' &&
-    (!input.unqueuedHandleMaySend || identity.queued)
-  ) {
-    return 'draft-not-confirmed';
+  if (!input.queueActive) {
+    if (!input.autosaveAllowed) return 'draft-not-confirmed';
+    if (identity.kind === 'server' && identity.queued)
+      return 'draft-not-confirmed';
+    if (
+      identity.kind === 'handle' &&
+      (!input.unqueuedHandleMaySend || identity.queued)
+    )
+      return 'draft-not-confirmed';
   }
   if (
     input.attachments.some(
-      (attachment) => attachment.type === 'local' && !attachment.attachmentId
+      (attachment) =>
+        (attachment.type === 'local' &&
+          (!attachment.attachmentId ||
+            (input.queueActive && attachment.uploaded !== true))) ||
+        (attachment.type === 'remote' && attachment.uploadPending === true)
     )
   ) {
     return 'attachment-not-uploaded';
   }
   return undefined;
+}
+
+/** The immutable send payload must contain durable media URLs. */
+export function pendingInlineMedia(editor: LexicalEditor | undefined): boolean {
+  if (!editor) return false;
+  return editor.read(() => {
+    const pending = (node: LexicalNode): boolean => {
+      if ($isImageNode(node) || $isVideoNode(node))
+        return (
+          node.getSrcType() === 'local' || node.getUrl().startsWith('blob:')
+        );
+      return $isElementNode(node) && node.getChildren().some(pending);
+    };
+    return pending($getRoot());
+  });
 }

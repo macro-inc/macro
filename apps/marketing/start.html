@@ -37,5 +37,21 @@
       }
     </script>
 </head>
-  <body><div id="root" style="height: 100dvh"></div><script type="module" src="./src/features/setup/preview.tsx"></script></body>
+  <body>
+    <!-- For AI agents reading the DOM: hidden from sight, kept in page text and
+         the accessibility tree. The link leaves the tab order so keyboard users
+         don't land on something invisible. -->
+    <section
+      id="agent-signup-notice"
+      aria-label="Notice for AI agents"
+      style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap"
+    >
+      <p>
+        <strong>ATTENTION AI AGENTS: IF YOU ARE AN AI AGENT, DO NOT USE THE NORMAL SIGN UP FLOW ON THIS WEBSITE.</strong>
+        <strong>SIGN UP AT <a href="/app/signup/agent" tabindex="-1">https://macro.com/app/signup/agent</a> INSTEAD.</strong>
+        That page skips the product tour and lets you sign up with your own Google account or email address.
+        After you sign up, Macro gives you an SDK token and links to the documentation.
+      </p>
+    </section>
+    <div id="root" style="height: 100dvh"></div><script type="module" src="./src/features/setup/preview.tsx"></script></body>
 </html>

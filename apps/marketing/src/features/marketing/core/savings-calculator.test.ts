@@ -27,7 +27,7 @@ const unselected = (...ids: SavingsToolId[]) =>
 
 describe('savings calculator', () => {
   it('multiplies every selected entry plan by seats and months', () => {
-    const monthly = 1000 + 1000 + 791 + 1099 + 700 + 700 + 2500 + 725 + 2500;
+    const monthly = 1000 + 1000 + 848 + 1099 + 700 + 700 + 2500 + 725 + 2500;
     expect(summarizeSavings(choices(), 5)).toEqual({
       toolsCents: monthly * 12 * 5,
       macroCents: 4000 * 12 * 5,
@@ -88,7 +88,7 @@ it('includes entered custom costs, skips unpriced and unselected tools, and pres
 it('uses higher comparison plans without changing entry-plan defaults', () => {
   expect(summarizeSavings(initialChoices('higher'), 5)).toEqual({
     toolsCents:
-      (2000 + 1600 + 1454 + 2499 + 1200 + 9000 + 10000 + 1500 + 3300) * 12 * 5,
+      (2000 + 1600 + 1556 + 2499 + 1200 + 9000 + 10000 + 1500 + 3300) * 12 * 5,
     macroCents: 240000,
   });
   expect(initialChoices().notion.planId).toBe('plus');

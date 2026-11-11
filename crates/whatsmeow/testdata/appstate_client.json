@@ -1,0 +1,310 @@
+{
+  "critical_unblock_low_v1_patch": "0a02080112b701080012b2010a220a2023ff327599a6eab4243f1177092ff10075038724e5b7df70884bc4a2951300ea1283010a800161057a7b98f0cca82fdc3a9685d87dad39efd881f11d2a16eb5f59ccaa7ebea336fe4de8aa15ac412c711c1d9cf143cbf1ff4adf168d858d753118423c3e9ff17ed9c1a44aa12cb2fcfdf105ee2e324135e00066640737c6259e156be2df0c313822e45be8fc332941bcfd7822a1fa10656f75d8e8bce2a18dd986d0cc32c6bf1a060a040000000112a501080012a0010a220a20306b006bd93cfc1c224308aa4c55a746c78a955944c3b76b0ebdfa297501470612720a70aeafbc132dd78b5880c740548430b09e383e246cd92b1c80afb3fbe0a427f4715b8930910df08c5d36723f53f5c4796f19486caafff81c39060dbf4360e8631a195cacc8b87e75cee7e756c25ab86e2d8df01b443537c862e2cfd6d8475bf9f70a69cf7ad1b862f3c9483ad2d84bda231a060a040000000122209b1784eb47ef4d83d16a164e531ab1f5ce400e2cd1a04af1c69e1a075b5ff4482a204c4aecf8dd99017a52a8135e3803df211685ec785fc8ab50f1f163f2034edee932060a0400000001",
+  "fetch_snapshot_iq": "00f80a1908ff831b2a1f16ec9c045a11fa0003f801f802ece3f801f805ec5b89eceded1e9b",
+  "fetch_version_iq": "00f80a1908ff831b2a2f16ec9c045a11fa0003f801f802ece3f801f807ec5b89eceded1eec0f5455",
+  "key_1_data": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+  "key_1_id": "00000001",
+  "key_2_data": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "key_2_id": "00000002",
+  "mark_not_dirty_iq": "00f80a1908ff831b2a3f16ecb8045a11fa0003f801f805edf804ecc0ec9aff051700000000",
+  "recovery_request": "621d101082011808083a140a0c726567756c61725f686967681080e2cfaa06",
+  "regular_high_v1_events": [
+    {
+      "action": "08fbd095ffbc31220908011080adf180bd31",
+      "index": [
+        "mute",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "08011080adf180bd31",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "Mute"
+    },
+    {
+      "action": "08fbd095ffbc312a020801",
+      "index": [
+        "pin_v1",
+        "120363000000000001@g.us"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "jid": "120363000000000001@g.us",
+      "timestamp": 1700000000123,
+      "type": "Pin"
+    },
+    {
+      "action": "08fbd095ffbc318a0134080112300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "index": [
+        "archive",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "080112300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "Archive"
+    },
+    {
+      "action": "08fbd095ffbc312a020800",
+      "index": [
+        "pin_v1",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0800",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "Pin"
+    },
+    {
+      "action": "08fbd095ffbc31a20134080112300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "index": [
+        "markChatAsRead",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "080112300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "MarkChatAsRead"
+    },
+    {
+      "action": "08fbd095ffbc3112020801",
+      "index": [
+        "star",
+        "120363000000000001@g.us",
+        "STARRED",
+        "0",
+        "2222@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "is_from_me": false,
+      "jid": "120363000000000001@g.us",
+      "message_id": "STARRED",
+      "sender_jid": "2222@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "Star"
+    },
+    {
+      "action": "08fbd095ffbc31b201320a300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "index": [
+        "deleteChat",
+        "1111@s.whatsapp.net",
+        "1"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0a300880e2cfaa061a280a200a133131313140732e77686174736170702e6e657410011a074c4153544d53471080e2cfaa06",
+      "delete_media": true,
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "DeleteChat"
+    },
+    {
+      "action": "08fbd095ffbc31720a0a04576f726b10032000",
+      "index": [
+        "label_edit",
+        "5"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0a04576f726b10032000",
+      "from_full_sync": true,
+      "label_id": "5",
+      "timestamp": 1700000000123,
+      "type": "LabelEdit"
+    },
+    {
+      "action": "08fbd095ffbc317a020801",
+      "index": [
+        "label_jid",
+        "5",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "label_id": "5",
+      "timestamp": 1700000000123,
+      "type": "LabelAssociationChat"
+    },
+    {
+      "action": "08fbd095ffbc317a020801",
+      "index": [
+        "label_message",
+        "5",
+        "1111@s.whatsapp.net",
+        "LABELED",
+        "0",
+        "0"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "label_id": "5",
+      "message_id": "LABELED",
+      "timestamp": 1700000000123,
+      "type": "LabelAssociationMessage"
+    },
+    {
+      "action": "08fbd095ffbc313a0a0a084e6577204e616d65",
+      "index": [
+        "setting_pushName"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0a084e6577204e616d65",
+      "from_full_sync": true,
+      "timestamp": 1700000000123,
+      "type": "PushNameSetting"
+    },
+    {
+      "action": "08fbd095ffbc311a170a0c436f6e746163742046756c6c1207436f6e74616374",
+      "index": [
+        "contact",
+        "3333@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0a0c436f6e746163742046756c6c1207436f6e74616374",
+      "from_full_sync": true,
+      "jid": "3333@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "Contact"
+    },
+    {
+      "action": "08fbd095ffbc31aa0100",
+      "index": [
+        "clearChat",
+        "1111@s.whatsapp.net",
+        "1",
+        "1"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "",
+      "delete_media": true,
+      "from_full_sync": true,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "ClearChat"
+    },
+    {
+      "action": "08fbd095ffbc31920108080110ffe1cfaa06",
+      "index": [
+        "deleteMessageForMe",
+        "120363000000000001@g.us",
+        "DELETED",
+        "1",
+        "0"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "080110ffe1cfaa06",
+      "from_full_sync": true,
+      "is_from_me": true,
+      "jid": "120363000000000001@g.us",
+      "message_id": "DELETED",
+      "sender_jid": "",
+      "timestamp": 1700000000123,
+      "type": "DeleteForMe"
+    },
+    {
+      "action": "08fbd095ffbc31ba01020801",
+      "index": [
+        "setting_unarchiveChats"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "timestamp": 1700000000123,
+      "type": "UnarchiveChatsSetting"
+    },
+    {
+      "action": "08fbd095ffbc31ea01020801",
+      "index": [
+        "userStatusMute",
+        "2222@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0801",
+      "from_full_sync": true,
+      "jid": "2222@s.whatsapp.net",
+      "timestamp": 1700000000123,
+      "type": "UserStatusMute"
+    }
+  ],
+  "regular_high_v1_patch": "0a02080112a501080012a0010a220a20fd8f08fd42bb0cf831b0b5cb91d5a777ab789bd1e3a1a681d5b497b1f571ed9d12720a701fc6b4e2628ad11bf4fb6b59dfc7218d4a397cb5b5e0fb602a271c9718168b43d140900b0a3a35c0ff4bc3fef034ef4d7e88f73b780606b93ff975b76222a4a16a2b4bd51b19d6b7e0d6a91b1abb531101b49a5ec8f073ee14a164753950afded47dad32f5104ab7bf38071c199d466a1a060a040000000112a501080012a0010a220a20240b1e9857ae8780d74379047fa0fe0817c2fd260baef328bc5dc5eee152c8e212720a70986c84315cc92ff04321541f8b828554e38bb90a5386bc8dc40d7605a11af9a4ddd840a772a731b6516d56e04b9dc4194f87097c208c04db16cba17a3b5126e589f8d9b7a53c2ff91766ddc44c707fa1610fc0cab681f1b6fa0c1435037afdd7c588ef3474e6d438c4e337ff6341e8fc1a060a040000000112d701080012d2010a220a20fd198cc281cacc56535e913d9083ce1e739f0b191e09546d3e436a88da59bf3f12a3010aa00188db7a4f8afbb4672c2d44f77dbcf1b5f42db4b869981764dd3242c43fa142686e8a58f9a36beff48c42e69f5cb58984801c6410079a1d384f4d0676f1d7afd20754346eed954b6fadd860e4f9bd746af77f97016813e0f1bc318fe12dc348b2bea7e5355423cf354a1c8bf128d6d2961172a2dd246a04e201131c8e2ce9255e0853b5d164659904d5709b14b875df307b5beda58c63c055c0edebbc19c7960b1a060a040000000112a501080012a0010a220a20306b006bd93cfc1c224308aa4c55a746c78a955944c3b76b0ebdfa297501470612720a700e8888bffdbb4e672d08df4403607f6bf3c72788f7b4503f658a45e5d372e76394f761e330ef2c678481ce8e378190910a9c366b26987f1f88db1a9abc2201b62eff5d8eba0c5d32f7ea8274341ac7340ef46dc8d8c68da08d6f82f02b46dc16b33273d5b90f03b4c760cd4c1b74d5731a060a040000000112d701080012d2010a220a20c97dc2e89bc87d0dad894c1ec026c9e3e90deded4e1ecee9bf62bd1d0a19c5fa12a3010aa001eaf12f6109b92c59d8a4004c044a8513b3b30157450dba5cbc2fe9ff7adbbf401431847b6b98b950c83f59d6f44774867c31472985bd17983d3853a48644238462072d1f1310de687c508b3c26f556aff0791dad6aebf16016cd35d59490f26c9c95ecdabffb7d49fb313ba40a738cc206ea9a50d1bfd3b34d8f77d01a43f48e3d662ec235953d96d7133c6ef0ce0f8515f860e9597b43b5b308929b9d498cf01a060a040000000112c701080012c2010a220a206b36787a74f8cee12cfb30b81f828ee3644baf2c1ad922a83c7e03e206cebd481293010a9001ed42f391f1f244a37864e8f6e75af0951a023ad47d1aa4446506ac3ad131386cdfd027cabe7a448fad73bc0891a30e42cfe13f3e0635f7e3e717e17545910fd70c5120fbe7da89058ed146353bd2926d194ccbe64835500de02735d38128f3c4fcf813f044d9d6706a93393798e0d47b530ef05f1a1eabace0a997edfbdb67b0adbdbe17c041889e6bbee1c10b6b2d9c1a060a040000000112d701080012d2010a220a2007468814b960863dc8461ce93131a6992fcc2f7e3b21d066a6195d707537016812a3010aa00191c7f712dd1b64d55ef71b04621323ff21226914ff8cda66aed81cf73c9c87b6808441c53ef949f4f967a17284dc471f3f67e41dbc3f413e2bb12a4460cb12cb8d53312b0bf8a71b031acfb525edd392d57c0edb75ebd93f74a3f53024d0cfc86e60968808fa9434165f92f4b6ad774bbe400d585084e2ac03f509b6f43f2e7f83de931e4813be9b1a88a02ba7c9eef1cf1074461bd09591173f4e2ef8ebd46d1a060a040000000112950108001290010a220a209c57180afa7c43acfdc7a271ac2676392a9ec86232515273365a1958ae73ed1412620a602336ddf1eae731a5746709a9d1a051a1da5cf0e5801881a0ffd64df9cb0f2faf4881bae9149265ae1f79e762754ffbfd9e823016b9d53d41ce4989643d892de7fb44bdcfdbc6eca257e0349513976c88471160bb3544aed11f6c6eb40bc7ceeb1a060a040000000112a501080012a0010a220a20105aef1f755cfd1abddd3ed26bbb9843aebd8bc36ab5def311a3155a90a8a5b912720a707217f58b9742cdacd93be54a4da781bd3ab459b944b46ff96ddc6dc3a4960b83c26f95010662f8ffa78819ff2716ee9322f60266ddaa30929be0a108c0abc68767102f3feb9f2c42de4c21148f1b8d7f843b4590c84bddd833c769776674159e485a26dfc93a116ab2fa130181e1948d1a060a040000000112c701080012c2010a220a2092d0b05818241b5875cba76e488cafdaccf3a90d4758cc773653a26858bf9bc01293010a90019d0e1fdfedded6da3913b57d461c07229a5f7321a0df7d4c2febf96eee90ec7e3c6e960bc05e8a7ebe707e55d24cc392698445eb126c7751e2b9f890120157353215c3796002d5d58cd8127386873fd1371f922a1e2d392d3036d369f068a77b55fb6195d43b307c91296d337b151b7b1ada5027b4266d8c1e509b81fbe3d66460d3c88406e224679974834aff1db8f51a060a040000000112950108001290010a220a2028a68b23170e40d044dc3b7842730273657c039a4bf84fcb28b4fe5ab24358d412620a6069411b74aeb3fc2ca06a23c60cd347306025b0cf08c34f9e532597febb2e5d38d1a281bb84eb75fb0bd9a5f4fcd8db0a3541946bde4996e8c5698c7945204d94ae1034acf5400fb0762a1171d91f1b695a3c6996d84799ea8ea2346036ddc03e1a060a040000000112b701080012b2010a220a2023ff327599a6eab4243f1177092ff10075038724e5b7df70884bc4a2951300ea1283010a8001d4e472778e0c1e430eee19b6f522a338f0bc69d01914713743e95986666a398d8ed55c06671d8ae60ebbca2ba4ac3cc8c884ada569615cd0d9d3b3f0cf51fc737ec73e69f3b85ef8cee2e5604a12233ac9cb848d067f4cfedb94ba7974f9157cbf40bd228b23b0f2a7792fc15d4ced70ee27e4e910e3c0d5aa96d7d6bb29401c1a060a040000000112a501080012a0010a220a20d3319649e02ef88635cf6465e5ca843d6d51f3d673594dbb664c0563442582e112720a70992a916caac1349196a8a4f0339425e569f9ded0ae051c4ac164e63dbd83b40de534dc4401603b63bcfc26d8301925b952a93daec64403513b4a20321be3a066710fbd5ee87c18b5e3c9b34c1c10370cec0d05e50f97daf1dd276b109cfe969af3890089accbf7b8a93f75c9d93f418b1a060a040000000112c701080012c2010a220a20dfbbca10174f693643f9496dd23e11eb9e982900da0ae7b7a83b97c4015a38321293010a9001c2988a367ba170dff73c127358be94af11b2fb409850fff9c5778f18dbe120c1cb171b54ced6b586ed0478d7a69827a7539f3e9f6d6e18653e8bf7677d855a4332bf93057f7b3065a002c2bdf048650363b9dfe7ecb64bbd5095fbb4b64b2041583d562cd76ad33eea4cf5373b001b9e342b80a9b33305a1853e0d57bf395f2a0a0944dbfae191e006c415e1343f1ea71a060a040000000112950108001290010a220a2048316ef643a37824dff98677428c6a56b954fc22a7b7bb9ce430c22ee623acba12620a60b3c65c5c77c8dd593e71f9e5a1548e6a2f709ebbc8f41ebed04b8af913acb049d9d7ef7bdbde2c3ab34e55145fba97013b355f69f16fc677bb8a8afc4f7e396c41fcffb045dcb6e8003be242a6058b83c06ac9a7d9d405581dc896c1432599ca1a060a040000000112a501080012a0010a220a20dc14644d2c872e2a5bcfe98267e076440432fe4821a3948e891659141c4bde6112720a70ba2ef54b290122f9f9e9917575809eb26420e051bf27ff7a733a2b072af302cc237ef604f428adab84e80ee500dc6359169fc4562beaf70204f1bc5332703bbdfe5642ab6ff80fda5da96c1a4f8fd771724d0721c7ae0c927ef7b01d01b058af30c9d56004f0c1c5c63568e0512395421a060a040000000122201f9dcf627a570e7d1d0f68994cdfb497daf4e0d833aa5193eae847bba08dee922a20aa6563121c7af512a85b3d17cb78af47eddce04eb6e73145c61c99ea61088de132060a0400000001",
+  "regular_high_v2_events": [
+    {
+      "action": "08dba599ffbc3122020800",
+      "index": [
+        "mute",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0800",
+      "from_full_sync": false,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000060123,
+      "type": "Mute"
+    },
+    {
+      "action": "08dba599ffbc312a020800",
+      "index": [
+        "pin_v1",
+        "1111@s.whatsapp.net"
+      ],
+      "type": "AppState"
+    },
+    {
+      "action": "0800",
+      "from_full_sync": false,
+      "jid": "1111@s.whatsapp.net",
+      "timestamp": 1700000060123,
+      "type": "Pin"
+    }
+  ],
+  "regular_high_v2_patch": "0a02080212a501080012a0010a220a20fd8f08fd42bb0cf831b0b5cb91d5a777ab789bd1e3a1a681d5b497b1f571ed9d12720a70135eea664dbb942e261159389263672ec4d88652aee5f4be8e14febebcfb3856981b86cba475a4fa5a5b7f4c72245b932314b224702e78aea40a10395e4dced0372a6caf6001726fde3087d0747fbc4800ae587dc18167a3e9f03ed180974dcf53523605b90ca5c02d1dcffcd42a8d5d1a060a040000000112a501080012a0010a220a20306b006bd93cfc1c224308aa4c55a746c78a955944c3b76b0ebdfa297501470612720a70379df43f0a617d369f7d502a98b6bc4b5f7cc3b61e21d2184aba89712c4dc04b1388c08e0473bf88e6e1875dcf682ba54f4b721b017508f9e9c5626e6c4104da9fb69e3f2aafe94eae4740955950e9dfbdfb8be9ca63f577b964b7437da59eadd89197b3fc2117b0fb3cdc06a40f28671a060a0400000001222042076bfd6162eb422dd8105a2ff94fbc8fa003a4e83dd2363b2280e07f7ab6642a20e5d2bbf686f5b2dc70dbf1c0ab62b3cccded0618865563166b2dea97906f2ff432060a0400000001",
+  "regular_low_v1_patch_key_2": "0a02080112d701080012d2010a220a207e75952f2dae79b9207f52c04c76a0955531d97682d25b60e4c4c6cc5e11acd012a3010aa0015677f10ded2d2b940af69f9e6ae4163d61c4bb64bb2f251888472fec5e8be91ade1085a528e9de801374a558adda85d80bc7e26546c9302ab8b1ff80e80a8608be7962731ca102d11542ec52336ec872105796f5721c054a26072a3e077cdc67301fae16396e61c947a3a0528fdd0bf376b82c0ad2349caa23e6bc68acb6df683034c6ebbb3e079ca6c8a8a774a301679a022af679c0fe376c86442844fd10e01a060a040000000212a501080012a0010a220a206e530e423af2cd0ffb9b24633ebb47e9a544eab68519af50157e1f90035f493112720a700dd3fbf6b23250c5f73570c86383b3de8a4a9c1dfe82bfbbb80e461ab7f03b018cfba6f5a14dc62b935e6e1af01f42300ba9483583d1664b1d9ff7ddf2458e4d86f44025b494565126bcf4449e989b8606aead4d70ad9ec1b46439a540b61fc7bd93af6fd0ea6964f1bd9d56ae0e4e6d1a060a04000000022220cfaf62e5af99f1d2893feaf195874487f8ed3171024252f7d682bdc11baa16772a207eb1a9b21e9bb3671169461780aae427e74602ebe9230c098f0e93626111968b32060a0400000002",
+  "send_app_state_iq_without_patch": "00f80a1908ff831b2a1f16ec9c045a11fa0003f801f802ece3f801f808ec5b89ed28542ded1eec0ff801f801ecf6"
+}

@@ -15,7 +15,6 @@ const [savedConnection, setSavedConnection] = createSignal<Leftover>({
   kind: 'pipedream',
   id: 'pd-slack',
   title: 'Slack workspace',
-  subtitle: 'Slack',
   appSlug: 'slack_v2',
   enabled: false,
 });
@@ -25,6 +24,9 @@ const state = vi.hoisted(() => ({
   ready: true,
   failed: false,
   retry: vi.fn(),
+}));
+vi.mock('@core/constant/settingsTabsConfig', () => ({
+  useSettingsTabAvailable: () => () => true,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => state.mobile }));
 vi.mock('@core/constant/SettingsState', () => ({
@@ -49,17 +51,17 @@ vi.mock('../../settings/connections/use-connections-model', () => ({
     }),
   }),
 }));
-vi.mock('../../settings/connections/ConnectionsPage', () => ({
-  ConnectionsPage: (props: {
-    initialMode?: string;
-    initialProvider?: string;
-  }) => (
+vi.mock('../../settings/connections/integrations-view', () => ({
+  IntegrationsView: (props: { initialProvider?: string }) => (
     <p>
       {props.initialProvider
         ? `Settings for ${props.initialProvider}`
-        : `${props.initialMode} connections`}
+        : 'Available integrations'}
     </p>
   ),
+}));
+vi.mock('@core/pipedream/ConnectedAppIcon', () => ({
+  ConnectedAppIcon: () => <svg aria-hidden="true" />,
 }));
 vi.mock('../../settings/connections/leftover-row', () => ({
   LeftoverRow: (props: { leftover: Leftover }) => (
@@ -108,9 +110,10 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo;
   vi.unstubAllGlobals();
 });
-function setup() {
+function setup(imageUnsupportedReason?: string) {
   const actions = {
     openFiles: vi.fn(),
+    openImages: vi.fn(),
     openLibrary: vi.fn(),
     openSkills: vi.fn(),
   };
@@ -119,7 +122,11 @@ function setup() {
       <style>
         {'[role="menu"] {animation-name:none;transition-duration:0s}'}
       </style>
-      <AgentComposerAddMenu {...actions} getEditor={() => null} />
+      <AgentComposerAddMenu
+        {...actions}
+        imageUnsupportedReason={imageUnsupportedReason}
+        getEditor={() => null}
+      />
     </>
   ));
   const trigger = screen.getByRole('button', { name: /^Add$/ });
@@ -130,10 +137,9 @@ function setup() {
 
 it('keeps uploads available through the richer menu', () => {
   const actions = setup();
-  fireEvent.keyDown(
-    screen.getByRole('menuitem', { name: /Add photos & files/ }),
-    { key: 'Enter' }
-  );
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add files/ }), {
+    key: 'Enter',
+  });
   expect(actions.openFiles).toHaveBeenCalledOnce();
 });
 it.each([
@@ -165,12 +171,12 @@ it('opens a disabled connection for management', async () => {
     await screen.findByText('Saved Slack connection settings: disabled')
   ).toBeTruthy();
 });
-it('opens discovery for Add connections', async () => {
+it('opens the unified catalog for Add connections', async () => {
   setup();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add connections/ }), {
     key: 'Enter',
   });
-  expect(await screen.findByText('discover connections')).toBeTruthy();
+  expect(await screen.findByText('Available integrations')).toBeTruthy();
 });
 it('offers retry without hiding the main actions when a source fails', () => {
   state.failed = true;
@@ -207,4 +213,41 @@ it('hands the mobile sheet off to connection settings', async () => {
   setup();
   fireEvent.click(await screen.findByRole('button', { name: /GitHub/ }));
   expect(await screen.findByText('Settings for github')).toBeTruthy();
+});
+
+it('refuses photos on a text-only model while keeping the file action usable', () => {
+  const actions = setup("GPT OSS 120B doesn't support images");
+  const photos = screen.getByRole('menuitem', { name: /Add photos/ });
+  expect(photos.getAttribute('aria-disabled')).toBe('true');
+  const reason = document.getElementById(
+    photos.getAttribute('aria-describedby') ?? ''
+  );
+  expect(reason?.textContent).toBe("GPT OSS 120B doesn't support images");
+  fireEvent.keyDown(photos, { key: 'Enter' });
+  expect(actions.openImages).not.toHaveBeenCalled();
+  expect(screen.getByRole('menu')).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add files/ }), {
+    key: 'Enter',
+  });
+  expect(actions.openFiles).toHaveBeenCalledOnce();
+});
+
+it('opens the photo picker for an image-capable model', () => {
+  const actions = setup();
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add photos/ }), {
+    key: 'Enter',
+  });
+  expect(actions.openImages).toHaveBeenCalledOnce();
+});
+
+it('keeps file uploads available in the mobile sheet for a text-only model', async () => {
+  state.mobile = true;
+  const actions = setup("GPT OSS 120B doesn't support images");
+  const photos = await screen.findByRole('button', { name: /Add photos/ });
+  expect(photos.hasAttribute('disabled')).toBe(true);
+  expect(photos.textContent).toContain("GPT OSS 120B doesn't support images");
+  fireEvent.click(photos);
+  expect(actions.openImages).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /Add files/ }));
+  expect(actions.openFiles).toHaveBeenCalledOnce();
 });

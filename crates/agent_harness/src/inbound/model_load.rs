@@ -41,8 +41,6 @@ pub enum ModelHarnessDto {
     InMemory,
     /// The caller's Cursor account.
     Cursor,
-    /// The caller's allowlisted Claude subscription demo.
-    ClaudeCloud,
     /// A paired macrod runtime.
     Macrod,
 }
@@ -54,7 +52,6 @@ impl TryFrom<LoadAgentModelsRequest> for LoadAgentModels {
         let harness = match value.harness {
             ModelHarnessDto::InMemory => ModelHarness::InMemory,
             ModelHarnessDto::Cursor => ModelHarness::Cursor,
-            ModelHarnessDto::ClaudeCloud => ModelHarness::ClaudeCloud,
             ModelHarnessDto::Macrod => ModelHarness::Macrod,
         };
         Ok(Self {
@@ -188,7 +185,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime or Cursor account is not connected"),
+        (status = 409, description = "Macrod machine or Cursor account is not connected"),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )

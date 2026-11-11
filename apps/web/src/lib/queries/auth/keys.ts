@@ -13,9 +13,15 @@ export const authKeys = createQueryKeys('auth', {
   githubLinkStatus: null,
   emailConnectionProviders: null,
   userInfo: null,
-  userName: (userId: string) => ({
-    queryKey: [userId],
+  userLanguage: null,
+  userName: (
+    viewerId: string,
+    session: number,
+    generation: number,
+    userId: string
+  ) => ({
+    queryKey: [viewerId, session, generation, userId],
   }),
-  userNameSelf: null,
+  userNameSelf: (viewerId: string, session: number) => [viewerId, session],
   userQuota: null,
 });

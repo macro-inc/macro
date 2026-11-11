@@ -14,6 +14,8 @@ interface EmailUserTooltipProps {
   bold?: boolean;
   /** Fallback photo (e.g. a synced contact photo) when there's no Macro profile picture. */
   photoUrl?: string;
+  /** Class for the trigger wrapping `children`. */
+  triggerClass?: string;
 }
 
 export function EmailUserTooltip(props: EmailUserTooltipProps) {
@@ -24,7 +26,9 @@ export function EmailUserTooltip(props: EmailUserTooltipProps) {
       placement="bottom"
       open={open()}
       onOpenChange={setOpen}
+      isolateClicks
       triggerAs="span"
+      triggerClass={props.triggerClass}
       trigger={props.children}
       content={
         <UserTooltip

@@ -12,6 +12,8 @@ domain.
 - `src/ops.rs`: `DatabaseOp` and the row/column/view change/result types —
   the core vocabulary everything else is built from.
 - `src/cast.rs`: the cell-value casting rule between column kinds.
+- `src/date_range.rs`: `DateRange`, a date-range cell's value, its ISO
+  interval parser and how it compares to a date (contains / before / after).
 - `src/views.rs` + `src/views/`: view filter/sort evaluation (`eval.rs`),
   Kanban lane keys (`lane_key.rs`, `lanes.rs`).
 - `src/formula.rs`: derived/formula column types.

@@ -14,7 +14,7 @@ use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use strum::IntoEnumIterator as _;
-use trigger_context::TriggerContext;
+use trigger_context::{TriggerContext, TriggerOrigin};
 use webhook::domain::models::WebhookFilter;
 
 #[cfg(test)]
@@ -47,6 +47,8 @@ pub enum TriggerWork {
         content: String,
         /// Why the agent was called, forwarded with the prompt.
         context: Option<TriggerContext>,
+        /// What opened the session, copied onto its create request.
+        origin: Box<TriggerOrigin>,
     },
     /// Open a session somebody asked for from the composer, under the id
     /// they are waiting on. No thread, so nothing is announced anywhere;
@@ -61,6 +63,8 @@ pub enum TriggerWork {
         bot: BotId,
         /// Who asked; owns the session.
         sender: MacroUserIdStr<'static>,
+        /// What opened the session, copied onto its create request.
+        origin: TriggerOrigin,
     },
     /// Forward a message into a session that already exists, serving it
     /// first if this daemon is not already. Just the prompt: the harness
@@ -84,7 +88,7 @@ pub enum TriggerWork {
 /// errors, and the stream is left open either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skipped {
-    /// The sender is not a user, so there is nobody to act for.
+    /// No valid user sender, bot attribution, or requested owner to act for.
     NotFromUser,
     /// An event shape this daemon does not recognise yet - the trigger's
     /// vocabulary is non-exhaustive on purpose.
@@ -100,6 +104,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 bot_id,
                 session_id,
                 owner,
+                origin,
                 context: _,
             },
         )) => {
@@ -109,6 +114,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 session: session_id,
                 bot: bot_id,
                 sender,
+                origin,
             })
         }
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::AssignedToTask(assigned)) => {
@@ -127,9 +133,11 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 thread_id: assigned.discussion_id,
                 message_id: assigned.discussion_id,
                 context: assigned.context,
+                origin: Box::new(assigned.origin),
             })
         }
         AgentTriggerTopicEvent::New(event) => {
+            let origin = event.origin();
             let Some(OpeningMention {
                 bot_id,
                 message,
@@ -138,11 +146,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
             else {
                 return Err(Skipped::Unrecognized);
             };
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = message.invoking_user().ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
                 reuse_origin_message: false,
                 bot: bot_id,
@@ -154,6 +158,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 message_id: message.message_id,
                 content: message.content,
                 context,
+                origin: Box::new(origin),
             })
         }
         AgentTriggerTopicEvent::Existing(event) => {
@@ -166,11 +171,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
             else {
                 return Err(Skipped::Unrecognized);
             };
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = message.invoking_user().ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::PromptExisting {
                 message_id: message.message_id,
                 session: session_id,

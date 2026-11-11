@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    INSERT INTO whatsapp_device (\n                        account_id,\n                        data_key_ciphertext,\n                        kms_key_id,\n                        encryption_version\n                    )\n                    VALUES ($1, $2, $3, $4)\n                    ON CONFLICT (account_id) DO NOTHING\n                    RETURNING account_id\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f0c532d8e744b58ba33b2b61bbada52a02bb874d5a20301ba7a2d78842d4ef2b"
+}

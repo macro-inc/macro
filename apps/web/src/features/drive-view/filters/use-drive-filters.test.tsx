@@ -6,7 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { DriveState } from '../core/types';
 import { createDriveState } from '../primitives/drive-state';
@@ -24,14 +24,15 @@ vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@property/tags/use-tag-filter-group', () => ({
   useTagFilterGroup: () => () => ({ id: 'tags', label: 'Tags', options: [] }),
 }));
-vi.mock('@queries/contacts/contacts', () => ({ useContacts: () => () => [] }));
+vi.mock('@core/user/use-contact-filter-options', () => ({
+  useContactFilterOptions: vi.fn(),
+}));
 vi.mock('@ui', async () => ({
+  ...(await import('@ui/components/Button')),
+  ...(await import('@ui/components/ButtonGroup')),
   ...(await import('@ui/utils/classname')),
   ...(await import('@ui/components/Dropdown')),
   ...(await import('@ui/components/Layer')),
-}));
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));
@@ -60,7 +61,7 @@ afterEach(() => {
 });
 
 it.each(['pointer', 'keyboard'])(
-  'keeps the Drive Type submenu mounted while Shift-selecting and deselecting file types (%s)',
+  'keeps the Drive Type submenu mounted while toggling file types, then adds and closes (%s)',
   async (input) => {
     const [value, setValue] = createSignal<DriveState>({
       location: { kind: 'tab', tab: 'owned' },
@@ -70,6 +71,7 @@ it.each(['pointer', 'keyboard'])(
       facets: {},
       expandedFolderIds: [],
       favoritesOpen: true,
+      databasesOpen: true,
       rootOpen: true,
     });
     render(() => {
@@ -104,14 +106,13 @@ it.each(['pointer', 'keyboard'])(
     const select = (element: HTMLElement) => {
       if (input === 'keyboard') {
         element.focus();
-        fireEvent.keyDown(element, { key: 'Enter', shiftKey: true });
+        fireEvent.keyDown(element, { key: ' ' });
       } else
         fireEvent(
-          element,
+          element.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
           new MouseEvent('pointerup', {
             button: 0,
             bubbles: true,
-            shiftKey: true,
           })
         );
     };
@@ -131,6 +132,6 @@ it.each(['pointer', 'keyboard'])(
     pdf.focus();
     fireEvent.keyDown(pdf, { key: 'Enter' });
     await waitFor(() => expect(pdf.isConnected).toBe(false));
-    expect(value().facets.type).toBeUndefined();
+    expect(value().facets.type).toEqual(['file-pdf']);
   }
 );

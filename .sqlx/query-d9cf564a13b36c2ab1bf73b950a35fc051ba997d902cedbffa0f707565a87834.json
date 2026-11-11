@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_outgoing_event (account_id, chat_jid, message_id, nonce, value)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (account_id, chat_jid, message_id) DO UPDATE SET\n                created_at = now(),\n                nonce = EXCLUDED.nonce,\n                value = EXCLUDED.value\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d9cf564a13b36c2ab1bf73b950a35fc051ba997d902cedbffa0f707565a87834"
+}

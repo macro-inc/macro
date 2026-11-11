@@ -2,11 +2,14 @@ import { createEmailInboxSource } from '@app/features/email-compose/queries/inbo
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type { MailAccountsQuery } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { ok } from 'neverthrow';
+import { createEffect, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authKeys } from '../auth/keys';
 import { emailKeys } from './keys';
 import { useMailAccountsQuery } from './mail-accounts';
 import { useUpdateEmailSettingsMutation } from './settings';
@@ -19,6 +22,10 @@ const fixture = vi.hoisted(() => ({
   reportError: vi.fn(),
 }));
 let queryClient: QueryClient;
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|self@example.com',
+  useIsAuthenticated: () => () => true,
+}));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => fixture.client,
@@ -26,9 +33,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { patchSettings: fixture.patchSettings },
-}));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: fixture.reportError },
 }));
 vi.mock('../client', () => ({
   get queryClient() {
@@ -40,7 +44,10 @@ vi.mock('./link', async () => {
   return {
     useNonPrimaryEmailLinkIdHeader: () => (id: string) => id,
     useEmailLinksQuery: () =>
-      useQuery(() => ({ queryKey: emailKeys.links.queryKey, enabled: false })),
+      useQuery(() => ({
+        queryKey: emailKeys.links('macro|self@example.com').queryKey,
+        enabled: false,
+      })),
   };
 });
 
@@ -69,8 +76,9 @@ function accounts(signature: string, replySignature = true): MailAccountsQuery {
   };
 }
 
-function setupCatalog() {
-  let stored: unknown = accounts('Old signature');
+function setupCatalog(initial: unknown = accounts('Old signature')) {
+  let stored: unknown = initial;
+  const persisted = Promise.withResolvers<void>();
   let server = accounts('Old signature');
   let offline = false;
   let persistence: Promise<void> | undefined;
@@ -88,10 +96,14 @@ function setupCatalog() {
     onCacheGenerationChanged: () => () => {},
     onMutationSettled: () => () => {},
     claimNextMutation: async () => undefined,
-    readQuery: async () => ({ kind: 'hit', data: structuredClone(stored) }),
+    readQuery: async () =>
+      stored === null
+        ? { kind: 'miss' }
+        : { kind: 'hit', data: structuredClone(stored) },
     writeQuery: async (args) => {
       await persistence;
       stored = structuredClone(args.data);
+      persisted.resolve();
       return {
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: false,
@@ -127,6 +139,7 @@ function setupCatalog() {
   return {
     fetch,
     stored: () => stored,
+    persisted: persisted.promise,
     setServer: (data: MailAccountsQuery) => {
       server = data;
     },
@@ -156,11 +169,16 @@ function mountComposerAccounts() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(Telemetry, 'error').mockImplementation(fixture.reportError);
   fixture.cacheEnabled = true;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  queryClient.setQueryData(emailKeys.links.queryKey, {
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    id: 'macro|self@example.com',
+    authenticated: true,
+  });
+  queryClient.setQueryData(emailKeys.links('macro|self@example.com').queryKey, {
     links: [
       {
         id: 'inbox-1',
@@ -225,12 +243,15 @@ describe('email settings account reconciliation', () => {
           signature_on_replies_forwards: false,
         },
       },
-      'inbox-1'
+      'inbox-1',
+      undefined
     );
 
     catalog.goOffline();
     catalog.newClient();
-    queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
+    queryClient.removeQueries({
+      queryKey: emailKeys.links('macro|self@example.com').queryKey,
+    });
     const reopened = mountComposerAccounts();
     await vi.waitFor(() =>
       expect(reopened.inboxes.inboxes()[0]?.settings).toEqual({
@@ -255,8 +276,42 @@ describe('email settings account reconciliation', () => {
     ).resolves.toEqual(response);
     expect(fixture.reportError).toHaveBeenCalledOnce();
     expect(fixture.patchSettings).toHaveBeenCalledOnce();
-    expect(queryClient.getQueryData(emailKeys.links.queryKey)).toMatchObject({
+    expect(
+      queryClient.getQueryData(
+        emailKeys.links('macro|self@example.com').queryKey
+      )
+    ).toMatchObject({
       links: [{ id: 'inbox-1', settings: { signature: 'Saved signature' } }],
     });
   });
+});
+
+it('warms an empty sender catalog before first composition and reopens it offline', async () => {
+  const catalog = setupCatalog(null);
+  const disposeBackground = createRoot((dispose) => {
+    useMailAccountsQuery(() => true);
+    return dispose;
+  });
+  await catalog.persisted;
+  expect(catalog.stored()).toEqual(accounts('Old signature'));
+  disposeBackground();
+  catalog.goOffline();
+  catalog.newClient();
+  const composer = mountComposerAccounts();
+  const loaded = Promise.withResolvers<void>();
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      if (composer.inboxes.inboxes().length) loaded.resolve();
+    });
+    return dispose;
+  });
+  try {
+    await loaded.promise;
+    expect(composer.inboxes.inboxes()[0]?.id).toBe('inbox-1');
+    expect(composer.inboxes.inboxes()[0]?.email_address).toBe(
+      'self@example.com'
+    );
+  } finally {
+    stop();
+  }
 });

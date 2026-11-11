@@ -2,6 +2,7 @@
 //! cells are entity properties, written through the properties adapter.
 
 /// The change journal's statements, shared with the cell store's batches.
+mod folders;
 pub(crate) mod journal;
 /// Row identity statements, shared with the cell store's batches.
 pub(crate) mod rows;
@@ -47,6 +48,9 @@ pub enum PgDatabasesRepoError {
     /// one decoded.
     #[error("failed to encode or decode stored json")]
     Json(#[from] serde_json::Error),
+    /// A folder id is not a uuid.
+    #[error("folder id is not a uuid")]
+    FolderId(#[from] uuid::Error),
     /// A stored position is not a fractional key.
     #[error("stored position")]
     Position(#[from] PositionError),
@@ -66,6 +70,9 @@ pub enum PgDatabasesRepoError {
     /// This build cannot interpret the persisted journal payload format.
     #[error("unsupported database journal payload version {0}")]
     UnsupportedJournalPayloadVersion(i32),
+    /// The canonical team-share writer failed.
+    #[error("team share: {0}")]
+    TeamShare(rootcause::Report<share_permission_db_utils::team_share::TeamShareError>),
 }
 
 /// The UUIDs of typed ids, for a statement's `ANY($n)`.
@@ -85,6 +92,7 @@ pub(crate) struct DatabaseRecord {
     pub(crate) owner_id: String,
     pub(crate) created_at: chrono::DateTime<chrono::Utc>,
     pub(crate) trashed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub(crate) project_id: Option<String>,
 }
 
 impl From<DatabaseRecord> for Database {
@@ -95,6 +103,7 @@ impl From<DatabaseRecord> for Database {
             owner_id: record.owner_id,
             created_at: record.created_at,
             trashed_at: record.trashed_at,
+            project_id: record.project_id,
         }
     }
 }
@@ -149,26 +158,7 @@ pub(crate) async fn insert_owned_database(
     table_name: &str,
 ) -> Result<Database, PgDatabasesRepoError> {
     let position = position_after(None)?;
-    sqlx::query!(
-        "INSERT INTO databases (id) VALUES ($1)",
-        database_id.into_uuid()
-    )
-    .execute(&mut **transaction)
-    .await?;
-    let database: Database = sqlx::query_as!(
-        DatabaseRecord,
-        r#"
-            INSERT INTO database_entities (database_id, name, user_id)
-            VALUES ($1, $2, $3)
-            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at
-            "#,
-        database_id.into_uuid(),
-        name,
-        owner_id,
-    )
-    .fetch_one(&mut **transaction)
-    .await?
-    .into();
+    let database = insert_owned_entity(transaction, database_id, name, owner_id, None).await?;
     sqlx::query!(
         r#"
             INSERT INTO database_tables (id, database_id, name, position)
@@ -181,6 +171,39 @@ pub(crate) async fn insert_owned_database(
     )
     .execute(&mut **transaction)
     .await?;
+    Ok(database)
+}
+
+/// Insert a core database with no tables, its app entity and its owner's
+/// grant; `created_at` defaults to the transaction's time.
+pub(crate) async fn insert_owned_entity(
+    transaction: &mut Transaction<'static, Postgres>,
+    database_id: DatabaseId,
+    name: &str,
+    owner_id: &str,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
+) -> Result<Database, PgDatabasesRepoError> {
+    sqlx::query!(
+        "INSERT INTO databases (id) VALUES ($1)",
+        database_id.into_uuid()
+    )
+    .execute(&mut **transaction)
+    .await?;
+    let database: Database = sqlx::query_as!(
+        DatabaseRecord,
+        r#"
+            INSERT INTO database_entities (database_id, name, user_id, created_at)
+            VALUES ($1, $2, $3, COALESCE($4::timestamptz, now()))
+            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
+            "#,
+        database_id.into_uuid(),
+        name,
+        owner_id,
+        created_at,
+    )
+    .fetch_one(&mut **transaction)
+    .await?
+    .into();
     entity_access_db_utils::insert_entity_access_row(
         transaction,
         database_id.as_uuid(),
@@ -216,6 +239,30 @@ pub(crate) async fn insert_column(
     Ok(())
 }
 
+/// The databases filed in folders, for a folder trash to return to the root.
+#[derive(Debug, Clone)]
+pub struct PgDatabaseFolders {
+    pool: PgPool,
+}
+
+impl PgDatabaseFolders {
+    /// Unfile databases over the pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    /// Return the databases filed directly in any of `project_ids` to the
+    /// root, without the grants those folders passed down. A database is not
+    /// trashed with its folder, so trashing the folder files it at the root,
+    /// as purging the folder does.
+    pub async fn unfile_from_projects(
+        &self,
+        project_ids: &[String],
+    ) -> Result<(), PgDatabasesRepoError> {
+        folders::unfile_from_projects(&self.pool, project_ids).await
+    }
+}
+
 /// [`DatabasesRepo`] backed by MacroDB; a new database's title definition is
 /// written through the properties domain, in the same transaction.
 #[derive(Debug, Clone)]
@@ -228,6 +275,34 @@ impl<Properties> PgDatabasesRepo<Properties> {
     /// Create a repository over the pool and the properties writer.
     pub fn new(pool: PgPool, properties: Properties) -> Self {
         Self { pool, properties }
+    }
+
+    /// Every table of a live database with a derived column, ordered by
+    /// database and table.
+    pub async fn tables_with_derived_columns(
+        &self,
+    ) -> Result<Vec<(DatabaseId, TableId)>, PgDatabasesRepoError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT t.database_id, t.id
+            FROM database_columns c
+            JOIN database_tables t ON t.id = c.table_id
+            JOIN database_entities d ON d.database_id = t.database_id
+            WHERE c.config ->> 'kind' = 'derived' AND d.trashed_at IS NULL
+            ORDER BY t.database_id, t.id
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    DatabaseId::from_uuid(row.database_id),
+                    TableId::from_uuid(row.id),
+                )
+            })
+            .collect())
     }
 }
 
@@ -324,7 +399,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
+            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -387,6 +462,15 @@ where
         .execute(&self.pool)
         .await?;
         Ok(restored.rows_affected() == 1)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> Result<bool, Self::Error> {
+        folders::move_database(&self.pool, id, project_id).await
     }
 
     /// Deleting the app entity cleans up its owned storage, grants and journal,
@@ -486,7 +570,7 @@ where
         Ok(sqlx::query_as!(
             DatabaseRecord,
             r#"
-            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
             FROM database_entities
             WHERE database_id = ANY($1)
             ORDER BY created_at

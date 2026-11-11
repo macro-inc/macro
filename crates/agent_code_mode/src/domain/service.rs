@@ -13,11 +13,13 @@ use super::*;
 /// Session-bound execution and reads. Inbound adapters supply authenticated facts.
 #[async_trait]
 pub trait SessionCodeMode: Send + Sync + 'static {
-    /// Execute as the authenticated session's owner, retaining source and final results.
+    /// Execute as the selected account, bound to the originating prompt's turn.
     async fn execute(
         &self,
         session: &AgentSession,
         execution: ExecutionId,
+        acting_as: ai_toolset::actor::ToolActor,
+        turn: macro_uuid::Uuid,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError>;
@@ -68,6 +70,8 @@ impl CodeModeService {
     ) -> Result<ExecutionReceipt, CodeModeError> {
         let mut record = ExecutionRecord {
             execution_id: execution,
+            acting_as: Some(identity.acting_as),
+            turn_id: Some(identity.turn),
             source: request.source.clone(),
             status: ExecutionStatus::Running,
             result: None,
@@ -91,11 +95,20 @@ impl CodeModeService {
                         ),
                         other => other,
                     })?;
-                if existing.source == request.source {
+                if existing.source == request.source
+                    && existing.acting_as == Some(identity.acting_as)
+                    && existing.turn_id == Some(identity.turn)
+                {
                     return Ok(receipt(&existing));
                 }
             }
             return Err(error);
+        }
+        if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
+            record.status = ExecutionStatus::Cancelled;
+            record.error = Some("Execution cancelled before authorization.".into());
+            self.0.store.save(identity.session, &record).await?;
+            return Ok(receipt(&record));
         }
         let environment = match self
             .0
@@ -146,7 +159,7 @@ impl CodeModeService {
                 () = &mut watch_turn => break execution.await,
                 update = updates.recv(), if progress_open => {
                     if let Some(value) = update {
-                        super::activity::observe(&mut record, value);
+                        super::activity::observe(&mut record.activity, &mut record.activity_truncated, value);
                         dirty = true;
                     } else {
                         progress_open = false;
@@ -170,45 +183,10 @@ impl CodeModeService {
             }
         };
         while let Ok(value) = updates.try_recv() {
-            super::activity::observe(&mut record, value);
+            super::activity::observe(&mut record.activity, &mut record.activity_truncated, value);
         }
-        super::activity::finish(&mut record);
-        let (status, result, error) = match outcome {
-            Outcome::Succeeded { mut value } => {
-                if let Some(object) = value.as_object_mut()
-                    && object.len() == 1
-                    && object.contains_key("data")
-                {
-                    object.insert("reviews".into(), serde_json::json!([]));
-                }
-                let valid = value.as_object().is_some_and(|object| {
-                    object.len() == 2
-                        && object.contains_key("data")
-                        && object.get("reviews").is_some_and(|references| {
-                            serde_json::from_value::<Vec<reviews::ReviewReference>>(
-                                references.clone(),
-                            )
-                            .is_ok()
-                        })
-                });
-                if valid {
-                    (ExecutionStatus::Succeeded, Some(value), None)
-                } else {
-                    (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references.".into()))
-                }
-            }
-            Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
-            Outcome::Cancelled => (
-                ExecutionStatus::Cancelled,
-                None,
-                Some("Execution cancelled. Unfinished calls may have taken effect.".into()),
-            ),
-            Outcome::TimedOut => (
-                ExecutionStatus::TimedOut,
-                None,
-                Some("Execution timed out. Unfinished calls may have taken effect.".into()),
-            ),
-        };
+        super::activity::finish(&mut record.activity);
+        let (status, result, error) = settle(outcome, Reviews::Allowed);
         record.status = status;
         record.result = result;
         record.error = error;
@@ -226,11 +204,21 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
                 | "ReadDiscussion"
                 | "Comment"
+                // Document.commentOnText().
                 | "CommentOnText"
                 | "DeleteComment"
                 | "EditComment"
@@ -241,13 +229,21 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "GetEntityProperties"
                 | "SetEntityProperty"
                 | "BulkSetEntityPropertyOptions"
+                // macro.properties.tags() and createTag(); PropertyOption edits.
+                | "ListTags"
+                | "CreateTag"
+                | "EditTag"
+                | "DeleteTag"
                 | "ListInboxes"
                 | "ListLabels"
                 | "GetThread"
                 | "ReadThread"
                 | "UpdateThreadLabels"
                 | "SetSenderPolicy"
+                // macro.email.sendConfirmed runs the tool itself.
+                | "SendConfirmedEmail"
                 | "CreateChannel"
+                // Channel.send() and Thread.reply(), with images and documents.
                 | "SendChannelMessage"
                 | "EditChannelMessage"
                 | "DeleteChannelMessage"
@@ -256,16 +252,34 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadChannelThread"
                 | "RenameChannel"
                 | "ManageChannelParticipants"
+                // macro.channels.dm() and macro.channels.private().
+                | "OpenDirectMessage"
                 | "ReadCallRecord"
                 | "UpdateCallRecord"
                 | "DeleteCallRecord"
                 | "ListCalendars"
                 | "ListCalendarEvents"
+                // macro.calendar.createConfirmed runs the tool itself.
+                | "CreateConfirmedCalendarEvent"
                 | "UpdateCalendarEvent"
                 | "DeleteCalendarEvent"
+                // macro.calendar.teamAvailability().
+                | "GetTeamAvailability"
+                // macro.calendar.booking.
+                | "ReadBookingSettings"
+                | "UpdateBookingSettings"
+                | "ListBookings"
+                | "GetBookingInsights"
+                | "GetBookingRescheduleSlots"
+                | "ChangeBooking"
+                | "ListBookingLinks"
+                | "CreateBookingLink"
+                | "EditBookingLink"
                 | "ListNotifications"
                 | "MarkNotificationsDone"
                 | "MarkNotificationsSeen"
+                // muteNotifications()/unmuteNotifications() on item handles.
+                | "MuteNotifications"
                 | "ListTeamMembers"
                 | "CreateForm"
                 | "EditForm"
@@ -273,8 +287,80 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
+                // macro.documents.upload(), which sends the bytes through Macro.
+                | "UploadFile"
+                // macro.search, macro.workspace and macro.chats.
+                | "ContentSearch"
+                | "NameSearch"
+                | "ListEntities"
+                | "ReadChat"
+                // macro.web.search() and macro.web.fetch().
+                | "WebSearch"
+                | "WebFetch"
+                // macro.bots and Bot. IssueBotCredential stays: its chat card
+                // mints the secret without the model ever reading it.
+                | "ListBots"
+                | "CreateBot"
+                | "ConfigureBot"
+                | "DeleteBot"
+                | "GetBotWebhooks"
+                | "ManageBotChannelAccess"
+                // macro.agents.coding() and macro.agentSessions.createManaged.
+                | "ListCodingAgents"
+                | "DispatchCodingAgent"
+                // macro.connectedApps.discover and .addServer.
+                | "DiscoverConnectors"
+                | "ConnectMcpServer"
+                // macro.agentSessions.byId(): log(), foldedLog(), rename(),
+                // archive(), delete(), prompt(), control() and sharing.
+                | "ReadAgentSession"
+                | "ManageAgentSession"
+                | "ReadAgentSessionSharing"
+                | "UpdateAgentSessionSharing"
+                // macro.databases: list(), schema(), query() and view ops.
+                | "ListDatabases"
+                | "DescribeDatabase"
+                | "QueryDatabase"
+                | "SaveDatabaseView"
+                | "DeleteDatabaseView"
+                // macro.routines.
+                | "CreateRoutine"
+                | "ListRoutines"
+                | "ReadRoutine"
+                | "UpdateRoutine"
+                | "RunRoutine"
+                | "DeleteRoutine"
+                // macro.calendar.event(id).record() and addToCalendar().
+                | "ReadCalendarEvent"
+                | "AddSharedCalendarEvent"
+                // macro.images.generate().
+                | "GenerateImage"
+                // document.copy(), database.duplicate() and project.rename().
+                | "DuplicateItem"
+                | "RenameItem"
+                // macro.memory.read() and macro.memory.edit().
+                | "ReadMemory"
+                | "UpdateMemory"
+                // User.activity(), macro.activity.mine() and Initiative.activity().
+                | "GetUserActivity"
+                | "ReadActivity"
+                | "ReadInitiativeActivity"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
         )
 }
 
@@ -284,57 +370,70 @@ impl SessionCodeMode for CodeModeService {
         &self,
         session: &AgentSession,
         execution: ExecutionId,
+        acting_as: ai_toolset::actor::ToolActor,
+        turn: macro_uuid::Uuid,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError> {
         if self.0.executor.is_none() {
             return Err(CodeModeError::Unavailable);
         }
-        if session.is_archived {
+        if session.is_archived() {
+            return Err(CodeModeError::Forbidden);
+        }
+        if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
             return Err(CodeModeError::Forbidden);
         }
         let owner = session
             .owner_user()
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
-        let limits = Limits::default();
-        if request.source.trim().is_empty()
-            || request.source.len() > limits.max_source_bytes
-            || request.timeout_ms == 0
-            || request.timeout_ms > 30_000
-        {
-            return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
-        }
+        validate_request(&request)?;
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
         let identity = ExecutionIdentity {
             execution,
+            acting_as,
             session: session.id,
             agent_id: session.bot_id,
             owner,
-            turn: self
-                .0
-                .turns
-                .active(session.id)
-                .await?
-                .ok_or(CodeModeError::Forbidden)?,
+            turn,
         };
         let cancel = cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let service = self.clone();
+        let span = tracing::info_span!(
+            "code_mode.execution",
+            agent_session_id = %session.id,
+            execution_id = %execution,
+            source_bytes = request.source.len(),
+            status = tracing::field::Empty,
+            activity = tracing::field::Empty,
+            result_bytes = tracing::field::Empty,
+        );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
         tokio::spawn(
             async move {
                 let _permit = permit;
                 let result = service.run(identity, execution, request, cancel).await;
-                if let Err(error) = &result {
-                    tracing::error!(?error, "could not finish code execution journal");
+                match &result {
+                    Ok(receipt) => {
+                        let span = tracing::Span::current();
+                        span.record("status", tracing::field::debug(receipt.status));
+                        span.record("activity", receipt.activity.len());
+                        if let Some(value) = &receipt.result {
+                            span.record("result_bytes", value.to_string().len());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(?error, "could not finish code execution journal");
+                    }
                 }
                 result
             }
-            .in_current_span(),
+            .instrument(span.or_current()),
         )
         .await
         .map_err(CodeModeError::Task)?
@@ -360,6 +459,91 @@ impl SessionCodeMode for CodeModeService {
         record.error = execution_error(&record);
         Ok(record)
     }
+}
+
+/// Whether a program may return review references.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Reviews {
+    /// Session programs can persist review stacks and return their references.
+    Allowed,
+    /// Programs outside a session have nowhere to present a review.
+    Rejected,
+}
+
+/// Interpret a finished program against the `{data, reviews?}` contract.
+pub(super) fn settle(
+    outcome: Outcome,
+    reviews: Reviews,
+) -> (ExecutionStatus, Option<serde_json::Value>, Option<String>) {
+    match outcome {
+        Outcome::Succeeded { mut value } => {
+            if reviews == Reviews::Rejected {
+                // Shared guides end with `reviews: []`; an empty list asks for nothing.
+                if let Some(object) = value.as_object_mut()
+                    && object.get("reviews") == Some(&serde_json::json!([]))
+                {
+                    object.remove("reviews");
+                }
+                let valid = value
+                    .as_object()
+                    .is_some_and(|object| object.len() == 1 && object.contains_key("data"));
+                return if valid {
+                    (ExecutionStatus::Succeeded, Some(value), None)
+                } else {
+                    (
+                        ExecutionStatus::Failed,
+                        Some(value),
+                        Some(
+                            "main must return exactly {data: JSON}; reviews are unavailable here."
+                                .into(),
+                        ),
+                    )
+                };
+            }
+            if let Some(object) = value.as_object_mut()
+                && object.len() == 1
+                && object.contains_key("data")
+            {
+                object.insert("reviews".into(), serde_json::json!([]));
+            }
+            let valid = value.as_object().is_some_and(|object| {
+                object.len() == 2
+                    && object.contains_key("data")
+                    && object.get("reviews").is_some_and(|references| {
+                        serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
+                            .is_ok()
+                    })
+            });
+            if valid {
+                (ExecutionStatus::Succeeded, Some(value), None)
+            } else {
+                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references.".into()))
+            }
+        }
+        Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
+        Outcome::Cancelled => (
+            ExecutionStatus::Cancelled,
+            None,
+            Some("Execution cancelled. Unfinished calls may have taken effect.".into()),
+        ),
+        Outcome::TimedOut => (
+            ExecutionStatus::TimedOut,
+            None,
+            Some("Execution timed out. Unfinished calls may have taken effect.".into()),
+        ),
+    }
+}
+
+/// Reject requests the runner would refuse, before minting a credential.
+pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeError> {
+    if request.source.trim().is_empty()
+        || request.source.len() > Limits::default().max_source_bytes
+        || request.timeout_ms == 0
+        || request.timeout_ms > 30_000
+    {
+        return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+    }
+    Ok(())
 }
 
 fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {

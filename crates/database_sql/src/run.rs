@@ -111,6 +111,9 @@ pub enum RunFailure<SourceFailure, WriteFailure> {
     rename_all_fields = "camelCase"
 )]
 pub enum RunError {
+    /// A read-only caller supplied a write or schema command.
+    #[error("only SELECT statements are allowed")]
+    ReadOnly,
     /// The text was not a statement of the supported grammar.
     #[error(transparent)]
     Parse(ParseError),
@@ -199,6 +202,45 @@ pub enum RunError {
     /// The first step was asked for twice.
     #[error("the query has already started")]
     AlreadyStarted,
+    /// The statement names a table its catalog does not have: it was
+    /// resolved against another catalog.
+    #[error("table {table} is not in the catalog the statement was resolved against")]
+    TableNotInCatalog {
+        /// The table.
+        table: TableId,
+    },
+    /// The statement names a column its table does not have: it was
+    /// resolved against another catalog.
+    #[error(
+        "table {table} has no column {column}; the statement was resolved against another catalog"
+    )]
+    ColumnNotInTable {
+        /// The table.
+        table: TableId,
+        /// The column's definition.
+        column: Uuid,
+    },
+    /// A select item names a key nothing in the statement binds.
+    #[error("select item {key} is bound to no column of the statement")]
+    UnboundColumn {
+        /// The key.
+        key: Uuid,
+    },
+    /// A value for a column is not of the column's type.
+    #[error("a value written to \"{column}\" is not of that column's type")]
+    MismatchedValue {
+        /// The column's name.
+        column: String,
+    },
+    /// The engine broke one of its own invariants: a bug in the engine, not
+    /// a problem with the statement.
+    #[error(
+        "the query engine failed internally ({invariant}); this is a bug, not a problem with the statement"
+    )]
+    Internal {
+        /// The invariant broken.
+        invariant: &'static str,
+    },
 }
 
 /// A failure as it crosses the wasm boundary: the typed error, and the words
@@ -446,6 +488,7 @@ impl From<ViewProblem> for RunError {
 
 /// What a statement produced.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
     /// The result columns, in select-list order; empty for writes.
@@ -454,7 +497,9 @@ pub struct Outcome {
     pub rows: Table,
     /// For a row-shaped result, the row entity id behind each result row.
     pub row_ids: Vec<RowId>,
-    /// The tables read, so a caller can watch them for changes.
+    /// The tables read, so a caller can watch them for changes. Built-in IDs
+    /// are UUID-shaped constants, not RFC-versioned UUIDs.
+    #[cfg_attr(feature = "schema", schemars(with = "Vec<String>"))]
     pub read_tables: Vec<TableId>,
     /// Whether the read hit [`ROW_CAP`], making aggregates partial.
     pub truncated: bool,
@@ -469,6 +514,7 @@ pub struct Outcome {
 
 /// A column whose type an `ALTER COLUMN` changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AlteredColumn {
     /// The table.
@@ -481,6 +527,7 @@ pub struct AlteredColumn {
 
 /// One result column.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct OutcomeColumn {
     /// The name as the statement would call it: the column's display name,
@@ -488,11 +535,13 @@ pub struct OutcomeColumn {
     pub name: String,
     /// The column behind the values, when there is one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub column: Option<Uuid>,
     /// What the values are.
     pub kind: OutcomeKind,
     /// For `row_id`, the table whose rows its cells are.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
     pub table: Option<TableId>,
 }
 
@@ -511,6 +560,8 @@ pub enum OutcomeKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// Select option ids; the caller labels them from the catalog.
     Select,
     /// Entity ids; the caller hydrates them.
@@ -526,7 +577,34 @@ pub async fn run<Source: RowSource, Sink: OpsSink>(
     source: &Source,
     sink: &Sink,
 ) -> Result<Outcome, RunFailure<Source::Error, Sink::Error>> {
-    let (mut engine, mut step) = Engine::start(catalog, sql)?;
+    let (engine, step) = Engine::start(catalog, sql)?;
+    drive(engine, step, source, sink).await
+}
+
+/// Execute an already resolved SELECT without exposing a write sink.
+pub async fn run_select<Source: RowSource>(
+    catalog: &Catalog,
+    select: SelectQuery,
+    source: &Source,
+) -> Result<Outcome, RunFailure<Source::Error, RunError>> {
+    let (engine, step) = Engine::from_select(catalog, select)?;
+    drive(engine, step, source, &ReadOnly).await
+}
+
+struct ReadOnly;
+impl OpsSink for ReadOnly {
+    type Error = RunError;
+    async fn apply(&self, _: DatabaseId, _: Vec<DatabaseOp>) -> Result<Vec<OpResult>, Self::Error> {
+        Err(RunError::ReadOnly)
+    }
+}
+
+async fn drive<Source: RowSource, Sink: OpsSink>(
+    mut engine: Engine,
+    mut step: Step,
+    source: &Source,
+    sink: &Sink,
+) -> Result<Outcome, RunFailure<Source::Error, Sink::Error>> {
     loop {
         step = match step {
             Step::Done(outcome) => return Ok(outcome),
@@ -557,9 +635,53 @@ pub async fn run<Source: RowSource, Sink: OpsSink>(
     }
 }
 
+/// Read metadata without fetching data or creating a row catalog.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadDescription {
+    /// Tables actually bound by the compiler, not text matches in SQL.
+    pub read_tables: Vec<TableId>,
+    /// Expected output column identities, names and kinds.
+    pub columns: Vec<OutcomeColumn>,
+}
+
+/// Compile and describe a read, rejecting writes before any source is touched.
+pub fn describe_read(catalog: &Catalog, sql: &str) -> Result<ReadDescription, RunError> {
+    if crate::parse::parse_schema(sql)
+        .map_err(RunError::Parse)?
+        .is_some()
+    {
+        return Err(RunError::ReadOnly);
+    }
+    let crate::resolve::Query::Select(select) = crate::resolve::compile(catalog, sql)? else {
+        return Err(RunError::ReadOnly);
+    };
+    describe_select(catalog, &select)
+}
+
+/// Describe a compiled SELECT, including views, without executing its plan.
+pub fn describe_select(
+    catalog: &Catalog,
+    select: &SelectQuery,
+) -> Result<ReadDescription, RunError> {
+    let mut read_tables = Vec::new();
+    for relation in &select.relations {
+        if !read_tables.contains(&relation.table) {
+            read_tables.push(relation.table);
+        }
+    }
+    Ok(ReadDescription {
+        read_tables,
+        columns: result_columns(catalog, select)?,
+    })
+}
+
 /// The columns a resolved `SELECT` returns, named and typed as its outcome
 /// will be.
-pub fn result_columns(catalog: &Catalog, select: &SelectQuery) -> Vec<OutcomeColumn> {
+pub fn result_columns(
+    catalog: &Catalog,
+    select: &SelectQuery,
+) -> Result<Vec<OutcomeColumn>, RunError> {
     describe(
         catalog,
         &select.items,
@@ -576,23 +698,24 @@ pub(crate) fn describe(
     labels: &[(usize, String)],
     bindings: &[Binding],
     relations: &[Relation],
-) -> Vec<OutcomeColumn> {
+) -> Result<Vec<OutcomeColumn>, RunError> {
     let column = |key: Uuid| {
         column_of(catalog, bindings, relations, key)
             .cloned()
             .or_else(|| virtual_column_of(bindings, relations, key))
-            .expect("select items are bound in the scope")
+            .ok_or(RunError::UnboundColumn { key })
     };
     let mut columns: Vec<OutcomeColumn> = items
         .iter()
         .map(|item| match item {
             SelectItem::Column(key) => {
-                let column = column(*key);
+                let column = column(*key)?;
                 let bound = binding(bindings, *key);
                 let row_table = bound
-                    .map(|bound| relations[bound.relation].table)
+                    .and_then(|bound| relations.get(bound.relation))
+                    .map(|relation| relation.table)
                     .filter(|table| *key == row_id_key(*table));
-                OutcomeColumn {
+                Ok(OutcomeColumn {
                     column: bound.and_then(|bound| bound.column),
                     table: row_table,
                     kind: match column.kind {
@@ -601,27 +724,28 @@ pub(crate) fn describe(
                         ColumnKind::Number => OutcomeKind::Number,
                         ColumnKind::Boolean => OutcomeKind::Boolean,
                         ColumnKind::Date => OutcomeKind::Date,
+                        ColumnKind::DateRange => OutcomeKind::DateRange,
                         ColumnKind::Select { .. } => OutcomeKind::Select,
                         ColumnKind::Entity { .. } => OutcomeKind::Entity,
                     },
                     name: column.name,
-                }
+                })
             }
             SelectItem::Aggregate {
                 function,
                 column: None,
-            } => OutcomeColumn {
+            } => Ok(OutcomeColumn {
                 name: format!("{}(*)", function.name()),
                 column: None,
                 kind: OutcomeKind::Number,
                 table: None,
-            },
+            }),
             SelectItem::Aggregate {
                 function,
                 column: Some(key),
             } => {
-                let column = column(*key);
-                OutcomeColumn {
+                let column = column(*key)?;
+                Ok(OutcomeColumn {
                     name: format!("{}({})", function.name(), column.name),
                     column: None,
                     kind: match (function, &column.kind) {
@@ -631,14 +755,14 @@ pub(crate) fn describe(
                         _ => OutcomeKind::Number,
                     },
                     table: None,
-                }
+                })
             }
         })
-        .collect();
+        .collect::<Result<_, RunError>>()?;
     for (index, label) in labels {
         if let Some(column) = columns.get_mut(*index) {
             column.name = label.clone();
         }
     }
-    columns
+    Ok(columns)
 }

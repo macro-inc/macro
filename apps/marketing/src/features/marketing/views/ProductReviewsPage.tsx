@@ -69,11 +69,11 @@ export function RouteGithub() {
     <ProductPage>
       <div class="github-page">
         <ProductHero
-          tutorial="github"
           product="GitHub"
           title="Diffs and merge PRs from chat."
           description="Review diffs and merge pull requests from team chat. Comments and @mentions come back to your inbox."
           cta="github_hero_get_started"
+          tutorial="github"
         />
         <FeaturePageSection
           id="pr-links"

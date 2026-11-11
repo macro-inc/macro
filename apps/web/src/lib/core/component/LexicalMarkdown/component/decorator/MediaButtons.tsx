@@ -1,9 +1,9 @@
 import { isMobile } from '@core/mobile/isMobile';
+import NewTab from '@icon/system/regular/arrow-square-out.svg';
+import ArrowsOut from '@icon/system/regular/arrows-out-simple.svg';
+import ThreeDotsIcon from '@icon/system/regular/dots-three.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import NewTab from '@phosphor/arrow-square-out.svg';
-import ArrowsOut from '@phosphor/arrows-out-simple.svg';
-import ThreeDotsIcon from '@phosphor/dots-three.svg';
-import Trash from '@phosphor/trash.svg';
 import { Button, Dropdown, Layer } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -51,7 +51,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.enlarge?.();
           }}
         >
-          <ArrowsOut />
+          <ArrowsOut class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dialog.Trigger>
       </Show>
       <Show when={props.newTab && !isMobile()}>
@@ -65,7 +65,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.newTab?.();
           }}
         >
-          <NewTab />
+          <NewTab class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       <Show when={props.delete}>
@@ -79,7 +79,7 @@ export function MediaButtons(props: MediaButtonsProps) {
             props.delete?.();
           }}
         >
-          <Trash />
+          <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
     </>
@@ -102,7 +102,7 @@ export function MediaButtons(props: MediaButtonsProps) {
               variant="ghost"
               tooltip="More options"
             >
-              <ThreeDotsIcon />
+              <ThreeDotsIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Dropdown.Trigger>
             <Dropdown.Content>
               <Dropdown.Group>

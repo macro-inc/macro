@@ -1,5 +1,5 @@
-import HeadCircuit from '@phosphor-icons/core/regular/head-circuit.svg';
-import UserGear from '@phosphor-icons/core/regular/user-gear.svg';
+import HeadCircuit from '@icon/system/regular/head-circuit.svg';
+import UserGear from '@icon/system/regular/user-gear.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { AgentSummary } from '@service-cognition/generated/tools/types';
 import { createSignal, For, Show } from 'solid-js';
@@ -11,7 +11,6 @@ import { createToolRenderer } from './ToolRenderer';
 const HARNESS_NAMES: Record<string, string> = {
   'in-memory': 'Macro',
   cursor: 'Cursor',
-  'claude-cloud': 'Claude Cloud',
   macrod: 'Self-hosted harness',
 };
 
@@ -41,7 +40,7 @@ function agentDetails(agent: AgentSummary): Detail[] {
     { label: 'Agent ID', value: agent.bot.botId, secret: true },
     { label: 'Handle', value: `@${agent.bot.handle}` },
     { label: 'Owner', value: ownerLabel(agent.bot.owner) },
-    { label: 'Runtime', value: harnessLabel(agent) },
+    { label: 'Runs on', value: harnessLabel(agent) },
     { label: 'Model', value: agent.defaultModel },
     { label: 'Channels', value: channelsLabel(agent) },
     { label: 'Connected apps', value: appsLabel(agent) },

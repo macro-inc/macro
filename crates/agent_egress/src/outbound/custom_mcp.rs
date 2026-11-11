@@ -87,10 +87,12 @@ where
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         let McpDestination::Custom(key) = destination else {
-            return self.inner.resolve(owner, destination).await;
+            return self.inner.resolve(owner, agent, session, destination).await;
         };
 
         // Unlike a Pipedream slug there is nothing to address without a row:

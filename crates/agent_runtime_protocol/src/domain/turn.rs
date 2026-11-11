@@ -46,6 +46,12 @@ pub enum FailureNoticeKind {
     ProviderUsageLimit,
     /// The selected model cannot read image attachments in this conversation.
     UnsupportedImageInput,
+    /// The provider ended the run in failure; its own page for the run is
+    /// where any detail it kept lives.
+    ProviderRunFailed,
+    /// The runtime accepted the prompt but never handed it to the agent;
+    /// the fix is to send it again.
+    PromptNotDelivered,
 }
 
 /// An external page where the person can act on a [`FailureNotice`].
@@ -69,6 +75,21 @@ pub struct TurnCompleteNotification {
     pub session_id: SessionId,
     /// The recorded terminal outcome.
     pub outcome: TurnOutcome,
+}
+
+/// The runtime session backing this ACP session was deliberately ended by
+/// the person or agent driving it, such as its terminal tab being closed.
+///
+/// An optional extension. A runtime sends it only for an explicit closure
+/// fact it observed, never for a disconnect, crash, timeout, or other loss it
+/// cannot attribute to a deliberate close. Receivers treat repeats as one
+/// fact; the ACP session may still be resumed by a later prompt.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
+#[notification(method = "_session/closed")]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeSessionClosedNotification {
+    /// ACP session whose runtime session was closed.
+    pub session_id: SessionId,
 }
 
 /// Recorded terminal outcome of a reconstructed turn.

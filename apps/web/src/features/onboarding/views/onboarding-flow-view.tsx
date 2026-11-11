@@ -1,5 +1,12 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
   animateStepChange,
@@ -22,6 +29,7 @@ import { createOnboardingFlow } from '../primitives/onboarding-flow';
 import { EmailStep } from './email-step';
 import { PlanComparisonView } from './plan-comparison-view';
 import { type InviteOfferSlot, PlanStep } from './plan-step';
+import { RoutinesStep } from './routines-step';
 import { StoryStageView } from './story-stage-view';
 import { TeamStep } from './team-step';
 import { ToolsStep } from './tools-step';
@@ -30,6 +38,8 @@ import { ToolsStep } from './tools-step';
 export function OnboardingFlowView(props: {
   /** A deep link to land on after onboarding. */
   next: string | undefined;
+  /** Raw `?step` from the entry link. Unknown values are ignored. */
+  step?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
   /** Leaves the app for hosted checkout. */
@@ -43,6 +53,12 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
+  const teamDirectory = context.createTeamDirectory({
+    domain: () => undefined,
+    ownEmail: () => undefined,
+  });
+  // The work step offers Outlook beside Google; Read more then covers both.
+  const outlookAvailable = context.createOutlookAvailability();
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
@@ -58,6 +74,7 @@ export function OnboardingFlowView(props: {
   });
   const flow = createOnboardingFlow(context, {
     checkoutReturn: () => props.checkoutReturn,
+    requestedStep: () => props.step,
     record,
     signupMethod: () => {
       const accounts = emailAccounts.accounts();
@@ -65,6 +82,17 @@ export function OnboardingFlowView(props: {
       return accounts.value.length > 0 ? 'google' : 'email_code';
     },
     finishing: finish.finishing,
+  });
+
+  // AI starts suggesting routines for the last step as soon as an inbox is
+  // connected; the server runs it once per person, so once here is enough.
+  let generationStarted = false;
+  createEffect(() => {
+    if (generationStarted || !context.routineSuggestionsEnabled()) return;
+    const accounts = emailAccounts.accounts();
+    if (accounts.t !== 'ready' || accounts.value.length === 0) return;
+    generationStarted = true;
+    context.generateRoutineSuggestions();
   });
 
   // Leaving is the host's decision; the flow only reports why.
@@ -96,19 +124,52 @@ export function OnboardingFlowView(props: {
       queueMicrotask(() => focusStepHeading(content));
     });
   };
+  // Someone who already joined a team (invite link or domain) has nothing to
+  // do on the team step, so the flow passes over it in both directions.
+  const passesTeam = (target: OnboardingStep | undefined) => {
+    const teams = teamDirectory.teams();
+    return target === 'team' && teams.t === 'ready' && teams.value.length > 0;
+  };
+  const licensed = () => {
+    const viewer = context.viewer();
+    return viewer.t === 'signed-in' && viewer.viewer.licensed;
+  };
+  // The plan is settled before the routines step, but onboarding completes
+  // after it; a reload there falls back to what the license says.
+  const [finishPlan, setFinishPlan] = createSignal<() => Promise<void>>();
+  // With suggestions off there is no routines step: the plan finishes.
+  const choosePlan = (finishWith: () => Promise<void>) => {
+    if (finish.finishing()) return;
+    if (!context.routineSuggestionsEnabled()) {
+      fireAndForget(finishWith(), 'onboarding');
+      return;
+    }
+    setFinishPlan(() => finishWith);
+    flow.leave('completed');
+    goTo('routines');
+  };
+  const finishOnboarding = () => {
+    const finishWith =
+      finishPlan() ??
+      (licensed() ? () => finish.finishPremium() : () => finish.finishFree());
+    return finishWith();
+  };
   const advance = (outcome: StepOutcome = 'completed') => {
     if (finish.finishing()) return;
     const next = flow.leave(outcome);
+    const skipsTeam = passesTeam(next);
+    if (skipsTeam)
+      context.track('onboarding_v4_team', { action: 'already_on_team' });
     const viewer = context.viewer();
     if (
-      step() === 'team' &&
+      (step() === 'team' || skipsTeam) &&
       viewer.t === 'signed-in' &&
       viewer.viewer.licensed
     ) {
-      fireAndForget(finish.finishPremium(), 'onboarding');
+      choosePlan(() => finish.finishPremium());
       return;
     }
-    goTo(next);
+    goTo(skipsTeam ? 'plan' : next);
   };
   const viewerEmail = () => {
     const viewer = context.viewer();
@@ -125,8 +186,11 @@ export function OnboardingFlowView(props: {
   };
   const back = () => {
     const current = step();
+    // The plan is settled (and maybe paid for) once routines show.
+    if (current === 'routines') return undefined;
     const previous = current && previousOnboardingStep(current);
-    return previous && !finish.finishing() ? () => goTo(previous) : undefined;
+    const target = passesTeam(previous) ? 'tools' : previous;
+    return target && !finish.finishing() ? () => goTo(target) : undefined;
   };
 
   return (
@@ -150,9 +214,7 @@ export function OnboardingFlowView(props: {
         showPlanOffer() ? (
           <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueFree={() =>
-              fireAndForget(finish.finishFree(), 'onboarding')
-            }
+            onContinueFree={() => choosePlan(() => finish.finishFree())}
             onBackToPro={() => focusStepHeading(content, true)}
             onStartMax={() =>
               fireAndForget(
@@ -166,6 +228,7 @@ export function OnboardingFlowView(props: {
           step() === 'personal' ? (
           <OnboardingTrustDetails
             topic={step() === 'security' ? 'security' : 'google'}
+            microsoft={step() === 'work' && outlookAvailable()}
           />
         ) : undefined
       }
@@ -191,6 +254,9 @@ export function OnboardingFlowView(props: {
           <Match when={step() === 'work' || step() === 'personal'}>
             <EmailStep
               mode={step() === 'personal' ? 'personal' : 'work'}
+              signupProvider={
+                step() === 'work' ? flow.signupProvider() : undefined
+              }
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />
@@ -212,11 +278,17 @@ export function OnboardingFlowView(props: {
                   'onboarding'
                 )
               }
-              onContinueFree={() =>
-                fireAndForget(finish.finishFree(), 'onboarding')
-              }
+              onContinueFree={() => choosePlan(() => finish.finishFree())}
               renderInviteOffer={props.renderInviteOffer}
-              onPremiumPaid={finish.finishPremium}
+              onPremiumPaid={async (tier) =>
+                choosePlan(() => finish.finishPremium(tier))
+              }
+            />
+          </Match>
+          <Match when={step() === 'routines'}>
+            <RoutinesStep
+              finishing={finish.finishing()}
+              onFinish={() => fireAndForget(finishOnboarding(), 'onboarding')}
             />
           </Match>
         </Switch>

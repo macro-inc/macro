@@ -1,10 +1,10 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
-import { McpConnections } from '@app/features/settings/McpConnections';
+import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { TutorialPill } from '@app/features/video-tutorials';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -21,10 +21,12 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
-import { useSoupItemsQuery } from '@queries/soup/items';
+import { useSoupAstItemsQuery } from '@queries/soup/items';
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -38,9 +40,13 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
+import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { AgentSessionEntity } from '@entity';
 import { AgentSessionPane } from '../components/AgentSessionPane';
+import { AgentSessionSkeleton } from '../components/AgentSessionSkeleton';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
@@ -56,8 +62,10 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
+import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
@@ -71,6 +79,7 @@ function LoadingComposer() {
   return (
     <div class="grid size-full place-items-center text-ink-muted">
       <SpinnerIcon
+        aria-hidden={false}
         aria-label="Loading agent composer"
         class="size-5 animate-spin"
       />
@@ -78,17 +87,19 @@ function LoadingComposer() {
   );
 }
 
-function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
+function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const updatesFlag = useFeatureFlag(enableAgentUpdates);
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
-  const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
-  // The composer's Chat/Code choice; an open conversation keeps its own mode.
-  const workspace = createWorkspaceMode(userId());
+  const mode = (): AgentsMode => props.route?.mode ?? 'chat';
+  // The composer's Auto/Chat/Code choice; an open conversation keeps its own mode.
+  const workspace = createWorkspaceMode();
   const listView = createConversationListView(userId());
+  const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
   const isRoutinesPage = () => {
     const content = panel.handle.content();
@@ -98,47 +109,76 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
-    props.initialRoute
+    props.route
       ? {
-          conversation: props.initialRoute.conversation,
-          activeConversationId: props.initialRoute.conversation.id,
+          conversation: props.route.conversation,
+          activeConversationId: props.route.conversation.id,
         }
       : undefined
   );
+  // Selecting takes effect at once: the conversation's own Suspense shows a
+  // skeleton until its first load resolves. Selecting the conversation already
+  // on screen keeps it mounted, since the keyed Show remounts on a new object.
+  const selectConversation = (conversation: AgentConversationTarget) =>
+    batch(() => {
+      setPage('new');
+      setSelected((current) =>
+        current?.activeConversationId === conversation.id
+          ? current
+          : { conversation, activeConversationId: conversation.id }
+      );
+    });
+  // The list and its conversations share one mount (`mountKey` in the routes),
+  // so the selection follows navigation, including Back and Forward.
+  createEffect(
+    on(
+      () => {
+        const conversation = props.route?.conversation;
+        return conversation && `${conversation.type}:${conversation.id}`;
+      },
+      () => {
+        const conversation = props.route?.conversation;
+        if (!conversation) {
+          setSelected(undefined);
+          return;
+        }
+        // An adopted session id is the conversation already on screen.
+        if (selected()?.activeConversationId === conversation.id) return;
+        selectConversation(conversation);
+      },
+      { defer: true }
+    )
+  );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
   const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
-  const [draft, setDraft] = createSignal('');
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
+  // Routines that run often leave their runs unlisted; those stay a click
+  // away instead of in the list.
+  const [showUnlistedRuns, setShowUnlistedRuns] = createSignal(false);
   const rosterSource = createAgentRosterSource();
-  const query = useSoupItemsQuery(
-    () => {
-      const ownerId = userId();
-      return {
-        params: { sort_method: 'updated_at', limit: 100 },
-        body: {
-          ...QUERY_FILTERS_BASE,
-          chat_filters: { owners: ownerId ? [ownerId] : [] },
-          agent_session_filters: {
-            include: true,
-            owners: ownerId ? [ownerId] : [],
-          },
-        },
-      };
-    },
-    () => ({ enabled: Boolean(userId()) })
+  const query = useSoupAstItemsQuery(
+    () =>
+      agentConversationsQuery(userId() ?? '', {
+        showUnlistedRuns: showUnlistedRuns(),
+      }),
+    () => ({ enabled: Boolean(userId()), keepPreviousData: true })
   );
   const conversations = createMemo(() =>
     selectRecentAgentConversations(
-      query.isSuccess
-        ? query.data.map((entity) =>
-            withEntityNotifications(entity, notifications)
-          )
-        : [],
+      // A pending REST fallback's data read would suspend the sidebar.
+      (query.isPending ? [] : (query.data?.entities ?? [])).map((entity) =>
+        withEntityNotifications(entity, notifications)
+      ),
       userId(),
       search()
     )
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
+  const updateSessions = () =>
+    (query.isPending ? [] : (query.data?.entities ?? [])).filter(
+      (entity): entity is AgentSessionEntity => entity.type === 'agent_session'
+    );
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -172,14 +212,16 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
         const content = panel.handle.content();
         if (
           content.type === 'component' &&
-          typeof content.params?.draft === 'string'
+          typeof content.params?.draft === 'string' &&
+          content.params.draft.length > 0
         )
-          setDraft(content.params.draft);
+          persistedDraft.setDraft(content.params.draft);
         showComposer();
       }
     )
   );
   const openPage = (next: AgentsPage) => {
+    setCreatingKind(undefined);
     setMobileList(false);
     if (next === 'routines') {
       layout.openWithSplit(routineContent(), {
@@ -245,7 +287,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       id: agentsRouteId({ mode: targetMode, conversation }),
     };
     if (!event?.shiftKey && panel.handle.content().id === next.id) {
-      setSelected({ conversation, activeConversationId: conversation.id });
+      selectConversation(conversation);
       return;
     }
     const result = layout.openWithSplit(next, {
@@ -295,7 +337,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const pageTitle = () => {
     if (page() === 'routines') return 'Routines';
     if (page() === 'agents') return 'Agents';
-    if (page() === 'connections') return 'Connections';
+    if (page() === 'connections') return 'Integrations';
     return undefined;
   };
 
@@ -307,8 +349,19 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       onClearFilters={listView.clear}
       onGroupingChange={listView.setGrouping}
       activePage={selected() ? undefined : page()}
+      onCreateRoutine={() =>
+        layout.popoverSplit({ type: 'component', id: 'routine-compose' })
+      }
+      onCreateAgent={(kind) => {
+        openPage('agents');
+        setCreatingKind(kind);
+      }}
       onOpenPage={(next) =>
-        next === 'agents' ? openRoster('agent') : openPage(next)
+        next === 'new'
+          ? showComposer()
+          : next === 'agents'
+            ? openRoster('agent')
+            : openPage(next)
       }
       modeForConversation={modeForConversation}
       activeConversationId={selected()?.activeConversationId}
@@ -316,13 +369,20 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       conversations={partitioned().conversations}
       archived={partitioned().archived}
       loading={query.isPending}
-      error={query.isLoadingError}
+      error={Boolean(query.error) && !query.isFetchNextPageError}
       hasNextPage={Boolean(query.hasNextPage)}
       loadingNextPage={query.isFetchingNextPage}
       onSearchChange={setSearch}
-      onOpenConversation={(conversation, event) =>
-        openConversation(conversation, event, modeForConversation(conversation))
-      }
+      showUnlistedRuns={showUnlistedRuns()}
+      onShowUnlistedRunsChange={setShowUnlistedRuns}
+      onOpenConversation={(conversation, event) => {
+        markRowNotificationsSeenOnOpen(conversation, notifications);
+        openConversation(
+          conversation,
+          event,
+          modeForConversation(conversation)
+        );
+      }}
       onRetry={() => fireAndForget(query.refetch(), 'agents-view')}
       onLoadMore={() => fireAndForget(query.fetchNextPage(), 'agents-view')}
     />
@@ -356,7 +416,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
               <ViewShell.Main class="overflow-hidden">
                 <ViewTour tour={agentsTour} />
                 <main
-                  class="main touch:pt-[calc(var(--safe-top,0px)+0.5rem)]"
+                  class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
                   classList={{ hidden: isTouchDevice() && mobileList() }}
                 >
                   <Show
@@ -381,10 +441,15 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                 <RoutinesPage />
                               </Match>
                               <Match when={page() === 'connections'}>
-                                <McpConnections />
+                                <IntegrationsPage />
                               </Match>
                               <Match when={page() === 'agents'}>
-                                <AgentSettings />
+                                <AgentSettings
+                                  createKind={creatingKind()}
+                                  onCloseCreate={() =>
+                                    setCreatingKind(undefined)
+                                  }
+                                />
                               </Match>
                             </Switch>
                             <div
@@ -392,6 +457,21 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                               classList={{ hidden: page() !== 'new' }}
                             >
                               <NewChatPage
+                                showUpdates={
+                                  updatesFlag().enabled && page() === 'new'
+                                }
+                                updateSessions={updateSessions()}
+                                onOpenUpdateSession={(id) => {
+                                  const session = updateSessions().find(
+                                    (item) => item.id === id
+                                  );
+                                  if (session)
+                                    openConversation(
+                                      session,
+                                      undefined,
+                                      modeForConversation(session)
+                                    );
+                                }}
                                 mode={workspace.mode()}
                                 onModeChange={workspace.setMode}
                                 active={
@@ -402,13 +482,19 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                   composerFocus = focus;
                                 }}
                                 workspaceId={panel.handle.id}
-                                draft={draft()}
-                                onDraftChange={setDraft}
+                                draft={persistedDraft.draft()}
+                                onDraftChange={persistedDraft.setDraft}
                                 roster={rosterSource.roster()}
                                 rosterLoading={rosterSource.loading()}
                                 availabilityLoading={rosterSource.availabilityLoading()}
                                 onStart={startConversation}
                                 onOpenRoster={openRoster}
+                                belowComposer={
+                                  <TutorialPill
+                                    tutorial="agents"
+                                    class="self-center"
+                                  />
+                                }
                               />
                             </div>
                           </Suspense>
@@ -417,9 +503,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                     }
                   >
                     {(conversation) => (
-                      <Switch>
-                        <Match when={conversation.type === 'agent_session'}>
-                          <Suspense fallback={<LoadingComposer />}>
+                      // Per conversation, so one switched away from can't hold
+                      // the next in its fallback until its own load settles.
+                      <Suspense fallback={<AgentSessionSkeleton />}>
+                        <Switch>
+                          <Match when={conversation.type === 'agent_session'}>
                             <AgentSessionPane
                               id={conversation.id}
                               notificationSource={notifications}
@@ -428,11 +516,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                               }
                               onDeleted={showComposer}
                             />
-                          </Suspense>
-                        </Match>
-                        <Match when={true}>
-                          <div class="body">
-                            <Suspense fallback={<LoadingComposer />}>
+                          </Match>
+                          <Match when={true}>
+                            <div class="body">
                               <ChatEmptyStateContext.Provider
                                 value={() => (
                                   <div class="px-4 py-16 text-center">
@@ -446,15 +532,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                   target={previewBlockTarget(conversation)}
                                   orchestrator={orchestrator}
                                   splitPanelContext={panel}
-                                  headerLeading={
-                                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
-                                  }
                                 />
                               </ChatEmptyStateContext.Provider>
-                            </Suspense>
-                          </div>
-                        </Match>
-                      </Switch>
+                            </div>
+                          </Match>
+                        </Switch>
+                      </Suspense>
                     )}
                   </Show>
                 </main>
@@ -478,12 +561,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 }
 
 /** Dedicated Agents workspace used by the new app views layout. */
-export function AgentsView(props: { initialRoute?: AgentsRoute }) {
+export function AgentsView(props: { route?: AgentsRoute }) {
   return (
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Suspense fallback={<LoadingComposer />}>
-          <AgentsWorkspace initialRoute={props.initialRoute} />
+          <AgentsWorkspace route={props.route} />
         </Suspense>
       </StaticMarkdownContext>
     </ListEntityMetadataQueryProvider>

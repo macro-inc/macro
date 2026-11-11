@@ -1,4 +1,4 @@
-import ShieldCheck from '@phosphor/shield-check.svg';
+import ShieldCheck from '@icon/system/regular/shield-check.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 
@@ -12,6 +12,8 @@ export type ToolApprovalCardProps = {
   standing?: string;
   /** Who prompted the turn; absent for a bot on nobody's behalf. */
   requester?: string;
+  /** The owner prompted the turn: a call they confirm even in their own. */
+  ownTurn?: boolean;
   /** The session's owner, whose access the call spends. */
   owner: string;
   /** The viewer is the owner. */
@@ -31,7 +33,8 @@ export type ToolApprovalCardProps = {
  * "waiting for the owner" with a way out for everyone else.
  */
 export function ToolApprovalCard(props: ToolApprovalCardProps) {
-  const asker = () => props.requester ?? 'A bot';
+  const asker = () =>
+    props.ownTurn ? 'the agent' : (props.requester ?? 'A bot');
   return (
     <section
       aria-label="Tool approval request"
@@ -48,7 +51,9 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
               : `Waiting for ${props.owner} to approve`}
           </div>
           <p class="mt-0.5 text-sm leading-5 text-ink-muted [overflow-wrap:anywhere]">
-            {asker()} asked the agent to {props.action}.
+            {props.ownTurn
+              ? `The agent wants to ${props.action}.`
+              : `${asker()} asked the agent to ${props.action}.`}
           </p>
           <Show when={props.canApprove && props.standing}>
             {(standing) => (
@@ -68,7 +73,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
               <Button
                 type="button"
                 size="md"
-                variant="outline"
+                variant="secondary"
                 disabled={props.disabled}
                 onClick={() => props.onCancel()}
               >
@@ -91,7 +96,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
             <Button
               type="button"
               size="md"
-              variant="outline"
+              variant="secondary"
               disabled={props.disabled}
               onClick={() => props.onApproveAlways()}
             >
@@ -101,7 +106,7 @@ export function ToolApprovalCard(props: ToolApprovalCardProps) {
           <Button
             type="button"
             size="md"
-            variant="strong"
+            variant="primary"
             disabled={props.disabled}
             onClick={() => props.onApprove()}
           >

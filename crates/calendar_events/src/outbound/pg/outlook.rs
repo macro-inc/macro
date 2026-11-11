@@ -144,28 +144,48 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                         SELECT $1,rows.id,rows.master,$4 FROM unnest($2::text[],$3::text[]) rows(id,master)
                         ON CONFLICT(work_id,provider_id) DO UPDATE SET master_id=EXCLUDED.master_id,scan_id=EXCLUDED.scan_id"#,
                         lease.id,&ids,&masters,state.scan_id).execute(&mut *tx).await.map_err(report)?;
+                    sqlx::query!("DELETE FROM calendar_outlook_members WHERE work_id=$1 AND(provider_id=ANY($2::text[]) OR master_id=ANY($2::text[]))",lease.id,&page.removed).execute(&mut *tx).await.map_err(report)?;
+                    // A full scan reads every listed event anyway. A delta
+                    // round lists only changes, so it also reads the events
+                    // an older reader skipped, once per reader revision. One
+                    // with a stored copy was read, so it is stamped instead
+                    // and later pages do not check it again.
+                    let skipped_before = if state.full_scan {
+                        vec![]
+                    } else {
+                        sqlx::query_scalar!(
+                            r#"WITH unchecked AS(SELECT m.provider_id,m.master_id,EXISTS(SELECT 1 FROM calendar_event_sources s
+                                WHERE s.source_kind='outlook' AND s.account_id=$3 AND s.calendar_id=$4 AND s.provider_event_id=m.master_id) AS stored
+                                FROM calendar_outlook_members m WHERE m.work_id=$1 AND(m.reader_revision IS NULL OR m.reader_revision<$2)),
+                            stamped AS(UPDATE calendar_outlook_members m SET reader_revision=$2 FROM unchecked u
+                                WHERE m.work_id=$1 AND m.provider_id=u.provider_id AND u.stored)
+                            SELECT DISTINCT master_id AS "master_id!" FROM unchecked WHERE NOT stored"#,
+                            lease.id,
+                            lease.reader_revision,
+                            lease.account_id,
+                            target.calendar_id
+                        )
+                        .fetch_all(&mut *tx)
+                        .await
+                        .map_err(report)?
+                    };
                     let pending: Vec<_> = masters
                         .into_iter()
                         .chain(removed.into_iter().filter_map(|r| r.master_id))
+                        .chain(skipped_before)
                         .collect::<std::collections::BTreeSet<_>>()
                         .into_iter()
                         .collect();
-                    sqlx::query!("DELETE FROM calendar_outlook_members WHERE work_id=$1 AND(provider_id=ANY($2::text[]) OR master_id=ANY($2::text[]))",lease.id,&page.removed).execute(&mut *tx).await.map_err(report)?;
                     sqlx::query!(r#"UPDATE calendar_outlook_work SET page_loaded=true,pending_ids=$2,next_page=$3,terminal_cursor=$4,
                         visited_pages=array_append(visited_pages,COALESCE(page_cursor,'initial')) WHERE id=$1"#,lease.id,&pending,page.next,page.delta).execute(&mut *tx).await.map_err(report)?;
                 }
             }
             OutlookCalendarProgress::Event { id, exists } => {
-                if state.pending_ids.first() != Some(&id) || !state.page_loaded {
-                    return Err(rootcause::report!(
-                        "calendar event acknowledgment does not match pending work"
-                    ));
-                }
-                if !exists {
-                    let ids=sqlx::query_scalar!("DELETE FROM calendar_event_sources WHERE source_kind='outlook' AND calendar_id=$1 AND provider_event_id=$2 RETURNING event_id",target.calendar_id,&id).fetch_all(&mut *tx).await.map_err(report)?;
-                    for id in ids {
-                        restore_best_source_or_delete(&mut tx, &mut log, id).await?;
-                    }
+                acknowledge_event(&state.pending_ids, state.page_loaded, &id)?;
+                if exists {
+                    stamp_reader(&mut tx, lease, &id).await?;
+                } else {
+                    retire_provider_event(&mut tx, &mut log, target.calendar_id, &id).await?;
                     sqlx::query!(
                         "DELETE FROM calendar_outlook_members WHERE work_id=$1 AND master_id=$2",
                         lease.id,
@@ -175,7 +195,13 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     .await
                     .map_err(report)?;
                 }
-                sqlx::query!("UPDATE calendar_outlook_work SET pending_ids=array_remove(pending_ids,$2) WHERE id=$1",lease.id,&id).execute(&mut *tx).await.map_err(report)?;
+                remove_pending(&mut tx, lease.id, &id).await?;
+            }
+            OutlookCalendarProgress::Unreadable { id } => {
+                acknowledge_event(&state.pending_ids, state.page_loaded, &id)?;
+                stamp_reader(&mut tx, lease, &id).await?;
+                retire_provider_event(&mut tx, &mut log, target.calendar_id, &id).await?;
+                remove_pending(&mut tx, lease.id, &id).await?;
             }
             OutlookCalendarProgress::Finish => {
                 if !state.pending_ids.is_empty() || !state.page_loaded {
@@ -205,6 +231,15 @@ impl OutlookCalendarRepository for PgCalendarRepository {
                     }
                     sqlx::query!(r#"UPDATE calendar_outlook_work SET cursor=$2,page_cursor=$2,terminal_cursor=NULL,page_loaded=false,full_scan=$3,scan_id=gen_random_uuid(),visited_pages='{}'
                         WHERE id=$1"#,lease.id,if lease.is_primary{state.terminal_cursor}else{None},!lease.is_primary).execute(&mut *tx).await.map_err(report)?;
+                    if visible_calendar_sync_error_tx(&mut tx, target.calendar_id)
+                        .await?
+                        .is_some()
+                    {
+                        log.record(
+                            lease.binding.link_id,
+                            CalendarChangeOp::UpsertCalendar(target.calendar_id),
+                        );
+                    }
                     sqlx::query!(r#"UPDATE calendars SET synced_at=now(),last_sync_error=NULL,last_sync_error_at=NULL,consecutive_sync_failures=0,
                         materialized_starts_at=$2,materialized_ends_at=$3,materialized_start_date=$4,materialized_end_date=$5 WHERE id=$1"#,
                         target.calendar_id,target.range.starts_at,target.range.ends_at,target.range.start_date,target.range.end_date).execute(&mut *tx).await.map_err(report)?;
@@ -221,6 +256,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         &self,
         lease_id: Uuid,
         range: OccurrenceRange,
+        reader_revision: i16,
     ) -> Result<Option<OutlookCalendarLease>, Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         let mut log = ChangeLogBatch::default();
@@ -328,6 +364,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             pending_ids: row.pending_ids,
             page_loaded: row.page_loaded,
             page_cursor: row.page_cursor,
+            reader_revision,
         }))
     }
     async fn renew_outlook_calendar(&self, lease: &OutlookCalendarLease) -> Result<(), Report> {
@@ -426,6 +463,7 @@ impl OutlookCalendarRepository for PgCalendarRepository {
             _ => "Microsoft calendar synchronization will retry",
         };
         let mut tx = self.pool.begin().await.map_err(report)?;
+        let mut log = ChangeLogBatch::default();
         // An old worker must not alter the replacement grant's health.
         if fence(&mut tx, lease).await.is_err() {
             return Ok(());
@@ -433,7 +471,16 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         sqlx::query!(r#"UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,last_error=$2,attempts=attempts+1,
             next_run_at=now()+make_interval(secs=>LEAST(900,30*power(2,LEAST(attempts,5)))::int) WHERE id=$1"#,lease.id,message).execute(&mut *tx).await.map_err(report)?;
         if let Some(target) = &lease.target {
-            sqlx::query!("UPDATE calendars SET last_sync_error=$2,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1",target.calendar_id,message).execute(&mut *tx).await.map_err(report)?;
+            let shown_before = visible_calendar_sync_error_tx(&mut tx, target.calendar_id).await?;
+            let failures = sqlx::query_scalar!("UPDATE calendars SET last_sync_error=$2,last_sync_error_at=now(),consecutive_sync_failures=consecutive_sync_failures+1 WHERE id=$1 RETURNING consecutive_sync_failures",target.calendar_id,message).fetch_optional(&mut *tx).await.map_err(report)?;
+            if failures.is_some_and(|failures| {
+                failure_changes_sync_error_badge(shown_before.as_deref(), failures, message)
+            }) {
+                log.record(
+                    lease.binding.link_id,
+                    CalendarChangeOp::UpsertCalendar(target.calendar_id),
+                );
+            }
         }
         sqlx::query!(
             "UPDATE calendar_accounts SET sync_status=$2,last_sync_error=$3 WHERE id=$1",
@@ -448,8 +495,63 @@ impl OutlookCalendarRepository for PgCalendarRepository {
         .execute(&mut *tx)
         .await
         .map_err(report)?;
-        tx.commit().await.map_err(report)
+        log.commit(tx).await
     }
+}
+
+fn acknowledge_event(pending_ids: &[String], page_loaded: bool, id: &str) -> Result<(), Report> {
+    if pending_ids.first().map(String::as_str) != Some(id) || !page_loaded {
+        return Err(rootcause::report!(
+            "calendar event acknowledgment does not match pending work"
+        ));
+    }
+    Ok(())
+}
+
+async fn retire_provider_event(
+    tx: &mut Transaction<'_, Postgres>,
+    log: &mut ChangeLogBatch,
+    calendar_id: Uuid,
+    id: &str,
+) -> Result<(), Report> {
+    let ids=sqlx::query_scalar!("DELETE FROM calendar_event_sources WHERE source_kind='outlook' AND calendar_id=$1 AND provider_event_id=$2 RETURNING event_id",calendar_id,id).fetch_all(&mut **tx).await.map_err(report)?;
+    for id in ids {
+        restore_best_source_or_delete(tx, log, id).await?;
+    }
+    Ok(())
+}
+
+async fn stamp_reader(
+    tx: &mut Transaction<'_, Postgres>,
+    lease: &OutlookCalendarLease,
+    id: &str,
+) -> Result<(), Report> {
+    sqlx::query!(
+        "UPDATE calendar_outlook_members SET reader_revision=$3 WHERE work_id=$1 AND master_id=$2 AND reader_revision IS DISTINCT FROM $3",
+        lease.id,
+        id,
+        lease.reader_revision
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+async fn remove_pending(
+    tx: &mut Transaction<'_, Postgres>,
+    work_id: Uuid,
+    id: &str,
+) -> Result<(), Report> {
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET pending_ids=array_remove(pending_ids,$2) WHERE id=$1",
+        work_id,
+        id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
 }
 
 async fn reset_cursor(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<(), Report> {

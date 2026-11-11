@@ -3,6 +3,7 @@ mod draft;
 mod followup;
 mod previews;
 mod send;
+mod send_attempt;
 mod senders;
 mod sending_inbox;
 pub(crate) mod signature;
@@ -68,6 +69,8 @@ pub struct EmailServiceImpl<T, U, E, CS, Eam, B = NoopMacroEventBroker> {
     pub(crate) macro_event_broker: B,
     pub(crate) sent_undo_delay_secs: u32,
     pub(crate) sender_provider: std::sync::Arc<dyn crate::domain::senders::EmailSenderProvider>,
+    pub(crate) shared_thread_replies:
+        std::sync::Arc<dyn crate::domain::shared_thread_replies::SharedThreadReplyAccess>,
 }
 
 impl<T, U, E, CS, Eam> EmailServiceImpl<T, U, E, CS, Eam>
@@ -97,6 +100,9 @@ where
             sender_provider: std::sync::Arc::new(
                 crate::domain::senders::UnavailableEmailSenderProvider,
             ),
+            shared_thread_replies: std::sync::Arc::new(
+                crate::domain::shared_thread_replies::NoSharedThreadReplies,
+            ),
         }
     }
 }
@@ -108,6 +114,15 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
         provider: impl crate::domain::senders::EmailSenderProvider,
     ) -> Self {
         self.sender_provider = std::sync::Arc::new(provider);
+        self
+    }
+
+    /// Let callers reply to threads shared with them at edit access.
+    pub fn with_shared_thread_replies(
+        mut self,
+        access: impl crate::domain::shared_thread_replies::SharedThreadReplyAccess,
+    ) -> Self {
+        self.shared_thread_replies = std::sync::Arc::new(access);
         self
     }
 
@@ -126,6 +141,7 @@ impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B> {
             macro_event_broker,
             sent_undo_delay_secs: self.sent_undo_delay_secs,
             sender_provider: self.sender_provider,
+            shared_thread_replies: self.shared_thread_replies,
         }
     }
 
@@ -220,6 +236,14 @@ where
     anyhow::Error: From<T::Err>,
     anyhow::Error: From<E::Err>,
 {
+    async fn resolve_thread_read_id(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        self.resolve_thread_read_id_impl(macro_id, thread_id).await
+    }
+
     async fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
@@ -326,8 +350,11 @@ where
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         draft_id: uuid::Uuid,
+
+        expected_generation: i32,
     ) -> Result<crate::domain::models::DeletedUserDraft, EmailErr> {
-        self.delete_draft_for_user_impl(macro_id, draft_id).await
+        self.delete_draft_for_user_impl(macro_id, draft_id, expected_generation)
+            .await
     }
 
     async fn send_message_for_user(
@@ -390,7 +417,7 @@ where
         macro_id: MacroUserIdStr<'static>,
         thread_id: Uuid,
         action: crate::domain::models::mailbox_action::MailboxAction,
-    ) -> Result<(), EmailErr> {
+    ) -> Result<usize, EmailErr> {
         self.change_thread_mailbox_state_impl(macro_id, thread_id, action)
             .await
     }
@@ -400,7 +427,9 @@ where
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_seen_impl(macro_id, thread_id).await
+        self.mark_thread_seen_impl(macro_id, thread_id)
+            .await
+            .map(|_| ())
     }
 
     async fn set_thread_archived(
@@ -411,6 +440,17 @@ where
     ) -> Result<(), EmailErr> {
         self.set_thread_archived_impl(macro_id, thread_id, archived)
             .await
+            .map(|_| ())
+    }
+
+    async fn set_threads_archived(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<crate::domain::models::SetThreadsArchivedResult, EmailErr> {
+        self.set_threads_archived_impl(macro_id, thread_ids, archived)
+            .await
     }
 
     async fn mark_thread_unread(
@@ -418,7 +458,9 @@ where
         macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
         thread_id: Uuid,
     ) -> Result<(), EmailErr> {
-        self.mark_thread_unread_impl(macro_id, thread_id).await
+        self.mark_thread_unread_impl(macro_id, thread_id)
+            .await
+            .map(|_| ())
     }
 
     async fn update_thread_labels_for_user(

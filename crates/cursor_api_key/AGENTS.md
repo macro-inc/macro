@@ -10,8 +10,7 @@ model.
 ## Boundaries
 
 - Depends on: AWS KMS (via `aws-sdk-kms`).
-- Used by: `claude_cloud_agents`, `agent_harness`, `authentication_service`,
-  `agent_harness_service`.
+- Used by: `agent_harness`, `authentication_service`, `agent_harness_service`.
 
 ## Recipes
 

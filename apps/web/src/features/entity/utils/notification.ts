@@ -1,5 +1,7 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
+import { stoppedAgentsText } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ItemEntity } from '@queries/preview';
@@ -25,6 +27,7 @@ const CHANNEL_NOTIFICATION_TYPES = [
   'channel_message_reaction',
   'channel_message_reply',
   'document_mention',
+  'channel_access_requested',
 ] as const;
 
 export function notificationIsRead(notification: UnifiedNotification): boolean {
@@ -236,7 +239,7 @@ export function getNotificationActionText(n: Notification): string {
 
   return match(tag)
     .with('channel_mention', () => 'mentioned')
-    .with('channel_message_send', () => 'sent')
+    .with('channel_message_send', 'external_chat_message', () => 'sent')
     .with('channel_message_reaction', () => 'reacted')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
@@ -245,8 +248,10 @@ export function getNotificationActionText(n: Notification): string {
     .with('initiative_discussion', () => 'commented')
     .with('entity_access_requested', () => 'requested access')
     .with('entity_access_granted', () => 'granted access')
+    .with('runtime_access_removed', () => 'removed access')
     .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
+    .with('channel_access_requested', () => 'asked to join')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
     .with('task_assigned', () => 'assigned')
@@ -270,10 +275,18 @@ export function getNotificationActionText(n: Notification): string {
     .with('call_started', () => 'called')
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
+    .with('calendar_event_join_request', () => 'asked to join')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
     .with('agent_session_mentioned', () => 'mentioned')
+    .with('routine_run_finished', () => {
+      const meta = n.notification_metadata;
+      return meta.tag === 'routine_run_finished' &&
+        meta.content.outcome === 'failed'
+        ? 'failed'
+        : 'finished';
+    })
     .exhaustive(() => 'notified');
 }
 
@@ -305,6 +318,9 @@ export function extractMessageContent(notification: Notification): string {
     .with(
       { tag: P.union('entity_access_requested', 'entity_access_granted') },
       (m) => `${m.content.accessLevel} access to ${m.content.entityName}`
+    )
+    .with({ tag: 'runtime_access_removed' }, (m) =>
+      stoppedAgentsText(m.content.agents, m.content.runtimeName)
     )
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
     .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')
@@ -341,11 +357,17 @@ export function extractMessageContent(notification: Notification): string {
         m.content.displayName ||
         ''
     )
+    .with(
+      { tag: 'external_chat_message' },
+      (m) => `New ${providerIdentity(m.content.provider).label} message`
+    )
     .with({ tag: 'channel_invite' }, () => '')
+    .with({ tag: 'channel_access_requested' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
+    .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },
@@ -353,6 +375,7 @@ export function extractMessageContent(notification: Notification): string {
     )
     .with({ tag: 'agent_session_waiting_for_input' }, (m) => m.content.question)
     .with({ tag: 'agent_session_mentioned' }, (m) => m.content.sessionName)
+    .with({ tag: 'routine_run_finished' }, (m) => m.content.routineName)
     .exhaustive(() => '');
 }
 

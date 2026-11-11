@@ -1,5 +1,15 @@
+import { TutorialRow } from '@app/features/video-tutorials';
+import { usePending } from '@app/observability/flow';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
+import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
-import { type ListActivation, useListInteractions } from '@app/components/list';
+import {
+  type ListActivation,
+  type ListKey,
+  useListInteractions,
+} from '@app/components/list';
+import { StickyVirtualizer } from '@app/components/list/StickyVirtualizer';
 import { CommandState } from '@app/features/command/state';
 import {
   resolveEntityActionViewContext,
@@ -14,12 +24,16 @@ import {
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
+import { toast } from '@core/component/Toast/Toast';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -29,10 +43,11 @@ import {
   ListLayoutProvider,
   type WithNotification,
 } from '@entity';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { useRestoreEmailFolderMutation } from '@queries/email/folders';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -49,12 +64,15 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { CacheSnapshot } from 'virtua';
+import type { VirtualizerHandle } from 'virtua/solid';
+import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
+import { isExcludedEmailFolder } from '../constants';
 import {
   type EmailListActivationMetadata,
   useEmailView,
@@ -64,13 +82,21 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
+import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import type { EmailListPane } from '../reader-pane';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
+import {
+  EMAIL_FOCUS_WIDE_BREAKPOINT,
+  EmailFocusPreviewLeading,
+  EmailFocusReason,
+  EmailFocusScore,
+} from './EmailFocusBadges';
 import { EmailRowActions, EmailStarAction } from './EmailRowActions';
 
 type EmailActionRow = {
@@ -85,6 +111,25 @@ export type EmailListProps = {
   pane?: EmailListPane;
 };
 
+/**
+ * Each split's last measured list, so a list that remounts after a thread
+ * closes lays its rows out as before and its saved offset lands on the same
+ * rows. Bounded: one entry per recently used split.
+ */
+const savedLayouts = new Map<
+  string,
+  {
+    scope: string;
+    cache: CacheSnapshot;
+    offset: number;
+    focusKey: ListKey | undefined;
+  }
+>();
+const MAX_SAVED_LAYOUTS = 20;
+
+const isGroupHeaderRow = (row: EmailDataSourceItem) =>
+  row.kind === 'group-header';
+
 export function EmailList(props: EmailListProps) {
   const {
     state,
@@ -95,7 +140,9 @@ export function EmailList(props: EmailListProps) {
     selectedThread,
     filterByTag,
   } = useEmailView();
+  usePending('email.list.items', () => source.isLoading());
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
 
   function openEntity(
     entity: EntityData,
@@ -104,6 +151,7 @@ export function EmailList(props: EmailListProps) {
       openInNewSplit?: boolean;
     } = {}
   ) {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
@@ -166,9 +214,17 @@ export function EmailList(props: EmailListProps) {
       activeTab: state.tab,
     });
 
+  // Focus's day headers stay pinned while its chronological list scrolls.
+  const pinsDateHeaders = () =>
+    state.tab === 'focus' && state.focusSort === 'recent';
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  // The top-edge fade would wash out a pinned header.
+  createScrollTopFade(() => (pinsDateHeaders() ? undefined : viewport()));
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
+  // The virtualizer's item offsets exclude this; its scroll offset includes it.
+  // The top spacer holds the touch inset and the pinned tutorial row.
+  const listStartMargin = () => topSpacerSize.height ?? 0;
   const [emptyViewport, setEmptyViewport] = createSignal<HTMLDivElement>();
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   // Coming back from a thread, or toggling the reading pane, remounts the
@@ -184,7 +240,10 @@ export function EmailList(props: EmailListProps) {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
 
+  // Kept as the user scrolls: the virtualizer drops its handle while it
+  // unmounts, before this list's state is saved.
   let scrollOffset = DEFAULT_EMAIL_LIST_STATE.scrollOffset;
+  let lastHandle: VirtualizerHandle | undefined;
   const readListState = (): EmailListStateSnapshot => ({
     focusKey: list.focus.requestedKey(),
     scrollOffset: virtualizer()?.scrollOffset ?? scrollOffset,
@@ -213,6 +272,7 @@ export function EmailList(props: EmailListProps) {
   );
 
   const rows = source.items;
+  const scrollAnchor = createScrollAnchor({ scroller: viewport, rows });
 
   const swipeRowsByEntityId = createMemo(() => {
     const entities = new Map<string, EmailActionRow>();
@@ -266,6 +326,7 @@ export function EmailList(props: EmailListProps) {
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    positions: source.positions,
     collapse: {
       // Signal and Noise remove archived threads; finish the row animation first.
       enabled: () =>
@@ -330,6 +391,8 @@ export function EmailList(props: EmailListProps) {
     viewContext: entityActionViewContext,
     splitHandle: panel.handle,
     condition: listHasKeyboard,
+    extraFavoriteHotkey: { hotkey: 's', hotkeyToken: TOKENS.email.star },
+    extraMuteHotkey: { hotkey: 'shift+m', hotkeyToken: TOKENS.email.mute },
   });
 
   useEmailListHotkeys({
@@ -364,6 +427,33 @@ export function EmailList(props: EmailListProps) {
   }
 
   const rowActionState = createEmailRowActionState();
+  const restoreFolder = useRestoreEmailFolderMutation();
+  const restoreLabel = () =>
+    state.tab === 'spam'
+      ? t('entityActions.notSpam')
+      : t('entityActions.restoreEmail');
+  const restoreFolderThreads = createEmailFolderRestore({
+    tab: () => state.tab,
+    isPending: () => restoreFolder.isPending,
+    selection: list.selection.requestedKeys,
+    clearSelection: listInteractions.selection.clear,
+    restore: (input) => restoreFolder.mutateAsync(input),
+    onRestored: () =>
+      toast.success(t('entityActions.toastEmailRestoreRequested')),
+    onFailed: (count) =>
+      toast.failure(t('entityActions.toastEmailRestoreFailed', { count })),
+  });
+  function restoreThreads(
+    entities: EntityData[],
+    action: { clearSelection?: boolean } = {}
+  ) {
+    return restoreFolderThreads(
+      entities
+        .filter((entity) => entity.type === 'email')
+        .map((entity) => entity.id),
+      action
+    );
+  }
 
   async function runRowAction(
     row: EmailActionRow,
@@ -394,7 +484,24 @@ export function EmailList(props: EmailListProps) {
       <EmailRowActions
         archived={archived()}
         canArchive={entityActionViewContext().supportsMarkDone}
-        pending={rowActionState.isPending(props.row.rowId)}
+        canUnarchive={canMarkNotDone(props.row.entity)}
+        pending={
+          rowActionState.isPending(props.row.rowId) || restoreFolder.isPending
+        }
+        restore={
+          isExcludedEmailFolder(state.tab)
+            ? {
+                label: restoreLabel(),
+                run: () =>
+                  fireAndForget(
+                    restoreThreads([props.row.entity], {
+                      clearSelection: false,
+                    }),
+                    'email-view'
+                  ),
+              }
+            : undefined
+        }
         onFocus={() => focusActionRow(props.row)}
         onArchive={() =>
           fireAndForget(
@@ -411,12 +518,50 @@ export function EmailList(props: EmailListProps) {
   }
 
   let restoredScroll = false;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
+    if (handle) lastHandle = handle;
     if (!handle || restoredScroll) return;
-
-    handle.scrollTo(scrollOffset);
     restoredScroll = true;
+    // The virtualizer measures its viewport after this ref runs; a scroll
+    // issued against a zero-height viewport lands in the wrong place.
+    let frames = 0;
+    const restore = () => {
+      if (disposed) return;
+      if (handle.viewportSize === 0 && frames++ < 30) {
+        requestAnimationFrame(restore);
+        return;
+      }
+      handle.scrollTo(scrollOffset);
+      if (!resumed || list.focus.requestedKey() === resumed.focusKey) return;
+      requestAnimationFrame(() => {
+        if (!disposed) revealFocusedRow(handle);
+      });
+    };
+    requestAnimationFrame(restore);
+  }
+  // j/k in the open thread moves list focus. Returning keeps the list where
+  // it was and scrolls only when focus moved meanwhile to a row now off
+  // screen; a row the user scrolled away from stays where it is.
+  function revealFocusedRow(handle: VirtualizerHandle) {
+    const focused = list.focus.index();
+    if (focused < 0) return;
+    const top = listStartMargin() + handle.getItemOffset(focused);
+    const bottom = top + handle.getItemSize(focused);
+    const viewTop = handle.scrollOffset;
+    // A pinned header can cover a row within these bounds; the sticky handle
+    // allows for it and leaves a row that is really in view alone.
+    if (
+      pinsDateHeaders() ||
+      top < viewTop ||
+      bottom > viewTop + handle.viewportSize
+    ) {
+      handle.scrollToIndex(focused, { align: 'nearest' });
+    }
   }
 
   const hasEmailRows = () => rows().some((row) => row.kind === 'entity');
@@ -448,6 +593,31 @@ export function EmailList(props: EmailListProps) {
   const listScope = () =>
     `${state.tab}|${state.inboxIds === undefined ? '*' : state.inboxIds.join(',')}|${state.aliasFilter?.emailAddress ?? ''}`;
   let activeScope = listScope();
+  const layoutKey = panel.handle.id;
+  const savedLayout = savedLayouts.get(layoutKey);
+  // Closing a thread opens the list as a new history entry with no state of
+  // its own; resume from this split's last layout. Back and Forward restore
+  // their entry's own state instead.
+  const traversed = panel.handle.lastNavigationCause().startsWith('history-');
+  const resumed =
+    !traversed && savedLayout?.scope === activeScope ? savedLayout : undefined;
+  const initialCache = resumed?.cache;
+  if (resumed) scrollOffset = resumed.offset;
+  onCleanup(() => {
+    const handle = lastHandle;
+    if (!handle) return;
+    savedLayouts.delete(layoutKey);
+    savedLayouts.set(layoutKey, {
+      scope: activeScope,
+      cache: handle.cache,
+      offset: scrollOffset,
+      focusKey: list.focus.requestedKey(),
+    });
+    if (savedLayouts.size > MAX_SAVED_LAYOUTS) {
+      const oldest = savedLayouts.keys().next().value;
+      if (oldest !== undefined) savedLayouts.delete(oldest);
+    }
+  });
   createEffect(() => {
     const nextScope = listScope();
     if (nextScope === activeScope) return;
@@ -465,10 +635,18 @@ export function EmailList(props: EmailListProps) {
 
     if (list.focus.result()) return;
 
-    const restored = list.focus.restore(list.focus.requestedKey(), {
-      retainUnavailable: false,
+    // A row that left the list (archived from its open thread or on another
+    // device) hands focus to the row that took its place, which sits where
+    // the removed row was, so the list does not scroll for it.
+    const requested = list.focus.requestedKey();
+    const restored = list.focus.restore(requested, {
+      fallback: 'successor',
+      isNavigable: (row) => row.kind === 'entity',
     });
     if (restored) return;
+    // Without a surviving neighbour the key waits only while rows are still
+    // arriving; otherwise (search results, a stale saved key) take the first.
+    if (requested !== undefined && !hasEmailRows()) return;
     if (isTouchDevice()) return;
 
     list.focus.first({
@@ -506,12 +684,21 @@ export function EmailList(props: EmailListProps) {
         tabIndex={0}
         class="soup-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none [--color-list-highlighted:var(--color-active)]"
       >
+        <Show when={state.tab === 'drafts'}>
+          <QueuedSendStatus inboxIds={state.inboxIds} />
+        </Show>
         <PullToRefresh
           scrollContainer={pullScrollContainer}
           onRefresh={pullRefresh}
         />
 
-        <ListLayoutProvider ref={grid} narrowLayout="inbox">
+        <ListLayoutProvider
+          ref={grid}
+          narrowLayout="inbox"
+          wideBreakpoint={
+            state.tab === 'focus' ? EMAIL_FOCUS_WIDE_BREAKPOINT : undefined
+          }
+        >
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseEntity}
@@ -556,6 +743,7 @@ export function EmailList(props: EmailListProps) {
               >
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
                   <SpinnerIcon
+                    aria-hidden={false}
                     aria-label="Loading email"
                     class="size-5 animate-spin"
                   />
@@ -571,7 +759,7 @@ export function EmailList(props: EmailListProps) {
                 >
                   <span>Email couldn’t be loaded.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(source.refresh(), 'email-view')
@@ -588,7 +776,19 @@ export function EmailList(props: EmailListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
-                  <EmailEmptyState />
+                  {/* New inboxes start empty, which is when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'important'}
+                    fallback={<EmailEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <TutorialRow tutorial="mail" />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <EmailEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
@@ -601,21 +801,28 @@ export function EmailList(props: EmailListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none"
                 >
                   {/* Keep insets inside the scroller so rows slide under the floating chrome. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'important'}>
+                      <TutorialRow tutorial="mail" />
+                    </Show>
+                  </div>
                   {/* A row subtree that suspends (the project crumb's preview query, say)
                       detaches only itself, not the list and its scroll position. */}
                   <Suspense>
-                    <Virtualizer
+                    <StickyVirtualizer
                       ref={registerVirtualizer}
+                      cache={initialCache}
                       data={rows()}
                       scrollRef={viewport()}
-                      startMargin={
-                        isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
+                      startMargin={listStartMargin()}
+                      isSticky={
+                        pinsDateHeaders() ? isGroupHeaderRow : undefined
                       }
+                      stickyInset={listStartMargin()}
                       bufferSize={500}
                       itemSize={44}
                       keepMounted={
@@ -623,7 +830,11 @@ export function EmailList(props: EmailListProps) {
                           ? [list.focus.index()]
                           : undefined
                       }
-                      onScroll={checkNearEnd}
+                      onScroll={(offset) => {
+                        scrollOffset = offset;
+                        scrollAnchor.capture();
+                        checkNearEnd();
+                      }}
                     >
                       {(row) => (
                         <Switch>
@@ -661,6 +872,21 @@ export function EmailList(props: EmailListProps) {
                                     <ListEntity
                                       entity={entityRow().entity}
                                       onFilterByTag={filterByTag}
+                                      meta={
+                                        <EmailFocusReason
+                                          entity={entityRow().entity}
+                                        />
+                                      }
+                                      metaEnd={
+                                        <EmailFocusScore
+                                          entity={entityRow().entity}
+                                        />
+                                      }
+                                      previewLeading={
+                                        <EmailFocusPreviewLeading
+                                          entity={entityRow().entity}
+                                        />
+                                      }
                                       scheduleStatus={
                                         <Show
                                           when={source.reminderForThread?.(
@@ -706,6 +932,20 @@ export function EmailList(props: EmailListProps) {
                                       }
                                       actions={
                                         <Show when={!isTouchDevice()}>
+                                          <RowActions
+                                            row={{
+                                              entity: entityRow().entity,
+                                              rowId: entityRow().id,
+                                            }}
+                                          />
+                                        </Show>
+                                      }
+                                      touchActions={
+                                        <Show
+                                          when={isExcludedEmailFolder(
+                                            state.tab
+                                          )}
+                                        >
                                           <RowActions
                                             row={{
                                               entity: entityRow().entity,
@@ -804,9 +1044,8 @@ export function EmailList(props: EmailListProps) {
                                   }
                                 >
                                   <Button
-                                    variant="outline"
-                                    size="sm"
-                                    depth={2}
+                                    variant="secondary"
+                                    size="xs"
                                     disabled={loadMore().isLoading}
                                     class="bg-surface"
                                   >
@@ -828,7 +1067,7 @@ export function EmailList(props: EmailListProps) {
                           </Match>
                         </Switch>
                       )}
-                    </Virtualizer>
+                    </StickyVirtualizer>
                   </Suspense>
                   <Show when={isTouchDevice()}>
                     <div
@@ -847,7 +1086,22 @@ export function EmailList(props: EmailListProps) {
             selected={selectedEntities()}
             onClear={listInteractions.selection.clear}
             analyticsSource="email_view_selection_toolbar"
-          />
+          >
+            <Show when={isExcludedEmailFolder(state.tab)}>
+              <Button
+                size="sm"
+                disabled={restoreFolder.isPending}
+                onClick={() =>
+                  fireAndForget(
+                    restoreThreads(selectedEntities()),
+                    'email-view'
+                  )
+                }
+              >
+                {restoreLabel()}
+              </Button>
+            </Show>
+          </EntitySelectionToolbar>
         </Show>
       </div>
     </MaybeSoupEntityActionDrawerManager>

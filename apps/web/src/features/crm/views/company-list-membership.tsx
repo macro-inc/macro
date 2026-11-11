@@ -1,6 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ListIcon from '@phosphor/list-bullets.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useCrmLists, useCurrentTeamQuery } from './use-crm';
@@ -36,7 +36,7 @@ export function CompanyListsSection(props: { companyId: string }) {
     }
   }
   return (
-    <SidePanel.Section id="company-lists" title="Lists" order={18} defaultOpen>
+    <SidePanel.Section id="company-lists" title="Lists" order={40} defaultOpen>
       <div class="flex flex-col gap-3">
         <Show when={team.isError || lists.query.isError}>
           <div

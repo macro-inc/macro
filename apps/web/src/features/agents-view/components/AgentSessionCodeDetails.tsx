@@ -1,6 +1,6 @@
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';

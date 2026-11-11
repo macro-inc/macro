@@ -1,9 +1,15 @@
 # Notification retention
 
 The internal `notification_retention_handler` Lambda removes notifications older
-than 30 complete UTC days. Its EventBridge schedule is **disabled** in both dev
-and prod, and its event payload defaults to **dry-run**. Deploying the code or
-migrations alone does not purge history.
+than 30 complete UTC days. Both dev and prod stack configs **enable** its
+hourly EventBridge schedule in **deletion mode**. Deploying either
+notification-service stack activates cleanup, including the historical backlog;
+committing the config or applying migrations alone does not. These are desired
+settings, not proof of the deployed schedule's state. Merging to `main` triggers
+normal dev deployment; a production release applies the prod settings. Complete
+the rollout prerequisites before merging or releasing this activation. Missing
+stack settings still default to disabled/dry-run, and manual invocations with
+`{}` remain read-only.
 
 ## Semantics
 
@@ -18,7 +24,7 @@ migrations alone does not purge history.
   device registrations, and email-send bookkeeping are not removed.
 - Old unread notifications disappear. Items whose only feed-placement reason was
   an expired notification may disappear from that feed, not from source storage.
-- This is eventual cleanup, normally within a five-minute schedule interval plus
+- This is eventual cleanup, normally within a one-hour schedule interval plus
   execution time after expiry once caught up. Backlogs, failures, or locked rows
   can extend that delay. There is no new read-time expiration filter.
 - **Replay protection is intentionally out of scope.** Parent-row existence still
@@ -137,10 +143,13 @@ at Kafka: it does **not** measure time queued before PostgreSQL NOTIFY is forwar
 or acknowledge client delivery. Existing best-effort loss/reconnect semantics
 remain unchanged; no durable outbox is added by this observability change.
 
-Before the next deletion canary, after approved deployments:
+Before first enabling deletion in an environment, verify these prerequisites;
+code approval does not establish that the live checks have passed:
 
-1. Deploy the notification-service stack (extension + worker) and DSS (consumer
-   telemetry). Keep both cleanup schedules disabled and dry-run enabled.
+1. For a telemetry-only deployment of the notification-service stack (extension
+   + worker) and DSS (consumer telemetry), explicitly override the checked-in
+   retention settings to disabled/dry-run before deploying. The checked-in
+   settings otherwise enable deletion on deployment.
 2. Invoke explicit dry runs and verify the complete invocation and batch/read
    spans in Datadog, with the correct service/env and no exporter/flush errors.
 3. Confirm health logs from each running DSS instance, including healthy zero
@@ -157,8 +166,12 @@ Before the next deletion canary, after approved deployments:
 
 ## Rollout
 
-Production deletion needs explicit approval and a verified backup/PITR recovery
-procedure. Do not run a historical `DELETE` inside a migration.
+Deployment needs explicit approval; production deletion also needs a verified
+backup/PITR recovery procedure. The checked-in dev and prod settings select the
+final deletion stage below; they do not verify the rollout prerequisites.
+For an environment that has not completed them, explicitly override the config
+to disabled/dry-run before its first deployment and follow the staged checks.
+Do not run a historical `DELETE` inside a migration.
 
 1. Apply the additive migrations through the normal approved database workflow.
    The retention index is built concurrently in its own nontransactional
@@ -166,9 +179,10 @@ procedure. Do not run a historical `DELETE` inside a migration.
    changing its contract. Verify the index is valid. If a concurrent build fails,
    inspect its invalid index and repair/retry under the database deployment
    procedure rather than marking the migration successful.
-2. Deploy the notification-service stack. Its deployment configuration also builds
-   the new Lambda. Keep `notification_retention_enabled: false` and
-   `notification_retention_dry_run: true` initially.
+2. For an initial staged rollout, set `notification_retention_enabled: false`
+   and `notification_retention_dry_run: true` before deploying the
+   notification-service stack. These override the checked-in deletion settings.
+   Its deployment configuration also builds the Lambda.
 3. Inspect age distribution, recipient/receipt fanout, and query plans against
    representative data. Use plain `EXPLAIN` for production deletion plans;
    `EXPLAIN ANALYZE DELETE` actually deletes data.
@@ -184,8 +198,9 @@ procedure. Do not run a historical `DELETE` inside a migration.
 5. After approval and reviewing dry-run logs, change
    `notification_retention_dry_run` to `false` and deploy. Drain existing history
    with these same bounded batches; do not substitute a bulk deletion. Initial
-   capacity is at most 10,000 parents per invocation (usually less). Verify
-   steady-state capacity exceeds incoming expiration volume before enabling prod.
+   capacity is at most 10,000 parents per hourly invocation (usually less), or
+   240,000 per day. Verify steady-state capacity exceeds incoming expiration
+   volume before enabling prod.
 6. Monitor application latency, database CPU/I/O, WAL and replica lag, dead tuples,
    vacuum progress, NOTIFY warnings/queue pressure, and realtime consumer lag.
    Pause the schedule on unacceptable impact. Do not automatically run
@@ -199,8 +214,10 @@ retention period or batch caps.
 
 ## Monitoring and stopping
 
-Infrastructure alarms on Lambda errors, throttles, and no invocations for
-15 minutes while the schedule is enabled. Each sweep logs the cutoff,
+Infrastructure alarms on Lambda errors, throttles, and three consecutive hourly
+periods without invocations while the schedule is enabled. The invocation alarm
+fills missing hourly samples with zero and requires all three periods to breach,
+so older invocations cannot mask a stopped schedule. Each sweep logs the cutoff,
 `sampled_expired`, `oldest_expired_at`, committed parent `deleted` count,
 attempted `batches`, and stopping reason. Each committed batch is also logged,
 so partial progress remains visible if a later batch fails.
@@ -209,7 +226,7 @@ Track `cutoff - oldest_expired_at` as expiration backlog age. During backfill it
 should trend downward; once caught up, sustained growth indicates insufficient
 capacity, long-lived locks, or a failing high-fanout parent. A zero-row batch can
 mean rows were locked, not necessarily that every expired row has been removed.
-Do not run a full `COUNT(*)` over the backlog every five minutes.
+Do not run a full `COUNT(*)` over the backlog on each sweep.
 
 Disable `notification_retention_enabled` and deploy to stop future scheduled
 invocations. An already-running invocation may still commit batches. Emergency

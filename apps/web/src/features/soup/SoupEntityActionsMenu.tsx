@@ -1,11 +1,13 @@
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { children, For, type JSX, Show } from 'solid-js';
 import {
   createSoupEntityActions,
@@ -23,6 +25,12 @@ interface SoupEntityActionsMenuProps {
   extraItems?: JSX.Element;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Where the view moves after an action that removes the row. */
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
+  /** The folder the list shows, when the split's content doesn't say. */
+  viewedProjectId?: string;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -40,10 +48,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     const content = panel.handle.content();
     return buildActionGroups(props.list, props.entities, {
       viewContext: props.viewContext,
-      viewedProjectId: viewedProjectIdFromContent(content),
+      viewedProjectId:
+        props.viewedProjectId ?? viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
       openProjectPicker: props.onSetProject,
       splitHandle: panel.handle,
+      createActionNavigationHandler: props.createActionNavigationHandler,
     });
   };
 
@@ -61,17 +71,27 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
               <MenuSeparator />
             </Show>
             <For each={group.items}>
-              {(action) => (
-                <MenuItem
-                  text={action.label}
-                  icon={action.icon}
-                  hotkeyToken={action.hotkeyToken}
-                  shortcut={action.shortcut}
-                  disabled={action.disabled}
-                  onClick={() => handleAction(action.onClick)}
-                  class={action.destructive ? 'text-failure-ink' : undefined}
-                />
-              )}
+              {(action) => {
+                if (action.muteMenu) {
+                  return (
+                    <NotificationMuteMenu
+                      {...action.muteMenu}
+                      onActionComplete={props.onActionComplete}
+                    />
+                  );
+                }
+                return (
+                  <MenuItem
+                    text={action.label}
+                    icon={action.icon}
+                    hotkeyToken={action.hotkeyToken}
+                    shortcut={action.shortcut}
+                    disabled={action.disabled}
+                    onClick={() => handleAction(action.onClick)}
+                    class={action.destructive ? 'text-failure-ink' : undefined}
+                  />
+                );
+              }}
             </For>
           </>
         )}

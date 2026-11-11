@@ -38,18 +38,24 @@ pub async fn backfill_attachment(
 
     let attachment_args = p.metadata.clone();
 
-    upload_attachment(ctx_upload, &attachment_args)
-        .await
-        .map_err(|e| match e {
-            UploadAttachmentError::RateLimited => ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::new(e).context("Failed to upload attachment"),
-            }),
-            _ => ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: anyhow::Error::new(e).context("Failed to upload attachment"),
-            }),
-        })?;
+    let uploaded = upload_attachment(ctx_upload, &attachment_args).await;
+    if let Err(UploadAttachmentError::AttachmentDeleted) = uploaded {
+        tracing::info!(
+            attachment_id = %attachment_args.attachment_metadata.attachment_db_id,
+            "skipped attachment deleted before it could be backfilled"
+        );
+        return Ok(());
+    }
+    uploaded.map_err(|e| match e {
+        UploadAttachmentError::RateLimited(error) => ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::GmailApiRateLimited,
+            source: anyhow::Error::new(error).context("Failed to upload attachment"),
+        }),
+        _ => ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: anyhow::Error::new(e).context("Failed to upload attachment"),
+        }),
+    })?;
 
     Ok(())
 }

@@ -79,6 +79,10 @@ where
             EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::DatabaseRow => self.repo.get_database_row_access(entity_id, user_id).await,
             EntityType::Form => self.repo.get_form_access(entity_id, user_id).await,
+            EntityType::ExternalChat => {
+                self.repo.get_external_chat_access(entity_id, user_id).await
+            }
+            EntityType::Harness => self.repo.get_harness_access(entity_id, user_id).await,
             EntityType::ScheduledAction => {
                 self.repo
                     .get_scheduled_action_access(entity_id, user_id)
@@ -223,6 +227,7 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::ExternalChat
             | EntityType::Form => {
                 let access_level = self
                     .repo
@@ -296,6 +301,8 @@ where
             // A reminder belongs to a user, so a team-scoped bot never reaches one.
             | EntityType::Reminder
             | EntityType::Skill
+            // A runtime is used by people; a bot reaches one by being bound to it.
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
@@ -563,7 +570,9 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::ExternalChat
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
@@ -675,7 +684,9 @@ where
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::DatabaseRow
+            | EntityType::ExternalChat
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
@@ -793,6 +804,7 @@ where
             | EntityType::CrmContact
             | EntityType::CrmPipeline
             | EntityType::Database
+            | EntityType::ExternalChat
             | EntityType::Form => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")

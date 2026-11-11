@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { IMPORT_CATEGORIES } from '@app/features/connector-import/core/catalog';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -25,6 +26,15 @@ const CARDS: {
     sidebar: 'Home',
     copy: HOME_SETUP_PROMOTION,
     secondary: HOME_SETUP_PROMOTION.secondaryAction,
+  },
+  {
+    sidebar: 'Chat',
+    copy: {
+      ...IMPORT_CATEGORIES.channels,
+      logos: [...IMPORT_CATEGORIES.channels.providers],
+      action: 'Import Slack',
+    },
+    secondary: 'New channel',
   },
   { sidebar: 'Calendar', copy: CALENDAR_ACCOUNTS_PROMOTION },
   { sidebar: 'Pull requests', copy: PULL_REQUEST_REPOSITORIES_PROMOTION },

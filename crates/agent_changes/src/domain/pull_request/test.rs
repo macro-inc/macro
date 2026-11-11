@@ -73,14 +73,7 @@ fn linked_session() -> AgentSession {
 #[tokio::test]
 async fn every_harness_reads_the_linked_pr_with_the_session_owners_access() {
     let extractor = PullRequestChanges::new(Changesets::default());
-    for harness in [
-        "cursor",
-        "macrod",
-        "opencode",
-        "codex-cloud",
-        "claude-cloud",
-        "macro-inmem",
-    ] {
+    for harness in ["cursor", "macrod", "opencode", "codex-cloud", "macro-inmem"] {
         let mut session = test_agent_session(AgentSessionId::TEST_A);
         session.harness = harness.to_owned();
         session.pull_request_url = Some("https://github.com/upstream/repo/pull/42".to_owned());

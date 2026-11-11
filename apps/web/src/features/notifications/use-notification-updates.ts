@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshSharedAccess } from '@queries/access-requests/requests';
+import { calendarKeys } from '@queries/calendar/keys';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
@@ -14,6 +15,7 @@ import { teamKeys } from '@queries/team/keys';
 import { onCleanup } from 'solid-js';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { scheduledActionKeys } from '../routines/queries/keys';
 import type { NotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
@@ -118,6 +120,12 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'commented_on_document' }, () => {
       refreshSoupEntity(notification, 'document');
     })
+    // An open event's details list the new request.
+    .with({ tag: 'calendar_event_join_request' }, ({ content }) => {
+      queryClient.invalidateQueries({
+        queryKey: calendarKeys.joinRequests(content.eventId).queryKey,
+      });
+    })
     .with({ tag: 'crm_discussion' }, () => {
       const parent = {
         type: notification.entity_type,
@@ -135,9 +143,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
-    .with({ tag: 'channel_invite' }, () => {
-      refreshChannel(notification);
-    })
+    .with(
+      { tag: 'channel_invite' },
+      { tag: 'channel_access_requested' },
+      () => {
+        refreshChannel(notification);
+      }
+    )
     .with({ tag: 'channel_message_send' }, () => {
       refreshChannel(notification);
     })
@@ -147,6 +159,8 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     .with({ tag: 'call_started' }, () => {
       refreshChannel(notification);
     })
+    // DSS's `external_chat_changed` push already refreshes what an open page shows.
+    .with({ tag: 'external_chat_message' }, () => {})
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);
     })
@@ -159,6 +173,11 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
+    })
+    .with({ tag: 'routine_run_finished' }, () => {
+      queryClient.invalidateQueries({
+        queryKey: scheduledActionKeys.list.queryKey,
+      });
     })
     .with({ tag: 'invite_to_team' }, () => {
       queryClient.invalidateQueries({

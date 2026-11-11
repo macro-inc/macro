@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ActivityContext } from '../context/activity-context';
-import type { ActivityOverview } from '../core/event';
+import type { ActivityOverview, ActivityScope } from '../core/event';
 import { type FeedRow, flattenFeed, reuseRows } from '../core/feed-rows';
 import { type FeedGroup, groupEventsByDay } from '../core/group-events';
 import { createMyActivityQuery } from '../queries/feed-query';
@@ -28,7 +28,11 @@ export type OverviewView =
 export type MyActivityState = {
   overview: Accessor<OverviewView>;
   feed: Accessor<FeedView>;
-  /** Every virtualized row of the screen: the overview first, then the feed. */
+  /**
+   * Every virtualized row of the screen: on the viewer's own feed the
+   * overview first, then the feed. The overview is the viewer's own, so the
+   * team feed has none.
+   */
   rows: Accessor<FeedRow[]>;
   /**
    * Fetch the next feed page. No-op while one is in flight, none remain, or
@@ -42,19 +46,30 @@ export type MyActivityState = {
 
 /**
  * The Activity screen as data: overview and feed view states plus the one
- * action the screen exposes. Data wins over status flags so a background
- * refetch never blanks rows the user is reading.
+ * action the screen exposes, for the feed `scope` selects. Each scope keeps
+ * its own query, so switching tabs never shows the other feed's rows and
+ * switching back finds the pages already loaded. Data wins over status
+ * flags so a background refetch never blanks rows the user is reading.
  */
 export function createMyActivityState(
-  context: Pick<ActivityContext, 'graphql' | 'entityTypeShown'>
+  context: Pick<ActivityContext, 'graphql' | 'entityTypeShown'>,
+  scope: Accessor<ActivityScope>
 ): MyActivityState {
   const overviewQuery = createMyActivityOverviewQuery(context, {
     enabled: () => true,
   });
-  const feedQuery = createMyActivityQuery(context, { enabled: () => true });
+  const mineQuery = createMyActivityQuery(context, {
+    scope: 'mine',
+    enabled: () => scope() === 'mine',
+  });
+  const teamQuery = createMyActivityQuery(context, {
+    scope: 'team',
+    enabled: () => scope() === 'team',
+  });
+  const feedQuery = () => (scope() === 'team' ? teamQuery : mineQuery);
   const groups = createMemo(() =>
     groupEventsByDay(
-      (feedQuery.data ?? []).filter((event) =>
+      (feedQuery().data ?? []).filter((event) =>
         context.entityTypeShown(event.entityType)
       )
     )
@@ -77,17 +92,20 @@ export function createMyActivityState(
   });
 
   const feed = createMemo<FeedView>(() => {
-    if (groups().length > 0) {
+    const query = feedQuery();
+    // A team page can arrive empty while older pages remain (the server
+    // bounds each page's scan), so only the last page decides "empty".
+    if (groups().length > 0 || query.hasNextPage) {
       return {
         t: 'ready',
         groups: groups(),
-        hasMore: feedQuery.hasNextPage,
-        loadingMore: feedQuery.isFetchingNextPage,
-        moreFailed: feedQuery.isFetchNextPageError,
+        hasMore: query.hasNextPage,
+        loadingMore: query.isFetchingNextPage,
+        moreFailed: query.isFetchNextPageError,
       };
     }
-    if (feedQuery.isLoading) return { t: 'loading' };
-    if (feedQuery.isError) return { t: 'error' };
+    if (query.isLoading) return { t: 'loading' };
+    if (query.isError) return { t: 'error' };
     return { t: 'empty' };
   });
 
@@ -97,12 +115,16 @@ export function createMyActivityState(
       current.t === 'ready'
         ? flattenFeed(current.groups, { hasMore: current.hasMore })
         : [{ kind: 'status', status: current.t }];
-    return reuseRows(previous, [{ kind: 'overview' }, ...feedRows]);
+    return reuseRows(
+      previous,
+      scope() === 'team' ? feedRows : [{ kind: 'overview' }, ...feedRows]
+    );
   }, []);
 
   const fetchNext = () => {
-    if (!feedQuery.hasNextPage || feedQuery.isFetchingNextPage) return;
-    fireAndForget(feedQuery.fetchNextPage(), 'activity');
+    const query = feedQuery();
+    if (!query.hasNextPage || query.isFetchingNextPage) return;
+    fireAndForget(query.fetchNextPage(), 'activity');
   };
 
   return {
@@ -110,7 +132,7 @@ export function createMyActivityState(
     feed,
     rows,
     loadMore: () => {
-      if (feedQuery.isFetchNextPageError) return;
+      if (feedQuery().isFetchNextPageError) return;
       fetchNext();
     },
     retryMore: fetchNext,

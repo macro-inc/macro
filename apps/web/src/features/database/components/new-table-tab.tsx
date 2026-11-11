@@ -52,7 +52,7 @@ export function NewTableTab(props: {
 
   return (
     <form
-      class="flex h-6 shrink-0 items-center rounded-full bg-input px-3 ring-1 ring-inset ring-edge-muted"
+      class="flex h-6 shrink-0 items-center rounded-full bg-input px-3 ring-1 ring-inset ring-edge-muted not-touch:h-8"
       aria-label="New table"
       onSubmit={submit}
       aria-busy={pending()}

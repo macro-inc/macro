@@ -175,6 +175,43 @@ export type BulkGetByEventItemIdsRequest = {
     eventItemIds: Array<string>;
 };
 
+export type BulkItem = {
+    item_id: string;
+    item_type: EntityType;
+};
+
+export type BulkRemoveItemsRequest = {
+    items: Array<BulkItem>;
+};
+
+export type BulkSetItemsRequest = {
+    items: Array<BulkItem>;
+    /**
+     * A future resume time. Omit to mute indefinitely.
+     */
+    snoozed_until?: string | null;
+};
+
+/**
+ * A channel member who sees a calendar event only through a channel share
+ * asked the person who shared it to add them as a guest. Sent to the sharer,
+ * with the requester as sender.
+ */
+export type CalendarEventJoinRequestMetadata = {
+    /**
+     * The shared calendar event entity the request is for.
+     */
+    eventId: string;
+    /**
+     * Stable request identity, answered from the event's details.
+     */
+    requestId: string;
+    /**
+     * Event title when the request was made.
+     */
+    title: string;
+};
+
 /**
  * A calendar event alarm came due. Like [`ReminderMetadata`], these are
  * self-notifications: `sender_id` must stay `None` or the only recipient is
@@ -238,6 +275,20 @@ export type CallStartedMetadata = {
      * Profile picture URL of the user who started the call, when available.
      */
     sender_profile_picture_url?: string | null;
+};
+
+/**
+ * A person asked to join a channel the recipient participates in.
+ */
+export type ChannelAccessRequestedMetadata = CommonChannelMetadata & {
+    /**
+     * The attempt to join, which is also this notification's id.
+     */
+    requestId: string;
+    /**
+     * Optional requester profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
 };
 
 /**
@@ -593,7 +644,7 @@ export type EntityAccessRequestedMetadata = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A plain old json error response for use with axum.
@@ -605,6 +656,29 @@ export type ErrorResponse = {
      */
     message: string;
 };
+
+/**
+ * A live message in an independently shared external chat.
+ */
+export type ExternalChatMessageMetadata = {
+    /**
+     * The chat's name.
+     */
+    chatName: string;
+    /**
+     * Stable message id; retries use it as their notification id.
+     */
+    messageId: string;
+    /**
+     * The messaging service the chat lives in.
+     */
+    provider: ExternalChatProvider;
+};
+
+/**
+ * The messaging service an external chat lives in.
+ */
+export type ExternalChatProvider = 'whatsapp';
 
 /**
  * The strongly typed response for listing user notifications.
@@ -919,6 +993,23 @@ export type InviteToTeamMetadata = {
      */
     invitedBy: string;
     /**
+     * What the invitee gets by joining, as the team stood when the invite was sent.
+     */
+    inviteePlan?: InviteePlan;
+    /**
+     * The inviter's display name, when they have set one. It is user-provided, so it is shown
+     * on one line, capped, and escaped; the email falls back to the inviter's address.
+     */
+    inviterName?: string | null;
+    /**
+     * Whether the invite creates an agent account.
+     */
+    isAgent?: boolean;
+    /**
+     * Whether this email reminds the invitee of an invite they have not answered.
+     */
+    reminder?: boolean;
+    /**
      * Role/permission level in the team
      */
     role?: string | null;
@@ -939,6 +1030,11 @@ export type InviteToTeamMetadata = {
      */
     teamName: string;
 };
+
+/**
+ * What a team invitee gets by joining.
+ */
+export type InviteePlan = 'free' | 'premium';
 
 /**
  * Metadata for when a item is shared with a user
@@ -1138,6 +1234,12 @@ export type NotifEvent = {
     tag: 'reminder';
 } | {
     /**
+     * A live message in a shared external chat.
+     */
+    content: ExternalChatMessageMetadata;
+    tag: 'external_chat_message';
+} | {
+    /**
      * A calendar event alarm came due.
      */
     content: CalendarEventReminderMetadata;
@@ -1211,6 +1313,32 @@ export type NotifEvent = {
      */
     content: ChannelMessageReactionMetadata;
     tag: 'channel_message_reaction';
+} | {
+    /**
+     * A channel member asked to be added as a guest of an event the
+     * user shared with the channel.
+     */
+    content: CalendarEventJoinRequestMetadata;
+    tag: 'calendar_event_join_request';
+} | {
+    /**
+     * Someone asked to join a channel the user participates in.
+     */
+    content: ChannelAccessRequestedMetadata;
+    tag: 'channel_access_requested';
+} | {
+    /**
+     * One of the user's routines finished a run, successfully or not.
+     */
+    content: RoutineRunFinishedMetadata;
+    tag: 'routine_run_finished';
+} | {
+    /**
+     * A runtime's owner removed the user's access to it, and agents of
+     * theirs living there stopped.
+     */
+    content: RuntimeAccessRemovedMetadata;
+    tag: 'runtime_access_removed';
 };
 
 /**
@@ -1249,16 +1377,44 @@ export type NotificationState = 'unseen' | 'seen' | 'done';
  */
 export type NotificationTypeName = string;
 
+/**
+ * the value we send as the payload in the ios notification
+ * This data is accessible to the client
+ */
 export type PushNotificationData = {
+    navigation?: null | PushNotificationNavigation;
     /**
      * The id of the notification record (UserNotification.id)
      */
     notificationId: string;
     /**
+     * Account that owns the receiving device, set during per-recipient delivery.
+     */
+    recipientId?: string | null;
+    /**
      * The sender's profile picture URL, used by the Notification Service Extension
      * to download and attach as a rich notification image.
      */
     senderProfilePictureUrl?: string | null;
+};
+
+/**
+ * Open a channel at a specific message.
+ */
+export type PushNotificationNavigation = {
+    /**
+     * Channel containing the message.
+     */
+    channelId: string;
+    /**
+     * Message to highlight.
+     */
+    messageId: string;
+    /**
+     * Root of the message's thread; null identifies a top-level message.
+     */
+    threadId: string | null;
+    type: 'channel';
 };
 
 /**
@@ -1383,6 +1539,60 @@ export type RepliedToDocumentCommentThreadMetadata = {
  * Permission level used by an access request, excluding ownership.
  */
 export type RequestedAccessLevel = 'view' | 'comment' | 'edit';
+
+/**
+ * One of the recipient's routines finished a run. Every run notifies,
+ * whether it succeeded or failed.
+ */
+export type RoutineRunFinishedMetadata = {
+    /**
+     * How the run ended.
+     */
+    outcome: RoutineRunOutcome;
+    /**
+     * The routine that ran.
+     */
+    routineId: string;
+    /**
+     * The routine's name when it ran.
+     */
+    routineName: string;
+};
+
+/**
+ * How a routine run ended, as its notification reports it.
+ */
+export type RoutineRunOutcome = 'succeeded' | 'failed';
+
+/**
+ * A runtime's owner removed the recipient's access to it, or lowered it to
+ * Read, and agents the recipient keeps living there stopped.
+ */
+export type RuntimeAccessRemovedMetadata = {
+    /**
+     * The recipient's agents living on the runtime, which stopped. Never
+     * empty: without one there is nothing to tell them.
+     */
+    agents: Array<StoppedAgent>;
+    /**
+     * The runtime's name.
+     */
+    runtimeName: string;
+};
+
+/**
+ * One of the recipient's agents that stopped with their runtime access.
+ */
+export type StoppedAgent = {
+    /**
+     * The agent's bot id.
+     */
+    botId: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
 
 /**
  * Metadata for when a user is assigned to a task
@@ -1532,6 +1742,48 @@ export type UnsubscribeItemResponses = {
 
 export type UnsubscribeItemResponse = UnsubscribeItemResponses[keyof UnsubscribeItemResponses];
 
+export type RemoveUnsubscribeItemsData = {
+    body: BulkRemoveItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type RemoveUnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveUnsubscribeItemsError = RemoveUnsubscribeItemsErrors[keyof RemoveUnsubscribeItemsErrors];
+
+export type RemoveUnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type RemoveUnsubscribeItemsResponse = RemoveUnsubscribeItemsResponses[keyof RemoveUnsubscribeItemsResponses];
+
+export type UnsubscribeItemsData = {
+    body: BulkSetItemsRequest;
+    path?: never;
+    query?: never;
+    url: '/unsubscribe/items';
+};
+
+export type UnsubscribeItemsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnsubscribeItemsError = UnsubscribeItemsErrors[keyof UnsubscribeItemsErrors];
+
+export type UnsubscribeItemsResponses = {
+    200: EmptyResponse;
+};
+
+export type UnsubscribeItemsResponse = UnsubscribeItemsResponses[keyof UnsubscribeItemsResponses];
+
 export type RemoveUnsubscribeAllData = {
     body?: never;
     path?: never;
@@ -1605,6 +1857,82 @@ export type ListTypedNotificationsResponses = {
 };
 
 export type ListTypedNotificationsResponse = ListTypedNotificationsResponses[keyof ListTypedNotificationsResponses];
+
+export type BulkDeleteUserNotificationsV2Data = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk';
+};
+
+export type BulkDeleteUserNotificationsV2Errors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkDeleteUserNotificationsV2Error = BulkDeleteUserNotificationsV2Errors[keyof BulkDeleteUserNotificationsV2Errors];
+
+export type BulkDeleteUserNotificationsV2Responses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsDoneData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/done';
+};
+
+export type BulkMarkNotificationsDoneErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsDoneError = BulkMarkNotificationsDoneErrors[keyof BulkMarkNotificationsDoneErrors];
+
+export type BulkMarkNotificationsDoneResponses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsSeenData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/seen';
+};
+
+export type BulkMarkNotificationsSeenErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsSeenError = BulkMarkNotificationsSeenErrors[keyof BulkMarkNotificationsSeenErrors];
+
+export type BulkMarkNotificationsSeenResponses = {
+    200: unknown;
+};
+
+export type BulkMarkNotificationsUndoneData = {
+    body: NotificationBulkRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/bulk/undone';
+};
+
+export type BulkMarkNotificationsUndoneErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type BulkMarkNotificationsUndoneError = BulkMarkNotificationsUndoneErrors[keyof BulkMarkNotificationsUndoneErrors];
+
+export type BulkMarkNotificationsUndoneResponses = {
+    200: unknown;
+};
 
 export type BulkGetTypedNotificationsByEventItemIdsData = {
     body: BulkGetByEventItemIdsRequest;
@@ -1746,6 +2074,30 @@ export type EnableNotificationTypeResponses = {
     200: unknown;
 };
 
+export type DeleteUserNotificationV2Data = {
+    body?: never;
+    path: {
+        /**
+         * ID of the notification
+         */
+        notification_id: string;
+    };
+    query?: never;
+    url: '/v1/user_notifications/{notification_id}';
+};
+
+export type DeleteUserNotificationV2Errors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteUserNotificationV2Error = DeleteUserNotificationV2Errors[keyof DeleteUserNotificationV2Errors];
+
+export type DeleteUserNotificationV2Responses = {
+    200: unknown;
+};
+
 export type GetTypedNotificationByIdData = {
     body?: never;
     path: {
@@ -1772,103 +2124,3 @@ export type GetTypedNotificationByIdResponses = {
 };
 
 export type GetTypedNotificationByIdResponse = GetTypedNotificationByIdResponses[keyof GetTypedNotificationByIdResponses];
-
-export type BulkDeleteUserNotificationsV2Data = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk';
-};
-
-export type BulkDeleteUserNotificationsV2Errors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkDeleteUserNotificationsV2Error = BulkDeleteUserNotificationsV2Errors[keyof BulkDeleteUserNotificationsV2Errors];
-
-export type BulkDeleteUserNotificationsV2Responses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsDoneData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/done';
-};
-
-export type BulkMarkNotificationsDoneErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsDoneError = BulkMarkNotificationsDoneErrors[keyof BulkMarkNotificationsDoneErrors];
-
-export type BulkMarkNotificationsDoneResponses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsSeenData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/seen';
-};
-
-export type BulkMarkNotificationsSeenErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsSeenError = BulkMarkNotificationsSeenErrors[keyof BulkMarkNotificationsSeenErrors];
-
-export type BulkMarkNotificationsSeenResponses = {
-    200: unknown;
-};
-
-export type BulkMarkNotificationsUndoneData = {
-    body: NotificationBulkRequest;
-    path?: never;
-    query?: never;
-    url: '/v2/user_notifications/bulk/undone';
-};
-
-export type BulkMarkNotificationsUndoneErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type BulkMarkNotificationsUndoneError = BulkMarkNotificationsUndoneErrors[keyof BulkMarkNotificationsUndoneErrors];
-
-export type BulkMarkNotificationsUndoneResponses = {
-    200: unknown;
-};
-
-export type DeleteUserNotificationV2Data = {
-    body?: never;
-    path: {
-        /**
-         * ID of the notification
-         */
-        notification_id: string;
-    };
-    query?: never;
-    url: '/v2/user_notifications/{notification_id}';
-};
-
-export type DeleteUserNotificationV2Errors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type DeleteUserNotificationV2Error = DeleteUserNotificationV2Errors[keyof DeleteUserNotificationV2Errors];
-
-export type DeleteUserNotificationV2Responses = {
-    200: unknown;
-};

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_entities SET share_permission_id = $2 WHERE database_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "58d824f76ec5f0dbb0a6607c2574fd5540f3e1a6e36d343500b7f70bb007401b"
+}

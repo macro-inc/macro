@@ -4,18 +4,22 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CrmContactResponseCompanyId } from './crmContactResponseCompanyId';
+import type { CrmContactResponseEmail } from './crmContactResponseEmail';
 import type { CrmContactResponseName } from './crmContactResponseName';
 
 /**
  * A CRM contact as returned by `GET /crm/companies/{company_id}/contacts`.
  */
 export interface CrmContactResponse {
-  /** The id of the company the contact belongs to. */
-  companyId: string;
+  /** The id of the company the contact belongs to; absent for a
+contact without a company. */
+  companyId?: CrmContactResponseCompanyId;
   /** When the contact record was created. */
   createdAt: string;
-  /** The contact's email address. */
-  email: string;
+  /** The contact's email address; absent for contacts added by name
+alone. */
+  email?: CrmContactResponseEmail;
   /** Earliest known interaction with this contact. */
   firstInteraction: string;
   /** Whether the contact is hidden from CRM listings for the
@@ -29,6 +33,9 @@ hidden contacts so they can render the right toggle state. */
   lastInteraction: string;
   /** Display name observed for the contact, if any. */
   name?: CrmContactResponseName;
+  /** Whether the address uses a known personal provider and permits company edits.
+Older servers omit this classification; clients must then keep it read-only. */
+  personalEmail?: boolean;
   /** When the contact record was last updated. */
   updatedAt: string;
 }

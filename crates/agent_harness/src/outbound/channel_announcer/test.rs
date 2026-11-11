@@ -57,7 +57,6 @@ fn declined_mentions_target_their_harness_settings() {
             "codex-cloud",
             "Codex",
         ),
-        (SessionBlocker::ClaudeNotConnected, "claude-cloud", "Claude"),
     ] {
         let prompt = connection_prompt(blocker);
         assert_eq!(
@@ -377,12 +376,14 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
     let mut messages = messages::domain::api::MockMessageCommands::new();
     let seen = Arc::clone(&patched);
     let replied = Message {
+        kind: messages::domain::models::MessageKind::Message,
         id: reply_id,
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),
         sender_id: channel_sender::ChannelSender::new_from_user(
             MacroUserIdStr::try_from_email("user@example.com").unwrap(),
         ),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
@@ -454,18 +455,21 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                     label: "Ran".into(),
                     detail: Some("TOKEN=private-value run-report".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "search".into(),
                     label: "Searched".into(),
                     detail: Some("confidential acquisition".into()),
                     status: ActivityStatus::Completed,
+                    card: None,
                 },
                 ActivityRow {
                     id: "request".into(),
                     label: "Fetched".into(),
                     detail: Some("https://internal.example/?token=private-value".into()),
                     status: ActivityStatus::Failed,
+                    card: None,
                 },
             ],
         },
@@ -492,12 +496,14 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
                 assert_eq!(post.thread_id, thread);
                 assert_eq!(post.content, "safe activity");
                 Ok(Message {
+                    kind: messages::domain::models::MessageKind::Message,
                     id,
                     parent: message_parent.clone(),
                     thread_id: thread,
                     sender_id: channel_sender::ChannelSender::new_from_user(
                         MacroUserIdStr::try_from_email("user@example.com").unwrap(),
                     ),
+                    triggered_via: None,
                     triggered_by: None,
                     bot_profile: None,
                     mentions: vec![],
@@ -554,4 +560,40 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
         Some("TOKEN=private-value run-report"),
         "snapshot serialization leaves live session details intact"
     );
+}
+
+/// A view is part of the reply, as its passages are: the stored step keeps
+/// it, while the step's detail stays in authorized live views.
+#[test]
+fn a_stored_step_keeps_the_view_it_presented() {
+    use agent_fold::domain::model::{ActivityCard, ActivityRow, Segment};
+    let view = dynamic_ui::View {
+        title: Some("Launch notes".to_owned()),
+        widgets: vec![dynamic_ui::Widget::Md {
+            markdown: "Shipped.".to_owned(),
+        }],
+    };
+    let segments = vec![ProjectedSegment {
+        segment: Segment {
+            index: 0,
+            kind: SegmentKind::Activity,
+            start: 0,
+            end: 1,
+            sealed: true,
+            rows: vec![ActivityRow {
+                id: "view_1".into(),
+                label: "Present view".into(),
+                detail: Some("Launch notes".into()),
+                status: ActivityStatus::Completed,
+                card: Some(ActivityCard::View { view: view.clone() }),
+            }],
+        },
+        text: None,
+    }];
+    let stored = reply_segments(TurnId(0), &segments);
+    let [AgentReplySegment::Activity { rows, .. }] = stored.as_slice() else {
+        panic!("one run of steps");
+    };
+    assert_eq!(rows[0].card, Some(ActivityCard::View { view }));
+    assert_eq!(rows[0].detail, None);
 }

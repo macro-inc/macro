@@ -1,8 +1,10 @@
-import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import LinkBreakIcon from '@phosphor/link-break.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import PowerIcon from '@phosphor/power.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import LinkBreakIcon from '@icon/system/regular/link-break.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import PowerIcon from '@icon/system/regular/power.svg';
 import { Dropdown } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -11,7 +13,9 @@ export type ConnectionMenuIcon =
   | 'disable'
   | 'rename'
   | 'reconnect'
-  | 'disconnect';
+  | 'disconnect'
+  | 'settings'
+  | 'external';
 
 export type ConnectionMenuItem = {
   label: string;
@@ -27,6 +31,8 @@ function MenuItemIcon(props: { item: ConnectionMenuItem }): JSX.Element {
     .with('rename', () => <PencilSimpleIcon class="size-4" />)
     .with('reconnect', () => <ArrowsClockwiseIcon class="size-4" />)
     .with('disconnect', () => <LinkBreakIcon class="size-4" />)
+    .with('settings', () => <GearIcon class="size-4" />)
+    .with('external', () => <ArrowUpRightIcon class="size-4" />)
     .exhaustive();
 }
 
@@ -39,11 +45,10 @@ export function ConnectionMore(props: {
         <Dropdown.Trigger
           aria-label="More"
           variant="ghost"
-          size="icon-sm"
-          depth={3}
-          class="text-ink-muted hover:text-ink"
+          size="icon-md"
+          class="text-ink-muted hover:text-ink touch:min-h-11 touch:min-w-11"
         >
-          <DotsThreeIcon class="size-4" />
+          <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
         <Dropdown.Content class="w-48">
           <Dropdown.Group>

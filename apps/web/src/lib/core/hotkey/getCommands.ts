@@ -16,6 +16,8 @@ type sortAndFilterOptions = {
   limitToCurrentScope?: boolean;
   // skips the runWithInputFocused filter — use for the command menu where all commands should be shown regardless of input focus
   ignoreInputFocused?: boolean;
+  // keeps commands registered with `hide` — the shortcut sheet lists hidden navigation keys
+  includeHidden?: boolean;
 };
 
 // This is reactive on active scope (if scope not specified), activeElement, and commmand conditions.
@@ -89,6 +91,18 @@ export function getActiveCommandsFromScope(
     : commands;
 }
 
+/** Every key a command registered in this scope would run for right now. */
+export function getRunnableHotkeys(scopeId: string): Set<ValidHotkey> {
+  return new Set(
+    getActiveCommandsFromScope(scopeId, {
+      limitToCurrentScope: true,
+      hideCommandsWithoutHotkeys: true,
+      ignoreInputFocused: true,
+      includeHidden: true,
+    }).flatMap((command) => command.hotkeys ?? [])
+  );
+}
+
 const filterCommands = (displayOptions: sortAndFilterOptions) => {
   return (command: HotkeyCommand) => {
     const hideValue =
@@ -99,7 +113,100 @@ const filterCommands = (displayOptions: sortAndFilterOptions) => {
       (displayOptions.ignoreInputFocused ||
         !isEditableInput(activeElement() as HTMLElement) ||
         command.runWithInputFocused) &&
-      hideValue !== true
+      (displayOptions.includeHidden || hideValue !== true)
     );
   };
 };
+
+/** One action in the shortcut sheet. Each binding is a key sequence. */
+export type ShortcutSheetEntry = {
+  description: string;
+  bindings: ValidHotkey[][];
+};
+
+export type ShortcutSheet = {
+  /** Shortcuts of the focused view and its parents, nearest first. */
+  view: ShortcutSheetEntry[];
+  /** Shortcuts that work anywhere in the app. */
+  app: ShortcutSheetEntry[];
+};
+
+/**
+ * Every shortcut reachable from a scope, for the shortcut sheet. Unlike the
+ * command menu it includes hidden navigation keys (j/k, Enter, Escape) and
+ * expands leader keys into sequences (g then e). Conditions are evaluated
+ * now, so read it before the sheet takes focus from the view.
+ */
+export function getShortcutSheet(scopeId: string): ShortcutSheet {
+  const sections = {
+    view: new Map<string, ShortcutSheetEntry>(),
+    app: new Map<string, ShortcutSheetEntry>(),
+  };
+  const seenBindings = new Set<string>();
+  const add = (
+    section: keyof typeof sections,
+    command: HotkeyCommand,
+    binding: ValidHotkey[]
+  ) => {
+    const bindingKey = binding.join(' ');
+    if (seenBindings.has(bindingKey)) return;
+    seenBindings.add(bindingKey);
+    const description =
+      typeof command.description === 'function'
+        ? command.description()
+        : command.description;
+    const entry = sections[section].get(description);
+    if (entry) entry.bindings.push(binding);
+    else
+      sections[section].set(description, { description, bindings: [binding] });
+  };
+
+  const commands = getActiveCommandsFromScope(scopeId, {
+    sortByScopeLevel: true,
+    hideCommandsWithoutHotkeys: true,
+    ignoreInputFocused: true,
+    includeHidden: true,
+  });
+  // Each key runs the nearest scope's command, and within a scope the one
+  // with the highest handler priority. Shadowing is per key, so a command
+  // keeps its other keys when only one of them is claimed nearer.
+  const keyOwners = new Map<ValidHotkey, HotkeyCommand>();
+  for (const command of [...commands].sort(
+    (a, b) =>
+      a.scopeLevel - b.scopeLevel ||
+      (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0)
+  )) {
+    for (const hotkey of command.hotkeys ?? []) {
+      if (!keyOwners.has(hotkey)) keyOwners.set(hotkey, command);
+    }
+  }
+  for (const command of commands) {
+    const section = command.scopeId === 'global' ? 'app' : 'view';
+    const leaderScope = command.activateCommandScopeId;
+    const hidden =
+      typeof command.hide === 'function' ? command.hide() : command.hide;
+    if (!leaderScope || hidden !== true) {
+      for (const hotkey of command.hotkeys ?? []) {
+        if (keyOwners.get(hotkey) === command) add(section, command, [hotkey]);
+      }
+    }
+    if (!leaderScope) continue;
+    // In dispatch order, so a letter a view claims shadows the app's.
+    const followers = getActiveCommandsFromScope(leaderScope, {
+      limitToCurrentScope: true,
+      hideCommandsWithoutHotkeys: true,
+      ignoreInputFocused: true,
+    }).sort((a, b) => (b.handlerPriority ?? 0) - (a.handlerPriority ?? 0));
+    for (const leader of command.hotkeys ?? []) {
+      for (const follower of followers) {
+        for (const hotkey of follower.hotkeys ?? []) {
+          add(follower.sheetSection ?? section, follower, [leader, hotkey]);
+        }
+      }
+    }
+  }
+  return {
+    view: [...sections.view.values()],
+    app: [...sections.app.values()],
+  };
+}

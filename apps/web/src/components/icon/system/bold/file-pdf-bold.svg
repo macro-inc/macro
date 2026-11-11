@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" data-macro-icon="file-pdf-bold" aria-hidden="true" focusable="false">
+  <path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z"/>
+  <path d="M13.5 3v3.5a2 2 0 0 0 2 2H19"/>
+  <g stroke-width="1.5">
+    <path d="M8.5 17.5v-6H11a2 2 0 0 1 0 4H8.5m6.5 0 1 1 1.5-1.5"/>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 import type { Attachment, Model } from '@core/component/AI/types';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, untrack } from 'solid-js';
+import { untrack } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { parseModel } from './parse';
 
@@ -46,14 +46,24 @@ function purgeLRU() {
 }
 purgeLRU();
 
+// Debounced saves of a draft the user just sent must not land after the
+// composer has already been cleared, or a remount shows the sent message again.
+const chatStateSaveTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function cancelChatStateSave(id: string) {
+  const pending = chatStateSaveTimeouts[id];
+  if (!pending) return;
+  clearTimeout(pending);
+  delete chatStateSaveTimeouts[id];
+}
+
 // debounced save chat state
 function useStoreChatState() {
-  const timeouts: Record<string, ReturnType<typeof setTimeout>> = {};
   return (id: string, state: Partial<StoredStuff>) => {
-    if (timeouts[id]) clearTimeout(timeouts[id]);
-    timeouts[id] = setTimeout(() => {
-      const updated_at = Date.now();
-      setPersistentChatState(id, { ...state, used_at: updated_at });
+    cancelChatStateSave(id);
+    chatStateSaveTimeouts[id] = setTimeout(() => {
+      delete chatStateSaveTimeouts[id];
+      setPersistentChatState(id, { ...state, used_at: Date.now() });
     }, 300);
   };
 }
@@ -64,6 +74,7 @@ export function storeChatStateImmediate(
   id: string,
   state: Partial<StoredStuff>
 ) {
+  cancelChatStateSave(id);
   setPersistentChatState(id, { ...state, used_at: Date.now() });
 }
 
@@ -83,23 +94,4 @@ export function getChatInputStoredState(id: string): Partial<StoredStuff> {
     ...storedStuff,
     model,
   };
-}
-
-// The new-chat soup composer has no chat id to key off of, so its draft model
-// gets its own persisted slot (kept out of the LRU-bounded chat-state store so
-// it's never purged). Like the per-chat draft model, this lets a model the user
-// picked but hasn't sent yet survive reload/navigation.
-const [soupModel, setSoupModel] = makePersisted(
-  createSignal<Model | undefined>(undefined),
-  {
-    name: 'soup-chat-input-model',
-  }
-);
-
-export function getSoupInputStoredModel(): Model | undefined {
-  return parseModel(untrack(soupModel));
-}
-
-export function storeSoupInputModel(model: Model) {
-  setSoupModel(model);
 }

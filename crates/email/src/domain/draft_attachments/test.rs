@@ -2,6 +2,7 @@ use super::*;
 
 fn facts() -> AttachmentEditFacts {
     AttachmentEditFacts {
+        generation_matches: true,
         authorized: true,
         editable: true,
         scheduled: false,

@@ -4,7 +4,7 @@ use messages::domain::ports::{MessageDirection, MessageTimelineQuery};
 use super::ChannelToolContext;
 use super::types::{
     PageDirection, ToolChannelMessage, ToolNavigation, ToolOmission, ToolOmissionKind, clamp_limit,
-    clamp_max_chars, content_truncation_omissions,
+    clamp_max_chars, content_truncation_omissions, user_senders,
 };
 use crate::domain::ports::ChannelService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -144,7 +144,12 @@ where
 {
     type Output = ReadChannelMessagesResponse;
 
-    #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
+    #[tracing::instrument(
+        name = "channels.tool.read_messages",
+        skip_all,
+        fields(user_id=?request_context.user_id, channel_id=%self.channel_id),
+        err
+    )]
     async fn call(
         &self,
         service_context: ServiceContext<ChannelToolContext<Svc, AccessSvc>>,
@@ -215,6 +220,12 @@ where
             older_cursor: continuation(page.next_cursor, MessageDirection::Older),
             newer_cursor: continuation(page.previous_cursor, MessageDirection::Newer),
         };
+        let senders = user_senders(
+            page.items
+                .iter()
+                .flat_map(|item| std::iter::once(&item.message).chain(&item.thread.preview)),
+        );
+        let names = service_context.sender_names(senders).await;
         let messages: Vec<_> = page
             .items
             .into_iter()
@@ -225,6 +236,7 @@ where
                     self.channel_id,
                     self.include_thread_previews.unwrap_or(true),
                     clamp_max_chars(self.max_chars_per_message),
+                    &names,
                 )
             })
             .collect();

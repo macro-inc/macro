@@ -133,11 +133,29 @@ pub(super) fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
 /// Agent sessions are authorized through `entity_access`, whose sources are
 /// the same user / channel / team ids the query's `user_source_ids` CTE
 /// already collects - the predicate the agent-session leg's own queries use.
+/// The filter's row predicates the gate can express apply as well, since
+/// hydration by id does not re-apply them. A session the viewer follows is
+/// shown even while hidden, and readable through its thread's parent, as in
+/// the agent-session leg's broad lists.
 pub(super) fn agent_session_gate(filter: Option<&EntityFilterAst>) -> String {
+    let tree = filter.and_then(|filter| filter.agent_session_filter.as_deref());
+    let implied = implied_conjuncts_sql(tree, |literal| match literal {
+        AgentSessionLiteral::Source(source) => Some(super::agent_session::source_sql(*source)),
+        AgentSessionLiteral::Visibility(visibility) => {
+            Some(super::agent_session::visibility_sql(*visibility))
+        }
+        AgentSessionLiteral::Include
+        | AgentSessionLiteral::Id(_)
+        | AgentSessionLiteral::Owner(_) => None,
+    });
+    let matching = if implied.is_empty() {
+        String::new()
+    } else {
+        format!(" AND EXISTS (SELECT 1 FROM agent_session s WHERE s.id = {ID_SQL}::uuid{implied})")
+    };
     // IDs come from the typed UUID AST, never raw request text. `only` is an
     // internal refresh constraint and deliberately does not bypass visibility.
-    let named = filter
-        .and_then(|filter| filter.agent_session_filter.as_deref())
+    let named = tree
         .map(super::agent_session::explicitly_named_ids)
         .unwrap_or_default()
         .into_iter()
@@ -151,17 +169,23 @@ pub(super) fn agent_session_gate(filter: Option<&EntityFilterAst>) -> String {
     uuid_guarded(
         ID_SQL,
         format!(
-            r#"EXISTS (
+            r#"(EXISTS (
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = {ID_SQL}::uuid
                 AND ea.entity_type = 'agent_session'
                 AND ea.source_id IN (SELECT source_id FROM user_source_ids)
-            ) AND (
+            ) OR EXISTS (
+                SELECT 1 FROM agent_session s
+                WHERE s.id = {ID_SQL}::uuid AND {followed} AND {parent_thread}
+            )) AND (
                 ({named}) OR NOT EXISTS (
                     SELECT 1 FROM agent_session s
-                    WHERE s.id = {ID_SQL}::uuid AND s.list_hidden
+                    WHERE s.id = {ID_SQL}::uuid AND s.visibility = 'hidden'
+                    AND NOT {followed}
                 )
-            )"#
+            ){matching}"#,
+            followed = super::agent_session::FOLLOWED_SQL,
+            parent_thread = super::agent_session::PARENT_THREAD_GRANT_SQL,
         ),
     )
 }

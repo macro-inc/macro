@@ -1,11 +1,10 @@
 import '@app/index.css';
 import { PromoCard } from '@app/features/sidebar-promotion/components/promo-card';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
-import FileCsvIcon from '@phosphor/file-csv.svg';
-import FileZipIcon from '@phosphor/file-zip.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
-import type { ImportState } from '@service-cognition/import';
+import FileCsvIcon from '@icon/system/regular/file-csv.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ConnectorImportProvider } from '../context/connector-import-context';
@@ -14,98 +13,29 @@ import { IMPORT_CATEGORIES } from '../core/catalog';
 import type { ImportCategory } from '../core/providers';
 import { ConnectorImportDialog } from '../views/import-dialog';
 
-// The real card and dialog over an in-memory pipeline: connecting succeeds
-// at once, Notion discovery stages two pages, and accepted pages import.
-const now = '2026-10-12T00:00:00Z';
+// The real card and dialog over in-memory connections: Pipedream connects at
+// once, GitHub's native authorization finishes a moment later as if in
+// another tab, and every import hands off to the agent.
 const [connected, setConnected] = createSignal<ReadonlySet<string>>(
   new Set(['dropbox'])
 );
-const [state, setState] = createSignal<ImportState>({ runs: [], entities: [] });
 const [handoff, setHandoff] = createSignal('');
-
-function page(id: string, title: string, summary: string) {
-  return {
-    id,
-    user_id: 'fixture',
-    source: 'notion' as const,
-    foreign_id: id,
-    status: 'staged' as const,
-    initiator: 'manual' as const,
-    metadata: { title, summary },
-    created_at: now,
-    updated_at: now,
-  };
-}
-
-function channel(id: string, name: string, purpose: string) {
-  return {
-    ...page(id, name, ''),
-    source: 'slack' as const,
-    metadata: { name, purpose, member_count: 12 },
-  };
-}
 
 const context: ConnectorImportContext = {
   createConnections: () => ({ connected, ready: () => true }),
-  createImportState: () => ({ state, ready: () => true }),
   connect: async (app) => {
-    setConnected((previous) => new Set([...previous, app.appSlug]));
-    return 'connected';
-  },
-  discover: async (source) => {
-    setState({
-      runs: [
-        { source, status: 'running', auto_import: false, updated_at: now },
-      ],
-      entities: [],
-    });
-    setTimeout(
-      () =>
-        setState({
-          runs: [
-            { source, status: 'ready', auto_import: false, updated_at: now },
-          ],
-          entities:
-            source === 'slack'
-              ? [
-                  channel('c1', 'general', 'Company-wide announcements'),
-                  channel('c2', 'eng', 'Engineering discussion'),
-                ]
-              : [
-                  page('p1', 'Q4 planning', 'Goals and owners for the quarter'),
-                  page(
-                    'p2',
-                    'Onboarding guide',
-                    'How new teammates get set up'
-                  ),
-                ],
-        }),
-      400
-    );
-  },
-  runImport: async (ids) => {
-    const flip = (status: 'importing' | 'imported') =>
-      setState((previous) => ({
-        ...previous,
-        entities: previous.entities.map((entity) =>
-          ids.includes(entity.id)
-            ? {
-                ...entity,
-                status,
-                ...(status === 'imported'
-                  ? { entity_id: `doc-${entity.id}`, entity_type: 'md' }
-                  : {}),
-              }
-            : entity
-        ),
-      }));
-    flip('importing');
-    setTimeout(() => flip('imported'), 400);
+    const add = () =>
+      setConnected((previous) => new Set([...previous, app.appSlug]));
+    if (!app.mcpUrl) {
+      add();
+      return 'connected';
+    }
+    setTimeout(add, 400);
+    return 'started';
   },
   startAgentImport: async (value) => {
     setHandoff(value.input);
   },
-  entityHref: (entity) => `#${entity.type}/${entity.id}`,
 };
 
 function Sidebar(props: { category: ImportCategory }) {
@@ -134,7 +64,6 @@ function Sidebar(props: { category: ImportCategory }) {
         config={config}
         open={open()}
         onOpenChange={setOpen}
-        onImported={() => setHidden(true)}
         alternatives={(() => {
           const alternative =
             props.category === 'crm'

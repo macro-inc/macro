@@ -4,12 +4,12 @@
  * Presentational.
  */
 
-import ArrowUUpLeft from '@phosphor/arrow-u-up-left.svg';
-import ArrowUUpRight from '@phosphor/arrow-u-up-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
+import ArrowUUpLeft from '@icon/system/regular/arrow-u-up-left.svg';
+import ArrowUUpRight from '@icon/system/regular/arrow-u-up-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CloudArrowUp from '@icon/system/regular/cloud-arrow-up.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -78,32 +78,32 @@ export function StatusBar(props: {
   const mod = () => (props.mac ? '⌘' : 'Ctrl+');
   return (
     <div
-      class="-translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex items-center gap-0.5 rounded-xl border border-edge-muted bg-menu p-1 shadow-lg"
+      class="menu-surface -translate-x-1/2 absolute bottom-3 left-1/2 z-10 flex items-center gap-0.5 p-1"
       data-testid="ai-status-bar"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <Show when={props.editable}>
         <Button
+          aria-label="Undo"
           variant="ghost"
           size="icon-md"
-          label="Undo"
           tooltip={`Undo · ${mod()}Z`}
           disabled={!props.canUndo}
           data-testid="ai-undo"
           onClick={() => props.onUndo()}
         >
-          <ArrowUUpLeft />
+          <ArrowUUpLeft class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Redo"
           variant="ghost"
           size="icon-md"
-          label="Redo"
           tooltip={`Redo · ${props.mac ? '⇧⌘Z' : 'Ctrl+Shift+Z'}`}
           disabled={!props.canRedo}
           data-testid="ai-redo"
           onClick={() => props.onRedo()}
         >
-          <ArrowUUpRight />
+          <ArrowUUpRight class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <span
           class="flex size-8 items-center justify-center text-ink-muted"
@@ -150,7 +150,7 @@ export function StatusBar(props: {
         <Show when={open()}>
           <div
             role="menu"
-            class="absolute right-0 bottom-full z-50 mb-2 w-60 rounded-lg border border-edge-muted bg-menu p-1 text-xs shadow-lg"
+            class="menu-surface absolute right-0 bottom-full z-50 mb-2 w-60 p-1 text-xs"
           >
             <MenuItems items={props.zoomItems} onDone={() => setOpen(false)} />
           </div>

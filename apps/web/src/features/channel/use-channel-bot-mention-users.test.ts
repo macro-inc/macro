@@ -9,6 +9,7 @@ import {
 } from './use-channel-bot-mention-users';
 
 const flags = vi.hoisted(() => ({ cursor: (): boolean => false }));
+const offline = vi.hoisted(() => ({ ids: new Set<string>() }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCursorAgents: { key: 'enable-cursor-agents' },
 }));
@@ -27,6 +28,9 @@ vi.mock('@queries/agents/agents', () => ({
       agent(CURSOR_BOT_ID, 'Cursor', 'all', 'cursor'),
     ],
   }),
+}));
+vi.mock('@queries/agents/offline-runtimes', () => ({
+  useOfflineAgentBotIds: () => () => offline.ids,
 }));
 
 const timestamp = '2026-08-27T12:00:00Z';
@@ -65,6 +69,25 @@ function agent(
 describe('availableBotMentionUsers', () => {
   beforeEach(() => {
     flags.cursor = () => false;
+    offline.ids = new Set<string>();
+  });
+
+  it('marks an agent whose runtime is offline', () => {
+    createRoot((dispose) => {
+      flags.cursor = () => true;
+      offline.ids = new Set(['codex-agent']);
+      const users = useMessageBotMentionUsers(() => ({
+        type: 'channel',
+        id: 'channel-1',
+      }));
+      expect(
+        users().find((user) => user.id === 'bot|codex-agent')?.offline
+      ).toBe(true);
+      expect(
+        users().find((user) => user.id === `bot|${CURSOR_BOT_ID}`)?.offline
+      ).toBeUndefined();
+      dispose();
+    });
   });
 
   it('updates Cursor mention visibility when the rollout changes', () => {
@@ -96,19 +119,13 @@ describe('availableBotMentionUsers', () => {
       'cursor'
     );
     const codex = agent('codex', 'Codex', 'all', 'codex-cloud');
-    const claude = agent('claude', 'Claude', 'all', 'claude-cloud');
     expect(
       availableBotMentionUsers(
         [bot(CURSOR_BOT_ID, 'Cursor'), installed.bot],
-        [global, installed, codex, claude],
+        [global, installed, codex],
         false
       ).map((user) => user.id)
-    ).toEqual([
-      'bot|installed-cursor',
-      'bot|global-cursor',
-      'bot|codex',
-      'bot|claude',
-    ]);
+    ).toEqual(['bot|installed-cursor', 'bot|global-cursor', 'bot|codex']);
   });
   it('hides the built-in Cursor bot before agent metadata is available', () => {
     expect(
@@ -130,7 +147,7 @@ describe('availableBotMentionUsers', () => {
       dispose();
     });
   });
-  it.each(['cursor', 'codex-cloud', 'claude-cloud'])(
+  it.each(['cursor', 'codex-cloud'])(
     'offers global and installed %s agents before connection',
     (harness) => {
       const global = agent('global', 'Global', 'all', harness);

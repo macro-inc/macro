@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_send SET state = 'pending', claimed_epoch = NULL, updated_at = now() WHERE id = $1 AND account_id = $2 AND state = 'sending' AND dispatch_started_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1a8fc7673aea461b4975e9de1e8fc7c691efcdeb0d693b0288d0ae9cc2a70c2a"
+}

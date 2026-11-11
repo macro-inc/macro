@@ -1,15 +1,17 @@
 // What "the Android native code" is, shared by the PR gate
-// (android-version-check.mjs), the Play release workflow's preconditions,
-// head guard and provenance stamp, the drift check and the watcher (all
-// through the `hash` CLI below) so they can never disagree about whether a
-// change is native.
+// (android-version-check.mjs), the Play release workflow's preconditions and
+// head guard, the publisher's head guard and provenance stamp, the drift
+// check and the watcher (all through the `hash` CLI below) so they can never
+// disagree about whether a change is native.
 //
 // It is every tracked file under apps/web/tauri except what never reaches
 // the Android binary — iOS, macOS, Linux, Windows and desktop-only paths by
 // naming convention (a path component or extension naming the platform, the
-// generated Xcode project under gen/apple, the desktop updater manifest,
-// editor config) — plus one thing outside that tree: the version of the
-// client cache wasm package. The app compiles the cache crates natively, and
+// generated Xcode project under gen/apple; for desktop only `desktop`,
+// `desktop.*` and `desktop-*`, since desktop_update compiles into Android;
+// the desktop updater manifest,
+// editor config, Markdown docs) — plus one thing outside that tree: the
+// version of the client cache wasm package. The app compiles the cache crates natively, and
 // the team bumps that version when a cache change must ship, so the bump
 // counts as a native change while other edits under crates/client do not.
 // The iOS gate (tooling/xtask/.../scripts/ios_native_tree.sh) is the mirror
@@ -22,7 +24,7 @@ import { pathToFileURL } from 'node:url';
 export const tauriPath = 'apps/web/tauri';
 export const cacheWasmManifest = 'crates/client/cache-wasm/Cargo.toml';
 export const androidExclude =
-  /(^|\/)(ios|macos|linux|windows|apple|desktop)([_./-]|$)|\.(ios|macos|linux|windows)\.|^desktop-release\.json$|^\.helix\//;
+  /(^|\/)(ios|macos|linux|windows|apple)([_./-]|$)|(^|\/)desktop([./-]|$)|\.(ios|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 
 /// A `git` runner bound to a working directory.
 export function gitIn(cwd) {
@@ -59,14 +61,19 @@ export function androidTreeListing(git, commit) {
     .filter((line) => line && !androidExclude.test(line.split('\t')[1]));
 }
 
-/// One hash for "the Android native code" at a commit: the listing above
-/// plus the cache wasm version. Equal hashes mean no native change.
-export function androidNativeHash(git, commit) {
-  const content = [
+/// What the hash covers at a commit: the listing above plus the cache wasm
+/// version, one line each (the iOS `native_tree_listing` twin).
+export function androidNativeListing(git, commit) {
+  return [
     ...androidTreeListing(git, commit),
     `cache-wasm-version ${cacheWasmVersion(git, commit)}`,
-  ].join('\n');
-  return git(['hash-object', '--stdin'], `${content}\n`);
+  ];
+}
+
+/// One hash for "the Android native code" at a commit. Equal hashes mean no
+/// native change.
+export function androidNativeHash(git, commit) {
+  return git(['hash-object', '--stdin'], `${androidNativeListing(git, commit).join('\n')}\n`);
 }
 
 /// Why two commits differ, for messages: which of the two signals moved.
@@ -99,6 +106,7 @@ export function androidVersionCode(git, commit) {
 
 // CLI for the workflows' shell steps:
 //   bun scripts/android-native.mjs hash [commit]          the native hash
+//   bun scripts/android-native.mjs listing [commit]       what it covers
 //   bun scripts/android-native.mjs version-code [commit]  the versionCode
 if (
   process.argv[1] &&
@@ -109,8 +117,9 @@ if (
     const git = gitIn(process.cwd());
     const resolved = git(['rev-parse', '--verify', '--end-of-options', `${commit}^{commit}`]);
     if (command === 'hash') console.log(androidNativeHash(git, resolved));
+    else if (command === 'listing') console.log(androidNativeListing(git, resolved).join('\n'));
     else if (command === 'version-code') console.log(androidVersionCode(git, resolved));
-    else throw new Error('Usage: android-native.mjs hash|version-code [commit]');
+    else throw new Error('Usage: android-native.mjs hash|listing|version-code [commit]');
   } catch (error) {
     console.error(error instanceof Error ? error.message : 'android-native failed');
     process.exitCode = 1;

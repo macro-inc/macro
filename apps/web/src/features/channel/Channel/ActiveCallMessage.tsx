@@ -1,102 +1,80 @@
+import { analytics } from '@app/lib/analytics';
+import { t } from '@app/lib/i18n';
 import { getCallJoinTab } from '@channel/Call/call-tabs';
 import { useCall } from '@channel/Call/use-call';
+import { UserGroup } from '@core/component/UserGroup';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneIcon from '@phosphor/phone-call.svg';
-import { useActiveCallQuery } from '@queries/call/call';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { Show } from 'solid-js';
+import { CallLiveChip } from '../Call/components/CallLiveChip';
+import { CallWaveform } from '../Call/components/CallWaveform';
+import { useParticipantSpeaking } from '../Call/primitives/use-call-speaking';
 import { useChannelTab } from './ChannelTabContext';
 
-function formatDuration(startedAt: string | undefined, nowMs: number) {
-  const startedAtMs = startedAt ? new Date(startedAt).getTime() : Number.NaN;
-  if (!Number.isFinite(startedAtMs)) return '';
-
-  const totalSeconds = Math.max(0, Math.floor((nowMs - startedAtMs) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
 export function ActiveCallMessage(props: { channelId: string }) {
-  const activeCallQuery = useActiveCallQuery(() => props.channelId);
+  const active = useActiveCallQuery(() => props.channelId);
+  const record = useLiveCallRecordQuery(() =>
+    active.isSuccess ? (active.data?.callId ?? '') : ''
+  );
   const { setActiveTab } = useChannelTab();
   const call = useCall(() => props.channelId, {
     onJoin: () => setActiveTab(getCallJoinTab()),
   });
-  const [nowMs, setNowMs] = createSignal(Date.now());
-  const durationTimer = globalThis.setInterval(
-    () => setNowMs(Date.now()),
-    1000
-  );
-  onCleanup(() => globalThis.clearInterval(durationTimer));
-
-  const shouldShow = () => !!activeCallQuery.data && !call.isInThisChannel();
-  const duration = createMemo(() =>
-    formatDuration(activeCallQuery.data?.createdAt, nowMs())
-  );
+  const isSpeaking = useParticipantSpeaking(() => ({
+    channelId: props.channelId,
+  }));
+  const participantIds = () =>
+    record.isSuccess
+      ? record.data.participants
+          .filter((participant) => !participant.leftAt)
+          .map((participant) => participant.userId)
+      : [];
 
   async function handleJoin() {
-    try {
-      await call.joinCall();
-    } catch (error) {
-      console.error('Failed to join call', error);
-    }
+    analytics.track('call_action', {
+      action: 'join_clicked',
+      channelId: props.channelId,
+      isExistingCall: true,
+    });
+    await call.joinCall();
   }
 
   return (
-    <Show when={shouldShow()}>
-      {/* Full-frame mobile/tablet: place above the floating input/dock stack. */}
-      <div class="w-full flex justify-center touch:pb-(--mobile-content-inset-bottom)">
-        <div class="macro-message-width w-full relative">
-          <div class="w-full pr-2 pl-(--message-padding-x)">
-            <div
-              class="grid min-w-0 items-start gap-x-2 py-2"
-              style={{
-                'grid-template-columns':
-                  'var(--user-icon-width) minmax(0, 1fr)',
-                'grid-template-areas': '"icon content"',
-              }}
-            >
-              <div
-                class="shrink-0 size-(--user-icon-width) rounded-full bg-success/15 text-success flex items-center justify-center"
-                style={{ 'grid-area': 'icon' }}
-              >
-                <PhoneIcon class="size-5" />
-              </div>
-              <div
-                class="min-w-0 rounded-md border border-edge-muted bg-surface px-3 py-2 text-sm text-ink"
-                style={{ 'grid-area': 'content' }}
-              >
-                <div class="flex min-w-0 items-center gap-2">
-                  <div class="min-w-0 flex-1">
-                    <div class="font-medium">
-                      A call is active in this channel
-                    </div>
-                    <Show when={duration()}>
-                      {(value) => (
-                        <div class="text-xs text-ink-extra-muted">
-                          Active for{' '}
-                          <span class="font-mono tabular-nums">{value()}</span>
-                        </div>
-                      )}
-                    </Show>
-                  </div>
-                  <Button
-                    variant="success"
-                    size="sm"
-                    class="shrink-0"
-                    onClick={() => fireAndForget(handleJoin(), 'channel-call')}
-                  >
-                    <PhoneIcon class="size-3.5" />
-                    Join
-                  </Button>
-                </div>
-              </div>
-            </div>
+    <Show when={active.isSuccess && active.data && !call.isInThisChannel()}>
+      <div class="mb-2 flex w-full justify-center touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
+        <div class="macro-message-width flex w-full min-w-0 items-center gap-3 rounded-2xl border border-success/20 bg-success/10 p-2.5">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-success/10">
+            <CallWaveform class="size-5" />
+          </span>
+          <div class="flex min-w-0 flex-1 items-center gap-2 mobile:flex-col mobile:items-start mobile:gap-0">
+            <span class="truncate text-sm font-medium">
+              {t('calls.inProgress')}
+            </span>
+            <CallLiveChip
+              bare
+              hideWave
+              startedAt={active.isSuccess ? active.data?.createdAt : undefined}
+            />
           </div>
+          <UserGroup
+            isHighlighted={isSpeaking}
+            userIds={participantIds()}
+            maxUsers={isMobile() ? 3 : 4}
+            size="sm"
+            suppressClick
+          />
+          <Button
+            variant="success"
+            size="sm"
+            disabled={call.isJoining()}
+            onClick={() => fireAndForget(handleJoin(), 'channel-call')}
+          >
+            <PhoneIcon class="size-4" />
+            {t('calls.join')}
+          </Button>
         </div>
       </div>
     </Show>

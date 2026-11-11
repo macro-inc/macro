@@ -19,10 +19,11 @@ import type {
   ImportCategory,
   ImportCategoryConfig,
   ImportIcon,
+  ImportProvider,
 } from './providers';
 
 // Order is promotion order: the sidebar card shows these left to right and
-// its copy names the first few. Natively imported sources lead.
+// its copy names the first few. Sources with an import ledger lead.
 // Each pitch fills one line and most of a second at the default sidebar width.
 export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
   files: {
@@ -32,7 +33,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
       'Import docs and files from Notion, Google Drive, Dropbox, and more.',
     action: 'Import files',
     dialogDescription:
-      'Connect an app, then pick what to bring into your Drive.',
+      'Connect an app, then pick what to bring into your Drive with the agent.',
     items: 'documents and files',
     destination: 'my Macro Drive',
     providers: [
@@ -41,7 +42,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'Notion',
         detail: 'Pages and wikis',
         icon: IconNotion as ImportIcon,
-        native: 'notion',
+        ledger: 'notion',
       },
       {
         appSlug: 'google_drive',
@@ -81,7 +82,8 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
     pitch:
       'Import issues and tasks from Linear, Jira, Asana, GitHub, and more.',
     action: 'Import tasks',
-    dialogDescription: 'Connect an app, then pick which tasks to bring over.',
+    dialogDescription:
+      'Connect an app, then pick which tasks to bring over with the agent.',
     items: 'issues and tasks',
     destination: 'Macro tasks',
     providers: [
@@ -90,13 +92,14 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'Linear',
         detail: 'Issues',
         icon: IconLinear as ImportIcon,
-        native: 'linear',
+        ledger: 'linear',
       },
       {
         appSlug: 'jira',
         name: 'Jira',
         detail: 'Issues',
         icon: IconJira as ImportIcon,
+        ledger: 'jira',
       },
       {
         appSlug: 'asana',
@@ -109,6 +112,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'GitHub',
         detail: 'Issues',
         icon: IconGithub as ImportIcon,
+        // Connects through the GitHub account link (an overlaid app).
       },
       {
         appSlug: 'trello',
@@ -130,7 +134,7 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
     pitch: 'Import companies and contacts from HubSpot, Salesforce, and more.',
     action: 'Import customers',
     dialogDescription:
-      'Connect an app, then bring its companies and contacts into your CRM.',
+      'Connect an app, and the agent brings its companies and contacts into your CRM.',
     items: 'companies and contacts',
     destination: 'the Macro CRM',
     providers: [
@@ -162,12 +166,12 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
   },
   channels: {
     category: 'channels',
-    headline: 'Bring Slack to Macro',
+    headline: 'Create or import channels',
     pitch:
       'Import Slack channels and members, with or without message history.',
     action: 'Import from Slack',
     dialogDescription:
-      'Connect Slack to pick channels, or upload an export to bring history.',
+      'Connect Slack to pick channels with the agent, or upload an export to bring history.',
     items: 'channels',
     destination: 'Macro channels',
     providers: [
@@ -176,8 +180,19 @@ export const IMPORT_CATEGORIES: Record<ImportCategory, ImportCategoryConfig> = {
         name: 'Slack',
         detail: 'Channels',
         icon: IconSlack as ImportIcon,
-        native: 'slack',
+        ledger: 'slack',
       },
     ],
   },
 };
+
+/** Where Macro can import an app's data from, if it can. */
+export function importSourceFor(
+  appSlug: string
+): { config: ImportCategoryConfig; provider: ImportProvider } | undefined {
+  for (const config of Object.values(IMPORT_CATEGORIES)) {
+    const provider = config.providers.find((row) => row.appSlug === appSlug);
+    if (provider) return { config, provider };
+  }
+  return undefined;
+}

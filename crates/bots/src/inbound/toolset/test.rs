@@ -88,6 +88,7 @@ fn sample_agent(handle: &str) -> Agent {
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: true,
+        stopped_reason: None,
     }
 }
 
@@ -118,6 +119,14 @@ impl BotService for ToolTestBotService {
         _caller: MacroUserIdStr<'static>,
         _bot_id: BotId,
         _req: UpdateAgentRequest,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
+    async fn manageable_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _bot_id: BotId,
     ) -> Result<Agent, BotError> {
         unimplemented!()
     }

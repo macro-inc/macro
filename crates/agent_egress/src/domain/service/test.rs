@@ -4,6 +4,7 @@ use crate::domain::model::{
     McpServerListing, McpServerSlug, ProxyBody, RepoSlug, SessionGrant, UpstreamCall,
     UpstreamCredential,
 };
+use bot_id::BotId;
 use http::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
 use http_body_util::{BodyExt, Empty, Full};
@@ -51,6 +52,7 @@ impl StubSessions {
         Self(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
+            agent: BotId::TEST_A,
             repo: Some(session_repo()),
             mcp_servers: servers,
             prompter: None,
@@ -67,6 +69,15 @@ impl SessionAuthority for StubSessions {
         self.0
             .clone()
             .map_err(|()| EgressError::Unauthenticated("unknown session token"))
+    }
+
+    async fn authorize_session(
+        &self,
+        _session: AgentSessionId,
+    ) -> Result<SessionGrant, EgressError> {
+        self.0
+            .clone()
+            .map_err(|()| EgressError::Unauthenticated("unknown session"))
     }
 }
 
@@ -89,6 +100,8 @@ enum Knowledge {
 /// Records who it was asked about, and answers with a fixed upstream.
 struct SpyCredentials {
     asked: Mutex<Vec<(String, String)>>,
+    /// The agent each resolution was attributed to.
+    agents: Mutex<Vec<BotId>>,
     known: Knowledge,
     url: String,
     scope: HeaderMap,
@@ -103,6 +116,7 @@ impl SpyCredentials {
     fn at(url: &str) -> Self {
         Self {
             asked: Mutex::default(),
+            agents: Mutex::default(),
             known: Knowledge::Connected,
             url: url.to_owned(),
             scope: HeaderMap::new(),
@@ -156,6 +170,7 @@ impl SpyCredentials {
     fn empty() -> Self {
         Self {
             asked: Mutex::default(),
+            agents: Mutex::default(),
             known: Knowledge::Unknown,
             url: String::new(),
             scope: HeaderMap::new(),
@@ -170,8 +185,11 @@ impl McpCredentials for SpyCredentials {
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
+        self.agents.lock().expect("lock").push(agent);
         let slug = match destination {
             McpDestination::Connected(slug) => slug.clone(),
             McpDestination::Preview => unreachable!("preview must never resolve owner credentials"),
@@ -885,6 +903,7 @@ async fn a_session_owned_outside_macro_is_proxied_with_its_owners_credentials() 
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: visitor.clone(),
+            agent: BotId::TEST_A,
             repo: None,
             mcp_servers: Vec::new(),
             prompter: None,
@@ -1197,6 +1216,7 @@ async fn a_session_without_a_repository_can_use_mcp_but_cannot_mint_git_credenti
         StubSessions(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
+            agent: BotId::TEST_A,
             repo: None,
             mcp_servers: Vec::new(),
             prompter: None,
@@ -1278,8 +1298,10 @@ fn prompted_by(prompter: Option<MacroUserIdStr<'static>>) -> StubSessions {
         unreachable!("granting grants");
     };
     grant.prompter = Some(crate::domain::model::TurnPrompter {
+        kind: agent_session::domain::model::PrompterKind::User,
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: prompter,
+        client: None,
     });
     StubSessions(Ok(grant))
 }
@@ -1297,6 +1319,9 @@ struct RecordingApprovals {
         )>,
     >,
     withdrawn: Mutex<Vec<serde_json::Value>>,
+    held_in_process: Mutex<Vec<crate::domain::approval::InProcessCall>>,
+    /// How an in-process hold is answered; nobody answering expires it.
+    answer: Mutex<Option<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus>>,
 }
 
 impl OwnerApprovals for RecordingApprovals {
@@ -1318,6 +1343,19 @@ impl OwnerApprovals for RecordingApprovals {
     ) -> Result<(), EgressError> {
         self.withdrawn.lock().unwrap().push(request_id.clone());
         Ok(())
+    }
+
+    async fn hold_in_process(
+        &self,
+        call: crate::domain::approval::InProcessCall,
+    ) -> Result<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus, EgressError>
+    {
+        self.held_in_process.lock().unwrap().push(call);
+        Ok(self
+            .answer
+            .lock()
+            .unwrap()
+            .unwrap_or(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Expired))
     }
 }
 
@@ -1420,6 +1458,57 @@ async fn a_tool_call_to_macros_own_server_is_held_under_its_name() {
     assert_eq!((held[0].0.as_str(), held[0].1.as_str()), ("macro", "Macro"));
 }
 
+fn google_drive() -> EgressTarget {
+    EgressTarget::McpServer(McpDestination::Connected(
+        McpServerSlug::parse("google_drive").expect("slug"),
+    ))
+}
+
+/// A change to the owner's Drive waits for them even in their own turn.
+#[tokio::test]
+async fn a_drive_write_in_the_owners_own_turn_is_held_for_them() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"trash_file","arguments":{"fileId":"f"}}}"#,
+            ),
+        )
+        .await
+        .expect("held");
+    assert_eq!(response.status(), StatusCode::IM_USED, "the hold answered");
+    assert!(!service.forward.was_called());
+    let held = service.approvals.held.lock().unwrap();
+    let [(slug, name, call, _)] = held.as_slice() else {
+        panic!("one call was held");
+    };
+    assert_eq!(
+        (slug.as_str(), name.as_str(), call.name.as_str()),
+        ("google_drive", "Google Drive", "trash_file")
+    );
+}
+
+/// Reading the owner's Drive in their own turn asks nobody.
+#[tokio::test]
+async fn a_drive_read_in_the_owners_own_turn_goes_straight_through() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_files","arguments":{"query":"x"}}}"#,
+            ),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
 /// Only `tools/call` runs anything; the handshake and listing still flow so
 /// the agent sees its tools.
 #[tokio::test]
@@ -1519,3 +1608,5 @@ async fn a_public_web_search_in_a_gated_turn_goes_straight_through() {
     assert!(service.forward.was_called());
     assert!(service.approvals.held.lock().unwrap().is_empty());
 }
+
+mod actor;

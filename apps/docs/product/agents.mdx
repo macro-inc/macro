@@ -1,28 +1,39 @@
 ---
 title: "Agents"
-icon: "wand-magic-sparkles"
+icon: "sparkle"
 description: "Agents that live inside your workspace — with full context on your email, tasks, docs, calls, and channels."
 ---
 
 <GuideGraphic kind="agents" label="An agent works from the team conversation and returns its result." />
 
-Macro agents live inside your workspace and work from [unified memory](/product/unified-memory), so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
+Macro agents live and work inside your workspace, so one prompt can reach your email, tasks, docs, calls, channels, and connected tools. They can search and read anything you can see, draft emails and documents, create and update tasks, post in channels, and run on a schedule. Everything they do is attributed to you and bounded by your permissions.
 
 Watch a 1:05 walkthrough of Macro Agents.
 
 <video src="https://macro.com/video/tutorials/agents.mp4" poster="https://macro.com/video/tutorials/agents-poster.jpg" controls playsInline preload="metadata" className="w-full aspect-video rounded-xl" />
 
-> To start a new chat use shortcut <kbd>c</kbd> \+ <kbd>a</kbd>
+### The Agents workspace
 
-### The Agents tab
+Agents lists every conversation you've had, named automatically from your first message, and you can pick any of them back up where you left off. Ask for summaries, clarifications, drafts, or a status check. Agents answer using everything in your workspace, not just the current thread.
 
-The Agents module lists every chat you've had, named automatically from your first message, and you can pick any of them back up where you left off. Ask for summaries, clarifications, drafts, or a status check. Agents answer using everything in your workspace, not just the current thread.
+> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents.
 
-> Use shortcut <kbd>g</kbd> \+ <kbd>a</kbd> to go to Agents, and <kbd>j</kbd> and <kbd>k</kbd> to move up and down through chats.
+**Chat** and **Code** are the two kinds of conversation.
+
+- **Chat** works in your workspace: documents, email, tasks, channels, and the rest of what you can see.
+- **Code** works on a repository. The session shows the repository, branch, and linked pull request. See [GitHub integration](/integrations/github).
+
+The composer starts in **Auto**, which sends each prompt to your usual chat agent, or to your usual coding agent when the work is code. Choose **Chat** or **Code** to start that kind every time.
+
+Group conversations by **Type** and the sidebar splits into **Chat** and **Code**. Filter by **Type** to show one of them.
+
+**New conversation** starts a conversation. The **Agent** selector in the composer sets the agent or model. **Search conversations** filters by title. Right-click a conversation to rename, favorite, share, or delete it.
+
+A notification appears on [Home](/product/home) when an agent finishes or needs an answer.
 
 ### Full workspace context
 
-Agents answer from [unified memory](/product/unified-memory), a continuously refreshed view of your email, messages, tasks, docs, calls, and connected tools, not just your chat history. That's why you can ask a broad question ("what's the latest on the Acme deal?") without pointing them at anything.
+Agents answer from your email, messages, tasks, docs, calls, and connected tools, not just your chat history. That's why you can ask a broad question ("what's the latest on the Acme deal?") without pointing them at anything.
 
 When you want to be exact, @mention a specific channel, doc, task, or thread right in your prompt. That pins the context and skips the search, so agents work from precisely the item you mean. See [Mentions in Agents](/concepts/mentions#mentions-in-agents).
 
@@ -51,21 +62,25 @@ Mention **@Macro** in any [channel](/product/channels) to pull agents into the c
   **@Macro** invokes the built-in agents. They're separate from **custom bots** — named integrations you create with their own API tokens and webhooks to post into channels programmatically.
 </Note>
 
-### Automations
+### Routines
 
-Agents can run on a schedule. An automation is a saved prompt that runs on its own, like a daily inbox brief, a Friday team recap, or a weekly reminder to triage stale tasks.
+A [routine](/product/routines) is a saved prompt that runs on a schedule or when activity happens in Macro, such as a new email or a task status change.
 
-**To create an automation**
+### Skills
 
-- Go to the Agents Block, press **Agents** in the top right corner, then **Automations**.
-- Fill out the form with your instructions and the schedule.
-- Hit **Create** and wait for your automation to run.
+A [skill](/product/skills) is a saved set of instructions an agent follows. Type `/` in an agent composer to attach one.
+
+### Custom agents
+
+**Settings → Agents** creates agents with a name, instructions, default model, and the machine it runs on: Macro's own, a hosted coding agent, or your own computer. See [Bring your own agent](/AI/bring-your-own) to connect Claude Code, Codex, or another local agent. See [Cursor](/AI/cursor) to run coding agents on your Cursor plan.
 
 ### Choosing a model
 
-A model picker sits in the chat input. You can choose a model per chat depending on how difficult you deem the question. Your choice is remembered for that chat and carried forward when you start a new one from the composer.
+A model picker sits in the composer. You can choose a model per conversation depending on how difficult you deem the question. Your choice is remembered for that conversation and carried forward when you start a new one.
 
-With Guest access you can only use Haiku, the fast model. Every paid plan (Premium and Max) unlocks the rest, including Opus 5, Fable 5.1 (Anthropic's most capable model), and GPT-6 Astra (OpenAI's). Heavier models draw down your included AI faster, and the picker shows by how much: Opus uses about 2.5×, and Fable and Astra about 5×, what Sonnet does for the same conversation.
+On the Free plan, the model is Gemini 3.8 Flash. Pro and Max include Anthropic's Sonnet 5.5, Opus 5.5, and Haiku 4.5, OpenAI's GPT-6 Astra and GPT-5.6, and open-weight models.
+
+Agent chats count as AI usage. Each plan includes a monthly amount, and some models use more of it than others. **Settings → Usage** shows how much of that amount you have used. See [Pricing](/account/billing).
 
 ### MCP setup
 
@@ -79,4 +94,4 @@ See [MCP setup](/AI/mcp/overview) for client-by-client instructions.
 
 ### @mentioning
 
-Agent chats are markdown entities like everything else in Macro, so you can @mention a chat from a doc, task, email, or channel to link back to a conversation. And it works the other way too: @mention docs, tasks, channels, people, and more inside a prompt to hand agents exactly the context you want.
+Agent conversations are entities like everything else in Macro, so you can @mention a conversation from a doc, task, email, or channel to link back to a conversation. And it works the other way too: @mention docs, tasks, channels, people, and more inside a prompt to hand agents exactly the context you want.

@@ -269,3 +269,28 @@ INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, ent
    'document', 'doc-generic', 'macro|user-a@test.com', '2024-01-03 00:00:00+00'),
   ('00000000-0000-0000-0000-00000000e003', 'doc', 'src-doc-2',
    'document', 'doc-2', 'macro|user-a@test.com', '2024-01-04 00:00:00+00');
+
+-- comments: messages on non-channel parents (used by attachment-references tests)
+-- c0a1: an initiative discussion comment mentioning doc-comment
+-- c0a2: a document discussion comment attaching doc-comment
+-- c0a3: a soft-deleted reply under c0a1 that also mentions doc-comment → excluded
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content, created_at, updated_at, edited_at, deleted_at) VALUES
+  ('00000000-0000-0000-0000-00000000c0a1', 'initiative', '00000000-0000-0000-0000-0000000000a1', NULL,
+   'macro|user-a@test.com', 'see <m-document-mention>doc-comment</m-document-mention>',
+   '2024-01-05 10:00:00+00', '2024-01-05 10:00:00+00', NULL, NULL),
+  ('00000000-0000-0000-0000-00000000c0a2', 'document', 'doc-parent', NULL,
+   'macro|user-b@test.com', 'attached here',
+   '2024-01-05 11:00:00+00', '2024-01-05 11:00:00+00', NULL, NULL),
+  ('00000000-0000-0000-0000-00000000c0a3', 'initiative', '00000000-0000-0000-0000-0000000000a1',
+   '00000000-0000-0000-0000-00000000c0a1', 'macro|user-a@test.com', 'deleted reply',
+   '2024-01-05 12:00:00+00', '2024-01-05 12:00:00+00', NULL, '2024-01-06 00:00:00');
+
+INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000e0c1', 'message', '00000000-0000-0000-0000-00000000c0a1',
+   'document', 'doc-comment', 'macro|user-a@test.com', '2024-01-05 10:00:00+00'),
+  ('00000000-0000-0000-0000-00000000e0c3', 'message', '00000000-0000-0000-0000-00000000c0a3',
+   'document', 'doc-comment', 'macro|user-a@test.com', '2024-01-05 12:00:00+00');
+
+INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height, created_at) VALUES
+  ('00000000-0000-0000-0000-00000000a0c2', '00000000-0000-0000-0000-00000000c0a2',
+   'document', 'doc-comment', NULL, NULL, '2024-01-05 11:00:00+00');

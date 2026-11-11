@@ -7,7 +7,8 @@ import {
 } from './draft-storage';
 
 const storageKey = 'routine-composer-draft';
-const expiry = 3 * 60 * 1000;
+// A new routine's page keeps its draft for a day.
+const expiry = 24 * 60 * 60 * 1000;
 const agentId = '0195a096-3d24-7000-8000-000000000001';
 const draft: ScheduleDraft = {
   name: '',
@@ -17,6 +18,7 @@ const draft: ScheduleDraft = {
   daysOfWeek: [],
   dayOfMonth: '',
   target: { kind: 'model', model: 'retired-model' },
+  apps: [],
 };
 
 function store(value: unknown): void {
@@ -35,6 +37,15 @@ afterEach(() => {
 });
 
 describe('routine composer storage', () => {
+  it('keeps what AI created while drafting', () => {
+    const created = [
+      { entityType: 'database', entityId: 'bug-log', used: true },
+      { entityType: 'document', entityId: 'todays-task', used: false },
+    ];
+    saveRoutineComposerDraft({ ...draft, created });
+    expect(loadRoutineComposerDraft()?.created).toEqual(created);
+  });
+
   it('returns null for empty storage and clears saved drafts', () => {
     expect(loadRoutineComposerDraft()).toBeNull();
     saveRoutineComposerDraft(draft);

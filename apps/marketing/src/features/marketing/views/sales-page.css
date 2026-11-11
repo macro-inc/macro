@@ -9,7 +9,7 @@
 /* Pull the CTA up to the subtitle: 16px instead of the homepage's 36px
    (24px row gap + 12px margin from homepage-scroll-cue.css). */
 .tour-hero .ob-welcome:has(.homepage-hero-cta) > [data-welcome-copy] > .homepage-hero-action { margin-top: -8px; }
-/* The shared header's "Talk to us" and "Open app" buttons lead off the page;
+/* The shared header's "Talk to us" and "Sign Up" buttons lead off the page;
    the booker is inline here, so hide them while this page is mounted. */
 body:has(.tour-page) .site-header-actions { display: none; }
 /* The desktop line break orphans a word on phones; balance the lines instead. */

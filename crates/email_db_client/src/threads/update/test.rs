@@ -26,7 +26,7 @@ async fn sync_sets_flag_when_thread_has_calendar_attachment(
     assert!(!fetch_flag(&pool, THREAD_WITH_ICS).await?);
 
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, Uuid::parse_str(THREAD_WITH_ICS)?).await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(THREAD_WITH_ICS)?).await?;
 
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
     Ok(())
@@ -43,7 +43,7 @@ async fn sync_clears_stale_flag_when_no_calendar_attachment(
     assert!(fetch_flag(&pool, THREAD_STALE_TRUE_PDF_ONLY).await?);
 
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, Uuid::parse_str(THREAD_STALE_TRUE_PDF_ONLY)?).await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(THREAD_STALE_TRUE_PDF_ONLY)?).await?;
 
     assert!(!fetch_flag(&pool, THREAD_STALE_TRUE_PDF_ONLY).await?);
     Ok(())
@@ -56,12 +56,112 @@ async fn sync_clears_stale_flag_when_no_calendar_attachment(
 async fn sync_is_stable_when_flag_already_matches(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let thread_id = Uuid::parse_str(THREAD_WITH_ICS)?;
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    sync_thread_attachment_flags(&mut conn, thread_id).await?;
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
 
     // Re-sync with no attachment changes: the value must stay put.
-    sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    sync_thread_attachment_flags(&mut conn, thread_id).await?;
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
+    Ok(())
+}
+
+// -- attachment kinds ---------------------------------------------------------
+
+const KIND_THREAD_ALL_KINDS: &str = "00000000-0000-0000-0000-00000000c201";
+const KIND_THREAD_STALE_NO_ATTACHMENTS: &str = "00000000-0000-0000-0000-00000000c202";
+const KIND_LINK: &str = "00000000-0000-0000-0000-000000000c01";
+
+/// `(pdf, image, document)` flags of one thread.
+async fn fetch_kind_flags(
+    pool: &Pool<Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<(bool, bool, bool)> {
+    let row = sqlx::query!(
+        "SELECT has_pdf_attachment, has_image_attachment, has_document_attachment
+         FROM email_threads WHERE id = $1",
+        Uuid::parse_str(thread_id)?
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok((
+        row.has_pdf_attachment,
+        row.has_image_attachment,
+        row.has_document_attachment,
+    ))
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn sync_sets_kind_flags_from_attachment_mime_types(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut conn = pool.acquire().await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(KIND_THREAD_ALL_KINDS)?).await?;
+
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    assert!(!fetch_flag(&pool, KIND_THREAD_ALL_KINDS).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn sync_clears_stale_kind_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let mut conn = pool.acquire().await?;
+    sync_thread_attachment_flags(
+        &mut conn,
+        Uuid::parse_str(KIND_THREAD_STALE_NO_ATTACHMENTS)?,
+    )
+    .await?;
+
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_STALE_NO_ATTACHMENTS).await?,
+        (false, false, false)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(KIND_LINK)?;
+
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id).await?,
+        1
+    );
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    // Clearing stale flags belongs to ingest and delete, not the backfill.
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_STALE_NO_ATTACHMENTS).await?,
+        (true, true, true)
+    );
+
+    // A rerun has nothing left to set.
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id).await?,
+        0
+    );
     Ok(())
 }
 
@@ -336,6 +436,72 @@ async fn repeated_metadata_recompute_is_noop(pool: Pool<Postgres>) -> anyhow::Re
         thread_after_second.updated_at, thread_after_first.updated_at,
         "no-op metadata recompute must not rewrite the row"
     );
+    Ok(())
+}
+
+/// Archived sent mail to `recipient` with a Macro reply draft, recomputed.
+async fn reply_draft_to_sent_mail_inbox_state(
+    pool: &Pool<Postgres>,
+    recipient: &str,
+) -> anyhow::Result<ThreadInboxState> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let (thread_id, sent_id) = (Uuid::now_v7(), Uuid::now_v7());
+    let mut contacts = Vec::new();
+    for email in ["me@example.com", recipient] {
+        contacts.push(sqlx::query_scalar!(
+            "INSERT INTO email_contacts (id, link_id, email_address) VALUES ($1, $2, $3)
+            ON CONFLICT (link_id, email_address) DO UPDATE SET email_address = EXCLUDED.email_address RETURNING id",
+            Uuid::now_v7(), link_id, email,
+        ).fetch_one(pool).await?);
+    }
+    let (sender, recipient_contact) = (contacts[0], contacts[1]);
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id, provider_id) VALUES ($1, $2, $3)",
+        thread_id,
+        link_id,
+        thread_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, provider_id, from_contact_id, is_sent, internal_date_ts) VALUES ($1, $2, $3, $4, $5, TRUE, '2025-01-01T10:00:00Z')",
+        sent_id, thread_id, link_id, sent_id.to_string(), sender,
+    ).execute(pool).await?;
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type) VALUES ($1, $2, 'TO')",
+        sent_id,
+        recipient_contact,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_messages (id, thread_id, link_id, is_draft) VALUES ($1, $2, $3, TRUE)",
+        Uuid::now_v7(),
+        thread_id,
+        link_id,
+    )
+    .execute(pool)
+    .await?;
+    update_thread_metadata(&mut *pool.acquire().await?, thread_id, link_id).await?;
+    fetch_inbox_state(pool, &thread_id.to_string()).await
+}
+
+// Mail the user sent to themselves is mail they received, so a reply draft
+// brings it back to the inbox. Mail sent only to others stays archived.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../email/fixtures", scripts("email_thread_labels"))
+)]
+async fn a_message_sent_to_its_own_sender_counts_as_received_mail(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let to_self = reply_draft_to_sent_mail_inbox_state(&pool, "me@example.com").await?;
+    assert!(to_self.inbox_visible);
+    assert!(to_self.latest_inbound_message_ts.is_some());
+
+    let to_other = reply_draft_to_sent_mail_inbox_state(&pool, "other@example.com").await?;
+    assert!(!to_other.inbox_visible);
+    assert!(to_other.latest_inbound_message_ts.is_none());
     Ok(())
 }
 

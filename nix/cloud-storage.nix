@@ -58,10 +58,24 @@
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and bundled public SDK/Handlebars runtime.
+      # for the Deno bootstrap and timer shims;
+      # `.proto` for the protobuf files the `whatsmeow_proto` and
+      # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+      # `crates/routine_program` embeds its catalog programs with `include_str!`.
+      # Only these `.ts` files: matching every `.ts` would pull the web app into
+      # the Rust source hash.
+      routineCatalogFilter =
+        path: _type: builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
+      # Rust templates (askama, minijinja) include their stylesheets, such as
+      # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
+      # stylesheets under Rust crates and services: matching every `.css` would
+      # pull the web app into the Rust source hash.
+      templateCssFilter =
+        path: _type:
+        builtins.match ".*/(crates|services)/[^/]+/templates/.*\\.css$" (toString path) != null;
       # Rust local HTTP clients embed only the public proxy CA, never its keys.
       localCaFilter = path: _type: pkgs.lib.hasSuffix "/infra/local/certs/ca.pem" (toString path);
       binFilter = path: _type: builtins.match ".*\\.bin$" path != null;
@@ -71,6 +85,8 @@
         || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
+        || (routineCatalogFilter path type)
+        || (templateCssFilter path type)
         || (binFilter path type)
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
@@ -114,9 +130,10 @@
         };
 
       # Workspace-root files that crates read across crate boundaries: the
-      # .sqlx offline cache (sqlx macros resolve it from the workspace root)
-      # and shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates). Included in every pruned source, so a
+      # .sqlx offline cache (sqlx macros resolve it from the workspace root),
+      # shared assets under static_assets/ (include_bytes!-ed from workspace
+      # crates), and the [patch.crates-io] crates under vendor/, which
+      # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
       rootDepsSrc = pkgs.lib.cleanSourceWith {
@@ -135,6 +152,9 @@
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
+          || (rel == "vendor")
+          || (rel == "vendor/utoipa-swagger-ui")
+          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -165,6 +185,66 @@
           chmod -R +w $out
           ${overlays}
         '';
+
+      # ── Code-mode assets ──────────────────────────────────────────
+      # crates/code_mode_assets embeds the Deno SDK bundle and agent SDK docs.
+      # Its build script runs the generator itself unless CODE_MODE_ASSETS_DIR
+      # names prebuilt assets, as every Nix build of it does: the sandbox has
+      # no network for a bun install. Keep this filter in step with the build
+      # script's GENERATOR_INPUTS.
+      jsNodeModules = pkgs.callPackage ../nix-support/node_modules.nix { src = ../.; };
+
+      codeModeAssetsSrc = pkgs.lib.cleanSourceWith {
+        src = ../.;
+        name = "code-mode-assets-src";
+        filter =
+          path: type:
+          let
+            rel = pkgs.lib.removePrefix ((toString ../.) + "/") (toString path);
+            segments = pkgs.lib.splitString "/" rel;
+            isUnder = directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel;
+          in
+          !(builtins.elem "node_modules" segments)
+          && !(builtins.elem "dist" segments)
+          && (
+            builtins.elem rel [
+              "bun.lock"
+              "package.json"
+              "packages"
+            ]
+            || builtins.any isUnder [
+              "packages/code-mode-sdk"
+              "packages/sdk"
+              "packages/sdk-docs"
+            ]
+          );
+      };
+
+      codeModeAssets = pkgs.stdenvNoCC.mkDerivation {
+        pname = "code-mode-assets";
+        version = "0.1.0";
+        src = codeModeAssetsSrc;
+        nativeBuildInputs = [ pkgs.bun ];
+        dontConfigure = true;
+        buildPhase = ''
+          runHook preBuild
+          export HOME="$TMPDIR/home"
+          mkdir -p "$HOME"
+          for project in . packages/sdk packages/sdk-docs packages/code-mode-sdk; do
+            if [ -d "${jsNodeModules}/$project/node_modules" ]; then
+              cp -a "${jsNodeModules}/$project/node_modules" "$project/"
+            fi
+          done
+          bun packages/code-mode-sdk/scripts/generate.ts "$out"
+          runHook postBuild
+        '';
+        dontInstall = true;
+        dontFixup = true;
+      };
+
+      codeModeAssetsEnv = {
+        CODE_MODE_ASSETS_DIR = "${codeModeAssets}";
+      };
 
       commonArgs = {
         inherit src;
@@ -225,6 +305,7 @@
       # set because its KV and R2 storage features are mutually exclusive.
       workspaceArtifacts = craneLib.cargoBuild (
         commonArgs
+        // codeModeAssetsEnv
         // {
           inherit cargoArtifacts;
           pname = "cloud-storage-workspace";
@@ -279,6 +360,7 @@
           pkgs.lib.nameValuePair "doppler-config-bin-${binName}" (
             craneLib.buildPackage (
               commonArgs
+              // codeModeAssetsEnv
               // {
                 # Reuse the dependency-only layer, then compile only this
                 # Doppler config binary and the local crates it actually uses.
@@ -303,6 +385,7 @@
 
       openApiBins = craneLib.buildPackage (
         commonArgs
+        // codeModeAssetsEnv
         // {
           cargoArtifacts = workspaceArtifacts;
           pname = "cloud-storage-openapi";
@@ -312,7 +395,7 @@
             "--all-features"
             "--bin document_storage_service_openapi"
             "--bin properties_service_openapi"
-            "--bin document_cognition_service_openapi"
+            "--bin agent_harness_cognition_openapi"
             "--bin authentication_service_openapi"
             "--bin notification_service_openapi"
             "--bin static_file_service_openapi"
@@ -323,7 +406,6 @@
             "--bin email_service_openapi"
             "--bin search_service_openapi"
             "--bin scheduled_action_openapi"
-            "--bin document_cognition_service_models"
             "--bin gen_tool_schemas"
           ];
         }
@@ -335,6 +417,7 @@
       # postgres/redis services. Built in Nix and cached by Namespace.
       nextestArchive = craneLib.mkCargoDerivation (
         commonArgs
+        // codeModeAssetsEnv
         // {
           cargoArtifacts = workspaceArtifacts;
           pname = "cloud-storage-nextest-archive";
@@ -357,19 +440,9 @@
 
       deployServiceBinaryDefinitions = [
         {
-          serviceName = "preview-gateway";
-          packageName = "preview_gateway";
-          binaries = [ "preview_gateway" ];
-        }
-        {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
           binaries = [ "agent_harness_service" ];
-        }
-        {
-          serviceName = "agent-schedule-service";
-          packageName = "scheduled_action";
-          binaries = [ "service" ];
         }
         {
           serviceName = "authentication-service";
@@ -397,11 +470,6 @@
           binaries = [ "convert_service" ];
         }
         {
-          serviceName = "document-cognition-service";
-          packageName = "document_cognition_service";
-          binaries = [ "document_cognition_service" ];
-        }
-        {
           serviceName = "document-storage-service";
           packageName = "document_storage_service";
           binaries = [ "document_storage_service" ];
@@ -420,14 +488,14 @@
           ];
         }
         {
+          serviceName = "email-focus-worker";
+          packageName = "email_focus_worker";
+          binaries = [ "email_focus_worker" ];
+        }
+        {
           serviceName = "image-proxy-service";
           packageName = "image_proxy_service";
           binaries = [ "image_proxy_service" ];
-        }
-        {
-          serviceName = "mcp-server";
-          packageName = "mcp_service";
-          binaries = [ "mcp_service" ];
         }
         {
           serviceName = "notification-service";
@@ -448,6 +516,11 @@
           serviceName = "unfurl-service";
           packageName = "unfurl_service";
           binaries = [ "unfurl_service" ];
+        }
+        {
+          serviceName = "whatsapp-session-service";
+          packageName = "whatsapp_session_service";
+          binaries = [ "whatsapp_session_service" ];
         }
       ];
 
@@ -511,6 +584,11 @@
         }:
         craneLib.buildPackage (
           commonArgs
+          # Only services that embed the assets depend on them, so an SDK
+          # change leaves the other deploy derivations cached.
+          // pkgs.lib.optionalAttrs (builtins.elem "crates/code_mode_assets" (
+            workspaceDepClosures.${packageName} or [ ]
+          )) codeModeAssetsEnv
           // {
             # Pruned source: this derivation only rebuilds when a crate in
             # the service's own workspace closure changes.
@@ -561,6 +639,24 @@
           ${checkBinaries}
         '';
 
+      # Same for the email service and its Focus worker.
+      emailServiceDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.email-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-email-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-focus-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
+
       localStackBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
           name = "local-stack-binaries-${def.serviceName}";
@@ -569,20 +665,17 @@
       );
 
       localStackDeployServiceNames = [
-        "preview-gateway"
         "agent-harness-service"
-        "agent-schedule-service"
         "calendar-service"
         "connection-gateway"
         "contacts-service"
-        "document-cognition-service"
         "document-storage-service"
         "email-service"
         "image-proxy-service"
-        "mcp-server"
         "notification-service"
         "static-file-service"
         "unfurl-service"
+        "whatsapp-session-service"
       ];
 
       localStackBinaries = pkgs.buildEnv {
@@ -651,6 +744,31 @@
             unzip -tqq "$out/call_recording_preview_handler/ffmpeg-layer.zip" >/dev/null
           '';
 
+      # cargo hashes the linker path into every crate's fingerprint, and zigbuild
+      # writes its linker wrapper under its cache directory. Under $TMPDIR, which
+      # is random per build on the CI runners, no handler could reuse the shared
+      # dependency layer. /tmp isn't usable instead because it isn't private there.
+      # Generating the wrappers into the store gives every build one path, and
+      # zigbuild only rewrites a wrapper whose content differs.
+      zigbuildWrappers =
+        pkgs.runCommand "cargo-zigbuild-wrappers"
+          {
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.cargo-zigbuild
+              pkgs.zig
+            ];
+          }
+          ''
+            export HOME="$TMPDIR/home" XDG_CACHE_HOME="$TMPDIR/xdg"
+            export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig" ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig"
+            export CARGO_ZIGBUILD_CACHE_DIR="$out"
+            mkdir -p "$HOME" src
+            printf '[package]\nname = "probe"\nversion = "0.0.0"\nedition = "2021"\n' > Cargo.toml
+            echo 'fn main() {}' > src/main.rs
+            cargo zigbuild --release --offline --target ${lambdaZigTarget}
+          '';
+
       lambdaCommonArgs = commonArgs // {
         # zig links the final binary (cargo-zigbuild); drop the host-only mold arg.
         RUSTFLAGS = "";
@@ -694,14 +812,14 @@
           export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
           export ZIG_LOCAL_CACHE_DIR="$TMPDIR/zig-cache"
           export XDG_CACHE_HOME="$TMPDIR/xdg"
+          export CARGO_ZIGBUILD_CACHE_DIR=${zigbuildWrappers}
 
           # Inherited cargoArtifacts can carry CMake configure state
-          # (CMakeCache.txt / CMakeFiles) from the deps-only layer. Its
-          # CMAKE_C_COMPILER points at a cargo-zigbuild wrapper script under
-          # $TMPDIR whose hash-suffixed name need not exist in this sandbox,
-          # and CMake hard-fails validating a cached compiler that is gone
-          # ("is not a full path to an existing compiler tool"). Drop the
-          # configure state so a build-script re-run reconfigures cleanly;
+          # (CMakeCache.txt / CMakeFiles) from the deps-only layer, which
+          # records paths from the build that made it, and CMake hard-fails
+          # validating a cached compiler that is gone ("is not a full path to
+          # an existing compiler tool"). Drop the configure state so a
+          # build-script re-run reconfigures cleanly;
           # crates whose fingerprints are clean never read it, so this costs
           # nothing on the cached path. (Today aws-lc-sys is the only cmake
           # crate in the graph, via AWS_LC_SYS_CMAKE_BUILDER below.)
@@ -730,7 +848,9 @@
       # One shared dep closure for all lambda handlers. Build it with the same
       # cargo-zigbuild target used by the final packages; Cargo fingerprints the
       # `.2.26` target separately from the plain triple, so warming the plain
-      # target does not help the deploy builds.
+      # target does not help the deploy builds. Select with --bin, as
+      # deployLambdaPackage does: without --package cargo resolves features across
+      # the workspace, and any other selection gives units the handlers can't reuse.
       lambdaDeployCargoArtifacts = craneLib.buildDepsOnly (
         lambdaCommonArgs
         // {
@@ -742,7 +862,7 @@
           cargoBuildCommand = "cargo zigbuild --release";
           cargoExtraArgs =
             "--locked --target ${lambdaZigTarget} "
-            + pkgs.lib.concatMapStringsSep " " (n: "--package ${n}") lambdaNames;
+            + pkgs.lib.concatMapStringsSep " " (n: "--bin ${n}") lambdaNames;
         }
       );
 
@@ -885,10 +1005,46 @@
           '';
         };
 
+      # GoAlert MCP server (github.com/amitray007/goalert-mcp, MIT), built from
+      # the reviewed v0.1.0 commit rather than the npm tarball. Bump `rev`,
+      # `hash` and `npmDepsHash` together, after re-reviewing the source.
+      goalert-mcp = pkgs.buildNpmPackage {
+        pname = "goalert-mcp";
+        version = "0.1.0";
+        src = pkgs.fetchFromGitHub {
+          owner = "amitray007";
+          repo = "goalert-mcp";
+          rev = "c8c285f35ce31426c576a69c25f5bb1a365a7565";
+          hash = "sha256-TDBI06V6boZ3RihwirGchDcKkZ7nKCyyB1pEebqEMiU=";
+        };
+        npmDepsHash = "sha256-PhanjTUmHoXzXsu9H3wKWVrZ89tfk8T4/QYdFcMGZ+M=";
+        nodejs = pkgs.nodejs_24;
+        # Only dev dependencies (esbuild, fsevents) ship install scripts.
+        npmFlags = [ "--ignore-scripts" ];
+        meta.mainProgram = "goalert-mcp";
+      };
+
+      # Starts goalert-mcp against Macro's GoAlert with the admin login read
+      # from Doppler at launch, read-only unless GOALERT_READ_ONLY=false.
+      goalert-mcp-macro = pkgs.writeShellApplication {
+        name = "goalert-mcp-macro";
+        runtimeInputs = [ pkgs.doppler ];
+        text = ''
+          GOALERT_PASSWORD="$(doppler secrets get GOALERT_ADMIN_PASSWORD --project observability --config prd --plain)"
+          export GOALERT_PASSWORD
+          export GOALERT_BASE_URL=https://oncall.macro-internal.com
+          export GOALERT_USERNAME=admin
+          export GOALERT_READ_ONLY="''${GOALERT_READ_ONLY:-true}"
+          exec ${pkgs.lib.getExe goalert-mcp} "$@"
+        '';
+      };
+
       shellTools =
         with pkgs;
         [
           daytona
+          goalert-mcp
+          goalert-mcp-macro
           nsc
           parallel
           docker-compose
@@ -904,6 +1060,7 @@
           zip
           cargo-info
           cargo-udeps
+          cargo-shear
           cargo-tauri
           cargo-lambda
           cargo-zigbuild
@@ -956,6 +1113,8 @@
           doppler
           biome
           jq
+          prek
+          gitleaks
           # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
           # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
           # stripe-cli
@@ -963,6 +1122,7 @@
           rustToolchain
           python3
         ]
+        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker
@@ -972,12 +1132,12 @@
     in
     {
       checks = {
-        code-execution-assets = pkgs.runCommand "cloud-storage-code-execution-assets" { } ''
-          for source in ${src} ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}; do
-            for asset in bootstrap.mjs sdk.mjs handlebars.mjs; do
-              test -s "$source/crates/code_execution/src/outbound/deno/$asset"
-            done
-          done
+        code-mode-assets = codeModeAssets;
+        # Deploy builds compile [patch.crates-io] crates from the pruned
+        # source, so their real code (not mkDummySrc's stubs) must be there.
+        pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
+          grep -q "fn write_embed_code" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           touch $out
         '';
         fmt = craneLib.cargoFmt {
@@ -987,6 +1147,7 @@
         };
         clippy = craneLib.cargoClippy (
           commonArgs
+          // codeModeAssetsEnv
           // {
             cargoArtifacts = workspaceArtifacts;
             cargoClippyExtraArgs = "--workspace --all-features --exclude sync_service -- -D warnings";
@@ -995,6 +1156,7 @@
         );
         clippy-sync-service = craneLib.cargoClippy (
           commonArgs
+          // codeModeAssetsEnv
           // {
             cargoArtifacts = workspaceArtifacts;
             cargoClippyExtraArgs = "-p sync_service -- -D warnings -A clippy::unnecessary_map_or -A clippy::collapsible_if";
@@ -1011,7 +1173,7 @@
             crateToDir = {
               document_storage_service = "service-storage";
               properties_service = "service-properties";
-              document_cognition_service = "service-cognition";
+              agent_harness_cognition = "service-cognition";
               authentication_service = "service-auth";
               notification_service = "service-notification";
               static_file_service = "service-static-files";
@@ -1052,13 +1214,18 @@
           openApiBins
           dopplerConfigBins
           nextestArchive
+          goalert-mcp
+          goalert-mcp-macro
           ;
         default = cargoArtifacts;
+        code-mode-assets = codeModeAssets;
+        macro-js-node-modules = jsNodeModules;
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+        deploy-service-binaries-email-service = emailServiceDeployBinaries;
       }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
@@ -1083,8 +1250,9 @@
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
+              # CI needs sccache to cache every crate. It loads this shell through
+              # setup-nix-dev-shell, so these attributes reach its build steps.
+              # The shellHook switches local shells to incremental builds.
               CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
@@ -1093,7 +1261,45 @@
               # entries while switching compilers, breaking aws-lc and librdkafka.
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
-              shellHook = pkgs.lib.optionalString isLinux ''
+              shellHook = ''
+                # Local rebuilds after an edit are mostly workspace crates, which
+                # incremental compilation reuses and sccache misses across
+                # worktrees anyway. Third-party crates still go through sccache.
+                # Line tables keep backtrace locations while shrinking test
+                # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
+                if [ -z "''${CI:-}" ]; then
+                  unset CARGO_INCREMENTAL
+                  export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
+                  ${pkgs.lib.optionalString isLinux ''
+                    # Link host binaries with mold. Scoped to the host target, so
+                    # wasm and musl builds keep their own linkers; zig cc (cargo
+                    # zigbuild) ignores the flag. An exported RUSTFLAGS replaces
+                    # it, as cargo does.
+                    export CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS="''${CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS:--C link-arg=-fuse-ld=mold}"
+                  ''}
+                fi
+                if command -v prek >/dev/null 2>&1; then
+                  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+                  if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
+                    # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
+                    # unset it only for this install so we do not overwrite the
+                    # dispatcher; git still runs our hook via that dispatcher.
+                    hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
+                    cursor_hooks=""
+                    if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
+                      cursor_hooks="$hooks_path"
+                      git -C "$repo_root" config --local --unset-all core.hooksPath || true
+                    fi
+                    if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
+                      echo "warning: prek hook install failed" >&2
+                    fi
+                    if [ -n "$cursor_hooks" ]; then
+                      git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
+                    fi
+                  fi
+                fi
+              ''
+              + pkgs.lib.optionalString isLinux ''
                 target_dir="''${CARGO_TARGET_DIR:-target}"
                 current_cc="$(type -P "''${CC:-cc}" || true)"
                 if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
@@ -1121,6 +1327,14 @@
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
               AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # Android builds compile with the NDK's clang, which the cc
+              # builder accepts. The CMake builder needs CMake to locate the
+              # NDK itself, which fails in the tauri-android shell ("Neither
+              # the NDK or a standalone toolchain was found").
+              AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
               # cargo-zigbuild compiles C with zig cc, which ignores the Nix
               # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
               # buildInputs provides to host builds (see the note on `libraries`;

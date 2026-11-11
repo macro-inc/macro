@@ -192,6 +192,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
             muted: reviewed().toolOutcome.kind === 'failed',
+            stopped: false,
             trailing: undefined,
           }}
           // The tool has reported back, so nothing is still going out.

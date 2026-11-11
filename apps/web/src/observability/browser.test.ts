@@ -1,7 +1,10 @@
 import { Telemetry } from '@macro-inc/observability';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { initializeBrowserObservability } from './browser';
 import { readDesktopDiagnostics } from './desktop';
+import { clearDocumentLifecycle } from './document-lifecycle';
+import { frontendInstanceId } from './frontend-instance';
+import { startRuntimeResourceSampling } from './runtime-resources';
 import { initializeUiOperationTelemetry } from './ui-operation';
 
 const startupSpan = vi.hoisted(() => ({
@@ -27,10 +30,17 @@ vi.mock('@macro-inc/observability', () => ({
 }));
 vi.mock('@macro-inc/observability/web', () => ({
   createWebTracingProvider: vi.fn(),
+  StackContextManager: class {},
 }));
-vi.mock('@macro-inc/observability/zone', () => ({
-  ZoneContextManager: class {},
+vi.mock('./typing-burst', () => ({
+  startTypingBurstTelemetry: vi.fn(() => vi.fn()),
 }));
+
+vi.mock('./runtime-resources', () => ({
+  startRuntimeResourceSampling: vi.fn(() => vi.fn()),
+}));
+vi.mock('./boot', () => ({ startBootTrace: vi.fn() }));
+vi.mock('./os-type', () => ({ osType: () => 'linux' }));
 vi.mock('./ui-operation', () => ({
   initializeUiOperationTelemetry: vi.fn(() => vi.fn()),
 }));
@@ -56,6 +66,8 @@ beforeEach(() => {
   });
 });
 
+afterEach(clearDocumentLifecycle);
+
 it('explicit native recording overrides the normal enablement gate and exporter before startup', async () => {
   vi.mocked(readDesktopDiagnostics).mockResolvedValue({
     identity: {
@@ -72,14 +84,24 @@ it('explicit native recording overrides the normal enablement gate and exporter 
   await initializeBrowserObservability();
   const config = vi.mocked(Telemetry.init).mock.calls[0][0];
   expect(await config.enabled()).toBe(true);
-  expect(config.recording).toBe(true);
+  expect((await config.startup)?.recording).toBe(true);
+  expect(startRuntimeResourceSampling).toHaveBeenCalledOnce();
+  const read = vi.mocked(startRuntimeResourceSampling).mock.calls[0][0];
+  expect(await read?.()).toEqual({});
   expect(initializeUiOperationTelemetry).toHaveBeenCalledOnce();
-  expect(config.tracesUrl).toBe('http://localhost:4318/v1/traces');
-  expect(config.logsUrl).toBe('http://localhost:4318/v1/logs');
+  expect((await config.startup)?.tracesUrl).toBe(
+    'http://localhost:4318/v1/traces'
+  );
+  expect((await config.startup)?.logsUrl).toBe('http://localhost:4318/v1/logs');
   expect(config.resourceAttributes).toMatchObject({
     'app.runtime': 'tauri',
+    frontend_instance_id: frontendInstanceId,
     'service.instance.id': 'launch-1',
     'macro.recording.id': 'recording-1',
+  });
+  expect(config.spanAttributes?.()).toMatchObject({
+    frontend_instance_id: frontendInstanceId,
+    native_instance_id: 'launch-1',
   });
   expect(Telemetry.span).toHaveBeenCalledWith('native.webview.start');
   expect(startupSpan.setAttr).toHaveBeenCalledWith(
@@ -126,14 +148,99 @@ it('drops browser and extension noise from window errors but reports app errors'
 });
 
 it('an older binary without diagnostics still obeys the normal telemetry gate', async () => {
+  sessionStorage.setItem(
+    'macro-document-lifecycle',
+    JSON.stringify({
+      frontendInstanceId: '11111111-1111-4111-8111-111111111111',
+      startedAtMs: Date.now() - 1000,
+      updatedAtMs: Date.now() - 1000,
+      visible: true,
+    })
+  );
   vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
   await initializeBrowserObservability();
   const config = vi.mocked(Telemetry.init).mock.calls[0][0];
   expect(await config.enabled()).toBe(false);
-  expect(config.recording).toBe(false);
-  expect(initializeUiOperationTelemetry).not.toHaveBeenCalled();
+  expect((await config.startup)?.recording).toBe(false);
+  expect(initializeUiOperationTelemetry).toHaveBeenCalledOnce();
   expect(config.resourceAttributes).toMatchObject({
     'app.runtime': 'tauri',
     'app.platform': 'desktop',
+    'os.type': 'linux',
   });
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_checkpoint_available',
+    true
+  );
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_pagehide_observed',
+    false
+  );
+});
+
+it('revokes the previous document identity if logout happens while telemetry initializes', async () => {
+  sessionStorage.setItem(
+    'macro-document-lifecycle',
+    JSON.stringify({
+      frontendInstanceId: '11111111-1111-4111-8111-111111111111',
+      startedAtMs: Date.now() - 1000,
+      updatedAtMs: Date.now() - 1000,
+      visible: true,
+    })
+  );
+  vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
+  const reached = Promise.withResolvers<void>();
+  const resume = Promise.withResolvers<void>();
+  vi.mocked(Telemetry.init).mockImplementation(async () => {
+    reached.resolve();
+    await resume.promise;
+  });
+  const initializing = initializeBrowserObservability();
+  await reached.promise;
+  clearDocumentLifecycle();
+  resume.resolve();
+  await initializing;
+  expect(startupSpan.setAttr).toHaveBeenCalledWith(
+    'previous_document_checkpoint_available',
+    false
+  );
+  expect(startupSpan.setAttr).not.toHaveBeenCalledWith(
+    'previous_document_instance_id',
+    expect.anything()
+  );
+});
+
+it('registers the native provider before waiting for a single enablement decision', async () => {
+  vi.mocked(readDesktopDiagnostics).mockResolvedValue(undefined);
+  const decide = Promise.withResolvers<void>();
+  const reached = Promise.withResolvers<void>();
+  const onProviderReady = vi.fn();
+  vi.mocked(Telemetry.init).mockImplementation(async (config) => {
+    // Every consumer must get the same decision, including the exporter.
+    expect(config.enabled()).toBe(config.enabled());
+    reached.resolve();
+    await decide.promise;
+  });
+  const initializing = initializeBrowserObservability(onProviderReady);
+  await reached.promise;
+  expect(onProviderReady).toHaveBeenCalledOnce();
+  expect(initializeUiOperationTelemetry).toHaveBeenCalledOnce();
+  decide.resolve();
+  await initializing;
+});
+
+it('registers the provider and releases native render while diagnostics remain pending', async () => {
+  let finish: (snapshot: undefined) => void = () => {};
+  vi.mocked(readDesktopDiagnostics).mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  const ready = vi.fn();
+  const initialization = initializeBrowserObservability(ready);
+  expect(Telemetry.init).toHaveBeenCalledOnce();
+  expect(ready).toHaveBeenCalledOnce();
+  expect(initializeUiOperationTelemetry).toHaveBeenCalledOnce();
+  finish(undefined);
+  await initialization;
 });

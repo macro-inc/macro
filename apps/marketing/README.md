@@ -109,6 +109,10 @@ in the router, preload map, site search, and prerender list.
   fonts, videos, styling, and other static files.
 - `scripts/`: public build, prerendering, SEO, and architecture checks.
 
+Hero descriptions fill their available width up to the shared maximum rather
+than shrink-wrapping their text, so Safari does not wrap a planned desktop line
+before the explicit line break. Phone copy remains free to wrap.
+
 Email is the visual reference for product pages. Tasks, Channels, Documents,
 Agents, Calls, and Reviews use `ProductPage` on top of `FeaturePage`: centered
 Slab heroes, a 920px outer feature measure with 24px inset, left-aligned
@@ -265,7 +269,7 @@ Verified direct installer URLs remain usable while loading and if the API fails;
 update these fallbacks in `desktopDownloads.ts` when retiring older installers.
 The separate “All releases” link opens GitHub, with the selected installer's
 release version displayed beneath it.
-The page hides the header's Open app action, has no web-app download option,
+The page hides the header's Sign Up action, has no web-app download option,
 and has no header/footer navigation entry.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
@@ -504,6 +508,24 @@ FAQ answers and the always-visible comparison are rendered in the initial HTML.
 The CRM comparison appears above the FAQ, using the shared product table styling.
 Retain FAQ class markers so prerendering emits matching FAQPage structured data.
 
+## Tutorial videos
+
+Product heroes put **Watch demo** beside Get started (`ProductHero`'s
+`tutorial`, and the Email hero); the Agents page's Bring your own agent
+section also has one for MacroD. It opens `TutorialVideoDialog`: the app's
+Block tutorial, paused behind the app's play pill (play disc, presenter, "Watch
+demo · m:ss") until the visitor presses it. Escape and the backdrop close it,
+and focus returns to the button. Titles and lengths in
+`core/tutorial-videos.ts` copy the app's `tutorials` messages; change both
+together.
+
+The videos and posters live once, in `public/video/tutorials/` (mp4s through
+Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
+them from there, including Blocks without a page here (Home, Drive, Calendar,
+Scheduling, Spreadsheets, Databases, Canvas). Replacing a video keeps its
+name; the deploy's `--size-only` sync skips a same-size file, and CloudFront
+caches videos for a day.
+
 ## Paid-social landing page
 
 `/tour` (`features/marketing/views/SalesPage.tsx`) is the Instagram ad landing
@@ -689,9 +711,14 @@ sales reporting is checked for those CRMs and partial for Macro’s agent summar
 Connected collaboration tools receive partial credit alongside Macro’s native workspace.
 Credit Macro’s Granola connection for reading captured notes, not for native
 recording of other meeting apps or every feature of the connected product. ClickUp
-stays in the migration overview. Overview links scroll to the matching product
-comparison; verify both initial-load and client-side navigation hashes. Keep cells to checks, crosses, or explained partial marks and label built-in tools explicitly. Retain detailed article links when an article exists. Source URLs
-are not shown in the UI. Icon-only comparison tables are not exported as prose
+stays in the migration overview. The migration overview uses the same framed
+`FeatureComparisons` renderer with plain, unlinked headers and row labels. Its
+verified rows and source URLs live in `core/migration-comparisons.ts`; CRM
+templates and Salesforce-backed Slack CRM receive explained partial marks.
+The wide overview remains horizontally scrollable on all viewport sizes. Keep
+cells to checks, crosses, or explained partial marks and label built-in tools
+explicitly. Detailed articles remain discoverable through navigation rather than
+comparison-table labels. Source URLs are not shown in the UI. Icon-only comparison tables are not exported as prose
 FAQ answers. Verify table columns, keyboard focus, scrolling, and existing
 functional FAQs after moving or adding a comparison.
 
@@ -968,13 +995,18 @@ and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
 `HomepageClosing` for the static bottom Sign Up CTA and the shared feature heading styles.
 
-Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
-`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
-It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
-header-to-list gap. Channels and DMs scroll independently. Verify search,
-section collapse, Threads navigation, and opening a mentioned source after
-switching channels. Message text uses the app's 15px/24px reading size; dark
-surface and edge tokens are frozen from `apps/web/src/index.css`.
+Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
+All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
+controls, 32px section headers, and a 4px header-to-list gap. It is not the current
+app's sidebar parity target: `channels-view/components/rail/ExpandedChannelsRail.tsx`
+uses Favorites, Team channels, and custom sections in one scrolling list, with a
+sticky collapsible DM panel and no view tabs. Verify the demo's search, section
+collapse, thread navigation, and opening a mentioned source after switching
+channels. Message text uses the app's 15px/24px reading size; dark surface and edge
+tokens are frozen from `apps/web/src/index.css`.
+
+Keep Merge/Merged and Open session actions in the shared agent chip at the same
+24px height and pill radius, with touch resizing disabled for both.
 
 Cursor replies in the Agents, Channels, and GitHub walkthroughs share
 `DemoAgentChip`, adapted from the current `MagicChipView` in the app. It uses
@@ -1241,3 +1273,5 @@ The homepage uses the same wide-screen right rail and stacked signup/demo action
 Use full first and last names for people in channel mockups. Rotate stories across Peter Chinman, Wolf Mermelstein, Eric Hayes, Rahul Batra, and Austin Barron as well as the existing cast. Use the shared `homepagePeople` profile photos; Rahul has an initials avatar because his Macro profile has no photo. Keep Valentina out of demo fixtures.
 
 The Agents teamwork walkthrough uses a compact 600px frame and finishes on the completed Cursor session card. Keep that card visible at the bottom of the conversation, including with reduced motion; do not loop back to the initial design request.
+
+Keep the server-rendered homepage headline visible on phones before JavaScript loads. Desktop retains its heading through hydration; mobile switches to the existing welcome composition with the same headline and a working signup link. Verify both paths in `scripts/verifyHomepage.ts`.

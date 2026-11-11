@@ -6,8 +6,8 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckCircle from '@phosphor/check-circle.svg';
-import X from '@phosphor/x.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { type Camera, pageToScreen, screenToPage } from '../core/camera';
@@ -69,7 +69,7 @@ function PinCard(props: {
     Math.max(8, Math.min(props.at.y - 28, props.viewport.h - 160));
   return (
     <div
-      class="absolute z-10 flex flex-col overflow-hidden rounded-lg border border-edge-muted bg-panel text-ink text-xs shadow-lg"
+      class="menu-surface absolute z-10 flex flex-col overflow-hidden text-xs"
       style={{
         left: `${Math.max(8, Math.min(props.at.x + 16, props.viewport.w - CARD - 8))}px`,
         top: `${top()}px`,

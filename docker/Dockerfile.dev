@@ -19,7 +19,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
         --bin authentication_service \
         --bin connection_gateway_service \
         --bin contacts_service \
-        --bin document_cognition_service \
         --bin document_storage_service \
         --bin document_upload_finalizer_local_worker \
         --bin email_service \
@@ -33,7 +32,6 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=shared \
     && cp /app/target/debug/authentication_service /app/out/ \
     && cp /app/target/debug/connection_gateway_service /app/out/ \
     && cp /app/target/debug/contacts_service /app/out/ \
-    && cp /app/target/debug/document_cognition_service /app/out/ \
     && cp /app/target/debug/document_storage_service /app/out/ \
     && cp /app/target/debug/document_upload_finalizer_local_worker /app/out/ \
     && cp /app/target/debug/email_service /app/out/ \
@@ -73,8 +71,6 @@ CMD ["/app/out/connection_gateway_service"]
 FROM services_bundle AS contacts_service
 CMD ["/app/out/contacts_service"]
 
-FROM services_bundle AS document_cognition_service
-CMD ["/app/out/document_cognition_service"]
 
 FROM services_bundle AS document_storage_service
 CMD ["/app/out/document_storage_service"]

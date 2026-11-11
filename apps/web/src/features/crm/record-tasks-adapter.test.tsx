@@ -1,27 +1,66 @@
 import type { TasksViewProviderProps } from '@app/features/tasks-view/tasks-view-context';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { CrmActivityTasks } from './activity-tasks-adapter';
 import type { CrmRecordScope } from './core/record';
 import { CrmRecordTasks } from './record-tasks-adapter';
 
-const { openWithSplit } = vi.hoisted(() => ({ openWithSplit: vi.fn() }));
+const {
+  openWithSplit,
+  popoverSplit,
+  openTaskComposer,
+  openItem,
+  workspacePresent,
+} = vi.hoisted(() => ({
+  openWithSplit: vi.fn(),
+  popoverSplit: vi.fn(),
+  openTaskComposer: vi.fn(),
+  openItem: vi.fn(() => false),
+  workspacePresent: vi.fn(() => true),
+}));
+vi.mock('./context/workspace-context', () => ({
+  useCrmWorkspace: () => ({ host: { record: { openItem } } }),
+  useOptionalCrmWorkspace: () =>
+    workspacePresent() ? { host: { record: { openItem } } } : undefined,
+}));
+vi.mock('./context/crm-context', () => ({
+  useCrmContext: () => ({ openTaskComposer }),
+}));
+vi.mock('@app/features/tasks-view/tasks-content', () => ({
+  TasksContent: () => null,
+}));
 
 vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit }),
+  useSplitLayout: () => ({ openWithSplit, popoverSplit }),
 }));
 vi.mock('@property/tags/tag-sets-context', () => ({
   TagSetsQueryProvider: (props: ParentProps) => props.children,
 }));
 vi.mock('@app/features/tasks-view/tasks-view-context', () => ({
   TasksViewProvider: (props: TasksViewProviderProps) => (
-    <button
-      type="button"
-      onClick={(event) => props.onOpenTask?.({ id: 'task-1' }, { event })}
-    >
-      Open task
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={(event) => props.onOpenTask?.({ id: 'task-1' }, { event })}
+      >
+        Open task
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          props.onCreateTask?.({
+            dueDate: new Date('2026-10-01T12:00:00Z'),
+            composerContext: { key: 'crm-board', initialPropertyValues: {} },
+          })
+        }
+      >
+        Create scoped task
+      </button>
+      {!props.onCreateTask && props.children}
+    </>
   ),
+  useTasksView: () => ({ state: { search: '' }, setState: vi.fn() }),
 }));
 vi.mock('@app/features/tasks-view/components/TasksControls', () => ({
   TasksControls: () => null,
@@ -32,15 +71,29 @@ vi.mock('@app/features/tasks-view/components/task-list/TaskList', () => ({
 vi.mock('@app/features/tasks-view/queries/use-tasks-query', () => ({
   useTasksDataSource: vi.fn(),
 }));
-vi.mock('@block-md/util/taskComposerProperties', () => ({
-  createTaskWithProperties: vi.fn(),
+vi.mock('@ui', () => ({
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props} />
+  ),
 }));
-vi.mock('@ui', () => ({ Button: () => null }));
-vi.mock('./components/record-section', () => ({ RecordSection: () => null }));
+vi.mock('./components/record-section', () => ({
+  RecordSection: (props: {
+    actions: JSX.Element;
+    createAction: { label: string; onClick: () => void };
+  }) => (
+    <>
+      {props.actions}
+      <button onClick={props.createAction.onClick}>
+        {props.createAction.label}
+      </button>
+    </>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  workspacePresent.mockReturnValue(true);
 });
 
 const scopes: CrmRecordScope[] = [
@@ -52,6 +105,26 @@ const scopes: CrmRecordScope[] = [
   },
   { type: 'company', id: 'company-1', domains: ['example.com'] },
 ];
+
+it('persists the original CRM context and associations', () => {
+  render(() => <CrmRecordTasks scope={scopes[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'New task' }));
+  const params = popoverSplit.mock.calls[0][0].params;
+  expect(params.composerContext.key).toBe('crm:contact:contact-1');
+  expect(Object.values(params.composerContext.initialPropertyValues)).toEqual(
+    expect.arrayContaining([
+      {
+        valueType: 'ENTITY',
+        refs: [{ entity_id: 'contact-1', entity_type: 'CONTACT' }],
+      },
+      {
+        valueType: 'ENTITY',
+        refs: [{ entity_id: 'company-1', entity_type: 'COMPANY' }],
+      },
+    ])
+  );
+  expect(params.createTask).toBeUndefined();
+});
 
 it.each(scopes)('opens a task from a $type in the task view', (scope) => {
   render(() => <CrmRecordTasks scope={scope} />);
@@ -70,5 +143,33 @@ it('preserves the request to open a task in a new split', () => {
   expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
     { type: 'task', id: 'task-1' },
     { preferNewSplit: true }
+  );
+});
+
+it('forwards board and Gantt creation defaults through the CRM composer', () => {
+  render(() => <CrmActivityTasks />);
+  fireEvent.click(screen.getByRole('button', { name: 'Create scoped task' }));
+  expect(openTaskComposer).toHaveBeenCalledWith({
+    dueDate: new Date('2026-10-01T12:00:00Z'),
+    composerContext: { key: 'crm-board', initialPropertyValues: {} },
+  });
+});
+
+it('opens an unmodified task in the CRM record instead of a separate split', () => {
+  openItem.mockReturnValueOnce(true);
+  render(() => <CrmRecordTasks scope={scopes[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+  expect(openItem).toHaveBeenCalledOnce();
+  expect(openWithSplit).not.toHaveBeenCalled();
+});
+
+it('keeps standalone record previews independent of a CRM workspace', () => {
+  workspacePresent.mockReturnValue(false);
+  render(() => <CrmRecordTasks scope={scopes[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+  expect(openItem).not.toHaveBeenCalled();
+  expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+    { type: 'task', id: 'task-1' },
+    { preferNewSplit: false }
   );
 });

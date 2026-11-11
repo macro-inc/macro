@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use agent::ReasoningEffort;
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use agent_api_keys::domain::UsableAgentKey;
 use ai_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
@@ -36,6 +37,8 @@ pub struct AgentIdentity {
 pub struct TurnRequest {
     /// Whether the turn answers the user or condenses their conversation.
     pub purpose: TurnPurpose,
+    /// How the session's reader receives the reply.
+    pub delivery: ReplyDelivery,
     /// The session the turn belongs to.
     pub session_id: agent_session::domain::model::AgentSessionId,
     /// Counts what the turn is waiting on a person for - a question, or a
@@ -45,6 +48,9 @@ pub struct TurnRequest {
     /// their identity and token usage is recorded against them. Both need a
     /// person, which the engine asks of this rather than assumes.
     pub owner: Owner,
+    /// What the turn's model calls, and its tools', are metered as: the
+    /// session's feature.
+    pub feature: ai_usage::AiFeature,
     /// Model id the turn runs on. Unknown ids fall back to the loop's
     /// default model rather than failing the turn.
     pub model: String,
@@ -77,6 +83,10 @@ pub struct TurnRequest {
     /// rejected - before the model reads its result. Absent for the same
     /// reason as `user_input`; a pending call then stays pending.
     pub reviewer: Option<Arc<dyn UserToolReviewer>>,
+    /// The agent's own key the turn's model calls run on instead of Macro's,
+    /// with their usage recorded against it rather than the owner's
+    /// allowance. `None` runs on Macro.
+    pub agent_key: Option<UsableAgentKey>,
 }
 
 /// Whether a model call answers the user or condenses their conversation.
@@ -88,6 +98,18 @@ pub enum TurnPurpose {
     /// summary, or an image read for it. No tools, no memory, no opening
     /// line, and `instructions` as its whole system prompt.
     Summary,
+}
+
+/// How the session's reader receives a reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplyDelivery {
+    /// Live, as the model writes it, so a fast model's opening line shows
+    /// long before the turn's own first token.
+    Streamed,
+    /// Only once the turn has finished, as one message (a reply posted to the
+    /// thread of the message that mentioned the agent). An opening line would
+    /// arrive with the rest, so none is written.
+    Whole,
 }
 
 /// How many things a turn currently waits on a person for. Shared between

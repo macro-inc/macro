@@ -137,6 +137,8 @@ const ROUTE_MODULES: Array<[RegExp, string]> = [
 
 interface ManifestChunk {
   file: string;
+  name?: string;
+  isDynamicEntry?: boolean;
   css?: string[];
   imports?: string[];
 }
@@ -147,16 +149,30 @@ function collectChunkAssets(
   manifest: Manifest,
   key: string
 ): { js: string[]; css: string[] } {
+  // Vite may emit a shared dynamic route under a generated _Name-hash.js key
+  // rather than its source path (CRM does this). Resolve that real entry too.
+  const candidates = manifest[key]
+    ? [key]
+    : Object.keys(manifest).filter(
+        (candidate) =>
+          manifest[candidate].isDynamicEntry &&
+          manifest[candidate].name === path.basename(key, path.extname(key))
+      );
+  if (candidates.length !== 1)
+    throw new Error(
+      `Expected one built route entry for ${key}, found ${candidates.length}`
+    );
   const js = new Set<string>();
   const css = new Set<string>();
   const visit = (k: string) => {
     const chunk = manifest[k];
-    if (!chunk || js.has(chunk.file)) return;
+    if (!chunk) throw new Error(`Missing static route dependency: ${k}`);
+    if (js.has(chunk.file)) return;
     js.add(chunk.file);
     for (const c of chunk.css ?? []) css.add(c);
     for (const imp of chunk.imports ?? []) visit(imp);
   };
-  visit(key);
+  visit(candidates[0]);
   return { js: [...js], css: [...css] };
 }
 
@@ -313,7 +329,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
       '@type': 'Organization',
       name: 'Macro',
       url: `${BASE_URL}/`,
-      logo: `${BASE_URL}/og-image.jpg`,
+      logo: `${BASE_URL}/logo.png`,
       sameAs: [
         'https://x.com/macrodotcom',
         'https://github.com/macro-inc/macro',

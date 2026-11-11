@@ -19,6 +19,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
@@ -38,7 +39,10 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isGuestEditRefused,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -172,9 +176,10 @@ function CalendarPageDataStatus(props: {
               We couldn’t load your calendar events. Try again.
             </p>
             <Button
-              variant="accent"
+              aria-label="Retry loading calendar"
+              tooltip="Retry loading calendar"
+              variant="primary"
               size="sm"
-              label="Retry loading calendar"
               onClick={() =>
                 fireAndForget(
                   props.data.occurrencesQuery.refetch(),
@@ -316,6 +321,10 @@ export function Page(props: {
       {
         onError: (error) => {
           change.revert();
+          if (isGuestEditRefused(error)) {
+            toast.failure(GUEST_EDITS_RESTRICTED);
+            return;
+          }
           toast.failure('Failed to update event', {
             subtext: error.message,
           });
@@ -351,6 +360,9 @@ export function Page(props: {
           onDateSelect: isMobile() ? undefined : handleSelect,
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);
+          },
+          onSelectedEventMount: (event, element) => {
+            if (isActive()) calendarView.reanchorSelectedEvent(event, element);
           },
         }}
         eventTimeChangePending={updateEventTime.isPending}

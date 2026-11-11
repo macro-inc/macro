@@ -11,6 +11,8 @@ import type { ResultError } from '../../../lib/core/util/result';
 export type DatabaseCellFailure =
   | { kind: 'read-only-column' }
   | { kind: 'not-a-number' }
+  /** Not `start/end` or one date, or a range that ends before it starts. */
+  | { kind: 'not-a-date-range' }
   /** A relation's cells are rows, edited as a relation. */
   | { kind: 'relation-as-entity' }
   /** A multi-valued cell that is not the grid's JSON array of values. */
@@ -106,6 +108,11 @@ export function databaseWriteMessage(failure: DatabaseWriteFailure): string {
         'This column expects a number. Your entry is kept so you can correct it.'
     )
     .with(
+      { kind: 'not-a-date-range' },
+      () =>
+        'This column expects a time range that ends on or after its start. Your entry is kept so you can correct it.'
+    )
+    .with(
       { kind: 'relation-as-entity' },
       () => 'This column holds related records; edit it as a relation.'
     )
@@ -179,7 +186,16 @@ export function databaseReadMessage(failure: DatabaseReadFailure): string {
       { kind: 'fetch' },
       () => 'The rows could not be loaded. Check your connection.'
     )
-    .with({ kind: 'read-only' }, () => 'Try refreshing the table.')
+    .with({ kind: 'rejected' }, ({ message }) => message)
+    .with(
+      { kind: 'scope-changed' },
+      () => 'The account or access changed. Reopen the table to continue.'
+    )
+    .with(
+      { kind: 'read-only' },
+      { kind: 'cancelled' },
+      () => 'Try refreshing the table.'
+    )
     .with(
       { kind: 'table-unavailable' },
       () => 'This table is no longer available.'

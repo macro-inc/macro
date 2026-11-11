@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_preview_lease l SET status = $3 WHERE id = $1 AND replica_id = $2 AND status IN ('starting','ready') AND expires_at > now() AND EXISTS (SELECT 1 FROM agent_preview_replica WHERE id = $2 AND expires_at > now())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e80b48c212bcf934ab22f81403b7b1ef8e45fb7ea52c759330834ddf1ffb6be5"
+}

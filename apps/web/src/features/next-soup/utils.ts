@@ -15,8 +15,9 @@ import {
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
-import { projectRouteId } from '@app/features/projects/core/route';
+import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
@@ -24,6 +25,7 @@ import {
   scopeChannelNotificationsForEntity,
 } from '@app/features/soup/entity-notifications';
 import { replacePaneSearchParams } from '@app/lib/split-router';
+import { beginInteraction } from '@app/observability/flow';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import {
@@ -87,18 +89,18 @@ import {
   getChannelNotificationParams,
   getDocumentCommentLocation,
   getDocumentCommentNotification,
-  markNotificationsForEntityAsReadInBackground,
   type NotificationSource,
   notificationIsRead,
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { openRuntimesSettings } from '@notifications/notification-navigation';
 import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
-  archiveEmailThread,
+  archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
 import { emailKeys } from '@queries/email/keys';
@@ -261,9 +263,7 @@ export const openEntityInNewTab = ({
   location ??= getRowClickFallbackLocation(entity);
   // Build URL for the entity
   let entityPath: string;
-  if (entity.type === 'initiative') {
-    entityPath = `/app/component/${projectRouteId({ id: entity.id, section: 'overview' })}`;
-  } else if (entity.type === 'calendar_event') {
+  if (entity.type === 'calendar_event') {
     entityPath = `/app${calendarPath(getPreferredCalendarPeriodView())}`;
   } else if (entity.type === 'document') {
     const { fileType, subType } = entity;
@@ -629,6 +629,22 @@ export const openEntityInSplitFromUnifiedList = async (
   entity: EntityData,
   options: OpenEntityOptions
 ): Promise<void> => {
+  // From the row action to the opened view's paint: the navigation it commits
+  // and the view it mounts join this interaction.
+  const interaction = beginInteraction('list.open', {
+    attributes: { 'entity.type': entity.type },
+  });
+  try {
+    await openEntity(entity, options);
+  } finally {
+    interaction.end();
+  }
+};
+
+const openEntity = async (
+  entity: EntityData,
+  options: OpenEntityOptions
+): Promise<void> => {
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
   let { location } = options;
 
@@ -712,6 +728,16 @@ export const openEntityInSplitFromUnifiedList = async (
     }
   }
 
+  // A runtime has no page of its own: Settings → Machines points it out.
+  if (entity.type === 'harness') {
+    requestRuntimeShare(entity.id, false);
+    openRuntimesSettings(splitManager, {
+      newSplit: openInNewSplit,
+      sourceHandle: splitHandle,
+    });
+    return;
+  }
+
   const content = getEntitySplitContent(entity);
 
   const channelTarget = getChannelEntityTarget(entity, {
@@ -765,29 +791,36 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  const hydrateNotificationsAndMarkSeen = async (
+  const hydrateNotificationsAndMarkSeen = (
     channel: ChannelEntity,
     notificationSource: NotificationSource
-  ) => {
-    try {
-      const hydrated = await hydrateChannelNotificationSelection(
-        channel,
-        notificationSource.withLocalOverrides
-      );
-      const view = splitManager.findOpenView(content);
-      // A late response must not mark a closed conversation or a mobile pane
-      // that the user has already left. Hydration never reopens or retargets it.
-      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
-      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
-        channelReadScope: options.channelReadScope,
-      });
-    } catch (error) {
-      console.error('Failed to load conversation notifications after opening', {
-        channelId: channel.id,
-        error,
-      });
-    }
-  };
+  ) =>
+    Telemetry.span('channel.open.notifications', async (span) => {
+      span.setAttr('channel.id', channel.id);
+      try {
+        const hydrated = await hydrateChannelNotificationSelection(
+          channel,
+          notificationSource.withLocalOverrides
+        );
+        const view = splitManager.findOpenView(content);
+        // A late response must not mark a closed conversation or a mobile pane
+        // that the user has already left. Hydration never reopens or retargets it.
+        if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) {
+          span.setAttr('channel.open.outcome', 'left');
+          return;
+        }
+        markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+          channelReadScope: options.channelReadScope,
+        });
+        span.setAttr('channel.open.outcome', 'loaded');
+      } catch (error) {
+        span.setAttr('channel.open.outcome', 'failed');
+        console.error(
+          'Failed to load conversation notifications after opening',
+          { channelId: channel.id, error }
+        );
+      }
+    });
 
   let markedNotifications = false;
   const markNotificationsSeen = () => {
@@ -888,22 +921,6 @@ export function markChannelNotificationsSeenOnOpen(
   });
 }
 
-/** Mark calendar-event notifications seen when opening their occurrence. */
-export function markCalendarNotificationSeenOnOpen(
-  entity: EntityData,
-  notificationSource: NotificationSource
-) {
-  // Calendar events open a component split without a block to clear notifications.
-  if (entity.type !== 'calendar_event') return;
-  fireAndForget(
-    markNotificationsForEntityAsReadInBackground(notificationSource, {
-      type: entity.type,
-      id: entity.id,
-    }),
-    'open-entity-in-split'
-  );
-}
-
 /**
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
@@ -968,10 +985,12 @@ export function calendarViewTargetForEntity(
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
-      .with({ type: 'initiative' }, (entity) => ({
-        type: 'component' as const,
-        id: projectRouteId({ id: entity.id, section: 'overview' }),
-      }))
+      // The Tasks-hosted route carries the project's own identity, so an open
+      // project split is reused; the legacy component would mount a redirect
+      // shim beside it.
+      .with({ type: 'initiative' }, (entity) =>
+        projectHostedContent(entity.id, 'overview')
+      )
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);
@@ -1002,72 +1021,15 @@ function getEntitySplitContent(entity: EntityData) {
       .with({ type: 'calendar_event' }, () => {
         return { type: 'component' as const, id: CALENDAR_VIEW_ID };
       })
+      // Runtimes open in Settings → Machines; the open path branches before
+      // reaching here, so this only serves duplicate checks.
+      .with({ type: 'harness' }, () => {
+        return { type: 'component' as const, id: 'settings' };
+      })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };
       })
   );
-}
-
-async function _archiveEmail(
-  id: string,
-  options: { archive: boolean; optimisticallyExclude?: boolean }
-) {
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
-
-  const previousEmail = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: queryKeys.all.email,
-  });
-
-  const current = getSoupEntityById(id);
-  const soupTxn = options.optimisticallyExclude
-    ? removeSoupEntities(new Set([id]))
-    : optimisticUpdateSoupEntity({
-        tag: 'emailThread',
-        data: { id, inboxVisible: false },
-        frecency_score: current?.frecency_score ?? 0,
-      });
-
-  // Optimistic update for email queries
-  const applyEmailOptimistic = (data?: {
-    pages: { items: EntityData[] }[];
-  }) => {
-    if (!data) return data;
-
-    return {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: options.optimisticallyExclude
-          ? page.items.filter((item) => item.id !== id)
-          : page.items.map((item) =>
-              item.id === id ? { ...item, inboxVisible: false } : item
-            ),
-      })),
-    };
-  };
-
-  for (const [key, data] of previousEmail) {
-    queryClient.setQueryData(key, applyEmailOptimistic(data));
-  }
-
-  let disposition: EmailArchiveDisposition | undefined;
-  try {
-    disposition = await archiveEmailThread({ value: options.archive, id });
-  } catch (_err) {
-    soupTxn.rollback();
-    for (const [key, data] of previousEmail) {
-      queryClient.setQueryData(key, data);
-    }
-  } finally {
-    if (disposition !== 'queued') {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-        invalidateSoupEntity(id),
-      ]);
-    }
-  }
 }
 
 type TrashEmailsHandle = {
@@ -1532,9 +1494,7 @@ export async function executeMarkEntitiesDone(args: {
   };
   const [emailResults, [notificationResult], [entityResult]] =
     await Promise.all([
-      Promise.allSettled(
-        emailIds.map((id) => archiveEmailThread({ value: true, id }))
-      ),
+      archiveEmailThreads(emailIds, true),
       Promise.allSettled([writeNotificationIds()]),
       Promise.allSettled([writeNotificationEntities()]),
     ]);
@@ -1631,9 +1591,7 @@ export async function executeMarkEntitiesUndone(args: {
     return notificationIds;
   };
   const [emailResults, [notificationResult]] = await Promise.all([
-    Promise.allSettled(
-      emailIds.map((id) => archiveEmailThread({ value: false, id }))
-    ),
+    archiveEmailThreads(emailIds, false),
     Promise.allSettled([writeNotificationIds()]),
   ]);
   for (const [index, result] of emailResults.entries()) {

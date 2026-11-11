@@ -1,62 +1,108 @@
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
-import { buildSimpleEntityUrl } from '@core/util/url';
+import { nativeToolSlug } from '@app/features/onboarding/queries/connected-tools';
+import { assignOauthUrl, reserveOauthPopup } from '@core/pipedream/oauth-popup';
+import { Telemetry } from '@macro-inc/observability';
 import {
-  type ImportState,
-  useDiscoverMutation,
-  useImportQuery,
-  useRunImportMutation,
-} from '@queries/import';
+  useMcpServersQuery,
+  useStartMcpAuthMutation,
+} from '@queries/mcp-servers';
 import {
   connectPipedreamApp,
   usePipedreamConnectedSlugs,
 } from '@queries/pipedream-connectors';
-import type { JSX } from 'solid-js';
+import { type Accessor, createMemo, type JSX } from 'solid-js';
 import { ConnectorImportProvider } from './context/connector-import-context';
-import type { ConnectorImportContext } from './context/contracts';
+import type {
+  ConnectOutcome,
+  ConnectorImportContext,
+} from './context/contracts';
 import type { ImportCategoryConfig } from './core/providers';
 import {
   ConnectorImportDialog,
   type ImportAlternative,
 } from './views/import-dialog';
 
-const PENDING_STATE: ImportState = { runs: [], entities: [] };
+function useProductionContext(
+  config: Accessor<ImportCategoryConfig>
+): ConnectorImportContext {
+  const startMcpAuth = useStartMcpAuthMutation();
 
-function useProductionContext(): ConnectorImportContext {
-  const discover = useDiscoverMutation();
-  const runImport = useRunImportMutation();
+  // Opens the OAuth tab synchronously, inside the click, so it isn't blocked.
+  function connectNative(app: {
+    appSlug: string;
+    name: string;
+    mcpUrl: string;
+  }): Promise<ConnectOutcome> {
+    const popup = reserveOauthPopup();
+    return Telemetry.span(
+      'mcp.authorize',
+      async (span): Promise<ConnectOutcome> => {
+        span.setAttr('connector.app_slug', app.appSlug);
+        span.setAttr('connector.server_url', app.mcpUrl);
+        try {
+          const { authorization_url } = await startMcpAuth.mutateAsync({
+            server_url: app.mcpUrl,
+            server_name: app.name,
+            parentSpan: span,
+          });
+          assignOauthUrl(popup, authorization_url);
+          span.setAttr('connector.outcome', 'started');
+          return 'started';
+        } catch (error) {
+          popup?.close();
+          span.error('MCP authorization failed to start');
+          throw error;
+        }
+      }
+    );
+  }
+
   return {
     createConnections() {
-      const { slugs, ready } = usePipedreamConnectedSlugs();
-      return { connected: slugs, ready };
-    },
-    createImportState() {
-      const query = useImportQuery();
+      const pipedream = usePipedreamConnectedSlugs();
+      // Refetches on focus, so returning from the OAuth tab shows the result.
+      const native = useMcpServersQuery({ neverSuspend: true });
+      const nativeSlugs = createMemo(() =>
+        native.isSuccess
+          ? native.data.flatMap((server) => {
+              const slug =
+                server.authenticated && server.enabled
+                  ? nativeToolSlug(server)
+                  : undefined;
+              return slug &&
+                config().providers.some(
+                  (provider) => provider.appSlug === slug && provider.mcpUrl
+                )
+                ? [slug]
+                : [];
+            })
+          : []
+      );
       return {
-        // Guard resource reads so polling never suspends the dialog.
-        state: () => (query.isSuccess ? query.data : PENDING_STATE),
-        ready: () => query.isSuccess && !query.isPlaceholderData,
+        connected: () => new Set([...pipedream.slugs(), ...nativeSlugs()]),
+        // A failed native read leaves Pipedream's answer standing.
+        ready: () =>
+          pipedream.ready() &&
+          (native.isError || (native.isSuccess && !native.isPlaceholderData)),
       };
     },
     connect: (app, container) =>
-      connectPipedreamApp({
-        appSlug: app.appSlug,
-        serverName: app.name,
-        container,
-      }),
-    discover: (source) => discover.mutateAsync(source),
-    runImport: async (importIds) => {
-      await runImport.mutateAsync({ importIds, discardIds: [] });
-    },
+      app.mcpUrl
+        ? connectNative({ ...app, mcpUrl: app.mcpUrl })
+        : connectPipedreamApp({
+            appSlug: app.appSlug,
+            serverName: app.name,
+            container,
+          }),
     startAgentImport: (handoff) =>
       openChatWithInput(handoff.input, { instructions: handoff.instructions }),
-    entityHref: (entity) => buildSimpleEntityUrl(entity),
   };
 }
 
 /**
- * The import dialog wired to production: the Pipedream connector stack, the
- * import pipeline, and agent handoff. Loaded on demand by the sidebar card,
- * so the card itself renders with its view.
+ * The import dialog wired to production: native MCP and Pipedream
+ * connections, and the agent chat that runs each import. Loaded on demand by
+ * the sidebar card, so the card itself renders with its view.
  */
 export function ConnectorImportDialogHost(props: {
   config: ImportCategoryConfig;
@@ -64,17 +110,15 @@ export function ConnectorImportDialogHost(props: {
   onOpenChange(open: boolean): void;
   opener?: HTMLElement;
   alternatives?: readonly ImportAlternative[];
-  onImported(): void;
 }): JSX.Element {
   return (
-    <ConnectorImportProvider context={useProductionContext()}>
+    <ConnectorImportProvider context={useProductionContext(() => props.config)}>
       <ConnectorImportDialog
         config={props.config}
         open={props.open}
         onOpenChange={props.onOpenChange}
         opener={props.opener}
         alternatives={props.alternatives}
-        onImported={props.onImported}
       />
     </ConnectorImportProvider>
   );

@@ -11,6 +11,68 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/activity": {
+      "get": {
+        "tags": ["activity"],
+        "summary": "Read the acting user's own activity in a time range, newest first.",
+        "description": "Includes actions agents performed on the user's behalf. Returns at most\n100 events; `truncated` reports that more matched, so narrow the range.",
+        "operationId": "read_my_activity",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Inclusive start, RFC 3339.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Exclusive end, RFC 3339; must be after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`from` is not before `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-cost/pricing": {
       "post": {
         "tags": ["ai_usage"],
@@ -233,6 +295,59 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/calendar/events/create-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Create a calendar event the user approved in conversation, quoting their approval.",
+        "operationId": "create_confirmed_calendar_event",
+        "requestBody": {
+          "description": "CreateConfirmedCalendarEvent arguments: CreateCalendarEvent's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ToolCalendarEvent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not created: a blank confirmation, a calendar the user cannot write, or a provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
                 }
               }
             }
@@ -1046,6 +1161,87 @@
         }
       }
     },
+    "/database-query": {
+      "post": {
+        "tags": ["database_query"],
+        "operationId": "generate_database_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseQueryAnswer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions": {
       "post": {
         "tags": ["decisions"],
@@ -1140,6 +1336,59 @@
         }
       }
     },
+    "/email/send-confirmed": {
+      "post": {
+        "tags": ["confirmed_actions"],
+        "summary": "Send an email the user approved in conversation, quoting their approval.",
+        "operationId": "send_confirmed_email",
+        "requestBody": {
+          "description": "SendConfirmedEmail arguments: SendEmail's, plus userConfirmation",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "SendEmailResponse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed, or missing userConfirmation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Not sent: a blank confirmation, an inbox or attachment the user cannot use, or a delivery failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -1155,6 +1404,152 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/images/generate": {
+      "post": {
+        "tags": ["images"],
+        "summary": "Generate an image with Nano Banana and store it as a static file owned by\nthe caller. Charged to the acting user's AI allowance.",
+        "operationId": "generate_image",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid prompt or reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A reference is not accessible, or no user to bill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The model declined to render the prompt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The image could not be read or stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The image model request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image generation or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/import/notion": {
+      "get": {
+        "tags": ["import"],
+        "summary": "Where the user's Notion workspace import stands.",
+        "operationId": "notion_report_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/notion/cancel": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Stop planning or writing the user's Notion import. Objects already\nimported stay.",
+        "operationId": "cancel_notion_handler",
+        "responses": {
+          "200": {
+            "description": "Where the import stands after cancelling",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -1194,7 +1589,7 @@
     "/import/runs/{source}/discover": {
       "post": {
         "tags": ["import"],
-        "summary": "Discover candidates for user selection without auto-importing them.",
+        "summary": "Discover candidates for user selection. Only Slack supports discovery.",
         "operationId": "discover_handler",
         "parameters": [
           {
@@ -1212,88 +1607,10 @@
             "description": "Discovery accepted (idempotent)"
           },
           "400": {
-            "description": "Unknown import source"
+            "description": "Unknown import source or discovery not supported"
           },
           "500": {
             "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/import/runs/{source}/dismiss": {
-      "post": {
-        "tags": ["import"],
-        "summary": "Dismiss one source's import section.",
-        "operationId": "dismiss_run_handler",
-        "parameters": [
-          {
-            "name": "source",
-            "in": "path",
-            "description": "Import source",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Dismissed"
-          },
-          "400": {
-            "description": "Unknown import source"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/import/runs/{source}/retry": {
-      "post": {
-        "tags": ["import"],
-        "summary": "Restart a failed (or dismissed) gather run for one source.",
-        "operationId": "retry_gather_handler",
-        "parameters": [
-          {
-            "name": "source",
-            "in": "path",
-            "description": "Import source",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Retry accepted (idempotent)"
-          },
-          "400": {
-            "description": "Unknown import source"
-          },
-          "402": {
-            "description": "AI allowance exhausted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error"
-          },
-          "503": {
-            "description": "AI usage validation unavailable; retry later",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AiAdmissionErrorBody"
-                }
-              }
-            }
           }
         }
       }
@@ -1301,7 +1618,7 @@
     "/import/state": {
       "get": {
         "tags": ["import"],
-        "summary": "Get the authenticated user's import state: gather runs plus visible\nledger rows.",
+        "summary": "Get the authenticated user's import state: discovery runs plus visible\nledger rows.",
         "operationId": "get_state_handler",
         "responses": {
           "200": {
@@ -1316,6 +1633,64 @@
           },
           "500": {
             "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/import/workspaces/{source}": {
+      "get": {
+        "tags": ["import"],
+        "summary": "Report progress for one reviewed workspace source.",
+        "operationId": "workspace_report_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/import/workspaces/{source}/cancel": {
+      "post": {
+        "tags": ["import"],
+        "summary": "Cancel this source's plan or write, keeping completed entities.",
+        "operationId": "cancel_workspace_handler",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ImportSource"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotionImportReport"
+                }
+              }
+            }
           }
         }
       }
@@ -1420,7 +1795,7 @@
       },
       "post": {
         "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user.",
+        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
         "operationId": "add_mcp_server",
         "requestBody": {
           "content": {
@@ -1439,6 +1814,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1642,7 +2027,7 @@
       "get": {
         "tags": ["memory"],
         "summary": "Get the authenticated user's latest memory.",
-        "description": "Returns the current memory if one exists. If the memory is stale or missing,\na background generation is triggered and the endpoint returns the stale\nmemory (200) or 404 if none exists yet.",
+        "description": "Compose stored private preferences, latest activity, and current team profiles.\nEnrolls the caller for daily refresh; generation never runs on this request.",
         "operationId": "get_memory_handler",
         "responses": {
           "200": {
@@ -1656,7 +2041,186 @@
             }
           },
           "404": {
-            "description": "No memory exists for this user yet (generation triggered)"
+            "description": "No composed memory exists for this user yet"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/activity": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read privacy-reviewed professional activity of the caller or a current teammate.",
+        "description": "Reports use UTC calendar days, Monday-start weeks and calendar months.\nAn empty list means no stored activity, not no work.",
+        "operationId": "get_user_activity",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "A `macro|` user id; omit for the caller.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive first UTC date.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Inclusive last UTC date, at most 366 days after `start`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity reports in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityReports"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id or date range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user is not the caller or a current teammate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/explicit": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read the caller's private explicit memory and its revision.",
+        "description": "Content is newline-separated; edits address one-based lines.",
+        "operationId": "read_explicit_memory",
+        "responses": {
+          "200": {
+            "description": "The caller's explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["memory"],
+        "summary": "Apply one edit to the caller's private explicit memory.",
+        "description": "A stale revision changes nothing and answers 409; reread before retrying.\nAdditions that fail privacy review answer 422.",
+        "operationId": "edit_explicit_memory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExplicitMemoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The edited explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid line or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The revision is stale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Rejected by privacy review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error",
@@ -1674,7 +2238,7 @@
     "/onboarding": {
       "get": {
         "tags": ["onboarding"],
-        "summary": "Get the authenticated user's onboarding state. While the flow is active\nthis also starts any gather runs that are due, so polling this endpoint\nis what keeps onboarding moving.",
+        "summary": "Get the authenticated user's onboarding state.",
         "operationId": "get_state_handler",
         "responses": {
           "200": {
@@ -1861,13 +2425,93 @@
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything.",
+        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
         "operationId": "complete_pipedream_mcp_connection",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PipedreamCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/connect/complete": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Record an app the user connected through Macro Connect.",
+        "description": "Answers 404 until Connect lists an active connection for this user and\napp, so the frontend can poll it while the consent window is open.",
+        "operationId": "complete_pipedream_mcp_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamConnectCompleteRequest"
               }
             }
           },
@@ -2067,12 +2711,151 @@
         }
       }
     },
+    "/pipedream/mcp/overlays": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the catalog apps that connect through their own MCP server.",
+        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
+        "operationId": "list_pipedream_mcp_overlays",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipedream/mcp/recover": {
+      "post": {
+        "tags": ["pipedream-mcp"],
+        "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
+        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
+        "operationId": "recover_pipedream_mcp_connection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PipedreamRecoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipedreamConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pipedream/mcp/token": {
       "post": {
         "tags": ["pipedream-mcp"],
-        "summary": "Create a short-lived Pipedream Connect token for the authenticated user.",
-        "description": "The frontend opens Pipedream's hosted Connect UI with this token; the\nuser picks (or is deep-linked into) an app and authorizes it there.",
+        "summary": "Start a connect flow for the authenticated user.",
+        "description": "By default, a short-lived Pipedream Connect token: the frontend opens\nPipedream's hosted Connect UI with it, and the user picks (or is\ndeep-linked into) an app and authorizes it there. When the body names an\napp Macro Connect serves and the `macro-connect` rollout is on for the\nuser, a Connect URL instead.",
         "operationId": "create_pipedream_mcp_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PipedreamTokenRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "",
@@ -2158,6 +2941,142 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "List the caller's skills, or search them by name when `query` is given.\nBuilt-in skills are included.",
+        "operationId": "list_skills",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Words from the skill's name, matched as one adjacent phrase. Omit to\nlist the 100 most recently updated skills.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "matchType",
+            "in": "query",
+            "description": "How `query` is matched; `partial` when omitted.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SkillsMatchType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching skills, most recently updated first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Blank query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Listing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Search failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills/{id}": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "Read one skill's complete instructions: a skill document the caller can\nview, or a built-in skill.",
+        "operationId": "read_skill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The skill's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The skill's instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No skill the caller can view has this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Reading failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Access check unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
                 }
               }
             }
@@ -2368,6 +3287,186 @@
           }
         }
       }
+    },
+    "/web/fetch": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Read one public web page as Markdown. Charged to the acting user's AI allowance.",
+        "operationId": "fetch_web_page",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebFetch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The page text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebFetchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Web fetch is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The page could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The fetch provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web fetch busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web/search": {
+      "post": {
+        "tags": ["web"],
+        "summary": "Search the public web. Charged to the acting user's AI allowance.",
+        "operationId": "search_web",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebSearch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Results, best match first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query or filters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Web search is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user hourly rate limit exceeded"
+          },
+          "502": {
+            "description": "The search provider failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Web search busy, or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2376,6 +3475,51 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
+      },
+      "Activity": {
+        "type": "object",
+        "description": "A privacy-reviewed activity report; period_end is inclusive.",
+        "required": ["granularity", "periodStart", "periodEnd", "content"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "granularity": {
+            "$ref": "#/components/schemas/Granularity"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ActivityErrorBody": {
+        "type": "object",
+        "description": "Error body for activity reads.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error description."
+          }
+        }
+      },
+      "ActivityReports": {
+        "type": "object",
+        "description": "Activity reports for one user, ordered by period.",
+        "required": ["reports"],
+        "properties": {
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          }
+        }
       },
       "AddServerRequest": {
         "type": "object",
@@ -2389,21 +3533,6 @@
           "url": {
             "type": "string",
             "description": "The MCP server's streamable HTTP URL."
-          }
-        }
-      },
-      "AiAdmissionErrorBody": {
-        "type": "object",
-        "description": "Public admission error payload. Handlers with additional fields can reuse the\ndomain error's code and message and [`admission_status`].",
-        "required": ["error", "code"],
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Stable denial or unavailability code."
-          },
-          "error": {
-            "type": "string",
-            "description": "Human-readable explanation, without internal billing diagnostics."
           }
         }
       },
@@ -2423,8 +3552,12 @@
           "import",
           "agent_session",
           "agent_repository_choice",
+          "agent_mode_choice",
           "dictation",
-          "image_generation"
+          "image_generation",
+          "email_focus",
+          "web_search",
+          "non_billable_agent_session"
         ]
       },
       "AssistantMessagePart": {
@@ -3100,6 +4233,11 @@
           }
         }
       },
+      "CompletionThinking": {
+        "type": "string",
+        "description": "How much a model may think before it gives a structured answer.",
+        "enum": ["default", "low"]
+      },
       "CompletionUsage": {
         "type": "object",
         "description": "User and feature attribution for one invocation.",
@@ -3215,6 +4353,100 @@
           }
         ],
         "description": "What a successful tool call committed to the user's databases."
+      },
+      "DatabaseQueryAnswer": {
+        "type": "object",
+        "description": "A proposal, never stored results or permission to read the named database.",
+        "required": [
+          "answerable",
+          "sql",
+          "explanation",
+          "title",
+          "displayMode"
+        ],
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "chart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DatabaseQueryChart"
+              }
+            ]
+          },
+          "databaseId": {
+            "type": ["string", "null"]
+          },
+          "displayMode": {
+            "$ref": "#/components/schemas/DatabaseQueryDisplayMode"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryChart": {
+        "type": "object",
+        "description": "Chart fields name the proposal's result columns exactly.",
+        "required": ["x", "y", "title", "stack"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
+          "stack": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "x": {
+            "type": "string"
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryDisplayMode": {
+        "type": "string",
+        "description": "Supported live-answer presentations.",
+        "enum": ["scalar", "table", "bar", "line", "area", "scatter", "pie"]
+      },
+      "DatabaseQueryRequest": {
+        "type": "object",
+        "description": "The question and untrusted schema hints; authorization remains in the read services.",
+        "required": ["model", "prompt", "sql", "schema"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "The SQL engine's error from one failed proposal, used for a bounded repair."
+          },
+          "model": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "schema": {},
+          "sql": {
+            "type": "string"
+          }
+        }
       },
       "DecisionErrorBody": {
         "type": "object",
@@ -3377,13 +4609,15 @@
           "crm_contact",
           "crm_pipeline",
           "reminder",
+          "harness",
           "skill",
           "agent_session",
           "scheduled_action",
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "ErrorBody": {
@@ -3412,6 +4646,20 @@
         "type": "string",
         "description": "How long a projection remains active without being requested.",
         "enum": ["day", "week", "month"]
+      },
+      "ExplicitMemory": {
+        "type": "object",
+        "description": "A private explicit memory document and its optimistic concurrency token.",
+        "required": ["content", "revision"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "FeatureUsage": {
         "type": "object",
@@ -3875,6 +5123,141 @@
         "description": "A `provider/model` id every user may request without professional features.",
         "enum": ["google/gemini-3.8-flash"]
       },
+      "GenerateImageAspectRatio": {
+        "type": "string",
+        "description": "Shape of the generated image.",
+        "enum": ["square", "landscape", "portrait", "widescreen", "tall"]
+      },
+      "GenerateImageErrorBody": {
+        "type": "object",
+        "description": "Sanitized, machine-readable failure of an image request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without provider or storage diagnostics."
+          }
+        }
+      },
+      "GenerateImageReference": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An image document the caller can view.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The Macro document ID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An uploaded or previously generated static file.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The static file ID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["staticFile"]
+              }
+            }
+          }
+        ],
+        "description": "A reference image already stored in Macro."
+      },
+      "GenerateImageRequest": {
+        "type": "object",
+        "description": "What image to generate.",
+        "required": ["prompt"],
+        "properties": {
+          "aspectRatio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GenerateImageAspectRatio",
+                "description": "Shape of the image; the model default (square) when omitted."
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Description of the image: subject, style, composition, colours, and any text to render."
+          },
+          "referenceImages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerateImageReference"
+            },
+            "description": "Up to three reference images, in the order the prompt refers to them."
+          }
+        }
+      },
+      "GenerateImageResponse": {
+        "type": "object",
+        "description": "The stored generated image.",
+        "required": [
+          "staticFileId",
+          "url",
+          "mimeType",
+          "sizeBytes",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Intrinsic pixel height.",
+            "minimum": 0
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "IANA media type of the image, e.g. `image/png`."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Commentary the model produced alongside the image, when any."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the image in bytes.",
+            "minimum": 0
+          },
+          "staticFileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Static file ID, reusable as a reference image or a message attachment."
+          },
+          "url": {
+            "type": "string",
+            "description": "Permanent URL of the image."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Intrinsic pixel width.",
+            "minimum": 0
+          }
+        }
+      },
       "GenericErrorResponse": {
         "type": "object",
         "required": ["error", "message"],
@@ -3961,6 +5344,11 @@
           }
         }
       },
+      "Granularity": {
+        "type": "string",
+        "description": "Fixed calendar granularity, always in UTC, with Monday-start weeks.",
+        "enum": ["day", "week", "month", "summary"]
+      },
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
@@ -4006,6 +5394,7 @@
           "id",
           "user_id",
           "source",
+          "kind",
           "foreign_id",
           "status",
           "initiator",
@@ -4040,12 +5429,26 @@
             "$ref": "#/components/schemas/Initiator",
             "description": "Where it was first staged from."
           },
+          "kind": {
+            "$ref": "#/components/schemas/ImportKind",
+            "description": "What the item is in its source system."
+          },
           "last_error": {
             "type": ["string", "null"],
             "description": "Failure detail from the last import attempt, when one failed."
           },
           "metadata": {
             "description": "Per-source metadata (shape depends on `source`; see\n[`LinearIssueMeta`], [`NotionDocMeta`], [`SlackChannelMeta`])."
+          },
+          "parent_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The import row this item was imported under (a subpage's parent page,\na row's database), when it was imported as part of a tree."
+          },
+          "review_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent session review that approved importing this item, when it\ncame from one."
           },
           "source": {
             "$ref": "#/components/schemas/ImportSource",
@@ -4068,25 +5471,59 @@
           "user_id": {
             "type": "string",
             "description": "The user who staged/imported it. Team-imported rows from teammates\nare visible with their owner's id, so clients can say \"created by a\nteammate\"."
+          },
+          "waiting_on": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The teammate's row this one waits on: that teammate is writing the\nsame object for the team, and this row links to their copy once it\nis imported."
           }
         }
       },
+      "ImportKind": {
+        "type": "string",
+        "description": "What an imported item is in its source system. Each source has its own\nkinds; a Notion database and a Notion page, or a Linear project and a\nLinear issue, are tracked and deduplicated separately.",
+        "enum": [
+          "issue",
+          "project",
+          "document",
+          "page",
+          "database",
+          "data_source",
+          "row",
+          "jira_issue",
+          "jira_project",
+          "jira_epic",
+          "channel"
+        ]
+      },
       "ImportRun": {
         "type": "object",
-        "description": "Gather-run state for one user × source.",
-        "required": ["source", "status", "auto_import", "updated_at"],
+        "description": "Discovery-run state for one user × source.",
+        "required": ["source", "status", "updated_at"],
         "properties": {
-          "auto_import": {
-            "type": "boolean",
-            "description": "Whether this run should import its onboarding-staged candidates as\nsoon as gathering finishes."
-          },
           "error": {
             "type": ["string", "null"],
-            "description": "Gather or automatic-import failure detail, when the run failed."
+            "description": "Discovery failure detail, when the run failed."
+          },
+          "review_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The review presenting the run's plan, once one does. A Notion plan is\npresented while it is still `running`; rows staged after that take it."
+          },
+          "scanned": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScanCounts",
+                "description": "What the run has found in the source so far, while it is `running`."
+              }
+            ]
           },
           "source": {
             "$ref": "#/components/schemas/ImportSource",
-            "description": "The source this run gathered from."
+            "description": "The source this run discovered from."
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus",
@@ -4102,11 +5539,11 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack"]
       },
       "ImportState": {
         "type": "object",
-        "description": "The full import aggregate for a user: gather runs plus visible ledger\nrows (their own, and teammates' team-imported rows).",
+        "description": "The full import aggregate for a user: discovery runs plus visible ledger\nrows (their own, and teammates' team-imported rows).",
         "required": ["runs", "entities"],
         "properties": {
           "entities": {
@@ -4121,7 +5558,7 @@
             "items": {
               "$ref": "#/components/schemas/ImportRun"
             },
-            "description": "Gather runs, one per source that ever gathered."
+            "description": "Discovery runs, one per source that ever ran discovery."
           }
         }
       },
@@ -4194,6 +5631,59 @@
       },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "MemoryEdit": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["insert"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["replace"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["delete"]
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An edit to one one-based line. A revision is required to prevent replay\nor concurrent edits from inserting twice or deleting a different line."
       },
       "MemoryErrorBody": {
         "type": "object",
@@ -4304,11 +5794,46 @@
           }
         }
       },
+      "NotionAlreadyImported": {
+        "type": "object",
+        "description": "A teammate's copy of a Notion object, shared with the user's team.",
+        "required": ["by", "entityId", "entityType"],
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "The teammate who imported it, by email."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The Macro entity it became."
+          },
+          "entityType": {
+            "type": "string",
+            "description": "That entity's type (`md`, `project`)."
+          }
+        }
+      },
+      "NotionDecision": {
+        "type": "string",
+        "description": "What a workspace import does with one Notion object.",
+        "enum": ["copy", "tasks", "skip", "hand"]
+      },
       "NotionDocMeta": {
         "type": "object",
         "description": "Metadata for one staged Notion page. Deliberately has NO content field:\npage bodies are fetched at import time, for accepted pages only.",
         "required": ["title"],
         "properties": {
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionPlanItem",
+                "description": "Where this object sits in a workspace import plan; absent for pages\nstaged one at a time. Written by the workspace import, never by a\nmodel, so it is left out of the tool schema."
+              }
+            ]
+          },
           "summary": {
             "type": ["string", "null"],
             "description": "One-line summary of what the page contains."
@@ -4320,6 +5845,346 @@
           "url": {
             "type": ["string", "null"],
             "description": "Deep link back to the page in Notion."
+          }
+        }
+      },
+      "NotionImportReport": {
+        "type": "object",
+        "description": "Where a Notion workspace import stands.",
+        "required": [
+          "pages",
+          "dataSources",
+          "copy",
+          "tasks",
+          "skip",
+          "hand",
+          "documents",
+          "databases",
+          "databaseRows",
+          "taskRows",
+          "imported",
+          "waiting",
+          "writing"
+        ],
+        "properties": {
+          "alreadyImportedBy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionImporter"
+            },
+            "description": "Who imported the objects already in Macro, most first."
+          },
+          "alreadyInMacro": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects a teammate already imported and shared with the team;\nthey link to that copy and are not counted as copies.",
+            "minimum": 0
+          },
+          "copy": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Objects to copy as they are.",
+            "minimum": 0
+          },
+          "dataSources": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Data sources (database tables) in the plan.",
+            "minimum": 0
+          },
+          "databaseRows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Rows those databases hold, every one counted while planning.",
+            "minimum": 0
+          },
+          "databases": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Data sources written as databases.",
+            "minimum": 0
+          },
+          "deciding": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects the decision model has not answered for yet, while\nplanning is still `running`.",
+            "minimum": 0
+          },
+          "documents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pages written as documents.",
+            "minimum": 0
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Why the run failed, when it did."
+          },
+          "failures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReportItem"
+            },
+            "description": "Objects that failed to import, with the failure."
+          },
+          "hand": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Objects that need handling by hand.",
+            "minimum": 0
+          },
+          "handItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotionReportItem"
+            },
+            "description": "Objects that need handling by hand, with reasons."
+          },
+          "imported": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects already imported.",
+            "minimum": 0
+          },
+          "issues": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker issues in the plan.",
+            "minimum": 0
+          },
+          "onTeam": {
+            "type": "boolean",
+            "description": "Whether the user is on a team. Without one, everything the import\nwrites stays visible only to them."
+          },
+          "pages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pages in the plan.",
+            "minimum": 0
+          },
+          "projects": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tracker groups written as Macro projects.",
+            "minimum": 0
+          },
+          "reviewId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The review the plan is tied to, once presented."
+          },
+          "scanned": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScanCounts",
+                "description": "What planning has found in Notion so far, while it is `running`."
+              }
+            ]
+          },
+          "sharedWithTeam": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Written plan objects shared with the user's team.",
+            "minimum": 0
+          },
+          "skip": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Objects left in Notion.",
+            "minimum": 0
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunStatus",
+                "description": "The run's state: `running` while planning, `ready` once a plan is\nstaged, `importing` while writing, `completed`, `failed`, or\n`dismissed` when cancelled. Absent before the first run."
+              }
+            ]
+          },
+          "taskRows": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Tasks the task lists become, one per row.",
+            "minimum": 0
+          },
+          "tasks": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Data sources whose rows become tasks.",
+            "minimum": 0
+          },
+          "waiting": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects still waiting to be written.",
+            "minimum": 0
+          },
+          "waitingOnTeammates": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects waiting for a teammate who is writing the same object\nfor the team; they link to the teammate's copy once it is written.",
+            "minimum": 0
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Provider items skipped because they were unreadable, or optional features unavailable."
+          },
+          "writing": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Plan objects being written now.",
+            "minimum": 0
+          }
+        }
+      },
+      "NotionImporter": {
+        "type": "object",
+        "description": "A teammate who already imported some of a plan's objects.",
+        "required": ["by", "count"],
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "The teammate, by email."
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many of the plan's objects they imported.",
+            "minimum": 0
+          }
+        }
+      },
+      "NotionPlanItem": {
+        "type": "object",
+        "description": "One object's place in a workspace import plan.",
+        "properties": {
+          "alreadyImported": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionAlreadyImported",
+                "description": "A teammate's copy shared with the team, which this object links to\ninstead of being imported again."
+              }
+            ]
+          },
+          "decision": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionDecision",
+                "description": "What the import does with it; absent while planning has staged the\nobject but the decision model has not answered for it yet."
+              }
+            ]
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Titles of the pages above it, outermost first."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why, in a short sentence, when the decision model gave one."
+          },
+          "rows": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "For a data source: rows counted while planning.",
+            "minimum": 0
+          },
+          "sampleTitles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For a data source: the titles of a few of its rows."
+          },
+          "shareable": {
+            "type": "boolean",
+            "description": "Whether the user may change `shared`: false for users without a team."
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Whether what it becomes is shared with the user's team."
+          },
+          "sharedReason": {
+            "type": ["string", "null"],
+            "description": "Why it is (or is not) shared, when the decision model chose or the\nimport could not share it."
+          },
+          "taskFields": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NotionTaskFields",
+                "description": "For a task list: which columns hold the task fields."
+              }
+            ]
+          }
+        }
+      },
+      "NotionReportItem": {
+        "type": "object",
+        "description": "One object a workspace import report calls out.",
+        "required": ["importId", "title", "kind"],
+        "properties": {
+          "importId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The ledger row."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ImportKind",
+            "description": "What the object is."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why it is called out: the decision model's reason, or the failure."
+          },
+          "title": {
+            "type": "string",
+            "description": "The object's title."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Its Notion URL."
+          }
+        }
+      },
+      "NotionTaskFields": {
+        "type": "object",
+        "description": "Which Notion columns hold a task list's task fields, by property name.",
+        "properties": {
+          "assignee": {
+            "type": ["string", "null"],
+            "description": "The assignee column."
+          },
+          "due": {
+            "type": ["string", "null"],
+            "description": "The due date column."
+          },
+          "priority": {
+            "type": ["string", "null"],
+            "description": "The priority column."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "The status column."
           }
         }
       },
@@ -4409,6 +6274,13 @@
             "type": "string",
             "description": "Pipedream app name slug — pass this to the connect flow."
           },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Categories assigned by Pipedream."
+          },
           "description": {
             "type": ["string", "null"],
             "description": "One-line description of the app."
@@ -4456,10 +6328,25 @@
           }
         }
       },
+      "PipedreamConnectCompleteRequest": {
+        "type": "object",
+        "description": "Request body for recording a finished Macro Connect flow.",
+        "required": ["app_slug"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "The app that was connected, by Pipedream slug."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "Optional display name for the connector, as for completion."
+          }
+        }
+      },
       "PipedreamConnectionResponse": {
         "type": "object",
         "description": "A connected MCP app as returned by the API.",
-        "required": ["app_slug", "server_name", "enabled"],
+        "required": ["app_slug", "server_name", "enabled", "provider"],
         "properties": {
           "app_slug": {
             "type": "string",
@@ -4469,28 +6356,85 @@
             "type": "boolean",
             "description": "Whether the connector is enabled for tool use."
           },
+          "provider": {
+            "$ref": "#/components/schemas/PipedreamProviderResponse",
+            "description": "The backend holding the grant."
+          },
           "server_name": {
             "type": "string",
             "description": "Human-readable display name."
           }
         }
       },
+      "PipedreamOverlayResponse": {
+        "type": "object",
+        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
+        "required": ["app_slug", "server_url"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug, as it appears in the catalog."
+          },
+          "server_url": {
+            "type": "string",
+            "description": "The MCP server to authorize with the native MCP OAuth flow."
+          }
+        }
+      },
+      "PipedreamProviderResponse": {
+        "type": "string",
+        "description": "Which backend a connection or connect flow uses.",
+        "enum": ["pipedream", "connect"]
+      },
+      "PipedreamRecoverRequest": {
+        "type": "object",
+        "description": "Request body for recovering a connect flow whose result the Connect UI\nnever reported.",
+        "required": ["app_slug"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "The Pipedream app the flow was connecting, by name slug."
+          },
+          "server_name": {
+            "type": ["string", "null"],
+            "description": "Optional display name for the connector, as for completion."
+          }
+        }
+      },
+      "PipedreamTokenRequest": {
+        "type": "object",
+        "description": "Request body for starting a connect flow.",
+        "properties": {
+          "app_slug": {
+            "type": ["string", "null"],
+            "description": "The app to connect, by Pipedream slug. With it, an app Macro Connect\nserves can answer with a Connect URL instead of a Pipedream token."
+          }
+        }
+      },
       "PipedreamTokenResponse": {
         "type": "object",
-        "description": "Response from creating a Pipedream Connect token.",
-        "required": ["token", "expires_at", "connect_link_url"],
+        "description": "Response from starting a connect flow: a Pipedream Connect token, or for\n`provider = connect` a Macro Connect URL.",
+        "required": ["provider"],
         "properties": {
           "connect_link_url": {
-            "type": "string",
-            "description": "Shareable link that opens the same connect flow in a browser tab."
+            "type": ["string", "null"],
+            "description": "Shareable link that opens the same connect flow in a browser tab.\nPipedream only."
+          },
+          "connect_url": {
+            "type": ["string", "null"],
+            "description": "URL to open in a popup or browser tab for Macro Connect's consent\nflow; once it finishes, call `/pipedream/mcp/connect/complete`.\nConnect only."
           },
           "expires_at": {
-            "type": "string",
-            "description": "RFC 3339 expiry of the token."
+            "type": ["string", "null"],
+            "description": "RFC 3339 expiry of the token. Pipedream only."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/PipedreamProviderResponse",
+            "description": "The backend this flow connects through."
           },
           "token": {
-            "type": "string",
-            "description": "Short-lived token to open the Pipedream Connect UI with."
+            "type": ["string", "null"],
+            "description": "Short-lived token to open the Pipedream Connect UI with. Pipedream only."
           }
         }
       },
@@ -4521,27 +6465,32 @@
           "price_per_audio_minute": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per audio minute (USD), absent for token billing."
+            "description": "Price per audio minute (USD), absent for token and credit billing."
           },
           "price_per_million_cache_read": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-read input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_cache_write": {
             "type": ["number", "null"],
             "format": "float",
-            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio billing."
+            "description": "Price per million cache-write input tokens (USD), absent when the model\nhas no published rate and for audio and credit billing."
           },
           "price_per_million_in": {
             "type": "number",
             "format": "float",
-            "description": "Price per million input tokens (USD); zero for audio billing."
+            "description": "Price per million input tokens (USD); zero for audio and credit billing."
           },
           "price_per_million_out": {
             "type": "number",
             "format": "float",
-            "description": "Price per million output tokens (USD); zero for audio billing."
+            "description": "Price per million output tokens (USD); zero for audio and credit billing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), absent for token and audio billing."
           },
           "total": {
             "type": "number",
@@ -4587,6 +6536,24 @@
         "type": "string",
         "description": "The materialization status of a user's projection instance.",
         "enum": ["loading", "cold", "ready", "refreshing", "error"]
+      },
+      "ReadActivityResponse": {
+        "type": "object",
+        "description": "Response from [`ReadActivity`].",
+        "required": ["activities", "truncated"],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolActivityEvent"
+            },
+            "description": "Matching activity events, newest first."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether more than 100 events matched the requested range."
+          }
+        }
       },
       "RefreshCadence": {
         "type": "string",
@@ -4656,7 +6623,7 @@
       },
       "RunStatus": {
         "type": "string",
-        "description": "Lifecycle of a gather run (one per user × source).",
+        "description": "Lifecycle of a discovery run (one per user × source).",
         "enum": [
           "running",
           "ready",
@@ -4665,6 +6632,25 @@
           "failed",
           "dismissed"
         ]
+      },
+      "ScanCounts": {
+        "type": "object",
+        "description": "What a planning run has found in the source so far.",
+        "required": ["pages", "dataSources"],
+        "properties": {
+          "dataSources": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Data sources (database tables) found.",
+            "minimum": 0
+          },
+          "pages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pages found.",
+            "minimum": 0
+          }
+        }
       },
       "SendChatMessagePayload": {
         "allOf": [
@@ -4785,6 +6771,11 @@
             "type": ["number", "null"],
             "format": "float",
             "description": "New price per million output tokens (USD). Required for token pricing."
+          },
+          "price_per_provider_credit": {
+            "type": ["number", "null"],
+            "format": "float",
+            "description": "Price per vendor credit (USD), or null unless the model bills in credits."
           }
         }
       },
@@ -4839,6 +6830,93 @@
                 "description": "The explicit access level granted to the owner's team, or `null` when disabled."
               }
             ]
+          }
+        }
+      },
+      "SkillContentResponse": {
+        "type": "object",
+        "description": "A skill's complete instructions.",
+        "required": ["id", "name", "content", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "content": {
+            "type": "string",
+            "description": "The skill's full markdown instructions."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill's id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          }
+        }
+      },
+      "SkillErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a skill request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without backend diagnostics."
+          }
+        }
+      },
+      "SkillListing": {
+        "type": "object",
+        "description": "One skill the caller can read.",
+        "required": ["id", "name", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, when it says."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill document's id, or a built-in skill's well-known id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the skill document was last updated; built-in skills have none."
+          }
+        }
+      },
+      "SkillsMatchType": {
+        "type": "string",
+        "description": "How search terms are matched against skill names.",
+        "enum": ["partial", "exact"]
+      },
+      "SkillsResponse": {
+        "type": "object",
+        "description": "The skills matching a listing or search, most recently updated first,\nbuilt-in skills last.",
+        "required": ["skills"],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillListing"
+            },
+            "description": "The matching skills."
           }
         }
       },
@@ -5074,6 +7152,10 @@
           "prompt": {
             "type": "string"
           },
+          "thinking": {
+            "$ref": "#/components/schemas/CompletionThinking",
+            "description": "How much the model may think first; `low` answers faster. Applies to\ncompletions without tools."
+          },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet"
           }
@@ -5112,6 +7194,250 @@
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
         "enum": ["user", "team"]
+      },
+      "ToolActivityAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The entity was created.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["created"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity's content or metadata was edited.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was opened.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["opened"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was soft-deleted.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was sent in the entity.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["messaged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An email message was sent on the thread.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["sent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone submitted a response to the entity (form).",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["responded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property value changed on the entity.",
+            "required": ["property", "type"],
+            "properties": {
+              "from": {
+                "description": "The previous value, when known."
+              },
+              "from_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Previous select/tag option ids resolved to display labels."
+              },
+              "property": {
+                "type": "string",
+                "description": "The property definition id."
+              },
+              "property_name": {
+                "type": ["string", "null"],
+                "description": "The property definition's human-readable display name, when it is\nstill visible to the caller."
+              },
+              "property_type": {
+                "type": ["string", "null"],
+                "description": "The property's canonical data type, including `tag` for tag sets."
+              },
+              "to": {
+                "description": "The new value, or `None` when cleared."
+              },
+              "to_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "New select/tag option ids resolved to display labels."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["propertyChanged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was added to the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The added principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was removed from the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The removed principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call was started in the entity.",
+            "required": ["call_id", "type"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "description": "The started call's id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["callStarted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was added to the project. Resolve references through authorized project history.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was removed from the project.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An action outside this deployment's vocabulary.",
+            "required": ["tag", "type"],
+            "properties": {
+              "payload": {
+                "description": "The stored payload, verbatim."
+              },
+              "tag": {
+                "type": "string",
+                "description": "The stored action tag."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
+            }
+          }
+        ],
+        "description": "One activity action returned to the AI."
+      },
+      "ToolActivityEvent": {
+        "type": "object",
+        "description": "One activity event returned by [`ReadActivity`].",
+        "required": [
+          "actorId",
+          "entityType",
+          "entityId",
+          "action",
+          "occurredAt"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ToolActivityAction",
+            "description": "What the principal did."
+          },
+          "actorId": {
+            "type": "string",
+            "description": "The principal that mechanically performed the action."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The entity acted on."
+          },
+          "entityType": {
+            "type": "string",
+            "description": "The kind of entity acted on."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the action occurred."
+          }
+        }
       },
       "ToolOutcome": {
         "oneOf": [
@@ -5206,6 +7532,22 @@
           "operation": {
             "$ref": "#/components/schemas/UpdateOperation",
             "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateExplicitMemoryRequest": {
+        "type": "object",
+        "description": "One explicit memory edit at the revision it was based on.",
+        "required": ["revision", "edit"],
+        "properties": {
+          "edit": {
+            "$ref": "#/components/schemas/MemoryEdit",
+            "description": "The one-based line edit to apply."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The revision returned by the last read or successful edit."
           }
         }
       },
@@ -5378,18 +7720,18 @@
           "audio_seconds": {
             "type": ["number", "null"],
             "format": "double",
-            "description": "Audio duration in seconds, absent for token billing."
+            "description": "Audio duration in seconds, absent for token and credit billing."
           },
           "cache_read_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens read from a prompt cache; zero for audio billing.",
+            "description": "Input tokens read from a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "cache_write_input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Input tokens written to a prompt cache; zero for audio billing.",
+            "description": "Input tokens written to a prompt cache; zero for audio and credit billing.",
             "minimum": 0
           },
           "created_at": {
@@ -5400,7 +7742,7 @@
           "input_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Uncached input tokens; zero for audio billing.",
+            "description": "Uncached input tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "model": {
@@ -5410,7 +7752,7 @@
           "output_tokens": {
             "type": "integer",
             "format": "int64",
-            "description": "Output tokens; zero for audio billing.",
+            "description": "Output tokens; zero for audio and credit billing.",
             "minimum": 0
           },
           "price": {
@@ -5423,6 +7765,12 @@
                 "description": "Applied pricing, if known."
               }
             ]
+          },
+          "provider_credits": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Vendor credits consumed, absent for token and audio billing.",
+            "minimum": 0
           }
         }
       },
@@ -5552,6 +7900,158 @@
             "description": "The URL of the citation."
           }
         }
+      },
+      "WebErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a web request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without provider diagnostics."
+          }
+        }
+      },
+      "WebFetch": {
+        "type": "object",
+        "description": "Read one public web page.",
+        "required": ["url"],
+        "properties": {
+          "maxChars": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Most characters of page text to return, 1 to 100,000 (default 20,000).",
+            "minimum": 0
+          },
+          "url": {
+            "type": "string",
+            "description": "The `http` or `https` URL of the page."
+          }
+        }
+      },
+      "WebFetchResponse": {
+        "type": "object",
+        "description": "The text of a fetched page.",
+        "required": ["url", "content", "truncated"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The page text as Markdown, cut to `maxChars`."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "The page title, when the provider reports one."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether `content` was cut to `maxChars`."
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL that was read."
+          }
+        }
+      },
+      "WebSearch": {
+        "type": "object",
+        "description": "Search the public web.",
+        "required": ["query"],
+        "properties": {
+          "domains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Only return pages from these domains, e.g. `[\"docs.rs\", \"github.com\"]`."
+          },
+          "excludeDomains": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Never return pages from these domains."
+          },
+          "includeContent": {
+            "type": ["boolean", "null"],
+            "description": "Also return each page's text as Markdown (up to 8,000 characters per result)."
+          },
+          "maxResults": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "How many results to return, 1 to 20 (default 5).",
+            "minimum": 0
+          },
+          "query": {
+            "type": "string",
+            "description": "What to search for, in natural language or keywords (at most 400 characters)."
+          },
+          "since": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "Only return pages published on or after this date (`YYYY-MM-DD`)."
+          },
+          "topic": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WebSearchTopic",
+                "description": "`news` for recent articles with publication dates; `general` (the default) otherwise."
+              }
+            ]
+          }
+        }
+      },
+      "WebSearchResponse": {
+        "type": "object",
+        "description": "The pages a search found, best match first.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WebSearchResult"
+            },
+            "description": "Results, best match first. Empty when nothing matched."
+          }
+        }
+      },
+      "WebSearchResult": {
+        "type": "object",
+        "description": "One page a search found.",
+        "required": ["title", "url", "snippet"],
+        "properties": {
+          "content": {
+            "type": ["string", "null"],
+            "description": "The page text as Markdown, when `includeContent` was set."
+          },
+          "publishedAt": {
+            "type": ["string", "null"],
+            "description": "When the page was published, as the search provider reports it."
+          },
+          "snippet": {
+            "type": "string",
+            "description": "The part of the page most relevant to the query."
+          },
+          "title": {
+            "type": "string",
+            "description": "The page title."
+          },
+          "url": {
+            "type": "string",
+            "description": "The page URL; cite it when you use the result."
+          }
+        }
+      },
+      "WebSearchTopic": {
+        "type": "string",
+        "description": "The kind of results a search favours.",
+        "enum": ["general", "news"]
       },
       "WithChatId": {
         "type": "object",

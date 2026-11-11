@@ -18,6 +18,8 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
         .create(
             session,
             &ExecutionRecord {
+                acting_as: None,
+                turn_id: None,
                 execution_id: execution,
                 source: String::new(),
                 status: ExecutionStatus::Running,
@@ -30,26 +32,33 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
         )
         .await
         .unwrap();
-    let store = PgReviewStore(pool.clone());
-    let mut record = ReviewRecord {
-        id: ReviewId(macro_uuid::generate_uuid_v7()),
-        session_id: session,
-        execution_id: Some(execution),
-        presented_at: None,
-        kind: ReviewKind::Email,
-        title: "Pick one".into(),
-        revision: 0,
-        updated_at: 0,
-        notification_id: None,
-        notification_attempt_at: None,
-        items: vec![ReviewItem {
-            id: macro_uuid::generate_uuid_v7(),
-            draft: json!({"subject":"Which?"}),
-            status: ReviewItemStatus::Pending,
-            result: None,
-            error: None,
-        }],
-    };
+    let store = PgReviewStore(
+        pool.clone(),
+        std::sync::Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+            pool.clone(),
+        )),
+    );
+    let mut record: ReviewRecord = serde_json::from_value(json!({
+        "id": macro_uuid::generate_uuid_v7(),
+        "sessionId": session.as_uuid(),
+        "actingUser": "macro|owner@example.com",
+        "executionId": execution,
+        "presentedAt": null,
+        "title": "Pick one",
+        "revision": 0,
+        "updatedAt": 0,
+        "decision": null,
+        "kind": "email",
+        "items": [{
+            "id": macro_uuid::generate_uuid_v7(),
+            "draft": {"subject":"Which?", "body":"Hello", "to":[{"email":"ada@example.com"}]},
+            "edited": false,
+            "status": "pending",
+            "result": null,
+            "error": null
+        }]
+    }))
+    .unwrap();
     store.create(&record, 100).await.unwrap();
     let mut second = record.clone();
     second.id = ReviewId(macro_uuid::generate_uuid_v7());
@@ -88,19 +97,58 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
             .is_none()
     );
     record.revision = 1;
-    record.items[0].status = ReviewItemStatus::Submitting;
-    let (first, second) = tokio::join!(store.save(0, &record), store.save(0, &record));
+    record.items.states_mut()[0].status = ReviewItemStatus::Submitting;
+    let notification = agent_session::domain::notifications::PendingNotification::new(
+        agent_session::domain::notifications::ProduceNotification {
+            session_id: session,
+            subject_id: record.id.0.to_string(),
+            event: agent_runtime_protocol::domain::notification::NotificationEvent::ReviewDecided(
+                agent_runtime_protocol::domain::notification::ReviewOutcome {
+                    outcome:
+                        agent_runtime_protocol::domain::notification::DecisionOutcome::Approved,
+                    by: "macro|owner@example.com".into(),
+                    via: agent_runtime_protocol::domain::notification::DecisionVia::Card,
+                    items: vec![],
+                },
+            ),
+            dedupe_key: None,
+            wake: true,
+        },
+    )
+    .unwrap();
+    let (first, second) = tokio::join!(
+        store.save(0, &record, Some(&notification)),
+        store.save(0, &record, Some(&notification))
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM agent_session_notification WHERE session_id = $1",
+            session.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(1)
+    );
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
     assert!(matches!(
         first.err().or(second.err()),
         Some(CodeModeError::Conflict)
     ));
-    let persisted = PgReviewStore(pool.clone())
-        .get(session, record.id)
-        .await
-        .unwrap();
+    let persisted = PgReviewStore(
+        pool.clone(),
+        std::sync::Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+            pool.clone(),
+        )),
+    )
+    .get(session, record.id)
+    .await
+    .unwrap();
     assert_eq!(persisted.revision, 1);
-    assert_eq!(persisted.items[0].status, ReviewItemStatus::Submitting);
+    assert_eq!(
+        persisted.items.states()[0].status,
+        ReviewItemStatus::Submitting
+    );
     sqlx::raw_sql("DELETE FROM agent_session WHERE id = '00000000-0000-0000-0000-000000000001'")
         .execute(&pool)
         .await

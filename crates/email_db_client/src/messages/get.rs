@@ -14,7 +14,32 @@ use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-/// Returns a map of message IDs to sender info for all found messages
+/// The threads of the link's messages among `message_ids`, each once.
+#[tracing::instrument(skip(executor, message_ids), err)]
+pub async fn thread_ids_of_messages<'e, E>(
+    executor: E,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+) -> Result<Vec<Uuid>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT thread_id
+        FROM email_messages
+        WHERE id = ANY($1) AND link_id = $2
+        ORDER BY thread_id
+        "#,
+        message_ids,
+        link_id,
+    )
+    .fetch_all(executor)
+    .await
+}
+
+/// Returns a map of message IDs to sender info for all found messages.
+/// Messages without a sender contact are left out of the map.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_sender_and_pretty_sender(
     pool: &PgPool,
@@ -30,8 +55,8 @@ pub async fn get_message_sender_and_pretty_sender(
         r#"
         SELECT
             m.id as "message_id!",
-            c.email_address as "sender!",
-            COALESCE(c.name, c.email_address) as "pretty_sender!"
+            c.email_address as "sender?",
+            COALESCE(c.name, c.email_address) as "pretty_sender?"
         FROM email_messages m
         LEFT JOIN email_contacts c ON c.id = m.from_contact_id
         WHERE m.id = ANY($1)
@@ -46,8 +71,11 @@ pub async fn get_message_sender_and_pretty_sender(
     let mut result = HashMap::new();
     for row in rows {
         let message_id = row.message_id;
-        let sender = row.sender;
-        let pretty_sender = row.pretty_sender;
+        let Some(sender) = row.sender else {
+            tracing::warn!(%message_id, "message has no sender contact");
+            continue;
+        };
+        let pretty_sender = row.pretty_sender.unwrap_or_else(|| sender.clone());
         result.insert(
             message_id,
             MessageSenderInfo {
@@ -286,12 +314,14 @@ pub async fn fetch_messages_with_labels(
     Ok(processed_messages)
 }
 
-// gets the headers we need for threading messages correctly
+/// The headers a reply needs to thread under `message_id`. The parent may sit
+/// in another inbox than the reply's: another of the sender's own, or the
+/// owner's when its thread was shared with the sender. Callers pass a reply
+/// target that was authorized when its draft was saved.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_threading_headers(
     pool: &PgPool,
     message_id: Uuid,
-    link_id: Uuid,
 ) -> anyhow::Result<(Option<String>, Option<String>)> {
     let row_option = sqlx::query!(
         r#"
@@ -301,10 +331,9 @@ pub async fn get_message_threading_headers(
           -- The references header can have multiple IDs, so we just return it raw
           jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
         FROM email_messages
-        WHERE id = $1 AND link_id = $2
+        WHERE id = $1
         "#,
-        message_id,
-        link_id
+        message_id
     )
         .fetch_optional(pool)
         .await?;

@@ -8,18 +8,16 @@ it('opens a selected provider and returns to its connection overview', () => {
     expect(view.provider()).toBe('github');
     view.showOverview();
     expect(view.provider()).toBeNull();
-    expect(view.mode()).toBe('connected');
     dispose();
   });
 });
-it('starts in discovery and preserves that mode when closing a provider', () => {
+it('starts with the unified overview and returns after closing a provider', () => {
   createRoot((dispose) => {
-    const view = createConnectionsViewState({ mode: 'discover' });
-    expect(view.mode()).toBe('discover');
+    const view = createConnectionsViewState();
+    expect(view.provider()).toBeNull();
     view.openProvider('github');
     view.closeProvider();
     expect(view.provider()).toBeNull();
-    expect(view.mode()).toBe('discover');
     dispose();
   });
 });

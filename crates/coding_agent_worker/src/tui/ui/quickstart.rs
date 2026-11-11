@@ -2,14 +2,16 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Padding, Paragraph, Wrap};
 
 use super::layout::{centered, render_input};
 use super::modals::agent_groups;
 use super::theme::{ACCENT, DIM, ERR, OK, THEME, WARN, focus_marker, focus_style, modal};
-use crate::config::IdentityScope;
 use crate::tui::agent_catalog::AgentKind;
 use crate::tui::quickstart::{Quickstart, QuickstartFocus, QuickstartMode};
+
+/// Rows a Quickstart status may wrap onto before the rest is clipped.
+const MAX_STATUS_LINES: usize = 4;
 
 pub(crate) fn render_quickstart(
     frame: &mut Frame,
@@ -20,41 +22,52 @@ pub(crate) fn render_quickstart(
     let discovered_height = (discovered_lines(setup, 0).len() as u16 + 2).clamp(3, 12);
     let area = centered(
         84,
-        frame.area().height.saturating_sub(2).min(36),
+        frame.area().height.saturating_sub(2).min(38),
         frame.area(),
     );
     frame.render_widget(Clear, area);
-    let block = modal("Quickstart", ACCENT).padding(Padding::new(2, 2, 1, 1));
+    let vertical_padding = u16::from(area.height >= 24);
+    let block =
+        modal("Quickstart", ACCENT).padding(Padding::new(2, 2, vertical_padding, vertical_padding));
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    // A status wraps rather than clipping: an install error is only useful whole.
+    let status_height = setup.status.as_ref().map_or(0, |(message, _)| {
+        let width = usize::from(inner.width.max(1));
+        u16::try_from(
+            message
+                .chars()
+                .count()
+                .div_ceil(width)
+                .clamp(1, MAX_STATUS_LINES),
+        )
+        .unwrap_or(1)
+    });
+    let intro_height = 2 + status_height;
+    // Custom, workspace, the web note, and submit occupy eight fixed rows.
+    let form_height = intro_height + discovered_height + 8;
     let [
         intro,
         discovered_area,
         custom_area,
         _form_spacer,
         workspace_area,
-        scope_area,
-        permissions_area,
-        permission_warning_area,
+        web_note_area,
         _button_spacer,
         submit_area,
-        warning_area,
         _details_spacer,
         details_area,
     ] = Layout::vertical([
-        Constraint::Length(3),
+        Constraint::Length(intro_height),
         Constraint::Length(discovered_height),
         Constraint::Length(3),
+        Constraint::Fill(1),
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(2),
-        Constraint::Min(1),
+        Constraint::Fill(1),
         Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Fill(1),
+        Constraint::Length(u16::from(inner.height > form_height)),
     ])
     .areas(inner);
 
@@ -75,7 +88,10 @@ pub(crate) fn render_quickstart(
             Style::new().fg(if *is_error { ERR } else { OK }),
         ));
     }
-    frame.render_widget(Paragraph::new(intro_lines), intro);
+    frame.render_widget(
+        Paragraph::new(intro_lines).wrap(Wrap { trim: false }),
+        intro,
+    );
     render_discovered_agents(frame, setup, discovered_area);
     render_quickstart_custom(frame, setup, custom_area);
 
@@ -102,59 +118,15 @@ pub(crate) fn render_quickstart(
         ),
     }
 
-    let scope_focused = setup.focus == QuickstartFocus::Scope;
-    let scope = match setup.scope {
-        IdentityScope::Private => "Private",
-        IdentityScope::Team => "Team",
-    };
     frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("{}{:<14}", focus_marker(scope_focused), "Access"),
-                Style::new().fg(DIM),
-            ),
-            Span::styled(scope, focus_style(scope_focused)),
-        ])),
-        scope_area,
+        Paragraph::new("Name, access, and permissions are set on the web.")
+            .style(Style::new().fg(DIM)),
+        Rect {
+            x: web_note_area.x + 16,
+            width: web_note_area.width.saturating_sub(16),
+            ..web_note_area
+        },
     );
-    if setup.scope == IdentityScope::Team {
-        frame.render_widget(
-            Paragraph::new(
-                "Warning: teammates can command agents on this machine. Trust your team.",
-            )
-            .style(Style::new().fg(WARN))
-            .alignment(Alignment::Center),
-            warning_area,
-        );
-    }
-
-    let permissions_focused = setup.focus == QuickstartFocus::PermissionBypass;
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("{}{:<14}", focus_marker(permissions_focused), "Full Access"),
-                Style::new().fg(DIM),
-            ),
-            Span::styled(
-                if setup.allow_permission_bypass {
-                    "[x] On"
-                } else {
-                    "[ ] Off (always prompt)"
-                },
-                focus_style(permissions_focused),
-            ),
-        ])),
-        permissions_area,
-    );
-    if setup.allow_permission_bypass {
-        frame.render_widget(
-            Paragraph::new(
-                "Warning: agents can run commands and edit files without approval.\nOnly enable this if you trust everyone who can create agents here.",
-            )
-            .style(Style::new().fg(WARN)),
-            permission_warning_area,
-        );
-    }
 
     let submit_focused = setup.focus == QuickstartFocus::Submit;
     let button_style = if submit_focused {

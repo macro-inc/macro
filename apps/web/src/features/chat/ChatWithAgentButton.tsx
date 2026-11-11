@@ -1,4 +1,5 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
@@ -9,9 +10,14 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import AgentIcon from '@phosphor/sparkle.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
+import type { ButtonSize } from '@ui';
 import { createSignal } from 'solid-js';
 
 export { AgentIcon as ChatWithAgentIcon };
@@ -26,6 +32,7 @@ type ChatWithAgentEntity =
       blockParams?: Record<string, string>;
     }
   | { type: 'project'; id: string; name: string }
+  | { type: 'chat'; id: string; name: string }
   | { type: 'channel'; id: string; name: string; channelType: ChannelType };
 
 function buildMention(entity: ChatWithAgentEntity): ChatAttachmentMention {
@@ -63,6 +70,22 @@ async function createAndOpenAgent(seed: {
     toast.failure('Unable to open chat');
     return false;
   }
+  // Unsent text with no session settings is a draft for the new-conversation
+  // composer, where the user picks Auto, Chat, or Code and the agent first.
+  if (
+    manager &&
+    seed.input !== undefined &&
+    !seed.message &&
+    !seed.model &&
+    !seed.instructions &&
+    isFeatureEnabled(enableChatV3Agents)
+  ) {
+    openAgentComposer(manager, !seed.replaceSplit, {
+      draft: seed.input,
+      handle: seed.replaceSplit,
+    });
+    return true;
+  }
 
   const id = startPendingSession({
     prompt: seed.message,
@@ -92,8 +115,13 @@ async function createAndOpenAgent(seed: {
   return true;
 }
 
+/** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
+const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
+
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const input = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
+  const mention = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
+  const input =
+    entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
   return createAndOpenAgent({ input });
 }
 
@@ -141,6 +169,7 @@ export function ChatWithAgentButton(props: {
   /** Button text; defaults to "Chat". */
   label?: string;
   disabled?: boolean;
+  grouped?: boolean;
 }) {
   const [opening, setOpening] = createSignal(false);
   async function open() {
@@ -154,9 +183,12 @@ export function ChatWithAgentButton(props: {
   }
   return (
     <HeaderActionButton
+      grouped={props.grouped}
       tooltip={props.label ?? 'Chat with Agent'}
       label={props.label ?? 'Chat'}
-      icon={<AgentIcon />}
+      icon={
+        <AgentIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      }
       onClick={() => fireAndForget(open(), 'chat-with-agent')}
       disabled={props.disabled || opening()}
       busy={opening()}
@@ -164,13 +196,21 @@ export function ChatWithAgentButton(props: {
   );
 }
 
-export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
+export function AskMacroButton(props: {
+  entity: ChatWithAgentEntity;
+  grouped?: boolean;
+  size?: ButtonSize;
+}) {
   return (
     <HeaderActionButton
+      grouped={props.grouped}
+      size={props.size}
       onClick={() => openChatWithAgent(props.entity)}
       tooltip="Ask Macro"
       label="Ask Macro"
-      icon={<AgentIcon />}
+      icon={
+        <AgentIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+      }
     />
   );
 }

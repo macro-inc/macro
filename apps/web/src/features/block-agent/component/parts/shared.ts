@@ -43,6 +43,8 @@ export type ToolCallCommon = {
   status: ToolStatus;
   /** The chat block's failed treatment: faded row, quiet trailing label. */
   muted: boolean;
+  /** The turn ended while the call was still running (see `settledToolStatus`). */
+  stopped: boolean;
   trailing: JSX.Element | undefined;
 };
 

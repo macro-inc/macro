@@ -44,11 +44,11 @@ afterEach(() => {
 });
 
 describe('HomeSetupPromotion', () => {
-  it('opens Connections and Team settings', () => {
+  it('opens Integrations and Team settings', () => {
     render(() => <HomeSetupPromotion />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect tools' }));
     fireEvent.click(screen.getByRole('button', { name: 'Invite team' }));
-    expect(host.openSettings.mock.calls).toEqual([['Connections'], ['Team']]);
+    expect(host.openSettings.mock.calls).toEqual([['Connected'], ['Team']]);
   });
 
   it('hides invites from members of a team that limits them to admins', () => {

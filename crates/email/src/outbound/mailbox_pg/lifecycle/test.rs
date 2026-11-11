@@ -66,6 +66,13 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
     db: PgPool,
 ) {
     let (repo, link, replacement) = shared(&db).await;
+    sqlx::query!(
+        "UPDATE email_sync_streams SET import_started_at = now() - interval '1 hour', import_completed_at = now() - interval '5 minutes' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let command = macro_uuid::generate_uuid_v7();
     sqlx::query!(
         r#"INSERT INTO email_mailbox_commands(id,link_id,generation,actor_id,intent,status)
@@ -110,15 +117,18 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
         .await,
         Err(TokenError::ReauthRequired)
     ));
-    assert_eq!(
-        sqlx::query_scalar!(
-            "SELECT count(*) FROM email_sync_streams WHERE link_id = $1 AND generation = 2",
-            link
-        )
-        .fetch_one(&db)
-        .await
-        .unwrap(),
-        Some(1)
+    let rebound_stream = sqlx::query!(
+        r#"SELECT import_started_at < now() - interval '30 minutes' AS "started_before!", import_completed_at IS NOT NULL AS "completed!"
+        FROM email_sync_streams WHERE link_id = $1 AND generation = 2"#,
+        link
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(rebound_stream.len(), 1);
+    assert!(
+        rebound_stream[0].started_before && rebound_stream[0].completed,
+        "the import run continues in the new generation, so it must not report completion again"
     );
     assert_eq!(
         sqlx::query_scalar!(
@@ -276,6 +286,52 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn outlook_resync_starts_a_new_import_run_once(db: PgPool) {
+    let telemetry = crate::telemetry_capture::Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link, _) = shared(&db).await;
+    sqlx::query!(
+        r#"INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,import_started_at,import_completed_at)
+        VALUES ($1,$2,1,'folder_catalog','mail',true,now() - interval '1 day',now() - interval '23 hours')"#,
+        macro_uuid::generate_uuid_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sync_streams SET initial_complete = true WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let service = InboxLifecycleService::new(repo.clone(), Effects);
+
+    service.resync(&actor("remaining"), link).await.unwrap();
+    let again = service.resync(&actor("remaining"), link).await.unwrap();
+
+    assert!(again.already_in_progress);
+    let started = telemetry.events("outlook import started");
+    let [(level, fields)] = started.as_slice() else {
+        panic!("expected one start, got {started:?}");
+    };
+    assert_eq!(*level, tracing::Level::INFO);
+    assert_eq!(fields["link_id"], link.to_string());
+    assert_eq!(fields["sync_generation"], "1");
+    let run = sqlx::query!(
+        r#"SELECT import_started_at > now() - interval '1 minute' AS "restarted!", import_completed_at
+        FROM email_sync_streams WHERE link_id = $1 AND kind = 'folder_catalog'"#,
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(run.restarted);
+    assert!(run.import_completed_at.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn gmail_resync_commits_the_backfill_with_durable_publication(db: PgPool) {
     let (repo, link, _) = shared(&db).await;
     sqlx::query!(
@@ -338,4 +394,34 @@ async fn subscription_cleanup_precedes_revoke_and_delete_even_with_parallel_publ
         repo.finish_effect(&lease, true).await.unwrap();
     }
     panic!("disconnect must eventually publish deletion");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn effect_claims_take_due_mailbox_effects_before_gmail_history_and_skip_backed_off_rows(
+    db: PgPool,
+) {
+    let (repo, link) = super::super::test::fixture(&db).await;
+    let history = InboxLifecycleEffect::GmailHistory {
+        work: crate::domain::mailbox::gmail_history::HistoryWork::Delete {
+            provider_id: "history-due".into(),
+        },
+    };
+    let later = InboxLifecycleEffect::AccessRemoved {
+        viewer: "later".into(),
+    };
+    let due = InboxLifecycleEffect::AccessRemoved {
+        viewer: "due".into(),
+    };
+    for (effect, delay) in [(later, 3600.0), (history, -120.0), (due, -60.0)] {
+        sqlx::query!("INSERT INTO email_mailbox_lifecycle_outbox(id,link_id,payload,available_at) VALUES($1,$2,$3,now() + make_interval(secs => $4))",Uuid::now_v7(),link,serde_json::to_value(effect).unwrap(),delay).execute(&db).await.unwrap();
+    }
+    let mut claimed = Vec::new();
+    while let Some(lease) = repo.claim_effect(Uuid::now_v7()).await.unwrap() {
+        claimed.push(match lease.effect {
+            InboxLifecycleEffect::AccessRemoved { viewer } => viewer,
+            InboxLifecycleEffect::GmailHistory { .. } => "history".into(),
+            other => panic!("unexpected effect {other:?}"),
+        });
+    }
+    assert_eq!(claimed, ["due", "history"]);
 }

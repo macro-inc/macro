@@ -30,11 +30,12 @@ pub fn message_from_row(
     attachments: Vec<MessageAttachment>,
     attachments_draft: Vec<AttachmentDraft>,
     attachments_forwarded: Vec<AttachmentForwarded>,
-    scheduled_send_time: Option<chrono::DateTime<chrono::Utc>>,
+    scheduled_send: Option<crate::domain::models::ScheduledSend>,
     body_replyless: Option<String>,
     calendar_invitations: Vec<CalendarInvitation>,
 ) -> Message {
     Message {
+        draft_generation: row.draft_generation,
         operation_status: None,
         calendar_invitations,
         db_id: row.db_id,
@@ -55,7 +56,8 @@ pub fn message_from_row(
         is_sent: row.is_sent,
         is_draft: row.is_draft,
         has_attachments: row.has_attachments,
-        scheduled_send_time,
+        scheduled_send_time: scheduled_send.as_ref().map(|schedule| schedule.send_time),
+        scheduled_send_status: scheduled_send.map(|schedule| schedule.status),
         from,
         to,
         cc,

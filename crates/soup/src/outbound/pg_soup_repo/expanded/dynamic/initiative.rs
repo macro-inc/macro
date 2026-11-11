@@ -6,19 +6,28 @@ use item_filters::ast::initiative::InitiativeLiteral;
 use models_pagination::SimpleSortMethod;
 use system_properties::SystemPropertyKey;
 
-use super::{access_semi_join, sql_string_literal, top_needs_user_history};
+use super::{build_notification_state_clause, sql_string_literal, top_needs_user_history};
+use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 
 /// The initiative listing policy: explicit grants and the owner's team link.
 /// Public links do not enumerate otherwise undiscovered initiatives.
+///
+/// Both checks run per initiative against sources collected once into an
+/// array, so cost follows the initiative count. Joining `user_source_ids`
+/// instead scales with the caller's channels.
 pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
     format!(
-        r#"({} OR EXISTS (
+        r#"(EXISTS (
+        SELECT 1 FROM entity_access ea
+        WHERE ea.entity_id = i.id AND ea.entity_type = 'initiative'
+        AND ea.source_id = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+        {PER_CANDIDATE}
+    ) OR EXISTS (
         SELECT 1 FROM "SharePermission" sp
         JOIN team_user owner_team ON owner_team.user_id = i.owner_user_id
         WHERE sp.id = i.share_permission_id AND sp."linkShare" = 'TEAM'
-        AND owner_team.team_id::text IN (SELECT source_id FROM user_source_ids)
-    ))"#,
-        access_semi_join("i.id::text", "initiative")
+        AND owner_team.team_id::text = ANY(ARRAY(SELECT source_id FROM user_source_ids))
+    ))"#
     )
 }
 
@@ -44,13 +53,17 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
             ),
             Expr::Literal(InitiativeLiteral::DueBefore(date)) => due_date_filter("<=", date),
             Expr::Literal(InitiativeLiteral::DueAfter(date)) => due_date_filter(">=", date),
+            Expr::Literal(InitiativeLiteral::NotificationState(state)) => {
+                build_notification_state_clause("i.id", "initiative", *state)
+            }
         }
     }
     fn due_date_filter(operator: &str, date: &DateTime<Utc>) -> String {
+        let value = super::property_date_expression("ep_due");
         format!(
-            "EXISTS (SELECT 1 FROM entity_properties ep_due WHERE ep_due.entity_id = i.id::text AND ep_due.entity_type = 'INITIATIVE' AND ep_due.property_definition_id = '{}' AND (ep_due.values->>'value')::timestamptz {operator} '{}'::timestamptz)",
+            "EXISTS (SELECT 1 FROM entity_properties ep_due WHERE ep_due.entity_id = i.id::text AND ep_due.entity_type = 'INITIATIVE' AND ep_due.property_definition_id = '{}' AND {value} {operator} '{}'::timestamptz)",
             SystemPropertyKey::DUE_DATE_UUID,
-            date.to_rfc3339()
+            date.to_rfc3339(),
         )
     }
     filter
@@ -58,7 +71,11 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
         .unwrap_or_default()
 }
 
-pub(super) fn initiative_top_clause(sort: SimpleSortMethod, grouped: bool) -> String {
+pub(super) fn initiative_top_clause(
+    sort: SimpleSortMethod,
+    grouped: bool,
+    property_sort: bool,
+) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "i.created_at",
         SimpleSortMethod::UpdatedAt => "i.updated_at",
@@ -69,6 +86,8 @@ pub(super) fn initiative_top_clause(sort: SimpleSortMethod, grouped: bool) -> St
     };
     let group_columns = if grouped {
         ", NULL::text as project_id, 'INITIATIVE'::property_entity_type as property_entity_type"
+    } else if property_sort {
+        ", 'INITIATIVE'::property_entity_type as property_entity_type"
     } else {
         ""
     };

@@ -110,6 +110,7 @@ impl MessageCommands for FakeMessages {
         }
         let at = Utc.with_ymd_and_hms(2026, 9, 23, 12, 0, 0).unwrap();
         let message = Message {
+            kind: messages::domain::models::MessageKind::Message,
             id: Uuid::from_u128(99),
             parent: MessageParent::parse("document", &access.entity().entity_id).unwrap(),
             thread_id: input.thread_id,
@@ -121,6 +122,7 @@ impl MessageCommands for FakeMessages {
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: Some(USER.to_owned()),
             content: input.content.clone(),
             created_at: at,
@@ -285,6 +287,36 @@ async fn comment_on_text_places_the_mark_then_posts_a_thread_anchored_to_it() {
         "ships on Friday"
     );
     assert!(editing.removed_comment_marks.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn comment_on_text_through_an_mcp_client_carries_its_name() {
+    let messages = FakeMessages::default();
+    let ServiceContext(context) = context_with(
+        AccessLevel::Comment,
+        messages.clone(),
+        "md",
+        FakeEditingWorker::default(),
+    );
+    comment_on_text("ships on Friday", None)
+        .call(
+            ServiceContext(context.with_via("Claude Code".to_owned())),
+            request(),
+        )
+        .await
+        .unwrap();
+
+    let posts = messages.posts.lock().unwrap();
+    let [(access, post)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_bot_on_document(access);
+    assert_eq!(
+        post.attribution,
+        MessageAttribution::ActingUserVia {
+            client: "Claude Code".to_owned()
+        }
+    );
 }
 
 #[tokio::test]

@@ -163,13 +163,18 @@ export function useHomeEntitiesQuery(
 
   const queryArgs = createMemo(() => buildHomeQuery(viewContext()));
 
+  const requested = () => options.enabled?.() ?? true;
+  // Signal's channel threads are the viewer's own, so wait for the viewer
+  // like the Channels thread queries instead of fetching a page to discard.
+  const awaitingViewer = () => requested() && !userId();
+
   const query = useSoupAstItemsQuery(queryArgs, () => {
     // Capture the tab alongside the query args so the insert gate stays bound
     // to the query it was registered on: after a tab switch the previous
     // tab's cached query keeps gating cache inserts by its own membership.
     const tab = viewContext().tab;
     return {
-      enabled: options.enabled?.() ?? true,
+      enabled: requested() && Boolean(userId()),
       showSupportedForeignEntities: foreignEntities().enabled,
       meta: {
         insertFilter: homeTabInsertFilter(tab),
@@ -219,6 +224,7 @@ export function useHomeEntitiesQuery(
     transformEntities,
     hasUnreadEntity,
     notificationSource,
+    awaitingViewer,
   };
 }
 
@@ -274,7 +280,9 @@ function useSoupHomeDataSource(
     filterEntities,
     attachNotifications,
     transformEntities,
+    awaitingViewer,
   } = useHomeEntitiesQuery(state, options);
+  const notificationsLoading = () => awaitingViewer() || query.isLoading;
 
   const [now, setNow] = createSignal(homeClock());
   onMount(() => {
@@ -334,6 +342,7 @@ function useSoupHomeDataSource(
   });
 
   const search = createSearchState({
+    surface: () => 'home',
     text: () => state.search,
     localPool,
     buildRequest: (request) => buildHomeSearchRequest(viewContext(), request),
@@ -341,7 +350,9 @@ function useSoupHomeDataSource(
 
   const rawEntities = createMemo<EntityData[]>((previous) => {
     if (!search.isSearching()) {
-      const notifications = query.isLoading ? [] : (query.data?.entities ?? []);
+      const notifications = notificationsLoading()
+        ? []
+        : (query.data?.entities ?? []);
       return notifications;
     }
 
@@ -360,11 +371,11 @@ function useSoupHomeDataSource(
     if (!mergeRecents() || search.isSearching()) return undefined;
     return getHomePagination(
       {
-        oldestFetchedTimestamp: query.isLoading
+        oldestFetchedTimestamp: notificationsLoading()
           ? undefined
           : query.data?.oldestFetchedTimestamp,
         hasMore: query.hasNextPage && !query.error,
-        isLoading: query.isLoading,
+        isLoading: notificationsLoading(),
       },
       {
         oldestFetchedTimestamp: recentQuery.isLoading
@@ -435,13 +446,13 @@ function useSoupHomeDataSource(
     if (hasNoTypes()) return false;
     if (!search.isSearching()) {
       return (
-        (query.isLoading || (mergeRecents() && recentQuery.isLoading)) &&
+        (notificationsLoading() || (mergeRecents() && recentQuery.isLoading)) &&
         entities().items.length === 0
       );
     }
     if (entities().items.length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();
-    return query.isLoading;
+    return notificationsLoading();
   };
 
   return {

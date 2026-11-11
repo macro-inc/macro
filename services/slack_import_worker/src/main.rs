@@ -9,12 +9,11 @@ use chrono::{DateTime, Utc};
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use import::outbound::pg_import_repo::PgImportRepo;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
-use macro_queues::{NotificationIngressQueue, SlackImportDlq, SlackImportQueue};
+use macro_queues::{SlackImportDlq, SlackImportQueue};
 use macro_service_urls::SearchProcessingServiceUrl;
-use notification::{domain::service::SqsNotificationIngress, outbound::queue::SqsQueue};
 use slack_import_worker::composition::{
     authorizer::WorkerAuthorizer, channel_sink::ChannelImportSink,
-    join_announcer::WorkerJoinAnnouncer, reference_reconciliation::WorkerReferenceReconciler,
+    reference_reconciliation::WorkerReferenceReconciler,
 };
 use slack_integration::{
     domain::{
@@ -31,10 +30,6 @@ use slack_integration::{
     },
 };
 use sqlx::postgres::PgPoolOptions;
-use teams::{
-    domain::join_announcement::JoinAnnouncementServiceImpl,
-    outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
-};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -77,22 +72,9 @@ async fn run() -> Result<(), rootcause::Report> {
         limits,
     )?;
     let sqs = aws_sdk_sqs::Client::new(&macro_aws_config::get_macro_aws_config().await);
-    let queue = SqsImportQueue::new(
-        sqs.clone(),
-        &SlackImportQueue::new(),
-        &SlackImportDlq::new(),
-    )
-    .await
-    .map_err(|error| *error.current_context())?;
-    let announcer = WorkerJoinAnnouncer::new(
-        JoinAnnouncementServiceImpl::new(
-            JoinAnnouncementRepositoryImpl::new(pool.clone()),
-            SqsNotificationIngress {
-                queue: SqsQueue::new(sqs, NotificationIngressQueue::new().to_string()),
-            },
-        ),
-        config.slack_import_join_email_enabled,
-    );
+    let queue = SqsImportQueue::new(sqs, &SlackImportQueue::new(), &SlackImportDlq::new())
+        .await
+        .map_err(|error| *error.current_context())?;
     let search = HttpSearchBackfill::new(
         SearchProcessingServiceUrl::new()?.as_ref(),
         &config.internal_api_key,
@@ -104,7 +86,6 @@ async fn run() -> Result<(), rootcause::Report> {
         sink.clone(),
         sink,
         authorizer,
-        announcer,
         ImporterConfig { limits },
     )?;
     let maintenance = ImportMaintenance::new(

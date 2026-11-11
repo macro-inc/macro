@@ -4,13 +4,34 @@ Page request for the authenticated user's activity feed.
 input ActivityFeedInput {
 	"""
 	Opaque cursor from the previous page's `nextCursor`; absent for the
-	first page.
+	first page. Pass it back with the same `scope`.
 	"""
 	cursor: String
 	"""
 	Page size; defaults to 25, capped at 100.
 	"""
 	limit: Int
+	"""
+	Whose activity to read; defaults to the user's own.
+	"""
+	scope: ActivityFeedScope! = MINE
+}
+
+"""
+Whose activity an activity feed page reads.
+"""
+enum ActivityFeedScope {
+	"""
+	The authenticated user's own activity, delegated actions included.
+	"""
+	MINE
+	"""
+	Activity by the authenticated user's teammates, on entities shared
+	with the user (link sharing alone does not count; forms never). A
+	page may hold fewer items than its limit, or none, while
+	`nextCursor` is set: keep paging until it is absent.
+	"""
+	TEAM
 }
 
 """
@@ -74,6 +95,38 @@ input CalendarEventTimeInput @oneOf {
 	An all-day span.
 	"""
 	allDay: AllDayEventTimeInput
+}
+
+"""
+A guest to add to an event.
+"""
+input CalendarGuestInput {
+	"""
+	Guest email address.
+	"""
+	email: String!
+	"""
+	Whether attendance is optional.
+	"""
+	optional: Boolean! = false
+}
+
+"""
+What guests may do with an event; Google calendars only.
+"""
+input CalendarGuestPolicyInput {
+	"""
+	Whether guests may change the event; implies inviting others.
+	"""
+	canModify: Boolean!
+	"""
+	Whether guests may invite others.
+	"""
+	canInviteOthers: Boolean!
+	"""
+	Whether guests may see the guest list.
+	"""
+	canSeeOtherGuests: Boolean!
 }
 
 """
@@ -198,6 +251,53 @@ input ChannelSharePolicyInput {
 }
 
 """
+One batch of clearing the viewer's notification inbox.
+"""
+input ClearNotificationInboxInput {
+	"""
+	Which rows are cleared; the inbox the caller shows.
+	"""
+	scope: NotificationInboxScopeInput
+	"""
+	Clear only unread rows.
+	"""
+	unreadOnly: Boolean @deprecated(reason: "Set scope.unreadOnly. Remove after 2026-12-06.")
+	"""
+	RFC 3339 time; clear only rows whose newest notification arrived at or
+	after it.
+	"""
+	since: String
+	"""
+	Groups read in this batch; defaults to 100, capped at 200.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous batch's `nextCursor`; absent for the
+	first. Send it with the same scope, filters and `since`.
+	"""
+	cursor: String
+}
+
+"""
+The result of one batch of clearing the inbox.
+"""
+type ClearNotificationInboxPayload {
+	"""
+	How many rows the batch cleared.
+	"""
+	rowCount: Int!
+	"""
+	Opaque token that reverses exactly this batch.
+	"""
+	undoToken: String!
+	"""
+	Send as the next batch's `cursor` to keep clearing; absent once
+	nothing is left.
+	"""
+	nextCursor: String
+}
+
+"""
 Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
@@ -286,6 +386,12 @@ type CompleteMutationRoot {
 	"""
 	setEmailThreadArchived(input: SetEmailThreadArchivedInput!): GraphqlSoupEmailThread!
 	"""
+	Set archive-based Done on many threads with one provider write per
+	inbox. Returns the threads that could not change and the
+	primary-backed record of every requested thread the caller can load.
+	"""
+	setEmailThreadsArchived(input: SetEmailThreadsArchivedInput!): SetEmailThreadsArchivedPayload!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
@@ -309,6 +415,14 @@ type CompleteMutationRoot {
 	`DRAFT_ALREADY_SENT`.
 	"""
 	deleteEmailDraft(input: DeleteEmailDraftInput!): DeleteEmailDraftPayload!
+	"""
+	Durably accept an immutable send snapshot; safe to replay after response loss.
+	"""
+	sendEmailAttempt(input: SendEmailAttemptInput!): SendEmailAttemptPayload!
+	"""
+	Revoke delivery authority even if the original send request has not arrived.
+	"""
+	cancelEmailSend(input: EmailSendAttemptInput!): SendEmailAttemptPayload!
 	"""
 	Create an initiative owned by the authenticated user.
 	"""
@@ -343,6 +457,12 @@ type CompleteMutationRoot {
 	"""
 	respondToCalendarEvent(input: RespondToCalendarEventInput!): GraphqlCalendarMutationPayload!
 	"""
+	Add guests to an event, the whole series or one occurrence, without
+	touching anyone already invited. The organizer may, and so may a
+	guest the organizer lets invite others; Google emails the new guests.
+	"""
+	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
+	"""
 	Mark work feed items done for the authenticated user: acknowledge the
 	notifications each entry showed and archive inbox email.
 	Notifications newer than an entry's `revision` stay active. Own work
@@ -357,11 +477,63 @@ type CompleteMutationRoot {
 	in the requested feed.
 	"""
 	undoWorkFeedItemsDone(input: UndoWorkFeedItemsDoneInput!): UndoWorkFeedItemsDonePayload!
+	"""
+	Mark notification inbox rows done for the authenticated user:
+	acknowledge the notifications each row shows and hides, and archive
+	an email row's thread. Notifications newer than a row's `revision`
+	stay active. Tasks, requests, reviews and pull requests themselves
+	are not completed.
+	"""
+	markNotificationInboxRowsDone(input: MarkNotificationInboxRowsDoneInput!): MarkNotificationInboxRowsDonePayload!
+	"""
+	Mark one notification of a row done for the authenticated user, with
+	the hidden notifications about the same message or comment. A row's last
+	shown notification completes the row, as marking the row done does.
+	Returns the row's group's place in the requested inbox.
+	"""
+	markNotificationInboxNotificationDone(input: MarkNotificationInboxNotificationDoneInput!): MarkNotificationInboxNotificationDonePayload!
+	"""
+	Clear the authenticated user's notification inbox one batch at a time:
+	every matching row the batch reads is marked done, its shown and hidden
+	notifications. Email threads are not archived. Repeat with
+	`nextCursor` until it is absent; each batch's undo token reverses that
+	batch.
+	"""
+	clearNotificationInbox(input: ClearNotificationInboxInput!): ClearNotificationInboxPayload!
+	"""
+	Reverse one mark-done for the authenticated user without overwriting
+	anything that happened since, and return the restored groups' places
+	in the requested inbox.
+	"""
+	undoNotificationInboxRowsDone(input: UndoNotificationInboxRowsDoneInput!): UndoNotificationInboxRowsDonePayload!
+	"""
+	Mark notification inbox rows seen for the authenticated user: the
+	notifications each row shows and hides become read. Returns the
+	updated groups' places in the requested inbox.
+	"""
+	markNotificationInboxRowsSeen(input: MarkNotificationInboxRowsSeenInput!): MarkNotificationInboxRowsSeenPayload!
+	"""
+	Create once; replaying the same owned ID returns its existing record.
+	"""
+	createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!
+	"""
+	Replace supplied fields only if the caller owns the expected revision.
+	"""
+	updateSavedView(input: UpdateSavedViewInput!): GraphqlSavedView!
+	"""
+	Delete the expected owned revision; repeating a completed deletion returns the ID.
+	"""
+	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Set the authenticated viewer's personal order; definitions and their
+	revisions are unchanged. Returns the views in their new order.
+	"""
+	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
 }
 
 """
 Root subscription object combining realtime Soup, notification,
-activity, and work feed adapters.
+activity, work feed and notification inbox adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -376,6 +548,11 @@ type CompleteSubscriptionRoot {
 	were missed, and the log must be refetched.
 	"""
 	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
+	Recorded activity from any invocation associated with this accessible session.
+	The stream errors when rows were missed; clients must refetch its REST page.
+	"""
+	agentSessionActivityAppended(sessionId: ID!): [GraphqlActivityEvent!]!
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
@@ -393,6 +570,26 @@ type CompleteSubscriptionRoot {
 	client resubscribes and refetches.
 	"""
 	workFeedUpdates(scope: WorkFeedScopeInput): [WorkFeedPatch!]!
+	"""
+	Changes to the authenticated user's notification inbox in `scope`:
+	groups to insert or move with their current rows, groups to remove,
+	and an invalidation when changes may have been missed. Each payload
+	is one batch to apply together. Start it before fetching the first
+	page and refetch after an invalidation; the stream ends with an error
+	when its sources end, after which the client resubscribes and
+	refetches.
+	"""
+	notificationInboxUpdates(scope: NotificationInboxScopeInput): [NotificationInboxPatch!]!
+	"""
+	Changes to the registered work of `accountIds` that the authenticated
+	user can see: entries to show, entries to stop showing, and an
+	invalidation when changes may have been missed or sharing changed.
+	Each payload is one batch to apply together. Start it before fetching
+	`registeredWork` and refetch after an invalidation; the stream ends
+	with an error when its source ends, after which the client resubscribes
+	and refetches.
+	"""
+	registeredWorkUpdates(accountIds: [ID!]!): [GraphqlRegisteredWorkPatch!]!
 }
 
 """
@@ -464,6 +661,10 @@ input CreateCalendarEventInput {
 	only, timed, no attendees).
 	"""
 	outOfOffice: CalendarOutOfOfficeInput
+	"""
+	What guests may do; omit for Google's defaults.
+	"""
+	guestPolicy: CalendarGuestPolicyInput
 }
 
 """
@@ -493,6 +694,467 @@ input CreateInitiativeInput {
 }
 
 """
+Inputs for creating a saved view with a stable client-generated identity.
+"""
+input CreateSavedViewInput {
+	"""
+	Client-generated UUID reused when retrying the same creation.
+	"""
+	id: ID!
+	"""
+	Nonempty display name, limited to 120 characters.
+	"""
+	name: String!
+	"""
+	Consumer-owned JSON object, limited to 32 KiB.
+	"""
+	config: JSON!
+	"""
+	Current team to share with, or null for a private definition.
+	"""
+	sharedTeamId: ID
+}
+
+"""
+Match the checked or unchecked state of a cell.
+"""
+input DatabaseViewCheckboxTest {
+	"""
+	Whether the cell must be checked.
+	"""
+	checked: Boolean!
+}
+
+"""
+How the conditions within a filter group combine.
+"""
+enum DatabaseViewConjunction {
+	"""
+	Require every condition.
+	"""
+	AND
+	"""
+	Require at least one condition.
+	"""
+	OR
+}
+
+"""
+An ordering comparison between instants.
+"""
+enum DatabaseViewDateOperator {
+	"""
+	The instant is before the comparison instant.
+	"""
+	BEFORE
+	"""
+	The instant is after the comparison instant.
+	"""
+	AFTER
+	"""
+	The instant is at or before the comparison instant.
+	"""
+	ON_OR_BEFORE
+	"""
+	The instant is at or after the comparison instant.
+	"""
+	ON_OR_AFTER
+}
+
+"""
+How a date range relates to a day.
+"""
+enum DatabaseViewDateRangeOperator {
+	"""
+	The range overlaps the day.
+	"""
+	CONTAINS
+	"""
+	The range misses the day, or is empty.
+	"""
+	DOES_NOT_CONTAIN
+	"""
+	The range ends before the day.
+	"""
+	ENDS_BEFORE
+	"""
+	The range ends on or after the day.
+	"""
+	ENDS_ON_OR_AFTER
+	"""
+	The range starts after the day.
+	"""
+	STARTS_AFTER
+	"""
+	The range starts on or before the day.
+	"""
+	STARTS_ON_OR_BEFORE
+}
+
+"""
+Compare a date range cell with the day starting at a UTC instant.
+"""
+input DatabaseViewDateRangeTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewDateRangeOperator!
+	"""
+	The start of the day compared against.
+	"""
+	value: DateTime!
+}
+
+"""
+Compare a date cell with a UTC instant.
+"""
+input DatabaseViewDateTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewDateOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: DateTime!
+}
+
+"""
+Compare referenced entity identities with a set of entities.
+"""
+input DatabaseViewEntitiesTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Referenced entity identities.
+	"""
+	entities: [String!]!
+}
+
+"""
+A typed predicate on one column placement.
+"""
+input DatabaseViewFilterCondition {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	The comparison appropriate for this column.
+	"""
+	test: DatabaseViewFilterTest!
+}
+
+"""
+A conjunction of column conditions or nested groups.
+"""
+input DatabaseViewFilterGroup {
+	"""
+	Require every condition or at least one condition.
+	"""
+	conjunction: DatabaseViewConjunction!
+	"""
+	Column tests or nested groups.
+	"""
+	conditions: [DatabaseViewFilterNode!]!
+}
+
+"""
+Exactly one column condition or nested filter group.
+"""
+input DatabaseViewFilterNode @oneOf {
+	"""
+	A predicate on one column.
+	"""
+	condition: DatabaseViewFilterCondition
+	"""
+	A nested group of predicates.
+	"""
+	group: DatabaseViewFilterGroup
+}
+
+"""
+Exactly one test compatible with the selected column type.
+"""
+input DatabaseViewFilterTest @oneOf {
+	"""
+	Test cell emptiness.
+	"""
+	presence: DatabaseViewPresenceTest
+	"""
+	Test a text or link cell.
+	"""
+	text: DatabaseViewTextTest
+	"""
+	Test a numeric cell.
+	"""
+	number: DatabaseViewNumberTest
+	"""
+	Test a date cell.
+	"""
+	date: DatabaseViewDateTest
+	"""
+	Test a date range cell against a day.
+	"""
+	dateRange: DatabaseViewDateRangeTest
+	"""
+	Test a checkbox cell.
+	"""
+	checkbox: DatabaseViewCheckboxTest
+	"""
+	Test selected option identities.
+	"""
+	options: DatabaseViewOptionsTest
+	"""
+	Test referenced entity identities.
+	"""
+	entities: DatabaseViewEntitiesTest
+}
+
+"""
+A numeric equality or ordering comparison.
+"""
+enum DatabaseViewNumberOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The number is greater than the comparison value.
+	"""
+	GREATER_THAN
+	"""
+	The number is at least the comparison value.
+	"""
+	GREATER_THAN_OR_EQUAL
+	"""
+	The number is less than the comparison value.
+	"""
+	LESS_THAN
+	"""
+	The number is at most the comparison value.
+	"""
+	LESS_THAN_OR_EQUAL
+}
+
+"""
+Compare a numeric cell with a finite number.
+"""
+input DatabaseViewNumberTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewNumberOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: Float!
+}
+
+"""
+Compare selected option identities with a set of options.
+"""
+input DatabaseViewOptionsTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewSetOperator!
+	"""
+	Option identities from the selected column.
+	"""
+	options: [ID!]!
+}
+
+"""
+The requested cell-presence condition.
+"""
+enum DatabaseViewPresenceOperator {
+	"""
+	The cell has no value.
+	"""
+	IS_EMPTY
+	"""
+	The cell has a value.
+	"""
+	IS_NOT_EMPTY
+}
+
+"""
+Test whether the cell has a value.
+"""
+input DatabaseViewPresenceTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewPresenceOperator!
+}
+
+"""
+Filtering and ordering applied to the entire table before pagination.
+"""
+input DatabaseViewQueryInput {
+	"""
+	Optional filter; omission includes every row.
+	"""
+	filter: DatabaseViewFilterGroup
+	"""
+	Ordering keys in priority order; omission uses manual row order.
+	"""
+	sort: [DatabaseViewSort!]! = []
+}
+
+"""
+A table view and its optional continuation, with a bounded page size.
+"""
+input DatabaseViewRowsInput {
+	"""
+	The table within the authorized database.
+	"""
+	tableId: ID!
+	"""
+	The complete filtering and ordering definition.
+	"""
+	query: DatabaseViewQueryInput!
+	"""
+	The preceding page’s opaque cursor; omit for the first page.
+	"""
+	cursor: String
+	"""
+	Page size from 1 through 500; defaults to 500.
+	"""
+	limit: Int
+}
+
+"""
+Membership and order belong to this page; row facts retain their shared identity.
+"""
+type DatabaseViewRowsPage {
+	"""
+	Rows in global view order, hydrated as canonical Soup entities.
+	"""
+	items: [GraphqlSoupDatabaseRow!]!
+	"""
+	Continuation for the next page; absent at the end of the result.
+	"""
+	nextCursor: String
+	"""
+	Table version against which this page was selected.
+	"""
+	version: Int!
+}
+
+"""
+A membership condition for single- or multi-valued cells.
+"""
+enum DatabaseViewSetOperator {
+	"""
+	The single-valued cell matches one supplied identity.
+	"""
+	IS_ANY_OF
+	"""
+	The single-valued cell matches no supplied identity.
+	"""
+	IS_NONE_OF
+	"""
+	The cell contains at least one supplied identity.
+	"""
+	HAS_ANY
+	"""
+	The cell contains every supplied identity.
+	"""
+	HAS_ALL
+	"""
+	The cell contains no supplied identity.
+	"""
+	HAS_NONE
+}
+
+"""
+One ordering key; earlier keys take precedence.
+"""
+input DatabaseViewSort {
+	"""
+	Column placement identity within the selected table.
+	"""
+	column: ID!
+	"""
+	Ascending or descending value order.
+	"""
+	direction: DatabaseViewSortDirection!
+}
+
+"""
+The direction of a view ordering key.
+"""
+enum DatabaseViewSortDirection {
+	"""
+	Order values from lowest to highest.
+	"""
+	ASCENDING
+	"""
+	Order values from highest to lowest.
+	"""
+	DESCENDING
+}
+
+"""
+A text equality or substring comparison.
+"""
+enum DatabaseViewTextOperator {
+	"""
+	The value equals the comparison value.
+	"""
+	IS
+	"""
+	The value differs from the comparison value.
+	"""
+	IS_NOT
+	"""
+	The text contains the comparison string.
+	"""
+	CONTAINS
+	"""
+	The text does not contain the comparison string.
+	"""
+	DOES_NOT_CONTAIN
+	"""
+	The text starts with the comparison string.
+	"""
+	STARTS_WITH
+	"""
+	The text ends with the comparison string.
+	"""
+	ENDS_WITH
+}
+
+"""
+Compare a text or link cell with a string.
+"""
+input DatabaseViewTextTest {
+	"""
+	The comparison to apply.
+	"""
+	operator: DatabaseViewTextOperator!
+	"""
+	The value to compare the cell against.
+	"""
+	value: String!
+}
+
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+
+"""
 Delete an event, one occurrence, or an occurrence onward.
 """
 input DeleteCalendarEventInput {
@@ -519,6 +1181,10 @@ input DeleteCalendarEventInput {
 Input for deleting an email draft.
 """
 input DeleteEmailDraftInput {
+	"""
+	Generation from the last loaded draft.
+	"""
+	draftGeneration: Int
 	"""
 	Draft handle to delete: a client-generated ID or a server ID, resolved
 	like a save's. A handle that is already gone (or was never bound — a
@@ -553,6 +1219,20 @@ type DeleteEmailDraftPayload {
 	Canonical surviving thread, when this delete found a draft.
 	"""
 	thread: GraphqlSoupEmailThread
+}
+
+"""
+Inputs for a revision-guarded deletion.
+"""
+input DeleteSavedViewInput {
+	"""
+	Identity of the definition to delete.
+	"""
+	id: ID!
+	"""
+	Revision that must still match when the deletion commits.
+	"""
+	expectedRevision: Int!
 }
 
 """
@@ -715,6 +1395,76 @@ enum EmailMessageResolutionAction {
 	Deliberately retry delivery after acknowledging possible duplication.
 	"""
 	RETRY_SEND
+}
+
+"""
+Identifies one send action independently of its server message identity.
+"""
+input EmailSendAttemptInput {
+	"""
+	Stable UUID generated for the explicit Send action.
+	"""
+	attemptId: ID!
+	"""
+	Sending inbox captured at Send, never inferred during replay.
+	"""
+	linkId: ID!
+}
+
+"""
+Current result of one replay-safe send action.
+"""
+type EmailSendAttemptPayload {
+	"""
+	Stable send-action identity.
+	"""
+	attemptId: ID!
+	"""
+	Current delivery state.
+	"""
+	status: EmailSendStatus!
+	"""
+	First acceptance's delivery deadline, preserved across retries.
+	"""
+	sendTime: String
+	"""
+	Current message, absent if cancelled before admission or subsequently deleted.
+	"""
+	message: GraphqlSoupEmailMessage
+	"""
+	Server conversation identity, when admitted.
+	"""
+	threadId: ID
+}
+
+"""
+Authoritative delivery state; acceptance is not proof of provider delivery.
+"""
+enum EmailSendStatus {
+	"""
+	Durably accepted; preparation may be retried and cancellation remains safe.
+	"""
+	ACCEPTED
+	"""
+	Submission began, or a legacy claim has an unknown outcome; cancellation is unsafe.
+	"""
+	SENDING
+	"""
+	Delivery failed before acceptance; cancellation can restore the draft.
+	"""
+	FAILED
+	"""
+	Delivery may have occurred and is being reconciled without resending.
+	"""
+	DELIVERY_UNCONFIRMED
+	"""
+	Provider delivery was recorded.
+	"""
+	SENT
+	"""
+	This attempt cannot deliver.
+	"""
+	CANCELLED
 }
 
 """
@@ -946,6 +1696,14 @@ type GraphqlActivityEvent {
 	"""
 	subjectId: String!
 	"""
+	Originating code-mode invocation, when present.
+	"""
+	agentCorrelationId: ID
+	"""
+	Display verb supplied by a validated code-mode invocation.
+	"""
+	agentVerb: String
+	"""
 	The kind of entity acted on.
 	"""
 	entityType: GraphqlEntityType!
@@ -957,6 +1715,10 @@ type GraphqlActivityEvent {
 	What the principal did.
 	"""
 	action: GraphqlActivityAction!
+	"""
+	The stored action tag, for clients that do not need its typed payload.
+	"""
+	actionTag: String!
 	"""
 	When it happened, in RFC 3339 format.
 	"""
@@ -1027,7 +1789,7 @@ type GraphqlActivityOverview {
 }
 
 """
-One page of the authenticated user's activity, newest first.
+One page of activity, newest first.
 """
 type GraphqlActivityPage {
 	"""
@@ -1161,6 +1923,24 @@ enum GraphqlAgentPullRequestState {
 }
 
 """
+Who or what archived an agent session.
+"""
+enum GraphqlAgentSessionArchiveCause {
+	"""
+	A person archived it.
+	"""
+	USER
+	"""
+	Every pull request linked to it closed, with at least one merged.
+	"""
+	PULL_REQUEST_MERGED
+	"""
+	The runtime session backing it was deliberately closed.
+	"""
+	RUNTIME_CLOSED
+}
+
+"""
 The two operands of a recursive `AgentSessionFilterExpr` binary expression.
 """
 input GraphqlAgentSessionBinaryExpr {
@@ -1216,6 +1996,16 @@ input GraphqlAgentSessionLiteral @oneOf {
 	(`bot|<uuid>`), or a team (a bare hyphenated uuid).
 	"""
 	owner: String
+	"""
+	Who started the session. Narrows the sessions a query asks for; it
+	does not opt the query in.
+	"""
+	source: GraphqlAgentSessionSource
+	"""
+	Whether the session is listed. Narrows the sessions a query asks for;
+	it does not opt the query in.
+	"""
+	visibility: GraphqlAgentSessionVisibility
 }
 
 """
@@ -1361,6 +2151,44 @@ type GraphqlAgentSessionSettledMetadata {
 }
 
 """
+Who started an agent session: filter input, and the field Soup returns.
+"""
+enum GraphqlAgentSessionSource {
+	"""
+	A person, directly or through something they did.
+	"""
+	USER
+	"""
+	Another agent, which dispatched the session on its owner's behalf.
+	"""
+	AGENT
+	"""
+	A routine's unattended run.
+	"""
+	ROUTINE
+}
+
+"""
+Where an agent session is shown: filter input, and the field Soup returns.
+"""
+enum GraphqlAgentSessionVisibility {
+	"""
+	Shown wherever the owner's sessions are.
+	"""
+	LISTED
+	"""
+	Left out of Home and the default Agents list, but a filter can still
+	ask for it; a routine's setting decides it for each of its runs.
+	"""
+	UNLISTED
+	"""
+	Out of every list and search; only a query naming the session's id
+	returns it.
+	"""
+	HIDDEN
+}
+
+"""
 Metadata for an agent session blocked on a question.
 """
 type GraphqlAgentSessionWaitingForInputMetadata {
@@ -1404,6 +2232,24 @@ type GraphqlAllDayEventTime {
 	Exclusive local end date (`YYYY-MM-DD`).
 	"""
 	endDate: String!
+}
+
+"""
+GraphQL input naming a kind of email attachment.
+"""
+enum GraphqlAttachmentKind {
+	"""
+	PDF files.
+	"""
+	PDF
+	"""
+	PNG, JPEG, GIF, WebP or SVG images.
+	"""
+	IMAGE
+	"""
+	Word, Excel and PowerPoint files, plain text and CSV.
+	"""
+	DOCUMENT
 }
 
 """
@@ -1568,6 +2414,10 @@ type GraphqlCalendarCapabilities {
 	Whether an attendee can reset their RSVP to unanswered.
 	"""
 	resetRsvp: Boolean!
+	"""
+	Whether the organizer can set what guests may do.
+	"""
+	guestPolicy: Boolean!
 }
 
 """
@@ -1770,6 +2620,11 @@ type GraphqlCalendarEvent {
 	"""
 	guestPolicy: GraphqlCalendarGuestPolicy!
 	"""
+	Whether this is a snapshot of a meeting shared with the owner: a
+	private copy the meeting's changes never reach.
+	"""
+	isSnapshot: Boolean!
+	"""
 	What the viewer may do with the event.
 	"""
 	viewerCan: GraphqlCalendarViewerCapabilities!
@@ -1832,6 +2687,24 @@ input GraphqlCalendarEventExpr @oneOf {
 	Match a literal.
 	"""
 	literal: GraphqlCalendarEventLiteral
+}
+
+"""
+Metadata for a request to be added as a guest of a shared calendar event.
+"""
+type GraphqlCalendarEventJoinRequestMetadata {
+	"""
+	Join request identifier.
+	"""
+	requestId: ID!
+	"""
+	The shared calendar event identifier.
+	"""
+	eventId: ID!
+	"""
+	Event display title when the request was made.
+	"""
+	title: String!
 }
 
 """
@@ -2304,13 +3177,18 @@ type GraphqlCalendarViewerCapabilities {
 	"""
 	removeGuests: Boolean!
 	"""
-	Change the event's guest policy.
+	Change the event's guest policy, which only Google calendars have.
 	"""
 	setGuestPolicy: Boolean!
 	"""
 	Answer the invitation.
 	"""
 	rsvp: Boolean!
+	"""
+	Act as the event's organizer: replace its whole guest list and manage
+	its conferencing.
+	"""
+	organize: Boolean!
 }
 
 """
@@ -2405,6 +3283,28 @@ enum GraphqlCallStatus {
 	The unattended option.
 	"""
 	UNATTENDED
+}
+
+"""
+Metadata for someone asking to join a channel the recipient participates in.
+"""
+type GraphqlChannelAccessRequestedMetadata {
+	"""
+	The attempt to join; its current outcome is served by the channel.
+	"""
+	requestId: ID!
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Requester profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
 }
 
 """
@@ -2967,6 +3867,61 @@ type GraphqlCommentedOnDocumentMetadata {
 }
 
 """
+One viewer's directory entry, not a globally shared user profile or CRM contact.
+"""
+type GraphqlContact {
+	"""
+	Stable identity of the viewer/person pair. Names do not affect this key.
+	"""
+	id: ID!
+	"""
+	Target user identifier, also used for people who have not joined Macro.
+	"""
+	userId: ID!
+	"""
+	Email address derived from the target user identifier.
+	"""
+	email: String!
+	"""
+	Macro profile name, then this viewer's address-book name; null means use email fallback.
+	"""
+	name: String
+}
+
+"""
+Optional exact matching stages for bounded reference-resolution fallback.
+Omission keeps ordinary subsequence search unchanged.
+"""
+enum GraphqlContactMatching {
+	"""
+	Whole name, address or user identity.
+	"""
+	EXACT
+	"""
+	First word of the resolved name (full address when no name exists).
+	"""
+	FIRST_NAME
+	"""
+	Whole and first names, addresses and identities at the same priority.
+	"""
+	ANY_NAME
+}
+
+"""
+A bounded contact-ID-ordered page; an empty page may still have a continuation.
+"""
+type GraphqlContactPage {
+	"""
+	Authorized contacts, including self in sorted position.
+	"""
+	nodes: [GraphqlContact!]!
+	"""
+	Opaque continuation, or null only when the source is exhausted.
+	"""
+	nextCursor: String
+}
+
+"""
 GraphQL input naming the CRM record an association filter restricts to.
 """
 input GraphqlCrmAssociation @oneOf {
@@ -2978,6 +3933,10 @@ input GraphqlCrmAssociation @oneOf {
 	Items associated with the contact.
 	"""
 	contact: ID
+	"""
+	Activity across visible CRM-enabled teams; only true is valid.
+	"""
+	activity: Boolean
 }
 
 """
@@ -3336,6 +4295,10 @@ GraphQL input for selecting database rows through Soup.
 """
 input GraphqlDatabaseRowLiteral @oneOf {
 	"""
+	Include accessible rows of every table; must be true.
+	"""
+	include: Boolean
+	"""
 	Match the rows of a table.
 	"""
 	tableId: ID
@@ -3343,6 +4306,24 @@ input GraphqlDatabaseRowLiteral @oneOf {
 	Match one row.
 	"""
 	id: ID
+}
+
+"""
+One named half-open UTC interval.
+"""
+input GraphqlDateBucketRange {
+	"""
+	Unique group key.
+	"""
+	key: String!
+	"""
+	Inclusive RFC 3339 UTC start; null means negative infinity.
+	"""
+	start: String
+	"""
+	Exclusive RFC 3339 UTC end; null means positive infinity.
+	"""
+	end: String
 }
 
 """
@@ -3375,6 +4356,34 @@ type GraphqlDatePropertyValue {
 	The stored date-time formatted as RFC 3339.
 	"""
 	value: String!
+}
+
+"""
+A date range accepted when setting an entity property.
+"""
+input GraphqlDateRangeInput {
+	"""
+	Where the range starts, as an RFC 3339 date-time.
+	"""
+	start: String!
+	"""
+	Where the range ends, as an RFC 3339 date-time no earlier than the start.
+	"""
+	end: String!
+}
+
+"""
+A date-range property value.
+"""
+type GraphqlDateRangePropertyValue {
+	"""
+	Where the range starts, formatted as RFC 3339.
+	"""
+	start: String!
+	"""
+	Where the range ends, formatted as RFC 3339; never before the start.
+	"""
+	end: String!
 }
 
 """
@@ -3476,8 +4485,8 @@ input GraphqlDocumentLiteral @oneOf {
 	emailAttachmentParticipant: GraphqlEmailValue
 	"""
 	Associated with a CRM record through its Companies or Contacts
-	property or a reference to the record. Requires an expanded,
-	timestamp-sorted query.
+	property or a reference to the record. Requires an expanded query
+	sorted by a timestamp or task due date.
 	"""
 	crmAssociated: GraphqlCrmAssociation
 	"""
@@ -3613,6 +4622,63 @@ input GraphqlEmailFilterAst {
 }
 
 """
+Why a thread is in or out of Focus.
+"""
+enum GraphqlEmailFocusCategory {
+	"""
+	A customer, client or user asking for help or giving feedback.
+	"""
+	CUSTOMER
+	"""
+	Mail from someone at the owner's own company.
+	"""
+	TEAM
+	"""
+	Mail from someone the owner corresponds with.
+	"""
+	KNOWN
+	"""
+	Relevant mail that fits no narrower category.
+	"""
+	OTHER
+	"""
+	In Focus, a reschedule, update, cancellation or proposed new time for an
+	event that isn't over. Left out, a new invite or an RSVP notice.
+	"""
+	CALENDAR
+	"""
+	Unsolicited outreach: a pitch, recruiting or a job application.
+	"""
+	OUTREACH
+	"""
+	Automated, bulk or templated mail.
+	"""
+	AUTOMATED
+	"""
+	Nothing marks the thread as relevant.
+	"""
+	LOW_RELEVANCE
+}
+
+"""
+Which way a thread's importance is moving.
+"""
+enum GraphqlEmailImportanceTrend {
+	"""
+	Rising, towards 100.
+	"""
+	UP
+	"""
+	Falling, towards 0.
+	"""
+	DOWN
+	"""
+	Not moving.
+	"""
+	FLAT
+}
+
+"""
 Enriched email link accessible to the authenticated user.
 """
 type GraphqlEmailLink {
@@ -3722,6 +4788,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	recipient: GraphqlEmailValue
 	"""
+	A message whose subject contains this text, ignoring case (1-200 characters).
+	"""
+	subject: String
+	"""
 	The thread id option.
 	"""
 	threadId: ID
@@ -3757,6 +4827,10 @@ input GraphqlEmailLiteral @oneOf {
 	The calendar only option.
 	"""
 	calendarOnly: Boolean
+	"""
+	Threads with at least one attachment of this kind.
+	"""
+	attachment: GraphqlAttachmentKind
 	"""
 	The created at option.
 	"""
@@ -3824,6 +4898,48 @@ enum GraphqlEmailSyncStatus {
 	Synchronization is disabled.
 	"""
 	INACTIVE
+}
+
+"""
+The Focus classification of one email thread.
+"""
+type GraphqlEmailThreadFocus {
+	"""
+	Whether the thread belongs in Focus.
+	"""
+	isFocus: Boolean!
+	"""
+	The Focus category, or why the thread was left out.
+	"""
+	category: GraphqlEmailFocusCategory!
+	"""
+	How much the thread matters right now, 0 to 100.
+	"""
+	importance: Int!
+	"""
+	Someone else sent the latest message and it waits on the owner's answer.
+	Never true together with `needs_follow_up`.
+	"""
+	needsReply: Boolean!
+	"""
+	The owner sent the latest message and should come back to the thread: it
+	has an open loop or has waited for an answer. Never true together with
+	`needs_reply`.
+	"""
+	needsFollowUp: Boolean!
+	"""
+	When the classification was made, in RFC 3339 format.
+	"""
+	classifiedAt: String!
+	"""
+	Which way `importance` is moving.
+	"""
+	importanceTrend: GraphqlEmailImportanceTrend!
+	"""
+	The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+	the viewer's time zone never shifts. Absent when it names no open deadline.
+	"""
+	dueOn: String
 }
 
 """
@@ -3975,8 +5091,9 @@ input GraphqlEntityFilterAst {
 	"""
 	favoritesOnly: Boolean
 	"""
-	Restrict every entity type to items associated with this CRM record.
-	Requires an expanded, timestamp-sorted query.
+	Restrict every entity type to items associated with this CRM record,
+	or to activity across visible CRM-enabled teams.
+	Requires an expanded query sorted by a timestamp or selected property.
 	"""
 	crmAssociation: GraphqlCrmAssociation
 	"""
@@ -4252,12 +5369,43 @@ enum GraphqlEntityType {
 	Macro Form entity (a questionnaire answered into a database table).
 	"""
 	FORM
+	"""
+	Independently shared external chat.
+	"""
+	EXTERNAL_CHAT
+	"""
+	Schema-only stub for clients released with this value before external
+	chats replaced WhatsApp groups. Never returned; rejected as input.
+	"""
+	WHATSAPP_GROUP @deprecated(reason: "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30.")
+	"""
+	A registered runtime.
+	"""
+	HARNESS
 }
 
 """
 The mutually exclusive time shape of an event or occurrence.
 """
 union GraphqlEventTime = GraphqlTimedEventTime | GraphqlAllDayEventTime
+
+"""
+Metadata for a message in an independently shared external chat.
+"""
+type GraphqlExternalChatMessageMetadata {
+	"""
+	The messaging service the chat lives in (`whatsapp`).
+	"""
+	provider: String!
+	"""
+	Display name of the chat.
+	"""
+	chatName: String!
+	"""
+	Message to open within the chat.
+	"""
+	messageId: ID!
+}
 
 """
 GraphQL fields for an ordered favorite.
@@ -4367,6 +5515,10 @@ input GraphqlFilterPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: ID
+	"""
+	Match a DATE property in a UTC range.
+	"""
+	dateRange: GraphqlPropertyDateRange
 }
 
 """
@@ -5078,7 +6230,7 @@ enum GraphqlGroupByField {
 	"""
 	ENTITY_TYPE
 	"""
-	Group by containing project.
+	Group by the Project property (initiative membership).
 	"""
 	PROJECT
 	"""
@@ -5103,6 +6255,10 @@ input GraphqlGroupByInput {
 	Optional property entity type restriction.
 	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Optional caller-defined date ranges; requires PROPERTY grouping.
+	"""
+	bucketing: GraphqlPropertyBucketing
 }
 
 """
@@ -5249,6 +6405,10 @@ input GraphqlInitiativeLiteral @oneOf {
 	Match projects due after this RFC 3339 timestamp.
 	"""
 	dueAfter: String
+	"""
+	Exact notification state for the requester; also opts in.
+	"""
+	notificationState: NotificationState
 }
 
 """
@@ -5529,10 +6689,10 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
-A notification associated with a Soup entity.
+A notification associated with a shared entity, including entities outside Soup.
 """
 type GraphqlNotification {
 	"""
@@ -5544,9 +6704,13 @@ type GraphqlNotification {
 	"""
 	eventType: String!
 	"""
-	The type of the associated entity.
+	The Soup type of the associated entity.
 	"""
-	entityType: GraphqlSoupEntityType!
+	entityType: GraphqlSoupEntityType! @deprecated(reason: "Use targetEntityType, which also covers entities outside Soup. Remove after 2026-12-01.")
+	"""
+	The type of the associated entity, including entities outside Soup.
+	"""
+	targetEntityType: GraphqlEntityType!
 	"""
 	The identifier of the associated entity.
 	"""
@@ -5809,6 +6973,35 @@ type GraphqlProperty {
 }
 
 """
+Transform the selected DATE property into caller-defined ranges.
+Non-DATE values use the missing-value bucket.
+"""
+input GraphqlPropertyBucketing {
+	"""
+	Bucketing transformation.
+	"""
+	type: GraphqlPropertyBucketingType!
+	"""
+	Ordered, contiguous UTC ranges covering every present date.
+	"""
+	ranges: [GraphqlDateBucketRange!]!
+	"""
+	Key for entities whose selected property is absent or cleared.
+	"""
+	missingValueBucketKey: String!
+}
+
+"""
+Supported property-value transformations.
+"""
+enum GraphqlPropertyBucketingType {
+	"""
+	Caller-defined half-open UTC date ranges.
+	"""
+	DATE_RANGES
+}
+
+"""
 A property definition's supported value type.
 """
 enum GraphqlPropertyDataType {
@@ -5820,6 +7013,10 @@ enum GraphqlPropertyDataType {
 	Date and time values.
 	"""
 	DATE
+	"""
+	A span from a start date-time to an end one.
+	"""
+	DATE_RANGE
 	"""
 	Numeric values.
 	"""
@@ -5848,6 +7045,20 @@ enum GraphqlPropertyDataType {
 	URL values.
 	"""
 	LINK
+}
+
+"""
+Explicit UTC bounds for a DATE property.
+"""
+input GraphqlPropertyDateRange {
+	"""
+	Inclusive UTC start, or no lower bound.
+	"""
+	start: String
+	"""
+	Exclusive UTC end, or no upper bound.
+	"""
+	end: String
 }
 
 """
@@ -6122,7 +7333,64 @@ enum GraphqlPropertyTargetEntityType {
 """
 A property value represented by a type-safe GraphQL union.
 """
-union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+
+"""
+An agent session an account registered as its work.
+"""
+type GraphqlRegisteredWork {
+	"""
+	The registration.
+	"""
+	id: ID!
+	"""
+	The account whose work this is.
+	"""
+	accountId: ID!
+	"""
+	When the account registered it, in RFC 3339.
+	"""
+	registeredAt: String!
+	"""
+	The session registered.
+	"""
+	session: GraphqlSoupAgentSession!
+}
+
+"""
+Changes may have been missed or sharing changed: refetch the list.
+"""
+type GraphqlRegisteredWorkInvalidate {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One change to the registered work of the subscribed accounts.
+"""
+union GraphqlRegisteredWorkPatch = GraphqlRegisteredWorkUpsert | GraphqlRegisteredWorkRemove | GraphqlRegisteredWorkInvalidate
+
+"""
+A registration that ended or whose session was archived.
+"""
+type GraphqlRegisteredWorkRemove {
+	"""
+	The registration to stop showing.
+	"""
+	id: ID!
+}
+
+"""
+A registration to show, new or with its session's list fields changed.
+"""
+type GraphqlRegisteredWorkUpsert {
+	"""
+	The registration.
+	"""
+	entry: GraphqlRegisteredWork!
+}
 
 """
 The two operands of a recursive reminder filter expression. Ignored.
@@ -6268,6 +7536,91 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
+Metadata for a finished routine run.
+"""
+type GraphqlRoutineRunFinishedMetadata {
+	"""
+	Routine id.
+	"""
+	routineId: ID!
+	"""
+	Routine name when it ran.
+	"""
+	routineName: String!
+	"""
+	Whether the run succeeded.
+	"""
+	succeeded: Boolean!
+}
+
+"""
+Metadata for removed runtime access that stopped the recipient's agents.
+"""
+type GraphqlRuntimeAccessRemovedMetadata {
+	"""
+	The runtime's name.
+	"""
+	runtimeName: String!
+	"""
+	The recipient's agents that stopped.
+	"""
+	agents: [GraphqlStoppedAgent!]!
+}
+
+"""
+A saved filter definition, not a snapshot of matching entities.
+"""
+type GraphqlSavedView {
+	"""
+	Stable identity of this saved definition.
+	"""
+	id: ID!
+	"""
+	User who owns and can edit this definition.
+	"""
+	ownerId: ID!
+	"""
+	Display name chosen by the owner.
+	"""
+	name: String!
+	"""
+	Versioned filter configuration interpreted by the consuming feature.
+	"""
+	config: JSON!
+	"""
+	Team with effective access, or null when the definition is private.
+	"""
+	sharedTeamId: ID
+	"""
+	Current revision required for conditional updates and deletion.
+	"""
+	revision: Int!
+	"""
+	Creation timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	Last update timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+}
+
+"""
+A page in the viewer's own order, then by creation time and ID, after
+effective visibility checks.
+"""
+type GraphqlSavedViewPage {
+	"""
+	Definitions the authenticated viewer can currently access.
+	"""
+	nodes: [GraphqlSavedView!]!
+	"""
+	Opaque continuation cursor, or null when the listing is complete.
+	"""
+	nextCursor: String
+}
+
+"""
 An AI routine the authenticated user can access.
 """
 type GraphqlScheduledAction {
@@ -6288,7 +7641,8 @@ type GraphqlScheduledAction {
 	"""
 	trigger: GraphqlScheduledActionTrigger!
 	"""
-	Agent task for this routine. Null when the stored task is not an agent task.
+	The agent step this routine hands off to: its only one, or the first of
+	several in different branches. Null when no step runs an agent.
 	"""
 	agentTask: GraphqlScheduledActionAgentTask
 	"""
@@ -6329,11 +7683,11 @@ type GraphqlScheduledActionAgentTask {
 	"""
 	agent: GraphqlScheduledActionAgent
 	"""
-	System prompt for the agent.
+	Always empty: the agent step's instructions are in `userPrompt`.
 	"""
 	prompt: String!
 	"""
-	User prompt for the agent.
+	The agent step's instructions.
 	"""
 	userPrompt: String!
 }
@@ -6368,6 +7722,18 @@ type GraphqlScheduledActionEventFilter {
 	Entity ids that can satisfy this filter. Null matches every id; an empty list matches nothing.
 	"""
 	entityIds: [ID!]
+	"""
+	Which GitHub App deliveries satisfy a `GITHUB` filter.
+	"""
+	github: GraphqlScheduledActionGithubSelector
+	"""
+	Exact payload tests a GitHub delivery must pass, as a reader would state them.
+	"""
+	payloadMatch: [String!]!
+	"""
+	The task property that must have changed, and the values it must gain.
+	"""
+	property: GraphqlScheduledActionPropertySelector
 	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
@@ -6438,6 +7804,10 @@ enum GraphqlScheduledActionEventName {
 	A call the routine's owner joined ended.
 	"""
 	CALL_ENDED
+	"""
+	Macro's GitHub App received a delivery.
+	"""
+	GITHUB
 }
 
 """
@@ -6451,6 +7821,28 @@ type GraphqlScheduledActionEventsTrigger {
 }
 
 """
+GitHub deliveries a filter watches. Empty lists match everything.
+"""
+type GraphqlScheduledActionGithubSelector {
+	"""
+	GitHub event names, such as `workflow_run`.
+	"""
+	events: [String!]!
+	"""
+	Payload actions, such as `completed`.
+	"""
+	actions: [String!]!
+	"""
+	Repositories, as `owner/name`.
+	"""
+	repositories: [String!]!
+	"""
+	Whether deliveries caused by bots also match.
+	"""
+	includeBots: Boolean!
+}
+
+"""
 Any of several schedules and optional Macro event filters.
 """
 type GraphqlScheduledActionMultipleTrigger {
@@ -6459,15 +7851,69 @@ type GraphqlScheduledActionMultipleTrigger {
 	"""
 	schedules: [GraphqlScheduledActionCronTrigger!]!
 	"""
+	Single runs at exact times.
+	"""
+	once: [GraphqlScheduledActionOnceTrigger!]!
+	"""
 	Events that can also trigger this routine.
 	"""
 	events: GraphqlScheduledActionEventsTrigger
 }
 
 """
+A routine that runs a single time.
+"""
+type GraphqlScheduledActionOnceTrigger {
+	"""
+	When the routine runs, as RFC 3339.
+	"""
+	at: String!
+	"""
+	Whether that run is still ahead. False once it has run.
+	"""
+	pending: Boolean!
+}
+
+"""
+A task property a filter watches.
+"""
+type GraphqlScheduledActionPropertySelector {
+	"""
+	The property definition that must have changed.
+	"""
+	definitionId: ID!
+	"""
+	Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+	"""
+	values: [String!]!
+}
+
+"""
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger
+
+"""
+The persisted state of a scheduled delivery.
+"""
+enum GraphqlScheduledSendStatus {
+	"""
+	Waiting for its send time or safely retrying preparation.
+	"""
+	PENDING
+	"""
+	Provider submission has started.
+	"""
+	SENDING
+	"""
+	Delivery was definitely rejected; the draft can be restored.
+	"""
+	FAILED
+	"""
+	Delivery may have succeeded; reconciliation is required.
+	"""
+	UNCONFIRMED
+}
 
 """
 A select-option property value.
@@ -6509,6 +7955,10 @@ input GraphqlSetPropertyValue @oneOf {
 	An RFC 3339 date-time value.
 	"""
 	date: String
+	"""
+	A span from a start date-time to an end one.
+	"""
+	dateRange: GraphqlDateRangeInput
 	"""
 	A numeric value.
 	"""
@@ -6580,7 +8030,7 @@ enum GraphqlSharedEmailFilter {
 }
 
 """
-GraphQL representation of supported Soup sorts.
+GraphQL representation of Soup timestamp, notification, and selected-property sorts.
 """
 enum GraphqlSimpleSortMethod {
 	"""
@@ -6604,6 +8054,12 @@ enum GraphqlSimpleSortMethod {
 	notified first. Descending `soup` only; not supported by `groupSoup`.
 	"""
 	NOTIFIED_AT
+	"""
+	Sort by the selected property key, missing last, then newest update and ID.
+	Missing definitions and unsupported types use update-time ordering.
+	Email, channels, calls, companies, and agent sessions never appear.
+	"""
+	PROPERTY
 }
 
 """
@@ -6675,7 +8131,16 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	Whether the session is archived and read-only.
 	"""
-	isArchived: Boolean!
+	isArchived: Boolean! @deprecated(reason: "Use archivedBy. Remove after 2026-12-03.")
+	"""
+	Who or what archived the session, or null while it is active. An archived session is
+	read-only.
+	"""
+	archivedBy: GraphqlAgentSessionArchiveCause
+	"""
+	When the session was archived, or null while it is active.
+	"""
+	archivedAt: String
 	"""
 	The principal identifier of the owner.
 	"""
@@ -6735,6 +8200,14 @@ type GraphqlSoupAgentSession implements GraphqlSoupEntity {
 	"""
 	threadId: ID
 	"""
+	Who started the session.
+	"""
+	source: GraphqlAgentSessionSource!
+	"""
+	Where the session is shown.
+	"""
+	visibility: GraphqlAgentSessionVisibility!
+	"""
 	The session's last known status: `no_messages`, `disconnected`, or the
 	wire name of the most recent system event (for example `session/end`).
 	"""
@@ -6788,9 +8261,19 @@ type GraphqlSoupBin {
 	"""
 	key: String!
 	"""
+	Display text for a group whose key alone does not identify it client
+	side, limited to what the viewer can read. Null when the client labels
+	the key itself or the viewer cannot read the entity behind it.
+	"""
+	label: String
+	"""
 	Total number of items in this group across all pages.
 	"""
 	totalCount: Int!
+	"""
+	Stored option order or calendar bucket order, when available.
+	"""
+	displayOrder: Int
 	"""
 	Opaque cursor for the next page in this bin, if one exists.
 	"""
@@ -7527,17 +9010,29 @@ type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	"""
 	teamId: ID!
 	"""
-	Parent company.
+	Parent company; null for a contact without a company.
 	"""
-	companyId: ID!
+	parentCompanyId: ID
 	"""
-	Parent company's display name.
+	Parent company's display name; null without a company.
 	"""
-	companyName: String!
+	parentCompanyName: String
 	"""
-	Full email address.
+	Full email address; null for a contact added by name alone.
 	"""
-	email: String!
+	emailAddress: String
+	"""
+	Parent company, or the nil ID for a contact without a company.
+	"""
+	companyId: ID! @deprecated(reason: "Use parentCompanyId. Remove after 2026-12-10.")
+	"""
+	Parent company's display name, or empty without a company.
+	"""
+	companyName: String! @deprecated(reason: "Use parentCompanyName. Remove after 2026-12-10.")
+	"""
+	Full email address, or empty for a contact added by name alone.
+	"""
+	email: String! @deprecated(reason: "Use emailAddress. Remove after 2026-12-10.")
 	"""
 	Team-local display name.
 	"""
@@ -7958,6 +9453,10 @@ An adaptively hydrated email content projection for Soup queries.
 """
 type GraphqlSoupEmailMessage {
 	"""
+	Generation required when editing a draft after send/cancellation.
+	"""
+	draftGeneration: Int!
+	"""
 	Immutable scheduling snapshots; JSON keeps both transports identical.
 	"""
 	calendarInvitations: JSON!
@@ -8025,6 +9524,10 @@ type GraphqlSoupEmailMessage {
 	When this draft is scheduled to be sent, in RFC 3339 format.
 	"""
 	scheduledSendTime: String
+	"""
+	Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
+	"""
+	scheduledSendStatus: GraphqlScheduledSendStatus
 	"""
 	The sender of the message.
 	"""
@@ -8351,9 +9854,20 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Whether any message was received rather than drafted or sent. Only
+	threads with received mail can return to the inbox.
+	"""
+	hasReceivedMail: Boolean!
+	"""
 	Most recent explicit return from an email reminder.
 	"""
 	reminderReturnedAt: String
+	"""
+	The thread's Focus classification: whether it belongs in Focus, why,
+	and how important it is. `null` until the thread is classified, and
+	for threads in inboxes the viewer does not own.
+	"""
+	focus: GraphqlEmailThreadFocus
 	"""
 	Timestamp of the latest outbound message, in RFC 3339 format: the SENT
 	view's sort key.
@@ -8500,6 +10014,10 @@ enum GraphqlSoupEntityType {
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
+	"""
+	A paired runtime, listed only by attention feeds.
+	"""
+	HARNESS
 }
 
 """
@@ -8546,6 +10064,75 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	Source-specific metadata.
 	"""
 	sourceMetadata: JSON!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+A paired runtime (a macrod machine). Only attention feeds list it, for
+the access notifications filed under it; it opens in Settings → Machines.
+"""
+type GraphqlSoupHarness implements GraphqlSoupEntity {
+	"""
+	The harness identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for runtimes.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The machine's name.
+	"""
+	displayName: String
+	"""
+	Common runtime metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The machine's name.
+	"""
+	name: String!
+	"""
+	The principal identifier of the owner: a user or a team.
+	"""
+	ownerId: String!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -8864,6 +10451,20 @@ type GraphqlSoupReminderReference {
 }
 
 """
+An agent that stopped with its owner's runtime access.
+"""
+type GraphqlStoppedAgent {
+	"""
+	The agent's bot id.
+	"""
+	botId: ID!
+	"""
+	The agent's display name.
+	"""
+	name: String!
+}
+
+"""
 Text stored by a string select option.
 """
 type GraphqlStringPropertyOptionValue {
@@ -8980,9 +10581,21 @@ The authenticated user and their user-scoped data.
 """
 type GraphqlUser {
 	"""
+	Visible personal and effectively shared definitions, bounded after visibility checks.
+	"""
+	savedViews(kind: String, first: Int, after: String): GraphqlSavedViewPage!
+	"""
+	An authorized definition or null when not found or not visible.
+	"""
+	savedView(id: ID!): GraphqlSavedView
+	"""
 	Stable id of the authenticated user.
 	"""
 	id: ID!
+	"""
+	A page filtered and ordered across the entire authorized table.
+	"""
+	databaseViewRows(databaseId: ID!, input: DatabaseViewRowsInput!): DatabaseViewRowsPage!
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
@@ -9016,8 +10629,9 @@ type GraphqlUser {
 	"""
 	folders: [GraphqlSoupProject!]!
 	"""
-	A page of the authenticated user's own activity, newest first.
-	Delegated actions performed on the user's behalf are included.
+	A page of activity, newest first: by default the authenticated
+	user's own, delegated actions included; in the `TEAM` scope, their
+	teammates' activity on entities shared with the user.
 	"""
 	activity(input: ActivityFeedInput!): GraphqlActivityPage!
 	"""
@@ -9037,6 +10651,45 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	Resolve up to 500 exact target user IDs, omitting unrelated or unknown people.
+	"""
+	contactsByUserIds(
+		"""
+		Target user IDs, not GraphqlContact record IDs; empty input returns no contacts.
+		"""
+		userIds: [ID!]!
+	): [GraphqlContact!]!
+	"""
+	Resolve up to 500 exact email addresses, restricted to the viewer's contacts or self.
+	"""
+	contactsByEmails(
+		"""
+		Email addresses normalized by the user-ID parser; empty input returns no contacts.
+		"""
+		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
+	Read one page of the viewer's personal contacts with resolved names.
+	"""
+	contacts(
+		"""
+		Maximum contacts to read, from 1 to 500; defaults to 100.
+		"""
+		limit: Int,
+		"""
+		Opaque nextCursor from an earlier page in this directory.
+		"""
+		after: String,
+		"""
+		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
+		"""
+		search: String,
+		"""
+		Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply.
+		"""
+		matching: GraphqlContactMatching
+	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
@@ -9061,6 +10714,19 @@ type GraphqlUser {
 	"""
 	workFeed(input: WorkFeedInput): WorkFeedPage!
 	"""
+	The agent sessions `accountIds` registered as their work that the
+	authenticated user can view, newest first, at most 50 accounts.
+	Registrations of sessions the user cannot view are completely hidden.
+	"""
+	registeredWork(accountIds: [ID!]!): [GraphqlRegisteredWork!]!
+	"""
+	A page of the authenticated user's notifications inbox, newest group
+	first: their pending notifications grouped by the entity they are
+	filed under and cut into rows, one per conversation thread, channel
+	top level, email thread, task, request or agent session.
+	"""
+	notificationInbox(input: NotificationInboxInput): NotificationInboxPage!
+	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
 	emailLabels: [GraphqlSoupEmailLabel!]!
@@ -9069,9 +10735,24 @@ type GraphqlUser {
 	"""
 	emailLinks: [GraphqlEmailLink!]!
 	"""
+	Inspect a queued send after reconnect or restart without resending it.
+	"""
+	pendingEmailSends(after: String): PendingEmailSends!
+	"""
+	Inspect a queued send after reconnect or restart without resending it.
+	"""
+	emailSendAttempt(input: EmailSendAttemptInput!): EmailSendAttemptPayload
+	"""
 	Fetch one accessible email thread by its canonical identifier.
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
+	"""
+	The viewer's Focus: threads in their own inboxes worth their attention,
+	newest first by latest message time in either direction, with mail in
+	the last `days` days (default 30, at most 90). Each thread carries a
+	`focus` field that explains why.
+	"""
+	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
 	"""
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.
@@ -9090,6 +10771,22 @@ type GraphqlUser {
 	Fetch a page of Soup items using the existing Soup filter AST format.
 	"""
 	soup(input: SoupInput!): SoupPage!
+}
+
+"""
+A removed WhatsApp group message notification. Never returned; external
+chat messages use `GraphqlExternalChatMessageMetadata`. Remove after
+2026-11-30.
+"""
+type GraphqlWhatsappGroupMessageMetadata {
+	"""
+	Display name of the group.
+	"""
+	groupName: String!
+	"""
+	Message to open within the group.
+	"""
+	messageId: ID!
 }
 
 """
@@ -9134,8 +10831,17 @@ input GroupedSoupInitialInput {
 	limit: Int
 	"""
 	Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+	Grouped PROPERTY reads retain calendar events; flat PROPERTY reads do not.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
+	"""
+	Direction of property values. Defaults to DESC.
+	"""
+	sortDirection: GraphqlSortDirection
 	"""
 	AST-shaped filters applied to each Soup entity type.
 	"""
@@ -9319,6 +11025,33 @@ type InitiativeTasksPage {
 }
 
 """
+Add guests to an event without touching anyone already invited.
+"""
+input InviteCalendarEventGuestsInput {
+	"""
+	Event to add guests to.
+	"""
+	eventId: ID!
+	"""
+	Calendar whose copy of the event is written, for an event synced from
+	more than one calendar. Omit to write the canonical copy.
+	"""
+	calendarId: ID
+	"""
+	Guests to add; anyone already on the event is skipped.
+	"""
+	guests: [CalendarGuestInput!]!
+	"""
+	How much of a recurring series gains the guests.
+	"""
+	scope: GraphqlCalendarUpdateScope!
+	"""
+	Original-start key of the occurrence; required with `THIS_EVENT`.
+	"""
+	recurrenceId: String
+}
+
+"""
 A scalar that can represent any JSON value.
 """
 scalar JSON
@@ -9341,6 +11074,87 @@ input MarkEmailThreadUnreadInput {
 	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
+}
+
+"""
+Input for marking one notification of a row done.
+"""
+input MarkNotificationInboxNotificationDoneInput {
+	"""
+	The row showing the notification.
+	"""
+	rowId: ID!
+	"""
+	The notification, as the row lists it.
+	"""
+	notificationId: ID!
+	"""
+	The inbox the row's group is placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking one notification of a row done.
+"""
+type MarkNotificationInboxNotificationDonePayload {
+	"""
+	The row's group's place in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
+}
+
+"""
+Input for marking inbox rows done.
+"""
+input MarkNotificationInboxRowsDoneInput {
+	"""
+	The rows to complete, at most 200.
+	"""
+	rows: [NotificationInboxRowTargetInput!]!
+}
+
+"""
+The result of marking inbox rows done.
+"""
+type MarkNotificationInboxRowsDonePayload {
+	"""
+	The completed rows; remove them from every inbox. Rows that were
+	already gone are included.
+	"""
+	rowIds: [ID!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
+}
+
+"""
+Input for marking inbox rows seen.
+"""
+input MarkNotificationInboxRowsSeenInput {
+	"""
+	The rows to mark seen, at most 200.
+	"""
+	rowIds: [ID!]!
+	"""
+	The inbox the updated groups are placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking inbox rows seen.
+"""
+type MarkNotificationInboxRowsSeenPayload {
+	"""
+	The updated groups' places in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
 }
 
 """
@@ -9397,6 +11211,372 @@ input NotificationEntityInput {
 }
 
 """
+Who a row is from: a person, an agent, or Macro itself.
+"""
+type NotificationInboxActor {
+	"""
+	The kind of principal.
+	"""
+	kind: NotificationInboxActorKind!
+	"""
+	The user id for a user, the bot id for an agent; absent for Macro.
+	Not `id`: the client cache reads an `id` field as entity identity.
+	"""
+	principalId: String
+	"""
+	The display name when the row carries it (an agent's bot name);
+	users are looked up by id.
+	"""
+	name: String
+}
+
+"""
+The kind of principal a row is from. Values may be added; present one
+you do not know without an author.
+"""
+enum NotificationInboxActorKind {
+	"""
+	A Macro user.
+	"""
+	USER
+	"""
+	An agent.
+	"""
+	AGENT
+	"""
+	Macro itself.
+	"""
+	MACRO
+}
+
+"""
+The matching rows of the notifications filed under one entity. Entries
+belong to one inbox scope and have no id of their own; rows are shared.
+"""
+type NotificationInboxEntry {
+	"""
+	The group the rows are filed under: `<entity type>:<entity id>`.
+	"""
+	groupId: ID!
+	"""
+	The entity the rows are filed under.
+	"""
+	entity: GraphqlSoupEntity!
+	"""
+	Where the entry sits, in RFC 3339: the group's newest pending
+	notification.
+	"""
+	sortAt: String!
+	"""
+	The matching rows, newest first; never empty.
+	"""
+	rows: [NotificationInboxRow!]!
+}
+
+"""
+A group with no matching row left in the subscribed inbox: done,
+filtered out or inaccessible. The entity itself is not necessarily
+deleted.
+"""
+type NotificationInboxEntryRemoved {
+	"""
+	The removed group's id.
+	"""
+	groupId: ID!
+}
+
+"""
+A group that belongs in the subscribed inbox, with its current rows and
+placement. Insert it, or move it to its new `sortAt`.
+"""
+type NotificationInboxEntryUpserted {
+	"""
+	The entry.
+	"""
+	entry: NotificationInboxEntry!
+}
+
+"""
+Page request for the viewer's notification inbox.
+"""
+input NotificationInboxInput {
+	"""
+	Which rows the inbox shows.
+	"""
+	scope: NotificationInboxScopeInput
+	"""
+	Entries per page; defaults to 50, capped at 100.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous page's `nextCursor`; absent for the
+	first page. Send it with the same scope.
+	"""
+	cursor: String
+}
+
+"""
+Changes may have been missed: refetch the inbox.
+"""
+type NotificationInboxInvalidated {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One page of the viewer's notification inbox, newest group first.
+"""
+type NotificationInboxPage {
+	"""
+	The page's entries.
+	"""
+	entries: [NotificationInboxEntry!]!
+	"""
+	Cursor for the next page; absent once the inbox is exhausted.
+	"""
+	nextCursor: String
+	"""
+	Where this page's read stopped, the position `nextCursor` resumes
+	after; absent once the inbox is exhausted. A filtered page can read
+	past its last entry, so a live change placed after that entry but not
+	after this position belongs to this page rather than a later one.
+	"""
+	nextPosition: NotificationInboxPosition
+}
+
+"""
+One change to an inbox's membership, placement or rows.
+"""
+union NotificationInboxPatch = NotificationInboxEntryUpserted | NotificationInboxEntryRemoved | NotificationInboxInvalidated
+
+"""
+A place in the inbox's order: newest `sortAt` first, then entity id
+descending.
+"""
+type NotificationInboxPosition {
+	"""
+	The sort time, RFC 3339.
+	"""
+	sortAt: String!
+	"""
+	The entity id that breaks ties at `sortAt`.
+	"""
+	entityId: String!
+}
+
+"""
+One inbox row: the notifications shown together for one thread, a
+channel's top level, an email thread, a task, a request or a review. A
+row's contents depend only on the viewer's notifications, so one id is
+one row in every scope.
+"""
+type NotificationInboxRow {
+	"""
+	Stable per-viewer row id: `<groupId>#<slot>`. Opaque.
+	"""
+	id: ID!
+	"""
+	The row's kind.
+	"""
+	rowType: NotificationInboxRowType!
+	"""
+	For a thread row, the channel root message or discussion root
+	comment it is about.
+	"""
+	threadId: String
+	"""
+	When the row's newest shown notification was created, in RFC 3339.
+	"""
+	latestAt: String!
+	"""
+	Who the row is from, per its newest shown notification; absent when
+	that is no one in Macro (outside email senders, GitHub users).
+	"""
+	actor: NotificationInboxActor
+	"""
+	What the viewer can do from the row, in presentation order; empty
+	when the row only opens.
+	"""
+	actions: [NotificationInboxRowAction!]!
+	"""
+	Whether the row is unread.
+	"""
+	unseen: Boolean!
+	"""
+	How many notifications the row shows.
+	"""
+	count: Int!
+	"""
+	Opaque token of what the row stands for; send it with done so
+	notifications that arrive later stay active.
+	"""
+	revision: String!
+	"""
+	The row's shown notifications, newest first. Defaults to 20, capped
+	at 100; `count` is the full size.
+	"""
+	notifications(limit: Int): [GraphqlNotification!]!
+}
+
+"""
+One thing the viewer can do from a row, described as data. Perform it
+through the API of the thing it acts on; the inbox only says it is
+available.
+"""
+type NotificationInboxRowAction {
+	"""
+	What the action does.
+	"""
+	kind: NotificationInboxRowActionKind!
+	"""
+	What the action acts on when it is not the row's group: an access or
+	join request.
+	"""
+	targetId: ID
+	"""
+	The page the action opens outside Macro, such as a pull request.
+	"""
+	url: String
+}
+
+"""
+What the viewer can do from a row. Values are added with the row types
+that offer them; skip one you do not know.
+"""
+enum NotificationInboxRowActionKind {
+	"""
+	Open what the row is about.
+	"""
+	OPEN
+	"""
+	Answer the agent that is waiting for the viewer.
+	"""
+	ANSWER
+	"""
+	Review the pull request at `url`.
+	"""
+	REVIEW
+	"""
+	Grant the access request `targetId`.
+	"""
+	APPROVE
+	"""
+	Refuse the access request `targetId`.
+	"""
+	DENY
+	"""
+	Accept the join request `targetId`.
+	"""
+	ACCEPT
+	"""
+	Decline the join request `targetId`.
+	"""
+	DECLINE
+}
+
+"""
+One row to mark done.
+"""
+input NotificationInboxRowTargetInput {
+	"""
+	The row's id.
+	"""
+	id: ID!
+	"""
+	The row's `revision` the caller observed. Notifications newer than it
+	stay active. Omit to acknowledge everything current.
+	"""
+	revision: String
+}
+
+"""
+The kinds of notification inbox row. Values are added as the inbox
+learns new sources; present a value you do not know as a generic row.
+"""
+enum NotificationInboxRowType {
+	"""
+	An agent session's or AI chat's latest response or question.
+	"""
+	AGENT
+	"""
+	An email thread.
+	"""
+	EMAIL
+	"""
+	A top-level channel message that mentions the viewer, with its thread.
+	"""
+	CHANNEL_MENTION
+	"""
+	A channel's top-level messages, reactions to them and invites.
+	"""
+	CHANNEL_MESSAGES
+	"""
+	A channel thread's replies, mentions and reactions.
+	"""
+	CHANNEL_THREAD
+	"""
+	A top-level discussion comment that mentions the viewer, with its
+	thread.
+	"""
+	DISCUSSION_MENTION
+	"""
+	An entity's top-level discussion comments.
+	"""
+	DISCUSSION_MESSAGES
+	"""
+	One discussion thread's replies.
+	"""
+	DISCUSSION_THREAD
+	"""
+	A task assigned to the viewer.
+	"""
+	TASK
+	"""
+	A GitHub pull request's activity.
+	"""
+	PULL_REQUEST
+	"""
+	Reminders of an upcoming calendar event.
+	"""
+	CALENDAR_EVENT
+	"""
+	A request to join a calendar event the viewer shared.
+	"""
+	CALENDAR_JOIN_REQUEST
+	"""
+	A request for access to something the viewer can share.
+	"""
+	ACCESS_REQUESTED
+	"""
+	Access the viewer requested was granted.
+	"""
+	ACCESS_GRANTED
+	"""
+	The viewer's access to a runtime was removed, and agents of theirs
+	living there stopped.
+	"""
+	ACCESS_REMOVED
+}
+
+"""
+Which rows a notification inbox shows. Pages, subscriptions, seen and
+undo for one inbox send the same scope.
+"""
+input NotificationInboxScopeInput {
+	"""
+	Row kinds to include; omitted or empty means every kind.
+	"""
+	rowTypes: [NotificationInboxRowType!]
+	"""
+	Only unread rows; pages, cursors and updates then cover unread rows
+	alone. Defaults to false.
+	"""
+	unreadOnly: Boolean
+}
+
+"""
 The notification state as represented by GraphQL variables and responses.
 """
 enum NotificationState {
@@ -9430,6 +11610,34 @@ enum NotificationUpdateOperation {
 	Mark notifications as not done.
 	"""
 	MARK_UNDONE
+}
+
+"""
+An unresolved send owned by the authenticated actor, possibly from another device.
+"""
+type PendingEmailSend {
+	"""
+	Inbox needed to address the attempt, including after message deletion.
+	"""
+	linkId: ID!
+	"""
+	Current authoritative status.
+	"""
+	attempt: EmailSendAttemptPayload!
+}
+
+"""
+A bounded page of unresolved sends, newest first.
+"""
+type PendingEmailSends {
+	"""
+	Authorized sends.
+	"""
+	attempts: [PendingEmailSend!]!
+	"""
+	Opaque cursor for the next page.
+	"""
+	nextCursor: String
 }
 
 """
@@ -9468,6 +11676,21 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Inputs for setting the viewer's own order of one kind of saved view.
+"""
+input ReorderSavedViewsInput {
+	"""
+	Consumer kind whose order is replaced, such as `email`.
+	"""
+	kind: String!
+	"""
+	Visible views of that kind in their new order, at most 200; views left
+	out follow them by creation time.
+	"""
+	ids: [ID!]!
 }
 
 """
@@ -9524,7 +11747,8 @@ input RespondToCalendarEventInput {
 	"""
 	recurrenceId: String
 	"""
-	The owned connected address whose attendance is changed.
+	The owned connected address whose attendance is changed. Omit to
+	answer as the inbox the addressed copy syncs through.
 	"""
 	respondingEmail: String
 }
@@ -9559,6 +11783,10 @@ derives authoritative thread linkage from the reply target or the
 existing draft.
 """
 input SaveEmailDraftInput {
+	"""
+	Generation from the last loaded draft. Omitted by legacy clients.
+	"""
+	draftGeneration: Int
 	"""
 	Verified sender address for the selected inbox. Absent selects its primary address.
 	"""
@@ -9652,6 +11880,72 @@ type SaveEmailDraftPayload {
 }
 
 """
+Explicit sharing action: an omitted input leaves sharing unchanged; null team ID makes it private.
+"""
+input SavedViewSharingInput {
+	"""
+	Current team to share with; null explicitly removes sharing.
+	"""
+	teamId: ID
+}
+
+"""
+Immutable content approved by the user.
+"""
+input SendEmailAttemptInput {
+	"""
+	Saved signature HTML captured at Send; empty means no signature.
+	"""
+	signatureHtml: String
+	"""
+	Stable attempt and sending inbox.
+	"""
+	attempt: EmailSendAttemptInput!
+	"""
+	Full message snapshot; optional send time preserves Send Later across retries.
+	"""
+	message: SaveEmailDraftInput!
+	"""
+	Per-message signature preference.
+	"""
+	includeSignature: Boolean
+	"""
+	Completed draft attachment IDs.
+	"""
+	attachmentIds: [ID!]!
+	"""
+	Original attachment IDs for forwarded attachments.
+	"""
+	forwardedAttachmentIds: [ID!]!
+	"""
+	Editor HTML before the watermark, encoded like message HTML.
+	"""
+	restoreBodyHtml: String
+	"""
+	Editor plain text before the watermark.
+	"""
+	restoreBodyText: String
+	"""
+	Editor document before the watermark.
+	"""
+	restoreBodyMacro: String
+}
+
+"""
+Send admission or cancellation and the updated conversation.
+"""
+type SendEmailAttemptPayload {
+	"""
+	Admission/cancellation result and hydrated message.
+	"""
+	attempt: EmailSendAttemptPayload!
+	"""
+	Updated thread, absent for cancellation before admission.
+	"""
+	thread: GraphqlSoupEmailThread
+}
+
+"""
 Online delivery command. The draft handle is required so a response lost
 after enqueue cannot turn a retry into a second, unrelated message.
 """
@@ -9719,6 +12013,35 @@ input SetEmailThreadStateInput {
 	Desired state.
 	"""
 	value: Boolean!
+}
+
+"""
+Input for archive-based Done and its inverse on many threads at once.
+"""
+input SetEmailThreadsArchivedInput {
+	"""
+	Threads whose inbox membership should change, at most 100.
+	"""
+	threadIds: [ID!]!
+	"""
+	True for Done; false for Mark Not Done or Undo.
+	"""
+	archived: Boolean!
+}
+
+"""
+Result of archiving or unarchiving many email threads.
+"""
+type SetEmailThreadsArchivedPayload {
+	"""
+	Primary-backed record of every requested thread the caller can still
+	load, changed or not.
+	"""
+	threads: [GraphqlSoupEmailThread!]!
+	"""
+	Requested threads whose archive state could not change.
+	"""
+	failedThreadIds: [ID!]!
 }
 
 """
@@ -9814,10 +12137,15 @@ input SoupInitialInput {
 	"""
 	expand: Boolean
 	"""
-	Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
-	not supported by this initial GraphQL adapter.
+	Timestamp or selected numeric property sort. Defaults to VIEWED_AT.
+	Frecency is not supported by this GraphQL adapter.
+	Flat PROPERTY reads omit calendar events, email, channels, calls, companies, and agent sessions.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
 	"""
 	Email preview view used when hydrating email Soup items.
 	"""
@@ -9906,6 +12234,30 @@ input TimedEventTimeInput {
 """
 Input for undoing one mark-done.
 """
+input UndoNotificationInboxRowsDoneInput {
+	"""
+	The `undoToken` the mark-done returned.
+	"""
+	undoToken: String!
+	"""
+	The inbox the restored groups are placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of undoing a mark-done.
+"""
+type UndoNotificationInboxRowsDonePayload {
+	"""
+	The restored groups' places in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+}
+
+"""
+Input for undoing one mark-done.
+"""
 input UndoWorkFeedItemsDoneInput {
 	"""
 	The `undoToken` the mark-done returned.
@@ -9985,6 +12337,11 @@ input UpdateCalendarEventInput {
 	already out-of-office.
 	"""
 	outOfOffice: CalendarOutOfOfficeInput
+	"""
+	Replacement guest policy; only the organizer of a Google event may
+	change it, for the whole event or series.
+	"""
+	guestPolicy: CalendarGuestPolicyInput
 	"""
 	How much of a recurring series the update covers. Omit to let
 	`recurrenceId` decide: the identified occurrence alone when one is
@@ -10094,6 +12451,32 @@ input UpdateNotificationsInput {
 }
 
 """
+Inputs for a revision-guarded replacement update.
+"""
+input UpdateSavedViewInput {
+	"""
+	Identity of the definition to update.
+	"""
+	id: ID!
+	"""
+	Revision that must still match when the update commits.
+	"""
+	expectedRevision: Int!
+	"""
+	Replacement display name; omission preserves the current name.
+	"""
+	name: String
+	"""
+	Complete replacement configuration; omission preserves current filters.
+	"""
+	config: JSON
+	"""
+	Explicit sharing change; omission preserves the existing share.
+	"""
+	sharing: SavedViewSharingInput
+}
+
+"""
 One item to mark done.
 """
 input WorkFeedDoneItemInput {
@@ -10174,12 +12557,18 @@ input WorkFeedInput {
 	"""
 	scope: WorkFeedScopeInput
 	"""
+	Only items in this state: `UNSEEN` or `SEEN`. Subscriptions and undo
+	place items in every state, so an item seen while it is shown stays
+	until the page is fetched again.
+	"""
+	state: WorkFeedItemState
+	"""
 	Page size; defaults to 50, capped at 100.
 	"""
 	limit: Int
 	"""
 	Opaque cursor from the previous page's `nextCursor`; absent for the
-	first page. Send it with the same scope.
+	first page. Send it with the same scope and state.
 	"""
 	cursor: String
 }
@@ -10252,17 +12641,25 @@ The kinds of item a work feed can be narrowed to.
 """
 enum WorkFeedItemType {
 	"""
-	Documents and tasks.
+	Documents other than tasks.
 	"""
 	DOCUMENT
+	"""
+	Tasks.
+	"""
+	TASK
 	"""
 	AI chats.
 	"""
 	CHAT
 	"""
-	Projects.
+	Projects (folders).
 	"""
 	PROJECT
+	"""
+	Task projects (initiatives).
+	"""
+	INITIATIVE
 	"""
 	Email threads.
 	"""
@@ -10287,6 +12684,10 @@ enum WorkFeedItemType {
 	Agent sessions.
 	"""
 	AGENT_SESSION
+	"""
+	Paired runtimes, through their access notifications.
+	"""
+	RUNTIME
 }
 
 """
@@ -10315,12 +12716,34 @@ type WorkFeedPage {
 	Cursor for the next page; absent once the feed is exhausted.
 	"""
 	nextCursor: String
+	"""
+	Where this page's read stopped, the position `nextCursor` resumes
+	after; absent once the feed is exhausted. A filtered page can read
+	past its last entry, so a live change placed after that entry but not
+	after this position belongs to this page rather than a later one.
+	"""
+	nextPosition: WorkFeedPosition
 }
 
 """
 One change to a work feed's membership, placement or items.
 """
 union WorkFeedPatch = WorkFeedEntryUpserted | WorkFeedEntryRemoved | WorkFeedInvalidated
+
+"""
+A place in the feed's order: newest `sortAt` first, then entity id
+descending.
+"""
+type WorkFeedPosition {
+	"""
+	The sort time, RFC 3339.
+	"""
+	sortAt: String!
+	"""
+	The entity id that breaks ties at `sortAt`.
+	"""
+	entityId: String!
+}
 
 """
 Why an entry is presented the way it is in its feed.
@@ -10451,6 +12874,10 @@ directive @oneOf on INPUT_OBJECT
 Directs the executor to skip this field or fragment when the `if` argument is true.
 """
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Provides a scalar specification URL for specifying the behavior of custom scalar types.
+"""
+directive @specifiedBy(url: String!) on SCALAR
 schema {
 	query: SoupQueryRoot
 	mutation: CompleteMutationRoot

@@ -41,6 +41,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         hasTouch: viewport.width < 768,
         reducedMotion: 'reduce',
       });
+      page.setDefaultTimeout(15000);
       let releaseScripts!: () => void;
       const scriptsReady = new Promise<void>((resolve) => {
         releaseScripts = resolve;
@@ -107,25 +108,36 @@ export async function verifyHomepage(directory: string): Promise<void> {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
         });
-        if (!(await heading.evaluate((element) => element.isConnected)))
-          throw new Error(
-            `Homepage replaced its first-painted heading during hydration (${label})`
-          );
-        if ((await heading.textContent()) !== initialText)
-          throw new Error(
-            `Homepage changed heading text during hydration (${label})`
-          );
-        const after = await heading.boundingBox();
-        if (
-          !before ||
-          !after ||
-          (['x', 'y', 'width', 'height'] as const).some(
-            (key) => Math.abs(before[key] - after[key]) > 1
+        if (viewport.width >= 700) {
+          if (!(await heading.evaluate((element) => element.isConnected)))
+            throw new Error(
+              `Homepage replaced its first-painted heading during hydration (${label})`
+            );
+          if ((await heading.textContent()) !== initialText)
+            throw new Error(
+              `Homepage changed heading text during hydration (${label})`
+            );
+          const after = await heading.boundingBox();
+          if (
+            !before ||
+            !after ||
+            (['x', 'y', 'width', 'height'] as const).some(
+              (key) => Math.abs(before[key] - after[key]) > 1
+            )
           )
-        )
-          throw new Error(
-            `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
-          );
+            throw new Error(
+              `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
+            );
+        } else {
+          // Mobile replaces the desktop SSR fallback with its landing composition.
+          await expect(
+            page.locator('.ob-welcome [data-welcome-heading]')
+          ).toBeVisible();
+          await expect(
+            page.locator('.ob-welcome [data-welcome-heading]')
+          ).toHaveText(/The unified workspace\s*for your company\./);
+          await expect(page.locator('.homepage-hero-cta')).toBeVisible();
+        }
         await heading.dispose();
 
         if (viewport.width < 768)
@@ -155,22 +167,26 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
         await page.emulateMedia({ colorScheme });
         const overflow = await page
-          .locator('.macro-home-scroll')
+          .locator('[data-onboarding-scroll]')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        const graphic = await page
-          .locator('.homepage-feature-links .feature-flow')
-          .boundingBox();
-        expect(graphic).not.toBeNull();
-        expect(graphic!.x).toBeGreaterThanOrEqual(0);
-        expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(viewport.width);
+        if (viewport.width >= 700) {
+          const graphic = await page
+            .locator('.homepage-feature-links .feature-flow')
+            .boundingBox();
+          expect(graphic).not.toBeNull();
+          expect(graphic!.x).toBeGreaterThanOrEqual(0);
+          expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(
+            viewport.width
+          );
+        }
         await page
           .locator('#email')
           .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
         await page.goBack();
-        await page.locator('.macro-home-hero .macro-home-button').click();
+        await page.locator('.homepage-hero-cta').click();
         await expect(page).toHaveURL(
           `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
         );
@@ -179,7 +195,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, feature links, animation, and signup routing verified`
+          `[prerender] Homepage ${label}: SSR content, responsive hydration, navigation, feature links, animation, and signup routing verified`
         );
       } finally {
         releaseScripts();

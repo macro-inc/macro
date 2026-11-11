@@ -39,18 +39,26 @@ gateway `/calendar` prefix.
 ## Checks
 
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
-- `curl http://localhost:8088/health` after `just run_local` or `just stack up`.
+- `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
+
+- The API's server spans come from `macro_tower_layers` (`api::traced`).
+  tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO
+  filter, so an API wrapped in it sends no server spans.
 
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;
-  sharing changes and uncertain sync results require `true`.
+  sharing changes and uncertain sync results require `true`. An inbox refresh
+  already refreshes its viewers' team views, so its teammate fan-out skips
+  them; a sharing change also refreshes the sharer (`notify_sharers`).
 
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service` ·
   Docs: `docs/guides/new-service.md` (uses this service as the model)
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

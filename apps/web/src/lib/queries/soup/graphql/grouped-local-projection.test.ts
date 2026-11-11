@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { describe, expect, it } from 'vitest';
 import { parseCacheRevision } from '../../../graphql-cache/protocol';
 import type {
@@ -5,6 +6,11 @@ import type {
   GroupSoupQuery,
   SoupItemFieldsFragment,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { mapGraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
+import {
+  computeGroupKeysForItem,
+  resolveGroupMetaForKey,
+} from '../grouped/api';
 import {
   localSoupGroupKeys,
   mergeGroupedSoupBins,
@@ -52,6 +58,8 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              displayOrder: null,
+              label: null,
               totalCount: 300 - index * 10,
               nextCursor: `page-${index + 1}`,
               items: items.slice(index * 10, index * 10 + 10),
@@ -67,6 +75,8 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              displayOrder: null,
+              label: null,
               totalCount: 0,
               nextCursor: null,
               items: [groupedDocument('0', ['done'])],
@@ -88,26 +98,130 @@ describe('loaded grouped pages', () => {
 });
 
 describe('local grouped Soup projection', () => {
-  it('retains server membership for an unknown grouping field', () => {
-    const futureInput: GroupedSoupInitialInput = JSON.parse(
-      '{"groupBy":{"field":"FUTURE"},"sortMethod":"UPDATED_AT"}'
-    );
-    const item = groupedDocument('a');
-    const baseline = [
-      { key: 'server-group', items: [item], totalCount: 1, nextCursor: null },
-    ];
-
-    expect(localSoupGroupKeys(item, futureInput, now)).toBeUndefined();
+  it('moves loaded date values between half-open ranges while preserving unloaded counts', () => {
+    const dateInput: GroupedSoupInitialInput = {
+      groupBy: {
+        field: 'PROPERTY',
+        propertyDefinitionId: 'review-date',
+        bucketing: {
+          type: 'DATE_RANGES',
+          ranges: [
+            { key: 'review_soon', start: null, end: '2026-11-01T00:00:00Z' },
+            { key: 'review_later', start: '2026-11-01T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'no_review_date',
+        },
+      },
+      sortMethod: 'UPDATED_AT',
+    };
+    const a = groupedDocument('a');
+    a.properties[0] = {
+      ...a.properties[0],
+      propertyDefinitionId: 'review-date',
+      dataType: 'DATE',
+      isMultiSelect: false,
+      value: {
+        __typename: 'GraphqlDatePropertyValue',
+        dateValue: '2026-10-31T23:59:59Z',
+      },
+    };
+    const b = { ...a, id: 'b' };
+    const moved = {
+      ...a,
+      properties: [
+        {
+          ...a.properties[0],
+          value: {
+            __typename: 'GraphqlDatePropertyValue' as const,
+            dateValue: '2026-11-01T00:00:00Z',
+          },
+        },
+      ],
+    };
+    expect(localSoupGroupKeys(a, dateInput, now)).toEqual(['review_soon']);
+    expect(localSoupGroupKeys(moved, dateInput, now)).toEqual(['review_later']);
+    expect(
+      localSoupGroupKeys({ ...a, properties: [] }, dateInput, now)
+    ).toEqual(['no_review_date']);
     expect(
       projectLocalGroupedSoup(
-        baseline,
+        [
+          {
+            key: 'review_soon',
+            items: [a, b],
+            displayOrder: null,
+            label: null,
+            totalCount: 30,
+            nextCursor: 'more',
+          },
+          {
+            key: 'review_later',
+            items: [],
+            displayOrder: null,
+            label: null,
+            totalCount: 4,
+            nextCursor: 'later',
+          },
+        ],
         new Map(),
-        snapshot([item]),
-        futureInput,
+        snapshot([moved, b]),
+        dateInput,
         now
       )
-    ).toEqual(baseline);
+    ).toEqual([
+      {
+        key: 'review_soon',
+        items: [b],
+        displayOrder: null,
+        label: null,
+        totalCount: 29,
+        nextCursor: 'more',
+      },
+      {
+        key: 'review_later',
+        items: [moved],
+        displayOrder: null,
+        label: null,
+        totalCount: 5,
+        nextCursor: 'later',
+      },
+    ]);
   });
+
+  it('retains server membership for an unfamiliar grouping while refreshing rows', () => {
+    const before = groupedDocument('a');
+    const next = { ...groupedDocument('a', ['done']), displayName: 'Updated' };
+    const fromNewerServer = JSON.parse('"ASSIGNEE"');
+
+    expect(
+      projectLocalGroupedSoup(
+        [
+          {
+            key: 'server-group',
+            label: null,
+            items: [before],
+            displayOrder: null,
+            totalCount: 30,
+            nextCursor: 'more',
+          },
+        ],
+        new Map(),
+        snapshot([next]),
+        { ...input, groupBy: { field: fromNewerServer } },
+        now
+      )
+    ).toEqual([
+      {
+        key: 'server-group',
+        label: null,
+        items: [next],
+        displayOrder: null,
+        totalCount: 30,
+        nextCursor: 'more',
+      },
+    ]);
+  });
+
   it('moves normalized rows and removes filter nonmatches without losing unknown rows', () => {
     const a = groupedDocument('a');
     const b = groupedDocument('b');
@@ -115,7 +229,9 @@ describe('local grouped Soup projection', () => {
     const baseline = [
       {
         key: 'todo',
+        label: null,
         items: [a, b, unknown],
+        displayOrder: null,
         totalCount: 30,
         nextCursor: 'more',
       },
@@ -129,8 +245,22 @@ describe('local grouped Soup projection', () => {
       now
     );
     expect(result).toEqual([
-      { key: 'todo', items: [unknown], totalCount: 28, nextCursor: 'more' },
-      { key: 'done', items: [next], totalCount: 1, nextCursor: null },
+      {
+        key: 'todo',
+        items: [unknown],
+        displayOrder: null,
+        label: null,
+        totalCount: 28,
+        nextCursor: 'more',
+      },
+      {
+        key: 'done',
+        items: [next],
+        displayOrder: null,
+        label: null,
+        totalCount: 1,
+        nextCursor: null,
+      },
     ]);
     expect(result[1].items[0]).toBe(next);
     expect(baseline[0].items).toEqual([a, b, unknown]);
@@ -159,7 +289,9 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [selectedBefore, retained, missing, excluded],
+            displayOrder: null,
             totalCount: 30,
             nextCursor: 'more',
           },
@@ -172,7 +304,9 @@ describe('local grouped Soup projection', () => {
     ).toEqual([
       {
         key: 'todo',
+        label: null,
         items: [selected, current, missing],
+        displayOrder: null,
         totalCount: 29,
         nextCursor: 'more',
       },
@@ -187,11 +321,20 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [before],
+            displayOrder: null,
             totalCount: 30,
             nextCursor: 'todo-more',
           },
-          { key: 'done', items: [], totalCount: 20, nextCursor: 'done-more' },
+          {
+            key: 'done',
+            items: [],
+            displayOrder: null,
+            label: null,
+            totalCount: 20,
+            nextCursor: 'done-more',
+          },
         ],
         new Map(),
         snapshot([after]),
@@ -199,8 +342,22 @@ describe('local grouped Soup projection', () => {
         now
       )
     ).toEqual([
-      { key: 'todo', items: [], totalCount: 29, nextCursor: 'todo-more' },
-      { key: 'done', items: [after], totalCount: 20, nextCursor: 'done-more' },
+      {
+        key: 'todo',
+        items: [],
+        displayOrder: null,
+        label: null,
+        totalCount: 29,
+        nextCursor: 'todo-more',
+      },
+      {
+        key: 'done',
+        items: [after],
+        displayOrder: null,
+        label: null,
+        totalCount: 20,
+        nextCursor: 'done-more',
+      },
     ]);
   });
 
@@ -220,15 +377,38 @@ describe('local grouped Soup projection', () => {
     const row = { ...groupedDocument('a'), updatedAt: '2026-10-09T23:30:00Z' };
     expect(
       projectLocalGroupedSoup(
-        [{ key: 'today', items: [row], totalCount: 8, nextCursor: 'more' }],
+        [
+          {
+            key: 'today',
+            items: [row],
+            displayOrder: null,
+            label: null,
+            totalCount: 8,
+            nextCursor: 'more',
+          },
+        ],
         new Map(),
         snapshot([row]),
         { ...input, groupBy: { field: 'DATE' } },
         now
       )
     ).toEqual([
-      { key: 'today', items: [], totalCount: 7, nextCursor: 'more' },
-      { key: 'yesterday', items: [row], totalCount: 1, nextCursor: null },
+      {
+        key: 'today',
+        items: [],
+        displayOrder: null,
+        label: null,
+        totalCount: 7,
+        nextCursor: 'more',
+      },
+      {
+        key: 'yesterday',
+        items: [row],
+        displayOrder: null,
+        label: null,
+        totalCount: 1,
+        nextCursor: null,
+      },
     ]);
   });
 
@@ -278,6 +458,70 @@ describe('local grouped Soup projection', () => {
     ).toBeUndefined();
   });
 
+  it('moves project groups with the initiative property despite a different folder', () => {
+    const task = groupedDocument('a');
+    task.projectId = 'legacy-folder';
+    task.properties[0] = {
+      ...task.properties[0],
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      value: {
+        __typename: 'GraphqlEntityReferencePropertyValue',
+        references: [
+          {
+            entityId: 'initiative-1',
+            entityType: 'INITIATIVE',
+            specificMessageId: null,
+          },
+        ],
+      },
+    };
+    const projectInput: GroupedSoupInitialInput = {
+      groupBy: { field: 'PROJECT' },
+    };
+    expect(localSoupGroupKeys(task, projectInput, now)).toEqual([
+      'initiative-1',
+    ]);
+    const apiTask = mapGraphqlSoupItem(task);
+    expect(apiTask).toBeDefined();
+    if (!apiTask) throw new Error('Task must map to the REST item shape');
+    expect(computeGroupKeysForItem(apiTask, { type: 'project' })).toEqual([
+      'initiative-1',
+    ]);
+    expect(resolveGroupMetaForKey({ type: 'project' }, '')?.label).toBe(
+      'No Project'
+    );
+
+    const unassigned = { ...task, properties: [] };
+    const result = projectLocalGroupedSoup(
+      [
+        {
+          key: 'initiative-1',
+          items: [task],
+          label: 'Project One',
+          displayOrder: null,
+          totalCount: 1,
+          nextCursor: null,
+        },
+      ],
+      new Map(),
+      snapshot([unassigned]),
+      projectInput,
+      now
+    );
+    expect(
+      result.find((bin) => bin.key === '')?.items.map((item) => item.id)
+    ).toEqual(['a']);
+    expect(result.find((bin) => bin.key === 'initiative-1')?.totalCount).toBe(
+      0
+    );
+    // The server's name stays with its group; a group created locally has
+    // none until the next grouped page labels it.
+    expect(result.find((bin) => bin.key === 'initiative-1')?.label).toBe(
+      'Project One'
+    );
+    expect(result.find((bin) => bin.key === '')?.label).toBeNull();
+  });
+
   it('distinguishes known empty property values from unknown grouping evidence', () => {
     expect(localSoupGroupKeys(groupedDocument('a', []), input, now)).toEqual([
       '',
@@ -288,7 +532,7 @@ describe('local grouped Soup projection', () => {
         { ...input, groupBy: { field: 'PROJECT' } },
         now
       )
-    ).toEqual(['project-2']);
+    ).toEqual(['']);
     const linked = groupedDocument('a');
     linked.properties[0].value = {
       __typename: 'GraphqlLinkPropertyValue',

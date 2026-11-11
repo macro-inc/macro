@@ -3,7 +3,7 @@
 //! Run with:
 //!
 //! ```text
-//! cargo run -p agent_fold --bin export_types
+//! cargo run -p agent_fold --bin agent_fold_types
 //! ```
 
 use agent_fold::domain::model::SessionMetadata;
@@ -18,7 +18,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<FoldedMessage>()
         .register::<FoldedStreamEvent>()
         .register::<SessionMetadata>();
-    let generated = Typescript::default().export(&types, specta_serde::Format)?;
+    // Optional notification errors are omitted on output but accepted as null
+    // on input; phased types preserve both without weakening the payload union.
+    let generated = Typescript::default().export(&types, specta_serde::PhasesFormat)?;
     let generated = generated
         .lines()
         .map(str::trim_end)

@@ -191,6 +191,7 @@ pub fn topic_events(event: &crate::domain::ports::MessageEvent) -> Vec<MessageMa
             ..
         } => {
             let mut facts = vec![MessageMacroEvent::patched(MessagePatchedMetadata {
+                completed_reply: event.agent_trigger(),
                 parent: message.parent.clone(),
                 message_id: message.id,
                 thread_id: message.thread_id,
@@ -247,7 +248,8 @@ pub fn topic_events(event: &crate::domain::ports::MessageEvent) -> Vec<MessageMa
                 deleted_at: message.deleted_at,
             })]
         }
-        MessageChange::ReactionChanged { .. }
+        MessageChange::CallRootPosted { .. }
+        | MessageChange::ReactionChanged { .. }
         | MessageChange::ThreadUpdated { .. }
         | MessageChange::Typing { .. } => Vec::new(),
     }

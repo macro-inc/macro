@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_attachments_drafts SET draft_id = $1 WHERE draft_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bf8a10427f32241206f02b499aaca45f3e17288ea37c0905257a0afce6ba551"
+}

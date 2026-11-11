@@ -1,4 +1,5 @@
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";
+pub mod notion;
 pub mod parse_markdown;
 pub mod types;
 

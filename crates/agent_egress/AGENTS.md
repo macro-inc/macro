@@ -11,6 +11,8 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 
 - `src/lib.rs` doc comment: the full request flow (session token → grant →
   credential port → forward).
+- `src/domain/service/actor.rs`: per-call requester/owner selection and cross-account approval policy.
+- `src/outbound/actor_mcp.rs`: independent authenticated MCP sessions for tool listing/calls; credentials never share upstream session state.
 - `src/domain/service.rs`: `EgressServiceImpl` — steps 2 and 3 (token → grant,
   grant → credential).
 - `src/domain/ports.rs`: `SessionAuthority`, `McpCredentials`, `GithubTokens`,
@@ -18,6 +20,15 @@ MCP app, a custom server, or a GitHub installation token) on each request.
 - `src/outbound/mcp_credentials.rs` / `macro_mcp.rs` / `custom_mcp.rs` /
   `github_tokens.rs`: the credential resolvers.
 - `src/inbound/axum_router.rs`: the HTTP entry point the sandbox calls.
+- `SessionMcpExchange` (`src/domain/service/actor.rs`): in-process
+  `tools/list`/`tools/call` on a connected app or custom server for a caller
+  that authorized against the session itself (code executions'
+  `macro.connectedApps`). It reads the grant by session id
+  (`SessionAuthority::authorize_session`), never reaches Macro's own server or
+  previews, and shares the actor path's credential resolution and
+  not-connected answers. A call as the owner in a turn someone else prompted
+  is held per call through `OwnerApprovals::hold_in_process`, the same
+  approval record as the native tool gate.
 
 ## Scope
 
@@ -38,12 +49,32 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `src/outbound/` (adapter) → `src/domain/service.rs` (dispatch) →
   `src/domain/approval.rs` if it needs owner approval.
 
+Require `acting_as: requester | owner` on account-using session MCP calls;
+resolve it before credentials, strip it before upstream dispatch, and ask for
+approval only when the selected account differs from the verified requester.
+Check turn authority through `TurnPrompter::acting_user()`: System turns never
+inherit requester access, including malformed records retaining a user ID.
+Keep discovery on the session owner's configured catalog. Requester-only
+integrations are not advertised by this version. A missing selected connection
+returns an actionable tool error; never fall back to another account.
+Actor selection covers executable tool calls; initialization and other non-tool
+MCP methods retain their existing owner proxy behavior. Git and preview egress
+retain their existing session/repository identities.
+
 ## Checks
 
 - `cargo test -p agent_egress` (`SQLX_OFFLINE` unset).
 
-Code-mode minting attaches the session agent to a short-lived owner token;
-ordinary MCP owner tokens omit agent attribution.
+Session-egress Macro API tokens (`MacroApiTokens::mint`) carry the session's
+bound agent (`agent_session.bot_id`, read off the row as `SessionGrant.agent`) as
+their signed `agent_id` claim and retain `agent_session_id` provenance, so
+code mode can mint a fresh invocation correlation. Cache credentials by owner,
+agent, and session. The bot
+never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
+(code mode) choose the claim themselves, plus an optional signed `agent_via`
+client label (public MCP code mode signs the MCP client's name); `mint_for`
+signs none of these claims. `mint_for_routine` signs the routine whose run the
+token acts for (and optionally an agent; `None` writes as the owner).
 
 ## Gotchas
 

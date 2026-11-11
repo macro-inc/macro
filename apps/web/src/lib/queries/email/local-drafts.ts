@@ -9,17 +9,24 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { analytics } from '@app/lib/analytics';
 import { getNativeStagedUpload } from '@core/mobile/nativeStagedUpload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import type { NormalizedCacheExchangeOptions } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   ClaimedMutation,
   MutationInspection,
 } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type { OperationResult } from '@urql/core';
 import { authKeys } from '../auth/keys';
 import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
-import { createLocalDraftStore } from './local-draft-store';
+import {
+  createLocalDraftStore,
+  type DraftStorageSession,
+} from './local-draft-store';
+
+import type { EmailSendIntent } from './send-intent';
 
 export const localDraftStore = createLocalDraftStore(undefined, (event) => {
   const context = {
@@ -35,9 +42,11 @@ export const localDraftStore = createLocalDraftStore(undefined, (event) => {
 });
 const fileIds = new WeakMap<File, string>();
 const fileCopies = new WeakMap<File, Promise<Blob>>();
+const nativeUploadLocks = new Map<string, Promise<void>>();
 const pendingWrites = new Set<Promise<LocalDraft>>();
 const EPOCH_KEY = 'email-working-copies:epoch';
 let documentSession: { accountId: string; epoch: string } | undefined;
+let documentSessionOpened = false;
 let retiredSession = false;
 
 function storageEpoch() {
@@ -86,7 +95,7 @@ export async function clearLocalDrafts(): Promise<void> {
   }
 }
 
-async function session() {
+export async function emailStorageSession() {
   const user = queryClient.getQueryData<UserInfoData>(
     authKeys.userInfo.queryKey
   );
@@ -105,31 +114,95 @@ async function session() {
   }
   documentSession ??= { accountId: user.id, epoch };
   const expected = documentSession;
-  return await localDraftStore.activate(
-    expected.accountId,
-    expected.epoch,
-    () => {
-      const current = queryClient.getQueryData<UserInfoData>(
-        authKeys.userInfo.queryKey
-      );
-      return (
-        !retiredSession &&
-        current?.authenticated === true &&
-        current.id === expected.accountId &&
-        localStorage.getItem(EPOCH_KEY) === expected.epoch
-      );
-    }
-  );
+  let session: DraftStorageSession;
+  try {
+    session = await localDraftStore.activate(
+      expected.accountId,
+      expected.epoch,
+      () => {
+        const current = queryClient.getQueryData<UserInfoData>(
+          authKeys.userInfo.queryKey
+        );
+        return (
+          !retiredSession &&
+          current?.authenticated === true &&
+          current.id === expected.accountId &&
+          localStorage.getItem(EPOCH_KEY) === expected.epoch
+        );
+      },
+      // Signing in over another account skips the sign-out that would end
+      // its session, so it still owns this epoch. Take over only from a
+      // document that has not opened storage (one that has is that account's
+      // stale tab) and whose account this document confirmed with the server
+      // (a restored identity can still name the previous account).
+      () =>
+        !documentSessionOpened &&
+        (queryClient.getQueryState(authKeys.userInfo.queryKey)?.dataUpdatedAt ??
+          0) >= performance.timeOrigin
+    );
+  } catch (error) {
+    // A concurrent call in this document took the storage over meanwhile.
+    if (documentSession !== expected) return await emailStorageSession();
+    throw error;
+  }
+  if (session.epoch !== expected.epoch) {
+    const current = localStorage.getItem(EPOCH_KEY);
+    // A sign-out that ran meanwhile owns the epoch; never write over it.
+    if (
+      retiredSession ||
+      (current !== expected.epoch && current !== session.epoch)
+    )
+      throw new Error('This draft session is no longer active');
+    localStorage.setItem(EPOCH_KEY, session.epoch);
+    documentSession = { accountId: session.accountId, epoch: session.epoch };
+  }
+  documentSessionOpened = true;
+  return session;
+}
+
+/**
+ * Calls `ended` when this document's session can never reopen: another tab
+ * moved the epoch off it (a sign-out or another account's takeover), or the
+ * signed-in account is no longer the session's. A document signing itself
+ * out is excluded.
+ */
+export function watchEmailStorageEnded(
+  accountId: string,
+  ended: () => void
+): () => void {
+  const check = () => {
+    if (
+      documentSession &&
+      !retiredSession &&
+      (documentSession.accountId !== accountId ||
+        localStorage.getItem(EPOCH_KEY) !== documentSession.epoch)
+    )
+      ended();
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === EPOCH_KEY || event.key === null) check();
+  };
+  // A document restored from the back/forward cache missed storage events.
+  const onShow = (event: PageTransitionEvent) => {
+    if (event.persisted) check();
+  };
+  window.addEventListener('storage', onStorage);
+  window.addEventListener('pageshow', onShow);
+  check();
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    window.removeEventListener('pageshow', onShow);
+  };
 }
 
 export async function listLocalDrafts(): Promise<LocalDraft[]> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   return await localDraftStore.list(owner);
 }
 export async function readLocalDraft(
   id: string
 ): Promise<LocalDraft | undefined> {
-  return await localDraftStore.read(await session(), id);
+  return await localDraftStore.read(await emailStorageSession(), id);
 }
 
 /** Local body HTML uses the same base64 representation as the editor's save input. */
@@ -198,8 +271,11 @@ async function copyFile(file: File): Promise<Blob> {
     pending = (async () => {
       const staged = getNativeStagedUpload(file);
       if (!staged) return file;
-      if (!staged.previewSrc)
+      if (!staged.previewSrc) {
+        // Desktop tags the real pasted File, which still holds its bytes.
+        if (file.size === staged.size) return file;
         throw new Error('Attachment bytes are unavailable on this device');
+      }
       const response = await fetch(staged.previewSrc);
       if (!response.ok)
         throw new Error('Unable to preserve attachment on this device');
@@ -244,7 +320,7 @@ async function finishLocalWrite(write: Promise<LocalDraft>): Promise<void> {
 }
 
 async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   const id = input.clientHandles?.draftId ?? input.draft.db_id;
   if (!id)
     throw new Error('Draft identity must be minted before local persistence');
@@ -329,7 +405,7 @@ async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
 export async function restoreLocalAttachments(
   local: LocalDraft
 ): Promise<DraftFormAttachment[]> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   const attachments: DraftFormAttachment[] = [];
   for (const attachment of local.attachments) {
     if (attachment.type !== 'local') {
@@ -365,28 +441,48 @@ export function draftSyncPaused(local: LocalDraft): boolean {
   );
 }
 
-export async function resumeLocalDraft(id: string): Promise<void> {
-  const owner = await session();
+export async function resumeLocalDraft(
+  id: string,
+  retireGeneration?: string
+): Promise<void> {
+  const owner = await emailStorageSession();
   const draft = await localDraftStore.read(owner, id);
   if (!draft) return;
   await localDraftStore.update(owner, draft.key, (current) => ({
     ...current,
+    // Explicit send recovery keeps newer edits and their blobs while fencing
+    // callbacks from the send's old lifetime. Concurrent restores rotate once.
+    generation:
+      current.generation === retireGeneration
+        ? crypto.randomUUID()
+        : current.generation,
     status: 'dirty',
     errorCode: undefined,
     latestAttemptId: undefined,
     queuedAttemptId: undefined,
+    deleteAttemptId: undefined,
   }));
 }
 
-export async function forgetLocalDraft(id: string): Promise<void> {
-  const owner = await session();
+export async function forgetLocalDraft(
+  id: string,
+  expected?: Pick<LocalDraft, 'generation' | 'revision'>
+): Promise<void> {
+  const owner = await emailStorageSession();
   const draft = await localDraftStore.read(owner, id);
-  if (draft) await localDraftStore.update(owner, draft.key, () => undefined);
+  if (draft)
+    await localDraftStore.update(owner, draft.key, (current) =>
+      expected &&
+      (current.generation !== expected.generation ||
+        current.revision !== expected.revision)
+        ? current
+        : undefined
+    );
 }
 
 /** Only an explicit server Undo may start a fresh lifetime for a retired handle. */
 export async function reviveLocalDraft(id: string): Promise<void> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   await localDraftStore.generation(owner, id, true);
 }
 
@@ -394,7 +490,7 @@ export async function clearLocalAttachmentReceipt(
   draftId: string,
   attachmentId: string
 ): Promise<void> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   const draft = await localDraftStore.read(owner, draftId);
   if (!draft) return;
   await localDraftStore.update(owner, draft.key, (current) => ({
@@ -412,12 +508,18 @@ export async function recordLocalAttachment(
   draftId: string,
   file: File,
   attachmentId: string | undefined,
-  uploaded: boolean
+  uploaded: boolean,
+  expectedGeneration?: string
 ): Promise<void> {
-  const owner = await session();
+  const owner = await emailStorageSession();
   const draft = await localDraftStore.read(owner, draftId);
   const id = fileIds.get(file);
-  if (!draft || !id) return;
+  if (
+    !draft ||
+    !id ||
+    (expectedGeneration && draft.generation !== expectedGeneration)
+  )
+    return;
   await localDraftStore.update(owner, draft.key, (current) => {
     if (current.generation !== draft.generation) return current;
     const attachments = current.attachments.map((attachment) =>
@@ -441,11 +543,29 @@ export async function recordLocalAttachment(
   });
 }
 
+/**
+ * Whether the copy is being discarded: requested beside it, or admitted by the
+ * queue. Only an edit withdraws a request, so until one does no save of this
+ * copy may take the discard's place in the queue.
+ */
+function draftDiscardPending(local: LocalDraft): boolean {
+  return local.status === 'deleting' || local.deleteAttemptId !== undefined;
+}
+
+export async function beginDraftAttempt(
+  local: LocalDraft,
+  operation: 'delete'
+): Promise<DraftAttempt>;
+/** Resolves with nothing when the copy is being discarded: the save must not be queued. */
+export async function beginDraftAttempt(
+  local: LocalDraft,
+  operation: 'save'
+): Promise<DraftAttempt | undefined>;
 export async function beginDraftAttempt(
   local: LocalDraft,
   operation: 'save' | 'delete'
-): Promise<DraftAttempt> {
-  const owner = await session();
+): Promise<DraftAttempt | undefined> {
+  const owner = await emailStorageSession();
   if (local.accountId !== owner.accountId)
     throw new Error('This draft belongs to a previous account');
   const attempt: DraftAttempt = {
@@ -457,46 +577,99 @@ export async function beginDraftAttempt(
     revision: local.revision,
     operation,
   };
-  await localDraftStore.update(owner, local.key, (current) =>
-    current.generation !== local.generation ||
-    (operation === 'save' &&
-      (current.revision !== local.revision ||
-        draftSyncPaused(current) ||
-        current.status === 'deleting'))
-      ? current
-      : {
-          ...current,
-          latestAttemptId: attempt.id,
-          queuedAttemptId: undefined,
-          status: operation === 'delete' ? 'deleting' : 'dirty',
-        }
-  );
-  return attempt;
+  let discarding = false;
+  await localDraftStore.update(owner, local.key, (current) => {
+    discarding = operation === 'save' && draftDiscardPending(current);
+    if (
+      current.generation !== local.generation ||
+      current.revision !== local.revision
+    )
+      return current;
+
+    // A discard waits beside the copy: the queue is a second store, so the
+    // copy only becomes `deleting` once the queue admits the delete.
+    if (operation === 'delete')
+      return { ...current, deleteAttemptId: attempt.id };
+
+    // A save of the revision being discarded is older than the discard,
+    // whichever started first: a newer edit would have withdrawn the request.
+    if (draftSyncPaused(current) || discarding) return current;
+
+    return {
+      ...current,
+      latestAttemptId: attempt.id,
+      queuedAttemptId: undefined,
+      status: 'dirty',
+    };
+  });
+  return discarding ? undefined : attempt;
 }
 
-/** Admission is separate from intent: two stores cannot enqueue atomically. */
-export async function markDraftAttemptQueued(
-  attempt: DraftAttempt
-): Promise<void> {
-  const owner = await session();
+/**
+ * A delete that never reached the queue leaves the working copy with its
+ * editor. Dropping the request also refuses a replay of an enqueue whose
+ * outcome was uncertain.
+ */
+export async function abandonDraftDelete(attempt: DraftAttempt): Promise<void> {
+  const owner = await emailStorageSession();
   if (owner.accountId !== attempt.accountId) return;
   await localDraftStore.update(owner, attempt.draftKey, (draft) =>
-    draft.generation !== attempt.generation ||
-    draft.latestAttemptId !== attempt.id ||
-    draftSyncPaused(draft) ||
-    draft.status === 'synced'
-      ? draft
-      : {
-          ...draft,
-          queuedAttemptId: attempt.id,
-          status:
-            attempt.operation === 'delete'
-              ? 'deleting'
-              : draft.revision === attempt.revision
-                ? 'queued'
-                : draft.status,
-        }
+    draft.generation === attempt.generation &&
+    draft.deleteAttemptId === attempt.id
+      ? { ...draft, deleteAttemptId: undefined }
+      : draft
   );
+}
+
+/**
+ * Admission is separate from intent: two stores cannot enqueue atomically.
+ * Returns the copy as admission left it.
+ */
+export async function markDraftAttemptQueued(
+  attempt: DraftAttempt
+): Promise<LocalDraft | undefined> {
+  const owner = await emailStorageSession();
+  if (owner.accountId !== attempt.accountId) return;
+  return await localDraftStore.update(owner, attempt.draftKey, (draft) => {
+    if (draft.generation !== attempt.generation) return draft;
+
+    if (attempt.operation === 'delete') {
+      // Already admitted, by an earlier claim or by a build that marked the
+      // copy when the discard began.
+      if (draft.status === 'deleting')
+        return draft.latestAttemptId === attempt.id
+          ? { ...draft, queuedAttemptId: attempt.id }
+          : draft;
+
+      // The discard applies only to the revision the user discarded.
+      if (
+        draft.deleteAttemptId !== attempt.id ||
+        draft.revision !== attempt.revision
+      )
+        return draft;
+
+      return {
+        ...draft,
+        deleteAttemptId: undefined,
+        latestAttemptId: attempt.id,
+        queuedAttemptId: attempt.id,
+        status: 'deleting',
+      };
+    }
+
+    if (
+      draft.latestAttemptId !== attempt.id ||
+      draftSyncPaused(draft) ||
+      draft.status === 'synced'
+    )
+      return draft;
+
+    return {
+      ...draft,
+      queuedAttemptId: attempt.id,
+      status: draft.revision === attempt.revision ? 'queued' : draft.status,
+    };
+  });
 }
 
 function attemptOf(
@@ -529,6 +702,39 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+/**
+ * Whether a send on this device has taken the draft. Its content travels
+ * with the send, so a queued save of it, and that save's outcome, no longer
+ * speak for the working copy.
+ */
+export async function emailSendOwnsDraft(
+  draftId: string,
+  attempt?: DraftAttempt
+): Promise<boolean> {
+  const intents = await readLocalEmailSends();
+  return intents.some((value) => {
+    const intent = object(value);
+    const metadata = object(intent.metadata);
+    if (metadata.kind !== 'email-send-v1') return false;
+    const payload = object(metadata.payload);
+    const response = object(intent.response);
+    const sent = object(
+      object(response.cancelEmailSend ?? response.sendEmailMessage).attempt
+    );
+    if (
+      (intent.locallyCancelled || sent.status === 'CANCELLED') &&
+      attempt &&
+      attempt.generation !== object(payload.workingCopy).generation
+    )
+      return false;
+    return [
+      object(payload.draft).draftId,
+      object(payload.workingCopy).key,
+      object(sent.message).id,
+    ].includes(draftId);
+  });
+}
+
 /** Replay bookkeeping runs even when no composer is mounted. */
 export function localDraftQueueLifecycle(
   host: CacheHost
@@ -539,6 +745,17 @@ export function localDraftQueueLifecycle(
   let initialized: Promise<void> | undefined;
   const legacy = new Map<string, DraftAttempt>();
   const migrated = new Map<string, number>();
+  const previousAccount = new Set<string>();
+  async function ownedBySend(mutation: ClaimedMutation | MutationInspection) {
+    if (
+      mutation.operationName !== 'SaveEmailDraft' &&
+      mutation.operationName !== 'DeleteEmailDraft'
+    )
+      return false;
+    const id = text(object(mutation.variables.input).draftId);
+    if (!id) return false;
+    return await emailSendOwnsDraft(id, attemptOf(mutation));
+  }
   async function preserveLegacy(
     mutation: MutationInspection
   ): Promise<DraftAttempt | undefined> {
@@ -547,9 +764,16 @@ export function localDraftQueueLifecycle(
       mutation.operationName !== 'DeleteEmailDraft'
     )
       return;
+    if (await ownedBySend(mutation)) return;
     const known = legacy.get(mutation.transactionId);
     if (known) return known;
-    const owner = await session();
+    const owner = await emailStorageSession();
+    // Queued before this account took the storage over: the previous account
+    // never signed out, and its sign-out would have discarded this intent.
+    if (owner.replaced && !((mutation.enqueuedAtMs ?? 0) > owner.replaced.at)) {
+      previousAccount.add(mutation.transactionId);
+      return;
+    }
     const storageGeneration = await host.currentStorageGeneration();
     const saved = (await localDraftStore.attempts(owner)).find(
       (entry) =>
@@ -663,7 +887,7 @@ export function localDraftQueueLifecycle(
     return attempt;
   }
   async function prepare() {
-    const owner = await session();
+    const owner = await emailStorageSession();
     if (!host.inspectMutations)
       throw new Error('Draft recovery requires an updated cache runtime');
     const before = await localDraftStore.list(owner);
@@ -678,27 +902,43 @@ export function localDraftQueueLifecycle(
       )
     );
     for (const draft of before) {
-      // Dirty copies can belong to another tab's live debounce. Only reconcile
-      // an unchanged intent that was actually marked as enqueued/deleting.
-      if (
-        active.has(draft.key) ||
-        draft.queuedAttemptId !== draft.latestAttemptId ||
-        !draft.queuedAttemptId ||
-        (draft.status !== 'queued' && draft.status !== 'deleting')
-      )
-        continue;
-      await localDraftStore.update(owner, draft.key, (current) =>
+      if (active.has(draft.key)) continue;
+      const unchanged = (current: LocalDraft) =>
         current.generation === draft.generation &&
         current.revision === draft.revision &&
         current.latestAttemptId === draft.latestAttemptId &&
-        current.status === draft.status
-          ? {
-              ...current,
-              status:
-                current.status === 'deleting' ? 'delete-failed' : 'unconfirmed',
-            }
-          : current
+        current.status === draft.status;
+      const admitted =
+        !!draft.queuedAttemptId &&
+        draft.queuedAttemptId === draft.latestAttemptId;
+
+      // An older build marked the copy when a discard began. One that never
+      // reached the queue returns to its editor, as an abandoned delete does.
+      if (draft.status === 'deleting' && !admitted) {
+        await localDraftStore.update(owner, draft.key, (current) =>
+          unchanged(current)
+            ? { ...current, latestAttemptId: undefined, status: 'dirty' }
+            : current
+        );
+        continue;
+      }
+
+      // Dirty copies can belong to another tab's live debounce. Only reconcile
+      // an unchanged intent that was actually marked as enqueued/deleting.
+      if (
+        !admitted ||
+        (draft.status !== 'queued' && draft.status !== 'deleting')
+      )
+        continue;
+      const status =
+        draft.status === 'deleting' ? 'delete-failed' : 'unconfirmed';
+      const marked = await localDraftStore.update(
+        owner,
+        draft.key,
+        (current) => (unchanged(current) ? { ...current, status } : current)
       );
+      if (marked?.status === status)
+        reportDraftSyncFailure(draft.key, status, 'queue-entry-missing');
     }
     const transactions = new Set(
       queue.map((mutation) => mutation.transactionId)
@@ -762,18 +1002,24 @@ export function localDraftQueueLifecycle(
           mutation.operationName === 'DeleteEmailDraft')
       )
         return 'defer';
+      if (await ownedBySend(mutation)) return false;
       const attempt = await resolveAttempt(mutation);
-      if (!attempt) return true;
-      const owner = await session();
+      if (!attempt) return !previousAccount.has(mutation.transactionId);
+      const owner = await emailStorageSession();
       if (owner.accountId !== attempt.accountId) return false;
       const local = await localDraftStore.read(owner, attempt.draftKey);
       if (!local || local.generation !== attempt.generation) return false;
-      await markDraftAttemptQueued(attempt);
-      return attempt.operation === 'delete'
-        ? local.latestAttemptId === attempt.id && local.status === 'deleting'
-        : !draftSyncPaused(local) &&
-            local.status !== 'deleting' &&
-            attempt.revision >= local.acknowledgedRevision;
+      const marked = await markDraftAttemptQueued(attempt);
+      if (attempt.operation === 'delete')
+        return (
+          marked?.status === 'deleting' && marked.latestAttemptId === attempt.id
+        );
+
+      return (
+        !draftSyncPaused(local) &&
+        local.status !== 'deleting' &&
+        attempt.revision >= local.acknowledgedRevision
+      );
     },
     async onMutationAttemptResult(mutation, result, retry) {
       if (
@@ -784,6 +1030,10 @@ export function localDraftQueueLifecycle(
         initialized = undefined;
       const attempt = attemptOf(mutation) ?? legacy.get(mutation.transactionId);
       if (!attempt || retry) return;
+      // A save already on the wire when its draft was sent loses to that
+      // send; the server's refusal is not the working copy's failure.
+      const failed = !!result.error || result.data == null;
+      if (failed && (await ownedBySend(mutation))) return;
       await settleDraftAttempt(attempt, result, mutation.superseded);
     },
   };
@@ -794,33 +1044,37 @@ async function settleDraftAttempt(
   result: OperationResult,
   superseded: boolean
 ) {
-  const owner = await session();
+  const owner = await emailStorageSession();
   if (owner.accountId !== attempt.accountId) return;
   const code = result.error?.graphQLErrors[0]?.extensions.code;
+  const errorCode = typeof code === 'string' ? code : 'INTERNAL';
   const failed = !!result.error || result.data == null;
   const payload = result.data?.saveEmailDraft;
+  const outcome: { rejected?: 'failed' | 'delete-failed' } = {};
   await localDraftStore.update(owner, attempt.draftKey, (draft) => {
+    outcome.rejected = undefined;
     if (draft.generation !== attempt.generation) return draft;
     if (code === 'DRAFT_ALREADY_SENT') return undefined;
     const latest = draft.latestAttemptId === attempt.id;
     if (attempt.operation === 'delete') {
-      if (!latest) return draft;
-      return failed
-        ? {
-            ...draft,
-            status: 'delete-failed',
-            errorCode: typeof code === 'string' ? code : 'INTERNAL',
-          }
-        : undefined;
+      // A discard the queue never admitted is still this copy's open request.
+      // Its composer has left, so a failure must stay with the copy.
+      const requested = draft.deleteAttemptId === attempt.id;
+      if (!latest && !requested) return draft;
+      if (!failed) return undefined;
+      outcome.rejected = 'delete-failed';
+      return {
+        ...draft,
+        deleteAttemptId: undefined,
+        status: 'delete-failed',
+        errorCode,
+      };
     }
-    if (failed)
-      return superseded || !latest
-        ? draft
-        : {
-            ...draft,
-            status: 'failed',
-            errorCode: typeof code === 'string' ? code : 'INTERNAL',
-          };
+    if (failed) {
+      if (superseded || !latest) return draft;
+      outcome.rejected = 'failed';
+      return { ...draft, status: 'failed', errorCode };
+    }
     const acknowledgedRevision = Math.max(
       draft.acknowledgedRevision,
       attempt.revision
@@ -842,4 +1096,96 @@ async function settleDraftAttempt(
           : draft.status,
     };
   });
+  if (outcome.rejected)
+    reportDraftSyncFailure(
+      attempt.draftKey,
+      outcome.rejected,
+      'attempt-rejected',
+      errorCode
+    );
+}
+
+/**
+ * A working copy that now needs the user to retry. Identity and codes only,
+ * never content.
+ */
+function reportDraftSyncFailure(
+  draftKey: string,
+  status: 'failed' | 'unconfirmed' | 'delete-failed',
+  cause: 'attempt-rejected' | 'queue-entry-missing',
+  errorCode?: string
+) {
+  Telemetry.warn('email_draft.sync_failed', {
+    'email_draft.draft_id': draftKey,
+    'email_draft.status': status,
+    'email_draft.cause': cause,
+    'email_draft.error_code': errorCode,
+  });
+}
+
+export async function readLocalEmailSends(): Promise<EmailSendIntent[]> {
+  return await localDraftStore.sends(await emailStorageSession());
+}
+export async function persistLocalEmailSend(
+  intent: EmailSendIntent,
+  reserve = false
+): Promise<EmailSendIntent> {
+  return await localDraftStore.putSend(
+    await emailStorageSession(),
+    intent,
+    reserve
+  );
+}
+export async function removeLocalEmailSend(uuid: string): Promise<void> {
+  await localDraftStore.removeSend(await emailStorageSession(), uuid);
+}
+export async function readRemovedEmailSendCopy(
+  draftId: string
+): Promise<Pick<LocalDraft, 'generation' | 'revision'> | undefined> {
+  return await localDraftStore.sentCopy(await emailStorageSession(), draftId);
+}
+export function watchLocalEmailSends(changed: () => void): () => void {
+  return localDraftStore.subscribe(changed);
+}
+
+/** Web Locks serialize one durable file's upload across composers and tabs. */
+export async function withLocalAttachmentUpload(
+  draftId: string,
+  file: File,
+  upload: (
+    receipt: Extract<LocalDraftAttachment, { type: 'local' }>,
+    generation: string
+  ) => Promise<void>
+): Promise<void> {
+  const owner = await emailStorageSession();
+  const draft = await localDraftStore.read(owner, draftId);
+  const id = fileIds.get(file);
+  if (!draft || !id)
+    throw new Error('Save the attachment on this device before uploading');
+  const name = `macro-email-upload:${owner.accountId}:${draft.key}:${draft.generation}:${id}`;
+  const run = async () => {
+    await emailStorageSession();
+    const current = await localDraftStore.read(owner, draft.key);
+    const receipt = current?.attachments.find(
+      (attachment) => attachment.type === 'local' && attachment.id === id
+    );
+    if (current?.generation !== draft.generation || receipt?.type !== 'local')
+      throw new Error('This attachment belongs to an obsolete draft');
+    await upload(receipt, current.generation);
+  };
+  if (navigator.locks) {
+    await navigator.locks.request(name, run);
+    return;
+  }
+  if (!isTauri())
+    throw new Error('This browser cannot safely upload queued attachments');
+  // The native app has one main webview; serialize its composers even on older WebKit.
+  const previous = nativeUploadLocks.get(name) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(run);
+  nativeUploadLocks.set(name, next);
+  try {
+    await next;
+  } finally {
+    if (nativeUploadLocks.get(name) === next) nativeUploadLocks.delete(name);
+  }
 }

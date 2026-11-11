@@ -1,6 +1,7 @@
 import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
@@ -9,12 +10,14 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
-import { createSignal } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
@@ -52,6 +55,11 @@ const editor = vi.hoisted(() => ({
     | ((files: File[], directories: FileSystemDirectoryEntry[]) => void)
     | undefined,
   text: '',
+  readMarkdown: (): string => '',
+  /** Applies MarkdownShell's initial value when the editor connects. */
+  connect: undefined as ((markdown: string) => void) | undefined,
+  /** The fallback the composer configures with withRestoreFocus. */
+  restoreFocus: undefined as RestoreFocusDefault | undefined,
 }));
 
 vi.mock(
@@ -68,7 +76,10 @@ vi.mock(
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
-        withRestoreFocus: () => builder,
+        withRestoreFocus: (fallback?: RestoreFocusDefault) => {
+          editor.restoreFocus = fallback;
+          return builder;
+        },
         withSkills: () => builder,
         withAgentCommands: () => builder,
         withFilePaste: (options: {
@@ -90,7 +101,7 @@ vi.mock(
           clear: editor.clear,
           setMarkdown: editor.setMarkdown,
           focus: vi.fn(),
-          getMarkdown: () => editor.text,
+          getMarkdown: () => editor.readMarkdown(),
         },
         lexical: editor.lexical,
       };
@@ -100,15 +111,26 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { placeholder?: string }) => (
-    <div data-testid="editor">
-      {props.placeholder}
-      {/* Decorators portal their popups (the paste viewer) out of the editor. */}
-      <Portal>
-        <pre data-testid="portaled-text">Pasted text</pre>
-      </Portal>
-    </div>
-  ),
+  MarkdownShell: (props: {
+    placeholder?: string;
+    initialValue?: string;
+    onConnect?: () => void;
+  }) => {
+    // Like the real shell: apply the initial value once connected, then report it.
+    onMount(() => {
+      if (props.initialValue) editor.connect?.(props.initialValue);
+      props.onConnect?.();
+    });
+    return (
+      <div data-testid="editor">
+        {props.placeholder}
+        {/* Decorators portal their popups (the paste viewer) out of the editor. */}
+        <Portal>
+          <pre data-testid="portaled-text">Pasted text</pre>
+        </Portal>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@channel/Input/Input', () => ({
@@ -156,10 +178,66 @@ beforeEach(() => {
   );
   vi.clearAllMocks();
   vi.mocked(isTouchDevice).mockReturnValue(false);
+  editor.clear.mockReset();
+  editor.setMarkdown.mockReset();
   editor.text = '';
+  editor.readMarkdown = () => editor.text;
   editor.enter = undefined;
   editor.change = undefined;
+  editor.connect = undefined;
 });
+
+/** Replace the editor contents with the selection at the start, as Lexical's markdown import does. */
+function importAtStart(markdown: string) {
+  editor.lexical?.update(
+    () => {
+      const paragraph = $createParagraphNode().append(
+        $createTextNode(markdown)
+      );
+      $getRoot().clear().append(paragraph);
+      paragraph.selectStart();
+    },
+    { discrete: true }
+  );
+}
+
+/** Attach the editor to a document root, so focus and DOM selection run. */
+function connectRoot() {
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  document.body.append(root);
+  editor.lexical?.setRootElement(root);
+  onTestFinished(() => {
+    editor.lexical?.setRootElement(null);
+    root.remove();
+  });
+  return root;
+}
+
+/** Focus the root as triggerFocusInput does; restoreFocusPlugin then focuses the editor, falling back to the composer's configured default. */
+function focusEditor(root: HTMLElement) {
+  root.focus();
+  editor.lexical?.focus(undefined, {
+    defaultSelection: editor.restoreFocus ?? 'rootStart',
+  });
+}
+
+/** Characters before the DOM caret in `root`, or undefined when it is elsewhere. */
+function domCaretOffset(root: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !root.contains(selection.anchorNode)) return;
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+}
+
+function caretOffset() {
+  return editor.lexical?.read(() => {
+    const selection = $getSelection();
+    return $isRangeSelection(selection) ? selection.anchor.offset : undefined;
+  });
+}
 
 function type(text: string) {
   editor.text = text;
@@ -196,6 +274,33 @@ describe('Chat session input', () => {
     }
   );
 
+  it('does not write a sent prompt back into the editor', () => {
+    const [draft, setDraft] = createSignal('');
+    const [markdown, setMarkdown] = createSignal('');
+    editor.readMarkdown = markdown;
+    editor.clear.mockImplementation(() => setMarkdown(''));
+    editor.setMarkdown.mockImplementation((value: string) =>
+      setMarkdown(value)
+    );
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={send}
+        selector={<span />}
+      />
+    ));
+    setDraft('Hello agent');
+    setMarkdown('Hello agent');
+    editor.setMarkdown.mockClear();
+    editor.enter?.(undefined, 'Hello agent');
+    expect(send).toHaveBeenCalledWith('Hello agent', []);
+    expect(draft()).toBe('');
+    expect(markdown()).toBe('');
+    expect(editor.setMarkdown).not.toHaveBeenCalledWith('Hello agent');
+  });
+
   it('preloads the fold only when focused without sending or changing the draft', () => {
     const send = vi.fn();
     const change = vi.fn();
@@ -222,6 +327,46 @@ describe('Chat session input', () => {
     ));
     expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('focuses a draft seeded when the editor connects after the draft', () => {
+    let root: HTMLElement | undefined;
+    editor.connect = (markdown) => {
+      root = connectRoot();
+      importAtStart(markdown);
+    };
+    render(() => (
+      <ChatSessionInput initialInput="Ask about @Routine" onSend={vi.fn()} />
+    ));
+    if (!root) throw new Error('the editor never connected');
+    focusEditor(root);
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
+  });
+
+  it('focuses a draft the host applies to an open editor after the draft', () => {
+    editor.setMarkdown.mockImplementation(importAtStart);
+    const [draft, setDraft] = createSignal('');
+    render(() => (
+      <ChatSessionInput
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={vi.fn()}
+      />
+    ));
+    const root = connectRoot();
+    // Typed in earlier, then left for the Compose with agent button.
+    focusEditor(root);
+    const button = document.createElement('button');
+    document.body.append(button);
+    onTestFinished(() => button.remove());
+    button.focus();
+    setDraft('Ask about @Routine');
+    // Applying the draft doesn't take focus.
+    expect(document.activeElement).toBe(button);
+    focusEditor(root);
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
   });
 
   it('shows only the model control and submits a trimmed follow-up', () => {
@@ -308,18 +453,16 @@ describe('Chat session input', () => {
     expect(send).toHaveBeenCalledWith('Next request', []);
   });
 
-  it('advances a queued prompt with Enter only when the draft is empty', () => {
+  it('never stops the turn from Enter on an empty draft', () => {
     const send = vi.fn();
     const stop = vi.fn();
-    render(() => (
-      <ChatSessionInput busy hasQueuedMessages onSend={send} onStop={stop} />
-    ));
+    render(() => <ChatSessionInput busy onSend={send} onStop={stop} />);
     editor.enter?.(undefined, '');
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
     type('Another request');
     editor.enter?.(undefined, editor.text);
     expect(send).toHaveBeenCalledWith('Another request', []);
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).not.toHaveBeenCalled();
   });
 
   describe('on a touch device', () => {
@@ -339,24 +482,6 @@ describe('Chat session input', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(send).toHaveBeenCalledWith('first line', []);
       expect(hapticImpact).toHaveBeenCalledExactlyOnceWith('light');
-    });
-
-    it('does not advance the queue from Enter either', () => {
-      const stop = vi.fn();
-      render(() => (
-        <ChatSessionInput
-          busy
-          hasQueuedMessages
-          onSend={vi.fn()}
-          onStop={stop}
-        />
-      ));
-      expect(editor.enter?.(undefined, '')).toBe(false);
-      expect(stop).not.toHaveBeenCalled();
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Flush queued messages' })
-      );
-      expect(stop).toHaveBeenCalledOnce();
     });
 
     it('applies to a new conversation as well', () => {
@@ -555,7 +680,6 @@ describe('attachments in the shared composer', () => {
     render(() => (
       <ChatSessionInput
         busy
-        hasQueuedMessages
         onSend={send}
         onStop={stop}
         attachments={attachments()}
@@ -813,9 +937,7 @@ it('blocks existing images on text-only models and preserves the draft until swi
     />
   ));
   type('Describe this');
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   expect(
     screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
   ).toBe(true);

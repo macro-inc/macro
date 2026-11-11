@@ -34,6 +34,34 @@ fn domain_errors_map_to_distinct_transport_semantics() {
         (StatusCode::CONFLICT, CalendarMutationErrorCode::NotAttendee)
     );
     assert_eq!(
+        transport_of(CalendarMutationError::NotOrganizer),
+        (
+            StatusCode::FORBIDDEN,
+            CalendarMutationErrorCode::NotOrganizer
+        )
+    );
+    assert_eq!(
+        transport_of(CalendarMutationError::GuestsCannotInvite),
+        (
+            StatusCode::FORBIDDEN,
+            CalendarMutationErrorCode::GuestsCannotInvite
+        )
+    );
+    assert_eq!(
+        transport_of(CalendarMutationError::GuestListHidden),
+        (
+            StatusCode::FORBIDDEN,
+            CalendarMutationErrorCode::GuestListHidden
+        )
+    );
+    assert_eq!(
+        transport_of(CalendarMutationError::GuestsCannotModify),
+        (
+            StatusCode::FORBIDDEN,
+            CalendarMutationErrorCode::GuestsCannotModify
+        )
+    );
+    assert_eq!(
         transport_of(CalendarMutationError::InvalidInput("bad".to_string())),
         (
             StatusCode::BAD_REQUEST,
@@ -169,4 +197,50 @@ fn create_requests_carry_no_macro_call_unless_asked() {
     )
     .unwrap();
     assert!(request.macro_call);
+}
+
+#[test]
+fn a_copy_refusal_asks_the_caller_to_name_the_inbox() {
+    use crate::domain::copies::check_copy;
+    use crate::domain::models::MeetingCopy;
+
+    let copies = vec![
+        MeetingCopy {
+            event_id: Uuid::from_u128(1),
+            inbox: "owner@example.com".to_string(),
+            organizes: true,
+            attends: false,
+        },
+        MeetingCopy {
+            event_id: Uuid::from_u128(2),
+            inbox: "guest@example.com".to_string(),
+            organizes: false,
+            attends: true,
+        },
+    ];
+    let refusal = check_copy(&copies, Uuid::from_u128(1), None, CopyChange::Delete)
+        .expect("two inboxes hold the meeting");
+    let error = CalendarMutationApiError::from(refusal.clone());
+    assert_eq!(error.status, StatusCode::CONFLICT);
+    assert_eq!(error.code, CalendarMutationErrorCode::CopyChoiceRequired);
+    assert_eq!(error.message, refusal.message());
+}
+
+#[test]
+fn a_program_cannot_create_an_event_the_user_has_not_seen() {
+    let mut program = axum::http::HeaderMap::new();
+    program.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    let browser = axum::http::HeaderMap::new();
+
+    let refusal = refuse_program_create(false, &program).unwrap_err();
+    assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        refusal.code,
+        CalendarMutationErrorCode::ConfirmationRequired
+    );
+    assert!(refuse_program_create(true, &browser).is_err());
+    assert!(refuse_program_create(false, &browser).is_ok());
 }

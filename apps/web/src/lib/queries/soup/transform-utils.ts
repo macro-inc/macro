@@ -26,6 +26,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  HarnessEntity,
   InitiativeEntity,
   Notification,
   ProjectEntity,
@@ -47,7 +48,6 @@ import type {
 } from '@service-search/generated/models';
 import type {
   GithubPullRequest,
-  SoupApiItem,
   SoupAttachment,
   SoupCalendarEventTime,
   SoupPage,
@@ -55,7 +55,6 @@ import type {
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { formatDocumentName } from '@service-storage/util/filename';
-import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
 import { mapAgentSessionSearchResult } from './agent-session-search';
@@ -97,7 +96,8 @@ type SoupEntity =
   | CrmCompanyEntity
   | CrmContactEntity
   | CalendarEventEntity
-  | ForeignEntity;
+  | ForeignEntity
+  | HarnessEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
@@ -332,7 +332,11 @@ export const useSearchResponseItemMapper = () => {
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{ id: string; name?: string | null }>
+  channels: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    team_id?: string | null;
+  }>
 ) => {
   return (
     result: UnifiedSearchResponseItem,
@@ -505,8 +509,11 @@ export const createSearchResponseItemMapper = (
           contentHitData: null,
           source: 'service',
         };
+        const channel = channels.find(
+          (channel) => channel.id === result.channel_id
+        );
         const channelName =
-          channels.find((channel) => channel.id === result.channel_id)?.name ??
+          channel?.name ??
           (search.nameHighlight
             ? extractSearchSnippet(search.nameHighlight)
             : blockNameToDefaultFile('channel'));
@@ -517,6 +524,7 @@ export const createSearchResponseItemMapper = (
             name: channelName,
             ownerId: result.owner_id ?? '',
             channelType: result.channel_type as ChannelType,
+            teamId: channel?.team_id ?? undefined,
             createdAt: result.metadata.created_at,
             updatedAt: result.metadata.updated_at,
             viewedAt: result.metadata.viewed_at,
@@ -725,7 +733,9 @@ function calendarReminderTimestamp(
   for (const notification of notifications ?? []) {
     if (
       !notification.deleted_at &&
-      notification.notification_metadata.tag === 'calendar_event_reminder'
+      (notification.notification_metadata.tag === 'calendar_event_reminder' ||
+        notification.notification_metadata.tag ===
+          'calendar_event_join_request')
     ) {
       include(notification.created_at);
     }
@@ -891,6 +901,7 @@ export const mapApiSoupItemToEntity = (
         id: item.data.channel.id,
         name: item.data.channel.name || 'Unknown Channel',
         channelType: item.data.channel.channel_type,
+        teamId: item.data.channel.team_id ?? undefined,
         ownerId: item.data.channel.owner_id,
         frecencyScore: item.frecency_score ?? 0,
         updatedAt: item.data.channel.updated_at,
@@ -973,6 +984,14 @@ export const mapApiSoupItemToEntity = (
 
       return out;
     })
+    .with({ tag: 'harness' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: 'harness' as const,
+    }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,
@@ -988,7 +1007,7 @@ export const mapApiSoupItemToEntity = (
     .with({ tag: 'crmContact' }, (item) => ({
       ...item.data,
       type: 'crm_contact' as const,
-      name: item.data.name?.trim() || item.data.email,
+      name: item.data.name?.trim() || item.data.email || '',
       ownerId: item.data.teamId,
       sortTs: item.data.lastInteraction,
       frecencyScore: item.frecency_score,
@@ -1071,27 +1090,9 @@ const toCalendarEventTime = (
     ? { kind: 'timed', startsAt: time.startsAt, endsAt: time.endsAt }
     : { kind: 'allDay', startDate: time.startDate, endDate: time.endDate };
 
-export const isInstructionsMdDoc = (
-  item: SoupApiItem,
-  instructionsIdQuery: Pick<
-    UseQueryResult<string | null | undefined, Error>,
-    'data' | 'isSuccess'
-  >
-) => {
-  if (item.tag !== 'document') return false;
-
-  if (!instructionsIdQuery.isSuccess) return false;
-
-  return item.data.id === instructionsIdQuery.data;
-};
-
 export const mapSoupPageToEntityList: (
   data: SoupPage,
   options: {
-    instructionsIdQuery: Pick<
-      UseQueryResult<string | null | undefined, Error>,
-      'data' | 'isSuccess'
-    >;
     showSupportedForeignEntities?: boolean;
   }
 ) => SoupEntity[] = (data, options) => {
@@ -1099,16 +1100,10 @@ export const mapSoupPageToEntityList: (
     .filter((item): item is DisplayableSoupItem => {
       if (!isDisplayableSoupItem(item)) return false;
 
-      if (item.tag === 'foreignEntity') {
-        return (
-          options.showSupportedForeignEntities === true &&
-          item.data.foreignEntitySource === 'github_pull_request'
-        );
-      }
-
       return (
-        item.tag !== 'document' ||
-        !isInstructionsMdDoc(item, options.instructionsIdQuery)
+        item.tag !== 'foreignEntity' ||
+        (options.showSupportedForeignEntities === true &&
+          item.data.foreignEntitySource === 'github_pull_request')
       );
     })
     .map(mapApiSoupItemToEntity);

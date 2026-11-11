@@ -21,12 +21,15 @@ deliberately stable and widely depended on.
   generation for both the model-facing JSON schema and frontend TS types.
 - `src/annotations.rs`: required MCP tool annotations (every tool must set
   these).
+- `src/actor.rs`: session-only `acting_as` schema injection, required selection, and trusted owner/requester resolution; public tool inputs remain unchanged.
 - `src/context.rs`: `RequestContext`/`ServiceContext` and the `FromRef`
   extraction pattern.
 
 ## Scope
 
-- Owns: the tool trait, schema generation, and collection mechanics.
+- Owns: the tool trait, schema generation, and collection mechanics, plus
+  the tool-search wire types (`tool_search.rs`: `SearchToolsResponse`,
+  `LoadToolsResponse`) the agent loop reads loads back from.
 - Not here: any actual tool implementation — those live in domain crates
   and are assembled in `ai_tools`.
 
@@ -51,6 +54,18 @@ deliberately stable and widely depended on.
 
 - Every tool must declare MCP annotations; a tool without them fails to
   compile/register (see `src/annotations.rs`).
+- Keep tool input roots free of `oneOf`, `anyOf`, and `allOf`; put tagged variants
+  under a named property so provider validation accepts them. Schema generation
+  rejects root composition when toolsets are built, including in their tests.
+- A recursive input type recurses through an optional or nullable field, or a
+  list that may be empty. Gemini rejects a whole request whose tool schemas
+  hold a `$ref` loop of required fields, so schema generation rejects one too
+  (`schema/validate/ref_loop.rs`).
+- Gemini also rejects, with a bare 400 INVALID_ARGUMENT, a tool schema nested
+  more than `GEMINI_MAX_SCHEMA_DEPTH` (30) levels of non-empty JSON objects and
+  arrays. Inlining makes a deep input type count in full; schema generation
+  lifts optional unions out of their `anyOf` wrapper and rejects what is still
+  too deep (`schema/validate/depth.rs`).
 
 ## Related
 

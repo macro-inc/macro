@@ -106,6 +106,24 @@ it('skips the check without a project', async () => {
   expect(mock.properties).not.toHaveBeenCalled();
 });
 
+it('confirms creation before waiting for a project membership read', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  const projectRead = Promise.withResolvers<[]>();
+  const confirmed = Promise.withResolvers<string>();
+  mock.properties.mockReturnValue(projectRead.promise);
+  const creating = createTaskWithProperties(
+    'Ship it',
+    '',
+    [[SYSTEM_PROPERTY_IDS.PROJECT, taskComposerProjectValue('project')]],
+    new Map(),
+    vi.fn(),
+    { onCreated: (task) => confirmed.resolve(task.documentId) }
+  );
+  expect(await confirmed.promise).toBe('task');
+  projectRead.resolve([]);
+  expect(await creating).toEqual({ documentId: 'task' });
+});
+
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import {
   taskComposerVisiblePropertyIds,
@@ -304,6 +322,121 @@ it('retains a created single-select definition when the definition query fails',
       })
     );
     expect(mock.refetch).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+  }
+});
+
+it('lets the composer own failed-create feedback without silencing other callers', async () => {
+  mock.create.mockResolvedValue(null);
+  expect(
+    await createTaskWithProperties('Draft', '', [], new Map(), vi.fn(), {
+      showFailureToast: false,
+    })
+  ).toBeNull();
+  expect(mock.failure).not.toHaveBeenCalled();
+  expect(await create()).toBeNull();
+  expect(mock.failure).toHaveBeenCalledExactlyOnceWith('Failed to create Task');
+});
+
+it('keeps a message source through composer edits and the task create payload', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [definition(SYSTEM_PROPERTY_IDS.SOURCE, { data_type: 'ENTITY' })],
+  });
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({
+      initialValues: {
+        [SYSTEM_PROPERTY_IDS.SOURCE]: {
+          valueType: 'ENTITY',
+          refs: [
+            {
+              entity_type: 'CHANNEL',
+              entity_id: 'channel',
+              specific_message_id: 'reply',
+            },
+          ],
+        },
+      },
+      initialVisiblePropertyIds: [SYSTEM_PROPERTY_IDS.SOURCE],
+    }),
+    dispose,
+  }));
+  try {
+    const source = composer.properties()[0];
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: [
+        {
+          entity_type: 'CHANNEL',
+          entity_id: 'channel',
+          specific_message_id: 'reply',
+        },
+      ],
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        propertyValues: [
+          {
+            propertyId: SYSTEM_PROPERTY_IDS.SOURCE,
+            value: {
+              type: 'entity_reference',
+              reference: {
+                entity_type: 'CHANNEL',
+                entity_id: 'channel',
+                specific_message_id: 'reply',
+              },
+            },
+          },
+        ],
+      })
+    );
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: [{ entity_type: 'DOCUMENT', entity_id: 'request' }],
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        propertyValues: [
+          {
+            propertyId: SYSTEM_PROPERTY_IDS.SOURCE,
+            value: {
+              type: 'entity_reference',
+              reference: { entity_type: 'DOCUMENT', entity_id: 'request' },
+            },
+          },
+        ],
+      })
+    );
+    await composer.saveHandler.saveProperty(source, {
+      valueType: 'ENTITY',
+      refs: null,
+    });
+    await createTaskWithProperties(
+      'Task',
+      '',
+      Object.entries(composer.propertyValues),
+      composer.createDefinitions(),
+      vi.fn()
+    );
+    expect(mock.create).toHaveBeenLastCalledWith(
+      expect.objectContaining({ propertyValues: undefined })
+    );
   } finally {
     dispose();
   }

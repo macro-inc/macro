@@ -4,6 +4,7 @@ use email_api_client::domain::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use std::collections::BTreeSet;
 
 const ACTOR: &str = "macro|transfer@example.com";
 
@@ -30,6 +31,7 @@ async fn fixture(db: &PgPool) -> (EmailPgRepo, DraftTransferRequest) {
     (
         EmailPgRepo::new(db.clone()),
         DraftTransferRequest {
+            draft_generation: 0,
             id: Uuid::now_v7(),
             source_id: draft,
             source_link_id: source,
@@ -97,7 +99,8 @@ async fn transfer_preserves_uploads_and_fences_old_saves_deletes_and_delivery(db
             request.source_id,
             plan.source_thread_id,
             &[request.source_link_id],
-            Some(ACTOR)
+            Some(ACTOR),
+            0
         )
         .await
         .unwrap()
@@ -279,6 +282,7 @@ async fn paused_outlook_writes_still_finish_gmail_moves_and_keep_outlook_origina
     let gmail_move = prepare(
         &repo,
         &DraftTransferRequest {
+            draft_generation: 0,
             id: Uuid::now_v7(),
             source_id: gmail_draft,
             source_link_id: gmail_source,
@@ -292,6 +296,7 @@ async fn paused_outlook_writes_still_finish_gmail_moves_and_keep_outlook_origina
     let outlook_move = prepare(
         &repo,
         &DraftTransferRequest {
+            draft_generation: 0,
             id: Uuid::now_v7(),
             source_id: outlook_draft,
             source_link_id: outlook,
@@ -414,6 +419,7 @@ async fn recovery_before_a_delayed_request_prevents_it_from_committing(db: PgPoo
             .is_err()
     );
     let retry = DraftTransferRequest {
+        draft_generation: 0,
         id: Uuid::now_v7(),
         ..request
     };
@@ -526,6 +532,62 @@ async fn expired_or_replaced_cleanup_cannot_renew_or_complete(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn thread_pages_omit_deleted_and_moved_drafts(db: PgPool) {
+    let (repo, request) = fixture(&db).await;
+    let thread = sqlx::query_scalar!(
+        "SELECT thread_id FROM email_messages WHERE id=$1",
+        request.source_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    let (parent, kept, discarded) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,provider_id,is_draft,subject,mailbox_state) VALUES($1,$2,$3,'outlook-parent',false,'Parent','{\"in_inbox\":true}')",parent,thread,request.source_link_id).execute(&db).await.unwrap();
+    for draft in [kept, discarded] {
+        sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,is_draft,replying_to_id,subject,body_html_sanitized) VALUES($1,$2,$3,true,$4,'Re: Parent','<p>Reply</p>')",draft,thread,request.source_link_id,parent).execute(&db).await.unwrap();
+    }
+    message::delete_draft_message(
+        &db,
+        discarded,
+        thread,
+        &[request.source_link_id],
+        Some(ACTOR),
+        0,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let moved = repo
+        .commit_transfer(&prepare(&repo, &request).await, &contacts(), vec![])
+        .await
+        .unwrap();
+
+    for (thread, expected) in [
+        (thread, BTreeSet::from([parent, kept])),
+        (moved.thread_id, BTreeSet::from([moved.message_id])),
+    ] {
+        let page: BTreeSet<Uuid> = repo
+            .messages_by_thread_id_paginated(thread, 0, 50)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+        assert_eq!(page, expected);
+        let parsed: BTreeSet<Uuid> =
+            email_db_client::messages::get_parsed::get_paginated_parsed_messages_by_thread_id(
+                &db, thread, 0, 50,
+            )
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|message| message.db_id)
+            .collect();
+        assert_eq!(parsed, expected);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn returning_a_reply_to_its_original_inbox_never_rebinds_the_old_draft(db: PgPool) {
     let (repo, request) = fixture(&db).await;
     let parent = Uuid::now_v7();
@@ -556,6 +618,7 @@ async fn returning_a_reply_to_its_original_inbox_never_rebinds_the_old_draft(db:
         .await
         .unwrap();
     let back = DraftTransferRequest {
+        draft_generation: 0,
         id: Uuid::now_v7(),
         source_id: moved.message_id,
         source_link_id: request.destination_link_id,

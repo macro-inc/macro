@@ -5,12 +5,13 @@
 
 import type { CodeNode } from '@lexical/code';
 import { PrismTokenizer } from '@lexical/code';
-import type { LinkNode } from '@lexical/link';
+import { $isAutoLinkNode, type LinkNode } from '@lexical/link';
 import { $getListDepth, type ListItemNode, type ListNode } from '@lexical/list';
 import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AccountManagerRequestNode,
   type AgentActivityNode,
   type AgentContextNode,
   type AgentSessionMentionNode,
@@ -85,6 +86,7 @@ import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchN
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AccountManagerRequest as AccountManagerRequestDecorator } from '../decorator/AccountManagerRequest';
 import { AgentActivity as AgentActivityDecorator } from '../decorator/AgentActivity';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { AgentSessionMention as AgentSessionMentionDecorator } from '../decorator/AgentSessionMention';
@@ -350,7 +352,8 @@ function eraseRenderableElement<T extends ElementNode>(
 }
 
 const Text: TypedRenderableEntity<TextNode> = {
-  guard: (node: LexicalNode): node is TextNode => node.__type === 'text',
+  guard: (node: LexicalNode): node is TextNode =>
+    node.__type === 'text' || node.__type === 'unlinked-text',
   render: (props) => {
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -395,7 +398,7 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
     const shouldRenderLazy = options.lazy;
 
     return (
-      <span class={getTextClassName(props.node, props.theme)}>
+      <span class={getTextClassName(props.node, props.theme)} data-mention>
         {shouldRenderLazy ? (
           <LazyDecorator
             placeholder={
@@ -419,7 +422,7 @@ const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
   guard: (node: LexicalNode): node is AgentSessionMentionNode =>
     node.__type === 'agent-session-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <AgentSessionMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -433,7 +436,7 @@ const PullRequestMention: TypedRenderableEntity<PullRequestMentionNode> = {
   guard: (node: LexicalNode): node is PullRequestMentionNode =>
     node.__type === 'pr-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <PullRequestMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -485,6 +488,21 @@ const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
   ),
 };
 
+const AccountManagerRequest: TypedRenderableEntity<AccountManagerRequestNode> =
+  {
+    guard: (node: LexicalNode): node is AccountManagerRequestNode =>
+      node.__type === 'account-manager-request',
+    render: (props) => (
+      <span>
+        {AccountManagerRequestDecorator({
+          ...props.node.exportComponentProps(),
+          key: props.node.getKey(),
+          theme: props.theme,
+        })}
+      </span>
+    ),
+  };
+
 const DatabaseQuery: TypedRenderableEntity<DatabaseQueryNode> = {
   guard: (node: LexicalNode): node is DatabaseQueryNode =>
     node.__type === 'database-query',
@@ -529,7 +547,7 @@ const ContactMention: TypedRenderableEntity<ContactMentionNode> = {
   guard: (node: LexicalNode): node is ContactMentionNode =>
     node.__type === 'contact-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       {ContactMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
@@ -734,6 +752,7 @@ const List: TypedRenderableElement<ListNode> = {
           classList={{
             ['depth-' + depth]: true,
           }}
+          start={start !== 1 ? start : undefined}
           style={{ 'counter-reset': `static-md-counter-${depth} ${start - 1}` }}
         >
           {props.children}
@@ -875,16 +894,21 @@ const HorizontalRule: TypedRenderableEntity<HorizontalRuleNode> = {
 };
 
 const Link: TypedRenderableElement<LinkNode> = {
-  guard: (node: LexicalNode): node is LinkNode => node.__type === 'link',
-  render: (props) => (
-    <LinkWithPreview
-      url={props.node.__url}
-      class={props.theme.link}
-      title={props.node.__title ?? props.node.__url}
-    >
-      {props.children}
-    </LinkWithPreview>
-  ),
+  guard: (node: LexicalNode): node is LinkNode =>
+    node.__type === 'link' || node.__type === 'autolink',
+  render: (props) => {
+    if ($isAutoLinkNode(props.node) && props.node.getIsUnlinked())
+      return props.children;
+    return (
+      <LinkWithPreview
+        url={props.node.__url}
+        class={props.theme.link}
+        title={props.node.__title ?? props.node.__url}
+      >
+        {props.children}
+      </LinkWithPreview>
+    );
+  },
 };
 
 const Mark: TypedRenderableElement<MarkNode> = {
@@ -1043,6 +1067,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
   eraseRenderableEntity(ConnectApp),
+  eraseRenderableEntity(AccountManagerRequest),
   eraseRenderableEntity(DatabaseQuery),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),

@@ -6,6 +6,7 @@ import {
 } from '@macro-inc/collaboration/docx/agent';
 import { Hono } from 'hono';
 import * as z from 'zod';
+import { tokenAccessLevel } from '../document-token';
 import { type Bindings, getEnv } from '../env';
 import { createWorkerSyncSource } from '../sources';
 
@@ -78,24 +79,6 @@ const DocxBody = z.object({
 
 /** Access levels whose tokens may edit a document's content. */
 const EDIT_ACCESS = new Set(['edit', 'owner']);
-
-/**
- * The access level a document token claims. The sync service verifies the
- * token's signature on connect; this only reads the claim.
- */
-function tokenAccessLevel(token: string): string | undefined {
-  try {
-    const payload = token.split('.')[1] ?? '';
-    const claims = JSON.parse(
-      atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
-    ) as { access_level?: unknown };
-    return typeof claims.access_level === 'string'
-      ? claims.access_level
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 const docx = new Hono<{ Bindings: Bindings }>();
 

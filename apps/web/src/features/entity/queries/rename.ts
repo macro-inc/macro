@@ -1,3 +1,4 @@
+import { renameDatabase } from '@block-database/queries/rename-database';
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -7,6 +8,14 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { renameAgentSession } from '@queries/agent-session/entity-mutations';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  mutationQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
+import { useQueryAccount } from '@queries/auth/use-query-account';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
@@ -37,7 +46,10 @@ import {
   getEntityGraphqlClient,
   getGraphqlCacheHost,
 } from '@service-storage/graphql-soup';
-import { useMutation } from '@tanstack/solid-query';
+import {
+  type MutationFunctionContext,
+  useMutation,
+} from '@tanstack/solid-query';
 import type { EntityData } from '../types/entity';
 
 type RenamableEntity = Pick<EntityData, 'id' | 'type' | 'name'> &
@@ -58,6 +70,7 @@ type EntityRenameOperationResult = {
 type SoupTransactionMap = Map<string, SoupTransaction>;
 
 type RenameRollbackContext = {
+  account: QueryAccount | undefined;
   soupTransactions: SoupTransactionMap;
 };
 
@@ -110,8 +123,8 @@ const getEntityRenameData = (
   // Reminders aren't either — the entity-mutation router rejects them, and a
   // reminder's name is its description, edited through the reminders API.
   // Calendar event titles are edited through the calendar mutation API.
-  // Databases are renamed by the database block's `renameDatabase`, which owns
-  // the schema cache it updates; forms by the form block's `renameForm`.
+  // Databases go through `renameDatabase` (not Soup optimism); forms through
+  // `renameForm` on the form block.
   if (
     entity.type === 'crm_company' ||
     entity.type === 'crm_contact' ||
@@ -131,6 +144,20 @@ const getEntityRenameData = (
 };
 
 const performEntityRename = async (operation: EntityRenameOperation) => {
+  if (operation.entity.type === 'database') {
+    if (operation.newName.trim() === operation.entity.name) {
+      return { success: true };
+    }
+    const renamed = await renameDatabase(
+      getEntityGraphqlClient(),
+      operation.entity.id,
+      operation.newName
+    );
+    if (renamed.isErr()) {
+      console.error('Failed to rename database', renamed.error);
+    }
+    return { success: renamed.isOk() };
+  }
   const data = getEntityRenameData(operation);
   if (!data) return { success: false };
   if (data.itemType === 'agent_session') {
@@ -204,6 +231,7 @@ function observeRenameSettlement(
   operations: EntityRenameOperation[]
 ) {
   const host = getGraphqlCacheHost();
+  const account = currentQueryAccount();
   let finished = false;
   let unsubscribe: (() => void) | undefined;
   let unsubscribeReset: (() => void) | undefined;
@@ -212,6 +240,7 @@ function observeRenameSettlement(
     unsubscribeReset?.();
   };
   const refresh = async () => {
+    if (!isCurrentQueryAccount(account)) return;
     const requests = [
       queryClient.invalidateQueries({ queryKey: historyKeys.list.queryKey }),
       queryClient.invalidateQueries({ queryKey: soupKeys._def }),
@@ -219,7 +248,7 @@ function observeRenameSettlement(
     if (operations.some(({ entity }) => entity.type === 'channel'))
       requests.push(
         queryClient.invalidateQueries({
-          queryKey: channelKeys.listChannels.queryKey,
+          queryKey: channelKeys.listChannels(account.userId).queryKey,
         })
       );
     for (const { entity } of operations) {
@@ -268,6 +297,7 @@ const validateEntityRename = (entity: RenamableEntity): void => {
     case 'chat':
     case 'project':
     case 'call':
+    case 'database':
       return;
     case 'foreign':
       throw new Error('Foreign entities do not support renaming');
@@ -332,14 +362,18 @@ const renameDssSetData = (
   return txns;
 };
 
-const renameChannelSetData = (entities: EntityRenameOptimisticInfo[]): void => {
+const renameChannelSetData = (
+  entities: EntityRenameOptimisticInfo[],
+  account: QueryAccount | undefined
+): void => {
+  if (!isCurrentQueryAccount(account)) return;
   const channelUpdates = entities.filter(
     ({ itemType }) => itemType === 'channel'
   );
   if (channelUpdates.length === 0) return;
 
   queryClient.setQueryData<ApiChannelWithLatest[]>(
-    channelKeys.listChannels.queryKey,
+    channelKeys.listChannels(account.userId).queryKey,
     (prev) => {
       if (!prev) return prev;
       return prev.map((channel) => {
@@ -386,7 +420,8 @@ const renameHistorySetData = (entities: EntityRenameOptimisticInfo[]) => {
 };
 
 function performOptimisticRenameUpdates(
-  entities: EntityRenameOptimisticInfo[]
+  entities: EntityRenameOptimisticInfo[],
+  account: QueryAccount
 ): RenameRollbackContext {
   // A durable queued write can fail after the mutation callback has returned.
   // Only REST operations may write the legacy caches before confirmation.
@@ -397,17 +432,18 @@ function performOptimisticRenameUpdates(
     );
   renamePreviewSetData(entities);
   renameHistorySetData(entities);
-  renameChannelSetData(entities);
+  renameChannelSetData(entities, account);
   renameCallRecordSetData(entities);
   const soupTransactions = renameDssSetData(entities);
 
-  return { soupTransactions };
+  return { soupTransactions, account };
 }
 
 function rollbackOptimisticRenameUpdates({
   contexts,
   updates,
 }: RenameOnMutateResult): void {
+  if (!isCurrentQueryAccount(contexts.account)) return;
   for (const [, txn] of contexts.soupTransactions) {
     txn.rollback();
   }
@@ -424,13 +460,15 @@ function rollbackOptimisticRenameUpdates({
 
   renameHistorySetData(rollbackEntities);
   renamePreviewSetData(rollbackEntities);
-  renameChannelSetData(rollbackEntities);
+  renameChannelSetData(rollbackEntities, contexts.account);
   renameCallRecordSetData(rollbackEntities);
 }
 
 const bulkRenameMutationFn = async (
-  params: BulkRenameDssEntityMutationVariables
+  params: BulkRenameDssEntityMutationVariables,
+  context: MutationFunctionContext
 ): Promise<BulkRenameDssEntityMutationData> => {
+  assertQueryAccount(mutationQueryAccount(context));
   validateBulkRename(params);
 
   if (!isFeatureEnabled(enableGraphqlSoup)) {
@@ -483,15 +521,18 @@ const bulkRenameMutationFn = async (
 };
 
 const bulkRenameOnMutate = (
-  params: BulkRenameDssEntityMutationVariables
+  params: BulkRenameDssEntityMutationVariables,
+  context: MutationFunctionContext
 ): RenameOnMutateResult => {
+  const account = mutationQueryAccount(context);
+  assertQueryAccount(account);
   // TanStack runs onMutate before mutationFn. Validate before the first cache
   // write so an invalid batch cannot require a best-effort rollback.
   validateBulkRename(params);
   const updates = params
     .map(getEntityRenameData)
     .filter((d): d is EntityRenameData => d !== null);
-  const contexts = performOptimisticRenameUpdates(updates);
+  const contexts = performOptimisticRenameUpdates(updates, account);
   return { contexts, updates };
 };
 
@@ -501,6 +542,7 @@ const bulkRenameOnSettled = (
   params: BulkRenameDssEntityMutationVariables,
   onMutateResult: RenameOnMutateResult | undefined
 ): void => {
+  if (!isCurrentQueryAccount(onMutateResult?.contexts.account)) return;
   const hasFailed = !!error || data?.some((d) => !d.success);
   if (!hasFailed) return;
 
@@ -525,7 +567,10 @@ const bulkRenameOnSettled = (
 
   data.forEach((result, index) => {
     if (!result.success) {
-      const update = onMutateResult.updates[index];
+      const { entity } = params[index];
+      const update = onMutateResult.updates.find(
+        ({ id, itemType }) => id === entity.id && itemType === entity.type
+      );
       if (update) {
         failedUpdates.push(update);
         const key = soupTransactionKey(update.itemType, update.id);
@@ -539,6 +584,7 @@ const bulkRenameOnSettled = (
   if (failedUpdates.length > 0) {
     rollbackOptimisticRenameUpdates({
       contexts: {
+        account: onMutateResult.contexts.account,
         soupTransactions: failedSoupTransactions,
       },
       updates: failedUpdates,
@@ -546,7 +592,7 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** Supports channel/document/chat/project/call/agent-session rename. */
+/** Supports channel/document/chat/project/call/agent-session/database rename. */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -555,13 +601,16 @@ export function createRenameDssEntityMutation(
     RenameOnMutateResult
   >
 ) {
+  const account = useQueryAccount();
   return useMutation<
     RenameDssEntityMutationData,
     Error,
     RenameDssEntityMutationVariables,
     RenameOnMutateResult
   >(() => ({
-    mutationFn: async (params) => (await bulkRenameMutationFn([params]))[0],
+    meta: { queryAccount: account() },
+    mutationFn: async (params, context) =>
+      (await bulkRenameMutationFn([params], context))[0],
     ...withCallbacks<
       RenameDssEntityMutationData,
       Error,
@@ -569,7 +618,8 @@ export function createRenameDssEntityMutation(
       RenameOnMutateResult
     >(
       {
-        onMutate: async (params) => bulkRenameOnMutate([params]),
+        onMutate: async (params, context) =>
+          bulkRenameOnMutate([params], context),
         onSettled: (data, error, params, onMutateResult) => {
           bulkRenameOnSettled(
             data ? [data] : undefined,
@@ -584,14 +634,16 @@ export function createRenameDssEntityMutation(
   }));
 }
 
-/** Supports channel/document/chat/project/call/agent-session bulk rename. */
+/** Supports channel/document/chat/project/call/agent-session/database bulk rename. */
 export function createBulkRenameDssEntityMutation() {
+  const account = useQueryAccount();
   return useMutation<
     BulkRenameDssEntityMutationData,
     Error,
     BulkRenameDssEntityMutationVariables,
     RenameOnMutateResult
   >(() => ({
+    meta: { queryAccount: account() },
     mutationFn: bulkRenameMutationFn,
     onMutate: bulkRenameOnMutate,
     onSettled: bulkRenameOnSettled,

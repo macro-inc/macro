@@ -102,7 +102,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
           declineMessage: 'On vacation',
         },
       }),
-      event({ addConference: true })
+      event({ addConference: true }),
+      true
     );
     expect(merged.eventType).toBe('out_of_office');
     expect(merged.outOfOffice).toEqual({
@@ -117,7 +118,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
       submitValues({
         outOfOffice: { autoDeclineMode: 'decline_all_conflicting_invitations' },
       }),
-      event({})
+      event({}),
+      true
     );
     expect(merged.outOfOffice).toEqual({ autoDeclineMode: 'decline_all' });
   });
@@ -128,7 +130,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
       event({
         eventType: 'out_of_office',
         outOfOffice: { autoDeclineMode: 'decline_all' },
-      })
+      }),
+      true
     );
     expect(merged.eventType).toBe('default');
     expect(merged.outOfOffice).toBeUndefined();
@@ -137,7 +140,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
   it('keeps a regular event regular', () => {
     const merged = editorSubmitValuesToCreateCalendarEvent(
       submitValues({}),
-      event({})
+      event({}),
+      true
     );
     expect(merged.eventType).toBeUndefined();
     expect(merged.outOfOffice).toBeUndefined();
@@ -146,7 +150,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
   it('turns the conferencing choice into exactly one tool flag', () => {
     const macro = editorSubmitValuesToCreateCalendarEvent(
       submitValues({ conferenceChoice: 'macro' }),
-      event({ addConference: true })
+      event({ addConference: true }),
+      true
     );
     expect(macro.addMacroCall).toBe(true);
     expect(macro.addConference).toBe(false);
@@ -156,7 +161,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
         conferenceChoice: 'google_meet',
         conference: 'google_meet',
       }),
-      event({ addMacroCall: true })
+      event({ addMacroCall: true }),
+      true
     );
     expect(meet.addMacroCall).toBe(false);
     expect(meet.addConference).toBe(true);
@@ -166,7 +172,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
         conferenceChoice: 'microsoft_teams',
         conference: 'microsoft_teams',
       }),
-      event({ addMacroCall: true })
+      event({ addMacroCall: true }),
+      true
     );
     expect(teams.addMacroCall).toBe(false);
     expect(teams.addConference).toBe(true);
@@ -174,7 +181,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
 
     const none = editorSubmitValuesToCreateCalendarEvent(
       submitValues({ conferenceChoice: 'none' }),
-      event({ addMacroCall: true })
+      event({ addMacroCall: true }),
+      true
     );
     expect(none.addMacroCall).toBe(false);
     expect(none.addConference).toBe(false);
@@ -186,7 +194,8 @@ describe('editorSubmitValuesToCreateCalendarEvent', () => {
         conferenceChoice: 'macro',
         outOfOffice: { autoDeclineMode: 'decline_none' },
       }),
-      event({ addMacroCall: true })
+      event({ addMacroCall: true }),
+      true
     );
     expect(merged.addMacroCall).toBe(false);
     expect(merged.addConference).toBe(false);
@@ -200,8 +209,27 @@ it('preserves a pending legacy conference request and emits only the generic fie
   );
   const updated = editorSubmitValuesToCreateCalendarEvent(
     submitValues({ conferenceChoice: 'google_meet' }),
-    legacy
+    legacy,
+    true
   );
   expect(updated.addConference).toBe(true);
   expect(updated).not.toHaveProperty('addGoogleMeet');
+});
+
+it('keeps the proposed guest permissions only on a calendar that has them', () => {
+  const policy = {
+    canModify: false,
+    canInviteOthers: false,
+    canSeeOtherGuests: true,
+  };
+  const proposed = event({ guestPolicy: policy });
+
+  expect(
+    editorSubmitValuesToCreateCalendarEvent(submitValues({}), proposed, true)
+      .guestPolicy
+  ).toEqual(policy);
+  expect(
+    editorSubmitValuesToCreateCalendarEvent(submitValues({}), proposed, false)
+      .guestPolicy
+  ).toBeUndefined();
 });

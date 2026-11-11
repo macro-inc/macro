@@ -14,6 +14,7 @@ import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
+import { queryReadyGate } from '@queries/gate';
 import { useNotificationTypePreferencesQuery } from '@queries/notification/type-preferences';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import {
@@ -32,7 +33,8 @@ export function useNavigationUnread() {
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
   const preferencesQuery = useNotificationTypePreferencesQuery();
   const isTypeDisabled = (type: string) =>
-    preferencesQuery.data?.disabled_types.includes(type) ?? false;
+    queryReadyGate(preferencesQuery) &&
+    preferencesQuery.data.disabled_types.includes(type);
   const channels = createChannelUnreadQuery(
     makeGraphqlSoupInput({
       // Preserve the previous feed's 500-entity candidate bound, but select
@@ -67,15 +69,15 @@ export function useNavigationUnread() {
   // Respect user preference: hide badge when email notifications are disabled.
   const emailUnread = createMemo(() => {
     if (isTypeDisabled('new_email')) return false;
-    if (email.isLoading) return false;
-    return (email.data?.entities ?? []).some(
+    if (!queryReadyGate(email)) return false;
+    return email.data.entities.some(
       (entity) => entity.type === 'email' && !entity.isRead && !entity.done
     );
   });
   const channelsUnread = createMemo(() => {
     if (graphqlFlag().enabled) {
-      if (!channels.isEnabled || channels.isLoading) return false;
-      return (channels.data ?? []).some((notification) => {
+      if (!channels.isEnabled || !queryReadyGate(channels)) return false;
+      return channels.data.some((notification) => {
         const state = notificationStateFromGraphql(notification.state);
         return (
           (notificationSource.withLocalState?.({
@@ -96,7 +98,9 @@ export function useNavigationUnread() {
   });
 
   return (id: string): boolean => {
-    if (id === 'home') return homeUnread();
+    // Notifications reads the same attention as Home's unread witness; a
+    // second live feed here would only duplicate it.
+    if (id === 'home' || id === 'notifications') return homeUnread();
     if (id === 'mail') return emailUnread();
     if (id === 'channels') return channelsUnread();
     return false;

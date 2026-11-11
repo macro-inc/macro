@@ -1,13 +1,14 @@
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { getPermissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { queryReadyGate } from '@queries/gate';
 import { storageServiceClient } from '@service-storage/client';
-import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { useQueryClient } from '@tanstack/solid-query';
 import { Button } from '@ui';
@@ -30,8 +31,13 @@ import { DatabaseToolbar } from '../database/components/database-toolbar';
 import { DatabaseProvider, useDatabase } from '../database/context/database';
 import type { CardMove } from '../database/core/board-moves';
 import type { DatabaseCellValue } from '../database/core/database-view';
+import { newViewNeedsColumn } from '../database/core/view-creation';
 import type { ViewChange } from '../database/core/view-state';
-import { allRecordsView, boardLayout } from '../database/core/views';
+import {
+  allRecordsView,
+  boardLayout,
+  timelineLayout,
+} from '../database/core/views';
 import {
   type DatabaseOpFailure,
   databaseOpMessage,
@@ -39,13 +45,17 @@ import {
 import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
-import type { Pipeline } from './core/pipeline';
+import { CrmListSkeleton } from './components/list-state';
+import { StageRequirementsDialog } from './components/stage-requirements-dialog';
+import { isTrackedPipeline, type Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
   createPipelineViews,
   type PipelineViews,
+  usePipelinePositionsQuery,
   usePipelineTableQuery,
 } from './queries/pipeline-views';
+import { useStageRequirements } from './queries/stage-requirements';
 import { AddPipelineRecordDialog } from './views/add-pipeline-record';
 
 /** Pipelines supply their own identity and owner to the existing share dialog. */
@@ -83,11 +93,7 @@ export function PipelineDatabaseEditor(props: {
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
       style={{ '--database-title-column-width': '18rem' }}
     >
-      <Suspense
-        fallback={
-          <div class="p-4 text-sm text-ink-muted">Loading pipeline…</div>
-        }
-      >
+      <Suspense fallback={<CrmListSkeleton label="Loading pipeline" />}>
         <Show when={props.pipeline.id} keyed>
           {(_id) => (
             <PipelineRecords
@@ -136,20 +142,27 @@ function PipelineRecords(props: {
     if (stored) void views.update(stored, change).mapErr(viewFailure);
     else setAllRecords((current) => ({ ...current, ...change }));
   };
-  // No read of stored card places exists for pipelines; moves keep theirs here.
-  const [positions, setPositions] = createSignal<
-    Record<string, CardPosition[]>
-  >({});
+  const positions = usePipelinePositionsQuery(deps, props.pipeline.id, () => {
+    const stored = selectedView();
+    return stored?.layout.kind === 'board' ? stored.id : undefined;
+  });
   const boardPositions: BoardPositions = {
-    state: () => ({
-      kind: 'ready',
-      positions: positions()[view().id] ?? [],
-    }),
-    setPositions: (change) =>
-      setPositions((current) => ({
-        ...current,
-        [view().id]: change(current[view().id] ?? []),
-      })),
+    get viewId() {
+      return view().id;
+    },
+    state: () => {
+      if (!selectedView()) return { kind: 'ready', positions: [] };
+      if (queryReadyGate(positions))
+        return { kind: 'ready', positions: positions.data };
+      if (positions.isError)
+        return {
+          kind: 'failed',
+          retry: () => {
+            fireAndForget(positions.refetch(), 'crm');
+          },
+        };
+      return { kind: 'loading' };
+    },
     // The server moves cards only on stored boards.
     get move() {
       const stored = selectedView();
@@ -181,7 +194,9 @@ function PipelineRecords(props: {
             changeView({ query: { ...view().query, filter: null } })
           }
           boardPositions={boardPositions}
-          onComposeRecord={setComposing}
+          onComposeRecord={
+            isTrackedPipeline(props.pipeline) ? setComposing : undefined
+          }
           renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
           renderTextValue={(value) => <DatabaseTextValue value={value} />}
           renderMentionPicker={(picker) => (
@@ -235,6 +250,13 @@ function PipelineToolbar(props: {
   pipelineActions?: JSX.Element;
 }) {
   const database = useDatabase();
+  const requirements = useStageRequirements(
+    { storage: storageServiceClient, client: useQueryClient() },
+    props.pipeline.id
+  );
+  const [configuring, setConfiguring] = createSignal(false);
+  const tracked = () =>
+    isTrackedPipeline(props.pipeline) ? props.pipeline : undefined;
   const columns = () => database.data.rows.columns();
   // A column added with a board shows once the table is read again.
   const refreshColumns = () => {
@@ -252,11 +274,7 @@ function PipelineToolbar(props: {
       onCreateView={(created) =>
         props.views.create(props.view, created, columns()).map((view) => {
           props.onSelectView(view.id);
-          if (
-            created.layout === 'board' &&
-            created.groupBy.kind === 'new-status'
-          )
-            refreshColumns();
+          if (newViewNeedsColumn(created)) refreshColumns();
         })
       }
       onRenameView={(target, name) =>
@@ -281,6 +299,18 @@ function PipelineToolbar(props: {
               .showAsBoardWithStatusColumn(target, columns())
               .map(refreshColumns)
           )
+          .with({ kind: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+            props.views
+              .update(target, {
+                layout: timelineLayout(range.columnId, columns()),
+              })
+              .map(() => undefined)
+          )
+          .with({ kind: 'timeline', range: { kind: 'new-column' } }, () =>
+            props.views
+              .showAsTimelineWithTimeRangeColumn(target, columns())
+              .map(refreshColumns)
+          )
           .exhaustive()
       }
       onDeleteView={(target) => {
@@ -289,33 +319,77 @@ function PipelineToolbar(props: {
       }}
       actions={
         <>
-          <Show when={props.canEdit}>
-            <Button variant="outline" onClick={() => props.onCompose({})}>
+          <Show when={props.canEdit && !tracked()}>
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(props.actions.createRecord(), 'crm')}
+            >
+              <PlusIcon class="size-4" />
+              {t('crm.addEntry')}
+            </Button>
+          </Show>
+          <Show when={props.canEdit && tracked()}>
+            <Button
+              variant="secondary"
+              disabled={!queryReadyGate(requirements.query)}
+              onClick={() => setConfiguring(true)}
+            >
+              Stage requirements
+            </Button>
+            <Show when={configuring()}>
+              <StageRequirementsDialog
+                columns={columns()}
+                rules={
+                  queryReadyGate(requirements.query)
+                    ? requirements.query.data
+                    : []
+                }
+                onSave={requirements.save}
+                onClose={() => setConfiguring(false)}
+              />
+            </Show>
+            <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
               {props.pipeline.recordType === 'company'
                 ? 'Add deal'
                 : 'Add contact'}
             </Button>
           </Show>
-          <Show when={props.canEdit && props.composing} keyed>
-            {(initialValues) => (
-              <AddPipelineRecordDialog
-                pipeline={props.pipeline}
-                columns={columns()}
-                initialValues={initialValues}
-                onCreate={props.actions.createRow}
-                onClose={() => props.onCompose(undefined)}
-                renderTextEditor={(editor) => (
-                  <DatabaseTextEditor {...editor} />
+          <Show when={tracked()}>
+            {(pipeline) => (
+              <Show when={props.canEdit && props.composing} keyed>
+                {(initialValues) => (
+                  <AddPipelineRecordDialog
+                    pipeline={pipeline()}
+                    columns={columns()}
+                    initialValues={initialValues}
+                    requirements={
+                      queryReadyGate(requirements.query)
+                        ? requirements.query.data
+                        : undefined
+                    }
+                    requirementsLoading={requirements.query.isPending}
+                    requirementsError={
+                      !queryReadyGate(requirements.query) &&
+                      requirements.query.isError
+                    }
+                    onCreate={props.actions.createRow}
+                    onClose={() => props.onCompose(undefined)}
+                    renderTextEditor={(editor) => (
+                      <DatabaseTextEditor {...editor} />
+                    )}
+                    renderTextValue={(value) => (
+                      <DatabaseTextValue value={value} />
+                    )}
+                    renderMentionPicker={(picker) => (
+                      <DatabaseMentionPicker {...picker} />
+                    )}
+                    renderMentionValue={(id, entityType) => (
+                      <DatabaseMentionValue id={id} entityType={entityType} />
+                    )}
+                  />
                 )}
-                renderTextValue={(value) => <DatabaseTextValue value={value} />}
-                renderMentionPicker={(picker) => (
-                  <DatabaseMentionPicker {...picker} />
-                )}
-                renderMentionValue={(id, entityType) => (
-                  <DatabaseMentionValue id={id} entityType={entityType} />
-                )}
-              />
+              </Show>
             )}
           </Show>
           {props.pipelineActions}

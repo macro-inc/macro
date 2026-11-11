@@ -1,5 +1,5 @@
 use super::*;
-use bot_id::{CLAUDE_BOT_ID, CODEX_BOT_ID, CURSOR_BOT_ID};
+use bot_id::{CODEX_BOT_ID, CURSOR_BOT_ID};
 
 #[test]
 fn only_external_runtimes_prompt_by_default() {
@@ -11,7 +11,6 @@ fn only_external_runtimes_prompt_by_default() {
         AgentKind::SandboxedCoder,
         AgentKind::Cursor,
         AgentKind::CodexCloud,
-        AgentKind::ClaudeCloud,
         AgentKind::InMemory,
     ] {
         assert_eq!(
@@ -42,7 +41,6 @@ fn builtin_runtimes_always_bypass_regardless_of_saved_agent_choice() {
         AgentKind::InMemory,
         AgentKind::Cursor,
         AgentKind::CodexCloud,
-        AgentKind::ClaudeCloud,
         AgentKind::SandboxedCoder,
     ] {
         for auto_accept_permissions in [None, Some(false), Some(true)] {
@@ -86,7 +84,6 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
         AgentKind::InMemory,
         AgentKind::Cursor,
         AgentKind::CodexCloud,
-        AgentKind::ClaudeCloud,
         AgentKind::SandboxedCoder,
         AgentKind::External,
     ] {
@@ -106,18 +103,13 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
 fn first_party_cloud_kinds_own_a_fixed_harness_slug() {
     assert_eq!(AgentKind::Cursor.harness_slug(), Some("cursor"));
     assert_eq!(AgentKind::CodexCloud.harness_slug(), Some("codex-cloud"));
-    assert_eq!(AgentKind::ClaudeCloud.harness_slug(), Some("claude-cloud"));
     assert_eq!(AgentKind::SandboxedCoder.harness_slug(), None);
     assert_eq!(AgentKind::InMemory.harness_slug(), None);
     assert_eq!(AgentKind::External.harness_slug(), None);
 
     // A create-path fallback that stamped the sandboxed-coder default is
     // corrected from the bot, not from the wrong slug it was handed.
-    for (bot, slug) in [
-        (CURSOR_BOT_ID, "cursor"),
-        (CODEX_BOT_ID, "codex-cloud"),
-        (CLAUDE_BOT_ID, "claude-cloud"),
-    ] {
+    for (bot, slug) in [(CURSOR_BOT_ID, "cursor"), (CODEX_BOT_ID, "codex-cloud")] {
         assert_eq!(
             AgentKind::for_session(bot, "opencode").harness_slug(),
             Some(slug),
@@ -153,7 +145,6 @@ fn only_the_in_memory_runtime_is_not_a_coder() {
         AgentKind::SandboxedCoder,
         AgentKind::Cursor,
         AgentKind::CodexCloud,
-        AgentKind::ClaudeCloud,
         AgentKind::External,
     ] {
         assert!(coder.is_coding(), "{coder:?} has a repository to work in");
@@ -216,4 +207,33 @@ fn a_silent_turn_is_told_by_how_it_stopped() {
             "blank text is no text: {stop:?}"
         );
     }
+}
+
+#[test]
+fn a_resident_answers_anyone_while_its_owner_keeps_access() {
+    let resident = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        runtime_name: "box".to_owned(),
+        resident: true,
+        agent_owner_may_use,
+        actor_may_use,
+    };
+    assert!(resident(true, Some(false)).may_run());
+    assert!(resident(true, None).may_run());
+    assert!(!resident(false, Some(true)).may_run());
+    assert!(!resident(false, None).may_run());
+}
+
+#[test]
+fn a_coding_agent_runs_for_people_who_may_use_the_runtime_themselves() {
+    let coding = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        runtime_name: "box".to_owned(),
+        resident: false,
+        agent_owner_may_use,
+        actor_may_use,
+    };
+    assert!(coding(false, Some(true)).may_run());
+    assert!(!coding(true, Some(false)).may_run());
+    // A turn nobody prompted runs on its agent owner's authority.
+    assert!(coding(true, None).may_run());
+    assert!(!coding(false, None).may_run());
 }

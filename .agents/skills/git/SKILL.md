@@ -1,6 +1,6 @@
 ---
 name: git
-description: Commit, branch, push, and open or update pull requests in this repository. Use before writing a commit message or PR title/body, pushing, stacking PRs, or when asked to "commit", "open a PR", or "push".
+description: Read this before any git or GitHub operation. Use whenever you commit, branch, rebase, push, or open or update a pull request — including writing a commit message or PR title/body. Never include customer PII or secrets in commits, messages, or PR descriptions.
 ---
 
 # Git and pull requests
@@ -8,11 +8,30 @@ description: Commit, branch, push, and open or update pull requests in this repo
 Commit as you go on a feature branch, one logical change per commit, without
 asking. Never commit to `main`. Push or open a PR only when the user asks.
 
+## PII and secrets
+
+Never put customer or third-party PII, or secrets, in a commit, commit
+message, PR title, or PR description. That includes emails, phone numbers,
+physical addresses, API keys, and tokens. Refer to people as "the customer"
+or a placeholder (`customer@example.com`).
+
+The pre-commit hook scans staged added lines; during merges its PII scan checks
+additions relative to every parent. Gitleaks excludes only staged files identical
+to the same path in an incoming parent; modified files remain scanned. Do not
+skip the hook (`--no-verify`).
+Do not add lines to `tooling/pii/exceptions` unless a human asks you to.
+
+Before opening or updating a PR, reread the title and body and strip any PII
+that came from logs, traces, or production data. `python3 tooling/pii/scan.py
+--text -` reads a title or body from stdin; `--changed` is what `just check` runs.
+
 ## Branches
 
 `<user>/<topic>` in kebab-case, for example `wolf/agent-rules`. One concern per
 branch. For dependent work, stack branches and open one PR per layer, each based on
 the branch below it.
+
+Use the user's established branch prefix, not the OS username.
 
 ## Commits and PR titles
 
@@ -31,12 +50,49 @@ The PR title follows the same form; squash merges use it as the commit on `main`
 - **body:** why the change was needed and anything a reviewer can't see in the
   diff. Wrap at 72 columns.
 
+## Privacy
+
+Everything written into the repository or onto GitHub is public: PR titles and
+bodies, commit messages, review comments and replies, code comments, docs, and
+test fixtures. Describe the code change and nothing else.
+
+- Never include personal data: names, emails, phone numbers, usernames,
+  addresses, account or workspace ids of real users, or @mentions of people.
+- Never name customers, prospects, partners, their companies, or their
+  products. Name a third-party product only when the code integrates with it
+  (`Slack integration`), never as the source of a request or report.
+- Never cite support channels, tickets, chat channels or threads, calls,
+  meetings, emails, or links into support tools or Macro workspace items
+  (task and agent-session links are fine). Don't say who asked or where it was reported.
+- Never mention places tied to a person or customer (cities, offices, regions).
+- When the reason matters, say it in general terms: "Users with long read
+  histories saw channels load slowly", not "<customer> reported in
+  <channel> that…". "A user request" is enough; omit the requester.
+- Test fixtures and examples use placeholders (`user@example.com`, `Acme`),
+  never data copied from a real account or conversation.
+- Context the user gives you (a support thread, a customer name, a screenshot)
+  stays in the conversation; restate it as the general problem before writing.
+
+CI's `PR Privacy Check` fails a PR whose title, body, or commits contain
+emails, phone numbers, @mentions, chat-channel names, or support-tool and Macro
+workspace links (Dependabot PRs are exempt). It cannot see names, so passing it
+is not enough: reread every title, body, and message against the list above.
+Run it locally before pushing or opening a PR:
+
+```sh
+just pr-privacy                                   # commit messages on this branch
+PR_TITLE="fix(x): ..." just pr-privacy body.md    # plus the PR title and body you will post
+```
+
+To fix a hit, edit the PR title or body, or reword the commit on your branch.
+
 ## Before pushing
 
 Run what applies to the files you changed, and fix failures before pushing:
 
 ```sh
 just check                                # format, lint, code rules on changed files
+just pr-privacy                           # commit messages carry no personal details
 cargo fmt --all -- --check                # any Rust change
 cargo x deps --check                      # Cargo.toml or crate added/removed
 cargo x workflows --check                 # workflow generators changed
@@ -46,6 +102,18 @@ cargo x kafka-topics --check              # macro_event_topics changed
 GitHub Actions workflows are generated from Rust: edit
 `tooling/xtask/crates/xtask_workflows`, never the YAML (see the
 [workflows rule](../../rules/infra/github-workflows.md)).
+
+Run the [`review`](../review/SKILL.md) skill on every PR pass, before the first
+push and again after changes that add or alter what it covers. It picks the
+reviews that apply to the diff; at least one always does. A diff that touches
+SQL, a query builder, a SQL function, or a migration always gets the database
+reviews (`query-review`, `migration-review`), and so does one that calls an
+existing query more often or over a wider scope. Fix every `block` finding
+before pushing; fix or justify the rest in the PR body.
+
+`query-review` checks the plan that the
+[`query-writing`](../query-writing/SKILL.md) skill had you record for each
+query before committing it. A changed query without one is not ready to push.
 
 Run the `audit` skill before handing off; it covers tests and area checks.
 
@@ -58,7 +126,7 @@ order, and drop any that would be empty:
 ## Why
 
 The problem or goal, with the evidence: the bug and how it shows up, numbers
-measured, the user request. Link issues.
+measured. Link GitHub issues or Macro tasks. Follow the Privacy section above.
 
 ## How it works
 
@@ -71,21 +139,31 @@ machines, pipelines). Drop it for small or mechanical changes.
 - One bullet per meaningful change, in reading order. Name files or modules
   when it helps navigation. Call out decisions and alternatives rejected.
 
+## Database review
+
+Whenever a database review ran (changed SQL, migrations, or a caller that
+widens a query): the `review` skill's table. One row per changed query or
+migration statement, with the rows it touches at production size, the index
+or lock it relies on, and the measured plan from `query-writing`. Justify any
+finding left open.
+
 ## Follow-ups
 
 - Work deliberately left out, with the reason.
 ```
 
 No test plan or testing section in PR descriptions or commit messages: CI shows
-the checks, and what you ran goes in your report to the user. Attach proof for
-user-visible changes: screenshots or a recording (see the `record-proof` skill
-when it is available).
+the checks, and what you ran goes in your report to the user. Attach screenshots
+or recordings to the PR for user-visible changes (see the `record-proof` skill
+when available). Do not commit verification captures unless explicitly requested.
 
 ## Handing off a PR
 
 Open PRs ready for review, not as drafts; if one was created as a draft, mark it
-ready. A PR whose checks are failing or still running is not done: watch CI and fix
-failures before handing off.
+ready. The `CI gate` passes only after a run requested with the `run-ci` label;
+the [`run-ci` skill](../run-ci/SKILL.md) says when to request one. A PR whose
+`CI gate` is failing, still running, or not run on the latest commit is not done:
+wait on it and fix failures before handing off.
 
 ## Updating a PR
 

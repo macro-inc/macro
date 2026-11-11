@@ -58,6 +58,7 @@ describe('stringToItemType', () => {
     'project',
     'channel',
     'crm_company',
+    'crm_contact',
     'crm_pipeline',
     'initiative',
   ])('parses %s as itself', (raw) => {
@@ -71,12 +72,16 @@ describe('stringToItemType', () => {
     }
   );
 
-  test.each(['crm_contact', 'channel_message', 'bogus'])(
-    'rejects %s',
+  test.each(['foreign', 'foreign_entity'])(
+    'reads the pull request spelling %s as a foreign entity',
     (raw) => {
-      expect(stringToItemType(raw)).toBeUndefined();
+      expect(stringToItemType(raw)).toBe('foreign');
     }
   );
+
+  test.each(['channel_message', 'bogus'])('rejects %s', (raw) => {
+    expect(stringToItemType(raw)).toBeUndefined();
+  });
 });
 
 describe('blockNameToItemType', () => {

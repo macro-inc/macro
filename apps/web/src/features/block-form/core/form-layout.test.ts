@@ -3,15 +3,15 @@ import {
   addQuestion,
   addSection,
   bookingStep,
-  brokenGateColumns,
+  brokenRuleColumns,
   columnsNamed,
-  gateColumns,
   hiddenColumns,
   moveQuestion,
   moveSection,
   pruneBrokenRules,
   removeQuestion,
   removeSection,
+  ruleColumns,
   sectionInsertIndex,
   swapQuestionColumn,
   updateQuestion,
@@ -41,6 +41,7 @@ function offsite(): FormLayout {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [
           {
@@ -79,6 +80,7 @@ function offsite(): FormLayout {
           ],
         },
         gateMessage: 'The offsite is for employees.',
+        showWhen: null,
         bookingTarget: null,
         questions: [],
       },
@@ -89,6 +91,7 @@ function offsite(): FormLayout {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [
           {
@@ -134,6 +137,7 @@ describe('addQuestion', () => {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -311,14 +315,14 @@ describe('broken gate rules', () => {
     layout.sections[0].questions = layout.sections[0].questions.filter(
       (question) => question.id !== TEAM_QUESTION
     );
-    expect(brokenGateColumns(layout, GATE)).toEqual([TEAM_COLUMN]);
+    expect(brokenRuleColumns(layout, GATE)).toEqual([TEAM_COLUMN]);
     const repaired = pruneBrokenRules(layout, GATE)._unsafeUnwrap();
     expect(repaired.prunedConditions).toBe(1);
     expect(repaired.layout.sections[1].gateRules?.conditions).toEqual([]);
-    expect(brokenGateColumns(offsite(), GATE)).toEqual([]);
+    expect(brokenRuleColumns(offsite(), GATE)).toEqual([]);
   });
 
-  it('keeps edits open around a screener whose question went in the grid', () => {
+  it('keeps edits open around a gate whose question went in the grid', () => {
     const layout: FormLayout = {
       sections: offsite().sections.map((section) =>
         section.id === ABOUT
@@ -473,6 +477,7 @@ describe('sections', () => {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [],
       },
@@ -529,6 +534,7 @@ describe('sections', () => {
     const layout = updateSection(offsite(), GATE, {
       gateRules: rules,
       gateMessage: 'Tell us your name',
+      showWhen: null,
     })._unsafeUnwrap();
     expect(layout.sections[1].gateRules).toEqual(rules);
     expect(layout.sections[1].gateMessage).toBe('Tell us your name');
@@ -561,8 +567,8 @@ describe('sections', () => {
 
 describe('reads', () => {
   it('lists the columns a gate may test', () => {
-    expect(gateColumns(offsite(), GATE)).toEqual([NAME_COLUMN, TEAM_COLUMN]);
-    expect(gateColumns(offsite(), ABOUT)).toEqual([]);
+    expect(ruleColumns(offsite(), GATE)).toEqual([NAME_COLUMN, TEAM_COLUMN]);
+    expect(ruleColumns(offsite(), ABOUT)).toEqual([]);
   });
 
   it('lists the columns rules name, nested groups included, once each', () => {
@@ -642,6 +648,7 @@ describe('booking step', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       },
@@ -649,7 +656,7 @@ describe('booking step', () => {
     )._unsafeUnwrap();
   }
 
-  it('adds a booking step after every question and screener, whatever index it was given', () => {
+  it('adds a booking step after every question and gate, whatever index it was given', () => {
     const layout = addSection(
       offsite(),
       {
@@ -659,6 +666,7 @@ describe('booking step', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       },
@@ -671,6 +679,7 @@ describe('booking step', () => {
       kind: 'booking',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: INTRO_CALL,
       questions: [],
     });
@@ -682,7 +691,7 @@ describe('booking step', () => {
     ]);
   });
 
-  it('inserts new sections and screeners before the booking step', () => {
+  it('inserts new sections and gates before the booking step', () => {
     const layout = addSection(
       withBooking(),
       {
@@ -692,6 +701,7 @@ describe('booking step', () => {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [],
       },
@@ -717,6 +727,7 @@ describe('booking step', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: REVIEW_CALL,
           questions: [],
         },
@@ -725,7 +736,7 @@ describe('booking step', () => {
     ).toEqual({ kind: 'booking-must-be-last', sectionId: BOOKING });
   });
 
-  it('refuses moving the booking step ahead of a screener, or a section after it', () => {
+  it('refuses moving the booking step ahead of a gate, or a section after it', () => {
     expect(moveSection(withBooking(), BOOKING, 1)._unsafeUnwrapErr()).toEqual({
       kind: 'booking-must-be-last',
       sectionId: BOOKING,
@@ -753,6 +764,7 @@ describe('booking step', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: REVIEW_CALL,
           questions: [],
         },
@@ -804,6 +816,7 @@ describe('booking step', () => {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         },
@@ -854,5 +867,118 @@ describe('booking step', () => {
     const removed = removeSection(changed, BOOKING)._unsafeUnwrap();
     expect(bookingStep(removed.layout)).toBeUndefined();
     expect(removed.prunedConditions).toBe(0);
+  });
+});
+
+describe('a section shown on a condition', () => {
+  /** About you → gate → Details, shown only when Team is Contractor. */
+  function conditional(): FormLayout {
+    const layout = offsite();
+    layout.sections[2].showWhen = {
+      conjunction: 'and',
+      conditions: [
+        {
+          kind: 'condition',
+          column: TEAM_COLUMN,
+          test: { kind: 'options', operator: 'isAnyOf', options: [CONTRACTOR] },
+        },
+      ],
+    };
+    return layout;
+  }
+
+  it('may test the questions of earlier sections only', () => {
+    expect(ruleColumns(conditional(), DETAILS)).toEqual([
+      NAME_COLUMN,
+      TEAM_COLUMN,
+    ]);
+    expect(
+      updateSection(conditional(), ABOUT, {
+        showWhen: {
+          conjunction: 'and',
+          conditions: [
+            {
+              kind: 'condition',
+              column: DIET_COLUMN,
+              test: { kind: 'presence', operator: 'isNotEmpty' },
+            },
+          ],
+        },
+      })._unsafeUnwrapErr()
+    ).toEqual({
+      kind: 'condition-before-question',
+      sectionId: ABOUT,
+      columnId: DIET_COLUMN,
+    });
+  });
+
+  it('refuses to move the section or its question so the question no longer comes first', () => {
+    expect(moveSection(conditional(), DETAILS, 0)._unsafeUnwrapErr()).toEqual({
+      kind: 'condition-before-question',
+      sectionId: DETAILS,
+      columnId: TEAM_COLUMN,
+    });
+    const withoutGate: FormLayout = {
+      sections: conditional().sections.filter((section) => section.id !== GATE),
+    };
+    expect(
+      moveQuestion(withoutGate, TEAM_QUESTION, {
+        sectionId: DETAILS,
+        index: 0,
+      })._unsafeUnwrapErr()
+    ).toEqual({
+      kind: 'condition-before-question',
+      sectionId: DETAILS,
+      columnId: TEAM_COLUMN,
+    });
+  });
+
+  it('goes with the last question it tests, so the section is shown to everyone', () => {
+    const { layout, prunedConditions } = removeQuestion(
+      conditional(),
+      TEAM_QUESTION
+    )._unsafeUnwrap();
+    expect(prunedConditions).toBe(2);
+    expect(layout.sections[1].gateRules).toEqual({
+      conjunction: 'and',
+      conditions: [],
+    });
+    expect(layout.sections[2].showWhen).toBeNull();
+  });
+
+  it('names its broken columns and drops just those when repaired', () => {
+    const layout = conditional();
+    layout.sections[2].showWhen = {
+      conjunction: 'or',
+      conditions: [
+        {
+          kind: 'condition',
+          column: TEAM_COLUMN,
+          test: { kind: 'options', operator: 'isAnyOf', options: [CONTRACTOR] },
+        },
+        {
+          kind: 'condition',
+          column: NAME_COLUMN,
+          test: { kind: 'text', operator: 'is', value: 'Ada' },
+        },
+      ],
+    };
+    // The Team question went in the grid; the condition stayed.
+    layout.sections[0].questions = layout.sections[0].questions.filter(
+      (question) => question.id !== TEAM_QUESTION
+    );
+    expect(brokenRuleColumns(layout, DETAILS)).toEqual([TEAM_COLUMN]);
+    const repaired = pruneBrokenRules(layout, DETAILS)._unsafeUnwrap();
+    expect(repaired.prunedConditions).toBe(1);
+    expect(repaired.layout.sections[2].showWhen).toEqual({
+      conjunction: 'or',
+      conditions: [
+        {
+          kind: 'condition',
+          column: NAME_COLUMN,
+          test: { kind: 'text', operator: 'is', value: 'Ada' },
+        },
+      ],
+    });
   });
 });

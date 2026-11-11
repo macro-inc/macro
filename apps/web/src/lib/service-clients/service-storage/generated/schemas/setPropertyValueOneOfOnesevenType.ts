@@ -10,5 +10,5 @@ export type SetPropertyValueOneOfOnesevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetPropertyValueOneOfOnesevenType = {
-  link: 'link',
+  multi_entity_reference: 'multi_entity_reference',
 } as const;

@@ -85,6 +85,7 @@ pub async fn handler(
         Ok(id) => id,
         Err(fusionauth::error::FusionAuthClientError::UserDoesNotExist) => {
             let user = fusionauth::user::create::User {
+                data: None,
                 email: Cow::Borrowed(&email),
                 password: Cow::Owned(uuid::Uuid::new_v4().to_string()),
                 username: Some(Cow::Borrowed(&email)),

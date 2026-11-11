@@ -105,14 +105,57 @@ impl GithubIdp {
     }
 }
 
+/// The application's OAuth redirect URLs: the only part of the kickstart that
+/// depends on the instance's ports. The init snapshot key leaves them out (see
+/// [`without_redirect_urls`]), and every bring-up writes the instance's own
+/// list into FusionAuth, so one snapshot serves every port window.
+pub fn redirect_urls(frontend_port: u16, auth_port: u16, proxy_origins: &[String]) -> Vec<String> {
+    let mut redirect_urls = vec![
+        format!("http://localhost:{frontend_port}/app"),
+        identity::oauth_redirect_uri(auth_port),
+        "http://authentication-service:8080/oauth/redirect".to_string(),
+    ];
+    // The browser may use localhost or the machine hostname for this proxy.
+    // Authorize the exact origins used by either local frontend mode.
+    for origin in proxy_origins {
+        for path in [
+            "/cognition/mcp/servers/auth/callback",
+            "/mcp/oauth/callback",
+        ] {
+            let callback = format!("{origin}{path}");
+            if !redirect_urls.contains(&callback) {
+                redirect_urls.push(callback);
+            }
+        }
+    }
+    redirect_urls
+}
+
+/// The kickstart document without the application's redirect URLs, so that
+/// instances that differ only in their ports produce the same snapshot key.
+pub fn without_redirect_urls(mut doc: Value) -> Value {
+    let requests = doc
+        .get_mut("requests")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten();
+    for request in requests {
+        let oauth = request
+            .pointer_mut("/body/application/oauthConfiguration")
+            .and_then(Value::as_object_mut);
+        if let Some(oauth) = oauth {
+            oauth.remove("authorizedRedirectURLs");
+        }
+    }
+    doc
+}
+
 /// Build the kickstart document. `lambda_body` is the JS source of
 /// `populate_jwt_local.js`; `reconcile_lambda_body` is the reconcile lambda
-/// attached to `google_gmail` (only used when `google` is configured); redirect
-/// URLs are templated from the instance ports.
+/// attached to `google_gmail` (only used when `google` is configured);
+/// `redirect_urls` comes from [`redirect_urls`].
 pub fn build(
-    frontend_port: u16,
-    auth_port: u16,
-    doc_cognition_port: u16,
+    redirect_urls: Vec<String>,
     lambda_body: &str,
     reconcile_lambda_body: &str,
     google: Option<&GoogleIdp>,
@@ -123,18 +166,6 @@ pub fn build(
     let key_id = identity::JWT_SIGNING_KEY_ID;
     let lambda_id = identity::POPULATE_JWT_LAMBDA_ID;
     let template_id = identity::PASSWORDLESS_EMAIL_TEMPLATE_ID;
-
-    let redirect_urls = json!([
-        format!("http://localhost:{frontend_port}/app"),
-        identity::oauth_redirect_uri(auth_port),
-        "http://authentication-service:8080/oauth/redirect",
-        // MCP client-connector callback on document_cognition_service. Must
-        // track the instance host port: a named `--port-base` stack publishes
-        // DCS somewhere other than 8085, and FusionAuth rejects (or the
-        // browser cannot reach) a callback that still points at 8085.
-        identity::oauth_redirect_uri(doc_cognition_port),
-        "https://mcp-server-local.macro.com/oauth/callback",
-    ]);
 
     // Kickstart executes these in order, so each request must come after the
     // entities it references. Dependency chain:

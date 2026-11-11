@@ -1,3 +1,4 @@
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
@@ -18,6 +19,9 @@ export interface EmailInbox extends SenderInbox {
 
 /** Identity returned by a successful save or send. Transport envelopes stay in adapters. */
 export interface PersistedEmailIdentity {
+  /** Present when durable send admission owns this message. */
+  sendAttemptId?: string;
+  persistence?: 'committed' | 'queued';
   draftId?: string;
   threadId?: string;
   inboxId: string;
@@ -76,18 +80,29 @@ export interface SaveEmailDraft {
   completingThread?: boolean;
 }
 export interface DeleteEmailDraft {
+  draftGeneration?: number;
   draftId: string;
   threadId?: string;
   inboxId?: string;
   completingThread?: boolean;
 }
 export interface SendEmailDraft {
-  clientHandles?: DraftClientHandles;
+  /** Frozen Send Later deadline; omitted uses the server Undo Send delay. */
+  sendTime?: string;
   message: EmailDraft;
+  clientHandles?: DraftClientHandles;
+  /** The exact working-copy version persisted for this submission. */
+  expectedLocalVersion?: Pick<LocalDraft, 'generation' | 'revision'>;
+  attachmentIds?: string[];
+  forwardedAttachmentIds?: string[];
+  restoreBodyHtml?: string | null;
+  restoreBodyText?: string | null;
+  restoreBodyMacro?: string | null;
   inboxId?: string;
   completingThread?: boolean;
 }
 export interface UploadEmailAttachments {
+  draftGeneration?: number;
   draftId: string;
   attachments: File[];
   inboxId?: string;
@@ -96,6 +111,7 @@ export interface UploadEmailAttachments {
   onAttachmentUploadFailed?: (file: File) => void;
 }
 export interface EmailAttachmentChange {
+  draftGeneration?: number;
   draftId: string;
   attachmentId: string;
   inboxId?: string;
@@ -105,6 +121,16 @@ export interface EmailAttachmentChange {
 export class DraftTransferAborted extends Error {}
 
 export interface EmailDraftStorage {
+  recoverSynchronization?(): Promise<void>;
+  syncAvailability?():
+    | 'ready'
+    | 'recovering'
+    | 'unavailable'
+    | 'recovery-required';
+  /** Explicit restoration may replace editor content; ordinary cache updates never do. */
+  watchRestorations?(
+    changed: (restoration: EmailDraftRestoration) => void
+  ): () => void;
   /** Reload canonical provider content after an explicit conflict resolution. */
   reloadDraft?(
     draftId: string,
@@ -119,6 +145,8 @@ export interface EmailDraftStorage {
     }
   ): Promise<LocalDraft>;
   retryDraft?(draftId: string): Promise<void>;
+  /** Drop the working copy of a draft whose server row no longer exists. */
+  forgetLocalDraft?(draftId: string): Promise<void>;
   /** Resolve durable local drafts before mounting an editor. */
   readDraft?(
     draftId: string,
@@ -143,6 +171,7 @@ export interface EmailDraftStorage {
     }) => void
   ): () => void;
   transferDraft(input: {
+    draftGeneration?: number;
     operationId: string;
     draftId: string;
     sourceInboxId: string;
@@ -163,10 +192,20 @@ export interface EmailDraftStorage {
   }): Promise<void>;
 }
 
+export interface EmailDraftRestoration {
+  draftId: string;
+  originalDraftId: string;
+  threadId: string;
+  inboxId?: string;
+  replyingToId?: string | null;
+  includeSignature?: boolean | null;
+}
+
 export interface EmailAttachmentStorage {
   completeAttachment(input: EmailAttachmentChange): Promise<void>;
   uploadAttachments(input: UploadEmailAttachments): Promise<void>;
   addForwardedAttachments(input: {
+    draftGeneration?: number;
     draftId: string;
     attachments: { attachmentId: string }[];
     inboxId?: string;
@@ -175,9 +214,58 @@ export interface EmailAttachmentStorage {
   removeForwardedAttachment(input: EmailAttachmentChange): Promise<void>;
 }
 
+/** An approved immediate send the thread read may not show yet. */
+export interface OutgoingEmail {
+  sendAttemptId: string;
+  /** The approved draft's handles and, once accepted, the server's message id. */
+  messageIds: string[];
+  threadIds: string[];
+  inboxId: string;
+  /** The provider confirmed delivery, so a fresh thread read shows it. */
+  delivered: boolean;
+  message: Pick<
+    EmailMessage,
+    | 'to'
+    | 'cc'
+    | 'bcc'
+    | 'subject'
+    | 'body_text'
+    | 'body_macro'
+    | 'body_html_sanitized'
+    | 'replying_to_id'
+  >;
+}
+
+/**
+ * One queued send as this device's outbox last recorded it. `accepted` is
+ * cancellable until the server's `undoUntil`; `pending` covers waiting,
+ * delivering, and cancellation in progress. `untracked` means the send left
+ * the outbox and the server could not say whether it was delivered.
+ */
+export type EmailSendProgress =
+  | { state: 'pending' }
+  | { state: 'accepted'; undoUntil: string }
+  | { state: 'sent' }
+  | { state: 'failed' }
+  | { state: 'cancelled' }
+  | { state: 'unconfirmed' }
+  | { state: 'untracked' };
+
 export interface EmailDelivery {
+  /** Whether sends can be persisted and replayed without connectivity. */
+  queueActive?: (inboxId?: string) => boolean;
+  /** Persisted locks, scoped to the composing surface's owner. */
+  sendLocked?: (draftId: string | undefined) => boolean;
+  /** Durable sends on their way; cancelled, failed and scheduled sends are excluded. */
+  outgoing?: () => OutgoingEmail[];
+  /** Reports each change until the send is sent, fails, is cancelled, or leaves this device. */
+  watchSend?(
+    sendAttemptId: string,
+    changed: (progress: EmailSendProgress) => void
+  ): () => void;
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: {
+    draftGeneration?: number;
     draftId: string;
     threadId?: string;
     inboxId?: string;
@@ -187,6 +275,7 @@ export interface EmailDelivery {
       draftId: string;
       threadId?: string;
       sendTime: string;
+      draftGeneration?: number;
       includeSignature?: boolean;
     },
     inboxId?: string
@@ -196,12 +285,19 @@ export interface EmailDelivery {
     inboxId?: string
   ): Promise<void>;
   undoSend(input: {
+    sendAttemptId?: string;
     threadId?: string;
     draftId: string;
     inboxId: string | undefined;
-    onUndone: () => Promise<void> | void;
+    onUndone: (result?: { draftRestored: boolean }) => Promise<void> | void;
   }): Promise<void>;
 }
+
+/**
+ * The working-copy version a send from this browser carried. Absent when the
+ * draft was sent from another device.
+ */
+export type SentWorkingCopy = Pick<LocalDraft, 'generation' | 'revision'>;
 
 export type EmailDraftLifecycleState =
   | {
@@ -217,6 +313,7 @@ export type EmailDraftLifecycleState =
       threadId: string;
       inboxId: string;
       sendTime: string;
+      deliveryStatus?: 'pending' | 'sending' | 'failed' | 'unconfirmed';
       observedAt: number;
     }
   | {
@@ -224,6 +321,7 @@ export type EmailDraftLifecycleState =
       draftId: string;
       threadId: string;
       inboxId: string;
+      sentCopy?: SentWorkingCopy;
       observedAt: number;
     }
   | {
@@ -323,8 +421,20 @@ export interface EmailEditorFiles {
   }): void;
 }
 
+/** Opens a calendar event drafted from an email. */
+export interface EmailCalendarEvents {
+  enabled: Accessor<boolean>;
+  open(email: { subject: string; guests: string[]; text: string }): boolean;
+}
+
+export type EmailRecipientSourceFactory = RecipientSourceFactory<
+  EmailRecipient['kind']
+>;
+
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  /** Absent where the composer has no calendar, such as isolated tests. */
+  calendarEvents?: EmailCalendarEvents;
   operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -336,7 +446,10 @@ export interface EmailComposeContext {
   presentation: EmailComposePresentation;
   editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
+  /** Explicit host-scoped extras, never the full personal directory. */
   recipients: Accessor<EmailRecipient[]>;
+  /** Each open To/Cc/Bcc selector owns its personal suggestion source. */
+  createRecipientSource: EmailRecipientSourceFactory | undefined;
   recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
   recordMention(sourceId: string, targetId: string): void;
@@ -347,12 +460,21 @@ export interface ComposeNoticeOptions {
   duration?: number;
   persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
+  }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;
   showThread?: (id: string) => void;
   showDraft?: (id: string) => void;
+  /** A From switch moved the draft to a new id and thread; the old ones are gone. */
+  showMovedDraft?: (moved: { draftId: string; threadId: string }) => void;
+  /** The draft a reload should reopen, or undefined when there is none. */
+  recordDraft?: (draftId: string | undefined) => void;
   goBack?: () => void;
   registerBack?: (handler: () => boolean) => void;
 }

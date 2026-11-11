@@ -108,7 +108,7 @@ describe('Slack import production boundary', () => {
       'slack_v2',
       'import-slack-channels'
     );
-    expect(host.openSettings).toHaveBeenCalledWith('Connections');
+    expect(host.openSettings).toHaveBeenCalledWith('Connected');
   });
 
   it.each([

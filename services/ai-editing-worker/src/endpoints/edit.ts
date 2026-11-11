@@ -85,8 +85,8 @@ const EditBody = z
     mode: z.enum(['supervised', 'fast']).default('supervised'),
     /**
      * The agent or persona the edit runs as. Its name labels every cursor the
-     * edit draws, so readers see who is editing; omitted, cursors draw pooled
-     * names.
+     * edit draws, so readers see who is editing; omitted, cursors read
+     * `Macro (AI)`.
      */
     editor: z.object({ name: z.string().trim().min(1) }).optional(),
     typingAnimations: z.boolean().optional(),
@@ -122,7 +122,7 @@ const EditBody = z
  *  chains (multiple, advancing on provider errors/rate limits). Roles the mode
  *  does not run are left unresolved, so their providers' keys are never
  *  required. The schema refinements guarantee the mode's roles are present. */
-function buildModels(
+export function buildModels(
   env: ReturnType<typeof getEnv>,
   models: EditModels,
   mode: EditMode,
@@ -208,9 +208,8 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         setTimeout(resolve, ms / presence.multiplier())
       );
 
-    const { usage, ops, session, clarification } = await Telemetry.span(
-      'edit.session',
-      async (span) => {
+    const { usage, ops, session, clarification, revision } =
+      await Telemetry.span('edit.session', async (span) => {
         span.setAttr('document.id', documentId);
         span.setAttr('edit.mode', mode);
         span.setAttr('edit.interpret', interpret);
@@ -247,8 +246,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
         } finally {
           span.setAttr('model.fallbacks', modelFallbacks);
         }
-      }
-    );
+      });
 
     const db = c.env.TRACES_DB;
     if (db) {
@@ -270,6 +268,7 @@ edit.post('/', zValidator('json', EditBody), async (c) => {
       ops,
       trace: debug ? renderTraceMarkdown(session) : undefined,
       clarification,
+      revision,
     });
   } catch (err) {
     if (!(err instanceof Error)) throw new Error(String(err));

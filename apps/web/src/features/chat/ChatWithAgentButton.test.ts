@@ -14,6 +14,16 @@ const mocks = vi.hoisted(() => ({
   manager: true,
   failure: vi.fn(),
   openWithSplit: vi.fn(),
+  openAgentComposer: vi.fn(),
+  agents: false,
+}));
+
+vi.mock('@app/features/agents-view/primitives/open-composer', () => ({
+  openAgentComposer: mocks.openAgentComposer,
+}));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableChatV3Agents: {},
+  isFeatureEnabled: () => mocks.agents,
 }));
 
 vi.mock('@app/signal/splitLayout', () => ({
@@ -45,11 +55,12 @@ import {
   openChatWithMessageReplacingSplit,
 } from './ChatWithAgentButton';
 
-describe('openChatWithAgent', () => {
+describe('Ask Agent without the agent composer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.startPendingSession.mockReturnValue('session-id');
     mocks.manager = true;
+    mocks.agents = false;
   });
 
   it('opens a bare agent session, without the Agents sidebar, with an unsent visible mention', async () => {
@@ -121,6 +132,7 @@ describe('openChatWithAgent', () => {
   it.each([
     { type: 'email' as const, id: 'email-id', name: 'Subject' },
     { type: 'project' as const, id: 'project-id', name: 'Launch' },
+    { type: 'chat' as const, id: 'chat-id', name: 'Old chat' },
     {
       type: 'channel' as const,
       id: 'channel-id',
@@ -133,6 +145,8 @@ describe('openChatWithAgent', () => {
     expect(seed.prompt).toBeUndefined();
     expect(seed.initialInput).toContain(entity.id);
     expect(seed.initialInput).toContain(entity.name);
+    if (entity.type === 'chat')
+      expect(seed.initialInput).toContain('"blockName":"chat"');
     if (entity.type === 'channel')
       expect(seed.initialInput).toContain('"channelType":"public"');
   });
@@ -188,4 +202,82 @@ describe('openChatWithAgent', () => {
       expect(mocks.openWithSplit).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('Ask Agent with the agent composer', () => {
+  const mention =
+    '<m-document-mention>{"documentId":"document-id","documentName":"Project plan","blockName":"md","blockParams":{}}</m-document-mention> ';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.startPendingSession.mockReturnValue('session-id');
+    mocks.manager = true;
+    mocks.agents = true;
+  });
+
+  it('opens the new-conversation composer in a new split with the mention as its draft', async () => {
+    expect(
+      await openChatWithAgent({
+        type: 'document',
+        id: 'document-id',
+        name: 'Project plan',
+        fileType: 'md',
+      })
+    ).toBe(true);
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      { openWithSplit: mocks.openWithSplit },
+      true,
+      { draft: mention, handle: undefined }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+    expect(mocks.openWithSplit).not.toHaveBeenCalled();
+  });
+
+  it('drafts "Continue this chat:" with the old chat mention, unsent', async () => {
+    await openChatWithAgent({ type: 'chat', id: 'chat-id', name: 'Old chat' });
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      {
+        draft:
+          'Continue this chat: <m-document-mention>{"documentId":"chat-id","documentName":"Old chat","blockName":"chat","blockParams":{}}</m-document-mention> ',
+        handle: undefined,
+      }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+  });
+
+  it('opens the composer for a channel-message draft', async () => {
+    await openChatWithInput('A message reference\n\n');
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      { draft: 'A message reference\n\n', handle: undefined }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+  });
+
+  it('opens the composer in place of the search split', async () => {
+    const split = { replace: vi.fn() } as unknown as SplitHandle;
+    await openChatWithInputReplacingSplit('', split);
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      { draft: '', handle: split }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+  });
+
+  it('still starts a session for handoffs with hidden instructions or a model', async () => {
+    await openChatWithInput('Draft', { instructions: 'Private context' });
+    await openChatWithInput('Draft', { model: 'database-model' });
+    expect(mocks.openAgentComposer).not.toHaveBeenCalled();
+    expect(mocks.startPendingSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('still sends a submitted query straight to a session', async () => {
+    await openChatWithMessage('Find my latest invoices');
+    expect(mocks.openAgentComposer).not.toHaveBeenCalled();
+    expect(mocks.startPendingSession).toHaveBeenCalled();
+  });
 });

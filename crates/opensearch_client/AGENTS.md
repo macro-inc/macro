@@ -37,11 +37,33 @@ projects.
   `src/upsert/<entity>.rs` + `src/delete/<entity>.rs` → a `src/search/<entity>.rs`
   query if it needs its own search endpoint → wire into
   `services/search_processing_service`.
+- Property DATE filters use the existing nested `properties.date_value` epoch-millisecond projection; emit only supplied inclusive/exclusive bounds and use a negated nested exists query for missing dates.
 
 ## Checks
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+
+## Gotchas
+
+- Map a failed `.send()` with `OpensearchClientError::request_failed` and a
+  failed body read with `deserialization_failed`. Both take an
+  `OpensearchOperation`: add a variant for a new request rather than passing a
+  name. `request_failed` classifies the cause as a `TransportFailure` (timeout,
+  connect, connection closed, other) and keeps the full source chain in
+  `details`; reqwest's `Display` alone drops the cause. A body cut off by a
+  transport failure also becomes `RequestFailed`, not `DeserializationFailed`.
+- Workspace feature unification enables reqwest's HTTP/2, so every request
+  from one process multiplexes over one connection, and a recycled connection
+  fails them all at once. Wrap each public `OpensearchClient` method's request
+  in `retry::resend_on_lost_connection`, which resends twice on a connection
+  closed or refused before a complete response, never on a timeout or an
+  error status. Every request must stay safe to resend: write by explicit id
+  or by query.
+- Put `instrument(err)` on the public method, not the inner function it
+  retries, so a recovered attempt does not record an error span.
+- Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
+  across a large mailbox runs for minutes.
 
 ## Related
 

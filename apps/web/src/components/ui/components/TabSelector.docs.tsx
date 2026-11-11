@@ -1,5 +1,4 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import { Tabs } from '@kobalte/core/tabs';
 import { createSignal, For } from 'solid-js';
 import { Dropdown } from './Dropdown';
 import { TabSelector } from './TabSelector';
@@ -10,7 +9,7 @@ function OverflowDemo() {
   const [selected, setSelected] = createSignal('Authors');
   return (
     <TabSelector class="w-72 max-w-full">
-      <Tabs
+      <TabSelector.Root
         value={selected()}
         onChange={setSelected}
         activationMode="manual"
@@ -27,7 +26,7 @@ function OverflowDemo() {
             )}
           </For>
         </TabSelector.List>
-      </Tabs>
+      </TabSelector.Root>
       <TabSelector.AddMenu label="Add table or form">
         <Dropdown.Item>New table</Dropdown.Item>
         <Dropdown.Item>New form</Dropdown.Item>
@@ -41,7 +40,7 @@ export default defineDoc({
   name: 'TabSelector',
   category: 'Navigation',
   description:
-    'Inset tabs with horizontal scrolling and a fixed add menu. Compose the track with Kobalte Tabs; keep AddMenu outside the tab collection.',
+    'Tabs that own panels or a dynamic collection, drawn as the same pills as Tabs, with horizontal scrolling and a fixed add menu. Root owns selection; keep AddMenu outside the tab collection.',
   exports: ['TabSelector'],
   import: "import { TabSelector } from '@ui';",
   demos: [

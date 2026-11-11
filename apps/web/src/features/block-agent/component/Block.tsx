@@ -4,19 +4,23 @@ import {
   ChangesSplit,
   ReviewNotesDock,
 } from '@app/features/changes/changes';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { SidePanel } from '@components/app/side-panel';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableAgentSessionActivity } from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import type { NotificationSource } from '@notifications/notification-source';
+import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { useSearchParams } from '@solidjs/router';
 import { EmptyStatePanel } from '@ui';
 import {
@@ -46,6 +50,27 @@ function AgentComposerRegion(props: ParentProps) {
   const content = children(() => props.children);
   return (
     <FloatRegionOrInline region="accessory">{content()}</FloatRegionOrInline>
+  );
+}
+
+function AgentPanelClearance(
+  props: ParentProps<{
+    class: string;
+    enabled: boolean;
+    holdsPrompts?: boolean;
+  }>
+) {
+  const sidePanel = useSidePanel();
+  return (
+    <div
+      class={props.class}
+      data-holds-prompts={props.holdsPrompts ? '' : undefined}
+      style={{
+        '--details-clearance': `${props.enabled && sidePanel?.isOpen() && !isTouchDevice() ? SidePanel.FLOATING_CLEARANCE_PX : 0}px`,
+      }}
+    >
+      {props.children}
+    </div>
   );
 }
 
@@ -93,6 +118,8 @@ function AgentBlockContent(props: {
   } = useAgentSession();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
+  const activityFlag = useFeatureFlag(enableAgentSessionActivity);
+  const persistentFloating = () => activityFlag().enabled;
 
   // Nothing loaded and no way forward: the load failed outright, or the
   // device is offline and the pending load cannot complete until
@@ -146,10 +173,15 @@ function AgentBlockContent(props: {
           active={props.active}
           notificationSource={props.notificationSource}
         />
-        <div class="size-full overflow-hidden flex">
+        <div class="size-full overflow-hidden flex @container/agent-session">
           {/* Collapsed by default, like the other conversation-shaped blocks —
             the transcript wants the width; `]` or the header button opens it. */}
-          <SidePanel.Layout defaultOpen={false} floating>
+          <SidePanel.Layout
+            defaultOpen={false}
+            persistKey="agent"
+            floating
+            persistentFloating={persistentFloating()}
+          >
             <AgentSidePanelSections />
             <AgentSplitHeader
               session={session()}
@@ -159,23 +191,35 @@ function AgentBlockContent(props: {
             {/* The Changes pane opens beside the transcript; closed, the
                 transcript keeps the whole width. */}
             <ChangesSplit>
-              <AgentConnections>
-                <Transcript searchTarget={searchTarget()} />
-              </AgentConnections>
+              <AgentPanelClearance
+                enabled={persistentFloating()}
+                class="flex min-h-0 flex-1 @min-[900px]/agent-session:pr-(--details-clearance)"
+              >
+                <AgentConnections>
+                  <Transcript searchTarget={searchTarget()} />
+                </AgentConnections>
+              </AgentPanelClearance>
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
               <AgentComposerRegion>
                 {/* Home/chat: re-enable pointer events on the accessory
                     contribution — the float host is pointer-transparent. */}
                 {/* pb matches ChannelInputContainer so the composer sits at
-                    the same height as the channel input. */}
-                <div class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+                    the same height as the channel input, and like it holds
+                    the corner prompt while inline on desktop. */}
+                <AgentPanelClearance
+                  enabled={persistentFloating()}
+                  holdsPrompts={!isTouchDevice()}
+                  class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0 @min-[900px]/agent-session:pr-(--details-clearance)"
+                >
                   <div class="macro-message-width mx-auto flex flex-col gap-2">
                     <Show
-                      when={!session()?.isArchived}
+                      when={!isSessionArchived(session())}
                       fallback={
-                        <Show when={sessionId()}>
-                          {(id) => <ArchivedSessionFooter sessionId={id()} />}
+                        <Show when={session()}>
+                          {(current) => (
+                            <ArchivedSessionFooter session={current()} />
+                          )}
                         </Show>
                       }
                     >
@@ -190,7 +234,7 @@ function AgentBlockContent(props: {
                       />
                     </Show>
                   </div>
-                </div>
+                </AgentPanelClearance>
               </AgentComposerRegion>
             </ChangesSplit>
           </SidePanel.Layout>

@@ -97,11 +97,11 @@ export function RouteCrm() {
   return (
     <ProductPage>
       <ProductHero
-        tutorial="crm"
         product="CRM"
         title="CRM that keeps itself up to date."
         description="Macro CRM stays up to date from your email and team chat. No separate tool to maintain."
         cta="crm_hero_get_started"
+        tutorial="crm"
       />
       <FeaturePageSection
         id="crm-from-email"

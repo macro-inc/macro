@@ -1,6 +1,7 @@
+import { t } from '@app/lib/i18n';
+import CheckIcon from '@icon/system/regular/check.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import CheckIcon from '@phosphor/check.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn, Dropdown, Layer } from '@ui';
 import {
   type Accessor,
@@ -11,6 +12,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import type { SearchableOptionSourceFactory } from './option-source';
 import {
   SearchableMultiSelect,
   type SearchableOption,
@@ -48,6 +50,7 @@ export type ConsolidatedFilter = {
 
   // Searchable filter props (for In/From style filters)
   searchableOptions?: Accessor<SearchableOption[]>;
+  createSource?: SearchableOptionSourceFactory;
   activeSearchableIds?: Accessor<string[]>;
   onSearchableChange?: (ids: string[]) => void;
   searchPlaceholder?: string;
@@ -55,6 +58,7 @@ export type ConsolidatedFilter = {
   setPopupOpen?: (v: boolean) => void;
   /** Keep options in their given order instead of pinning selected first. */
   preserveOptionOrder?: boolean;
+  searchFooter?: JSX.Element;
 };
 
 interface ConsolidatedFilterChipProps {
@@ -66,7 +70,7 @@ interface ConsolidatedFilterChipProps {
 
 const ChipDivider = (props: { mobile?: boolean }) => (
   <Show when={!props.mobile}>
-    <div class="w-px self-stretch bg-edge-muted shrink-0" />
+    <div class="w-px self-stretch bg-edge-divider shrink-0" />
   </Show>
 );
 
@@ -101,7 +105,7 @@ const MultiValueDisplay = (props: { values: FilterValue[] }) => {
       </Show>
       <span class="truncate max-w-32">{first()?.label}</span>
       <Show when={overflowCount() > 0}>
-        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-active text-xxs">
           +{overflowCount()}
         </span>
       </Show>
@@ -130,7 +134,7 @@ const PeopleMultiValueDisplay = (props: { values: FilterValue[] }) => {
       </Show>
       <span class="truncate max-w-32">{first()?.label}</span>
       <Show when={overflowCount() > 0}>
-        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-ink/10 text-xxs">
+        <span class="inline-flex items-center justify-center px-1 min-w-4 h-4 rounded-full bg-active text-xxs">
           +{overflowCount()}
         </span>
       </Show>
@@ -235,31 +239,44 @@ const SearchableValueSegment = (props: {
   class?: string;
   mobile?: boolean;
 }) => {
-  const options: Accessor<SearchableOption[]> = () =>
-    props.filter.searchableOptions?.() ?? [];
+  if (props.filter.createSource && !props.filter.activeSearchableIds)
+    throw new Error('Query-driven chips require explicit selected IDs');
   const activeIds: Accessor<string[]> = () =>
     props.filter.activeSearchableIds?.() ?? [];
+  const [internalOpen, setInternalOpen] = createSignal(false);
+  const open = () => props.filter.isPopupOpen?.() ?? internalOpen();
+  const setOpen = (value: boolean) => {
+    setInternalOpen(value);
+    props.filter.setPopupOpen?.(value);
+  };
+  const source = props.filter.createSource?.(activeIds, open);
+  const options = () =>
+    source?.options() ?? props.filter.searchableOptions?.() ?? [];
 
   const handleChange = (ids: string[]) => {
     props.filter.onSearchableChange?.(ids);
   };
 
-  const placeholder =
+  const placeholder = () =>
     props.filter.searchPlaceholder ??
-    `Search ${props.filter.categoryLabel.toLowerCase()}...`;
+    t('viewMenus.searchCategory', {
+      category: props.filter.categoryLabel.toLowerCase(),
+    });
 
   const isPeopleFilter = () => PEOPLE_FILTER_KEYS.has(props.filter.key);
 
   return (
     <SearchableMultiSelect
+      source={source}
       options={options}
       activeIds={activeIds}
       onChange={handleChange}
-      placeholder={placeholder}
+      placeholder={placeholder()}
       placement="bottom-start"
-      open={props.filter.isPopupOpen}
-      onOpenChange={(v) => props.filter.setPopupOpen?.(v)}
+      open={open}
+      onOpenChange={setOpen}
       preserveOrder={props.filter.preserveOptionOrder}
+      footer={props.filter.searchFooter}
     >
       <Combobox.Trigger
         class={cn(
@@ -315,7 +332,7 @@ const StandardValueSegment = (props: {
             'inline-flex items-center gap-1.5 px-2.5 h-auto!',
             props.mobile
               ? 'bg-active hover:bg-active active:bg-active rounded-none px-3'
-              : 'hover:bg-ink/5 active:bg-ink/8 rounded-none',
+              : 'hover:overlay-hover active:overlay-active rounded-none',
             props.class
           )}
         >
@@ -331,16 +348,18 @@ const StandardValueSegment = (props: {
 };
 
 export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
-  const isSearchable = () => Boolean(props.filter.searchableOptions);
+  const isSearchable = () =>
+    Boolean(props.filter.searchableOptions || props.filter.createSource);
 
   return (
     <Layer depth={2}>
       <div
         class={cn(
-          props.mobile ? 'h-10' : 'h-7',
-          'flex items-stretch text-xs whitespace-nowrap rounded-md',
-          'bg-surface text-ink border border-edge-muted overflow-clip',
-          props.mobile && 'bg-active border-none rounded-lg',
+          'flex items-stretch text-xs whitespace-nowrap text-ink overflow-clip',
+          // Desktop chips share the control frame; touch keeps its filled chip.
+          props.mobile
+            ? 'h-10 bg-active rounded-lg'
+            : 'h-6 rounded-full border border-edge-button bg-control not-touch:elevated',
           props.class
         )}
       >
@@ -375,6 +394,7 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
         <ChipDivider mobile={props.mobile} />
 
         <Button
+          variant="ghost"
           class={cn(
             'rounded-none h-full not-disabled:hover:text-failure',
             props.mobile && 'bg-active border-none'

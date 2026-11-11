@@ -6,12 +6,17 @@ pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
 use secretsmanager_client::LocalOrRemoteSecret;
 
+#[cfg(test)]
+mod test;
+
 pub const DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 900; // 15 minutes
 /// Allow long recordings to play and seek without the signed URL expiring mid-session.
 pub const CALL_RECORDING_PRESIGNED_URL_EXPIRY_SECONDS: u64 = 6 * 60 * 60;
 pub const DEFAULT_PRESIGNED_URL_BROWSER_CACHE_EXPIRY_SECONDS: u64 = 840; // remember that this is just a suggestion to the client browser 
 
 env_vars! {
+    /// PostHog project key for backend feature flags.
+    pub struct PosthogApiKey;
     pub struct DatabaseUrl;
     pub struct DatabaseUrlReadonly;
     pub struct DocumentStorageBucket;
@@ -83,12 +88,18 @@ maybe_env_vars! {
     /// Optional Meta test event code — routes events to Meta's test events
     /// view instead of production tracking.
     pub struct MetaTestEventCode;
+    /// PostHog host; defaults to the project's US region.
+    pub struct PosthogHost;
 }
 
 /// The configuration parameters for the application.
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Required PostHog project key for backend feature flags.
+    pub posthog_api_key: PosthogApiKey,
+    /// PostHog host (optional)
+    pub posthog_host: PosthogHost,
     /// Default-off quota admission and prospective usage counting.
     #[macro_config_default(ai_usage::AiUsageEnforcement::Disabled)]
     pub enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement,
@@ -169,6 +180,13 @@ pub struct Config {
     /// readable, finalizable and cancellable when this switch is off.
     #[macro_config_default(false)]
     pub slack_import_enabled: bool,
+
+    /// Send Gmail label writes as `ModifyMessageLabelsBatch` queue messages.
+    /// Enable only after every email-service pubsub worker runs a release that
+    /// decodes them; older workers delete the batch form. Off, each message is
+    /// its own `ModifyMessageLabels`.
+    #[macro_config_default(false)]
+    pub gmail_label_write_batches_enabled: bool,
 
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]

@@ -77,7 +77,12 @@ export function ProductBrand(props: { product: ProductName }) {
   return (
     <p class="email-page-hero-label">
       <a href="/" target="_self" class="product-home-link">
-        <Dynamic component={productIcons[props.product]} aria-hidden="true" />
+        <Dynamic
+          component={productIcons[props.product]}
+          width="20"
+          height="20"
+          aria-hidden="true"
+        />
         <span>Macro {props.product}</span>
       </a>
     </p>

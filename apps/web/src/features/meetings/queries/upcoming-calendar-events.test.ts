@@ -5,7 +5,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createComponent, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalendarSource } from '../../calendar/types';
+import {
+  type CalendarSource,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../../calendar/types';
 import { useUpcomingCalendarEventsSource } from './upcoming-calendar-events';
 
 vi.mock('@service-storage/client', () => ({
@@ -60,6 +64,9 @@ function occurrence(
       recurrenceLines: [],
       sequence: 0,
       isReadOnly: false,
+      guestPolicy: DEFAULT_GUEST_POLICY,
+      isSnapshot: false,
+      viewerCan: NO_VIEWER_CAPABILITIES,
       attendees: [],
       createdAt: today.toISOString(),
       updatedAt: today.toISOString(),

@@ -1,18 +1,20 @@
-import { toIconTabItems } from '@channel/Channel/channel-tab-icons';
+import { withChannelTabIcons } from '@channel/Channel/channel-tab-icons';
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
 import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
-import { SplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  SplitLabel,
+  titleFileMenuMount,
+} from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
-import type { TabItem } from '@core/component/Tabs';
-import { TabsInset } from '@core/component/TabsInset';
 import { useChannelName } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ChannelParticipant } from '@queries/channel/types';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { type TabOption, Tabs } from '@ui';
 import { Show } from 'solid-js';
 
 type TopProps = {
@@ -24,7 +26,7 @@ type TopProps = {
 
 type ChannelTopLeftProps = TopProps & {
   lockRename?: boolean;
-  tabs?: readonly TabItem[];
+  tabs?: readonly TabOption<ChannelTabId>[];
   activeTab?: ChannelTabId;
   onTabChange?: (value: ChannelTabId) => void;
 };
@@ -36,9 +38,6 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
     blockId,
     props.channelName ?? 'New Channel'
   );
-
-  const iconTabList = () =>
-    toIconTabItems(props.tabs ?? [], 'size-4 touch:size-6');
 
   const hasTabsMenu = () => !!(props.tabs?.length && props.onTabChange);
 
@@ -59,7 +58,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           />
           <div
             class="shrink-0 flex items-center h-full"
-            ref={(ref) => panel.setTitleFileMenuRef(ref)}
+            ref={titleFileMenuMount(panel)}
           />
         </div>
       </HeaderIsland>
@@ -70,10 +69,16 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
           containerClass="ph-no-capture min-w-0 shrink-0 h-full mx-2"
         >
           {(isCollapsed) => (
-            <TabsInset
-              list={isCollapsed() ? iconTabList() : [...(props.tabs ?? [])]}
+            <Tabs
+              aria-label="Channel sections"
+              options={
+                isCollapsed()
+                  ? withChannelTabIcons(props.tabs ?? [])
+                  : (props.tabs ?? [])
+              }
+              iconOnly={isCollapsed()}
               value={props.activeTab}
-              onChange={(value) => props.onTabChange?.(value as ChannelTabId)}
+              onChange={(value) => props.onTabChange?.(value)}
             />
           )}
         </CollapsibleHeaderItem>

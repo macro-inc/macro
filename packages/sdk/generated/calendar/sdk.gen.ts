@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ChangeBookingData, ChangeBookingErrors, ChangeBookingResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateBookingLinkData, CreateBookingLinkErrors, CreateBookingLinkResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, EditBookingLinkData, EditBookingLinkErrors, EditBookingLinkResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetBookingInsightsData, GetBookingInsightsErrors, GetBookingInsightsResponses, GetBookingSettingsData, GetBookingSettingsErrors, GetBookingSettingsResponses, GetManagedBookingData, GetManagedBookingErrors, GetManagedBookingResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListBookingLinksData, ListBookingLinksErrors, ListBookingLinksResponses, ListBookingRescheduleSlotsData, ListBookingRescheduleSlotsErrors, ListBookingRescheduleSlotsResponses, ListBookingsData, ListBookingsErrors, ListBookingsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SaveBookingSettingsData, SaveBookingSettingsErrors, SaveBookingSettingsResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -20,7 +20,7 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
 
 class HeyApiClient {
     protected client: Client;
-    
+
     constructor(args?: {
         client?: Client;
     }) {
@@ -30,9 +30,9 @@ class HeyApiClient {
 
 class HeyApiRegistry<T> {
     private readonly defaultKey = 'default';
-    
+
     private readonly instances: Map<string, T> = new Map();
-    
+
     get(key?: string): T {
         const instance = this.instances.get(key ?? this.defaultKey);
         if (!instance) {
@@ -40,7 +40,7 @@ class HeyApiRegistry<T> {
         }
         return instance;
     }
-    
+
     set(value: T, key?: string): void {
         this.instances.set(key ?? this.defaultKey, value);
     }
@@ -48,7 +48,7 @@ class HeyApiRegistry<T> {
 
 export class Sdk extends HeyApiClient {
     public static readonly __registry: HeyApiRegistry<Sdk> = new HeyApiRegistry<Sdk>();
-    
+
     constructor(args?: {
         client?: Client;
         key?: string;
@@ -56,14 +56,14 @@ export class Sdk extends HeyApiClient {
         super(args);
         Sdk.__registry.set(this, args?.key);
     }
-    
+
     /**
      * List calendars and their personal-availability inclusion.
      */
     public getAvailabilityCalendars<ThrowOnError extends boolean = false>(options?: Options<GetAvailabilityCalendarsData, ThrowOnError>): RequestResult<GetAvailabilityCalendarsResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<GetAvailabilityCalendarsResponses, unknown, ThrowOnError>({ url: '/availability-calendars', ...options });
     }
-    
+
     /**
      * Change which source calendars normally occupy this user's time.
      */
@@ -77,14 +77,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * List the requester's visible calendars for pickers and filters.
      */
     public listCalendars<ThrowOnError extends boolean = false>(options?: Options<ListCalendarsData, ThrowOnError>): RequestResult<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListCalendarsResponses, ListCalendarsErrors, ThrowOnError>({ url: '/calendars', ...options });
     }
-    
+
     /**
      * Create a calendar event and return its synced entity.
      */
@@ -98,14 +98,14 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Delete a calendar event at its provider.
      */
     public deleteCalendarEvent<ThrowOnError extends boolean = false>(options: Options<DeleteCalendarEventData, ThrowOnError>): RequestResult<DeleteCalendarEventResponses, DeleteCalendarEventErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DeleteCalendarEventResponses, DeleteCalendarEventErrors, ThrowOnError>({ url: '/events/{event_id}', ...options });
     }
-    
+
     /**
      * Update fields of a calendar event and return its synced entity.
      */
@@ -119,14 +119,50 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
+    /**
+     * Add a snapshot of an event shared with one of the requester's channels to
+     * one of their Google calendars and return the synced snapshot. The
+     * snapshot keeps the meeting's iCalendar UID and organizer, lists only the
+     * requester as a guest, and carries no join link; nobody is notified.
+     * While the requester's request to join the event is pending or accepted,
+     * the copy is refused with `join_request_open`: the meeting reaches their
+     * calendar as the invitation, which a copy would otherwise take in.
+     */
+    public copyCalendarEvent<ThrowOnError extends boolean = false>(options: Options<CopyCalendarEventData, ThrowOnError>): RequestResult<CopyCalendarEventResponses, CopyCalendarEventErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CopyCalendarEventResponses, CopyCalendarEventErrors, ThrowOnError>({
+            url: '/events/{event_id}/copy',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Add guests to a calendar event without touching anyone already invited,
+     * and return its synced entity. The organizer, and guests the organizer lets
+     * invite others, may call it; Google emails the new guests.
+     */
+    public inviteCalendarEventGuests<ThrowOnError extends boolean = false>(options: Options<InviteCalendarEventGuestsData, ThrowOnError>): RequestResult<InviteCalendarEventGuestsResponses, InviteCalendarEventGuestsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<InviteCalendarEventGuestsResponses, InviteCalendarEventGuestsErrors, ThrowOnError>({
+            url: '/events/{event_id}/guests',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     /**
      * Resolve an authorized event's provider link for Outlook-only actions.
      */
     public calendarEventProviderUrl<ThrowOnError extends boolean = false>(options: Options<CalendarEventProviderUrlData, ThrowOnError>): RequestResult<CalendarEventProviderUrlResponses, CalendarEventProviderUrlErrors, ThrowOnError> {
         return (options.client ?? this.client).get<CalendarEventProviderUrlResponses, CalendarEventProviderUrlErrors, ThrowOnError>({ url: '/events/{event_id}/provider-url', ...options });
     }
-    
+
     /**
      * Read and persist an organizer-only preview, without sending invitations.
      */
@@ -140,7 +176,7 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Set the requester's RSVP on a calendar event and return its synced entity.
      */
@@ -154,42 +190,163 @@ export class Sdk extends HeyApiClient {
             }
         });
     }
-    
+
     /**
      * Health check
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
     }
-    
+
+    /**
+     * Answer a request to join an event the requester can change and return
+     * where it now stands. Accepting adds the guest through the invite path; an
+     * already answered request is returned unchanged.
+     */
+    public respondToJoinRequest<ThrowOnError extends boolean = false>(options: Options<RespondToJoinRequestData, ThrowOnError>): RequestResult<RespondToJoinRequestResponses, RespondToJoinRequestErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<RespondToJoinRequestResponses, RespondToJoinRequestErrors, ThrowOnError>({
+            url: '/join-requests/{request_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     /**
      * Discard a preview only if no confirmation has been recorded.
      */
     public discardCalendarReplacement<ThrowOnError extends boolean = false>(options: Options<DiscardCalendarReplacementData, ThrowOnError>): RequestResult<DiscardCalendarReplacementResponses, DiscardCalendarReplacementErrors, ThrowOnError> {
         return (options.client ?? this.client).delete<DiscardCalendarReplacementResponses, DiscardCalendarReplacementErrors, ThrowOnError>({ url: '/replacements/{operation_id}', ...options });
     }
-    
+
     /**
      * Read saved progress without performing a provider mutation.
      */
     public calendarReplacementStatus<ThrowOnError extends boolean = false>(options: Options<CalendarReplacementStatusData, ThrowOnError>): RequestResult<CalendarReplacementStatusResponses, CalendarReplacementStatusErrors, ThrowOnError> {
         return (options.client ?? this.client).get<CalendarReplacementStatusResponses, CalendarReplacementStatusErrors, ThrowOnError>({ url: '/replacements/{operation_id}', ...options });
     }
-    
+
     /**
      * Explicitly confirm the saved preview, or resume the same confirmed operation.
      */
     public confirmCalendarReplacement<ThrowOnError extends boolean = false>(options: Options<ConfirmCalendarReplacementData, ThrowOnError>): RequestResult<ConfirmCalendarReplacementResponses, ConfirmCalendarReplacementErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ConfirmCalendarReplacementResponses, ConfirmCalendarReplacementErrors, ThrowOnError>({ url: '/replacements/{operation_id}/confirm', ...options });
     }
-    
+
+    /**
+     * List the profile's bookings, optionally those starting in a half-open range.
+     */
+    public listBookings<ThrowOnError extends boolean = false>(options?: Options<ListBookingsData, ThrowOnError>): RequestResult<ListBookingsResponses, ListBookingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListBookingsResponses, ListBookingsErrors, ThrowOnError>({ url: '/scheduling/bookings', ...options });
+    }
+
+    /**
+     * Approve, cancel, record attendance for, or reschedule one booking.
+     */
+    public changeBooking<ThrowOnError extends boolean = false>(options: Options<ChangeBookingData, ThrowOnError>): RequestResult<ChangeBookingResponses, ChangeBookingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ChangeBookingResponses, ChangeBookingErrors, ThrowOnError>({
+            url: '/scheduling/bookings/{id}/change',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Read one booking as its personal owner, a host, or a team administrator.
+     */
+    public getManagedBooking<ThrowOnError extends boolean = false>(options: Options<GetManagedBookingData, ThrowOnError>): RequestResult<GetManagedBookingResponses, GetManagedBookingErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetManagedBookingResponses, GetManagedBookingErrors, ThrowOnError>({ url: '/scheduling/bookings/{id}/manage', ...options });
+    }
+
+    /**
+     * Replacement start times for one booking on a schedule-local date.
+     */
+    public listBookingRescheduleSlots<ThrowOnError extends boolean = false>(options: Options<ListBookingRescheduleSlotsData, ThrowOnError>): RequestResult<ListBookingRescheduleSlotsResponses, ListBookingRescheduleSlotsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ListBookingRescheduleSlotsResponses, ListBookingRescheduleSlotsErrors, ThrowOnError>({ url: '/scheduling/bookings/{id}/slots', ...options });
+    }
+
+    /**
+     * Booking statistics for a local date range and the equally long period before it.
+     */
+    public getBookingInsights<ThrowOnError extends boolean = false>(options: Options<GetBookingInsightsData, ThrowOnError>): RequestResult<GetBookingInsightsResponses, GetBookingInsightsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<GetBookingInsightsResponses, GetBookingInsightsErrors, ThrowOnError>({
+            url: '/scheduling/insights',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * List and search booking links with their full drafts and reusable schedules.
+     */
+    public listBookingLinks<ThrowOnError extends boolean = false>(options?: Options<ListBookingLinksData, ThrowOnError>): RequestResult<ListBookingLinksResponses, ListBookingLinksErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListBookingLinksResponses, ListBookingLinksErrors, ThrowOnError>({ url: '/scheduling/links', ...options });
+    }
+
+    /**
+     * Create a booking link; an identical replay at the same slug returns the saved link.
+     */
+    public createBookingLink<ThrowOnError extends boolean = false>(options: Options<CreateBookingLinkData, ThrowOnError>): RequestResult<CreateBookingLinkResponses, CreateBookingLinkErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateBookingLinkResponses, CreateBookingLinkErrors, ThrowOnError>({
+            url: '/scheduling/links',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Replace one booking link's configuration at the profile revision it was read with.
+     */
+    public editBookingLink<ThrowOnError extends boolean = false>(options: Options<EditBookingLinkData, ThrowOnError>): RequestResult<EditBookingLinkResponses, EditBookingLinkErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<EditBookingLinkResponses, EditBookingLinkErrors, ThrowOnError>({
+            url: '/scheduling/links/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
+     * Read personal or team booking settings without creating them.
+     */
+    public getBookingSettings<ThrowOnError extends boolean = false>(options?: Options<GetBookingSettingsData, ThrowOnError>): RequestResult<GetBookingSettingsResponses, GetBookingSettingsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetBookingSettingsResponses, GetBookingSettingsErrors, ThrowOnError>({ url: '/scheduling/settings', ...options });
+    }
+
+    /**
+     * Save booking settings at the revision they were read with.
+     */
+    public saveBookingSettings<ThrowOnError extends boolean = false>(options: Options<SaveBookingSettingsData, ThrowOnError>): RequestResult<SaveBookingSettingsResponses, SaveBookingSettingsErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<SaveBookingSettingsResponses, SaveBookingSettingsErrors, ThrowOnError>({
+            url: '/scheduling/settings',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
     /**
      * Read the authenticated user's sharing choice.
      */
     public getTeamSharing<ThrowOnError extends boolean = false>(options?: Options<GetTeamSharingData, ThrowOnError>): RequestResult<GetTeamSharingResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<GetTeamSharingResponses, unknown, ThrowOnError>({ url: '/team-sharing', ...options });
     }
-    
+
     /**
      * Set the authenticated user's sharing choice.
      */

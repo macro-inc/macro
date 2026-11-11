@@ -9,10 +9,14 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Start here
 
 - `src/domain/service.rs` + `src/domain/models.rs`: bot CRUD policy and model.
+  Team admins may delete team agents; other team bots require the creator or
+  team owner.
 - `src/domain/events.rs`: `bot.created`/`bot.updated`/`bot.deleted` events published
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
   `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
 - `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
 
 ## Scope
@@ -40,6 +44,12 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 ## Gotchas
 
+- Agent create/update/patch must persist `has_agent = true` atomically with
+  configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`).
@@ -47,3 +57,5 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+- Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (setting up a bot
+  in the app and using it from the SDK)

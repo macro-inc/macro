@@ -57,6 +57,12 @@ pub enum SearchError {
     /// An agent-session filter is not a UUID.
     #[error("invalid agent session id: {0}")]
     InvalidAgentSessionId(String),
+    /// A channel filter id is not a UUID.
+    #[error("invalid channel id: {0}")]
+    InvalidChannelId(String),
+    /// A channel type filter is not a known channel type.
+    #[error("invalid channel type: {0}")]
+    InvalidChannelType(String),
     /// Opensearch error occurred
     #[error("unable to search")]
     Search(#[from] OpensearchClientError),
@@ -80,6 +86,8 @@ impl IntoResponse for SearchError {
             | SearchError::InvalidCursor
             | SearchError::InvalidCrmCompanyId(_)
             | SearchError::InvalidAgentSessionId(_)
+            | SearchError::InvalidChannelId(_)
+            | SearchError::InvalidChannelType(_)
             | SearchError::NoQueryOrTermsProvided
             | SearchError::NoChannelIds => StatusCode::BAD_REQUEST,
             SearchError::NameSearch(NameSearchError::IncompatibleCursor) => StatusCode::BAD_REQUEST,

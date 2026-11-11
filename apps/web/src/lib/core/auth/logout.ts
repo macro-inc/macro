@@ -1,5 +1,7 @@
 import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { clearNativeDiagnostics } from '@app/observability/native-diagnostics';
+import { reloadApp } from '@app/observability/reload';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { clearPipedreamCallbacks } from '@core/pipedream/connect-callback';
 import { syncLoginStorage } from '@core/util/cookies';
@@ -15,14 +17,21 @@ import {
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { setEmailOutboxSession } from '@queries/email/outbox-session';
+import {
+  readEmailSendIntents,
+  settledSendAttempt,
+} from '@queries/email/send-queue';
 import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
-import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
+import {
+  recordGraphqlMutationQueueCleared,
+  setGraphqlSoupSessionActive,
+} from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
-import { useNavigate } from '@solidjs/router';
 import { confirmDialog } from '@ui';
 import { getOwner } from 'solid-js';
 import { clearComposerStorage } from './clear-composer-storage';
@@ -35,6 +44,7 @@ const unauthenticatedUserInfo: UserInfoData = {
   name: null,
   licenseStatus: 'inactive',
   tutorialComplete: false,
+  isAgent: false,
   group: null,
   hasChromeExt: false,
   authenticated: false,
@@ -45,35 +55,53 @@ const unauthenticatedUserInfo: UserInfoData = {
   createdAt: undefined,
 };
 
-export async function clearLocalAuthSession() {
-  clearPipedreamCallbacks();
-  document.cookie =
-    'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
-  syncLoginStorage(false);
-  const documentContextsCleared = clearOfflineDocumentContexts();
-  clearDocumentQueryCache(queryClient);
-  clearTeamCalendarQueries();
-  // Start every wipe before waiting, including stores not hydrated this session.
-  const results = await Promise.allSettled([
-    Promise.resolve().then(clearComposerStorage),
-    documentContextsCleared,
-    clearRegisteredCaches(),
-    queryPersistence.clear(),
-    clearLocalDrafts(),
-  ]);
-  if (results.some((result) => result.status === 'rejected')) {
-    await rotateCacheScope();
-  }
-  // Only after the wipes: clearing the cache needs its registered host.
-  setGraphqlSoupSessionActive(false);
-  resetGraphqlSoupDoneSession();
-  queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
-  clearMcpAuthAttempts();
+export function clearLocalAuthSession(
+  cause: 'logout' | 'session-expired' = 'logout'
+) {
+  return clearRegisteredCaches(async (clearCaches) => {
+    const diagnosticsCleared = clearNativeDiagnostics();
+    clearPipedreamCallbacks();
+    document.cookie =
+      'login=false; expires=Thu, 01 Jan 1970 00:00:00 UTC; max-age=0; path=/; SameSite=Lax';
+    setEmailOutboxSession(undefined);
+    syncLoginStorage(false);
+    clearMcpAuthAttempts();
+    const documentContextsCleared = clearOfflineDocumentContexts();
+    clearDocumentQueryCache(queryClient);
+    clearTeamCalendarQueries();
+    // Start every wipe before waiting, including stores not hydrated this session.
+    const results = await Promise.allSettled([
+      diagnosticsCleared,
+      // Reads the queue before the cache wipe below deletes it.
+      recordGraphqlMutationQueueCleared(cause),
+      Promise.resolve().then(clearComposerStorage),
+      documentContextsCleared,
+      // Publishing a signed-out query can retire the physical cache host.
+      // Keep that publication behind its write drain and storage cleanup.
+      (async () => {
+        try {
+          await clearCaches();
+        } finally {
+          await queryPersistence.clear();
+        }
+      })(),
+      clearLocalDrafts(),
+    ]);
+    if (results.some((result) => result.status === 'rejected')) {
+      await rotateCacheScope();
+    }
+    // Only after the wipes: clearing the cache needs its registered host.
+    setGraphqlSoupSessionActive(false);
+    resetGraphqlSoupDoneSession();
+    queryClient.setQueryData(
+      authKeys.userInfo.queryKey,
+      unauthenticatedUserInfo
+    );
+  });
 }
 
 export function useLogout() {
   const analytics = useAnalytics();
-  const navigate = useNavigate();
   const owner = getOwner();
 
   return createCallback(async () => {
@@ -82,9 +110,13 @@ export function useLogout() {
     try {
       const inspectDrafts = async () => {
         await flushLocalDrafts();
-        return await listLocalDrafts();
+        const [drafts, sends] = await Promise.all([
+          listLocalDrafts(),
+          readEmailSendIntents(),
+        ]);
+        return { drafts, sends };
       };
-      const drafts = await Promise.race([
+      const { drafts, sends } = await Promise.race([
         inspectDrafts(),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
@@ -96,9 +128,16 @@ export function useLogout() {
       const unsynced = drafts.filter((draft) => draft.status !== 'synced');
       if (unsynced.length)
         warning = `${unsynced.length} draft(s) have changes saved only on this device. Signing out removes those changes and their pending attachments.`;
+      if (sends.some((send) => settledSendAttempt(send)?.status !== 'SENT'))
+        warning = [
+          warning,
+          'Pending sends remain saved for this account and resume when you sign in again. Sends already accepted by the server may still be delivered; signing out does not cancel them.',
+        ]
+          .filter(Boolean)
+          .join(' ');
     } catch {
       warning =
-        'Draft storage could not be checked. Signing out removes drafts and attachments saved only on this device, including any changes that have not synced.';
+        'Draft storage could not be checked. Signing out removes unsubmitted drafts and their pending attachments. Approved sends stay saved for this account; sends already accepted by the server may still be delivered.';
     } finally {
       clearTimeout(timer);
     }
@@ -118,8 +157,7 @@ export function useLogout() {
     // Must run before the session is torn down — the unregister call is
     // authenticated. Time-boxed so a hung request can't block logout.
     await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);
-    await clearLocalAuthSession();
-    await authServiceClient.logout();
+    await Promise.all([clearLocalAuthSession(), authServiceClient.logout()]);
     analytics.track('sign_out');
     analytics.reset();
 
@@ -134,10 +172,13 @@ export function useLogout() {
         mode: 'no-cors',
         redirect: 'manual',
       }).catch(() => {});
-      navigate('/login');
+      // Write the login URL directly: the router commits a navigation only
+      // after its transition settles, which lands after the reload has
+      // already restarted the signed-in route with no session to load.
+      window.history.replaceState(null, '', '#/login');
       // Native login reuses this WebView. End the document lifetime so queued
       // editor callbacks can never adopt the next account's draft session.
-      window.location.reload();
+      reloadApp('logout');
     } else {
       window.location.href = SERVER_HOSTS['auth-logout'];
     }

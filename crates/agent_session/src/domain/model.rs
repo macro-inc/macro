@@ -22,6 +22,11 @@ pub use agent_fold::domain::model::{
 /// whose string value is the [`AgentSessionId`] the ACP session serves.
 pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is how the session answers permission requests
+/// (`autoAccept` or `prompt`), so a runtime can tell its agent.
+pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
+
 /// Identity of one harness participant, minted fresh at construction.
 ///
 /// A restarted process is a new replica: whatever the old identity claimed is
@@ -110,6 +115,18 @@ pub struct LeaseView {
     pub asking_replica_draining: bool,
 }
 
+/// What asking a session's actor to release itself silently did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionRelease {
+    /// The actor stopped without writing or announcing anything.
+    Released,
+    /// The actor has work open (a turn, a permission request, a queued
+    /// command, or an unfinished handshake) and keeps running.
+    Busy,
+    /// No live actor for the session here.
+    NotAttached,
+}
+
 /// Where a session's live actor runs, from one service instance's viewpoint.
 #[derive(Debug, Clone)]
 pub enum SessionManagement {
@@ -178,13 +195,14 @@ pub enum SessionStatus {
 }
 
 /// Which Pipedream MCP servers a session is handed: the agent's own choice,
-/// snapshotted onto the session at creation like `instructions`. The servers
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
 /// it resolves to are re-listed before each prompt, so an app the owner
 /// connects mid-session reaches a live agent that can `session/resume`;
 /// editing the agent's selection applies to its next session.
 pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
 
-/// Why a session is created, independently of whether it appears in broad lists.
+/// Why a session is created, which decides where it is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionPurpose {
     /// A regular session opened directly or from a thread mention.
@@ -193,6 +211,19 @@ pub enum SessionPurpose {
     Warm,
     /// Context backing an agent DM; accessed through its conversation.
     AgentDm,
+    /// A session another agent dispatched on its owner's behalf. Listed, and
+    /// it notifies like the owner's own sessions.
+    Dispatched,
+    /// A routine's unattended run. Its successful turns notify nobody, and
+    /// the routine's setting decides whether it is listed.
+    Routine {
+        /// Listed or unlisted, from the routine's setting.
+        visibility: SessionVisibility,
+    },
+    /// Work a person asked for that runs out of sight, its result read
+    /// elsewhere: a routine draft. Hidden, started by the person, and it
+    /// notifies nobody (see [`AgentSession::is_background`]).
+    Background,
 }
 
 impl SessionPurpose {
@@ -209,13 +240,128 @@ impl SessionPurpose {
         Ok(if conversation { Self::AgentDm } else { self })
     }
 
-    /// Whether creation should omit the session from broad Agents/Home lists.
-    pub fn list_hidden(self, bot_id: BotId, thread_id: Option<Uuid>, hide_agent_dms: bool) -> bool {
-        match self {
+    /// Where a session created for this purpose is shown. Speculative,
+    /// DM-backing and thread sessions (any agent started by a mention or an
+    /// assignment in a thread) are reached through what they back, so they
+    /// are hidden until someone prompts them directly (see
+    /// [`AgentSessionRepo::add_follower`](super::ports::AgentSessionRepo::add_follower));
+    /// a routine's run follows its routine.
+    pub fn visibility(self, thread_id: Option<Uuid>, hide_agent_dms: bool) -> SessionVisibility {
+        let hidden = match self {
             Self::Warm => true,
             Self::AgentDm => hide_agent_dms,
-            Self::Standalone => bot_id == bot_id::MACRO_NEW_BOT_ID && thread_id.is_some(),
+            Self::Standalone => thread_id.is_some(),
+            Self::Dispatched => false,
+            Self::Background => true,
+            Self::Routine { visibility } => return visibility,
+        };
+        if hidden {
+            SessionVisibility::Hidden
+        } else {
+            SessionVisibility::Listed
         }
+    }
+
+    /// Who starts a session created for this purpose.
+    pub fn source(self) -> SessionSource {
+        match self {
+            Self::Dispatched => SessionSource::Agent,
+            Self::Routine { .. } => SessionSource::Routine,
+            Self::Standalone | Self::Warm | Self::AgentDm | Self::Background => SessionSource::User,
+        }
+    }
+}
+
+/// Who started a session. Stored on the session and carried by its lifecycle
+/// events, so lists and notifications can treat unattended runs differently.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionSource {
+    /// A person, directly or through something they did: a prompt, a
+    /// mention, an assignment, or asking for a routine draft.
+    #[default]
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+/// Where a session is shown. Stored as `agent_session.visibility`, which
+/// replaces `list_hidden` (`Hidden`); a trigger keeps that column in step until
+/// it is dropped.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    #[default]
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it: a routine's run, unless the routine lists its runs.
+    Unlisted,
+    /// Out of every list and search; reachable only by id, through what it
+    /// backs (a thread, a DM) or once a warm claim lists it.
+    Hidden,
+}
+
+/// Whether an in-process session's turns are billed to its owner. Stored as
+/// `agent_session.billing`, set by whoever opens the session and fixed for
+/// its life. Either way the turns are admitted and their usage recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionBilling {
+    /// Billed as the owner's agent session usage: every session unless its
+    /// opener chose otherwise.
+    #[default]
+    Billable,
+    /// Recorded but never billed: background work the owner didn't ask for
+    /// turn by turn.
+    NonBillable,
+}
+
+impl SessionBilling {
+    /// Whether this is the default, billed to the owner.
+    #[must_use]
+    pub fn is_billable(&self) -> bool {
+        *self == Self::Billable
     }
 }
 
@@ -263,6 +409,45 @@ pub struct CreateAgentSessionParams {
     /// replayed from a recording, or created without a sandbox, has nothing to
     /// store here.
     pub egress_token_hash: Option<String>,
+    /// What opened the session, written with the session's row. `Unknown`
+    /// writes nothing: an unclaimed warm session has no cause yet.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    pub billing: SessionBilling,
+}
+
+/// Who or what archived a session.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::AsRefStr,
+    strum::EnumString,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
+/// A session's archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionArchive {
+    /// Who or what archived it.
+    pub by: ArchiveCause,
+    /// When it was archived.
+    pub at: DateTime<Utc>,
 }
 
 /// A running or historical agent coding session.
@@ -272,8 +457,9 @@ pub struct AgentSession {
     pub id: AgentSessionId,
     /// User-facing session name.
     pub name: String,
-    /// Whether the session is archived and therefore read-only.
-    pub is_archived: bool,
+    /// Who archived the session and when, or `None` while it is active. An archived session
+    /// is read-only.
+    pub archived: Option<SessionArchive>,
     /// Who created and owns the session. Immutable for its life.
     pub owner_id: Owner,
     /// The root message where the bot was originally invoked, if any.
@@ -297,6 +483,12 @@ pub struct AgentSession {
     pub pull_request_url: Option<String>,
     /// The Macro task the session was explicitly linked to.
     pub task_id: Option<String>,
+    /// Who started the session.
+    pub source: SessionSource,
+    /// What opened the session. `Unknown` when nothing recorded it.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Where the session is shown.
+    pub visibility: SessionVisibility,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,
@@ -322,6 +514,28 @@ pub struct AgentSession {
 }
 
 impl AgentSession {
+    /// Whether the session is archived and therefore read-only.
+    pub fn is_archived(&self) -> bool {
+        self.archived.is_some()
+    }
+
+    /// Whether the session is work its owner asked for that runs out of
+    /// sight (a routine draft): started by them at their request, hidden, and
+    /// opened from no message, so no list, search or thread leads to it.
+    /// Nobody is told about its turns, and the routine scheduler that opened
+    /// it may delete it.
+    pub fn is_background(&self) -> bool {
+        self.source == SessionSource::User
+            && self.visibility == SessionVisibility::Hidden
+            && self.thread_id.is_none()
+            && self.originating_message_id.is_none()
+            && matches!(
+                &self.origin,
+                trigger_context::TriggerOrigin::Requested { by }
+                    if self.owner_id.as_user() == Some(by)
+            )
+    }
+
     /// The user this session runs as; see [`session_owner_user`].
     pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
         self.owner_id
@@ -372,25 +586,6 @@ pub struct ExternalSession {
     pub last_run_id: Option<String>,
 }
 
-impl ExternalSession {
-    /// Provider link, including Claude demo mappings created before URLs were saved.
-    pub fn web_url(&self) -> Option<String> {
-        self.external_url.clone().or_else(|| {
-            (self.provider == "claude-cloud"
-                && self.external_id.starts_with("cse_")
-                && self.external_id.len() > 4
-                && self
-                    .external_id
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b == b'_'))
-            .then(|| format!("https://claude.ai/code/{}", self.external_id))
-        })
-    }
-}
-
-#[cfg(test)]
-mod test;
-
 /// The agent behind a session, as much of it as rendering a message needs.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -407,6 +602,17 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
+/// The authority behind an invocation. System events never borrow owner access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PrompterKind {
+    /// A human or runtime prompt; user identifies any acting human.
+    #[default]
+    User,
+    /// An internal event with no user authority.
+    System,
+}
+
 /// Who prompted the turn a session is running, or last ran.
 ///
 /// Written at dispatch, before the runtime can act on the prompt, so the
@@ -414,10 +620,53 @@ pub struct SessionBot {
 /// prompted from one somebody else did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TurnPrompter {
+    /// Source of the turn's authority.
+    pub kind: PrompterKind,
     /// The action that opened the turn.
     pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
     /// The user who prompted it, absent when a bot acted on nobody's behalf.
     pub user: Option<MacroUserIdStr<'static>>,
+    /// The app tab the person typed the prompt in, when they typed it in one.
+    pub client: Option<UiClientId>,
+}
+
+/// One open Macro app tab, minted by the tab and kept for its lifetime.
+///
+/// Sent with a prompt typed in that tab, so what the turn shows the person
+/// reaches that tab and no other. It names a tab, not a person: it grants
+/// nothing, and is only ever read beside the prompter it came with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct UiClientId(Uuid);
+
+impl UiClientId {
+    /// Wrap a tab's id.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The id, for storage.
+    #[must_use]
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for UiClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl TurnPrompter {
+    /// Effective human authority. System turns never act as a user even if
+    /// malformed or old storage includes a user alongside the system kind.
+    pub fn acting_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        (self.kind == PrompterKind::User)
+            .then_some(self.user.as_ref())
+            .flatten()
+    }
 }
 
 /// One waiting action as the session store records it.
@@ -447,6 +696,9 @@ pub struct StoredQueuedAction {
     /// Why the agent is being asked, composed into the prompt at dispatch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the prompt was typed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<UiClientId>,
 }
 
 impl From<&StoredQueuedAction> for super::ports::QueuedControl {

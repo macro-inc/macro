@@ -1,3 +1,9 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import {
+  beginInteraction,
+  TraceFlow,
+  usePending,
+} from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
@@ -52,7 +58,7 @@ export function FormLoadFailureView(props: {
         </Match>
         <Match when={props.failure.kind === 'failed'}>
           <p class="font-medium text-ink">This form couldn’t be opened</p>
-          <Button variant="outline" onClick={props.onRetry}>
+          <Button variant="secondary" onClick={props.onRetry}>
             Try again
           </Button>
         </Match>
@@ -68,9 +74,9 @@ export function FormSkeleton() {
       aria-busy="true"
       aria-label="Loading form"
     >
-      <div class="h-32 animate-pulse rounded-xl bg-hover" />
-      <div class="h-48 animate-pulse rounded-xl bg-hover" />
-      <div class="h-24 animate-pulse rounded-xl bg-hover" />
+      <ListSkeleton.Bar class="h-32 w-full rounded-xl" />
+      <ListSkeleton.Bar class="h-48 w-full rounded-xl" />
+      <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
     </div>
   );
 }
@@ -114,7 +120,8 @@ function EditorTabs(props: {
 }
 
 /**
- * The form page: editors get Build, Responses and Share; viewers land on the respond page.
+ * The form page: editors get Build, Responses and Share; viewers land on
+ * the respond page, or the Responses table when those rows are shared.
  */
 type FormPageProps = {
   source: FormDetailSource;
@@ -140,6 +147,20 @@ function EditorPanels(
   const context = useFormContext();
   const collaboration = context.createLayoutCollaboration(props.detail.form.id);
   props.preview.trackLayout(collaboration.flush);
+  usePending('form.layout', () => collaboration.status().kind === 'loading');
+  const changeTab = (tab: FormTab) => {
+    if (tab === props.tab) return;
+    const interaction = beginInteraction('form.tab', {
+      attributes: { 'form.tab': tab },
+      closeOnJoin: true,
+    });
+    try {
+      props.onTabChange(tab);
+    } finally {
+      // Tabs commit inside an event batch; let that flush join its new panel.
+      queueMicrotask(interaction.end);
+    }
+  };
   // Authoring state and pending writes belong to the editor, across tab changes.
   const builder = (
     <BuilderView
@@ -167,7 +188,7 @@ function EditorPanels(
         detail={props.detail}
         idPrefix={props.tabsId}
         tab={props.tab}
-        onTabChange={props.onTabChange}
+        onTabChange={changeTab}
       />
       <div
         id={`${props.tabsId}-panel-${props.tab}`}
@@ -176,11 +197,17 @@ function EditorPanels(
         class="min-h-0 flex-1"
       >
         <Switch>
-          <Match when={props.tab === 'build'}>{builder}</Match>
-          <Match when={props.tab === 'responses'}>
-            <ResponsesView detail={props.detail} />
+          <Match when={props.tab === 'build'}>
+            <TraceFlow name="form.build">{builder}</TraceFlow>
           </Match>
-          <Match when={props.tab === 'share'}>{sharing}</Match>
+          <Match when={props.tab === 'responses'}>
+            <TraceFlow name="form.responses">
+              <ResponsesView detail={props.detail} />
+            </TraceFlow>
+          </Match>
+          <Match when={props.tab === 'share'}>
+            <TraceFlow name="form.settings">{sharing}</TraceFlow>
+          </Match>
         </Switch>
       </div>
     </>
@@ -188,6 +215,10 @@ function EditorPanels(
 }
 
 export function FormPageView(props: FormPageProps) {
+  usePending(
+    'form.detail',
+    () => !props.source.detail() && !props.source.failure()
+  );
   let respondScroll: HTMLDivElement | undefined;
   // One per mount: the same form can be open in two splits.
   const tabsId = createUniqueId();
@@ -212,17 +243,31 @@ export function FormPageView(props: FormPageProps) {
           <Show
             when={detail().access !== 'view'}
             fallback={
-              <div
-                ref={respondScroll}
-                class="h-full min-h-0 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
+              <Show
+                when={
+                  props.tab === 'responses' && detail().form.responsesVisible
+                }
+                fallback={
+                  <div
+                    ref={respondScroll}
+                    class="h-full min-h-0 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <RespondView
+                      detail={detail()}
+                      refetch={props.source.refetch}
+                      compact={false}
+                      scrollContainer={() => respondScroll}
+                      onOpenResponses={
+                        detail().form.responsesVisible
+                          ? () => props.onTabChange('responses')
+                          : undefined
+                      }
+                    />
+                  </div>
+                }
               >
-                <RespondView
-                  detail={detail()}
-                  refetch={props.source.refetch}
-                  compact={false}
-                  scrollContainer={() => respondScroll}
-                />
-              </div>
+                <ResponsesView detail={detail()} />
+              </Show>
             }
           >
             <EditorPanels {...props} detail={detail()} tabsId={tabsId} />

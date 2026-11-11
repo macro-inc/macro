@@ -20,10 +20,11 @@ use docker_compose_types as dct;
 use indexmap::IndexMap;
 use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
+use sha2::{Digest, Sha256};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::services_for_mode;
+use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
 
 #[cfg(test)]
@@ -37,7 +38,7 @@ const EGRESS_CONTAINER_PORT: u16 = 8102;
 pub const LOCALSTACK_IMAGE: &str = "localstack/localstack:4";
 pub const MAILPIT_IMAGE: &str = "axllent/mailpit:v1.20";
 pub const CADDY_IMAGE: &str = "caddy:2-alpine";
-pub const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay:dev";
+const SDK_WEBHOOK_RELAY_IMAGE: &str = "macro-sdk-webhook-relay";
 
 /// Base-compose services that bind fixed host ports but aren't in our inventory
 /// (reached via the proxy / container network, not the host). For named
@@ -90,33 +91,7 @@ pub fn generate(
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
         };
-        // Named instances need their own host ports (replacing the base ports —
-        // emitted as `!override` in apply_tags). Only the self-contained local
-        // stacks remap; dev inherits the base-compose ports.
-        let mut ports = Vec::new();
-        if mode.spec().runs_local_infra
-            && !instance.is_default()
-            && let Some(port) = svc.host_port
-        {
-            ports.push(format!("{}:8080", instance.port(port)));
-        }
-        // The agent egress proxy is the harness's second listener, and the one
-        // service port a party outside the compose network has to reach: the
-        // egress tunnel forwards Cursor's cloud to this host port. Published on
-        // every local instance, default included - the base compose publishes
-        // nothing for the harness.
-        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
-            ports.push(format!(
-                "{}:{EGRESS_CONTAINER_PORT}",
-                instance.port(Port::AgentHarnessEgress)
-            ));
-        }
-        if mode.spec().runs_local_infra && svc.compose_name == "preview_gateway" {
-            if instance.is_default() {
-                ports.push(format!("{}:8080", instance.port(Port::PreviewControl)));
-            }
-            ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
-        }
+        let ports = published_ports(mode, instance, svc);
         if !ports.is_empty() {
             s.ports = dct::Ports::Short(ports);
         }
@@ -136,7 +111,7 @@ pub fn generate(
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
-        add_local_infra(&mut services, instance, static_frontend);
+        add_local_infra(&mut services, instance, static_frontend)?;
         add_sdk_webhook_relay(&mut services, instance)?;
     }
     // Live Gmail sync: forward watch notifications from the instance's own
@@ -187,6 +162,9 @@ pub fn generate(
     if mode.spec().runs_local_infra && !instance.is_default() {
         set_external_networks_and_volumes(&mut value, instance);
     }
+    if !instance.is_default() {
+        set_external_project_networks(&mut value, instance);
+    }
 
     let yaml = serde_yaml::to_string(&value).context("rendering override yaml")?;
     let path = instance
@@ -203,22 +181,44 @@ pub fn generate(
     Ok(path)
 }
 
+fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Vec<String> {
+    let mut ports = Vec::new();
+    if !mode.spec().runs_local_infra {
+        return ports;
+    }
+    // Named instances replace inherited bindings. The harness has no base
+    // binding, so the default instance must publish its API port too.
+    if (!instance.is_default() || service.compose_name == EGRESS_SERVICE)
+        && let Some(port) = service.host_port
+    {
+        ports.push(format!("{}:8080", instance.port(port)));
+    }
+    if service.compose_name == EGRESS_SERVICE {
+        ports.push(format!(
+            "{}:{EGRESS_CONTAINER_PORT}",
+            instance.port(Port::AgentHarnessEgress)
+        ));
+        ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+    }
+    ports
+}
+
 fn add_sdk_webhook_relay(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
 ) -> Result<()> {
     super::sdk_webhook::ensure_keys(instance)?;
+    let context = repo_root().join("infra/local/sdk-webhook-relay");
+    let dockerfile = std::fs::read(context.join("Dockerfile"))
+        .with_context(|| format!("reading {}/Dockerfile", context.display()))?;
     let build = dct::BuildStep::Advanced(dct::AdvancedBuildStep {
-        context: repo_root()
-            .join("infra/local/sdk-webhook-relay")
-            .display()
-            .to_string(),
+        context: context.display().to_string(),
         ..Default::default()
     });
     services.insert(
         "sdk-webhook-relay".to_string(),
         Some(dct::Service {
-            image: Some(SDK_WEBHOOK_RELAY_IMAGE.to_string()),
+            image: Some(sdk_webhook_relay_image(&dockerfile)),
             build_: Some(build),
             ports: dct::Ports::Short(vec![format!(
                 "127.0.0.1:{}:22",
@@ -236,6 +236,13 @@ fn add_sdk_webhook_relay(
         }),
     );
     Ok(())
+}
+
+/// The relay's image tag, keyed on its Dockerfile. Compose only builds a tag that
+/// is missing, so a fixed tag keeps serving an image older than the Dockerfile.
+fn sdk_webhook_relay_image(dockerfile: &[u8]) -> String {
+    let digest = format!("{:x}", Sha256::digest(dockerfile));
+    format!("{SDK_WEBHOOK_RELAY_IMAGE}:{}", &digest[..12])
 }
 
 /// LocalStack (S3/SQS/DynamoDB), reachable as `localstack` on both networks.
@@ -272,7 +279,7 @@ fn add_localstack_service(
                 timeout: Some("10s".to_string()),
                 retries: 5,
                 start_period: Some("180s".to_string()),
-                start_interval: Some("2s".to_string()),
+                start_interval: Some("1s".to_string()),
                 ..Default::default()
             }),
             ports: dct::Ports::Short(vec![format!("{}:4566", instance.port(Port::LocalStack))]),
@@ -344,7 +351,7 @@ fn add_local_infra(
     services: &mut IndexMap<String, Option<dct::Service>>,
     instance: &Instance,
     static_frontend: bool,
-) {
+) -> Result<()> {
     // This per-instance directory belongs only to FusionAuth. Private SELinux
     // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {
@@ -434,6 +441,18 @@ fn add_local_infra(
         // (an empty `ports:` can't be expressed in the typed model — it needs the
         // `!override []` merge tag).
     }
+
+    // Every instance, the default one included, runs the content-tagged images.
+    for image in content_tagged_images() {
+        let tag = image.tag()?;
+        if let Some(service) = services
+            .entry(image.service.to_string())
+            .or_insert_with(|| Some(dct::Service::default()))
+        {
+            service.image = Some(tag);
+        }
+    }
+    Ok(())
 }
 
 /// Emit the Compose merge tags the typed schema can't represent:
@@ -547,6 +566,30 @@ fn set_external_networks_and_volumes(value: &mut Value, instance: &Instance) {
     );
 }
 
+/// Make the networks the base compose files define for each project external, so
+/// they sit on the instance's allocated subnet instead of drawing from Docker's
+/// small default pool. External also means an existing instance keeps the
+/// networks it has: Compose never compares or recreates them.
+fn set_external_project_networks(value: &mut Value, instance: &Instance) {
+    let root = value.as_mapping_mut().expect("compose root is a mapping");
+    let networks = root
+        .entry("networks".into())
+        .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()))
+        .as_mapping_mut()
+        .expect("compose networks is a mapping");
+    for (key, name) in [
+        ("services", instance.network_services()),
+        ("auth-internal", instance.network_auth_internal()),
+    ] {
+        let mut network = serde_yaml::Mapping::new();
+        // The base files' `driver: bridge` conflicts with `external`.
+        network.insert("driver".into(), reset_null());
+        network.insert("external".into(), true.into());
+        network.insert("name".into(), name.into());
+        networks.insert(key.into(), Value::Mapping(network));
+    }
+}
+
 /// `!reset null`.
 fn reset_null() -> Value {
     Value::Tagged(Box::new(TaggedValue {
@@ -594,6 +637,144 @@ fn net_aliases(pairs: &[(&str, &[&str])]) -> dct::Networks {
             })
             .collect(),
     ))
+}
+
+/// A repository-built image tagged by the content of everything its build
+/// reads. Compose builds an image only when its tag is missing, so the tag
+/// changes exactly when the image would: under a fixed tag a changed input
+/// never reaches a machine that built the old one, and under compose's
+/// per-project default name every new instance rebuilds. Images that copy the
+/// whole repository (`COPY . .`) would otherwise rebuild after any edit at all,
+/// about a minute each.
+pub struct ContentTaggedImage {
+    /// The compose service that runs it.
+    pub service: &'static str,
+    pub repository: &'static str,
+    /// Repository paths whose content defines the image.
+    inputs: fn() -> Result<Vec<String>>,
+}
+
+impl ContentTaggedImage {
+    pub fn tag(&self) -> Result<String> {
+        let inputs = (self.inputs)()?;
+        let inputs: Vec<&str> = inputs.iter().map(String::as_str).collect();
+        let key = super::content_key::of_paths(&super::repo_root(), &inputs)?;
+        Ok(format!("{}:{}", self.repository, &key[..12]))
+    }
+}
+
+pub fn content_tagged_images() -> [ContentTaggedImage; 3] {
+    [
+        ContentTaggedImage {
+            service: "search",
+            repository: "macro-local-opensearch",
+            inputs: || Ok(vec!["infra/local/opensearch".to_string()]),
+        },
+        ContentTaggedImage {
+            service: "sync_service",
+            repository: "macro-local-sync-service",
+            inputs: sync_service_inputs,
+        },
+        ContentTaggedImage {
+            service: "lexical_service",
+            repository: "macro-local-lexical-service",
+            inputs: lexical_service_inputs,
+        },
+    ]
+}
+
+/// The sync worker is a Rust crate built to wasm: its workspace dependency
+/// closure (the generated `.github/workspace-dep-closures.json`, which CI keeps
+/// current) plus what every cargo build reads.
+fn sync_service_inputs() -> Result<Vec<String>> {
+    let closures = super::repo_root().join(".github/workspace-dep-closures.json");
+    let raw =
+        std::fs::read(&closures).with_context(|| format!("reading {}", closures.display()))?;
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&raw).with_context(|| format!("parsing {}", closures.display()))?;
+    let closure = parsed["closures"]["sync_service"]
+        .as_array()
+        .context("no sync_service closure in .github/workspace-dep-closures.json")?;
+    let mut inputs: Vec<String> = [
+        "docker/sync-service.Dockerfile",
+        ".dockerignore",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        ".cargo",
+        "vendor",
+        "services/sync-service",
+    ]
+    .iter()
+    .map(|path| path.to_string())
+    .collect();
+    for dir in closure {
+        inputs.push(
+            dir.as_str()
+                .context("closure entries are paths")?
+                .to_string(),
+        );
+    }
+    Ok(inputs)
+}
+
+/// The lexical service installs the root JavaScript workspace and bundles its
+/// server, which imports `packages/lexical-core`: the workspace's manifests,
+/// lockfile and patches, the shared packages, and the service itself.
+fn lexical_service_inputs() -> Result<Vec<String>> {
+    let mut inputs: Vec<String> = [
+        "docker/lexical-service.Dockerfile",
+        "docker/lexical-service.Dockerfile.dockerignore",
+        "package.json",
+        "bun.lock",
+        "bunfig.toml",
+        "apps/web/patches",
+        "packages",
+        "vendor/ironcalc/pkg",
+        "services/lexical-service",
+    ]
+    .iter()
+    .map(|path| path.to_string())
+    .collect();
+    let manifest = super::repo_root().join("package.json");
+    let raw =
+        std::fs::read(&manifest).with_context(|| format!("reading {}", manifest.display()))?;
+    let parsed: serde_json::Value =
+        serde_json::from_slice(&raw).with_context(|| format!("parsing {}", manifest.display()))?;
+    let members = parsed["workspaces"]["packages"]
+        .as_array()
+        .context("no workspaces.packages in package.json")?;
+    for member in members {
+        let member = member.as_str().context("workspace members are paths")?;
+        inputs.push(format!("{member}/package.json"));
+    }
+    Ok(inputs)
+}
+
+/// Remove tags of the content-tagged images that are over three days old and
+/// aren't the current one. Docker refuses to remove an image a container
+/// (running or stopped) still uses, so a stopped instance keeps what it needs.
+/// Best effort.
+pub fn prune_content_tagged_images() {
+    for image in content_tagged_images() {
+        let Ok(current) = image.tag() else {
+            continue;
+        };
+        let Ok(listed) = Command::new("docker")
+            .args(["image", "ls", "--format", "{{.Repository}}:{{.Tag}}"])
+            .arg("--filter")
+            .arg(format!("reference={}", image.repository))
+            .args(["--filter", "until=72h"])
+            .output()
+        else {
+            continue;
+        };
+        for old in String::from_utf8_lossy(&listed.stdout).lines() {
+            if old != current {
+                let _ = Command::new("docker").args(["image", "rm", old]).output();
+            }
+        }
+    }
 }
 
 fn ports_only(ports: Vec<String>) -> dct::Service {

@@ -1,5 +1,6 @@
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
@@ -12,6 +13,7 @@ import { useIsMacroTeam } from '@core/context/team';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   captureScrollAnchor,
   restoreScrollAnchor,
@@ -32,10 +34,10 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { createEnterOwningControl } from '../util/createEnterOwningControl';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
-import { InstructionsEditor } from './InstructionsEditor';
 import { MarkdownEditor } from './MarkdownEditor';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
@@ -45,12 +47,11 @@ import {
   outlineFitsGutter,
   useMarkdownOutline,
 } from './MarkdownOutline';
+import { SkillDescriptionField } from './SkillDescriptionField';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 import { TaskDuplicateMatchPill } from './TaskDuplicateMatches';
 import { TitleEditor } from './TitleEditor';
-import {
-  registerLexicalStateDebuggerCommand,
-  registerMarkdownCommands,
-} from './useMarkdownCommands';
+import { registerMarkdownCommands } from './useMarkdownCommands';
 
 /**
  * Whether the Lexical state debugger panel is open, persisted across reloads so
@@ -98,10 +99,12 @@ export function Notebook(props: {
   autoFocus: boolean;
 }) {
   const { element: blockElement, state } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
+  const ownsEnter = createEnterOwningControl();
   const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
@@ -209,7 +212,8 @@ export function Notebook(props: {
         scopeId: currentScopeId,
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
-        keyDownHandler: () => {
+        keyDownHandler: (event) => {
+          if (ownsEnter(event?.target)) return false;
           const titleEditor = md.titleEditor;
           const markdownEditor = md.editor;
           const docName = untrack(documentName);
@@ -223,6 +227,25 @@ export function Notebook(props: {
           }
           return false;
         },
+        hide: true,
+      })
+    );
+  });
+
+  // The document shares its split scope with the view hosting it, and views
+  // like Drive bind Tab there to cycle their tabs, which closes the document.
+  // This override eclipses those commands while the document is mounted:
+  // Tab is left to the editors (title to body, list indent) and to native
+  // focus order.
+  createEffect(() => {
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
+    untrack(() =>
+      registerHotkey({
+        hotkey: ['tab', 'shift+tab'],
+        scopeId: currentScopeId,
+        description: 'Move focus within document',
+        keyDownHandler: () => false,
         hide: true,
       })
     );
@@ -265,8 +288,10 @@ export function Notebook(props: {
   createEffect(() => {
     if (hasRun) return;
     if (!props.autoFocus) return;
-    if (!blockElement()) return;
-    blockElement()?.focus();
+    const element = blockElement();
+    if (!element) return;
+    if (shouldAutofocusDocument(element, panel?.panelRef() ?? null))
+      element.focus();
     hasRun = true;
   });
 
@@ -354,6 +379,7 @@ export function Notebook(props: {
       >
         <TitleEditor autoFocusOnMount={props.autoFocus} />
         <div class="spacer h-3" />
+        <SkillDescriptionField />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
@@ -361,6 +387,7 @@ export function Notebook(props: {
         </div>
         <ParamsProvider state={params}>
           <MarkdownEditor
+            autoFocusOnMount={props.autoFocus && !isTouchDevice()}
             resolveAppLink={resolveAppLink}
             loroManager={props.loroManager}
             showLexicalStateDebugger={
@@ -391,70 +418,6 @@ export function Notebook(props: {
         }}
       >
         <CommentMargin wideEnough={showComments() && commentBreakpoints.md()} />
-      </div>
-    </div>
-  );
-}
-
-export function InstructionsNotebook(props: {
-  loroManager: LoroManager;
-  hotkeyScope: string | undefined;
-}) {
-  const { state } = useMarkdownDocument();
-  const setMd = state.editor.setMd;
-  const scopeId = () => props.hotkeyScope;
-  const canUseLexicalStateDebugger = useCanUseLexicalStateDebugger();
-  const resolveAppLink = useMacroMentionLinkResolver();
-
-  let notebookRef!: HTMLDivElement;
-  let contentRef!: HTMLDivElement;
-
-  // Set the refs on the block store.
-  onMount(() => {
-    setMd({
-      notebook: notebookRef,
-      commentMargin: undefined,
-      contentRef: contentRef,
-    });
-    onCleanup(() => {
-      setMd({
-        notebook: undefined,
-        commentMargin: undefined,
-      });
-    });
-  });
-
-  createEffect(() => {
-    const currentScopeId = scopeId();
-    if (!currentScopeId) return;
-    const group = untrack(() =>
-      registerLexicalStateDebuggerCommand(currentScopeId, {
-        canUseStateDebugger: canUseLexicalStateDebugger,
-        toggleStateDebugger: () => setShowLexicalStateDebugger((prev) => !prev),
-      })
-    );
-    onCleanup(() => group.dispose());
-  });
-  createEffect(() => {
-    if (!canUseLexicalStateDebugger() && showLexicalStateDebugger()) {
-      setShowLexicalStateDebugger(false);
-    }
-  });
-
-  return (
-    <div
-      class="flex relative text-ink min-h-full min-w-0 px-6"
-      ref={notebookRef}
-    >
-      <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsEditor
-          resolveAppLink={resolveAppLink}
-          loroManager={props.loroManager}
-          showLexicalStateDebugger={
-            canUseLexicalStateDebugger() && showLexicalStateDebugger()
-          }
-          onLexicalStateDebuggerClose={() => setShowLexicalStateDebugger(false)}
-        />
       </div>
     </div>
   );

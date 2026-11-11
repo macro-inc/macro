@@ -1,4 +1,4 @@
-import CaretUpIcon from '@phosphor/caret-up.svg';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import { Button } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, createUniqueId, type JSX } from 'solid-js';
@@ -19,7 +19,7 @@ export function BotAdvancedSection(props: { children: JSX.Element }) {
       >
         Advanced
         <CaretUpIcon
-          class="transition-transform"
+          class="transition-transform size-3.5 touch:size-6 shrink-0 pointer-events-none"
           classList={{ 'rotate-180': open() }}
         />
       </Button>

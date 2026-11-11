@@ -11,7 +11,7 @@ import type {
   ValueInfo,
 } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { type JSX, Match, Switch } from 'solid-js';
 import { type PropertyInput, valueLabel } from '../core/design-system';
 import { ComponentPicker } from './component-picker';

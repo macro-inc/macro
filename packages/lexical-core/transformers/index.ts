@@ -1,13 +1,14 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AGENT_ACTIVITY } from './agentActivity';
 import { I_AGENT_CONTEXT } from './agentContext';
+import { AUTO_LINK, ESCAPED_AUTO_LINK } from './auto-link';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
 import { I_CURSOR_SYSTEM_NOTIFICATION } from './cursorSystemNotification';
 import { CUSTOM_TRANSFORMERS } from './customTransformers';
 import { I_DATABASE_QUERY, I_DATABASE_QUERY_BLOCK } from './databaseQuery';
 import { I_HTML_RENDER } from './htmlRender';
-import { I_IMAGE_CONSTRAINED, IMAGE } from './image';
+import { I_IMAGE_CONSTRAINED, IMAGE, listItemImage } from './image';
 import {
   E_BLOCK_EQUATION_NODE,
   E_INLINE_EQUATION_NODE,
@@ -26,6 +27,7 @@ import {
   E_PR_MENTION,
   E_TAG_MENTION,
   E_USER_MENTION,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_AGENT_SESSION_CARD,
   I_AGENT_SESSION_MENTION,
   I_BOOKING_LINK_MENTION,
@@ -52,13 +54,16 @@ import {
   LINK_XML,
   MARK_XML,
   PRESERVE_LINES,
+  protectEmptyParagraphLines,
   SEARCH_MATCH,
+  UNLINKED_TEXT,
 } from './transformers';
 import { UNKNOWN_MENTION } from './unknownMention';
 import { I_VIDEO, VIDEO_LINK } from './video';
 import { E_WATERMARK, I_WATERMARK } from './watermark';
 
-export { isConversionOnlyTransformer };
+export { ORDERED_LIST_ENTER } from './customTransformers';
+export { isConversionOnlyTransformer, protectEmptyParagraphLines };
 
 /**
  * Internal transformers for converting markdown between Lexical state and markdown.
@@ -80,6 +85,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE, // Standard markdown images (fallback)
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   I_USER_MENTION,
   I_GROUP_MENTION,
   I_DOCUMENT_MENTION,
@@ -102,8 +108,11 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_THEME_MENTION,
   I_TAG_MENTION,
   I_CONNECT_APP,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
@@ -112,6 +121,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
  * External transformers for converting Lexical to and from to GitHub Flavored (ish) Markdown.
  */
 export const EXTERNAL_TRANSFORMERS: Transformer[] = [
+  UNLINKED_TEXT,
   I_DATABASE_QUERY_BLOCK,
   I_DATABASE_QUERY,
   HR,
@@ -119,6 +129,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   VIDEO_LINK,
   I_VIDEO,
   IMAGE,
+  listItemImage(IMAGE),
   BR_TAG_TO_LINE_BREAK,
   E_TABLE_NODE,
   HTML_BLOCKQUOTE,
@@ -148,6 +159,8 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_SNAPSHOT_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];
 
@@ -170,6 +183,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
   IMAGE,
+  listItemImage(I_IMAGE_CONSTRAINED, IMAGE),
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,
   E_TABLE_NODE,
@@ -204,6 +218,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_THEME_MENTION,
   I_TAG_MENTION,
   I_CONNECT_APP,
+  I_ACCOUNT_MANAGER_REQUEST,
   I_WATERMARK,
   E_WATERMARK,
   E_TAG_MENTION,
@@ -213,6 +228,8 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_INLINE_EQUATION_NODE,
   ...HTML_ENTITY_TRANSFORMERS,
   ...CUSTOM_TRANSFORMERS,
+  ESCAPED_AUTO_LINK,
+  AUTO_LINK,
   I_CURSOR_SYSTEM_NOTIFICATION, // After the code fence so a tag quoted in one stays text
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
 ];

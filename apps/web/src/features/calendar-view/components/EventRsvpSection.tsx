@@ -1,6 +1,6 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { OutlookRsvpAction } from '@app/features/calendar/views/event-replacement';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -38,8 +38,8 @@ export function EventRsvpSection(props: {
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
   const canRespond = () =>
+    props.event.viewerCan.rsvp &&
     selfAttendee() !== undefined &&
-    !props.event.isReadOnly &&
     !props.event.isCancelled;
 
   const rsvp = createCalendarRsvpController(() =>
@@ -75,7 +75,6 @@ export function EventRsvpSection(props: {
               <Button
                 variant="ghost"
                 size={props.buttonSize ?? 'sm'}
-                depth={3}
                 class="bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11"
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
@@ -95,12 +94,7 @@ export function EventRsvpSection(props: {
           )}
         </Show>
       </div>
-      <Show
-        when={
-          props.event.calendar.provider === 'outlook' &&
-          !selfAttendee()?.isOrganizer
-        }
-      >
+      <Show when={props.event.calendar.provider === 'outlook'}>
         <OutlookRsvpAction
           target={{
             eventId: props.event.eventId,

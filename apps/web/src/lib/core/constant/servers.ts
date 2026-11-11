@@ -6,7 +6,7 @@ const serverHostLocal: Servers = {
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8086',
   'websocket-service': 'ws://localhost:6969',
-  'cognition-service': 'http://localhost:8085',
+  'cognition-service': 'http://localhost:8101/cognition',
   'connection-gateway': 'ws://localhost:8082',
   'notification-service': 'http://localhost:8089',
   'static-file': 'http://localhost:8100',
@@ -18,9 +18,9 @@ const serverHostLocal: Servers = {
   // that prefix is carried here.
   'calendar-service': 'http://localhost:8088/calendar',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8099',
+  'scheduled-action': 'http://localhost:8101/scheduled-action',
   'agent-harness': 'http://localhost:8101',
-  preview: 'http://localhost:8110',
+  preview: 'http://localhost:8101/preview',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -85,9 +85,10 @@ const proxyOrigin: string | undefined =
 const wsProxyOrigin = proxyOrigin?.replace(/^http/, 'ws');
 
 // Follow the page's hostname (keeping the proxy's port) so the app works from
-// any `*.localhost` alias. Hostnames get separate cookie jars while ports
-// share them, so opening tabs like alice.localhost:3000 / carol.localhost:3000
-// gives each seeded persona an isolated login session against the one backend.
+// any `*.localhost` alias. Hostnames get separate cookie jars, so opening tabs
+// like alice.localhost:8090 / carol.localhost:8090 gives each seeded persona an
+// isolated login session against the one backend. Separate stacks don't need
+// this: their proxies keep each stack's cookies apart on any hostname.
 function resolveProxyOrigin(configured: string | undefined) {
   if (!configured || typeof window === 'undefined') return configured;
   try {
@@ -103,6 +104,18 @@ export const SERVER_HOSTS: Servers =
   import.meta.env.MODE === 'development'
     ? selectLocalServers()
     : serverHostRemote;
+
+/**
+ * The app talks to a self-contained local stack (`run_local`, `just stack`)
+ * through its single-origin proxy, which keeps each instance's cookies apart.
+ * `run_dev` uses the same proxy origin but not those cookie rules.
+ */
+export function usesLocalStackProxy(): boolean {
+  return (
+    import.meta.env.VITE_LOCAL_STACK === 'true' &&
+    SERVER_HOSTS['auth-service'] === proxyServers()?.['auth-service']
+  );
+}
 
 function proxyServers(): Servers | undefined {
   if (!proxyOrigin || !wsProxyOrigin) return undefined;
@@ -217,6 +230,28 @@ function selectSyncServiceHost():
 
 export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
 
+// Desktop HTTP services share the native session cookie jar. Navigation-only
+// destinations and WebSocket endpoints do not define HTTP transport prefixes.
+const nativeSessionServices = {
+  'auth-service': SERVER_HOSTS['auth-service'],
+  'auth-logout': undefined,
+  'pdf-service': SERVER_HOSTS['pdf-service'],
+  'document-storage-service': SERVER_HOSTS['document-storage-service'],
+  'websocket-service': undefined,
+  'cognition-service': SERVER_HOSTS['cognition-service'],
+  'connection-gateway': undefined,
+  'notification-service': SERVER_HOSTS['notification-service'],
+  'static-file': SERVER_HOSTS['static-file'],
+  'unfurl-service': SERVER_HOSTS['unfurl-service'],
+  contacts: SERVER_HOSTS['contacts'],
+  'email-service': SERVER_HOSTS['email-service'],
+  'calendar-service': SERVER_HOSTS['calendar-service'],
+  'image-proxy-service': SERVER_HOSTS['image-proxy-service'],
+  'scheduled-action': SERVER_HOSTS['scheduled-action'],
+  'agent-harness': SERVER_HOSTS['agent-harness'],
+  preview: SERVER_HOSTS['preview'],
+} satisfies Record<keyof Servers, string | undefined>;
+
 /**
  * The DSS host to use for sync-service permission tokens.
  * When the sync service is remote, permission tokens must come from the remote DSS
@@ -226,6 +261,22 @@ export const SYNC_PERMISSION_TOKEN_DSS_HOST =
   SYNC_SERVICE_HOSTS === syncServiceHostRemote
     ? serverHostRemote['document-storage-service']
     : SERVER_HOSTS['document-storage-service'];
+
+export const NATIVE_SESSION_SERVICE_URLS = [
+  ...Object.values(nativeSessionServices).filter((url) => url !== undefined),
+  SYNC_SERVICE_HOSTS.worker,
+  SYNC_PERMISSION_TOKEN_DSS_HOST,
+];
+
+/** Hosts the email service may have embedded in sent mail. Development
+ * proxies rewrite `SERVER_HOSTS`, while the backend embeds its direct URL. */
+export const EMAIL_SERVICE_EMBEDDED_HOSTS: readonly string[] = [
+  ...new Set([
+    SERVER_HOSTS['email-service'],
+    directServerHostRemote['email-service'],
+    serverHostLocal['email-service'],
+  ]),
+];
 
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {

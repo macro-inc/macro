@@ -8,6 +8,12 @@
   ],
   "permissions": [
     "auth:allow-authenticate",
+    "file-export:allow-available",
+    "file-export:allow-beginExport",
+    "file-export:allow-appendExport",
+    "file-export:allow-finishExport",
+    "file-export:allow-discardExport",
+
     "edit-menu:allow-set-native-menu-suppressed",
     "pasteboard:allow-read-pasteboard-text",
     "network-status:allow-watch-status",
@@ -30,6 +36,8 @@
     "call-kit:allow-set-call-drawer-channel-title",
     "call-kit:allow-set-call-drawer-theme",
     "call-kit:allow-set-participant-display-name",
-    "call-kit:allow-switch-camera"
+    "call-kit:allow-switch-camera",
+    "call-kit:allow-request-microphone-permission",
+    "call-kit:allow-open-microphone-settings"
   ]
 }

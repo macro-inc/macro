@@ -20,7 +20,7 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
-        agent_session::AgentSessionLiteral,
+        agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
@@ -31,7 +31,7 @@ use item_filters::{
         database_row::DatabaseRowLiteral,
         date::DateLiteral,
         document::DocumentLiteral,
-        email::{Email, EmailLiteral},
+        email::{AttachmentKind, Email, EmailLiteral, SubjectQuery},
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::{
             GithubPullRequestLiteral, GithubPullRequestReviewStatus, GithubPullRequestState,
@@ -282,6 +282,19 @@ enum GraphqlFilterPropertyMatchValue {
     SelectOption(ID),
     /// Entity reference id to match.
     EntityRef(ID),
+    /// Match a DATE property in a UTC range.
+    DateRange(GraphqlPropertyDateRange),
+}
+
+/// Explicit UTC bounds for a DATE property.
+#[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GraphqlPropertyDateRange {
+    /// Inclusive UTC start, or no lower bound.
+    start: Option<String>,
+    /// Exclusive UTC end, or no upper bound.
+    end: Option<String>,
 }
 
 impl GraphqlFilterPropertyMatchValue {
@@ -295,6 +308,24 @@ impl GraphqlFilterPropertyMatchValue {
                 EntityRefId::new(value.to_string())
                     .map_err(|err| InputError::new(format!("invalid entityRef: {err}")))?,
             ),
+            Self::DateRange(range) => {
+                PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange {
+                    start: range
+                        .start
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.start: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                    end: range
+                        .end
+                        .as_deref()
+                        .map(chrono::DateTime::parse_from_rfc3339)
+                        .transpose()
+                        .map_err(|err| InputError::new(format!("invalid dateRange.end: {err}")))?
+                        .map(|value| value.with_timezone(&Utc)),
+                })
+            }
         })
     }
 }
@@ -339,6 +370,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
     fn try_from(value: GraphqlPropertyEntityType) -> Result<Self, Self::Error> {
         Ok(match value {
             GraphqlPropertyEntityType::CalendarEvent => Self::CalendarEvent,
+            GraphqlPropertyEntityType::CallRecord => Self::CallRecord,
             GraphqlPropertyEntityType::Channel => Self::Channel,
             GraphqlPropertyEntityType::Chat => Self::Chat,
             GraphqlPropertyEntityType::Company => Self::Company,
@@ -349,8 +381,7 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
             GraphqlPropertyEntityType::Thread => Self::Thread,
             GraphqlPropertyEntityType::User => Self::User,
             GraphqlPropertyEntityType::Initiative => Self::Initiative,
-            other
-            @ (GraphqlPropertyEntityType::CallRecord | GraphqlPropertyEntityType::Contact) => {
+            other @ GraphqlPropertyEntityType::Contact => {
                 return Err(other);
             }
         })
@@ -364,8 +395,9 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
     favorites_only: Option<bool>,
-    /// Restrict every entity type to items associated with this CRM record.
-    /// Requires an expanded, timestamp-sorted query.
+    /// Restrict every entity type to items associated with this CRM record,
+    /// or to activity across visible CRM-enabled teams.
+    /// Requires an expanded query sorted by a timestamp or selected property.
     crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
@@ -702,8 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded,
-    /// timestamp-sorted query.
+    /// property or a reference to the record. Requires an expanded query
+    /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
     NameContains(String),
@@ -718,6 +750,8 @@ enum GraphqlCrmAssociation {
     Company(ID),
     /// Items associated with the contact.
     Contact(ID),
+    /// Activity across visible CRM-enabled teams; only true is valid.
+    Activity(bool),
 }
 
 impl GraphqlCrmAssociation {
@@ -726,6 +760,8 @@ impl GraphqlCrmAssociation {
         Ok(match self {
             Self::Company(id) => CrmAssociation::Company(parse_id(id, "company")?),
             Self::Contact(id) => CrmAssociation::Contact(parse_id(id, "contact")?),
+            Self::Activity(true) => CrmAssociation::Activity,
+            Self::Activity(false) => return Err(InputError::new("activity must be true")),
         })
     }
 }
@@ -912,6 +948,8 @@ enum GraphqlEmailLiteral {
     Bcc(GraphqlEmailValue),
     /// The recipient option.
     Recipient(GraphqlEmailValue),
+    /// A message whose subject contains this text, ignoring case (1-200 characters).
+    Subject(String),
     /// The thread id option.
     ThreadId(ID),
     /// The owner option.
@@ -930,6 +968,8 @@ enum GraphqlEmailLiteral {
     Shared(GraphqlSharedEmailFilter),
     /// The calendar only option.
     CalendarOnly(bool),
+    /// Threads with at least one attachment of this kind.
+    Attachment(GraphqlAttachmentKind),
     /// The created at option.
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
@@ -946,6 +986,9 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::Cc(value) => EmailLiteral::Cc(value.into_ast()?),
             Self::Bcc(value) => EmailLiteral::Bcc(value.into_ast()?),
             Self::Recipient(value) => EmailLiteral::Recipient(value.into_ast()?),
+            Self::Subject(value) => EmailLiteral::Subject(
+                SubjectQuery::try_from(value).map_err(|err| InputError::new(err.to_string()))?,
+            ),
             Self::ThreadId(id) => EmailLiteral::ThreadId(parse_id(id, "threadId")?),
             Self::Owner(id) => EmailLiteral::Owner(parse_id(id, "owner")?),
             Self::ProjectId(id) => EmailLiteral::ProjectId(id),
@@ -955,6 +998,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::InboxVisible(visible) => EmailLiteral::InboxVisible(visible),
             Self::Shared(shared) => EmailLiteral::Shared(shared.into_model()),
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
+            Self::Attachment(kind) => EmailLiteral::Attachment(kind.into_model()),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
             Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
@@ -990,6 +1034,30 @@ impl GraphqlEmailValue {
             ),
             Self::Domain(value) => Email::Domain(value),
         })
+    }
+}
+
+/// GraphQL input naming a kind of email attachment.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+enum GraphqlAttachmentKind {
+    /// PDF files.
+    Pdf,
+    /// PNG, JPEG, GIF, WebP or SVG images.
+    Image,
+    /// Word, Excel and PowerPoint files, plain text and CSV.
+    Document,
+}
+
+impl GraphqlAttachmentKind {
+    /// Convert this GraphQL option into the email-filter model.
+    fn into_model(self) -> AttachmentKind {
+        match self {
+            Self::Pdf => AttachmentKind::Pdf,
+            Self::Image => AttachmentKind::Image,
+            Self::Document => AttachmentKind::Document,
+        }
     }
 }
 
@@ -1206,6 +1274,82 @@ enum GraphqlAgentSessionLiteral {
     /// The owner principal option — a user (`macro|<email>`), a bot
     /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
+    /// Who started the session. Narrows the sessions a query asks for; it
+    /// does not opt the query in.
+    Source(GraphqlAgentSessionSource),
+    /// Whether the session is listed. Narrows the sessions a query asks for;
+    /// it does not opt the query in.
+    Visibility(GraphqlAgentSessionVisibility),
+}
+
+/// Who started an agent session: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionSource {
+    /// A person, directly or through something they did.
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+impl GraphqlAgentSessionSource {
+    /// Convert this GraphQL source into the filter model.
+    fn into_model(self) -> AgentSessionSource {
+        match self {
+            Self::User => AgentSessionSource::User,
+            Self::Agent => AgentSessionSource::Agent,
+            Self::Routine => AgentSessionSource::Routine,
+        }
+    }
+}
+
+impl From<AgentSessionSource> for GraphqlAgentSessionSource {
+    fn from(source: AgentSessionSource) -> Self {
+        match source {
+            AgentSessionSource::User => Self::User,
+            AgentSessionSource::Agent => Self::Agent,
+            AgentSessionSource::Routine => Self::Routine,
+        }
+    }
+}
+
+/// Where an agent session is shown: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it; a routine's setting decides it for each of its runs.
+    Unlisted,
+    /// Out of every list and search; only a query naming the session's id
+    /// returns it.
+    Hidden,
+}
+
+impl GraphqlAgentSessionVisibility {
+    /// Convert this GraphQL visibility into the filter model.
+    fn into_model(self) -> AgentSessionVisibility {
+        match self {
+            Self::Listed => AgentSessionVisibility::Listed,
+            Self::Unlisted => AgentSessionVisibility::Unlisted,
+            Self::Hidden => AgentSessionVisibility::Hidden,
+        }
+    }
+}
+
+impl From<AgentSessionVisibility> for GraphqlAgentSessionVisibility {
+    fn from(visibility: AgentSessionVisibility) -> Self {
+        match visibility {
+            AgentSessionVisibility::Listed => Self::Listed,
+            AgentSessionVisibility::Unlisted => Self::Unlisted,
+            AgentSessionVisibility::Hidden => Self::Hidden,
+        }
+    }
 }
 
 impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
@@ -1222,6 +1366,10 @@ impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
             Self::Include(true) => AgentSessionLiteral::Include,
             Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
             Self::Owner(owner) => AgentSessionLiteral::Owner(parse_owner(owner, "owner")?),
+            Self::Source(source) => AgentSessionLiteral::Source(source.into_model()),
+            Self::Visibility(visibility) => {
+                AgentSessionLiteral::Visibility(visibility.into_model())
+            }
         };
         Ok(Expr::val(literal))
     }
@@ -1364,6 +1512,8 @@ enum GraphqlInitiativeLiteral {
     DueBefore(String),
     /// Match projects due after this RFC 3339 timestamp.
     DueAfter(String),
+    /// Exact notification state for the requester; also opts in.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1380,6 +1530,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::NameContains(name) => InitiativeLiteral::NameContains(name),
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
+            Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }
@@ -1398,6 +1549,8 @@ filter_expr_input!(
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlDatabaseRowLiteral {
+    /// Include accessible rows of every table; must be true.
+    Include(bool),
     /// Match the rows of a table.
     TableId(ID),
     /// Match one row.
@@ -1407,6 +1560,12 @@ enum GraphqlDatabaseRowLiteral {
 impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
     fn into_expr(self) -> InputResult<Expr<DatabaseRowLiteral>> {
         Ok(Expr::val(match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "database row `include` must be true; omit the filter to exclude rows",
+                ));
+            }
+            Self::Include(true) => DatabaseRowLiteral::Include,
             Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
             Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
         }))

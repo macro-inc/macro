@@ -40,7 +40,7 @@ for the task's property/reference union.
 | Files and Calls | `features/crm/queries/record-items.ts` matches the current record's one system property; Files also includes email attachments. There is no company-contact expansion or incoming-reference predicate. |
 | Tasks | `features/crm/record-tasks-adapter.tsx` passes a single `TaskReferenceScope`. `features/tasks-view/queries/use-tasks-query.ts` filters fetched, local-search, continuation, and optimistic rows through property-only membership. A server-only fix would still lose mention-only tasks. `task-query.ts` and `task-search.ts` also encode the single property constraint. |
 | References UI | `lib/core/component/References.tsx` reads an unpaginated attachment-reference endpoint. Its generic-reference navigation only opens documents. It cannot represent the complete associated-item contract as-is. |
-| Existing reference reads | `crates/channels/src/outbound/pg_channels_repo.rs::get_attachment_references` reads `comms_attachments` and `comms_entity_mentions`. Channel rows check active membership and deleted messages. The generic-source SQL has no viewer/source ACL predicate; the service currently forwards its results. Do not expose that raw result as an authorized CRM feed. |
+| Existing reference reads | `crates/channels/src/outbound/pg_channels_repo.rs::get_attachment_references` reads `comms_attachments` and `comms_entity_mentions`. Channel rows check active membership and deleted messages; comment rows (messages on documents, initiatives, CRM records, and calls) are authorized per parent in the domain service through `CommentParentAccess`. The generic-source SQL has no viewer/source ACL predicate; the service forwards those results. Do not expose that raw result as an authorized CRM feed. |
 | CRM mention vocabulary | `packages/lexical-core/utils/mentions.ts`, the editor mention plugin, and `crates/messages/src/domain/mentions.rs` already recognize `crm_company` and `crm_contact`. The reference lookup passes unknown type strings through, so a blanket claim that the backend cannot accept CRM targets is inaccurate. |
 | Document mention recording | In `MentionsMenu/utils/mentionHandlers.ts`, CRM contacts return after inserting a chip without calling `trackMention`; company selection falls through to tracking the target as `document`. These are concrete gaps in this insertion path. The backend document-creation tracker can separately extract canonical CRM types, so audit creation, editing, paste, and removal instead of assuming every path fails identically. |
 | Soup architecture | `crates/item_filters/src/ast.rs` has property filters but no cross-entity incoming-reference/CRM-association selector. Soup fans out to other domain services; its SQL is not the only candidate source. Property-based pruning can skip sources that have references but no matching property rows. |
@@ -199,8 +199,8 @@ document `nc` (name contains) literal was added for scoped task search.
 
 **Resolution.** `SoupImpl` resolves every named record before any source query:
 `CrmService::resolve_association` authorizes the record with the viewer-scoped
-contact-listing policy (membership of a CRM-enabled team; hidden companies and
-contacts only for admins and owners; team-scoped bots restricted to their team)
+contact-listing policy (team membership, independent of email consent; hidden
+companies and contacts only for admins and owners; team-scoped bots restricted to their team)
 and returns the company with all of its visible contacts, or the single contact.
 An invisible record is `404` (`SoupErr::CrmRecordNotFound`), never an empty
 page. Edges are then read as complete sets: `SoupRepo::crm_property_edges`

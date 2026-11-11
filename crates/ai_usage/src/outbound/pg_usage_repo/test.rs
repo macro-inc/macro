@@ -1,5 +1,8 @@
 use super::*;
-use crate::domain::{AiFeature, CompletionUsage, SYSTEM_USER_ID, Usage, UsageApiParams};
+use crate::domain::service::UsageServiceImpl;
+use crate::domain::{
+    AiFeature, CompletionUsage, SYSTEM_USER_ID, Usage, UsageApiParams, UsageContext,
+};
 use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -9,6 +12,8 @@ fn completion(feature: AiFeature, model: &str, input: u64, output: u64) -> Compl
         feature,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input,
@@ -60,6 +65,10 @@ async fn seeded_pricing_is_available(pool: PgPool) {
         repo.get_pricing("whisper-1").await.unwrap(),
         Some(ModelPricing::Audio { per_minute: 0.006 })
     );
+    assert_eq!(
+        repo.get_pricing("tavily").await.unwrap(),
+        Some(ModelPricing::ProviderCredits { per_credit: 0.008 })
+    );
     let price = repo
         .get_pricing("gemini-2.5-flash-image")
         .await
@@ -86,6 +95,110 @@ async fn seeded_pricing_is_available(pool: PgPool) {
     .unwrap();
     assert!((cost.total - 0.03873).abs() < 0.000001);
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
+}
+
+/// Usage on an agent's own key references that key, and forgetting the key
+/// keeps the usage while dropping the reference.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn usage_references_the_agent_key_that_paid_for_it(pool: PgPool) {
+    let key_id = sqlx::query_scalar!(
+        r#"
+        WITH owner_identity AS (
+            INSERT INTO macro_user (id, username, email, stripe_customer_id)
+            VALUES (gen_random_uuid(), 'owner@example.com', 'owner@example.com', 'stripe_owner')
+            RETURNING id
+        ), owner_profile AS (
+            INSERT INTO "User" ("id", "email", "macro_user_id")
+            SELECT 'macro|owner@example.com', 'owner@example.com', id FROM owner_identity
+            RETURNING "id"
+        ), agent AS (
+            INSERT INTO bots (id, kind, name, handle, has_agent, owner_user_id)
+            SELECT gen_random_uuid(), 'owned', 'Agent', 'agent', true, "id" FROM owner_profile
+            RETURNING id
+        )
+        INSERT INTO agent_api_keys (
+            bot_id, provider, key_ciphertext, encryption_version, kms_key_id, key_prefix
+        )
+        SELECT id, 'anthropic', '\x01'::bytea, 1, 'kms-key', 'sk-ant-' FROM agent
+        RETURNING bot_id
+        "#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let repo = PgUsageRepo::new(pool.clone());
+    let mut row = completion(AiFeature::AgentSession, "claude-opus-5", 10, 20);
+    row.agent_api_key_id = Some(key_id);
+    repo.insert_usage(&row, false).await.unwrap();
+
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows[0].agent_api_key_id, Some(key_id));
+
+    sqlx::query!("DELETE FROM agent_api_keys WHERE bot_id = $1", key_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].agent_api_key_id, None);
+}
+
+/// What an agent session's turns and titles spend is recorded against the
+/// session, so it sums per session; usage outside any session names none.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_session_usage_rows_carry_their_session(pool: PgPool) {
+    let service = UsageServiceImpl::new(PgUsageRepo::new(pool.clone()));
+    let owner = MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap();
+    let session = macro_uuid::generate_uuid_v7();
+    let other_session = macro_uuid::generate_uuid_v7();
+    let one_million_input = UsageAmount::Tokens {
+        input: 1_000_000,
+        output: 0,
+        cache_read: 0,
+        cache_write: 0,
+    };
+    for context in [
+        UsageContext::new(AiFeature::NonBillableAgentSession, owner.clone())
+            .with_agent_session(Some(session)),
+        UsageContext::new(AiFeature::ChatRename, owner.clone())
+            .with_entity(Some(session))
+            .with_agent_session(Some(session)),
+        UsageContext::new(AiFeature::AgentSession, owner.clone())
+            .with_agent_session(Some(other_session)),
+        UsageContext::new(AiFeature::Chat, owner.clone()),
+    ] {
+        service
+            .record_now(context.into_event("claude-opus-5".into(), one_million_input))
+            .await
+            .unwrap();
+    }
+
+    let session_total = sqlx::query_scalar!(
+        r#"SELECT SUM(total) AS "total!" FROM ai_usage WHERE agent_session_id = $1"#,
+        session,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!((session_total - 10.0).abs() < 1e-3);
+
+    let mut rows: Vec<_> = PgUsageRepo::new(pool)
+        .query_usage(&UsageApiParams::default())
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|row| (row.feature, row.agent_session_id))
+        .collect();
+    rows.sort();
+    assert_eq!(
+        rows,
+        vec![
+            (AiFeature::Chat, None),
+            (AiFeature::ChatRename, Some(session)),
+            (AiFeature::AgentSession, Some(other_session)),
+            (AiFeature::NonBillableAgentSession, Some(session)),
+        ]
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -462,6 +575,8 @@ async fn cached_token_usage_roundtrips_with_its_cache_rates(pool: PgPool) {
         feature: AiFeature::AgentSession,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount,
             model: "claude-opus-5".to_string(),
@@ -506,6 +621,8 @@ async fn repricing_bills_cache_tokens_and_unprices_them_without_a_cache_rate(poo
             feature: AiFeature::AgentSession,
             user: SYSTEM_USER_ID.clone(),
             entity: None,
+            agent_api_key_id: None,
+            agent_session_id: None,
             cost: Usage {
                 amount: UsageAmount::Tokens {
                     input: 1_000_000,
@@ -589,4 +706,107 @@ async fn accelerated_and_long_context_prices_remain_distinct(pool: PgPool) {
             "{model}"
         );
     }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn credit_usage_roundtrips_and_reprices_without_affecting_tokens(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    let mut search = completion(AiFeature::WebSearch, "tavily", 0, 0);
+    let amount = UsageAmount::ProviderCredits { credits: 3 };
+    search.cost.amount = amount;
+    search.cost.price = Price::compute(
+        repo.get_pricing("tavily").await.unwrap().unwrap(),
+        search.cost.amount,
+    );
+    repo.insert_usage(&search, true).await.unwrap();
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "claude-opus-4-8", 1_000_000, 0),
+        true,
+    )
+    .await
+    .unwrap();
+
+    let query = UsageApiParams {
+        features: vec![AiFeature::WebSearch],
+        ..Default::default()
+    };
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].cost.amount, amount);
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::ProviderCredits { per_credit: 0.008 }
+    );
+    assert!((price.total - 0.024).abs() < 1e-7);
+
+    repo.set_pricing(
+        "tavily",
+        ModelPricing::Tokens {
+            input: 0.0,
+            output: 0.0,
+            cache_read: None,
+            cache_write: None,
+        },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows[0].cost.amount, amount);
+    assert!(
+        rows[0].cost.price.is_none(),
+        "token rates must not price credit usage"
+    );
+
+    repo.set_pricing("tavily", ModelPricing::Audio { per_minute: 0.006 })
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert!(
+        rows[0].cost.price.is_none(),
+        "audio rates must not price credit usage"
+    );
+
+    repo.set_pricing("tavily", ModelPricing::ProviderCredits { per_credit: 0.01 })
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&query).await.unwrap();
+    assert_eq!(rows[0].cost.amount, amount);
+    let price = rows[0].cost.price.unwrap();
+    assert_eq!(
+        price.pricing,
+        ModelPricing::ProviderCredits { per_credit: 0.01 }
+    );
+    assert!((price.total - 0.03).abs() < 1e-7);
+
+    let chat = repo
+        .query_usage(&UsageApiParams {
+            features: vec![AiFeature::Chat],
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(
+        chat[0].cost.price.is_none(),
+        "repricing another model must not touch chat rows"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn repricing_cannot_apply_credit_rates_to_token_usage(pool: PgPool) {
+    let repo = PgUsageRepo::new(pool);
+    repo.insert_usage(
+        &completion(AiFeature::Chat, "credit-history", 1_000_000, 0),
+        true,
+    )
+    .await
+    .unwrap();
+    repo.set_pricing(
+        "credit-history",
+        ModelPricing::ProviderCredits { per_credit: 0.008 },
+    )
+    .await
+    .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert!(rows[0].cost.price.is_none());
 }

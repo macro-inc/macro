@@ -1,6 +1,8 @@
 import { debounce } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 
 import { authServiceClient } from '@service-auth/client';
+import { until } from '@solid-primitives/promise';
 import {
   type Accessor,
   createEffect,
@@ -8,6 +10,7 @@ import {
   createSignal,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { z } from 'zod';
 
 type ProfilePictureStore = Record<string, ProfilePictureItem>;
 const [userProfilePictures, setUserProfilePictures] =
@@ -151,4 +154,55 @@ export function useProfilePictureUrl(id?: string): ProfilePictureUrlFetcher {
   };
 
   return [accessor, controls];
+}
+
+/** A user's profile picture URL from the shared cache, fetched if needed. */
+export async function getProfilePictureUrl(
+  id: string
+): Promise<string | undefined> {
+  useProfilePictureUrl(id);
+  const item = await until(() => {
+    const item = userProfilePictures[id];
+    return item && !item.loading ? item : undefined;
+  });
+  return item.url;
+}
+
+/**
+ * Refetches a user's picture only when it is already cached, so pictures
+ * nobody is showing are never fetched. The old URL stays visible until the new
+ * one arrives, and a failed refetch keeps it.
+ */
+export async function refreshProfilePicture(userId: string): Promise<void> {
+  const cached = userProfilePictures[userId];
+  if (!cached) return;
+
+  const result = await authServiceClient.postProfilePictures({
+    user_id_list: [userId],
+  });
+  if (result.isErr()) {
+    console.error('Failed to refresh user profile picture');
+    return;
+  }
+
+  const picture = result.value.pictures.find(({ id }) => id === userId);
+  setUserProfilePictures(userId, {
+    _createdAt: new Date(),
+    id: userId,
+    url: picture?.url,
+    loading: false,
+  });
+}
+
+const userPictureChangedSchema = z.object({ user_id: z.string().min(1) });
+
+/** Handles the gateway's `user_picture_changed` message; malformed payloads are ignored. */
+export function handleUserPictureChanged(payload: unknown): void {
+  const parsed = userPictureChangedSchema.safeParse(payload);
+  if (!parsed.success) return;
+
+  fireAndForget(
+    refreshProfilePicture(parsed.data.user_id),
+    'user-picture-changed'
+  );
 }

@@ -41,12 +41,9 @@ describe('launcher recent usage', () => {
     ).toEqual([
       ['Recents', ['Email', 'Task', 'Folder']],
       ['Docs', ['Document', 'Snippet']],
-      ['Organization', ['Folder']],
-      ['Comms', ['Email']],
-      ['Tasks', ['Task']],
     ]);
     expect(sections.flatMap((section) => section.items)).toHaveLength(
-      items.length + recent.length
+      items.length
     );
   });
 
@@ -74,7 +71,6 @@ describe('launcher recent usage', () => {
     ).toEqual([
       ['Recents', ['Task']],
       ['Docs', ['Document']],
-      ['Tasks', ['Task']],
     ]);
     expect(groupRecentCreateMenuItems([], [email, task])).toEqual([]);
   });

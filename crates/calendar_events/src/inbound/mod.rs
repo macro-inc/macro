@@ -8,6 +8,10 @@ pub mod axum_router;
 #[cfg(feature = "dispatch")]
 pub mod dispatch_worker;
 
+/// Axum routes for asking to join calendar events shared with a channel.
+#[cfg(feature = "inbound")]
+pub mod join_request_router;
+
 /// Axum routes for authenticated calendar event mutations.
 #[cfg(feature = "inbound")]
 pub mod mutation_router;

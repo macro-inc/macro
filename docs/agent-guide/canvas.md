@@ -1,5 +1,7 @@
 # Canvas
 
+An editable canvas with nothing on it shows the Canvas `TutorialPill` (from `features/video-tutorials`) in the middle of the board, once that video is in its catalog. It goes away when the first item is added or a drawing tool is picked, and read-only and embedded canvases never show it.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without
@@ -10,10 +12,9 @@ as gray rather than transparent.
 
 ## Canvas link paste
 
-Pasting a supported routed Macro app link onto the canvas creates a text
-node with an entity mention, as legacy links do. Routed links retain compatible
-block targets, but not workspace paths or pane-local search state; unsupported
-links remain text.
+Pasting a supported routed Macro app link onto the canvas creates a document
+reference card. Routed links retain compatible block targets, but not workspace
+paths or pane-local search state; unsupported links remain text.
 
 ## Copying and saving images
 
@@ -25,3 +26,107 @@ on desktop and uses the native share sheet on supported mobile devices.
 Controls are disabled while resolving the image source or running an action.
 Check an uploaded image and a workspace image, and confirm both actions disappear
 for multiple selections, groups, videos, and non-image shapes.
+
+## Artifacts
+
+Artifacts are behind the `enable-canvas-artifacts` flag. **Insert** offers
+**Artifact**, which places a node with starter HTML. The Canvas inspector edits its
+title and HTML. The document runs in a sandboxed frame; **Interact** or a
+double-click passes pointer input to it, and **Done** or a click elsewhere returns
+to the canvas. With the flag off, an artifact shows only its title and no script runs.
+The inspector also adds and edits styles and components shared across the canvas;
+HTML uses them with `<macro-style name="…">` and `<macro-component name="…">`.
+**Present** on a node opens the artifacts full screen in presentation order, which
+**Earlier** and **Later** in the inspector change. Check arrow keys and Esc both
+before and after clicking inside the frame. For an agent, `ReadCanvas` returns
+`artifactGuide` when the flag is on for the user, and artifact SDK operations in
+`ApplyCanvasEdits` fail without changing anything when it is off.
+
+## Multiplayer canvas
+
+Open the same canvas as two editors and a viewer. Create/move a shape in one
+editor and style it in the other; all three should converge. Undo the move and
+confirm the remote styling survives. Check colored cursors, dashed remote
+selections and live drag/drawing ghosts, including camera pan/zoom. Text, media,
+connectors and document cards use bounds-only ghosts; connector endpoint drafts
+are not broadcast. On touch, check selection and gesture awareness without hover.
+
+Disconnect an initialized editor, edit, reopen from its local cache, then reconnect.
+The unsent edits must survive and reach the other peers. Disconnecting removes
+remote overlays locally; absent peers expire after ten seconds. If the first
+connection or local storage fails, the original JSON opens read-only with Retry.
+If a live session cannot save locally, keep it open and use Retry saving; the
+live scene stays mounted until its buffered edits are persisted. Changing
+accounts invalidates the old connection; refreshed view/comment grants disable
+canvas edits.
+A viewer may wait on the original JSON until the first editor initializes the room.
+
+Downloads export the live scene, and Copy duplicates the shared room plus its
+original JSON. Reload older open canvas tabs before collaborating: the previous
+whole-file editor does not participate in shared state. Editing the same text
+item concurrently chooses one completed content string; characters do not merge.
+
+
+## AI editing and visual reads
+
+Use **Ask Macro** to attach the live Canvas. Ask for a visual layout or diagram:
+Macro can call **RenderCanvas** for an immutable PNG with crop/revision/object
+mapping, then edit and visually review the result. Embedded content is explicitly
+unavailable in scoped renders. A viewer can read/render but cannot edit.
+**ReadCanvas** also offers a compact approximate semantic overview with stable IDs.
+
+For a person mention, type `@` inside a text box or label and select the person.
+Ask Macro to insert that same person into another text box: it must resolve the
+user ID/email and call `mentionUser`, rather than type literal `@Name`. Inspect
+`[data-user-mention]` and its `data-user-id`/`data-email`, reopen the Canvas, and
+check a second editor sees the same chip. Existing rich text and other chips
+remain intact. Test wrapped text and an ellipse after resizing; chips must fit.
+ReadCanvas returns `userMentions` offsets/identities (bounded with an explicit
+truncation flag). A concurrent human relabel during measurement rejects the
+whole AI batch. Canvas chips do not send notifications or change access.
+
+Watch from a second editor: named AI writers show transient create/move/resize,
+connector and label previews, and independent tasks can progress together. These
+previews never save partial text. Unrelated edits retain valid previews; changing
+a target invalidates its pending batch. Cancel removes uncommitted overlays while
+keeping acknowledged prior batches. Reduced motion skips presentation delays.
+
+AI labels keep the requested font and grow boxes at their wrapping width by
+default. Check wrapped paragraphs, long unbroken strings, standalone text and
+ellipses after relabeling, font changes and narrowing width. Explicit fixed-size
+containment may scale text; an explicit overflow error commits no partial batch.
+The renderer regressions inspect actual text DOM bounds, including phone viewports.
+
+Create a fresh Canvas manually and through CreateDocument (`canvas`, empty
+fileContent). ReadCanvas and EditCanvas must work immediately before any editor
+opens it. Open it as its owner and another editor, reload, and verify the same
+items persist. Reopen a legacy S3 Canvas and verify its scene migrates without
+replacement. Native sync-backed Canvas loading must never request a presigned
+blob URL. A missing native snapshot is an error, never an empty reseed.
+
+For precise changes, ask to move the fixed-pivot boxes down 20 units or restyle
+specific labels. The main agent should use **ApplyCanvasEdits** with the fresh
+ReadCanvas revision and one batch, without screenshots or a second model.
+Check the returned geometry and text-layout effects. A stale revision must cause
+no mutation; reread before reconsidering the batch. For design tasks, EditCanvas
+receives an initial image and reviews its final layout; avoid extra outer renders
+of the same revision. A crop cannot verify changed objects outside its bounds.
+
+Watch a single batch affecting three separate regions from a second browser:
+up to three named region cursors should animate real operations together, then
+one durable commit should appear. Moving a group keeps its descendants together.
+A human target edit during any lane cancels the pending whole batch; unrelated
+changes survive. Repeat with reduced motion, a phone viewport, cancellation and
+reload. Cursor lanes represent operation groups, not extra model calls.
+
+## Mirror-backed tree compatibility
+
+Reopen a native Canvas created before Mirror tree support. Opening it must not
+replace its nodes or write a conversion snapshot. In two editor windows, group
+and ungroup shapes, move a group, reorder siblings and move children between
+groups. Both windows should retain the same IDs, geometry and ordering after
+reload. Move a group locally, restyle one child remotely, then undo the local
+move: the remote style must remain. Check labels and ellipses after these edits.
+Host metadata updates must not cancel a pending scene gesture or add undo steps.
+The graphics backend owns the scene Mirror on the existing host sync document;
+there is no second scene or separate transport to initialize.

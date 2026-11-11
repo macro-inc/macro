@@ -17,12 +17,12 @@ describe('flushFailureOf', () => {
       flushFailureOf(
         new FormFlushError({
           kind: 'publication',
-          message: 'Screener “Eligibility” checks a question asked after it.',
+          message: 'Gate “Eligibility” checks a question asked after it.',
         })
       )
     ).toEqual({
       message:
-        'Respondents still see the last valid version of this form. Screener “Eligibility” checks a question asked after it.',
+        'Respondents still see the last valid version of this form. Gate “Eligibility” checks a question asked after it.',
       refusal: 'invalid-layout',
     });
     expect(flushFailureOf(new Error('socket closed')).message).toBe(

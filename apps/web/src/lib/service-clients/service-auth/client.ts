@@ -15,6 +15,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
+  AiCreditPurchaseResult,
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
@@ -39,16 +40,22 @@ import type {
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
   PatchUserTutorialRequest,
+  PutCursorDefaultModelRequest,
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
+import type { AgentApiKey } from './generated/schemas/agentApiKey';
+import type { AgentSetupResponse } from './generated/schemas/agentSetupResponse';
 import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
+import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
@@ -70,6 +77,10 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
+import type { StatusUpdate } from './generated/schemas/statusUpdate';
+import type { SystemStatus } from './generated/schemas/systemStatus';
+import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
 import type { Team } from './generated/schemas/team';
 import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
 import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
@@ -77,6 +88,7 @@ import type { TeamInvitesResponse } from './generated/schemas/teamInvitesRespons
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
@@ -226,6 +238,12 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
     };
   };
 
+const agentApiKeyErrorResponseHandler: ErrorResponseHandler<'AGENT_API_KEY_ERROR'> =
+  async function handleAgentApiKeyErrorResponse(response) {
+    const { message } = await cursorApiKeyErrorResponseHandler(response);
+    return { code: 'AGENT_API_KEY_ERROR', message };
+  };
+
 /**
  * Errors a merge can end in beyond the shared GitHub ones: the user has no
  * GitHub account linked, or GitHub declined the merge and said why.
@@ -284,7 +302,8 @@ const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
   rejected: 'GitHub declined to merge the pull request',
 });
 
-const githubDraftErrorResponseHandler = githubChangeErrorResponseHandler({
+/** Shared by the draft and open/closed state routes, which fail the same ways. */
+const githubUpdateErrorResponseHandler = githubChangeErrorResponseHandler({
   noLink: 'Connect GitHub in Settings to change pull requests',
   rejected: 'GitHub declined to change the pull request',
 });
@@ -309,6 +328,16 @@ const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErr
         return { code: 'GONE', message: 'Resource deleted' };
       case 500:
         return { code: 'SERVER_ERROR', message: 'Internal server error' };
+      // GitHub, Google, or the sign-in service is down or throttling. The
+      // body names which and says to retry later, in words for the user.
+      case 502:
+      case 503:
+        return {
+          code: 'HTTP_ERROR',
+          message:
+            (await readErrorMessage(response)) ??
+            `HTTP error! status: ${response.status}`,
+        };
       default:
         return {
           code: 'HTTP_ERROR',
@@ -350,8 +379,10 @@ export const authServiceClient = {
     }));
   },
   async sessionLogin(args: { session_code: string }) {
-    // The session code stays valid server-side for 5 minutes and is
-    // replayable, so retrying transient failures is safe.
+    // A session code redeems once. A server error leaves it redeemable (the
+    // server puts it back when its own token refresh fails), so retrying
+    // those is safe; a retry after a redemption that succeeded but never
+    // reached us gets 400.
     const result = await authApiFetch<UserTokensResponse>(
       `/session/login/${args.session_code}`,
       { retry: { maxTries: 3, delay: 'exponential' } }
@@ -438,6 +469,12 @@ export const authServiceClient = {
       )
     ).map((result) => result);
   },
+  async agentSetup() {
+    return await fetchWithAuth<AgentSetupResponse>(
+      `${authHost}/user/agent_setup`,
+      { method: 'POST' }
+    );
+  },
   async putProfilePicture(args: PutProfilePictureParams) {
     return (
       await fetchWithAuth<EmptyResponse>(
@@ -472,6 +509,21 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
+  async getUserLanguage() {
+    return (
+      await fetchWithAuth<UserLanguage>(`${authHost}/user/language`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+  async putUserLanguage(args: UserLanguage) {
+    return (
+      await fetchWithAuth<EmptyResponse>(`${authHost}/user/language`, {
+        method: 'PUT',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
   async getUserNames(args: PostGetNamesRequestBody) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names`, {
@@ -480,9 +532,15 @@ export const authServiceClient = {
       })
     ).map((result) => result);
   },
-  async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
+  async getUserNamesWithEmail(
+    args: PostGetNamesRequestBody,
+    init?: Pick<SafeFetchInit, 'headers' | 'trace' | 'signal'>
+  ) {
     return (
       await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
+        headers: init?.headers,
+        trace: init?.trace,
+        signal: init?.signal,
         method: 'POST',
         body: JSON.stringify(args),
       })
@@ -562,7 +620,19 @@ export const authServiceClient = {
       >(`${authHost}/github_pull_requests/draft`, {
         method: 'POST',
         body: JSON.stringify(args),
-        errorResponseHandler: githubDraftErrorResponseHandler,
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async setGithubPullRequestState(args: SetGithubPullRequestStateRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestStateResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/state`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
       })
     ).map((result) => result);
   },
@@ -612,6 +682,7 @@ export const authServiceClient = {
       name: data.name,
       licenseStatus: data.licenseStatus,
       tutorialComplete: data.tutorialComplete,
+      isAgent: data.isAgent,
       group: data.group,
       hasChromeExt: data.hasChromeExt,
       authenticated: !!data.userId,
@@ -729,6 +800,35 @@ export const authServiceClient = {
         { method: 'GET' }
       )
     ).map((result) => result.offer ?? null);
+  },
+
+  /** Public: the status banner shows signed in or not. */
+  async getSystemStatus() {
+    return (
+      await authApiFetch<CurrentSystemStatus>('/system-status', {
+        method: 'GET',
+      })
+    ).map((status) => status);
+  },
+
+  /** Macro staff only; the server rejects everyone else. */
+  async setSystemStatus(status: SystemStatus) {
+    return (
+      await fetchWithAuth<StatusUpdate>(`${authHost}/system-status`, {
+        method: 'POST',
+        body: JSON.stringify(status),
+      })
+    ).map((update) => update);
+  },
+
+  /** Macro staff only. */
+  async listSystemStatusHistory() {
+    return (
+      await fetchWithAuth<SystemStatusHistory>(
+        `${authHost}/system-status/history`,
+        { method: 'GET' }
+      )
+    ).map((result) => result.updates);
   },
 
   // Stripe HTTP methods (replacing RPC calls)
@@ -852,6 +952,42 @@ export const authServiceClient = {
     );
   },
 
+  /** Buy a credit pack now on the payer's card on file. */
+  async purchaseAiCredits(args: { amountCents: number }) {
+    return await fetchWithAuth<
+      AiCreditPurchaseResult,
+      'PAID_PLAN_REQUIRED' | 'CREDIT_PURCHASE_REJECTED'
+    >(`${authHost}/ai-billing/credits/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ amountCents: args.amountCents }),
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return {
+            code: 'PAID_PLAN_REQUIRED',
+            message: 'A paid plan is required',
+          };
+        }
+        // Over the monthly credit limit, or an earlier purchase is still
+        // processing; the body says which.
+        if (response.status === 409) {
+          const body: unknown = await response.json().catch(() => undefined);
+          return {
+            code: 'CREDIT_PURCHASE_REJECTED',
+            message:
+              typeof body === 'object' &&
+              body !== null &&
+              'error' in body &&
+              typeof body.error === 'string'
+                ? body.error
+                : 'Credit purchase rejected',
+          };
+        }
+        return statusError(response.status);
+      },
+    });
+  },
+
+  /** Stripe Checkout for a credit pack, for a payer with no card on file. */
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;
@@ -906,6 +1042,49 @@ export const authServiceClient = {
         {
           method: 'GET',
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The agent's own API key, if it has one, and whether its owner's plan
+   * lets it run on one. Never returns a key or any part of one.
+   */
+  async getAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Stores the agent's own API key, for its model's provider, replacing any. */
+  async putAgentApiKey(agentId: string, apiKey: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /** Forgets the agent's API key. Does not revoke it at the provider. */
+  async deleteAgentApiKey(agentId: string) {
+    return (
+      await fetchWithAuth<AgentApiKey, 'AGENT_API_KEY_ERROR'>(
+        `${authHost}/agents/${agentId}/api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: agentApiKeyErrorResponseHandler,
         }
       )
     ).map((result) => result);
@@ -967,15 +1146,16 @@ export const authServiceClient = {
   },
 
   /**
-   * Chooses the model the user's sessions start on.
+   * Chooses the model, and optionally its effort, the user's sessions start on.
+   * Saving a model without an effort clears the previous one.
    */
-  async putCursorDefaultModel(modelId: string) {
+  async putCursorDefaultModel(request: PutCursorDefaultModelRequest) {
     return (
       await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
         `${authHost}/cursor-api-key/default-model`,
         {
           method: 'PUT',
-          body: JSON.stringify({ modelId }),
+          body: JSON.stringify(request),
           errorResponseHandler: cursorApiKeyErrorResponseHandler,
         }
       )
@@ -1128,7 +1308,16 @@ export const authServiceClient = {
     return authServiceClient.initGithubLink(originalUrl);
   },
 
-  async sendMobileWelcomeEmail(email: string) {
+  async sendMobileWelcomeEmail(
+    email: string,
+    attribution?: Record<string, string>
+  ) {
+    const body: { email: string; attribution?: Record<string, string> } = {
+      email,
+    };
+    if (attribution && Object.keys(attribution).length > 0) {
+      body.attribution = attribution;
+    }
     return safeFetch<
       SendMobileWelcomeEmailResponse,
       'RATE_LIMITED' | 'INVALID_EMAIL'
@@ -1136,7 +1325,7 @@ export const authServiceClient = {
       `${authHost}/mobile-welcome-email`,
       {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(body),
         credentials: 'include',
       },
       async (response) => {
@@ -1227,6 +1416,20 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Emails the caller's same-domain contacts who aren't on Macro yet that
+   * the caller's team exists. Call it after inviting, so invitees are
+   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
+   */
+  async sendTeamDomainNotice() {
+    return (
+      await fetchWithAuth<SendDomainNoticeResponse>(
+        `${authHost}/team/domain-notice`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {

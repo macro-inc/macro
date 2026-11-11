@@ -25,9 +25,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
 vi.mock('@app/features/soup/SoupEntityActionsDropdown', () => ({
   SoupEntityActionsDropdown: (props: {
     entity: ChannelEntity;
-    triggerProps?: { label?: string };
+    triggerProps?: { 'aria-label'?: string };
   }) => (
-    <button type="button" aria-label={props.triggerProps?.label}>
+    <button type="button" aria-label={props.triggerProps?.['aria-label']}>
       {props.entity.id}
     </button>
   ),
@@ -54,6 +54,10 @@ vi.mock('@channel/Call/ChannelCallButton', () => ({
   ChannelCallButton: () => null,
 }));
 vi.mock('@channel/Call/ChannelCallTab', () => ({ ChannelCallTab: () => null }));
+vi.mock('../../Call/views/ActiveCallHeader', () => ({
+  ActiveCallHeader: () => null,
+  JoinableCallStatus: () => null,
+}));
 vi.mock('@channel/Call/use-call', () => ({
   useCall: () => ({ isInThisChannel: () => false }),
 }));
@@ -64,7 +68,7 @@ vi.mock('@channel/channel-invite-button', () => ({
   ChannelInviteButton: () => null,
 }));
 vi.mock('@channel/components/ChannelTopIcon', () => ({
-  ChannelTopIcon: () => null,
+  ChannelTitleIcon: () => null,
 }));
 vi.mock('@channel/Participants/ChannelParticipantsTab', () => ({
   ChannelParticipantsTab: () => null,
@@ -74,7 +78,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
+  '@app/components/priority-collapse/PriorityCollapseOverflowSensor',
   () => ({
     createPriorityCollapseController: () => ({
       setRow: () => {},
@@ -83,12 +87,13 @@ vi.mock(
     PriorityCollapseOverflowSensor: mocks.pass,
   })
 );
-vi.mock('@components/app/split-layout/layoutUtils', () => ({
+vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
   useRegisterPriorityCollapseItem: () => () => false,
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
-vi.mock('@core/component/TabsInset', () => ({ TabsInset: () => null }));
 vi.mock('@core/constant/allBlocks', () => ({
   blocks: {},
   resolveBlockAlias: (type: string) => type,

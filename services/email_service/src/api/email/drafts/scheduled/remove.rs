@@ -1,10 +1,11 @@
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use axum_extra::extract::Cached;
 use email::domain::scheduled::{EmailSchedulingService, ScheduleChange};
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
@@ -16,7 +17,7 @@ use super::upsert::UpsertScheduledError;
 #[utoipa::path(
     delete, tag = "Draft Scheduling", path = "/email/drafts/scheduled/{message_id}",
     operation_id = "delete_scheduled_draft",
-    params(("message_id" = Uuid, Path, description = "The ID of the draft")),
+    params(DraftEditPrecondition, ("message_id" = Uuid, Path, description = "The ID of the draft")),
     responses(
         (status = 204, description = "Scheduled send deleted successfully"),
         (status = 400, body = ErrorResponse),
@@ -28,6 +29,7 @@ use super::upsert::UpsertScheduledError;
 )]
 #[tracing::instrument(skip(ctx, authorization, link), err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     Cached(authorization): Cached<
         MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -43,6 +45,7 @@ pub async fn handler(
             message_id,
             ScheduleChange::Cancel,
             None,
+            precondition.draft_generation,
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)

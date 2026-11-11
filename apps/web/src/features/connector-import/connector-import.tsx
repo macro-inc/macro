@@ -1,12 +1,12 @@
 import {
   allOf,
   flagVerdict,
+  type PromoAction,
   SidebarPromotion,
   type Verdict,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSidebarPromotions } from '@core/constant/featureFlags';
-import { useUserId } from '@core/context/user';
 import {
   usePipedreamMcpFlag,
   usePipedreamMcpFlagResult,
@@ -16,7 +16,7 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { IMPORT_CATEGORIES } from './core/catalog';
 import type { ImportCategory } from './core/providers';
-import { hideImportPromotion, importPromotionId } from './primitives/promotion';
+import { importPromotionId } from './primitives/promotion';
 import type { ImportAlternative } from './views/import-dialog';
 
 export type { ImportAlternative } from './views/import-dialog';
@@ -63,9 +63,12 @@ export function ConnectorImportPromotion(props: {
   /** See `SidebarPromotion`: `undefined` while the host's gates load. */
   applies: Verdict;
   alternatives?: readonly ImportAlternative[];
+  /** A shorter card button label, for when a second action shares the row. */
+  actionLabel?: string;
+  /** A second button beside the import action, e.g. to start from scratch. */
+  secondaryAction?: PromoAction;
   class?: string;
 }): JSX.Element {
-  const userId = useUserId();
   const pipedream = usePipedreamMcpFlag();
   const config = () => IMPORT_CATEGORIES[props.category];
   const dialogConfig = () => ({
@@ -76,7 +79,6 @@ export function ConnectorImportPromotion(props: {
   // The dialog's code loads on first open (and is fetched ahead on hover).
   const [opened, setOpened] = createSignal(false);
   const [opener, setOpener] = createSignal<HTMLButtonElement>();
-  const hide = () => hideImportPromotion(userId(), props.category);
   // Alternatives open their own dialogs; hand them the card button for focus.
   const alternatives = (): ImportAlternative[] =>
     (props.alternatives ?? []).map((base) => ({
@@ -107,7 +109,7 @@ export function ConnectorImportPromotion(props: {
           pitch={config().pitch}
           class={props.class}
           action={{
-            label: config().action,
+            label: props.actionLabel ?? config().action,
             onClick: (trigger) => {
               setOpener(trigger);
               const [direct, ...others] = alternatives();
@@ -116,9 +118,11 @@ export function ConnectorImportPromotion(props: {
               else openDialog(true);
             },
           }}
+          secondaryAction={props.secondaryAction}
+          dismissLabel={`Dismiss ${config().action.toLowerCase()}`}
         />
       </div>
-      {/* Beside the card: a finished import hides the card, not the dialog. */}
+      {/* Beside the card, so the dialog outlives the card's own gates. */}
       <Show when={opened()}>
         <Suspense>
           <ConnectorImportDialogHost
@@ -127,7 +131,6 @@ export function ConnectorImportPromotion(props: {
             onOpenChange={openDialog}
             opener={opener()}
             alternatives={alternatives()}
-            onImported={hide}
           />
         </Suspense>
       </Show>

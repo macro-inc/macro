@@ -12,6 +12,7 @@ import './feature-comparisons.css';
 export function FeatureComparisons(props: {
   title: string;
   comparisons: readonly FeatureComparison[];
+  tableMinWidth?: number;
 }) {
   let container!: HTMLDivElement;
   const rows = () =>

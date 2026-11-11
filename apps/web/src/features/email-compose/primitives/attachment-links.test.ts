@@ -4,6 +4,7 @@ import {
   $isDocumentMentionNode,
 } from '@macro-inc/lexical-core';
 import { $getRoot, $isElementNode, type LexicalEditor } from 'lexical';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '../core/constants';
 import { createComposeContext } from '../tests/capabilities';
@@ -15,8 +16,12 @@ import {
   createAttachmentLinkOffer,
 } from './attachment-links';
 
+const disposers: (() => void)[] = [];
 beforeEach(() => vi.useFakeTimers());
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
+  vi.useRealTimers();
+});
 
 const report = {
   documentId: 'doc-1',
@@ -83,14 +88,27 @@ describe('appendAttachmentLinks', () => {
 });
 
 describe('createAttachmentLinkOffer', () => {
-  function offerFor(editor: LexicalEditor, confirmed: boolean) {
+  function offerFor(
+    editor: LexicalEditor,
+    confirmed: boolean,
+    canEdit = () => true,
+    version = () => ''
+  ) {
     const confirm = vi.fn(async () => confirmed);
     const uploadDocuments = vi.fn(async () => [report]);
     const makePublic = vi.fn();
-    const links = createAttachmentLinkOffer({
-      editor: () => editor,
-      notices: { confirm },
-      editorFiles: { uploadDocuments, makePublic },
+    const links = createRoot((dispose) => {
+      disposers.push(dispose);
+      return {
+        ...createAttachmentLinkOffer({
+          editor: () => editor,
+          canEdit,
+          version,
+          notices: { confirm },
+          editorFiles: { uploadDocuments, makePublic },
+        }),
+        dispose,
+      };
     });
     return { ...links, confirm, uploadDocuments, makePublic };
   }
@@ -159,6 +177,48 @@ describe('createAttachmentLinkOffer', () => {
     expect(links.uploadDocuments).not.toHaveBeenCalled();
     expect(outline(editor)).toEqual(['text:Hi']);
   });
+
+  it('invalidates a pending confirmation when a queued lock arrives and clears', async () => {
+    const editor = createEmailEditor('Frozen');
+    const [canEdit, setCanEdit] = createSignal(true);
+    const decision = Promise.withResolvers<boolean>();
+    const links = offerFor(editor, true, canEdit);
+    links.confirm.mockReturnValue(decision.promise);
+    const sharing = links.share([huge], MAX_ATTACHMENTS_BYTES_SIZE);
+    setCanEdit(false);
+    setCanEdit(true);
+    decision.resolve(true);
+    await sharing;
+    expect(links.uploadDocuments).not.toHaveBeenCalled();
+    expect(outline(editor)).toEqual(['text:Frozen']);
+  });
+
+  it.each(['lock', 'identity', 'dispose', 'readonly'] as const)(
+    'keeps late uploads private and unlinked after %s',
+    async (change) => {
+      const editor = createEmailEditor('Frozen');
+      const [canEdit, setCanEdit] = createSignal(true);
+      const [version, setVersion] = createSignal('original');
+      const started = Promise.withResolvers<void>();
+      const pending = Promise.withResolvers<(typeof report)[]>();
+      const links = offerFor(editor, true, canEdit, version);
+      links.uploadDocuments.mockImplementation(() => {
+        started.resolve();
+        return pending.promise;
+      });
+      const sharing = links.share([huge], MAX_ATTACHMENTS_BYTES_SIZE);
+      await started.promise;
+      if (change === 'lock') setCanEdit(false);
+      if (change === 'identity') setVersion('restored');
+      if (change === 'dispose') links.dispose();
+      if (change === 'readonly') editor.setEditable(false);
+      pending.resolve([report]);
+      await sharing;
+      expect(links.makePublic).not.toHaveBeenCalled();
+      expect(outline(editor)).toEqual(['text:Frozen']);
+      expect(links.uploading()).toBe(false);
+    }
+  );
 
   it('keeps a file private and unlinked when the composer moved on mid-upload', async () => {
     const editor = createEmailEditor('Hi');

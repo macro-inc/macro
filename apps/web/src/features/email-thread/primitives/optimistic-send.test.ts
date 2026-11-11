@@ -1,28 +1,24 @@
 import { createRoot, createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import type {
-  PersistedEmailIdentity,
-  SendEmailDraft,
-} from '../../email-compose/context/compose-capabilities';
+import type { OutgoingEmail } from '../../email-compose/context/compose-capabilities';
 import { createComposeContext } from '../../email-compose/tests/capabilities';
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createOptimisticThreadSend } from './optimistic-send';
 
-const input: SendEmailDraft = {
+const outgoing: OutgoingEmail = {
+  sendAttemptId: 'attempt',
+  messageIds: ['draft'],
+  threadIds: ['thread'],
   inboxId: 'inbox',
+  delivered: false,
   message: {
-    db_id: 'draft',
-    thread_db_id: 'thread',
     subject: 'Final subject',
     body_text: 'café',
-    body_html: 'PHA+Y2Fmw6k8L3A+',
+    body_html_sanitized: '<p>café</p>',
     to: [{ email: 'recipient@example.com' }],
+    cc: [],
+    bcc: [],
   },
-};
-const identity: PersistedEmailIdentity = {
-  draftId: 'draft',
-  threadId: 'thread',
-  inboxId: 'inbox',
 };
 
 function setup() {
@@ -45,98 +41,121 @@ function setup() {
     const [snapshot, setSnapshot] = createSignal(
       thread([message('received'), draft])
     );
+    const [sends, setSends] = createSignal<OutgoingEmail[]>([]);
+    const refresh = vi.fn(async () => {});
     const compose = createComposeContext();
-    const request = Promise.withResolvers<PersistedEmailIdentity>();
-    vi.mocked(compose.delivery.sendMessage).mockReturnValue(request.promise);
-    const optimistic = createOptimisticThreadSend(
-      createThreadContext({ thread: snapshot }).source,
+    compose.delivery.outgoing = sends;
+    const source = createOptimisticThreadSend(
+      createThreadContext({ thread: snapshot, refresh }).source,
       compose
     );
-    return { ...optimistic, compose, request, snapshot, setSnapshot, dispose };
+    return { source, snapshot, setSnapshot, setSends, refresh, dispose };
   });
 }
 
-it.each(['reply', 'standalone'] as const)(
-  'shows a %s before send settles and retains it until the thread refreshes',
-  async (kind) => {
-    const state = setup();
-    try {
-      const sendInput =
-        kind === 'standalone'
-          ? { ...input, message: { ...input.message, thread_db_id: undefined } }
-          : input;
-      const send = state.delivery.sendMessage(sendInput);
-      expect(state.compose.delivery.sendMessage).toHaveBeenCalledWith(
-        sendInput
-      );
-      expect(
-        state.source.thread()?.messages.map((message) => message.db_id)
-      ).toEqual(['received', 'draft']);
-      expect(state.source.thread()?.messages[1]).toMatchObject({
-        is_draft: false,
-        subject: 'Final subject',
-        body_text: 'café',
-        body_html_sanitized: '<p>café</p>',
-        body_replyless: null,
-        from: { email: 'me@example.com' },
-        to: [{ email: 'recipient@example.com' }],
-        labels: [],
-        attachments_draft: [{ id: 'file' }],
-        sent_at: expect.any(String),
-      });
-      // The optimistic projection never changes the underlying draft snapshot.
-      expect(state.snapshot().messages[1].is_draft).toBe(true);
-      state.request.resolve(identity);
-      await expect(send).resolves.toEqual(identity);
-      expect(state.source.thread()?.messages[1].is_draft).toBe(false);
-      state.setSnapshot(
-        thread([
-          message('received'),
-          message('draft', { body_text: 'Server body' }),
-        ])
-      );
-      expect(
-        state.source.thread()?.messages.map((message) => message.body_text)
-      ).toEqual([undefined, 'Server body']);
-      state.setSnapshot(thread([message('received')]));
-      expect(state.source.thread()?.messages).toHaveLength(1);
-    } finally {
-      state.dispose();
-    }
-  }
-);
-
-it('removes a failed optimistic send while preserving a newer draft edit', async () => {
+it('shows an approved send in place of its draft until the thread read shows it', () => {
   const state = setup();
   try {
-    const send = state.delivery.sendMessage(input);
-    const rejected = expect(send).rejects.toThrow('Delivery failed');
+    state.setSends([outgoing]);
+    expect(
+      state.source.thread()?.messages.map((message) => message.db_id)
+    ).toEqual(['received', 'draft']);
+    expect(state.source.thread()?.messages[1]).toMatchObject({
+      is_draft: false,
+      subject: 'Final subject',
+      body_text: 'café',
+      body_html_sanitized: '<p>café</p>',
+      body_replyless: null,
+      from: { email: 'me@example.com' },
+      to: [{ email: 'recipient@example.com' }],
+      labels: [],
+      attachments_draft: [{ id: 'file' }],
+      sent_at: expect.any(String),
+    });
+    // The projection never changes the underlying draft snapshot.
+    expect(state.snapshot().messages[1].is_draft).toBe(true);
     state.setSnapshot(
       thread([
         message('received'),
-        message('draft', { is_draft: true, body_text: 'Newer edit' }),
+        message('draft', { body_text: 'Server body' }),
       ])
     );
-    state.request.reject(new Error('Delivery failed'));
-    await rejected;
-    expect(state.source.thread()?.messages[1]).toMatchObject({
-      is_draft: true,
-      body_text: 'Newer edit',
-    });
+    expect(
+      state.source.thread()?.messages.map((message) => message.body_text)
+    ).toEqual([undefined, 'Server body']);
+    // A later deletion must not resurrect the confirmed send.
+    state.setSnapshot(thread([message('received')]));
+    expect(state.source.thread()?.messages).toHaveLength(1);
   } finally {
     state.dispose();
   }
 });
 
-it('adopts the server identity without duplicating the draft or the sent message', async () => {
+it('shows a send from a new thread that the read has no draft for', () => {
   const state = setup();
   try {
-    const send = state.delivery.sendMessage(input);
-    state.request.resolve({ ...identity, draftId: 'server-message' });
-    await send;
-    expect(
-      state.source.thread()?.messages.map((message) => message.db_id)
-    ).toEqual(['received', 'server-message']);
+    state.setSnapshot(thread([]));
+    state.setSends([outgoing]);
+    expect(state.source.thread()?.messages).toMatchObject([
+      { db_id: 'draft', thread_db_id: 'thread', is_draft: false },
+    ]);
+  } finally {
+    state.dispose();
+  }
+});
+
+it('returns the draft and reads the thread again when the send is cancelled or fails', () => {
+  const state = setup();
+  try {
+    state.setSends([outgoing]);
+    expect(state.source.thread()?.messages[1].is_draft).toBe(false);
+    state.setSends([]);
+    expect(state.source.thread()?.messages[1]).toMatchObject({
+      is_draft: true,
+      body_text: 'Older body',
+    });
+    // Admission already made the server's copy a sent message.
+    expect(state.refresh).toHaveBeenCalledOnce();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('keeps a delivered send after it leaves the outbox and reads the thread once', () => {
+  const state = setup();
+  try {
+    state.setSends([outgoing]);
+    expect(state.refresh).not.toHaveBeenCalled();
+    state.setSends([{ ...outgoing, delivered: true }]);
+    expect(state.refresh).toHaveBeenCalledOnce();
+    state.setSends([]);
+    expect(state.source.thread()?.messages[1].is_draft).toBe(false);
+    expect(state.refresh).toHaveBeenCalledOnce();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('reads the thread again when a send the read already shows is undone', () => {
+  const state = setup();
+  try {
+    state.setSends([outgoing]);
+    // The read caught up after admission, so nothing is projected.
+    state.setSnapshot(
+      thread([message('received'), message('draft', { body_text: 'Sent' })])
+    );
+    expect(state.source.thread()).toBe(state.snapshot());
+    state.setSends([]);
+    expect(state.refresh).toHaveBeenCalledOnce();
+  } finally {
+    state.dispose();
+  }
+});
+
+it('adopts the server identity without duplicating the sent message', () => {
+  const state = setup();
+  try {
+    state.setSends([{ ...outgoing, messageIds: ['draft', 'server-message'] }]);
     state.setSnapshot(
       thread([
         message('received'),
@@ -150,71 +169,14 @@ it('adopts the server identity without duplicating the draft or the sent message
   }
 });
 
-it('rolls back only the failed send when multiple sends are in flight', async () => {
+it('keeps approved sends scoped to their thread when the source navigates', () => {
   const state = setup();
   try {
-    const second = Promise.withResolvers<PersistedEmailIdentity>();
-    vi.mocked(state.compose.delivery.sendMessage)
-      .mockReturnValueOnce(state.request.promise)
-      .mockReturnValueOnce(second.promise);
-    const firstSend = state.delivery.sendMessage(input);
-    const failed = expect(firstSend).rejects.toThrow();
-    const secondSend = state.delivery.sendMessage({
-      ...input,
-      message: { ...input.message, db_id: 'second', body_text: 'Second reply' },
-    });
-    state.request.reject(new Error('Failed'));
-    await failed;
-    expect(state.source.thread()?.messages.at(-1)).toMatchObject({
-      db_id: 'second',
-      is_draft: false,
-      body_text: 'Second reply',
-    });
-    expect(state.source.thread()?.messages[1].is_draft).toBe(true);
-    second.resolve({ ...identity, draftId: 'second' });
-    await secondSend;
-  } finally {
-    state.dispose();
-  }
-});
-
-it('removes the optimistic message only after Undo Send succeeds', async () => {
-  const state = setup();
-  try {
-    const send = state.delivery.sendMessage(input);
-    state.request.resolve(identity);
-    await send;
-    const onUndone = vi.fn();
-    const undo = { draftId: 'draft', inboxId: 'inbox', onUndone };
-    vi.mocked(state.compose.delivery.undoSend).mockRejectedValueOnce(
-      new Error('Undo failed')
-    );
-    await expect(state.delivery.undoSend(undo)).rejects.toThrow('Undo failed');
-    expect(state.source.thread()?.messages[1].is_draft).toBe(false);
-    vi.mocked(state.compose.delivery.undoSend).mockImplementation(
-      async ({ onUndone }) => {
-        await onUndone();
-      }
-    );
-    await state.delivery.undoSend(undo);
-    expect(state.source.thread()?.messages[1].is_draft).toBe(true);
-    expect(onUndone).toHaveBeenCalledOnce();
-  } finally {
-    state.dispose();
-  }
-});
-
-it('keeps optimistic sends scoped to their thread when the source navigates', async () => {
-  const state = setup();
-  try {
-    const send = state.delivery.sendMessage(input);
+    state.setSends([outgoing]);
     state.setSnapshot(thread([message('other')], { db_id: 'other-thread' }));
     expect(
       state.source.thread()?.messages.map((message) => message.db_id)
     ).toEqual(['other']);
-    state.request.resolve(identity);
-    await send;
-    expect(state.source.thread()?.messages).toHaveLength(1);
   } finally {
     state.dispose();
   }

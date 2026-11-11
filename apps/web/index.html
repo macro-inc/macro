@@ -35,14 +35,14 @@
     <!--
       Boot shell: the app frame's background in the saved theme, painted with
       the HTML so the screen is never blank while the bundle downloads and
-      starts — the rail column and, in the desktop app, the content card. It
+      starts — the rail column and, on desktop, the content card. It
       draws no app content; the first route shell to mount fades it out (see
       dismissBootShell).
     -->
     <style>
       #boot-shell {
-        --bs-page: oklch(0.17 0 0);
-        --bs-panel: oklch(0.17 0 0);
+        --bs-page: #0e0e0e;
+        --bs-panel: #121212;
         --bs-ink: oklch(1 0 0);
         --bs-edge: color-mix(in oklch, var(--bs-ink) 8%, transparent);
         position: fixed;
@@ -50,7 +50,7 @@
         z-index: 2147483000;
         display: flex;
         box-sizing: border-box;
-        background: var(--bs-panel);
+        background: var(--bs-page);
         color: var(--bs-ink);
         transition: opacity 180ms ease-out;
         pointer-events: none;
@@ -69,20 +69,19 @@
       .bs-rail {
         width: 56px;
         flex: none;
-        border-right: 1px solid var(--bs-edge);
       }
       .bs-content {
         flex: 1;
         min-width: 0;
       }
-      /* The desktop app's bordered content card (SplitLayout's bento inset). */
-      #boot-shell[data-desktop] .bs-rail {
-        border-right: 0;
-      }
-      #boot-shell[data-desktop] .bs-content {
-        margin: 6px 6px 6px 0;
-        border: 1px solid var(--bs-edge);
-        border-radius: 6px;
+      /* Match SplitLayout's desktop bento inset before the app mounts. */
+      @media (pointer: fine) {
+        .bs-content {
+          margin: 6px 6px 6px 0;
+          border: 1px solid var(--bs-edge);
+          border-radius: 8px;
+          background: var(--bs-panel);
+        }
       }
       .bs-mark {
         width: 44px;
@@ -111,9 +110,6 @@
       try {
         const shell = document.getElementById("boot-shell");
         const nativeOs = window.__TAURI_OS_PLUGIN_INTERNALS__?.os_type;
-        if (nativeOs && nativeOs !== "ios" && nativeOs !== "android") {
-          shell.dataset.desktop = "";
-        }
         // Match RootFrame's native macOS overlay-titlebar clearance before JS loads.
         if (nativeOs === "macos") shell.style.paddingTop = "40px";
         let theme = null;

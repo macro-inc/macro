@@ -73,6 +73,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Message reactions',
         description: 'When someone reacts to one of your messages',
       },
+      {
+        type: 'channel_access_requested',
+        label: 'Requests to join',
+        description: 'When someone asks to join a channel you belong to',
+      },
     ],
   },
   {
@@ -145,6 +150,12 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         label: 'Event reminders',
         description: 'When a calendar event is about to start',
       },
+      {
+        type: 'calendar_event_join_request',
+        label: 'Requests to join',
+        description:
+          'When someone asks to be added to an event you shared in a channel',
+      },
     ],
   },
   {
@@ -181,6 +192,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
         type: 'agent_session_mentioned',
         label: 'Agent session mentions',
         description: 'When someone mentions you in an agent session',
+      },
+      {
+        type: 'routine_run_finished',
+        label: 'Routine runs',
+        description: 'When one of your routines finishes or fails a run',
       },
     ],
   },

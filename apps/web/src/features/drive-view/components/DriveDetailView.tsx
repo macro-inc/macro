@@ -16,7 +16,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
-import { useCopyLink } from '@core/util/useCopyLink';
 import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
@@ -68,8 +67,6 @@ function hasBlockHeader(target: EntityDetailTarget) {
 function DriveDetailTopBar() {
   const navigationStack = useDriveDetailNavigation();
   const panel = useSplitPanelOrThrow();
-  const copyViewLink = useCopyLink();
-  const copyLink = () => copyViewLink(window.location.href);
   const activeDetail = () => {
     const target = navigationStack.active()?.data;
     const blockType = target ? entityDetailBlockType(target) : undefined;
@@ -83,7 +80,6 @@ function DriveDetailTopBar() {
     return {
       documentId: detail.target.id,
       blockAlias: detail.blockType,
-      copyLink,
     };
   });
 
@@ -102,7 +98,6 @@ function DriveDetailTopBar() {
               id={detail().target.id}
               blockType={detail().blockType}
               hotkeyScope={panel.splitHotkeyScope}
-              copyLink={copyLink}
             />
           )}
         </Show>
@@ -185,6 +180,7 @@ function StackEntityDetail(props: {
             if (context.type !== 'document') return null;
             return (
               <FileDetailBreadcrumbItem
+                download={context.download}
                 value={props.entry.value}
                 metadata={props.entry.data}
                 order={props.order}

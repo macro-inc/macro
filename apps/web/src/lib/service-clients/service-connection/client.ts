@@ -1,4 +1,4 @@
-import { isTabFocused } from '@core/signal/tabFocus';
+import { isTabVisible } from '@core/signal/tabFocus';
 import type { EntityId } from '@core/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
@@ -34,7 +34,12 @@ interface TrackedEntity {
 }
 const trackedEntities: Map<EntityId, TrackedEntity> = new Map();
 type EntityTarget = Pick<TrackEntityMessage, 'entity_id' | 'entity_type'>;
-type EntityRefresh = (entity: EntityTarget) => void;
+/** Why a tracked entity's views should read again: tracking began, or it may have missed events. */
+export type EntityRefreshReason = 'subscribed' | 'reconnected' | 'refocused';
+type EntityRefresh = (
+  entity: EntityTarget,
+  reason: EntityRefreshReason
+) => void;
 
 // The gateway sends an entity's events only to connections that opened or
 // pinged it this recently (connection_gateway's DEFAULT_TIMEOUT_THRESHOLD).
@@ -51,8 +56,10 @@ export const connectionGatewayClient = {
         trackedEntities.set(args.entity_id, {
           entityType: args.entity_type,
           count: 1,
+          // Visible, not focused: someone reading beside the window they are
+          // typing in is still looking, and should keep their presence dot.
           heartbeat: setInterval(() => {
-            if (isTabFocused())
+            if (isTabVisible())
               fireAndForget(
                 connectionGatewayClient.trackEntity({
                   ...args,
@@ -134,7 +141,7 @@ export function useEntitySubscription(
         const count = callbacks.get(onRefresh) ?? 0;
         callbacks.set(onRefresh, count + 1);
         // A cached view may have missed updates while nobody tracked its parent.
-        if (count === 0) onRefresh(value);
+        if (count === 0) onRefresh(value, 'subscribed');
       }
       onCleanup(() => {
         if (onRefresh) {
@@ -165,22 +172,22 @@ export function useReopenTrackedEntitiesOnReconnect(): void {
       });
       tracked.lastSeen = Date.now();
       for (const onRefresh of tracked.refreshCallbacks.keys())
-        onRefresh(entity);
+        onRefresh(entity, 'reconnected');
     }
   });
 }
 
 /**
- * Pings every tracked entity as soon as the tab regains focus, since the heartbeat pauses in
+ * Pings every tracked entity as soon as the tab is visible again, since the heartbeat pauses in
  * the background. A tab that went unseen longer than the gateway's activity window was left
  * out of the entity's events meanwhile, so its views refresh as they do after a reconnect.
  */
 export function useRefreshTrackedEntitiesOnFocus(): void {
   createEffect(
     on(
-      isTabFocused,
-      (focused) => {
-        if (!focused) return;
+      isTabVisible,
+      (visible) => {
+        if (!visible) return;
         const now = Date.now();
         for (const [entity_id, tracked] of trackedEntities) {
           const entity = { entity_id, entity_type: tracked.entityType };
@@ -196,7 +203,7 @@ export function useRefreshTrackedEntitiesOnFocus(): void {
           );
           if (missedEvents)
             for (const onRefresh of tracked.refreshCallbacks.keys())
-              onRefresh(entity);
+              onRefresh(entity, 'refocused');
         }
       },
       { defer: true }

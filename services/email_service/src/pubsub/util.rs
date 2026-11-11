@@ -1,6 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::domain::models::messages::ContactConnection;
 use email::domain::events::EmailMacroEvent;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -42,6 +43,30 @@ pub fn build_notification_recipients(
     }
 
     recipient_ids
+}
+
+/// Contact connections from a link's owner to each address. Addresses that fail
+/// to parse as a macro user id are skipped, so one malformed header address
+/// doesn't drop the connections to the others.
+pub fn build_contact_connections<'a>(
+    owner: &MacroUserIdStr<'static>,
+    link_id: Uuid,
+    emails: impl IntoIterator<Item = &'a str>,
+) -> Vec<ContactConnection> {
+    emails
+        .into_iter()
+        .filter_map(|email| match MacroUserIdStr::try_from_email(email) {
+            Ok(contact) => Some(ContactConnection::new(owner.clone(), contact)),
+            // The parse error echoes the address, so it stays out of the log.
+            Err(_) => {
+                tracing::warn!(
+                    %link_id,
+                    "skipping contact address that failed to parse as a macro user id"
+                );
+                None
+            }
+        })
+        .collect()
 }
 
 /// One recipient tuple `(email, name, first_at, last_at)` fed into
@@ -93,7 +118,7 @@ pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEv
 }
 
 /// Send message to connection gateway to trigger email refresh if user is active on FE
-#[tracing::instrument(skip(client), level = "debug")]
+#[tracing::instrument(skip(client, macro_id), level = "debug")]
 pub async fn cg_refresh_email(
     client: &ConnectionGatewayClient,
     macro_id: &str,
@@ -104,14 +129,14 @@ pub async fn cg_refresh_email(
         let _ = client
             .refresh_email(macro_id, payload)
             .await
-            .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
+            .inspect_err(|e| tracing::error!(error = %e, "Failed to refresh email"));
     }
 }
 
 /// Signal every viewer of a connected inbox's calendars — the link owner
 /// plus its delegated users — that the calendar projection changed. Best
 /// effort: an inactive or unreachable viewer only misses a refresh nudge.
-#[tracing::instrument(skip(client, db), level = "debug")]
+#[tracing::instrument(skip(client, db, owner_macro_id), level = "debug")]
 pub async fn cg_refresh_calendar(
     client: &ConnectionGatewayClient,
     db: &sqlx::PgPool,
@@ -148,10 +173,31 @@ pub async fn cg_refresh_calendar(
         let _ = client
             .refresh_calendar(&macro_id, payload.clone())
             .await
-            .inspect_err(
-                |e| tracing::error!(macro_id = %macro_id, "Failed to refresh calendar: {e}"),
-            );
+            .inspect_err(|e| tracing::error!(error = %e, %link_id, "Failed to refresh calendar"));
     }
+}
+
+/// Tell one requester their request to join `event_id` was answered. It names
+/// the event, whose id they hold, and not the sharer's inbox.
+#[tracing::instrument(skip(client, requester_id), level = "debug")]
+pub async fn cg_refresh_join_request(
+    client: &ConnectionGatewayClient,
+    requester_id: &str,
+    event_id: uuid::Uuid,
+) {
+    if !cfg!(feature = "connection_gateway") {
+        return;
+    }
+    let payload = serde_json::to_value(
+        calendar_events::domain::models::RefreshCalendarEvent::JoinRequestAnswered { event_id },
+    )
+    .unwrap_or_default();
+    let _ = client
+        .refresh_calendar(requester_id, payload)
+        .await
+        .inspect_err(
+            |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
+        );
 }
 
 /// Shared filter/dedup pass for the CRM populate + depopulate enqueue
@@ -260,15 +306,18 @@ pub async fn enqueue_populate_crm_contacts(
 /// The unique `(link_id, contact_email)` index collapses bulk deletes into a
 /// single pending row; the nightly cleanup job sweeps the table and
 /// depopulates contacts whose links no longer have messages with them.
-pub async fn insert_crm_cleanup_candidates(
-    ctx: &PubSubContext,
+pub async fn insert_crm_cleanup_candidates<'e, E>(
+    executor: E,
     link_id: Uuid,
     self_email: &str,
     contact_emails: impl IntoIterator<Item = String>,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
     let emails = normalized_non_self_contact_emails(self_email, contact_emails);
 
-    email_db_client::crm_cleanup::candidates::insert_candidates(&ctx.db, link_id, &emails)
+    email_db_client::crm_cleanup::candidates::insert_candidates(executor, link_id, &emails)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {

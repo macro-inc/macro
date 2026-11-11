@@ -10,8 +10,16 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn().mockResolvedValue(undefined),
   options: undefined as
     | undefined
-    | (() => { enabled: boolean; queryFn: () => Promise<unknown> }),
+    | (() => {
+        enabled: boolean;
+        queryFn: (context: { client: unknown }) => Promise<unknown>;
+      }),
 }));
+
+const runQuery = () =>
+  mocks.options!().queryFn({
+    client: { invalidateQueries: mocks.invalidateQueries },
+  });
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag,
@@ -30,11 +38,11 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 vi.mock('@tanstack/solid-query', () => ({
+  queryOptions: <T>(options: T) => options,
   useQuery: (options: typeof mocks.options) => {
     mocks.options = options;
     return {};
   },
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 
 beforeEach(() => {
@@ -72,7 +80,7 @@ describe('starter onboarding', () => {
   });
 
   it('opens the newly seeded board and refreshes the database list', async () => {
-    await mocks.options!().queryFn();
+    await runQuery();
     const selection = createUserScopedStorage(
       'database-view-selection:example'
     ).read(mocks.userId!);
@@ -86,7 +94,7 @@ describe('starter onboarding', () => {
   it('does not replace an existing browser view preference', async () => {
     const storage = createUserScopedStorage('database-view-selection:example');
     storage.write(mocks.userId!, 'existing preference');
-    await mocks.options!().queryFn();
+    await runQuery();
     expect(storage.read(mocks.userId!)).toBe('existing preference');
   });
 
@@ -97,17 +105,17 @@ describe('starter onboarding', () => {
       tableId: null,
       viewId: null,
     });
-    await mocks.options!().queryFn();
+    await runQuery();
     expect(localStorage.length).toBe(0);
     expect(mocks.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('keeps failed provisioning retryable without marking it complete', async () => {
     mocks.ensureStarter.mockRejectedValueOnce(new Error('offline'));
-    await expect(mocks.options!().queryFn()).rejects.toThrow('offline');
+    await expect(runQuery()).rejects.toThrow('offline');
     expect(localStorage.length).toBe(0);
     expect(mocks.invalidateQueries).not.toHaveBeenCalled();
-    await mocks.options!().queryFn();
+    await runQuery();
     expect(mocks.ensureStarter).toHaveBeenCalledTimes(2);
   });
 });

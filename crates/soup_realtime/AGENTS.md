@@ -35,7 +35,7 @@ tasks itself.
   `call`, `github_pull_requests`, `initiative`, `properties`, `projects`,
   `system_properties`, `rdkafka` (`consumer`), `agent_session`/`entity_access`
   (`outbound`).
-- Used by: `complete_graph`, `graphql_soup`, `work_feed`.
+- Used by: `complete_graph`, `graphql_soup`, `attention_feed`.
 
 ## Recipes
 
@@ -55,8 +55,13 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- Agent sessions have no source event here: their patches come from channel
+  references, linked pull requests, and the harness publishing through
+  `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
 - Only `call.record_imported` patches calls; native call lifecycle events on
-  `macro.calls` are ignored.
+  `macro.calls` are ignored. The web cache has no local call projection, so a
+  call patch makes mounted lists that can contain calls refetch
+  (`apps/web/src/lib/queries/soup/graphql/call-list-revalidation.ts`).
 
 ## Related
 

@@ -1,13 +1,17 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
+import { analytics } from '@app/lib/analytics';
+import { paneRoute } from '@app/routes/app-route';
 import {
   getChannelParams,
   navigateToChannelMessage,
 } from '@block-channel/utils/link';
+import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
-  OpenSplitResult,
+  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -18,20 +22,25 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
+  enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { NotificationType } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
 import { getNotificationById } from '@queries/notification/user-notifications';
+import type { PushNotificationNavigation } from '@service-notification/generated/schemas/pushNotificationNavigation';
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import {
   getDocumentCommentLocation,
   type NotificationEntityOverride,
@@ -62,16 +71,16 @@ async function goToLocationInSplit(
 }
 
 /** Opens or activates the requested content from the source split. */
-function openSplitIfNotOpen(
+type OpenOptions = {
+  newSplit?: boolean;
+  sourceHandle?: SplitHandle;
+  onApplied?: VoidFunction;
+};
+
+function openContent(
   layoutManager: SplitManager,
-  type: BlockName | BlockAlias | 'component',
-  id: string,
-  options: {
-    newSplit?: boolean;
-    params?: Record<string, unknown>;
-    sourceHandle?: SplitHandle;
-    onApplied?: VoidFunction;
-  } = {}
+  content: SplitContent,
+  options: OpenOptions
 ) {
   let onApplied = options.onApplied;
   const reportApplied = () => {
@@ -79,25 +88,38 @@ function openSplitIfNotOpen(
     onApplied = undefined;
     callback?.();
   };
-  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
-    if (!result) return;
-    if (result.status === 'opened' || result.status === 'reused') {
-      reportApplied();
-    }
-  };
+  const result = layoutManager.openWithSplit(content, {
+    activate: true,
+    referredFrom: null,
+    preferNewSplit: options.newSplit,
+    handle: options.sourceHandle,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
+  });
+  if (result?.status === 'opened' || result?.status === 'reused')
+    reportApplied();
+}
+
+/** Chats open in External's main pane; the chat's route claim reuses an open one. */
+function openExternalChat(
+  layoutManager: SplitManager,
+  chatId: string,
+  options: OpenOptions
+) {
+  openContent(layoutManager, externalChatContent(chatId), options);
+}
+
+function openSplitIfNotOpen(
+  layoutManager: SplitManager,
+  type: BlockName | BlockAlias | 'component',
+  id: string,
+  options: OpenOptions & { params?: Record<string, unknown> } = {}
+) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
-    reportApplied();
+    options.onApplied?.();
   } else {
-    const result = layoutManager.openWithSplit(contentReference(type, id), {
-      activate: true,
-      referredFrom: null,
-      preferNewSplit: options.newSplit,
-      handle: options.sourceHandle,
-      ...(options.onApplied ? { onApplied: reportApplied } : {}),
-    });
-    reportImmediateResult(result);
+    openContent(layoutManager, contentReference(type, id), options);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params).catch(
@@ -119,7 +141,7 @@ export function getChannelNotificationParams(
     }))
     .with({ tag: 'channel_message_send' }, (m) => ({
       messageId: m.content.messageId,
-      threadId: undefined,
+      threadId: m.content.messageId,
     }))
     .with({ tag: 'channel_message_reaction' }, (m) => ({
       messageId: m.content.messageId,
@@ -185,10 +207,16 @@ type NavigationDeferredError = {
   notificationId: string;
 };
 
+type NavigationFailedError = {
+  tag: 'NavigationFailedError';
+  cause: unknown;
+};
+
 type OpenNotificationFromIdError =
   | NotSupportedError
   | NotFoundError
-  | NavigationDeferredError;
+  | NavigationDeferredError
+  | NavigationFailedError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
@@ -222,6 +250,15 @@ function getSupportedHandler(
               onApplied,
             })
       )
+      .with('external_chat_message', () => {
+        if (!isFeatureEnabled(enableWhatsappLinked)) return null;
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openExternalChat(lm, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
       .with('new_email', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'new_email') return null;
@@ -235,6 +272,7 @@ function getSupportedHandler(
       })
       .with(
         'channel_invite',
+        'channel_access_requested',
         () =>
           async (lm: SplitManager, newSplit: boolean = false) =>
             openSplitIfNotOpen(lm, 'channel', notification.entity_id, {
@@ -254,7 +292,33 @@ function getSupportedHandler(
           notification.entity_type,
           notification.entity_id
         );
-        if (!target) return null;
+        if (
+          !target ||
+          (target.entityType === 'external_chat' &&
+            !isFeatureEnabled(enableWhatsappLinked))
+        )
+          return null;
+        // A runtime has no page of its own: its requests wait in its Share menu.
+        if (target.entityType === 'harness') {
+          const harnessId = target.entityId;
+          return async (lm: SplitManager, newSplit = false) =>
+            Telemetry.span(
+              'access_requests.notification.open',
+              async (span) => {
+                span.setAttr('entity.id', harnessId);
+                span.setAttr('entity.type', 'harness');
+                span.setAttr('notification.id', notification.id);
+                span.setAttr('notification.type', meta.tag);
+                span.setAttr('access_request.id', meta.content.requestId);
+                requestRuntimeShare(
+                  harnessId,
+                  meta.tag === 'entity_access_requested'
+                );
+                openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+              }
+            );
+        }
+        const sharedEntityType = target.entityType;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -314,33 +378,35 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'initiative'
-                  ? 'initiative'
-                  : itemToBlockName({
-                      type:
-                        target.entityType === 'email_thread'
-                          ? 'email'
-                          : target.entityType,
-                      fileType:
-                        document?.fileType ??
-                        entity?.fileType ??
-                        meta.content.fileType ??
-                        undefined,
-                      subType:
-                        document?.subType &&
-                        document.subType !== 'initiative_description'
-                          ? { type: document.subType }
-                          : undefined,
-                    });
+                sharedEntityType === 'external_chat'
+                  ? 'external_chat'
+                  : sharedEntityType === 'initiative'
+                    ? 'initiative'
+                    : itemToBlockName({
+                        type:
+                          sharedEntityType === 'email_thread'
+                            ? 'email'
+                            : sharedEntityType,
+                        fileType:
+                          document?.fileType ??
+                          entity?.fileType ??
+                          meta.content.fileType ??
+                          undefined,
+                        subType:
+                          document?.subType &&
+                          document.subType !== 'initiative_description'
+                            ? { type: document.subType }
+                            : undefined,
+                      });
               const applied = () => {
                 onApplied?.();
                 if (meta.tag === 'entity_access_requested')
                   openShareModal({
                     id: target.entityId,
                     itemType:
-                      target.entityType === 'email_thread'
+                      sharedEntityType === 'email_thread'
                         ? 'email'
-                        : target.entityType,
+                        : sharedEntityType,
                     blockAlias: block,
                     name: meta.content.entityName,
                     owner: state.owner ?? undefined,
@@ -350,14 +416,24 @@ function getSupportedHandler(
                   });
               };
               span.setAttr('access_requests.outcome', 'navigation_requested');
-              openSplitIfNotOpen(
-                lm,
-                block === 'initiative' ? 'component' : block,
-                block === 'initiative'
-                  ? projectRouteId({ id: target.entityId, section: 'overview' })
-                  : target.entityId,
-                { newSplit, sourceHandle, onApplied: applied }
-              );
+              if (block === 'external_chat')
+                openExternalChat(lm, target.entityId, {
+                  newSplit,
+                  sourceHandle,
+                  onApplied: applied,
+                });
+              else
+                openSplitIfNotOpen(
+                  lm,
+                  block === 'initiative' ? 'component' : block,
+                  block === 'initiative'
+                    ? projectRouteId({
+                        id: target.entityId,
+                        section: 'overview',
+                      })
+                    : target.entityId,
+                  { newSplit, sourceHandle, onApplied: applied }
+                );
             } catch {
               span.setAttr('access_requests.outcome', 'error');
               span.error('Access-request notification could not be opened');
@@ -535,6 +611,27 @@ function getSupportedHandler(
           );
         };
       })
+      .with('calendar_event_join_request', () => {
+        const meta = notification.notification_metadata;
+        if (meta.tag !== 'calendar_event_join_request') return null;
+
+        // The request is answered from the shared event's details.
+        return async (lm: SplitManager, newSplit: boolean = false) => {
+          if (!isFeatureEnabled(enableCalendarUi)) {
+            onApplied?.();
+            return;
+          }
+          openCalendarView(
+            { eventId: meta.content.eventId },
+            {
+              manager: lm,
+              handle: sourceHandle,
+              openInNewSplit: newSplit,
+              ...(onApplied ? { onApplied } : {}),
+            }
+          );
+        };
+      })
       .with('crm_discussion', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'crm_discussion') return null;
@@ -576,9 +673,54 @@ function getSupportedHandler(
         };
       })
       .with('inbox_reauth_required', () => null)
+      .with('routine_run_finished', () => {
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openContent(lm, routineContent(notification.entity_id), {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
+      // Its machine has no page of its own; Settings → Runtimes points it out.
+      .with('runtime_access_removed', () => {
+        const harnessId = notification.entity_id;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestRuntimeShare(harnessId, false);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       .exhaustive(() => null)
   );
 }
+
+/** Settings → Runtimes, where a runtime's sharing and access live. */
+export function openRuntimesSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
+  );
+}
+
+/**
+ * Where a notification was opened from: the app's own lists, a browser
+ * notification, a native (iOS, Android, macOS) notification, or a home
+ * recommendation that opens through its notification.
+ */
+export type NotificationOpenSource =
+  | 'in_app'
+  | 'browser_push'
+  | 'native_push'
+  | 'home_recommendation';
 
 /**
  * Opens the notification given the layout manager.
@@ -594,13 +736,28 @@ export function openNotification(
    * clicked).
    */
   sourceHandle?: SplitHandle,
-  options: { onApplied?: VoidFunction } = {}
+  options: { onApplied?: VoidFunction; source?: NotificationOpenSource } = {}
 ): ResultAsync<void, NotSupportedError> {
+  const reportOpened = () =>
+    analytics.track('notification_opened', {
+      source: options.source ?? 'in_app',
+      notificationType: notification.notification_metadata.tag,
+      entityType: notification.entity_type,
+    });
+  // A native tap on a cold start is retried until the layout applies it, so
+  // it counts once, when it applies.
+  const reportOnApplied =
+    options.source === 'native_push' ? options.onApplied : undefined;
   const handler = getSupportedHandler(
     notification,
     entity,
     sourceHandle,
-    options.onApplied
+    reportOnApplied
+      ? () => {
+          reportOpened();
+          reportOnApplied();
+        }
+      : options.onApplied
   );
   if (!handler) {
     return errAsync({
@@ -608,6 +765,7 @@ export function openNotification(
       notificationType: notification.notification_metadata.tag,
     });
   }
+  if (!reportOnApplied) reportOpened();
   return ResultAsync.fromSafePromise(handler(layoutManager, newSplit));
 }
 
@@ -630,12 +788,43 @@ export function openSingleStackNotification(
   return true;
 }
 
+/** Opens a notification a native notification tap named by id. */
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource,
-  options: { canOpen?: () => boolean; onApplied?: VoidFunction } = {}
+  notificationSource: Pick<NotificationSource, 'notifications'>,
+  options: {
+    canOpen?: () => boolean;
+    onApplied?: VoidFunction;
+    target?: PushNotificationNavigation;
+  } = {}
 ): ResultAsync<void, OpenNotificationFromIdError> {
+  if (options.target) {
+    if (options.canOpen && !options.canOpen()) {
+      return errAsync({ tag: 'NavigationDeferredError', notificationId });
+    }
+    const { channelId, messageId, threadId } = options.target;
+    fireAndForget(
+      prefetchChannelTarget(channelId, {
+        messageId,
+        threadId: threadId ?? messageId,
+      }),
+      'notification-navigation'
+    );
+    return ResultAsync.fromPromise(
+      navigateToChannelMessage(
+        layoutManager.getOrchestrator(),
+        channelId,
+        messageId,
+        threadId ?? messageId,
+        { splitManager: layoutManager, onApplied: options.onApplied }
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
+    );
+  }
   const openIfReady = (notification: UnifiedNotification) => {
     if (options.canOpen && !options.canOpen()) {
       return errAsync({
@@ -643,14 +832,22 @@ export function openNotificationFromId(
         notificationId,
       });
     }
-    return openNotification(
-      notification,
-      layoutManager,
-      false,
-      undefined,
-      undefined,
-      { onApplied: options.onApplied }
-    );
+    // Preserve the in-app caller contract while giving native navigation one
+    // error result for both rejected handlers and unsupported destinations.
+    return ResultAsync.fromPromise(
+      openNotification(
+        notification,
+        layoutManager,
+        false,
+        undefined,
+        undefined,
+        { onApplied: options.onApplied, source: 'native_push' }
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
+    ).andThen((result) => result);
   };
 
   // Check notification source first
@@ -662,8 +859,9 @@ export function openNotificationFromId(
   }
 
   // Fetch if not in notification source
-  return ResultAsync.fromSafePromise(
-    getNotificationById(notificationId)
+  return ResultAsync.fromPromise(
+    getNotificationById(notificationId),
+    (cause): NavigationFailedError => ({ tag: 'NavigationFailedError', cause })
   ).andThen((unified) => {
     if (!unified) {
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };

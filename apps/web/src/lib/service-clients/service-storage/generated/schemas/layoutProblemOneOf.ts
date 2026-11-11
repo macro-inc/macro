@@ -7,7 +7,7 @@
 import type { LayoutProblemOneOfKind } from './layoutProblemOneOfKind';
 
 /**
- * A booking step must be unique and follow all questions and screeners.
+ * A booking step must be unique and follow all questions and gates.
  */
 export type LayoutProblemOneOf = {
   kind: LayoutProblemOneOfKind;

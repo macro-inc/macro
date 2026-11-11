@@ -141,7 +141,7 @@ fn serve_over_channel_with_default_model(
     default_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
-    serve_over_channel_with_models(cursor, default_model, None, configure)
+    serve_over_channel_with_models(cursor, default_model, None, None, configure)
 }
 
 /// [`serve_over_channel`], for a session whose host record names a model.
@@ -154,12 +154,13 @@ fn serve_over_channel_with_host_model(
     host_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
-    serve_over_channel_with_models(cursor, None, host_model, configure)
+    serve_over_channel_with_models(cursor, None, None, host_model, configure)
 }
 
 fn serve_over_channel_with_models(
     cursor: FakeCursor,
     default_model: Option<&str>,
+    default_effort: Option<&str>,
     host_model: Option<&str>,
     configure: impl FnOnce(&Service),
 ) -> (Arc<Service>, TestClient) {
@@ -173,6 +174,7 @@ fn serve_over_channel_with_models(
             crate::domain::ports::NoArtifactStore,
         )
         .with_default_model(default_model.map(str::to_owned))
+        .with_default_effort(default_effort.map(str::to_owned))
         .with_host_model(host_model.map(str::to_owned)),
     );
     configure(&service);
@@ -265,8 +267,10 @@ async fn initialize_advertises_the_prompt_capabilities_we_actually_have() {
         capabilities.embedded_context,
         "resource links are handled, so embedded context must be advertised"
     );
-    // Cursor's prompt body is text-only; claiming these would be a lie.
-    assert!(!capabilities.image);
+    assert!(
+        capabilities.image,
+        "pasted image links are fetched and sent as prompt images"
+    );
     assert!(!capabilities.audio);
 }
 
@@ -582,7 +586,7 @@ async fn remote_mcp_servers_are_forwarded_to_the_agent() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one create_agent, got {calls:?}");
     };
     assert_eq!(
@@ -663,7 +667,7 @@ async fn stdio_mcp_servers_are_declined_without_failing_the_session() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one create_agent");
     };
     let names: Vec<&str> = servers.iter().map(|server| server.name.as_str()).collect();
@@ -836,6 +840,76 @@ async fn session_new_advertises_the_models_as_a_config_option() {
         .map(|entry| entry["value"].as_str().expect("a value id"))
         .collect();
     assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
+}
+
+/// The account's default effort is what a session on the default model starts
+/// on, whether the host record names that model or nothing at all.
+#[tokio::test]
+async fn a_session_on_the_default_model_starts_on_the_default_effort() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) = serve_over_channel_with_models(
+        cursor,
+        Some("gpt-5.5"),
+        Some("low"),
+        Some("gpt-5.5"),
+        |_| {},
+    );
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["id"], "reasoning_effort");
+    assert_eq!(result["configOptions"][1]["currentValue"], "low");
+}
+
+/// The default effort belongs to the default model: a session on another model
+/// keeps that model's own default, and an effort the default model no longer
+/// offers falls back to its default variant instead of failing the session.
+#[tokio::test]
+async fn the_default_effort_applies_only_where_the_default_model_offers_it() {
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) =
+        serve_over_channel_with_models(cursor, Some("gpt-5.5"), Some("ultra"), None, |_| {});
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
+
+    let cursor = FakeCursor::new();
+    cursor.script_models(offered_models());
+    let (_service, mut client) = serve_over_channel_with_models(
+        cursor,
+        Some("composer-2.5"),
+        Some("low"),
+        Some("gpt-5.5"),
+        |_| {},
+    );
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let result = expect_result(&response);
+    assert_eq!(result["configOptions"][0]["currentValue"], "gpt-5.5");
+    assert_eq!(result["configOptions"][1]["currentValue"], "medium");
 }
 
 /// `session/new` advertises Cursor's cloud slash commands after the session
@@ -1052,7 +1126,7 @@ async fn setting_the_model_and_effort_changes_what_the_next_run_asks_for() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the turn created an agent");
@@ -1213,7 +1287,7 @@ async fn a_restored_session_keeps_its_model() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateRun(_, _, model) => Some(model),
+            CursorCall::CreateRun(_, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the restored agent got a follow-up run");
@@ -1281,7 +1355,7 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateRun(_, _, model) => Some(model),
+            CursorCall::CreateRun(_, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the restored agent got a follow-up run");
@@ -1339,7 +1413,7 @@ async fn session_load_restores_the_clients_mcp_servers() {
         .expect("prompt runs");
 
     let calls = cursor.calls();
-    let [CursorCall::CreateAgent(_, _, _, servers, _)] = calls.as_slice() else {
+    let [CursorCall::CreateAgent(_, _, _, servers, _, _)] = calls.as_slice() else {
         panic!("expected one agent creation, got {calls:?}");
     };
     assert_eq!(servers.len(), 1);
@@ -1409,7 +1483,7 @@ async fn a_session_with_no_choice_rests_the_picker_on_auto() {
         .calls()
         .into_iter()
         .find_map(|call| match call {
-            CursorCall::CreateAgent(_, _, _, _, model) => Some(model),
+            CursorCall::CreateAgent(_, _, _, _, model, _) => Some(model),
             _ => None,
         })
         .expect("the prompt created an agent");

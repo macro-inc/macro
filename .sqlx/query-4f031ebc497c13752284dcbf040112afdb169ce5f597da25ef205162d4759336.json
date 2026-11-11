@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH flags AS (\n            SELECT\n                CASE WHEN $2 THEN NOT EXISTS (\n                    SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                    WHERE ml.message_id = m.id AND l.provider_label_id = $4\n                ) ELSE m.is_read END AS is_read,\n                CASE WHEN $3 THEN EXISTS (\n                    SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                    WHERE ml.message_id = m.id AND l.provider_label_id = $5\n                ) ELSE m.is_starred END AS is_starred\n            FROM email_messages m\n            WHERE m.id = $1\n        )\n        UPDATE email_messages m\n        SET is_read = flags.is_read, is_starred = flags.is_starred\n        FROM flags\n        WHERE m.id = $1\n            AND (m.is_read, m.is_starred) IS DISTINCT FROM (flags.is_read, flags.is_starred)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f031ebc497c13752284dcbf040112afdb169ce5f597da25ef205162d4759336"
+}

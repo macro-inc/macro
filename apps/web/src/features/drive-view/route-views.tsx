@@ -6,6 +6,7 @@ import {
   AppView,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { useIsAuthenticated } from '@core/auth';
 import { lazy, Show } from 'solid-js';
 import {
@@ -20,6 +21,7 @@ const DriveCallDetail = lazy(async () => ({
 }));
 
 const AuthenticatedDriveRouteView = withAuth(() => {
+  useViewRestoration();
   const panel = useSplitPanelOrThrow();
   const props = (): DriveViewProps => {
     const content = panel.handle.content();

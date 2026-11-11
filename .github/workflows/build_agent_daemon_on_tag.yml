@@ -83,8 +83,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -119,6 +123,11 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
@@ -164,6 +173,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-unknown-linux-musl
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -235,6 +245,18 @@ jobs:
         else
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
+
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
 
         mkdir -p artifacts
         stage=$(mktemp -d)
@@ -273,6 +295,7 @@ jobs:
         TARGET: x86_64-unknown-linux-musl
         SLUG: linux-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-linux-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -298,8 +321,12 @@ jobs:
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
-        cache: rust
-        path: /nix
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
       continue-on-error: true
     - name: Setup Nix
       uses: './.github/actions/setup-nix'
@@ -334,6 +361,11 @@ jobs:
             esac
           done < "$env_file"
           cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
           # Force the next compiler invocation to start a server with the new remote
           # backend even if a setup hook happened to launch one already.
           sccache --stop-server >/dev/null 2>&1 || true
@@ -379,6 +411,7 @@ jobs:
       shell: bash
       env:
         TARGET: aarch64-unknown-linux-musl
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -451,6 +484,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -488,6 +533,7 @@ jobs:
         TARGET: aarch64-unknown-linux-musl
         SLUG: linux-aarch64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '0'
     - name: Upload macrod-linux-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -554,6 +600,7 @@ jobs:
       shell: bash
       env:
         TARGET: aarch64-apple-darwin
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -626,6 +673,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -663,6 +722,7 @@ jobs:
         TARGET: aarch64-apple-darwin
         SLUG: macos-aarch64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-macos-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -726,6 +786,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-apple-darwin
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -798,6 +859,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -835,6 +908,7 @@ jobs:
         TARGET: x86_64-apple-darwin
         SLUG: macos-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '0'
     - name: Upload macrod-macos-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -904,6 +978,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-pc-windows-msvc
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -976,6 +1051,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -1013,6 +1100,7 @@ jobs:
         TARGET: x86_64-pc-windows-msvc
         SLUG: windows-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

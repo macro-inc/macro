@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   type CalendarEvent,
   type CalendarSource,
+  DEFAULT_GUEST_POLICY,
   isCalendarEventVisible,
   mapCalendarEventToFullCalendar,
   mapCalendarOccurrence,
+  NO_VIEWER_CAPABILITIES,
 } from './types';
 import { canEditCalendarEventTime } from './utils/event-interaction';
 
@@ -76,6 +78,9 @@ function item(sources: CalendarEventSourceContent[]): CalendarOccurrenceItem {
       recurrenceLines: [],
       sequence: 0,
       isReadOnly: false,
+      guestPolicy: DEFAULT_GUEST_POLICY,
+      isSnapshot: false,
+      viewerCan: NO_VIEWER_CAPABILITIES,
       attendees: [],
       createdAt: '2026-09-01T00:00:00Z',
       updatedAt: '2026-09-01T00:00:00Z',
@@ -160,6 +165,7 @@ describe('mapCalendarOccurrence', () => {
       removeGuests: false,
       setGuestPolicy: false,
       rsvp: true,
+      organize: false,
     };
 
     const primary = mapCalendarOccurrence(occurrence, {
@@ -306,6 +312,50 @@ describe('mapCalendarEventToFullCalendar', () => {
     expect(rendered.allDay).toBe(false);
     expect(rendered.startEditable).toBe(false);
     expect(rendered.durationEditable).toBe(false);
+  });
+
+  it('fixes a guest’s event in place unless the organizer lets them modify it', () => {
+    const guest = {
+      editDetails: false,
+      inviteGuests: true,
+      removeGuests: false,
+      setGuestPolicy: false,
+      rsvp: true,
+      organize: false,
+    };
+    const source = item([copy('primary')]);
+    source.event.viewerCan = guest;
+    const invited = mapCalendarEventToFullCalendar(
+      mapCalendarOccurrence(source, { sourceById })
+    );
+    source.event.viewerCan = { ...guest, editDetails: true };
+    const modifiable = mapCalendarEventToFullCalendar(
+      mapCalendarOccurrence(source, { sourceById })
+    );
+
+    expect(invited.startEditable).toBe(false);
+    expect(invited.durationEditable).toBe(false);
+    expect(modifiable.startEditable).toBe(true);
+    expect(modifiable.durationEditable).toBe(true);
+  });
+
+  it('fixes a snapshot of a shared meeting in place', () => {
+    const source = item([copy('primary')]);
+    source.event.isSnapshot = true;
+    source.event.viewerCan = {
+      editDetails: false,
+      inviteGuests: false,
+      removeGuests: false,
+      setGuestPolicy: false,
+      rsvp: false,
+      organize: false,
+    };
+    const snapshot = mapCalendarEventToFullCalendar(
+      mapCalendarOccurrence(source, { sourceById })
+    );
+
+    expect(snapshot.startEditable).toBe(false);
+    expect(snapshot.durationEditable).toBe(false);
   });
 
   it('keeps the occurrence identity and displayed title on the rendered event', () => {

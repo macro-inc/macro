@@ -103,6 +103,8 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::Call
             | EntityType::AgentSession
             | EntityType::Initiative
+            | EntityType::Database
+            | EntityType::ExternalChat
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
     }
@@ -110,7 +112,8 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
 }
 
 /// Load actual owner, current membership and canonical state under the shared guard.
-/// Threads and sessions without permissions read as NULL/revision zero without creating rows.
+/// Threads, sessions and databases without permissions read as NULL/revision zero
+/// without creating rows.
 /// Tasks and snippets use Document; calls resolve their durable entity.
 pub async fn load_facts(
     transaction: &mut Transaction<'_, Postgres>,
@@ -149,8 +152,14 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             SELECT i.owner_user_id, i.share_permission_id FROM initiative i
             WHERE $2 = 'initiative' AND i.id = $3
             UNION ALL
+            SELECT g.user_id, g.share_permission_id FROM external_chat g
+            WHERE $2 = 'external_chat' AND g.id = $3
+            UNION ALL
             SELECT s.owner_id, s.share_permission_id FROM agent_session s
             WHERE $2 = 'agent_session' AND s.id = $3
+            UNION ALL
+            SELECT d.user_id, d.share_permission_id FROM database_entities d
+            WHERE $2 = 'database' AND d.database_id = $3
         )
         SELECT e.owner AS "owner!", e.permission_id,
             sp.id AS "stored_permission_id?",
@@ -176,7 +185,7 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
         && (row.permission_id.is_some()
             || !matches!(
                 entity.entity_type,
-                EntityType::EmailThread | EntityType::AgentSession
+                EntityType::EmailThread | EntityType::AgentSession | EntityType::Database
             ))
     {
         return Err(report!(TeamShareError::InvalidState));
@@ -330,6 +339,9 @@ pub async fn restore_cleared(
             SELECT 1 FROM "Project" WHERE $2 = 'project' AND id = $1 AND "deletedAt" IS NOT NULL
             UNION ALL
             SELECT 1 FROM "Chat" WHERE $2 = 'chat' AND id = $1 AND "deletedAt" IS NOT NULL
+            UNION ALL
+            SELECT 1 FROM database_entities
+            WHERE $2 = 'database' AND database_id::text = $1 AND trashed_at IS NOT NULL
         ) AS "deleted!""#,
         previous.entity.entity_id.as_ref(),
         previous.entity.entity_type.as_ref(),

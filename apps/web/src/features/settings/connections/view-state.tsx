@@ -6,28 +6,16 @@ import {
 } from 'solid-js';
 import type { ProviderId } from './model';
 
-export type ConnectionsMode = 'connected' | 'discover';
-
-/** Navigation belongs to one mounted Agents Connections page, not global settings. */
+/** Scope provider navigation to each mounted Integrations page. */
 export function createConnectionsViewState(initial?: {
-  mode?: ConnectionsMode;
   provider?: ProviderId;
 }) {
-  const [mode, setMode] = createSignal<ConnectionsMode>(
-    initial?.mode ?? 'connected'
-  );
   const [provider, setProvider] = createSignal<ProviderId | null>(
     initial?.provider ?? null
   );
   return {
-    mode,
     provider,
     showOverview: () => {
-      setMode('connected');
-      setProvider(null);
-    },
-    showDiscover: () => {
-      setMode('discover');
       setProvider(null);
     },
     openProvider: (id: ProviderId) => setProvider(id),

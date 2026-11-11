@@ -1,7 +1,8 @@
 /** Compact, keyboard-accessible choices shared by the inspector's fields. */
+
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Select } from '@kobalte/core/select';
-import CaretDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
 
 type Option<T extends string> = { value: T; label: string; disabled?: boolean };
 
@@ -62,7 +63,7 @@ export function InspectorSelect<T extends string>(props: {
       </Select.Trigger>
       <Select.Portal>
         <Select.Content
-          class="fig-editor-theme z-modal min-w-32 max-w-72 rounded-xl border border-edge-muted bg-menu p-1.5 text-xs text-ink shadow-xl outline-none"
+          class="menu-surface fig-editor-theme z-modal min-w-32 max-w-72 p-1.5 text-xs outline-none"
           onKeyDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
           onPointerUp={(event) => event.stopPropagation()}

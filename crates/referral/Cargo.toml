@@ -17,13 +17,12 @@ axum = [
 ]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:async-stripe", "dep:sqlx", "ports"]
+outbound = ["dep:sqlx", "ports"]
 ports = []
 
 [dependencies]
 # Core
 anyhow = { workspace = true }
-chrono = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -52,14 +51,9 @@ tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 
-async-stripe = { workspace = true, default-features = false, features = [
-  "billing",
-  "checkout",
-  "runtime-tokio-hyper",
-], optional = true } # Outbound dependencies
+# Outbound dependencies
 sqlx = { workspace = true, optional = true }
 url = { workspace = true }
-urlencoding = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

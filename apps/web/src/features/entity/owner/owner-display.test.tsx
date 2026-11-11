@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   botProfiles: new Map<string, QueryLike>(),
   requestedBotIds: [] as string[],
   teams: { isPending: false, isError: false, data: [] as unknown },
-  mutate: vi.fn(),
+  openDm: vi.fn(),
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -43,11 +43,8 @@ vi.mock('@queries/bots/profiles', () => ({
 vi.mock('@queries/team/teams', () => ({
   useUserTeamsQuery: () => mocks.teams,
 }));
-vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutate: mocks.mutate }),
-}));
-vi.mock('@components/app/split-layout/layout', () => ({
-  useSplitLayout: () => ({ openWithSplit: vi.fn() }),
+vi.mock('@core/util/open-direct-message', () => ({
+  useOpenDirectMessage: () => mocks.openDm,
 }));
 vi.mock('@core/signal/profilePicture', () => ({
   useProfilePictureUrl: () => [() => undefined],
@@ -76,7 +73,8 @@ beforeEach(() => {
   mocks.botProfiles = new Map();
   mocks.requestedBotIds = [];
   mocks.teams = settled([{ id: ENGINEERING, name: 'Engineering' }]);
-  mocks.mutate.mockReset();
+  mocks.openDm.mockReset();
+  mocks.openDm.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -207,8 +205,8 @@ describe('OwnerLabel', () => {
     fireEvent.mouseDown(getByText('Engineering'));
 
     expect(container.querySelectorAll('[data-slot="avatar"]').length).toBe(3);
-    expect(mocks.mutate.mock.calls.map(([vars]) => vars)).toEqual([
-      { recipient_id: PETER },
+    expect(mocks.openDm.mock.calls).toEqual([
+      [PETER, { activate: true, preferNewSplit: false }],
     ]);
   });
 });

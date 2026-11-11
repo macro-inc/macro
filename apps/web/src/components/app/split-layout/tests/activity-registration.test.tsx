@@ -41,6 +41,7 @@ vi.mock('@service-connection/websocket', () => ({
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
   useSplitRouter: () => ({ entry: () => undefined }),
+  createSearchParams: () => [{ scope: 'mine' }, vi.fn()],
 }));
 vi.mock('@core/auth', () => ({
   useIsAuthenticated: () => () => state.authenticated(),
@@ -140,7 +141,7 @@ vi.mock('@app/features/next-soup/use-recent-view-flag', () => ({}));
 vi.mock('@app/features/settings/Settings', () => ({
   SettingsPanelComponentWrapper: () => null,
 }));
-vi.mock('@app/features/settings/McpConnections', () => ({}));
+vi.mock('@app/features/settings/IntegrationsPage', () => ({}));
 vi.mock('@app/features/tasks-view/tasks-view', () => ({}));
 vi.mock('@app/features/tasks-view/components/TasksDetailView', () => ({
   TasksDetailRouteView: () => null,
@@ -154,7 +155,7 @@ vi.mock('@app/signal/splitLayout', () => {
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
-vi.mock('@block-md/component/ComposeTask', () => ({
+vi.mock('@app/features/task-composer/compose-task', () => ({
   ComposeTask: (props: {
     composerContext?: {
       key: string;
@@ -572,10 +573,13 @@ describe('pane create context registration', () => {
 
   it('isolates snapshots from mutable provider values', () => {
     const context = mountCreateContext(() => 'pane');
-    const preset = crmTaskComposerContext({ type: 'company', id: 'acme' });
+    const preset = {
+      ...crmTaskComposerContext({ type: 'company', id: 'acme' }),
+      visiblePropertyIds: ['existing-property'],
+    };
     state.unregister.push(context.register('pane', () => ({ task: preset })));
     const snapshot = context.snapshot('task');
-    preset.visiblePropertyIds?.push('new-property');
+    preset.visiblePropertyIds.push('new-property');
     expect(snapshot?.visiblePropertyIds).not.toContain('new-property');
   });
 

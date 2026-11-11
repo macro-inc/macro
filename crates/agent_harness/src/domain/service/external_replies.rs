@@ -211,6 +211,7 @@ where
                     turn,
                     stop,
                     last_text,
+                    ..
                 }) => Some(ExternalReplyCompletion {
                     turn,
                     outcome: ReplyOutcome::of_turn(&stop, last_text),

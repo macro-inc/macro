@@ -47,10 +47,13 @@ async fn transient_create_retries_keep_identity_and_trigger_controls_keep_source
     });
     let sender = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
     let request = CreateAgentSessionRequest {
+        origin: trigger_context::TriggerOrigin::Unknown,
         id: Some(session.as_uuid()),
         bot_id: Some(bot_id::BotId::TEST_A.as_uuid()),
         workspace: Some("/workspace".into()),
         prompt: None,
+        prompt_action_id: None,
+        prompt_attachments: Vec::new(),
         repo_url: None,
         repo_branch: None,
         owner: Some(sender.to_string()),

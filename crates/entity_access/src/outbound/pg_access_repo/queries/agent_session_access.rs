@@ -28,15 +28,15 @@ pub async fn accessible_session_ids(
         WHERE entity_type = 'agent_session'
           AND source_id = ANY($1)
           AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))
-          -- Inline @macro sessions stay out of search unless asked for by
-          -- id. A grant with no session row (tests, a deleted session) is
-          -- not hidden: the predicate only matches a `list_hidden` row.
+          -- Hidden sessions (thread-started, DM contexts) stay out of search
+          -- unless asked for by id. A grant with no session row (tests, a deleted session) is
+          -- not hidden: the predicate only matches a hidden row.
           AND (
               entity_id = ANY($2)
               OR NOT EXISTS (
                   SELECT 1 FROM agent_session s
                   WHERE s.id = entity_access.entity_id
-                    AND s.list_hidden
+                    AND s.visibility = 'hidden'
               )
           )
         "#,

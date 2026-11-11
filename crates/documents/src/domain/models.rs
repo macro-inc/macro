@@ -30,6 +30,10 @@ pub enum DocumentError {
     /// The requested document was not found.
     #[error("document not found: {0}")]
     NotFound(String),
+    /// The email attachment an import names no longer exists, e.g. its
+    /// message was deleted after the attachment was queued.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
     /// The user is not authorized to perform this action.
     #[error("unauthorized")]
     Unauthorized,
@@ -393,6 +397,8 @@ pub struct NewDocument {
     pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Custom last-edit timestamp; defaults to `created_at`.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
@@ -549,12 +555,36 @@ pub struct CreateMarkdownDocumentRequest {
     pub skip_history: bool,
 }
 
+/// Request for a backend-initialized native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentRequest {
+    /// Canvas name.
+    pub document_name: String,
+    /// Optional parent project.
+    pub project_id: Option<uuid::Uuid>,
+}
+
 /// Response for creating a markdown document.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
     /// The document ID of the created markdown document
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Response for creating a native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentResponse {
+    /// The document ID of the created native Canvas
     pub document_id: String,
     /// Metadata for the created document
     pub document_metadata: DocumentResponseMetadata,
@@ -637,10 +667,34 @@ pub struct CreateSnippetResponse {
 pub struct CreateSkillRequest {
     /// The name of the skill.
     pub skill_name: String,
+    /// When to use the skill, in one line starting "Use when", e.g. "Use when
+    /// drafting release notes; not changelog entries". Agents choose skills
+    /// for a request by it.
+    pub description: String,
     /// Markdown source text. Defaults to an empty skill document.
     pub markdown: Option<String>,
     /// Optional project ID to associate the skill with.
     pub project_id: Option<uuid::Uuid>,
+}
+
+/// A skill's routing description.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDescriptionBody {
+    /// When to use the skill, in one line starting "Use when". Absent for a
+    /// skill created before descriptions existed.
+    pub description: Option<String>,
+}
+
+/// Request body for setting a skill's routing description.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SetSkillDescriptionRequest {
+    /// When to use the skill, in one line starting "Use when", at most 300
+    /// characters.
+    pub description: String,
 }
 
 /// Response for creating a skill.

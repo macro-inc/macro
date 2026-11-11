@@ -15,6 +15,13 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
+
+The document header's **Copy Share Link** and the Share dialog's **Copy Link**
+copy a standalone link to the selected file, not the current browser URL.
+Folder paths, list filters, and other open splits are not included.
+PDF location links retain the selected page or annotation without unrelated
+query parameters from the surrounding view.
 
 With `enable-graphql-soup` enabled, supported file/folder/chat moves, trash,
 restore, permanent deletion, duplication, and share-policy changes use GraphQL
@@ -26,7 +33,9 @@ retain successful siblings. A plan-refused chat duplicate still opens the paywal
 with either transport; it must not create a copy or retry through REST. Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
-must still hide its row. With the flag off, the existing REST paths remain.
+must still hide its row. Deletion and restore overlays distinguish entity type as
+well as ID, so an unrelated conversation with the same ID remains visible.
+With the flag off, the existing REST paths remain.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 
@@ -35,28 +44,83 @@ With `enable-databases` enabled, **My Files** includes owned databases and
 also includes accessible databases owned by others. **Search Drive** matches
 database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
-it is absent inside a folder because databases have no folder membership yet.
+it is absent inside a folder because a new database starts at the root; move
+it in afterwards.
 Database rows open their database block, including Enter and Open in new split.
-Use the database block's own actions to rename, share or trash it. The list
-omits unsupported duplicate, delete and move-to-folder actions for databases.
-Databases have no view history and do not appear in **Recent**, folder contents,
-or **Email attachments**. Creation time orders them when the selected sort has
-no corresponding database timestamp.
+Right-click (or long-press) a database for the same entity actions as other
+Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
+Copy ID, Share, Move to folder and Remove from folder (owner), and Delete
+(owner). Duplicate stays omitted because databases have no duplicate API.
+The owner can also drag a database or form row onto a folder (a sidebar folder
+or a folder row), or pick **Move to folder** from the database page's ⋯ menu or
+the form's title menu. A filed database or form appears in that folder's
+contents for everyone who can open it, inherits the folder's sharing like a
+document, and stays in the file tabs. Verify moving one into a nested folder
+shared with another user, that user opening it from the folder, and moving it
+back to root, by **Remove from folder** or a drop on the sidebar's **Drive**
+row. Each move toasts success once: databases and forms have no Soup record, so
+the move's result carries no cache patch for them. Deleting a folder trashes the
+documents and chats inside it but returns its databases and forms (and those in
+its subfolders) to the root, without the sharing the folder passed down; they show
+no folder chip, even after a reload, and restoring the folder does not file them
+again. Databases have no view history and do not appear in **Recent** or
+**Email attachments**. Creation time orders them when the selected sort has no
+corresponding database timestamp.
 
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock
 starts on **Recent**; explicit tab and folder links keep their destination. The
 first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
-edit order applies) and, on tab locations only, the same filter groups as the
+edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
-and a `Clear all` action in the drawer. The in-view `Search Drive` field, the
-Sort/Filter dropdowns, and the header New menu are desktop-only — search on
+and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
+expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
+controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
 The **Folders** pill opens the folder overview and stays highlighted inside
 any folder; tapping it from inside a folder returns to the overview, and
-selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy. Filter
+selecting another pill leaves the folder tree. On a touch device whose Drive
+sidebar is off screen, that overview is the nested folder tree — name order,
+with a folder search field — rather than a date-sorted list of every folder.
+Tap a folder name to open its contents; the expand control reveals child
+folders without leaving the overview. Inside a folder, a path under the pills
+lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
+the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+`Shared with me`, collapsible Favorites, a collapsible Databases section
+listing every database the viewer owns or has been shared, by name (past ten,
+it scrolls within its own height; hidden when there are none or databases are
+disabled), and a searchable folder hierarchy.
+The Drive sidebar's import card (**Import files**, see
+[setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
+**Import** (or a successful **Connect**) opens a new agent chat beside Drive
+that sends "Import my Notion workspace into Macro." (the agent plans with ImportFromNotion, or shows the
+Notion connect chip first; a user on a team is first asked whether to share
+the import with the team, keep it personal, or let AI decide per page, and a
+user without a team gets a personal import without being asked). The plan
+call returns within seconds and the agent presents the review card at once:
+while planning it shows `Reading Notion: 40 pages, 12 databases`, then every
+row with a **Deciding…** badge and `Deciding what to import: 40 of 84
+decided` as the decisions fill in, with **Import** disabled until the plan is
+ready. The card shows totals (Documents, Databases with rows, Task lists with
+tasks, Skipped, Already in Macro), a **Team** / **Only you** badge on every
+written row (the owner clicks it to flip it, and a folder flips what is below
+it; databases stay **Only you**, and the card says "Databases can't be shared
+with the team yet, so they stay with you."), a sharing summary line (without
+a team: `N only you — you're not on a team, so nothing is shared`), and a
+collapsed **Already in Macro** section linking to copies teammates already
+imported and shared, which are not imported again. A database or task-list
+row's caret (**Show rows of …**) shows its row count with a few sample row
+titles and, for a task list, which Notion columns become status, priority,
+due date and assignee. **Open full review** shows the whole plan in a dialog
+(a full-height sheet on phones). **Import …** approves straight from the
+card, with no confirmation step. The agent ends that
+message with "Should I kick it off?"; when the owner answers yes in chat, it
+approves the review itself (a `DecideReview` submit, the card's own approve with the
+card's choices), and the card's run state adds **Started by the agent at your
+request** ("at the owner's request" for other viewers). A message from anyone
+but the owner never approves, and a plan still being made cannot be approved
+yet. Filter
 by tag from the **Filter** menu's Tags submenu; navigating to another tab or folder
 clears tag filters. A folder with no files matching the active tag
 shows the list's no-match state rather than `This folder is empty`.
@@ -93,8 +157,14 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Move to folder, Copy Link,
-and owner-only Rename and Delete.
+unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
+with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
+owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
+**Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
+beside it (or at the top level without edit access to its parent), copying its
+subfolders, documents, tasks, and chats; email threads filed in it stay with the
+original. Folders with more than 100 subfolders, documents, and chats can't be
+duplicated, and a failed copy leaves nothing behind.
 A folder's Share dialog, when the owner belongs to a team, has Team access
 (None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
@@ -103,11 +173,19 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Created by uses a bounded searchable contact window on desktop and in the mobile
+drawer, with Me and persisted selections resolved independently of that window.
+Next options replaces the page; selected and unavailable IDs remain selected,
+and Only clears off-page selections in this group without changing other facets.
+Partial/offline cache data is labeled rather than treated as an empty directory.
+The source stays idle until the creator submenu/drawer section opens. Regression:
+`src/lib/core/internal/browser-test/list-filters.browser.e2e.ts` (stand-in data).
 The desktop Filter trigger shows the number of active filters, matching the
-mobile drawer; clearing all filters removes the badge. Hold Shift while selecting
-or deselecting Type options to keep the submenu open and combine several file
-types without reopening it. A normal selection closes the menu. Verify the badge
-tracks consecutive selections (1 → 2 → 1), including when filter groups refresh
+mobile drawer; clearing all filters removes the badge. Use the left checkboxes
+(or Space) to combine Type options without closing. Row activation adds and
+closes; Shift-click or **Only** selects just one type and stays open, following
+[shared multiselect behavior](ui-conventions.md#multiselect-dropdowns). Verify the badge
+tracks consecutive checkbox toggles (1 → 2 → 1), including when filter groups refresh
 while the menu is open. Desktop filter submenus allow a
 250 ms grace period when the mouse crosses the parent menu's padding; entering
 the submenu cancels the pending close. While the mouse heads toward an open
@@ -155,3 +233,72 @@ switch via the header pills; on narrow desktop layouts the header keeps a plain
 title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
+
+## Zooming opened images
+
+On a touch device, open an image file (an SVG, PNG, or JPEG) in Drive or as its
+own split. It rests at the size it always had: no larger than its own pixels,
+and an SVG with only a viewBox fills the pane. Pinch anywhere in the pane, on
+the image or beside it: the image grows until it fills the pane, then crops and
+pans with one finger, with a glide on release. A zoomed SVG stays sharp, because
+the image is laid out at its zoomed size rather than scaled up. One finger on an
+unzoomed image does nothing, so taps and the left-edge swipe back still work.
+Desktop keeps the plain image. The backend-free phone and tablet regression is
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`
+from `apps/web`.
+
+## Reading unrecognized files
+
+A file Macro has no viewer for reads in place when its content is text: one whose
+name has no recognized extension, or a text type such as `.env`, `.ics`, `.vcf`,
+or `.dot`. Both `/app/unknown/<id>` (channel attachments, mentions) and the Drive
+detail show it read-only through the static Lexical renderer, one literal line
+per file line, never as Markdown.
+
+- Upload a file named `notes` containing `# heading` and an indented line. Open
+  it from a channel and from Drive: the heading stays literal, the indentation
+  stays, and the header keeps Download and Share. Select several lines and copy:
+  the copy has no extra blank lines.
+- Binary content, empty files, text that is not UTF-8, and files over 1 MB or
+  20,000 lines keep **No preview available** with Share and Download. Known
+  binary types such as `.zip` never download for this check; legacy Office files
+  keep their conversion message.
+- `.txt` and other code types open in the code editor instead.
+
+## Downloading files
+
+Open a video, image, code file, canvas, or other uploaded file in Drive. Its
+header exposes **Download** on desktop, phone, and tablet. The file menu uses
+the same action. Video routes also expose it in their header; channel videos
+expose it over the player on hover or keyboard focus (always visible on touch)
+and in the expanded viewer. Linked video cards also offer Download in their
+preview header without opening the file.
+
+- Click Download once. The control shows preparation progress when the server
+  provides a length, disables repeat clicks, and offers Cancel. Browser users
+  proceed directly to browser downloads. Android and iOS binaries with the
+  file-export bridge proceed directly to the system save picker.
+- **Download started** means the browser accepted the file; check its downloads
+  UI for the location and final completion. **File saved** is reserved for a
+  completed native save. Retry download remains available after a fetch failure.
+- On phones and tablets that support system sharing, **Download** opens a menu
+  with **Download** and **Share**. Share opens the system share sheet; desktop
+  headers keep only Macro's existing Share control for access and links. If a browser's
+  user gesture expires during loading, a ready notice asks for another tap on
+  Share in the open menu; that tap uses the prepared bytes without another network request.
+  No Macro download dialog appears. Cancelling a chooser keeps the file ready
+  for another attempt and does not report success.
+- Installed iOS binaries without the optional file-export bridge use the system
+  share sheet for saving too. After a slow preparation, tap **Save file** to open
+  it, then choose Save to Files or another available system action. The dedicated
+  save picker becomes available when the new native binary ships.
+- Change files or close the viewer during preparation: the old request must stop
+  and must not save a late response. Close the expanded viewer with Escape and
+  confirm focus returns to its opener.
+
+Verification: use an existing video in a channel and Drive. Check both message
+and expanded-viewer download actions; compare downloaded bytes, filename, and
+extension with the original. Repeat at 390px with touch enabled and at tablet
+width. Exercise a failed request, retry, cancellation, and changing selection.
+Native save/share dialogs require physical iOS/Android verification in addition
+to browser emulation.

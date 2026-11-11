@@ -1,10 +1,10 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Collapsible } from '@kobalte/core/collapsible';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, Checkbox, Layer } from '@ui';
 import {
   batch,
@@ -90,7 +90,17 @@ const tokenSections = [
   },
   {
     label: 'Status',
-    tokens: ['success', 'warning', 'failure'] as const,
+    tokens: ['success', 'warning', 'failure', 'priority-urgent'] as const,
+  },
+  {
+    label: 'Task statuses',
+    tokens: [
+      'task-status-not-started',
+      'task-status-in-progress',
+      'task-status-in-review',
+      'task-status-completed',
+      'task-status-canceled',
+    ] as const,
   },
 ] as const;
 

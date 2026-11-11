@@ -77,11 +77,11 @@ export function RouteAgents() {
     <ProductPage>
       <div class="agents-hero">
         <ProductHero
-          tutorial="agents"
           product="Agents"
           title="Agents with omniscient context."
           description="Macro consolidates email, chats, docs, and CRM into one memory system, aggregated across your whole team."
           cta="agents_hero_get_started"
+          tutorial="agents"
         />
       </div>
       <FeaturePageSection

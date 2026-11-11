@@ -84,7 +84,8 @@ impl From<EmailErr> for CreateDraftError {
             EmailErr::MessageNotFound(_) | EmailErr::ThreadNotFound => {
                 CreateDraftError::NotFound(err.to_string())
             }
-            EmailErr::MessageAlreadySent(_)
+            EmailErr::DraftGenerationConflict(_)
+            | EmailErr::MessageAlreadySent(_)
             | EmailErr::InvalidDraft(_)
             | EmailErr::MessageDeliveryConflict(_)
             | EmailErr::CannotReplyToDraft

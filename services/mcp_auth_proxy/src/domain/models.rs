@@ -161,6 +161,71 @@ pub struct PendingAuthorization {
     pub client_state: String,
     /// Where to redirect back to the client with the authorization code.
     pub client_redirect_uri: String,
+    /// Digest of the `BrowserBinding` held by the browser that started the
+    /// flow; only that browser may complete it. `None` only on a flow started
+    /// by a build that predates the binding, which could only have used a
+    /// trusted redirect URI.
+    pub browser_binding_digest: Option<String>,
+    /// How the authorization code reaches the client once the user signs in.
+    pub delivery: CodeDelivery,
+}
+
+/// How an authorization code reaches the client.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, strum::Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum CodeDelivery {
+    /// Redirect the browser to the client's redirect URI.
+    #[default]
+    Redirect,
+    /// Show the user the callback URL to carry over themselves, because the
+    /// client's loopback listener is on another machine than the browser.
+    Manual,
+}
+
+/// The client callback URL a finished flow produced, and how it gets there.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientDelivery {
+    /// The client's redirect URI with the code, or error, appended.
+    pub url: String,
+    /// How the URL reaches the client.
+    pub method: CodeDelivery,
+}
+
+/// Whether the user has approved the client on the consent screen.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserConsent {
+    /// The user has not been asked yet.
+    NotAsked,
+    /// The user approved the client on the consent screen.
+    Approved,
+}
+
+/// What the consent screen shows the user about the client asking for access.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConsentPrompt {
+    /// The name the client registered with. Self-reported, so it is shown as
+    /// unverified.
+    pub client_name: String,
+    /// The host the authorization code will be sent to: the identity the user
+    /// is actually approving.
+    pub redirect_host: String,
+    /// How the code will leave the browser.
+    pub delivery: CodeDelivery,
+}
+
+/// How an authorize request proceeds.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AuthorizationStart {
+    /// Send the browser to the upstream sign-in at this URL.
+    SignIn(String),
+    /// Send the browser to the broker's email sign-in for this session.
+    EmailSignIn {
+        /// The broker session the sign-in completes.
+        session_id: String,
+    },
+    /// Ask the user to approve the client before signing in.
+    ConsentRequired(ConsentPrompt),
 }
 
 /// An authorization code issued by this broker and backed by an upstream token.
@@ -178,19 +243,69 @@ pub struct IssuedAuthorizationCode {
     /// The redirect URI from the authorization request, used for exact-match
     /// validation during token exchange.
     pub redirect_uri: String,
-    /// When `access_token` expires. `None` for codes issued before the broker
-    /// started tracking upstream token lifetimes.
-    pub access_token_expires_at: Option<SystemTime>,
+    /// When `access_token` expires.
+    pub access_token_expires_at: SystemTime,
+}
+
+/// How a user signs in upstream during an authorize flow.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, strum::Display)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum SignInMethod {
+    /// Straight to Google.
+    #[default]
+    Google,
+    /// A one-time code sent by email, the way the Macro app signs users in.
+    Email,
+    /// FusionAuth's login page: password and every other provider.
+    Login,
+}
+
+/// The upstream page a browser is sent to.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpstreamLogin<'a> {
+    /// Straight to Google.
+    Google,
+    /// FusionAuth's login page.
+    LoginPage,
+    /// The single sign-on provider an email address's domain requires.
+    Sso {
+        /// The upstream identity provider.
+        idp_id: &'a str,
+        /// The address the user entered, so the provider need not ask again.
+        email: &'a str,
+    },
+}
+
+/// The upstream's answer to a request to email a sign-in code.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EmailCodeRequest {
+    /// The code was emailed.
+    Sent,
+    /// The address's domain signs in through this identity provider instead.
+    SsoRequired {
+        /// The upstream identity provider.
+        idp_id: String,
+    },
+}
+
+/// What the email sign-in form does next.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum EmailSignInStep {
+    /// Ask the user for the code that was emailed.
+    EnterCode,
+    /// Send the browser to the single sign-on provider at this URL.
+    Sso(String),
 }
 
 /// OAuth authorize request from the MCP client.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct AuthorizeRequest {
     /// Expected to be `code`.
     pub response_type: String,
     /// Dynamically registered client id.
     pub client_id: String,
-    /// Loopback callback URI owned by the MCP client.
+    /// Callback URI owned by the MCP client.
     pub redirect_uri: String,
     /// Opaque state from the client.
     pub state: String,
@@ -198,10 +313,20 @@ pub struct AuthorizeRequest {
     pub code_challenge: String,
     /// Expected to be `S256`.
     pub code_challenge_method: String,
+    /// The sign-in the user picked on the chooser, when it was shown.
+    #[serde(default)]
+    pub sign_in: Option<SignInMethod>,
+    /// How the user asked for the code to reach the client, when they picked
+    /// on the chooser.
+    #[serde(default)]
+    pub delivery: Option<CodeDelivery>,
     /// Optional requested scopes.
     #[serde(default)]
-    #[allow(dead_code)]
     pub scope: Option<String>,
+    /// The MCP server the token is for (RFC 8707). Carried through consent;
+    /// `/token` decides the token from its own `resource`.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 /// OAuth callback request from the upstream auth server.
@@ -243,6 +368,10 @@ pub struct TokenRequest {
     /// and it must match the client the grant was issued to.
     #[serde(default)]
     pub client_id: Option<String>,
+    /// The MCP server the access token is for (RFC 8707), which decides what
+    /// kind of token it is.
+    #[serde(default)]
+    pub resource: Option<String>,
 }
 
 /// OAuth token response returned to the MCP client.
@@ -258,7 +387,34 @@ pub struct TokenResponse {
     /// OAuth token type.
     pub token_type: &'static str,
     /// Seconds until `access_token` expires, so clients can refresh before it
-    /// does. Omitted when the upstream lifetime is unknown.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires_in: Option<u64>,
+    /// does. Revocation does not cut an access token short, so this is also the
+    /// longest it stays usable after its grant is revoked.
+    pub expires_in: u64,
+}
+
+/// The client and grant an outstanding refresh token belongs to.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RefreshTokenBinding {
+    /// The client that obtained the refresh token.
+    pub client_id: String,
+    /// The authorization this refresh token descends from. Every token rotated
+    /// out of one authorization code shares it, so revoking it revokes the
+    /// whole family.
+    pub grant_id: String,
+}
+
+/// RFC 7009 token revocation request from the MCP client.
+///
+/// `token_type_hint` is accepted and ignored: RFC 7009 makes it optional, and
+/// the broker looks the token up the same way whatever its type.
+#[derive(Deserialize)]
+pub struct RevocationRequest {
+    /// The token to revoke.
+    #[serde(default)]
+    pub token: Option<RefreshToken>,
+    /// The client revoking the token. Public clients hold no credential, so
+    /// this is the client authentication RFC 7009 requires, and it must match
+    /// the client the token was issued to.
+    #[serde(default)]
+    pub client_id: Option<String>,
 }

@@ -3,14 +3,21 @@ import {
   prDisplayName,
   toGithubKey,
 } from '@app/features/block-pr/util/prKey';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
+import { toast } from '@core/component/Toast/Toast';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { openExternalUrl } from '@core/util/url';
 import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,10 +26,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -34,12 +37,13 @@ import type {
   GithubPullRequestCheckRun,
   GithubPullRequestComment,
 } from '@service-storage/generated/schemas';
-import { cn, Surface } from '@ui';
+import { buttonClasses, CopyButton, cn, Surface } from '@ui';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
+import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -274,6 +278,53 @@ function pullRequestPreview(
   };
 }
 
+async function copyPullRequestUrl(url: string): Promise<boolean> {
+  const copied = await ResultAsync.fromPromise(
+    navigator.clipboard.writeText(url),
+    () => undefined
+  );
+  if (copied.isErr()) {
+    toast.failure(t('entityActions.toastGithubLinkCopyFailed'));
+    return false;
+  }
+  toast.success(t('entityActions.toastGithubLinkCopied'));
+  return true;
+}
+
+/**
+ * Copy the pull request's GitHub address, or go to it. Clicks stay in the
+ * card: Solid delivers portaled events through the component tree, so they
+ * would otherwise reach a row hosting the mention.
+ */
+function PullRequestLinkActions(props: { url: string }) {
+  return (
+    <div class="flex shrink-0 items-center">
+      <CopyButton
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('entityActions.copyGithubLink')}
+        tooltip={t('entityActions.copyGithubLink')}
+        onClick={(e: MouseEvent) => {
+          e.stopPropagation();
+          return copyPullRequestUrl(props.url);
+        }}
+      >
+        <LinkIcon class="size-4" />
+      </CopyButton>
+      <a
+        href={props.url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={t('entityActions.openOnGitHub')}
+        class={buttonClasses({ variant: 'ghost', size: 'icon-sm' })}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <ArrowSquareOut class="size-4" />
+      </a>
+    </div>
+  );
+}
+
 function PreviewStat(props: { children: JSX.Element; class?: string }) {
   return (
     <span class={cn('flex items-center gap-1 font-mono', props.class)}>
@@ -321,17 +372,7 @@ function PullRequestPreviewBody(props: { id: string; fallbackLabel?: string }) {
               </span>
             </div>
             <Show when={pr().url}>
-              {(url) => (
-                <a
-                  href={url()}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <OpenIcon class="size-4" />
-                </a>
-              )}
+              {(url) => <PullRequestLinkActions url={url()} />}
             </Show>
           </div>
 
@@ -394,7 +435,7 @@ export function PullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <Suspense
           fallback={
             <div class="p-3 flex items-center justify-center text-sm text-ink-muted">
@@ -449,7 +490,7 @@ function UnsyncedPullRequestPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-80 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="flex items-center justify-between gap-2 p-2">
           <div class="flex items-center gap-2 min-w-0">
             <span class="relative size-4 shrink-0 inline-flex">
@@ -458,17 +499,7 @@ function UnsyncedPullRequestPreviewCard(props: {
             <span class="text-sm font-semibold truncate">{props.label}</span>
           </div>
           <Show when={props.url}>
-            {(url) => (
-              <a
-                href={url()}
-                target="_blank"
-                rel="noreferrer"
-                class="shrink-0 text-link hover:text-link-hover visited:text-link-visited"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <OpenIcon class="size-4" />
-              </a>
-            )}
+            {(url) => <PullRequestLinkActions url={url()} />}
           </Show>
         </div>
       </Surface>
@@ -544,7 +575,7 @@ function PullRequestMentionContent(props: PullRequestMentionDecoratorProps) {
       <span class="relative top-[0.125em] size-[1em] shrink-0 inline-flex mx-1">
         <PullRequestStatusIcon status={status()} />
       </span>
-      <span class="flex min-w-0 items-baseline underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
+      <span class="flex min-w-0 items-baseline text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         <span class="min-w-0 truncate">{parts().name}</span>
         <Show when={parts().number}>
           {(number) => (
@@ -642,7 +673,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
           href={props.url}
           target="_blank"
           rel="noreferrer"
-          class="text-link hover:text-link-hover visited:text-link-visited underline"
+          class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2 hover:decoration-current"
         >
           {fallbackLabel(mentionFallbackLabel(props))}
         </a>

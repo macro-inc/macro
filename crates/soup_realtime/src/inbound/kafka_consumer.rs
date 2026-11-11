@@ -355,6 +355,8 @@ fn soup_entity_type_from_channel_reference(entity_type: &str) -> Option<EntityTy
         ReferencedShareItemType::CalendarEvent => None,
         // Forms are not soup entities; a posted form renders as its card.
         ReferencedShareItemType::Form => None,
+        // External chats are not soup entities; External lists them.
+        ReferencedShareItemType::ExternalChat => None,
     }
 }
 
@@ -394,6 +396,8 @@ fn patches_from_channel_event(event: &ChannelTopicEvent) -> Vec<SoupRealtimePatc
         ChannelTopicEvent::Deleted(metadata) => {
             vec![delete(EntityType::Channel, metadata.channel_id)]
         }
+        // A request to join changes neither the channel nor its membership.
+        ChannelTopicEvent::AccessRequested(_) => Vec::new(),
     }
 }
 

@@ -27,10 +27,18 @@ pub(super) struct World {
     pub(super) published: Vec<(TableId, TableVersion)>,
     pub(super) metadata_changes: Vec<DatabaseId>,
     /// Every awareness relay the service asked for.
-    pub(super) awareness: Vec<(DatabaseId, String, Awareness)>,
+    /// Each as (database, user, whether they can edit, state).
+    pub(super) awareness: Vec<(DatabaseId, String, bool, Awareness)>,
     /// Simulate the gateway refusing an awareness relay.
     pub(super) awareness_relay_fails: bool,
     pub(super) share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
+    /// The owner's team, which a team share goes to.
+    pub(super) owner_team: Option<Uuid>,
+    /// The team share and its revision.
+    pub(super) team_share: Option<models_permissions::share_permission::team_share::TeamShareGrant>,
+    pub(super) team_share_revision: i64,
+    /// Simulate the team facts changing between authorization and the write.
+    pub(super) team_share_goes_stale: bool,
     /// Every `macro.databases` envelope the service handed the broker.
     pub(super) broker_events: Vec<serde_json::Value>,
     /// Every `settle_inference` call, newest last.
@@ -50,6 +58,8 @@ pub(super) struct World {
     pub(super) positions: HashMap<ViewId, Vec<CardPosition>>,
     /// The change journal, oldest first.
     pub(super) journal: Vec<JournaledChange>,
+    /// Shared definitions nobody may bind into a database.
+    pub(super) unbindable: Vec<PropertyDefinitionId>,
 }
 
 /// One change the fake cell store journaled.
@@ -97,6 +107,7 @@ impl DatabasesRepo for FakeRepo {
             owner_id: command.owner_id.as_ref().to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         };
         let title = definition(
             first_table.title_column,
@@ -194,6 +205,23 @@ impl DatabasesRepo for FakeRepo {
             .find(|database| database.id == id)
         {
             database.trashed_at = None;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+    async fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> Result<bool, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        if let Some(database) = world
+            .databases
+            .iter_mut()
+            .find(|database| database.id == id && database.trashed_at.is_none())
+        {
+            database.project_id = project_id.map(str::to_string);
             Ok(true)
         } else {
             Ok(false)
@@ -555,6 +583,34 @@ impl CellStore for FakeCells {
     }
 }
 
+impl crate::domain::duplicate::DatabaseDuplicateRepo for FakeCells {
+    type Error = FakeError;
+    async fn duplicate_database(
+        &self,
+        database: &Database,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, FakeError> {
+        {
+            let mut world = self.0.lock().unwrap();
+            world.databases.push(database.clone());
+            world
+                .grants
+                .entry(database.owner_id.clone())
+                .or_default()
+                .push((database.id, AccessLevel::Owner));
+        }
+        let outcome = self.apply_writes(writes).await;
+        if !matches!(outcome, Ok(WritesOutcome::Applied { .. })) {
+            let mut world = self.0.lock().unwrap();
+            world.databases.retain(|stored| stored.id != database.id);
+            if let Some(grants) = world.grants.get_mut(&database.owner_id) {
+                grants.retain(|(id, _)| *id != database.id);
+            }
+        }
+        outcome
+    }
+}
+
 impl ColumnDefinitionStore for FakeDefinitions {
     type Error = FakeError;
     async fn bindable_definition(
@@ -563,13 +619,8 @@ impl ColumnDefinitionStore for FakeDefinitions {
         _viewer: &Viewer,
         id: PropertyDefinitionId,
     ) -> Result<Option<PropertyDefinitionId>, FakeError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .definitions
-            .contains_key(&id)
-            .then_some(id))
+        let world = self.0.lock().unwrap();
+        Ok((world.definitions.contains_key(&id) && !world.unbindable.contains(&id)).then_some(id))
     }
     async fn create_typed_definition(
         &self,
@@ -661,15 +712,19 @@ impl TableEventPublisher for FakeEvents {
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> Result<(), FakeError> {
         let mut world = self.0.lock().unwrap();
         if world.awareness_relay_fails {
             return Err(FakeError);
         }
-        world
-            .awareness
-            .push((database_id, user_id.as_ref().to_string(), state.clone()));
+        world.awareness.push((
+            database_id,
+            user_id.as_ref().to_string(),
+            can_edit,
+            state.clone(),
+        ));
         Ok(())
     }
 }

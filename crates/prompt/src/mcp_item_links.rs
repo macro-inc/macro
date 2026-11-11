@@ -10,7 +10,7 @@
 //!
 //! This is scoped to the model's chat replies only. It does not govern content
 //! the model writes *into* a Macro document (e.g. via `CreateDocument` or
-//! `EditDocument`) — see [`crate::document_content_links`] for that, which
+//! `EditDocument`) — see `DocumentNamespace`'s `@agent` guidance in the SDK, which
 //! still requires `<m-document-mention>` tags even over MCP, since that content
 //! is rendered by the Macro app itself, not by the MCP client.
 //!
@@ -27,11 +27,12 @@ pub fn render(base_url: &str) -> String {
     format!(
         "# {TITLE}\n\
          When referring the user to a Macro item (document, channel, chat, \
-         project, task, email thread, or database) in your responses, write a plain URL of \
+         project, task, email thread, database, or routine) in your responses, write a plain URL of \
          the form `{base_url}/app/<type>/<id>`, where `<type>` is the item's type \
          — `md` for a document, `channel`, `chat`, `project`, `task`, `email` \
          for an email thread, or `database` — and `<id>` is the item id. Render it as a normal \
          Markdown link, e.g. `[Name]({base_url}/app/md/<id>)`.\n\
+         For a routine, use `[Name]({base_url}/app/routines/<id>)`.\n\
          \n\
          Do NOT emit `<m-document-mention>` XML tags or any other Macro internal \
          mention/markup format in these responses. Those only render inside the \

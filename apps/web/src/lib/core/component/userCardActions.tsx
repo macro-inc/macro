@@ -1,13 +1,14 @@
 import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
+import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideChat from '@phosphor/chat.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import WideTask from '@phosphor/list-checks.svg';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
+import WideChat from '@icon/system/regular/chat.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import WideTask from '@icon/system/regular/list-checks.svg';
 import {
   type Accessor,
   type Component,
@@ -28,6 +29,7 @@ type UserCardActionId =
   | 'copy-email'
   | 'copy-name'
   | 'open-contact'
+  | 'open-settings'
   | 'dm'
   | 'assign-task';
 
@@ -67,10 +69,8 @@ export function useUserCardActions(
 ): Accessor<UserCardAction[]> {
   const currentUserId = useUserId();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const { openWithSplit, popoverSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
-    onError: () => toast.failure('Failed to open direct message'),
-  });
+  const { popoverSplit } = useSplitLayout();
+  const openDm = useOpenDirectMessage();
 
   const userId = () => target().id;
   const canTreatAsUser = () =>
@@ -83,6 +83,7 @@ export function useUserCardActions(
     canTreatAsUser() && !isBotPrincipalId(userId());
 
   const contactAction = createCrmUserCardAction(() => target().email);
+  const settingsAction = createBotSettingsUserCardAction(userId);
 
   const copyAction = (
     id: UserCardActionId,
@@ -111,15 +112,7 @@ export function useUserCardActions(
     event.stopPropagation();
     const recipientId = userId();
     if (!recipientId) return;
-    const preferNewSplit = event.shiftKey;
-    // The mutation's onError callback handles failure feedback.
-    const { channel_id } = await getOrCreateDmMutation.mutateAsync({
-      recipient_id: recipientId,
-    });
-    openWithSplit(
-      { type: 'channel', id: channel_id },
-      { preferNewSplit, reopen: 'latest' }
-    );
+    await openDm(recipientId, { preferNewSplit: event.shiftKey });
   };
 
   const openTaskComposer = (event: MouseEvent) => {
@@ -151,6 +144,9 @@ export function useUserCardActions(
 
     const contact = contactAction();
     if (contact) actions.push(contact);
+
+    const settings = settingsAction();
+    if (settings) actions.push(settings);
 
     if (canDirectMessage() && userId() !== currentUserId()) {
       actions.push({

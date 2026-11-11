@@ -21,7 +21,8 @@ the website.
 
 ## Terminology
 
-- A **block** is the core unit in Macro (doc, email, channel, task, call, canvas, etc.). Use "block", not "module" or "app"
+- Call a form’s conditional answer check a **gate** in UI copy, AI tools, and docs.
+- **Block** is a proper noun for a core unit in Macro (a doc, email, channel, task, call, canvas, and so on). Capitalize it every time: "the Agents Block", "Block types". Use "Block", not "module" or "app". Leave ordinary English alone: code block, blockquote, and **Block Sender**
 - Use **@mention** (not "at-mention" or "tag") for references created with `@`
 - Use **channel** (not "chat room"), **agent** (not "bot"), and **workspace** for a user's whole Macro environment
 - Use **personal memory** and **team memory** for the two memory levels

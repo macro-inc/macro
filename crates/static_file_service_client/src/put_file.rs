@@ -15,6 +15,9 @@ pub struct PutFileRequest {
     /// extra metadata to store with file
     /// don't put anything private in here it is public
     pub extension_data: Option<Value>,
+    /// Exact upload size in bytes, signed into the upload URL when set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_length: Option<u64>,
 }
 
 // HACK: duplicate logic. put into model crate later
@@ -52,10 +55,12 @@ impl StaticFileServiceClient {
         content_type: String,
     ) -> Result<PutFileResponse> {
         self.upload(
+            None,
             PutFileRequest {
                 file_name: file_url.to_string(),
                 content_type: Some(content_type.clone()),
                 extension_data: None,
+                content_length: None,
             },
             file_bytes,
             &content_type,
@@ -77,10 +82,34 @@ impl StaticFileServiceClient {
         content_type: &str,
     ) -> Result<PutFileResponse> {
         self.upload(
+            None,
             PutFileRequest {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length: None,
+            },
+            bytes,
+            content_type,
+        )
+        .await
+    }
+
+    /// [`Self::put_named_bytes`] for a file owned by `owner_id`.
+    pub async fn put_named_bytes_for_user(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        bytes: Bytes,
+        content_type: &str,
+    ) -> Result<PutFileResponse> {
+        self.upload(
+            Some(owner_id),
+            PutFileRequest {
+                file_name: file_name.to_string(),
+                content_type: Some(content_type.to_string()),
+                extension_data: None,
+                content_length: None,
             },
             bytes,
             content_type,
@@ -98,6 +127,30 @@ impl StaticFileServiceClient {
         file_name: &str,
         content_type: &str,
     ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, None).await
+    }
+
+    /// Like [`Self::reserve_for_user`], but storage rejects an upload of any
+    /// size other than `content_length`.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reserve_sized_for_user(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: u64,
+    ) -> Result<PutFileResponse> {
+        self.reserve(owner_id, file_name, content_type, Some(content_length))
+            .await
+    }
+
+    async fn reserve(
+        &self,
+        owner_id: &str,
+        file_name: &str,
+        content_type: &str,
+        content_length: Option<u64>,
+    ) -> Result<PutFileResponse> {
         let full_url = format!("{}/internal/file", self.url);
         let res = self
             .client
@@ -107,6 +160,7 @@ impl StaticFileServiceClient {
                 file_name: file_name.to_string(),
                 content_type: Some(content_type.to_string()),
                 extension_data: None,
+                content_length,
             })
             .send()
             .await?;
@@ -125,15 +179,21 @@ impl StaticFileServiceClient {
         Ok(res.json().await?)
     }
 
-    /// Reserve a file and PUT its bytes to the upload URL that comes back.
+    /// Reserve a file (owned by `owner_id`, when given) and PUT its bytes to
+    /// the upload URL that comes back.
     async fn upload(
         &self,
+        owner_id: Option<&str>,
         body: PutFileRequest,
         bytes: Bytes,
         content_type: &str,
     ) -> Result<PutFileResponse> {
         let full_url = format!("{}/internal/file", self.url);
-        let res = self.client.put(&full_url).json(&body).send().await?;
+        let mut request = self.client.put(&full_url).json(&body);
+        if let Some(owner_id) = owner_id {
+            request = request.header(crate::INTERNAL_MACRO_USER_ID_HEADER, owner_id);
+        }
+        let res = request.send().await?;
 
         let status_code = res.status();
 

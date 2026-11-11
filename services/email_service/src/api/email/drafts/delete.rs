@@ -1,11 +1,12 @@
 use crate::api::context::{ApiContext, AuthorizationService};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use email::domain::{models::EmailErr, ports::EmailService};
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
@@ -39,6 +40,7 @@ impl IntoResponse for DeleteDraftError {
     path = "/email/drafts/{id}",
     operation_id = "delete_draft",
     params(
+        DraftEditPrecondition,
         ("id" = Uuid, Path, description = "Draft ID."),
     ),
     responses(
@@ -51,13 +53,18 @@ impl IntoResponse for DeleteDraftError {
 )]
 #[tracing::instrument(skip(ctx, authorization), err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     Path(draft_id): Path<Uuid>,
 ) -> Result<StatusCode, DeleteDraftError> {
     ctx.email_service
         .service()
-        .delete_draft_for_user(authorization.authorization.user.macro_user_id, draft_id)
+        .delete_draft_for_user(
+            authorization.authorization.user.macro_user_id,
+            draft_id,
+            precondition.draft_generation,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

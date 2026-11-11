@@ -1,5 +1,6 @@
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import WarningIcon from '@phosphor/warning-circle.svg';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
+import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import { For } from 'solid-js';
 
@@ -17,7 +18,7 @@ export function DatabaseLoadFailure(props: {
       <WarningIcon class="size-7 text-ink-muted" />
       <p class="text-sm font-medium">{props.title}</p>
       <p class="max-w-96 text-xs text-ink-muted">{props.message}</p>
-      <Button size="sm" class="gap-2" onClick={props.onRetry}>
+      <Button variant="ghost" size="sm" class="gap-2" onClick={props.onRetry}>
         <ArrowClockwiseIcon class="size-3.5" />
         Try again
       </Button>
@@ -33,9 +34,12 @@ export function TableSkeleton() {
       aria-label="Loading records"
       aria-busy="true"
     >
-      <div class="mb-4 h-8 animate-pulse rounded bg-hover" />
+      <div class="mb-4 flex gap-1.5">
+        <ListSkeleton.Bar class="h-8 w-28" />
+        <ListSkeleton.Bar class="h-8 w-20" />
+      </div>
       <For each={[0, 1, 2, 3, 4, 5]}>
-        {() => <div class="mb-2 h-9 animate-pulse rounded bg-hover/60" />}
+        {() => <ListSkeleton.Bar class="mb-2 h-9 w-full rounded-lg" />}
       </For>
     </div>
   );
@@ -52,9 +56,9 @@ export function BoardSkeleton() {
       <For each={[0, 1, 2]}>
         {() => (
           <div class="flex w-70 shrink-0 flex-col gap-2">
-            <div class="h-7 w-24 animate-pulse rounded bg-hover" />
+            <ListSkeleton.Bar class="h-6 w-24" />
             <For each={[0, 1, 2]}>
-              {() => <div class="h-20 animate-pulse rounded-lg bg-hover/60" />}
+              {() => <ListSkeleton.Bar class="h-20 w-full rounded-xl" />}
             </For>
           </div>
         )}

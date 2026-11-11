@@ -1,9 +1,11 @@
 use super::*;
 
 fn service(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     rtc: MockCallRtcClient,
 ) -> BaseWebhookCallService<StubConnectionService> {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     CallServiceImpl::new(
         repo,
         rtc,
@@ -121,6 +123,7 @@ async fn prepared_room_skips_external_creation_and_a_concurrent_join_does_not_de
             .prepare_meeting_call(&meeting)
             .await
             .unwrap()
+            .0
             .id,
         call_id
     );
@@ -273,7 +276,7 @@ async fn meeting_allocation_does_not_wait_for_recording_or_transcription() {
     .await
     .expect("room allocation must not wait for media services")
     .unwrap();
-    assert_eq!(prepared.id, call_id);
+    assert_eq!(prepared.0.id, call_id);
     // The recording progresses even though transcription is still blocked.
     release_recorder.send(()).unwrap();
     tokio::time::timeout(Duration::from_secs(2), attachment)
@@ -359,8 +362,13 @@ fn test_egress_config() -> EgressS3Config {
 
 #[tokio::test]
 async fn recording_webhook_can_link_before_the_startup_response() {
-    for correct_room in [false, true] {
+    for (correct_room, channel_id) in [
+        (false, None),
+        (true, None),
+        (true, Some(STARTED_EVENT_CHANNEL_ID)),
+    ] {
         let mut record = standalone_record(false);
+        record.channel_id = channel_id;
         let call_id = record.call_id;
         let room_name = call_id.to_string();
         record.room_name = Some(if correct_room {

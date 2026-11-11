@@ -6,13 +6,17 @@ import {
 } from '@app/features/property/side-panel/properties';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
   GithubPullRequestDetailsRows,
   SidePanel,
 } from '@components/app/side-panel';
-import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import {
+  EntityMetadata,
+  EntityMetadataRow,
+} from '@components/app/side-panel/EntityMetadata';
+import type { SidePanelSectionLayout } from '@components/app/side-panel/SidePanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { Wordcount } from '@core/component/LexicalMarkdown/component/status/Wordcount';
 import { Notifications } from '@core/component/Notifications';
@@ -29,6 +33,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { buildTaskProjectDefaultProperty } from '@entity/extractors-property';
 import { useNotificationsForEntity } from '@notifications';
 import {
+  getBuiltinPropertyIds,
   getDefaultPinnedProperties,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
@@ -49,7 +54,7 @@ import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
-/** Registers markdown header actions, panel sections, and metadata footer. */
+/** Registers markdown header actions, panel sections, and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;
@@ -69,21 +74,24 @@ export function MarkdownSidePanelSections() {
           <Show when={isTask() && !isMobile()}>
             <DispatchAgentButton showPrimaryLabel />
           </Show>
-          <AskMacroButton
-            entity={{
-              type: 'document',
-              id: documentId(),
-              name: displayName() ?? '',
-              fileType: 'md',
-            }}
-          />
+          <HeaderActionGroup label="Actions">
+            <AskMacroButton
+              grouped
+              entity={{
+                type: 'document',
+                id: documentId(),
+                name: displayName() ?? '',
+                fileType: 'md',
+              }}
+            />
+          </HeaderActionGroup>
         </div>
       </SidePanel.HeaderActions>
       <SidePanel.Footer>
+        <DetailsSectionContent documentId={documentId()} />
         <Show when={!isTask()}>
           <StatsSectionContent />
         </Show>
-        <DetailsSectionContent documentId={documentId()} />
       </SidePanel.Footer>
       <EntityTagsSection
         entityId={documentId()}
@@ -96,14 +104,16 @@ export function MarkdownSidePanelSections() {
         title="Properties"
         defaultOpen
         order={25}
-      >
-        <PropertiesSectionContent
-          documentId={documentId()}
-          isTask={isTask()}
-          canEdit={canEdit()}
-          documentName={displayName() ?? ''}
-        />
-      </SidePanel.Section>
+        render={(renderSection) => (
+          <PropertiesSectionContent
+            documentId={documentId()}
+            isTask={isTask()}
+            canEdit={canEdit()}
+            documentName={displayName() ?? ''}
+            renderSection={renderSection}
+          />
+        )}
+      />
       <EntityActivitySectionConditional
         entityId={documentId()}
         entityType={propertiesEntityType()}
@@ -155,10 +165,9 @@ function DetailsGrid(props: {
     >
       <Show when={props.folder()}>
         {(folder) => (
-          <div class="flex items-center gap-1">
-            Folder
+          <EntityMetadataRow label="Folder">
             <FolderLink projectId={folder().id} projectName={folder().name} />
-          </div>
+          </EntityMetadataRow>
         )}
       </Show>
     </EntityMetadata>
@@ -173,11 +182,8 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-ink hover:bg-hover focus:bg-active"
     >
-      <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
-        <EntityIcon targetType="project" size="fill" />
-      </span>
       <span class="underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
         {props.projectName}
       </span>
@@ -194,14 +200,25 @@ function PropertiesSectionContent(props: {
   isTask: boolean;
   canEdit: boolean;
   documentName: string;
+  renderSection: SidePanelSectionLayout;
 }) {
   const { state } = useMarkdownDocument();
   const mdData = state.editor.md;
 
   const entityType: PropertiesEntityType = props.isTask ? 'TASK' : 'DOCUMENT';
 
-  const pins = createPinnedProperties(() => mdData.editor);
   const projects = useFeatureFlag(enableProjects);
+  const defaultTitlePropertyDefinitionIds = () =>
+    props.isTask
+      ? [
+          ...getDefaultPinnedProperties('task'),
+          ...(projects().enabled ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
+        ]
+      : [];
+  const pins = createPinnedProperties(
+    () => mdData.editor,
+    defaultTitlePropertyDefinitionIds
+  );
 
   return (
     <EntityPropertiesSection
@@ -212,10 +229,16 @@ function PropertiesSectionContent(props: {
       defaultPinnedPropertyIds={() =>
         props.isTask ? getDefaultPinnedProperties('task') : []
       }
+      requiredPropertyDefinitionIds={
+        props.isTask ? getBuiltinPropertyIds('task') : undefined
+      }
       pinnedPropertyIds={pins.ids}
+      defaultTitlePropertyDefinitionIds={defaultTitlePropertyDefinitionIds}
       pinnedPropertyDefinitionOrder={PINNED_ORDER}
+      onPropertyPinned={mdData.editor ? pins.pin : undefined}
       onPropertyUnpinned={pins.unpin}
       showTags={false}
+      renderSection={props.renderSection}
       // A task joins a project through its Project property, edited like the others.
       defaultProperties={() =>
         props.isTask && projects().enabled
@@ -248,8 +271,13 @@ function StatsSectionContent() {
     <Show when={md.wordcountStats}>
       {(stats) => (
         <Wordcount.Root stats={stats()}>
-          <div class="mb-1">
-            <Wordcount.Words /> words · <Wordcount.Characters /> characters
+          <div class="mt-2 flex flex-col gap-2">
+            <EntityMetadataRow label="Words">
+              <Wordcount.Words />
+            </EntityMetadataRow>
+            <EntityMetadataRow label="Characters">
+              <Wordcount.Characters />
+            </EntityMetadataRow>
           </div>
         </Wordcount.Root>
       )}

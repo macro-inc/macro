@@ -112,6 +112,17 @@ fn android_notification(
     FCMMessage::notification(title, body, identifier, data, recipient_id)
 }
 
+fn ios_notification(
+    apns: &APNSPushNotification<serde_json::Value>,
+    recipient_id: &MacroUserIdStr<'_>,
+) -> APNSPushNotification<serde_json::Value> {
+    let mut notification = apns.clone();
+    if let Some(data) = notification.push_notification_data.as_object_mut() {
+        data.insert("recipientId".into(), recipient_id.as_ref().into());
+    }
+    notification
+}
+
 #[cfg(test)]
 mod test;
 
@@ -160,6 +171,7 @@ where
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
         let access_request = message.message_type() == "entity_access_requested";
+        let message_type = message.message_type().to_owned();
         let content = message.into_inner();
         if access_request {
             let notification_id = match &content {
@@ -195,7 +207,9 @@ where
                 .deliver_conn_gateway(conn)
                 .await
                 .context(DeliveryFailure::Other)]),
-            NotificationChannel::Email(email) => Either::Left([self.deliver_email(email).await]),
+            NotificationChannel::Email(email) => {
+                Either::Left([self.deliver_email(&message_type, email).await])
+            }
             NotificationChannel::Ios(apns) => Either::Right(
                 self.deliver_mobile(&apns)
                     .await
@@ -237,6 +251,7 @@ where
         let mut out = Vec::with_capacity(total);
 
         for (user_id, user_apns) in &apns.ios_device_endpoints {
+            let ios = ios_notification(&apns.notif, user_id);
             let android = (!user_apns.android_endpoints.is_empty())
                 .then(|| android_notification(apns, user_id.clone()));
             let checkers: Vec<_> = user_apns
@@ -245,7 +260,7 @@ where
                 .map(|endpoint| MobilePushSend {
                     mobile: &self.mobile,
                     endpoint_arn: endpoint,
-                    notif: MobilePayload::Ios(&apns.notif),
+                    notif: MobilePayload::Ios(&ios),
                     attributes: &apns.attributes,
                 })
                 .chain(android.iter().flat_map(|android| {
@@ -315,6 +330,7 @@ where
     /// Deliver via email.
     async fn deliver_email(
         &self,
+        notification_type: &str,
         email: EmailNotification<'static>,
     ) -> Result<DeliverySuccess, Report<DeliveryFailure>> {
         let EmailNotification {
@@ -344,13 +360,14 @@ where
 
         if let Err(e) = self
             .email
-            .send_email(recipient.clone(), &content)
+            .send_email(recipient.clone(), notification_type, &content)
             .await
             .inspect_err(|e| {
+                // The subject can carry the sender's name, so the type identifies the email.
                 tracing::error!(
                     error = ?e,
                     recipient = %recipient,
-                    subject = %content.subject,
+                    notification_type,
                     "Email delivery failed"
                 );
             })

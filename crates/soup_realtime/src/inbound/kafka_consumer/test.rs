@@ -331,6 +331,7 @@ fn sent_chat_messages_refresh_the_soup_model() {
 #[test]
 fn task_property_updates_map_to_document_updates() {
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,
@@ -338,6 +339,7 @@ fn task_property_updates_map_to_document_updates() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -460,6 +462,7 @@ fn attributed_initiative_clears_and_other_system_clears_still_refresh_soup() {
 fn a_cell_edit_updates_the_database_row() {
     let row = "70000000-0000-0000-0000-000000000001";
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::from_u128(0xe0000000_0000_0000_0000_000000000001),
         entity_id: row.to_string(),
         entity_type: PropertyEntityType::DatabaseRow,
@@ -467,6 +470,7 @@ fn a_cell_edit_updates_the_database_row() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -1038,6 +1042,7 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         }]))
     };
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
         entity_property_id: Uuid::now_v7(),
         entity_id: DOCUMENT_ID.to_string(),
         entity_type: PropertyEntityType::Task,
@@ -1045,6 +1050,7 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: project("project-to"),
         previous_value: project("project-from"),
         updated_at: Utc::now(),

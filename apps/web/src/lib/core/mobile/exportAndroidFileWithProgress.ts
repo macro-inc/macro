@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import XIcon from '@icon/system/regular/x.svg';
 import { createSignal } from 'solid-js';
 import { type AndroidFileAction, exportAndroidFile } from './androidFiles';
 
@@ -6,19 +7,37 @@ import { type AndroidFileAction, exportAndroidFile } from './androidFiles';
 export async function exportAndroidFileWithProgress(
   blob: Blob,
   name: string,
-  action: AndroidFileAction = 'save'
+  action: AndroidFileAction = 'save',
+  signal?: AbortSignal
 ): Promise<{ canceled: boolean }> {
-  if (blob.size < 1024 * 1024) return exportAndroidFile(blob, name, action);
+  if (signal?.aborted) return { canceled: true };
+  if (blob.size < 1024 * 1024) {
+    try {
+      return await exportAndroidFile(blob, name, action, { signal });
+    } catch (error) {
+      if (signal?.aborted) return { canceled: true };
+      throw error;
+    }
+  }
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
   const [progress, setProgress] = createSignal(0);
   const id = toast.custom(
     {
       get title() {
         return `Preparing file… ${Math.round(progress() * 100)}%`;
       },
-      actions: [{ label: 'Cancel', onClick: () => controller.abort() }],
+      actions: [
+        {
+          label: 'Cancel',
+          icon: XIcon,
+          variant: 'danger',
+          onClick: () => controller.abort(),
+        },
+      ],
     },
-    { persistent: true }
+    { persistent: true, showCloseButton: false }
   );
   try {
     return await exportAndroidFile(blob, name, action, {
@@ -33,6 +52,7 @@ export async function exportAndroidFileWithProgress(
     if (controller.signal.aborted) return { canceled: true };
     throw error;
   } finally {
+    signal?.removeEventListener('abort', abort);
     toast.dismiss(id);
   }
 }

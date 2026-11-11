@@ -4,7 +4,7 @@ icon: "tags"
 description: "Attach structured fields to documents, tasks, emails, and CRM records with one shared system."
 ---
 
-Macro uses properties to attach structured data to any *entity* (email, task, doc, CRM record, etc.). The properties system is unified across blocks, so you can organize different content types using the same fields, or create different fields for different content types. Tasks and CRM obviously have very different sensible properties, but the concepts are the same and the UI is shared, so teams can work together effectively.
+Macro uses properties to attach structured data to any *entity* (email, task, doc, CRM record, etc.). The properties system is unified across Blocks, so you can organize different content types using the same fields, or create different fields for different content types.
 
 <GuideGraphic kind="tasks" label="A task keeps status, assignee, and its source conversation together." />
 
@@ -12,20 +12,24 @@ On tasks, the default properties of Status, Priority, and Assignees are visible 
 
 ## Supported types
 
-Every entity that supports properties supports the same data types:
+**Add property** offers:
 
-- **STRING** (text): phone, job title, department, notes.
-- **NUMBER**: revenue, employee count, ARR.
-- **BOOLEAN**: toggles.
-- **DATE**: last contacted, contract/renewal date.
-- **SELECT\_STRING**: single/multi-select with string options (custom option colors/icons).
-- **SELECT\_NUMBER**: single/multi-select with numeric options.
-- **ENTITY**: a reference to another entity (User, Company, Contact, Document, Project, Channel, Chat, Task, Thread).
-- **LINK**: URLs (website, LinkedIn, etc.).
+- **Input**
+- **Input (Number)**
+- **Checkbox**
+- **Date**
+- **Time range**
+- **Link**
+- **Option**
+- **Option (Number)**
+- **User**, **Document**, **Channel**, **Project**, **Chat**, **Task**, or **Email**
+- **Any Entity**
+
+**Link**, **Option**, **Option (Number)**, and those entity types can be **Single** or **Multi**.
 
 ## System vs. custom
 
-A property is either **system** (built in and non-removable, like a task's Status) or **custom** (something you add). Properties can also be flagged as **metadata**, which keeps them out of the main views. There are three editors: inline (click-to-edit in a list or pill), popover (a focused dialog), and modal (batch editing across several fields).
+A property is either **system** (built in and non-removable, like a task's Status) or **custom** (something you add).
 
 ## Pinned properties
 
@@ -35,7 +39,7 @@ You can pin properties to show them in the card on the right, or in the unified 
 
 Some blocks ship with their own system properties:
 
-- **Tasks**: Status, Priority, Assignees, Due Date, Parent Task / Subtasks, Depends On, Effort, Story Points, and Relevant Documents. See [Tasks](/product/tasks).
+- **Tasks**: Status, Priority, Assignees, Due Date, Parent Task / Subtasks, Depends On, Effort, Story Points, and Relevant Docs. See [Tasks](/product/tasks).
 - **Documents**: Owner, Folder, Created and Updated timestamps, plus assignable fields like a linked Task and urgency. See [Documents](/product/docs).
 - **CRM companies (Customers)**: Stage (Lead, Qualified, Demo, Trial, Negotiation, Customer, Churned), Owner (a person on your team), and Revenue, plus a Last Interaction timestamp that updates automatically from synced workspace emails.
 - **CRM contacts & companies**: Email, Name, Company, interaction timestamps, Domains, Email Sync, and more.

@@ -53,6 +53,12 @@ export type LocalDraft = {
   acknowledgedRevision: number;
   latestAttemptId?: string;
   queuedAttemptId?: string;
+  /**
+   * A discard requested for this revision that the queue has not admitted.
+   * The copy stays editable until admission makes it `deleting`. Only an edit
+   * withdraws the request; a save of this revision yields to it.
+   */
+  deleteAttemptId?: string;
   draftId: string;
   threadId?: string;
   serverDraftId?: string;
@@ -80,15 +86,13 @@ export type DraftAttempt = {
 /** Presentation of local persistence and explicit server recovery. */
 export type DraftSyncViewState = {
   message: string;
-  /** Identifies a saved version to acknowledge after editing pauses. */
-  savedVersion?: string;
   detail?: string;
   failed: boolean;
-  action?: 'retry' | 'retry-discard';
+  action?: 'retry' | 'retry-discard' | 'reload';
   canKeepEditing: boolean;
 };
 
-/** Immediate and scheduled delivery must both wait for the latest local intent. */
+/** REST sending and scheduling require the latest local revision on the server. */
 export function localDraftReadyForDelivery(draft: LocalDraft): boolean {
   return (
     draft.acknowledgedRevision >= draft.revision &&

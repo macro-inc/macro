@@ -3,6 +3,43 @@
 
 use super::*;
 
+/// How long a session goes without user-visible activity before a runtime's
+/// dial stops restoring it.
+const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
+/// Whether neither Macro nor the runtime has seen activity in `session` for
+/// [`IDLE_SESSION_AFTER`]. `modified_at` moves when a turn starts, runs, is
+/// stopped or blocks, never when it ends, so an unfinished turn is read from
+/// the turn projection instead. `runtime_activity` is the runtime's own
+/// `updatedAt` for it, when its listing carries one; a runtime clock ahead of
+/// ours counts as now, never as the future.
+fn is_idle(
+    session: &AgentSession,
+    runtime_activity: Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    let now = chrono::Utc::now();
+    let last_activity = runtime_activity.map_or(session.modified_at, |runtime| {
+        runtime.min(now).max(session.modified_at)
+    });
+    now - last_activity >= IDLE_SESSION_AFTER
+}
+
+/// What a runtime's dial does with a session it listed.
+pub(super) enum DialReattach {
+    /// Restore it now.
+    Eager,
+    /// Leave it to bind on its next prompt or delivery.
+    Lazy,
+    /// Archived, or not an external session.
+    Skip,
+}
+
+enum NotificationRecovery {
+    Pending,
+    Running,
+    Completed,
+}
+
 impl<
     Sessions,
     Containers,
@@ -39,6 +76,316 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    /// Restore the runtime transport without starting a new invocation.
+    async fn reconnect(&self, session_id: AgentSessionId) -> Result<AgentSession> {
+        let session = self.sessions.get_session(session_id).await?;
+        let permission_policy = self
+            .permission_policy_for_session(session_id, session.bot_id)
+            .await?;
+        let kind = AgentKind::for_session(session.bot_id, &session.harness);
+        if kind.is_managed() {
+            let container = self.containers.resume(session_id).await?;
+            let mcp_servers = self
+                .resumed_mcp_servers(
+                    session_id,
+                    kind,
+                    session.owner_user()?,
+                    &session.mcp_servers,
+                )
+                .await?;
+            self.sessions
+                .attach_session(
+                    session_id,
+                    container
+                        .mcp_servers(mcp_servers)
+                        .permission_policy(permission_policy),
+                )
+                .await?;
+            // The sandbox is back; take waiting prompts from the store
+            // so a restart cannot drop what was queued while this
+            // replica was gone.
+            self.restore_queue(session_id).await?;
+        } else {
+            // An external runtime is not ours to start - only its
+            // operator can dial - but a bot whose runtime is already
+            // connected just has not had this session bound to it
+            // yet. That is the ordinary case: sessions bind when they
+            // are prompted, not when the runtime dials, so the first
+            // prompt after a reconnect is what restores the session.
+            let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await else {
+                // Kept in the session vocabulary so transports report
+                // it as a disconnect, not an internal error.
+                return Err(HarnessError::Session(AgentSessionError::Disconnected(
+                    session_id,
+                )));
+            };
+            if session.harness == harness_id::MACROD_HARNESS_SLUG {
+                attachment = attachment.initial_model(session.model.clone());
+            }
+            let egress = self
+                .egress
+                .provision(session_id, session.owner_user()?, &session.mcp_servers)
+                .await?;
+            self.sessions
+                .set_egress_token_hash(session_id, &egress.session_token_hash)
+                .await?;
+            self.sessions
+                .attach_session(
+                    session_id,
+                    attachment
+                        .permission_policy(permission_policy)
+                        .mcp_servers(self.egress.external_mcp_servers(&egress.sandbox)),
+                )
+                .await?;
+            self.restore_queue(session_id).await?;
+        }
+        Ok(session)
+    }
+
+    /// Load a live external session onto its runtime's new connection.
+    ///
+    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// an archived or managed one is never started by a runtime's dial.
+    /// Answers whether the session is attached here with its durable queue
+    /// loaded, so the caller can dispatch what it holds. That holds for a
+    /// session an earlier attempt attached before failing to load its queue,
+    /// so a retry finishes the job instead of stranding the queue.
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = false))]
+    pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived()
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            return Ok(false);
+        }
+        if self.sessions.attached_mcp_servers(session_id).is_some() {
+            self.ensure_hydrated(session_id).await?;
+            return Ok(true);
+        }
+        self.reconnect(session_id).await?;
+        tracing::Span::current().record("agent.session.reattached", true);
+        Ok(true)
+    }
+
+    /// What a runtime's dial does with one of the sessions it listed.
+    ///
+    /// Only work that would otherwise wait or go unseen is restored at dial
+    /// time: a command in flight here, a turn the durable projection shows
+    /// unfinished (still open, or open when the session disconnected, on any
+    /// replica), a durable queue nobody else dispatches, or a session that
+    /// Macro or the runtime (its listed `updatedAt`) saw active in the last
+    /// hour.
+    /// Everything else binds on its next prompt or delivery, which reconnects
+    /// a detached session anyway; durable notifications and conversation
+    /// recovery reach theirs through their own sweeps. Whether the session
+    /// is already attached is left to `reattach`, on the session's worker.
+    pub(super) async fn dial_reattach(
+        &self,
+        session_id: AgentSessionId,
+        runtime_activity: &std::collections::HashMap<
+            agent_client_protocol::schema::v1::SessionId,
+            chrono::DateTime<chrono::Utc>,
+        >,
+    ) -> Result<DialReattach> {
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived()
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            return Ok(DialReattach::Skip);
+        }
+        let listed_activity = session
+            .acp_session_id
+            .as_ref()
+            .and_then(|acp| runtime_activity.get(acp))
+            .copied();
+        if self.busy.is_pending(session_id) || !is_idle(&session, listed_activity) {
+            return Ok(DialReattach::Eager);
+        }
+        if self.sessions.has_unfinished_turn(session_id).await? {
+            return Ok(DialReattach::Eager);
+        }
+        if !self
+            .sessions
+            .list_queued_actions(session_id)
+            .await?
+            .is_empty()
+        {
+            return Ok(DialReattach::Eager);
+        }
+        Ok(DialReattach::Lazy)
+    }
+
+    /// Reconcile a prior invocation before deciding whether a batch may run.
+    async fn recover_batch(
+        &self,
+        session_id: AgentSessionId,
+        batch: &agent_session::domain::notifications::NotificationBatch,
+    ) -> Result<NotificationRecovery> {
+        use agent_session::domain::{
+            action_history::RecordedAction, notifications::NotificationOutcome,
+        };
+        let Some(store) = &self.notification_store else {
+            return Ok(NotificationRecovery::Pending);
+        };
+        match self
+            .sessions
+            .recorded_action(session_id, batch.action_id)
+            .await?
+        {
+            Some(RecordedAction::Finished {
+                notification_noop, ..
+            }) => {
+                store
+                    .complete(
+                        batch.lease_id,
+                        if notification_noop {
+                            NotificationOutcome::Noop
+                        } else {
+                            NotificationOutcome::Delivered
+                        },
+                    )
+                    .await?;
+                Ok(NotificationRecovery::Completed)
+            }
+            Some(RecordedAction::Running { turn, .. }) => {
+                let session = self.sessions.get_session(session_id).await?;
+                // Claims demote matching legacy background actions. Neither
+                // their old wire actor nor a newer turn can supply authority.
+                let actor = self
+                    .sessions
+                    .turn_prompter(session_id)
+                    .await?
+                    .filter(|prompter| prompter.action_id == batch.action_id)
+                    .and_then(|prompter| prompter.acting_user().cloned());
+                // Do not rewrite turn_prompter: a batch attached to a real
+                // prompt retains that user's authority across recovery.
+                self.notification_batches.insert(session_id, batch.clone());
+                self.busy.mark_turn(
+                    session_id,
+                    InFlightTurn {
+                        action_id: batch.action_id,
+                        turn,
+                        actor,
+                        announce: None,
+                        announcement_message_id: None,
+                        dispatched_at: chrono::Utc::now(),
+                        bot_id: Some(session.bot_id),
+                        speaks_as_chip: false,
+                        presented: Vec::new(),
+                        held_tool_calls: Vec::new(),
+                    },
+                );
+                if !matches!(
+                    self.sessions.management(session_id).await?,
+                    SessionManagement::Ours
+                ) && let Err(error) = self.reconnect(session_id).await
+                {
+                    self.notification_batches.remove(&session_id);
+                    self.busy.clear(session_id);
+                    store.release(batch.lease_id).await?;
+                    return Err(error);
+                }
+                // Periodic serialized reconciliation checks this installed
+                // batch too, including responses committed during attachment.
+                Ok(NotificationRecovery::Running)
+            }
+            Some(RecordedAction::Interrupted { .. }) | None => {
+                if batch.notifications.is_empty() {
+                    return Err(AgentSessionError::from(
+                        rootcause::report!("notification payload requires a compatible consumer")
+                            .into_dynamic(),
+                    )
+                    .into());
+                }
+                Ok(NotificationRecovery::Pending)
+            }
+        }
+    }
+
+    /// Stage a waking batch, recovering completed attempts without invoking
+    /// the model again when a process died between its response and the ack.
+    #[tracing::instrument(name = "agent.notification.deliver", skip_all, fields(%session_id), err)]
+    pub(super) async fn stage_notifications(&self, session_id: AgentSessionId) -> Result<()> {
+        let Some(store) = &self.notification_store else {
+            return Ok(());
+        };
+        for _ in 0..100 {
+            let Some(batch) = store.claim(session_id, false).await? else {
+                return Ok(());
+            };
+            match self.recover_batch(session_id, &batch).await? {
+                NotificationRecovery::Completed => continue,
+                NotificationRecovery::Running => return Ok(()),
+                NotificationRecovery::Pending => {}
+            }
+            if !batch.wake {
+                store.defer_until_prompt(batch.lease_id).await?;
+                continue;
+            }
+            for context in &batch.producer_contexts {
+                genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
+            }
+            let entry = QueuedEntry {
+                action_id: batch.action_id,
+                action: AgentAction::notification(batch.notifications.clone()),
+                actor: None,
+                announce: None,
+                context: None,
+                announced: None,
+                created_at: chrono::Utc::now(),
+                client: None,
+            };
+            self.notification_batches.insert(session_id, batch);
+            self.queues.requeue_front(session_id, entry);
+            break;
+        }
+        Ok(())
+    }
+
+    /// Attach quiet events, or recover the prior turn before dispatching this
+    /// prompt. False means the caller must leave its real prompt queued.
+    #[tracing::instrument(name = "agent.notification.deliver", skip_all, fields(%session_id, %action_id), err)]
+    pub(super) async fn attach_notifications(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &mut AgentAction,
+    ) -> Result<bool> {
+        if self.notification_batches.contains_key(&session_id) {
+            return Ok(true);
+        }
+        let AgentAction::Prompt(prompt) = action else {
+            return Ok(true);
+        };
+        let Some(store) = &self.notification_store else {
+            return Ok(true);
+        };
+        for _ in 0..100 {
+            let Some(mut batch) = store.claim(session_id, true).await? else {
+                return Ok(true);
+            };
+            match self.recover_batch(session_id, &batch).await? {
+                NotificationRecovery::Completed => continue,
+                NotificationRecovery::Running => return Ok(false),
+                NotificationRecovery::Pending => {}
+            }
+            store.bind_action(batch.lease_id, action_id).await?;
+            batch.action_id = action_id;
+            for context in &batch.producer_contexts {
+                genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
+            }
+            prompt.notifications = Some(
+                agent_runtime_protocol::domain::notification::NotificationInput {
+                    notifications: batch.notifications.clone(),
+                    system_turn: false,
+                },
+            );
+            self.notification_batches.insert(session_id, batch);
+            return Ok(true);
+        }
+        Ok(true)
+    }
+
     /// Deliver one already-composed action to the session's runtime.
     ///
     /// Announcing and composition are not this function's business: both
@@ -57,6 +404,7 @@ where
             actor,
             announce: _,
             context: _,
+            client: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)
@@ -64,12 +412,13 @@ where
         {
             let session = self.sessions.get_session(session_id).await?;
             policy
-                .authorize_prompt(session_id, session.bot_id, actor.as_ref())
+                .authorize_prompt(session_id, session.bot_id, if matches!(&action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn)) { session.owner_id.as_user() } else { actor.as_ref() })
                 .await?;
         }
         if action.occupies_turn() {
             self.admit_session_id(session_id).await?;
             self.refresh_mcp_servers(session_id).await;
+            self.refresh_permission_policy(session_id).await;
         }
 
         match self
@@ -87,68 +436,7 @@ where
                 return Err(error.into());
             }
             Err(AgentSessionError::Disconnected(_)) => {
-                let session = self.sessions.get_session(session_id).await?;
-                let permission_policy = self
-                    .permission_policy_for_session(session_id, session.bot_id)
-                    .await?;
-                let kind = AgentKind::for_session(session.bot_id, &session.harness);
-                if kind.is_managed() {
-                    let container = self.containers.resume(session_id).await?;
-                    let mcp_servers = self
-                        .resumed_mcp_servers(
-                            session_id,
-                            kind,
-                            session.owner_user()?,
-                            &session.mcp_servers,
-                        )
-                        .await?;
-                    self.sessions
-                        .attach_session(
-                            session_id,
-                            container
-                                .mcp_servers(mcp_servers)
-                                .permission_policy(permission_policy),
-                        )
-                        .await?;
-                    // The sandbox is back; take waiting prompts from the store
-                    // so a restart cannot drop what was queued while this
-                    // replica was gone.
-                    self.restore_queue(session_id).await?;
-                } else {
-                    // An external runtime is not ours to start - only its
-                    // operator can dial - but a bot whose runtime is already
-                    // connected just has not had this session bound to it
-                    // yet. That is the ordinary case: sessions bind when they
-                    // are prompted, not when the runtime dials, so the first
-                    // prompt after a reconnect is what restores the session.
-                    let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await
-                    else {
-                        // Kept in the session vocabulary so transports report
-                        // it as a disconnect, not an internal error.
-                        return Err(HarnessError::Session(AgentSessionError::Disconnected(
-                            session_id,
-                        )));
-                    };
-                    if session.harness == harness_id::MACROD_HARNESS_SLUG {
-                        attachment = attachment.initial_model(session.model.clone());
-                    }
-                    let egress = self
-                        .egress
-                        .provision(session_id, session.owner_user()?, &session.mcp_servers)
-                        .await?;
-                    self.sessions
-                        .set_egress_token_hash(session_id, &egress.session_token_hash)
-                        .await?;
-                    self.sessions
-                        .attach_session(
-                            session_id,
-                            attachment
-                                .permission_policy(permission_policy)
-                                .mcp_servers(self.egress.external_mcp_servers(&egress.sandbox)),
-                        )
-                        .await?;
-                    self.restore_queue(session_id).await?;
-                }
+                let session = self.reconnect(session_id).await?;
                 if action.occupies_turn() {
                     self.admit_session(&session).await?;
                 }
@@ -196,11 +484,7 @@ where
             })
             .and_then(|session| session.instructions.as_deref())
             .filter(|instructions| !instructions.trim().is_empty());
-        let instructions = instructions
-            .into_iter()
-            .chain(prompt.private_context.as_deref())
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        let instructions = instructions.into_iter().collect::<Vec<_>>().join("\n\n");
         if let Some(origin) = announce {
             self.authorize_prompt_origin(origin, actor).await?;
         }

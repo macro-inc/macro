@@ -26,6 +26,7 @@ use models_properties::api::{
 use models_properties::convert_set_property_value_to_property_value;
 use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -42,10 +43,10 @@ use super::events::{
 };
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, PropertyTargetKey,
-    ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
+    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, PropertyAccessReceiptExt,
+    PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagScope, TagSet,
     UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{
@@ -56,6 +57,16 @@ use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
 use helpers::{
     extract_option_ids_from_property_value, is_property_applicable_to, retain_caller_visible_tags,
 };
+
+// Database cells must commit with their table version and change journal.
+fn require_generic_property_target(entity_type: AccessEntityType) -> Result<(), PropertiesErr> {
+    if entity_type == AccessEntityType::DatabaseRow {
+        return Err(PropertiesErr::Validation(
+            "Database row properties must be edited through database operations".into(),
+        ));
+    }
+    Ok(())
+}
 
 struct PublishedEventActors {
     actor: Option<Actor<'static>>,
@@ -247,6 +258,8 @@ where
         value: &Option<PropertyValue>,
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
+        source: Option<&PropertyChangeSource>,
+        inherited_from_project: Option<Uuid>,
     ) -> PropertyMacroEvent {
         let PublishedEventActors {
             actor,
@@ -261,6 +274,8 @@ where
             actor_user_id,
             actor,
             on_behalf_of,
+            source: source.cloned(),
+            inherited_from_project,
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -282,6 +297,8 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
+                None,
             ));
         }
     }
@@ -447,12 +464,18 @@ where
         Ok(result.definition)
     }
 
-    /// Publish one entity-property event per entity the remap rewrote, so the
-    /// search index and Soup rebuild those entities from the committed rows.
-    fn publish_tag_remap_events(&self, remap: &TagRemapOutcome, actor: &MacroUserIdStr<'_>) {
-        for mutation in &remap.mutations {
+    /// Publish one entity-property event per entity an option delete or tag
+    /// remap rewrote, so search, activity and Soup rebuild those entities from
+    /// the committed rows.
+    fn publish_option_change_events(
+        &self,
+        mutations: &[EntityPropertyMutationSnapshot],
+        actor: &MacroUserIdStr<'_>,
+    ) {
+        for mutation in mutations {
             self.publish_property_event(PropertyMacroEvent::entity_property_updated(
                 EntityPropertyUpdatedMetadata {
+                    inherited_from_project: None,
                     entity_property_id: mutation.property.id,
                     entity_id: mutation.property.entity_id.clone(),
                     entity_type: mutation.property.entity_type,
@@ -460,6 +483,7 @@ where
                     actor_user_id: Some(actor.clone().into_owned()),
                     actor: None,
                     on_behalf_of: None,
+                    source: None,
                     value: mutation.value.clone(),
                     previous_value: mutation.previous_value.clone(),
                     updated_at: mutation.property.updated_at,
@@ -608,21 +632,34 @@ where
         self.get_property_value(access, property_key.uuid()).await
     }
 
-    #[tracing::instrument(
-        skip(self, access),
-        fields(
-            entity_id = %access.entity_id(),
-            entity_type = ?access.entity_type(),
-            property_definition_id = %property_definition_id,
-            has_value = value.is_some()
-        )
-    )]
     async fn set_entity_property(
         &self,
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        self.set_entity_property_with_source(access, property_definition_id, value, None)
+            .await
+    }
+
+    #[tracing::instrument(
+        skip(self, access, source),
+        fields(
+            entity_id = %access.entity_id(),
+            entity_type = ?access.entity_type(),
+            property_definition_id = %property_definition_id,
+            has_value = value.is_some(),
+            has_source = source.is_some()
+        )
+    )]
+    async fn set_entity_property_with_source(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
+    ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
         let entity_type = subject.storage_entity_type;
@@ -713,6 +750,8 @@ where
                 // value; the activity transition simply omits its "from" side.
                 &None,
                 access,
+                source.as_ref(),
+                None,
             ));
             return Ok(EntityPropertyWithDefinition {
                 property,
@@ -760,6 +799,8 @@ where
             &property_value,
             &snapshot.previous_value,
             access,
+            source.as_ref(),
+            None,
         ));
 
         Ok(EntityPropertyWithDefinition {
@@ -833,6 +874,8 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 task,
+                None,
+                Uuid::parse_str(project.entity_id()).ok(),
             ));
         }
         Ok(())
@@ -853,6 +896,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let property_definition = self
             .repository
             .get_property_definition(property_definition_id)
@@ -897,6 +941,8 @@ where
             &mutation.value,
             &mutation.previous_value,
             access,
+            None,
+            None,
         ));
 
         Ok(())
@@ -917,6 +963,7 @@ where
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let mutation = self
             .repository
@@ -935,6 +982,8 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
+                None,
             ));
         }
 
@@ -955,6 +1004,7 @@ where
         access: &EditReceipt,
         updates: Vec<EntityPropertyOptionUpdate>,
     ) -> Result<Vec<EntityPropertyOptionSelection>, PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_type = subject.storage_entity_type;
 
@@ -1078,6 +1128,15 @@ where
         let mut outcomes: Vec<Option<EntityOptionUpdateOutcome>> =
             (0..subjects.len()).map(|_| None).collect();
         for index in order {
+            if let Err(error) = require_generic_property_target(access[index].entity_type()) {
+                outcomes[index] = Some(EntityOptionUpdateOutcome::Failed {
+                    message: match error {
+                        PropertiesErr::Validation(message) => message,
+                        other => other.to_string(),
+                    },
+                });
+                continue;
+            }
             let subject = &subjects[index];
             let entity_id = subject.canonical_key.entity_id.as_str();
             let entity_type = subject.storage_entity_type;
@@ -1540,13 +1599,13 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        let after = match self
+        let (after, mutations) = match self
             .repository
             .replace_property_options(property_definition_id, &plan)
             .await
             .map_err(anyhow::Error::from)?
         {
-            PropertyOptionReplaceOutcome::Replaced(options) => options,
+            PropertyOptionReplaceOutcome::Replaced { options, mutations } => (options, mutations),
             PropertyOptionReplaceOutcome::OptionNotFound => {
                 return Err(PropertiesErr::OptionNotFound);
             }
@@ -1568,6 +1627,7 @@ where
             };
             self.publish_property_event(event);
         }
+        self.publish_option_change_events(&mutations, user_id);
         Ok(after)
     }
 
@@ -1597,18 +1657,19 @@ where
             return Err(PropertiesErr::OptionNotFound);
         }
 
-        let deleted = self
+        let mutations = self
             .repository
             .delete_property_option(property_definition_id, option_id)
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(anyhow::Error::from)?
+            .ok_or(PropertiesErr::OptionNotFound)?;
 
-        if !deleted {
-            return Err(PropertiesErr::OptionNotFound);
-        }
-
-        tracing::info!("successfully deleted property option");
+        tracing::info!(
+            entities_updated = mutations.len(),
+            "successfully deleted property option"
+        );
         self.publish_property_event(Self::property_option_deleted_event(&option, user_id));
+        self.publish_option_change_events(&mutations, user_id);
 
         Ok(())
     }
@@ -1702,7 +1763,7 @@ where
         // The option keeps its id, so this reports the same label now hanging
         // off the team definition rather than a newly created one.
         self.publish_property_event(Self::property_option_updated_event(&remap.option, user_id));
-        self.publish_tag_remap_events(&remap, user_id);
+        self.publish_option_change_events(&remap.mutations, user_id);
 
         Ok(remap.option)
     }
@@ -1743,7 +1804,7 @@ where
         );
 
         self.publish_property_event(Self::property_option_deleted_event(&source_option, user_id));
-        self.publish_tag_remap_events(&remap, user_id);
+        self.publish_option_change_events(&remap.mutations, user_id);
 
         Ok(remap.option)
     }
@@ -1857,6 +1918,7 @@ where
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]
     async fn delete_entity_properties(&self, access: &EditReceipt) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let subject = self.resolve_subject(access).await?;
         let entity_reference =
             EntityReference::new(access.entity_id().to_string(), subject.storage_entity_type);
@@ -1905,6 +1967,7 @@ where
         access: &EditReceipt,
         entity_property_id: Uuid,
     ) -> Result<(), PropertiesErr> {
+        require_generic_property_target(access.entity_type())?;
         let property_info = self
             .repository
             .lookup_entity_property(entity_property_id)

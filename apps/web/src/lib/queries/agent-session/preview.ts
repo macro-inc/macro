@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, onCleanup } from 'solid-js';
 import { previewServiceClient } from '../../service-clients/service-preview/client';
 import { subscribeSocketSessionStarted } from './queue-sync';
@@ -12,6 +12,18 @@ export function handleAgentSessionPreview(event: { agentSessionId: string }) {
 }
 const key = (sessionId: string | undefined) =>
   ['agentSession', 'preview', sessionId ?? ''] as const;
+
+function agentPreviewQueryOptions(sessionId: string | undefined) {
+  return queryOptions({
+    queryKey: key(sessionId),
+    queryFn: () => throwOnErr(() => previewServiceClient.get(sessionId!)),
+    enabled: Boolean(sessionId),
+    staleTime: 0,
+    // Repairs missed events and renews the viewer's event subscription.
+    refetchInterval: 30_000,
+    retry: false,
+  });
+}
 
 export function useAgentPreview(sessionId: Accessor<string | undefined>) {
   const client = useQueryClient();
@@ -27,15 +39,7 @@ export function useAgentPreview(sessionId: Accessor<string | undefined>) {
       fireAndForget(invalidate(), 'agent-preview')
     )
   );
-  const query = useQuery(() => ({
-    queryKey: key(sessionId()),
-    queryFn: () => throwOnErr(() => previewServiceClient.get(sessionId()!)),
-    enabled: Boolean(sessionId()),
-    staleTime: 0,
-    // Repairs missed events and gateway restarts; also renews the viewer's event subscription.
-    refetchInterval: 30_000,
-    retry: false,
-  }));
+  const query = useQuery(() => agentPreviewQueryOptions(sessionId()));
   return {
     query,
     open: () => throwOnErr(() => previewServiceClient.open(sessionId()!)),

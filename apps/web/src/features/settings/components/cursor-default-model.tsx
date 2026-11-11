@@ -1,8 +1,8 @@
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useCursorApiKeyStatusQuery,
@@ -10,11 +10,17 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { SettingsSelect } from './settings-select';
+import { EffortSelector } from '../../block-agent/component/EffortSelector';
+import {
+  type EffortChoice,
+  effortConfigOption,
+} from '../../block-agent/state/session-config';
 
 /**
- * The model new Cursor sessions start on. Saves on change; renders loading,
- * error, and unsupported states in place of the picker.
+ * The model and reasoning effort new Cursor sessions start on. Saves on
+ * change; renders loading, error, and unsupported states in place of the
+ * picker. The effort stops are the selected model's own, so a saved effort the
+ * model no longer offers shows the model's default instead.
  */
 export function CursorDefaultModel(props: { triggerClass?: string }) {
   const cursorStatus = useCursorApiKeyStatusQuery();
@@ -57,9 +63,30 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
     modelOptions()[0]?.id ??
     null;
 
+  const capabilities = useAgentCapabilitiesQuery(() => {
+    const model = selectedModelId();
+    if (!registered() || modelData()?.status !== 'available' || !model) return;
+    return { harness: 'cursor', model } as const;
+  });
+  const effort = () =>
+    effortConfigOption(
+      capabilities.isPending ? [] : (capabilities.data?.configOptions ?? [])
+    );
+  const selectedEffort = () => {
+    const config = effort();
+    const saved = cursorStatus.isSuccess
+      ? cursorStatus.data.defaultEffort
+      : null;
+    if (saved && config?.options.some((option) => option.value === saved)) {
+      return saved;
+    }
+    return config?.currentValue;
+  };
+
+  // A model saved alone clears the effort, which belonged to the old model.
   const changeModel = async (modelId: string) => {
     try {
-      await setDefaultModel.mutateAsync(modelId);
+      await setDefaultModel.mutateAsync({ modelId });
       toast.success('Default model updated');
     } catch (error) {
       toast.failure(
@@ -69,17 +96,35 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
     }
   };
 
+  const changeEffort = async (choice: EffortChoice) => {
+    const modelId = selectedModelId();
+    if (!modelId) return;
+    try {
+      await setDefaultModel.mutateAsync({ modelId, effort: choice.value });
+      toast.success('Default effort updated');
+    } catch (error) {
+      toast.failure(
+        (error instanceof ThrownResultError && error.message) ||
+          'Failed to set your default effort'
+      );
+    }
+  };
+
   return (
     <Show
       when={!cursorModels.isPending}
       fallback={
-        <SettingsSelect
-          label="Default model"
+        <ModelCatalogPicker
+          value={null}
           options={[]}
           placeholder="Loading models…"
-          triggerClass={props.triggerClass}
-          onChange={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
-          disabled
+          onSelect={(id) => fireAndForget(changeModel(id), 'cursor-connect')}
+          ariaLabel="Default model"
+          triggerClass={
+            props.triggerClass ??
+            'h-9 w-full justify-between text-base [&>span]:flex-1'
+          }
+          pending
         />
       }
     >
@@ -90,7 +135,7 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
             <p class="text-xs text-negative">Could not load Cursor models.</p>
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() =>
                 fireAndForget(cursorModels.refetch(), 'cursor-connect')
@@ -109,36 +154,32 @@ export function CursorDefaultModel(props: { triggerClass?: string }) {
             </p>
           }
         >
-          <Show
-            when={isLargeModelCatalog(catalogOptions())}
-            fallback={
-              <SettingsSelect
-                label="Default model"
-                options={modelOptions()}
+          <div class="flex w-full min-w-0 items-center gap-1">
+            <div class="min-w-0 flex-1">
+              <ModelCatalogPicker
                 value={selectedModelId()}
-                triggerClass={props.triggerClass}
-                disabled={setDefaultModel.isPending}
-                onChange={(id) =>
+                options={catalogOptions()}
+                onSelect={(id) =>
                   fireAndForget(changeModel(id), 'cursor-connect')
                 }
+                disabled={setDefaultModel.isPending}
+                ariaLabel="Default model"
+                triggerClass={
+                  props.triggerClass ??
+                  'h-9 w-full justify-between text-base [&>span]:flex-1'
+                }
+                placement="bottom-start"
               />
-            }
-          >
-            <ModelCatalogPicker
-              value={selectedModelId()}
-              options={catalogOptions()}
-              onSelect={(id) =>
-                fireAndForget(changeModel(id), 'cursor-connect')
-              }
+            </div>
+            <EffortSelector
+              config={effort()}
+              value={selectedEffort()}
               disabled={setDefaultModel.isPending}
-              ariaLabel="Default model"
-              triggerClass={
-                props.triggerClass ??
-                'h-9 w-full justify-between text-base [&>span]:flex-1'
+              onChange={(choice) =>
+                fireAndForget(changeEffort(choice), 'cursor-connect')
               }
-              placement="bottom-start"
             />
-          </Show>
+          </div>
         </Show>
       </Show>
     </Show>

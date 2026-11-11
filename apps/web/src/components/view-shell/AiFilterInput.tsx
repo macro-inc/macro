@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { Telemetry } from '@macro-inc/observability';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { cn } from '@ui';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
@@ -135,7 +135,7 @@ export function AiFilterInput(props: AiFilterInputProps) {
     <div class="flex w-60 flex-col gap-1">
       <div
         class={cn(
-          'flex h-8 items-center gap-2 rounded-lg border border-edge-muted bg-input px-2',
+          'flex h-8 items-center gap-2 rounded-lg border border-edge-muted bg-input not-touch:elevated px-2',
           'focus-within:border-accent'
         )}
       >

@@ -4,7 +4,7 @@ use macro_service_urls::McpServiceUrl;
 #[test]
 fn macro_mcp_endpoint_preserves_the_gateway_prefix() {
     for (base, expected) in [
-        (McpServiceUrl::local(), "http://localhost:8080/mcp"),
+        (McpServiceUrl::local(), "http://localhost:8101/mcp"),
         (
             McpServiceUrl::dev(),
             "https://dev-gateway.macro.com/mcp/mcp",

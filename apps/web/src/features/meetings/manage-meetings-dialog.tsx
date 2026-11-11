@@ -79,7 +79,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
                   Could not load your call links.
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => fireAndForget(meetings.refetch(), 'meetings')}
                 >
                   Try again
@@ -107,7 +107,7 @@ export function ManageMeetingsDialog(props: { onClose: () => void }) {
             </Switch>
           </div>
           <div class="flex justify-end pt-4">
-            <Button variant="strong" onClick={props.onClose}>
+            <Button variant="secondary" onClick={props.onClose}>
               Done
             </Button>
           </div>

@@ -1,18 +1,18 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Dots from '@icon/system/regular/dots-three.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import Globe from '@icon/system/regular/globe.svg';
+import Link from '@icon/system/regular/link.svg';
+import Pencil from '@icon/system/regular/pencil-simple.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Popover } from '@kobalte/core/popover';
-import Calendar from '@phosphor/calendar-blank.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Check from '@phosphor/check.svg';
-import Clock from '@phosphor/clock.svg';
-import Copy from '@phosphor/copy.svg';
-import Dots from '@phosphor/dots-three.svg';
-import Eye from '@phosphor/eye.svg';
-import Globe from '@phosphor/globe.svg';
-import Link from '@phosphor/link.svg';
-import Pencil from '@phosphor/pencil-simple.svg';
-import Trash from '@phosphor/trash.svg';
 import { Badge, Button, ConfirmDialog, Dropdown, Tooltip } from '@ui';
 import {
   batch,
@@ -328,10 +328,11 @@ export function AvailabilityPanel(props: {
                     <Show when={props.canEdit}>
                       <Dropdown>
                         <Dropdown.Trigger
+                          aria-label={`Actions for ${schedule.name}`}
+                          tooltip={`Actions for ${schedule.name}`}
                           ref={actionsButton}
                           variant="ghost"
                           size="icon-sm"
-                          label={`Actions for ${schedule.name}`}
                           disabled={props.saving}
                           class="shrink-0 touch:hidden"
                         >
@@ -439,7 +440,7 @@ export function AvailabilityPanel(props: {
                   />
                   <Show when={props.canEdit}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={props.saving}
                       onClick={(event) =>
@@ -546,11 +547,12 @@ function SchedulePreview(props: {
       modal={false}
     >
       <Popover.Trigger
+        aria-label={`Preview ${props.schedule.name}`}
+        tooltip={`Preview ${props.schedule.name}`}
         as={Button}
         ref={setTrigger}
         variant="ghost"
         size="sm"
-        label={`Preview ${props.schedule.name}`}
       >
         <Eye class="size-3.5" />
         Preview

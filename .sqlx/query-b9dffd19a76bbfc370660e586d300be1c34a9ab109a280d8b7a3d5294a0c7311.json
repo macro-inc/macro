@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9dffd19a76bbfc370660e586d300be1c34a9ab109a280d8b7a3d5294a0c7311"
+}

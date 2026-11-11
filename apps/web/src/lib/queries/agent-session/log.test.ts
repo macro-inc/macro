@@ -14,8 +14,10 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: {},
   isFeatureEnabled: () => true,
 }));
+const telemetry = vi.hoisted(() => ({ traceFollowResumed: vi.fn() }));
 vi.mock('@core/agent-session/load-telemetry', () => ({
   traceCacheWrite: () => undefined,
+  traceFollowResumed: telemetry.traceFollowResumed,
 }));
 
 const metadata = vi.hoisted(() => new WeakMap<object, { source: string }>());
@@ -41,7 +43,11 @@ import { watchAgentSessionLog } from './log';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
-function entry(n: number) {
+function entry(
+  n: number
+): NonNullable<
+  AgentSessionLogQuery['user']['agentSession']
+>['log']['entries'][number] {
   return {
     id: `00000000-0000-0000-0000-${n.toString(16).padStart(12, '0')}`,
     createdAt: new Date(Date.UTC(2026, 7, 13, 0, 0, n)).toISOString(),
@@ -87,25 +93,31 @@ function fromCache<T>(data: T): Result<T> {
 }
 
 let query: ReturnType<typeof makeSubject<Result<AgentSessionLogQuery>>>;
-let appended: ReturnType<
+type Appended = ReturnType<
   typeof makeSubject<
     Result<{ agentSessionLogAppended: ReturnType<typeof entry>[] }>
   >
 >;
+/** The latest subscription the client opened. */
+let appended: Appended;
+/** Every subscription the client opened, in order. */
+let subscriptions: Appended[];
 /** The order the client was asked for things in. */
 let calls: string[];
 
 beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
+  subscriptions = [];
   query = makeSubject();
-  appended = makeSubject();
   client.query.mockImplementation((): Source<unknown> => {
     calls.push('query');
     return query.source;
   });
   client.subscription.mockImplementation((): Source<unknown> => {
     calls.push('subscription');
+    appended = makeSubject();
+    subscriptions.push(appended);
     return appended.source;
   });
   host.readQuery.mockResolvedValue({ kind: 'miss' });
@@ -121,6 +133,30 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('loads and follows notification frames over GraphQL', async () => {
+    const rows = vi.fn();
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows,
+      gap,
+    });
+    const data = logData([1]);
+    const notification = {
+      ...entry(2),
+      direction: 'notification',
+      content: { type: 'notification', notifications: [] },
+    };
+    data.user.agentSession?.log.entries.push(notification);
+    query.next(fromCache(data));
+    query.next(fromNetwork(data));
+    expect((await watch.cached)?.rows[1].direction).toBe('notification');
+    expect((await watch.fetched).rows[1].direction).toBe('notification');
+    appended.next(fromNetwork({ agentSessionLogAppended: [notification] }));
+    expect(rows.mock.calls[0][0][0].direction).toBe('notification');
+    expect(gap).not.toHaveBeenCalled();
+    watch.stop();
+  });
+
   it('says why the cache missed', async () => {
     const hit = watchAgentSessionLog(SESSION);
     query.next(fromCache(logData([1])));
@@ -223,19 +259,102 @@ describe('watchAgentSessionLog', () => {
     expect(written.user.agentSession?.log.entries).toHaveLength(2);
   });
 
-  it('reports a gap when the subscription errors', async () => {
+  it('reopens a subscription the server ended with an error, then reports the gap', async () => {
+    const rows = vi.fn();
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows,
+      gap,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+
+    // What urql hands on when the server closes a subscriber that fell
+    // behind: the error, then the end of the stream.
+    const closed = subscriptions[0];
+    closed.next({
+      error: new Error('closed after falling behind'),
+      stale: false,
+      hasNext: false,
+    } as unknown as Result<{ agentSessionLogAppended: never[] }>);
+    closed.complete();
+    expect(gap).not.toHaveBeenCalled();
+    await settle();
+
+    expect(subscriptions).toHaveLength(2);
+    expect(calls).toEqual(['subscription', 'query', 'subscription']);
+    expect(gap).toHaveBeenCalledOnce();
+    expect(telemetry.traceFollowResumed).toHaveBeenCalledExactlyOnceWith(
+      SESSION,
+      'error',
+      1,
+      0
+    );
+
+    // The control answer the runtime logs after the wake reaches the
+    // session live, without a reread.
+    subscriptions[1].next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    expect(rows).toHaveBeenCalledWith([row(2)]);
+    watch.stop();
+  });
+
+  it('reopens a subscription that ended without an error', async () => {
     const gap = vi.fn();
     const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
       rows: () => undefined,
       gap,
     });
-    appended.next({
-      error: new Error('closed after falling behind'),
-      stale: false,
-      hasNext: false,
-    } as unknown as Result<{ agentSessionLogAppended: never[] }>);
+    subscriptions[0].complete();
+    await settle();
 
+    expect(subscriptions).toHaveLength(2);
     expect(gap).toHaveBeenCalledOnce();
+    expect(telemetry.traceFollowResumed).toHaveBeenCalledExactlyOnceWith(
+      SESSION,
+      'ended',
+      1,
+      0
+    );
     watch.stop();
+  });
+
+  it('backs off while the subscription keeps ending, and starts over once it delivers', async () => {
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    subscriptions[0].complete();
+    await settle();
+    expect(subscriptions).toHaveLength(2);
+
+    subscriptions[1].complete();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscriptions).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscriptions).toHaveLength(3);
+
+    subscriptions[2].complete();
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(subscriptions).toHaveLength(4);
+
+    subscriptions[3].next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    subscriptions[3].complete();
+    await settle();
+    expect(subscriptions).toHaveLength(5);
+    watch.stop();
+  });
+
+  it('does not reopen once stopped', async () => {
+    const gap = vi.fn();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap,
+    });
+    subscriptions[0].complete();
+    watch.stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(subscriptions).toHaveLength(1);
+    expect(gap).not.toHaveBeenCalled();
   });
 });

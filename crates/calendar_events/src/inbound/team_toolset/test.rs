@@ -10,9 +10,12 @@ use crate::domain::team::{
     AvailabilityCalendar, TeamCalendarCursor, TeamCalendarPage, TeamCalendarSharing,
 };
 
+/// The requester, range and member filter of one team calendar read.
+type TeamCalendarRequest = (String, OccurrenceRange, Option<Vec<String>>);
+
 #[derive(Default)]
 struct FakeService {
-    requests: Mutex<Vec<(String, OccurrenceRange, Option<Vec<String>>)>>,
+    requests: Mutex<Vec<TeamCalendarRequest>>,
     fail: bool,
 }
 

@@ -13,7 +13,7 @@ import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { untrack } from 'solid-js';
 import { z } from 'zod';
 
-/** Home's prompt to connect tools (Settings → Connections) and invite teammates (Settings → Team). */
+/** Home's prompt to connect tools (Settings → Integrations) and invite teammates (Settings → Team). */
 export function HomeSetupPromotion(props: { class?: string }) {
   const promotions = useFeatureFlag(enableSidebarPromotions);
   const { openSettings } = useSettingsState();
@@ -47,7 +47,7 @@ export function HomeSetupPromotion(props: { class?: string }) {
       dismissLabel="Dismiss workspace setup"
       action={{
         label: COPY.action,
-        onClick: () => openSettings('Connections'),
+        onClick: () => openSettings('Connected'),
       }}
       secondaryAction={
         canInvite()

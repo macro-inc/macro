@@ -4,9 +4,10 @@ import {
   flagVerdict,
 } from '@app/features/sidebar-promotion/sidebar-promotion';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { lazyNamed } from '@core/util/lazyNamed';
-import FileZipIcon from '@phosphor/file-zip.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { Show, Suspense } from 'solid-js';
 
@@ -16,7 +17,8 @@ const SlackImport = lazyNamed(() => import('./slack-import'), 'SlackImport');
 /**
  * The Channels rail's Slack card: the shared connector-import card, whose
  * dialog picks channels through the Slack connector and hands history
- * imports to the archive dialog.
+ * imports to the archive dialog. Its second button creates a channel from
+ * scratch instead.
  */
 export function SlackImportSidebar() {
   const flag = useFeatureFlag(enableSlackArchiveImport);
@@ -62,6 +64,11 @@ export function SlackImportSidebar() {
             },
           },
         ]}
+        actionLabel="Import Slack"
+        secondaryAction={{
+          label: 'New channel',
+          onClick: () => openNewChannelModal(),
+        }}
       />
     </>
   );

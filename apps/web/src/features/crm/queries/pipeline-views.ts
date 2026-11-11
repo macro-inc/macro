@@ -1,27 +1,86 @@
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
+import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import type { Accessor } from 'solid-js';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   boardWithStatusColumn,
   newBoardWithStatusColumn,
 } from '../../database/core/board-grouping';
-import type { CardMove } from '../../database/core/board-moves';
+import { type CardMove, withPositions } from '../../database/core/board-moves';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { createKeyedSerializer } from '../../database/core/keyed-serializer';
+import {
+  newTimelineWithTimeRangeColumn,
+  timelineWithTimeRangeColumn,
+} from '../../database/core/timeline-range';
 import type { NewView } from '../../database/core/view-creation';
 import type { CardMoved, ViewChange } from '../../database/core/view-state';
-import { boardLayout } from '../../database/core/views';
+import { boardLayout, timelineLayout } from '../../database/core/views';
 import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
 type ViewOpResult = Extract<OpResult, { kind: 'view' }>;
+type PositionsStorage = Pick<
+  CrmRecordDependencies['storage'],
+  'getCrmPipelineViewPositions'
+>;
+
+function pipelinePositionsOptions(
+  storage: PositionsStorage,
+  pipelineId: string,
+  viewId: string | undefined
+) {
+  return {
+    queryKey: crmKeys.pipelinePositions(pipelineId, viewId).queryKey,
+    enabled: !!viewId,
+    queryFn: () =>
+      viewId
+        ? Telemetry.span('crm.board.positions', async (span) => {
+            span.setAttr('crm.pipeline_id', pipelineId);
+            span.setAttr('database.view_id', viewId);
+            return throwOnErr(() =>
+              storage.getCrmPipelineViewPositions(pipelineId, viewId)
+            );
+          })
+        : Promise.resolve([]),
+  };
+}
+
+/** Saved ordering is scoped to the pipeline and the selected board. */
+export function usePipelinePositionsQuery(
+  deps: {
+    client: CrmRecordDependencies['client'];
+    storage: PositionsStorage;
+  },
+  pipelineId: string,
+  viewId: Accessor<string | undefined>
+) {
+  return useQuery(
+    () => pipelinePositionsOptions(deps.storage, pipelineId, viewId()),
+    () => deps.client
+  );
+}
+
+function pipelineTableQueryOptions(
+  deps: CrmRecordDependencies,
+  pipelineId: string
+) {
+  return queryOptions({
+    queryKey: crmKeys.pipelineTable(pipelineId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => deps.storage.getCrmPipelineTable(pipelineId)),
+  });
+}
 
 /** The pipeline's single table, whose stored views the toolbar lists. */
 export function usePipelineTableQuery(
@@ -29,11 +88,7 @@ export function usePipelineTableQuery(
   pipeline: Pipeline
 ) {
   return useQuery(
-    () => ({
-      queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
-      queryFn: () =>
-        throwOnErr(() => deps.storage.getCrmPipelineTable(pipeline.id)),
-    }),
+    () => pipelineTableQueryOptions(deps, pipeline.id),
     () => deps.client
   );
 }
@@ -43,7 +98,10 @@ export function usePipelineTableQuery(
  * pipeline's own endpoint. Its storage database is not the viewer's to address.
  */
 export function createPipelineViews(
-  deps: CrmRecordDependencies,
+  deps: {
+    client: CrmRecordDependencies['client'];
+    storage: Pick<CrmRecordDependencies['storage'], 'applyCrmPipelineOps'>;
+  },
   pipeline: Pipeline
 ) {
   const key = crmKeys.pipelineTable(pipeline.id).queryKey;
@@ -88,8 +146,23 @@ export function createPipelineViews(
     options: [uuidv7(), uuidv7(), uuidv7()] as [string, string, string],
   });
 
+  /** A batch adding a column and then changing `view`. */
+  const withColumn = (view: DatabaseView, ops: DatabaseOp[]) =>
+    inOrder(view.id, () =>
+      apply(ops)
+        .andThen(lastView)
+        .map((stored) => {
+          upsert(stored);
+          // The new column arrives with the table read.
+          deps.client.invalidateQueries({ queryKey: key });
+        })
+    );
+
   return {
-    /** Add a view that starts from `current`; a board without a grouping column adds a Status column. */
+    /**
+     * Add a view that starts from `current`; a board without a grouping
+     * column adds a Status column, and a timeline without a time range a Time range column.
+     */
     create(
       current: DatabaseView,
       input: NewView,
@@ -107,24 +180,34 @@ export function createPipelineViews(
           },
         },
       ];
-      let ops: DatabaseOp[];
-      if (input.layout === 'table')
-        ops = created(
-          current.layout.kind === 'table'
-            ? current.layout
-            : { kind: 'table', columns: [] }
-        );
-      else if (input.groupBy.kind === 'column')
-        ops = created(boardLayout(input.groupBy.columnId, columns));
-      else
-        ops = newBoardWithStatusColumn({
-          tableId: pipeline.tableId,
-          viewId,
-          name: input.name,
-          query: current.query,
-          columns,
-          status: status(),
-        });
+      const creation = {
+        tableId: pipeline.tableId,
+        viewId,
+        name: input.name,
+        query: current.query,
+        columns,
+      };
+      const ops = match(input)
+        .with({ layout: 'table' }, () =>
+          created(
+            current.layout.kind === 'table'
+              ? current.layout
+              : { kind: 'table', columns: [] }
+          )
+        )
+        .with({ layout: 'board', groupBy: { kind: 'column' } }, ({ groupBy }) =>
+          created(boardLayout(groupBy.columnId, columns))
+        )
+        .with({ layout: 'board', groupBy: { kind: 'new-status' } }, () =>
+          newBoardWithStatusColumn({ ...creation, status: status() })
+        )
+        .with({ layout: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+          created(timelineLayout(range.columnId, columns))
+        )
+        .with({ layout: 'timeline', range: { kind: 'new-column' } }, () =>
+          newTimelineWithTimeRangeColumn({ ...creation, column: uuidv7() })
+        )
+        .exhaustive(() => created({ kind: 'table', columns: [] }));
       return inOrder(listKey, () => apply(ops).andThen(lastView)).map(
         (view) => {
           upsert(view);
@@ -154,14 +237,19 @@ export function createPipelineViews(
       view: DatabaseView,
       columns: readonly DatabaseViewColumn[]
     ) {
-      return inOrder(view.id, () =>
-        apply(boardWithStatusColumn({ view, columns, status: status() }))
-          .andThen(lastView)
-          .map((stored) => {
-            upsert(stored);
-            // The new column arrives with the table read.
-            deps.client.invalidateQueries({ queryKey: key });
-          })
+      return withColumn(
+        view,
+        boardWithStatusColumn({ view, columns, status: status() })
+      );
+    },
+    /** Lay a view out as a timeline along a new Time range column, in one batch. */
+    showAsTimelineWithTimeRangeColumn(
+      view: DatabaseView,
+      columns: readonly DatabaseViewColumn[]
+    ) {
+      return withColumn(
+        view,
+        timelineWithTimeRangeColumn({ view, columns, column: uuidv7() })
       );
     },
     remove(view: DatabaseView) {
@@ -184,33 +272,52 @@ export function createPipelineViews(
       view: DatabaseView,
       move: CardMove
     ): ResultAsync<CardMoved, DatabaseOpFailure> {
+      const positionsKey = crmKeys.pipelinePositions(
+        pipeline.id,
+        view.id
+      ).queryKey;
       return inOrder(view.id, () =>
-        apply([
-          {
-            kind: 'view',
-            table: view.tableId,
-            view: view.id,
-            change: {
-              kind: 'move_card',
-              row: move.row,
-              lane: move.lane,
-              before: move.before,
-              after: move.after,
+        ResultAsync.fromSafePromise(
+          deps.client.cancelQueries({ queryKey: positionsKey })
+        ).andThen(() =>
+          apply([
+            {
+              kind: 'view',
+              table: view.tableId,
+              view: view.id,
+              change: {
+                kind: 'move_card',
+                row: move.row,
+                lane: move.lane,
+                before: move.before,
+                after: move.after,
+              },
             },
-          },
-        ])
+          ])
+        )
       ).andThen((results) => {
         const result = results.at(-1) as ViewOpResult | undefined;
-        return result?.kind === 'view' &&
-          result.change.kind === 'card_moved' &&
-          result.tableVersion != null
-          ? okAsync({
-              positions: result.change.positions,
-              tableVersion: result.tableVersion,
-            })
-          : errAsync<CardMoved, DatabaseOpFailure>({
-              kind: 'unexpected-result',
-            });
+        if (
+          result?.kind !== 'view' ||
+          result.change.kind !== 'card_moved' ||
+          result.tableVersion == null
+        )
+          return errAsync<CardMoved, DatabaseOpFailure>({
+            kind: 'unexpected-result',
+          });
+        const moved = {
+          positions: result.change.positions,
+          tableVersion: result.tableVersion,
+        };
+        // A focus refetch may have started while the write was in flight.
+        return ResultAsync.fromSafePromise(
+          deps.client.cancelQueries({ queryKey: positionsKey })
+        ).map(() => {
+          deps.client.setQueryData<CardPosition[]>(positionsKey, (current) =>
+            withPositions(current ?? [], moved.positions)
+          );
+          return moved;
+        });
       });
     },
   };

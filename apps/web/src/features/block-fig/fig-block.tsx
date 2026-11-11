@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The `.fig` block: app chrome (header, file menu, sharing) around the
  * viewer, wired to the worker engine and document storage.
@@ -44,7 +45,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -131,7 +132,7 @@ function FigHost(props: {
           message:
             'This design was replaced by a newer file (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {
@@ -328,8 +329,8 @@ function DownloadOnly(props: { onDownload: () => void }): JSX.Element {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 p-6 text-ink-muted text-sm">
       Figma files can't be previewed here yet.
-      <Button variant="outline" size="sm" onClick={props.onDownload}>
-        <DownloadSimple />
+      <Button variant="secondary" size="sm" onClick={props.onDownload}>
+        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download
       </Button>
     </div>

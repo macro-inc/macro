@@ -1,6 +1,6 @@
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
 import { Popover } from '@kobalte/core/popover';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import CheckCircle from '@phosphor/check-circle.svg';
 import { cn, Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import { createEffect, createSignal, on, Show, useContext } from 'solid-js';
@@ -84,6 +84,7 @@ export function MinimizedThread(props: {
         <Layer depth={2}>
           <div
             ref={setBadge}
+            data-comment-badge={String(props.comment.threadId)}
             class={cn(
               'transition-transform flex items-center group text-ink-extra-muted pointer-events-auto',
               props.isActive && '-translate-x-4'

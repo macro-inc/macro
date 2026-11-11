@@ -56,12 +56,13 @@ pub trait ConnectionRepo: Send + Sync {
     /// Deletes a [StoredConnectionEntity] from the database
     async fn remove_entity(&self, entity: &EntityConnection<'_>) -> anyhow::Result<()>;
 
-    /// Updates the last_ping timestamp for a given connection entity
+    /// Updates the last_ping timestamp for a given connection entity, or
+    /// returns `None` when there is no entry for it
     async fn update_last_entity_ping(
         &self,
         entity: &EntityConnection<'_>,
         timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity>;
+    ) -> anyhow::Result<Option<StoredConnectionEntity>>;
 
     /// Updates the last_ping timestamp for a given top level connection
     async fn update_user_connection_last_ping(
@@ -70,6 +71,15 @@ pub trait ConnectionRepo: Send + Sync {
         user: &str,
         timestamp: u64,
     ) -> anyhow::Result<()>;
+}
+
+/// What became of a message offered to a connection's outbound queue.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SendOutcome {
+    /// The message is queued for the connection's forwarder to write.
+    Queued,
+    /// The connection would not take the message, so it was dropped.
+    Dropped,
 }
 
 #[derive(Clone)]
@@ -182,23 +192,40 @@ impl ConnectionManager {
 
     /// Updates the last_ping timestamp for a given connection entity
     /// This also propogates to the last_ping timestamp for the top level user connection
+    ///
+    /// A ping for an entity with no entry re-creates it: the client is still
+    /// watching, so a lost `open` (a failed write, a row cleared under a live
+    /// connection) must not hide the user until they reopen the entity.
     #[tracing::instrument(err, skip(self))]
-    pub async fn refresh_connection_entity(&self, entity: &EntityConnection<'_>) -> Result<()> {
+    pub async fn refresh_connection_entity(
+        &self,
+        connection_entity: UserEntityConnection<'_>,
+    ) -> Result<()> {
         let updated_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        let connection_id = entity.connection_id.clone();
+        let connection_id = connection_entity.extra.connection_id.to_string();
+        let user_id = connection_entity.user_id.to_string();
 
-        // Update the last_ping on the specific entity associated with the connection_id
-        let entity = self
+        let refreshed = self
             .persistence
-            .update_last_entity_ping(entity, updated_timestamp)
+            .update_last_entity_ping(&connection_entity.extra, updated_timestamp)
             .await?;
+        if refreshed.is_none() {
+            tracing::warn!(
+                connection_id = %connection_id,
+                entity_type = %connection_entity.extra.extra.entity_type,
+                entity_id = %connection_entity.extra.extra.entity_id,
+                "ping for an untracked entity; re-creating its entry"
+            );
+            self.persistence
+                .insert_connection_entry(connection_entity)
+                .await?;
+        }
 
-        // // Update the user connection last_ping
         self.persistence
-            .update_user_connection_last_ping(&connection_id, &entity.user_id, updated_timestamp)
+            .update_user_connection_last_ping(&connection_id, &user_id, updated_timestamp)
             .await?;
 
         Ok(())
@@ -216,7 +243,9 @@ impl ConnectionManager {
     /// A full queue is not a slow consumer, it is a consumer already a whole
     /// queue behind, so it is treated the same as a closed one: the
     /// connection goes, which also aborts the forwarder that stopped
-    /// draining, and the client reconnects.
+    /// draining, and the client reconnects. That is the designed way to shed
+    /// a client that stopped reading, not a failed send, so it is reported as
+    /// [SendOutcome::Dropped] rather than an error.
     #[tracing::instrument(
         name = "connection_gateway.queue_send",
         err,
@@ -225,9 +254,10 @@ impl ConnectionManager {
             connection.id = id,
             connection.queue.observed_depth = tracing::field::Empty,
             connection.queue.max_capacity = tracing::field::Empty,
+            connection.dropped = tracing::field::Empty,
         )
     )]
-    pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
+    pub async fn send_message(&self, id: &str, message: Message) -> Result<SendOutcome> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
             None => anyhow::bail!("connection not found"),
@@ -241,14 +271,31 @@ impl ConnectionManager {
         span.record("connection.queue.max_capacity", max_capacity as u64);
 
         if let Err(err) = sender.try_send(OutgoingMessage::Message(message)) {
+            span.record("connection.dropped", true);
             tracing::warn!(
+                error = %err,
                 connection.id = id,
                 connection.queue.observed_depth = depth,
                 connection.queue.max_capacity = max_capacity,
                 "websocket outbound queue would not take a message; dropping the connection"
             );
             self.remove_connection(id).await?;
-            anyhow::bail!("failed to send message: {}", err);
+            return Ok(SendOutcome::Dropped);
+        }
+
+        Ok(SendOutcome::Queued)
+    }
+
+    /// Send a raw binary frame to a connection held by this instance.
+    pub async fn send_binary(&self, id: &str, bytes: Vec<u8>) -> Result<()> {
+        let sender = match self.connections.get(id) {
+            Some(connection) => connection.sender.clone(),
+            None => anyhow::bail!("connection not found"),
+        };
+
+        if let Err(err) = sender.try_send(OutgoingMessage::Binary(bytes)) {
+            self.remove_connection(id).await?;
+            anyhow::bail!("failed to send binary message: {}", err);
         }
 
         Ok(())

@@ -153,16 +153,59 @@ impl FusionAuthClient {
     where
         T: serde::Serialize + std::fmt::Debug + 'static,
     {
+        self.oauth2_authorize_url(Some(idp_id), login_hint, None, state)
+    }
+
+    /// As [`Self::construct_oauth2_authorize_url`], with an OpenID Connect
+    /// `prompt` (such as `select_account`) that FusionAuth passes on to the
+    /// identity provider. Use it for an identity provider that discovers its
+    /// endpoints from an issuer, whose authorize URL can't carry the prompt.
+    #[tracing::instrument(skip(self, state), level = tracing::Level::TRACE)]
+    pub fn construct_oauth2_authorize_url_with_prompt<T>(
+        &self,
+        idp_id: &str,
+        login_hint: Option<&str>,
+        prompt: &str,
+        state: Option<T>,
+    ) -> anyhow::Result<String>
+    where
+        T: serde::Serialize + std::fmt::Debug + 'static,
+    {
+        self.oauth2_authorize_url(Some(idp_id), login_hint, Some(prompt), state)
+    }
+
+    /// The authorize URL with no identity provider picked, which lands on
+    /// FusionAuth's own login page (password and every provider).
+    pub fn construct_oauth2_login_page_url<T>(&self, state: Option<T>) -> anyhow::Result<String>
+    where
+        T: serde::Serialize + std::fmt::Debug + 'static,
+    {
+        self.oauth2_authorize_url(None, None, None, state)
+    }
+
+    fn oauth2_authorize_url<T>(
+        &self,
+        idp_id: Option<&str>,
+        login_hint: Option<&str>,
+        prompt: Option<&str>,
+        state: Option<T>,
+    ) -> anyhow::Result<String>
+    where
+        T: serde::Serialize + std::fmt::Debug + 'static,
+    {
         let mut url = Url::parse(&format!("{}/oauth2/authorize", self.fusion_auth_public_url))
             .expect("Invalid base URL");
 
         url.query_pairs_mut()
             .append_pair("client_id", &self.client_id)
             .append_pair("redirect_uri", &self.oauth_redirect_uri)
-            .append_pair("idp_hint", idp_id)
             .append_pair("response_type", "code")
             .append_pair("scope", "openid profile email offline_access")
             .append_pair("access_type", "offline"); // Explicitly request offline access
+
+        if let Some(idp_id) = idp_id {
+            url.query_pairs_mut().append_pair("idp_hint", idp_id);
+        }
 
         if let Some(state) = state {
             tracing::trace!(state=?state, "state provided");
@@ -173,6 +216,10 @@ impl FusionAuthClient {
 
         if let Some(login_hint) = login_hint {
             url.query_pairs_mut().append_pair("login_hint", login_hint);
+        }
+
+        if let Some(prompt) = prompt {
+            url.query_pairs_mut().append_pair("prompt", prompt);
         }
 
         Ok(url.to_string())

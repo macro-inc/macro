@@ -1,4 +1,5 @@
 use chrono::Utc;
+pub use item_filters::ast::agent_session::{AgentSessionSource, AgentSessionVisibility};
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -18,6 +19,22 @@ pub enum AgentPullRequestState {
     Merged,
 }
 
+/// Who or what archived an agent session.
+#[derive(
+    Serialize, Clone, Copy, Deserialize, Debug, PartialEq, Eq, strum::EnumString, strum::AsRefStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub enum AgentSessionArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
 /// An agent session as displayed in Soup.
 ///
 /// Includes the persisted runtime and repository metadata needed to render
@@ -32,8 +49,12 @@ pub struct SoupAgentSession<T = ()> {
     /// The user-facing name of the session
     pub name: String,
 
-    /// Whether the session is archived and read-only.
-    pub is_archived: bool,
+    /// Who or what archived the session, or `None` while it is active. An archived session is
+    /// read-only.
+    pub archived_by: Option<AgentSessionArchiveCause>,
+
+    /// When the session was archived, or `None` while it is active.
+    pub archived_at: Option<chrono::DateTime<Utc>>,
 
     /// Who the session belongs to
     #[cfg_attr(feature = "schema", schema(value_type = String))]
@@ -69,6 +90,14 @@ pub struct SoupAgentSession<T = ()> {
     /// The channel thread the session was opened from, when any
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_id: Option<Uuid>,
+
+    /// Who started the session
+    #[serde(default)]
+    pub source: AgentSessionSource,
+
+    /// Where the session is shown
+    #[serde(default)]
+    pub visibility: AgentSessionVisibility,
 
     /// The session's last known status.
     ///

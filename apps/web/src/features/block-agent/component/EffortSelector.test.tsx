@@ -46,42 +46,43 @@ afterEach(() => {
   HTMLElement.prototype.scrollTo = originalScrollTo;
   vi.unstubAllGlobals();
 });
-it('selects a named effort option and closes on touch', async () => {
-  const touch = true;
-  vi.mocked(isTouchDevice).mockReturnValue(touch);
-  const change = vi.fn();
-  const openChange = vi.fn();
-  render(() => (
-    <EffortSelector
-      config={config}
-      onChange={change}
-      onOpenChange={openChange}
-    />
-  ));
-  const trigger = screen.getByRole('button', { name: 'Effort: Low' });
-  if (touch) fireEvent.click(trigger);
-  else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-  expect(screen.queryByRole('slider')).toBeNull();
-  const high = await screen.findByRole(touch ? 'button' : 'menuitem', {
-    name: 'High',
-  });
-  if (touch) {
-    expect(
-      screen.getByRole('button', { name: 'Low' }).getAttribute('aria-pressed')
-    ).toBe('true');
-    expect(high.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(high);
-  } else {
-    high.focus();
-    fireEvent.keyDown(high, { key: 'Enter' });
+it.each([false, true])(
+  'selects a named effort option and closes (touch=%s)',
+  async (touch) => {
+    vi.mocked(isTouchDevice).mockReturnValue(touch);
+    const change = vi.fn();
+    const openChange = vi.fn();
+    render(() => (
+      <EffortSelector
+        config={config}
+        onChange={change}
+        onOpenChange={openChange}
+      />
+    ));
+    const trigger = screen.getByRole('button', { name: 'Effort: Low' });
+    if (touch) fireEvent.click(trigger);
+    else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const high = await screen.findByRole(touch ? 'button' : 'menuitem', {
+      name: 'High',
+    });
+    if (touch) {
+      expect(
+        screen.getByRole('button', { name: 'Low' }).getAttribute('aria-pressed')
+      ).toBe('true');
+      expect(high.getAttribute('aria-pressed')).toBe('false');
+      fireEvent.click(high);
+    } else {
+      high.focus();
+      fireEvent.keyDown(high, { key: 'Enter' });
+    }
+    expect(openChange).toHaveBeenLastCalledWith(false);
+    expect(change).toHaveBeenCalledExactlyOnceWith({
+      configId: 'effort',
+      value: 'high',
+      name: 'High',
+    });
   }
-  expect(openChange).toHaveBeenLastCalledWith(false);
-  expect(change).toHaveBeenCalledExactlyOnceWith({
-    configId: 'effort',
-    value: 'high',
-    name: 'High',
-  });
-});
+);
 it('hides unsupported effort', () => {
   render(() => <EffortSelector onChange={vi.fn()} />);
   expect(screen.queryByRole('button')).toBeNull();
@@ -111,28 +112,9 @@ it('returns focus to the composer when the mobile chooser closes', async () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Effort: Low' }));
   const low = await screen.findByRole('button', { name: 'Low' });
-  await waitFor(() => expect(document.activeElement).toBe(low));
+  // The sheet takes focus, not its first row, so no row opens ringed.
+  const sheet = low.closest('[data-corvu-drawer-content]');
+  await waitFor(() => expect(document.activeElement).toBe(sheet));
   fireEvent.keyDown(low, { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(input));
-});
-
-it('adjusts desktop effort with the speedometer slider and retains the popup', async () => {
-  vi.mocked(isTouchDevice).mockReturnValue(false);
-  const change = vi.fn();
-  render(() => <EffortSelector config={config} onChange={change} />);
-  fireEvent.keyDown(screen.getByRole('button', { name: 'Effort: Low' }), {
-    key: 'Enter',
-  });
-  const slider = await screen.findByRole('slider', {
-    name: 'Reasoning effort',
-  });
-  await waitFor(() => expect(document.activeElement).toBe(slider));
-  expect(screen.queryByRole('menuitem', { name: 'Choose model' })).toBeNull();
-  fireEvent.keyDown(slider, { key: 'ArrowRight' });
-  expect(change).toHaveBeenCalledExactlyOnceWith({
-    configId: 'effort',
-    value: 'high',
-    name: 'High',
-  });
-  expect(screen.getByRole('menu')).toBeTruthy();
 });

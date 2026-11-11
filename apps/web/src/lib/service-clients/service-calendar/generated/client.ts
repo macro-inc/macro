@@ -7,16 +7,41 @@
 import type {
   AvailabilityCalendarBody,
   AvailabilityCalendarsResponse,
+  BookingChange,
+  BookingInsights,
+  BookingLink,
+  BookingLinkListing,
+  BookingProfile,
+  BookingResponse,
+  BookingsResponse,
   CalendarEvent,
   CalendarEventProviderUrl,
   CalendarEventProviderUrlParams,
+  CalendarJoinRequest,
   CalendarMutationApiError,
   CalendarReplacementView,
+  CopyCalendarEventRequest,
+  CreateBookingLinkParams,
+  CreateBookingLinkRequest,
   CreateCalendarEventRequest,
   DeleteCalendarEventParams,
+  EditBookingLinkParams,
+  EditBookingLinkRequest,
+  GetBookingInsightsParams,
+  GetBookingSettingsParams,
+  InsightQuery,
+  InviteCalendarEventGuestsRequest,
+  ListBookingLinksParams,
+  ListBookingRescheduleSlotsParams,
+  ListBookingsParams,
   ListCalendarsResponse,
   PrepareCalendarReplacementRequest,
+  ProfileResponse,
+  ReceiptResponse,
+  RespondToJoinRequestRequest,
   RsvpCalendarEventRequest,
+  SaveBookingSettingsParams,
+  SlotsResponse,
   TeamCalendarSharingBody,
   UpdateCalendarEventRequest,
 } from './schemas';
@@ -415,6 +440,181 @@ export const updateCalendarEvent = async (
 };
 
 /**
+ * @summary Add a snapshot of an event shared with one of the requester's channels to
+one of their Google calendars and return the synced snapshot. The
+snapshot keeps the meeting's iCalendar UID and organizer, lists only the
+requester as a guest, and carries no join link; nobody is notified.
+While the requester's request to join the event is pending or accepted,
+the copy is refused with `join_request_open`: the meeting reaches their
+calendar as the invitation, which a copy would otherwise take in.
+ */
+export type copyCalendarEventResponse201 = {
+  data: CalendarEvent;
+  status: 201;
+};
+
+export type copyCalendarEventResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type copyCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type copyCalendarEventResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type copyCalendarEventResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type copyCalendarEventResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type copyCalendarEventResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type copyCalendarEventResponseSuccess = copyCalendarEventResponse201 & {
+  headers: Headers;
+};
+export type copyCalendarEventResponseError = (
+  | copyCalendarEventResponse400
+  | copyCalendarEventResponse401
+  | copyCalendarEventResponse403
+  | copyCalendarEventResponse404
+  | copyCalendarEventResponse409
+  | copyCalendarEventResponse503
+) & {
+  headers: Headers;
+};
+
+export type copyCalendarEventResponse =
+  | copyCalendarEventResponseSuccess
+  | copyCalendarEventResponseError;
+
+export const getCopyCalendarEventUrl = (eventId: string) => {
+  return `/events/${eventId}/copy`;
+};
+
+export const copyCalendarEvent = async (
+  eventId: string,
+  copyCalendarEventRequest: CopyCalendarEventRequest,
+  options?: RequestInit
+): Promise<copyCalendarEventResponse> => {
+  const res = await fetch(getCopyCalendarEventUrl(eventId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(copyCalendarEventRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: copyCalendarEventResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as copyCalendarEventResponse;
+};
+
+/**
+ * @summary Add guests to a calendar event without touching anyone already invited,
+and return its synced entity. The organizer, and guests the organizer lets
+invite others, may call it; Google emails the new guests.
+ */
+export type inviteCalendarEventGuestsResponse200 = {
+  data: CalendarEvent;
+  status: 200;
+};
+
+export type inviteCalendarEventGuestsResponse400 = {
+  data: CalendarMutationApiError;
+  status: 400;
+};
+
+export type inviteCalendarEventGuestsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type inviteCalendarEventGuestsResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type inviteCalendarEventGuestsResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type inviteCalendarEventGuestsResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type inviteCalendarEventGuestsResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type inviteCalendarEventGuestsResponseSuccess =
+  inviteCalendarEventGuestsResponse200 & {
+    headers: Headers;
+  };
+export type inviteCalendarEventGuestsResponseError = (
+  | inviteCalendarEventGuestsResponse400
+  | inviteCalendarEventGuestsResponse401
+  | inviteCalendarEventGuestsResponse403
+  | inviteCalendarEventGuestsResponse404
+  | inviteCalendarEventGuestsResponse409
+  | inviteCalendarEventGuestsResponse503
+) & {
+  headers: Headers;
+};
+
+export type inviteCalendarEventGuestsResponse =
+  | inviteCalendarEventGuestsResponseSuccess
+  | inviteCalendarEventGuestsResponseError;
+
+export const getInviteCalendarEventGuestsUrl = (eventId: string) => {
+  return `/events/${eventId}/guests`;
+};
+
+export const inviteCalendarEventGuests = async (
+  eventId: string,
+  inviteCalendarEventGuestsRequest: InviteCalendarEventGuestsRequest,
+  options?: RequestInit
+): Promise<inviteCalendarEventGuestsResponse> => {
+  const res = await fetch(getInviteCalendarEventGuestsUrl(eventId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(inviteCalendarEventGuestsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: inviteCalendarEventGuestsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as inviteCalendarEventGuestsResponse;
+};
+
+/**
  * @summary Resolve an authorized event's provider link for Outlook-only actions.
  */
 export type calendarEventProviderUrlResponse200 = {
@@ -648,6 +848,87 @@ export const healthHandler = async (
 };
 
 /**
+ * @summary Answer a request to join an event the requester can change and return
+where it now stands. Accepting adds the guest through the invite path; an
+already answered request is returned unchanged.
+ */
+export type respondToJoinRequestResponse200 = {
+  data: CalendarJoinRequest;
+  status: 200;
+};
+
+export type respondToJoinRequestResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type respondToJoinRequestResponse403 = {
+  data: CalendarMutationApiError;
+  status: 403;
+};
+
+export type respondToJoinRequestResponse404 = {
+  data: CalendarMutationApiError;
+  status: 404;
+};
+
+export type respondToJoinRequestResponse409 = {
+  data: CalendarMutationApiError;
+  status: 409;
+};
+
+export type respondToJoinRequestResponse503 = {
+  data: CalendarMutationApiError;
+  status: 503;
+};
+
+export type respondToJoinRequestResponseSuccess =
+  respondToJoinRequestResponse200 & {
+    headers: Headers;
+  };
+export type respondToJoinRequestResponseError = (
+  | respondToJoinRequestResponse401
+  | respondToJoinRequestResponse403
+  | respondToJoinRequestResponse404
+  | respondToJoinRequestResponse409
+  | respondToJoinRequestResponse503
+) & {
+  headers: Headers;
+};
+
+export type respondToJoinRequestResponse =
+  | respondToJoinRequestResponseSuccess
+  | respondToJoinRequestResponseError;
+
+export const getRespondToJoinRequestUrl = (requestId: string) => {
+  return `/join-requests/${requestId}`;
+};
+
+export const respondToJoinRequest = async (
+  requestId: string,
+  respondToJoinRequestRequest: RespondToJoinRequestRequest,
+  options?: RequestInit
+): Promise<respondToJoinRequestResponse> => {
+  const res = await fetch(getRespondToJoinRequestUrl(requestId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(respondToJoinRequestRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: respondToJoinRequestResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as respondToJoinRequestResponse;
+};
+
+/**
  * @summary Read saved progress without performing a provider mutation.
  */
 export type calendarReplacementStatusResponse200 = {
@@ -798,6 +1079,713 @@ export const confirmCalendarReplacement = async (
     status: res.status,
     headers: res.headers,
   } as confirmCalendarReplacementResponse;
+};
+
+/**
+ * @summary List the profile's bookings, optionally those starting in a half-open range.
+ */
+export type listBookingsResponse200 = {
+  data: BookingsResponse;
+  status: 200;
+};
+
+export type listBookingsResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type listBookingsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listBookingsResponseSuccess = listBookingsResponse200 & {
+  headers: Headers;
+};
+export type listBookingsResponseError = (
+  | listBookingsResponse400
+  | listBookingsResponse403
+) & {
+  headers: Headers;
+};
+
+export type listBookingsResponse =
+  | listBookingsResponseSuccess
+  | listBookingsResponseError;
+
+export const getListBookingsUrl = (params?: ListBookingsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/bookings?${stringifiedParams}`
+    : `/scheduling/bookings`;
+};
+
+export const listBookings = async (
+  params?: ListBookingsParams,
+  options?: RequestInit
+): Promise<listBookingsResponse> => {
+  const res = await fetch(getListBookingsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBookingsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBookingsResponse;
+};
+
+/**
+ * @summary Approve, cancel, record attendance for, or reschedule one booking.
+ */
+export type changeBookingResponse200 = {
+  data: BookingResponse;
+  status: 200;
+};
+
+export type changeBookingResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type changeBookingResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type changeBookingResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type changeBookingResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type changeBookingResponseSuccess = changeBookingResponse200 & {
+  headers: Headers;
+};
+export type changeBookingResponseError = (
+  | changeBookingResponse400
+  | changeBookingResponse403
+  | changeBookingResponse404
+  | changeBookingResponse409
+) & {
+  headers: Headers;
+};
+
+export type changeBookingResponse =
+  | changeBookingResponseSuccess
+  | changeBookingResponseError;
+
+export const getChangeBookingUrl = (id: string) => {
+  return `/scheduling/bookings/${id}/change`;
+};
+
+export const changeBooking = async (
+  id: string,
+  bookingChange: BookingChange,
+  options?: RequestInit
+): Promise<changeBookingResponse> => {
+  const res = await fetch(getChangeBookingUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bookingChange),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: changeBookingResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as changeBookingResponse;
+};
+
+/**
+ * @summary Read one booking as its personal owner, a host, or a team administrator.
+ */
+export type getManagedBookingResponse200 = {
+  data: ReceiptResponse;
+  status: 200;
+};
+
+export type getManagedBookingResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getManagedBookingResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getManagedBookingResponseSuccess = getManagedBookingResponse200 & {
+  headers: Headers;
+};
+export type getManagedBookingResponseError = (
+  | getManagedBookingResponse403
+  | getManagedBookingResponse404
+) & {
+  headers: Headers;
+};
+
+export type getManagedBookingResponse =
+  | getManagedBookingResponseSuccess
+  | getManagedBookingResponseError;
+
+export const getGetManagedBookingUrl = (id: string) => {
+  return `/scheduling/bookings/${id}/manage`;
+};
+
+export const getManagedBooking = async (
+  id: string,
+  options?: RequestInit
+): Promise<getManagedBookingResponse> => {
+  const res = await fetch(getGetManagedBookingUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getManagedBookingResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getManagedBookingResponse;
+};
+
+/**
+ * @summary Replacement start times for one booking on a schedule-local date.
+ */
+export type listBookingRescheduleSlotsResponse200 = {
+  data: SlotsResponse;
+  status: 200;
+};
+
+export type listBookingRescheduleSlotsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listBookingRescheduleSlotsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type listBookingRescheduleSlotsResponseSuccess =
+  listBookingRescheduleSlotsResponse200 & {
+    headers: Headers;
+  };
+export type listBookingRescheduleSlotsResponseError = (
+  | listBookingRescheduleSlotsResponse403
+  | listBookingRescheduleSlotsResponse404
+) & {
+  headers: Headers;
+};
+
+export type listBookingRescheduleSlotsResponse =
+  | listBookingRescheduleSlotsResponseSuccess
+  | listBookingRescheduleSlotsResponseError;
+
+export const getListBookingRescheduleSlotsUrl = (
+  id: string,
+  params: ListBookingRescheduleSlotsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/bookings/${id}/slots?${stringifiedParams}`
+    : `/scheduling/bookings/${id}/slots`;
+};
+
+export const listBookingRescheduleSlots = async (
+  id: string,
+  params: ListBookingRescheduleSlotsParams,
+  options?: RequestInit
+): Promise<listBookingRescheduleSlotsResponse> => {
+  const res = await fetch(getListBookingRescheduleSlotsUrl(id, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBookingRescheduleSlotsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBookingRescheduleSlotsResponse;
+};
+
+/**
+ * @summary Booking statistics for a local date range and the equally long period before it.
+ */
+export type getBookingInsightsResponse200 = {
+  data: BookingInsights;
+  status: 200;
+};
+
+export type getBookingInsightsResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getBookingInsightsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getBookingInsightsResponseSuccess =
+  getBookingInsightsResponse200 & {
+    headers: Headers;
+  };
+export type getBookingInsightsResponseError = (
+  | getBookingInsightsResponse400
+  | getBookingInsightsResponse403
+) & {
+  headers: Headers;
+};
+
+export type getBookingInsightsResponse =
+  | getBookingInsightsResponseSuccess
+  | getBookingInsightsResponseError;
+
+export const getGetBookingInsightsUrl = (params?: GetBookingInsightsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/insights?${stringifiedParams}`
+    : `/scheduling/insights`;
+};
+
+export const getBookingInsights = async (
+  insightQuery: InsightQuery,
+  params?: GetBookingInsightsParams,
+  options?: RequestInit
+): Promise<getBookingInsightsResponse> => {
+  const res = await fetch(getGetBookingInsightsUrl(params), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(insightQuery),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBookingInsightsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBookingInsightsResponse;
+};
+
+/**
+ * @summary List and search booking links with their full drafts and reusable schedules.
+ */
+export type listBookingLinksResponse200 = {
+  data: BookingLinkListing;
+  status: 200;
+};
+
+export type listBookingLinksResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type listBookingLinksResponseSuccess = listBookingLinksResponse200 & {
+  headers: Headers;
+};
+export type listBookingLinksResponseError = listBookingLinksResponse403 & {
+  headers: Headers;
+};
+
+export type listBookingLinksResponse =
+  | listBookingLinksResponseSuccess
+  | listBookingLinksResponseError;
+
+export const getListBookingLinksUrl = (params?: ListBookingLinksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/links?${stringifiedParams}`
+    : `/scheduling/links`;
+};
+
+export const listBookingLinks = async (
+  params?: ListBookingLinksParams,
+  options?: RequestInit
+): Promise<listBookingLinksResponse> => {
+  const res = await fetch(getListBookingLinksUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listBookingLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listBookingLinksResponse;
+};
+
+/**
+ * @summary Create a booking link; an identical replay at the same slug returns the saved link.
+ */
+export type createBookingLinkResponse200 = {
+  data: BookingLink;
+  status: 200;
+};
+
+export type createBookingLinkResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type createBookingLinkResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type createBookingLinkResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type createBookingLinkResponseSuccess = createBookingLinkResponse200 & {
+  headers: Headers;
+};
+export type createBookingLinkResponseError = (
+  | createBookingLinkResponse400
+  | createBookingLinkResponse403
+  | createBookingLinkResponse409
+) & {
+  headers: Headers;
+};
+
+export type createBookingLinkResponse =
+  | createBookingLinkResponseSuccess
+  | createBookingLinkResponseError;
+
+export const getCreateBookingLinkUrl = (params?: CreateBookingLinkParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/links?${stringifiedParams}`
+    : `/scheduling/links`;
+};
+
+export const createBookingLink = async (
+  createBookingLinkRequest: CreateBookingLinkRequest,
+  params?: CreateBookingLinkParams,
+  options?: RequestInit
+): Promise<createBookingLinkResponse> => {
+  const res = await fetch(getCreateBookingLinkUrl(params), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createBookingLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createBookingLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createBookingLinkResponse;
+};
+
+/**
+ * @summary Replace one booking link's configuration at the profile revision it was read with.
+ */
+export type editBookingLinkResponse200 = {
+  data: BookingLink;
+  status: 200;
+};
+
+export type editBookingLinkResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type editBookingLinkResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type editBookingLinkResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type editBookingLinkResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type editBookingLinkResponseSuccess = editBookingLinkResponse200 & {
+  headers: Headers;
+};
+export type editBookingLinkResponseError = (
+  | editBookingLinkResponse400
+  | editBookingLinkResponse403
+  | editBookingLinkResponse404
+  | editBookingLinkResponse409
+) & {
+  headers: Headers;
+};
+
+export type editBookingLinkResponse =
+  | editBookingLinkResponseSuccess
+  | editBookingLinkResponseError;
+
+export const getEditBookingLinkUrl = (
+  id: string,
+  params?: EditBookingLinkParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/links/${id}?${stringifiedParams}`
+    : `/scheduling/links/${id}`;
+};
+
+export const editBookingLink = async (
+  id: string,
+  editBookingLinkRequest: EditBookingLinkRequest,
+  params?: EditBookingLinkParams,
+  options?: RequestInit
+): Promise<editBookingLinkResponse> => {
+  const res = await fetch(getEditBookingLinkUrl(id, params), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(editBookingLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: editBookingLinkResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as editBookingLinkResponse;
+};
+
+/**
+ * @summary Read personal or team booking settings without creating them.
+ */
+export type getBookingSettingsResponse200 = {
+  data: ProfileResponse;
+  status: 200;
+};
+
+export type getBookingSettingsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getBookingSettingsResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getBookingSettingsResponseSuccess =
+  getBookingSettingsResponse200 & {
+    headers: Headers;
+  };
+export type getBookingSettingsResponseError = (
+  | getBookingSettingsResponse403
+  | getBookingSettingsResponse404
+) & {
+  headers: Headers;
+};
+
+export type getBookingSettingsResponse =
+  | getBookingSettingsResponseSuccess
+  | getBookingSettingsResponseError;
+
+export const getGetBookingSettingsUrl = (params?: GetBookingSettingsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/settings?${stringifiedParams}`
+    : `/scheduling/settings`;
+};
+
+export const getBookingSettings = async (
+  params?: GetBookingSettingsParams,
+  options?: RequestInit
+): Promise<getBookingSettingsResponse> => {
+  const res = await fetch(getGetBookingSettingsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getBookingSettingsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getBookingSettingsResponse;
+};
+
+/**
+ * @summary Save booking settings at the revision they were read with.
+ */
+export type saveBookingSettingsResponse200 = {
+  data: ProfileResponse;
+  status: 200;
+};
+
+export type saveBookingSettingsResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type saveBookingSettingsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type saveBookingSettingsResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type saveBookingSettingsResponseSuccess =
+  saveBookingSettingsResponse200 & {
+    headers: Headers;
+  };
+export type saveBookingSettingsResponseError = (
+  | saveBookingSettingsResponse400
+  | saveBookingSettingsResponse403
+  | saveBookingSettingsResponse409
+) & {
+  headers: Headers;
+};
+
+export type saveBookingSettingsResponse =
+  | saveBookingSettingsResponseSuccess
+  | saveBookingSettingsResponseError;
+
+export const getSaveBookingSettingsUrl = (
+  params?: SaveBookingSettingsParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/scheduling/settings?${stringifiedParams}`
+    : `/scheduling/settings`;
+};
+
+export const saveBookingSettings = async (
+  bookingProfile: BookingProfile,
+  params?: SaveBookingSettingsParams,
+  options?: RequestInit
+): Promise<saveBookingSettingsResponse> => {
+  const res = await fetch(getSaveBookingSettingsUrl(params), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(bookingProfile),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: saveBookingSettingsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as saveBookingSettingsResponse;
 };
 
 /**

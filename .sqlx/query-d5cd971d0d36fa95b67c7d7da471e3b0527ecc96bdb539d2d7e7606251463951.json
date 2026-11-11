@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH editable AS (\n                    -- Sent rows are used by the worker's post-delivery cleanup.\n                    SELECT id FROM email_messages\n                    WHERE id = $2 AND link_id = $3 AND (is_draft OR is_sent)\n                    FOR UPDATE\n                )\n                DELETE FROM email_attachments_drafts ead\n                USING editable m\n                WHERE ead.draft_id = m.id AND ead.id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d5cd971d0d36fa95b67c7d7da471e3b0527ecc96bdb539d2d7e7606251463951"
+}

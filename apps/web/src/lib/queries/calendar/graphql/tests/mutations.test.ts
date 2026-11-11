@@ -1,4 +1,7 @@
-import type { CalendarRangeCacheArgs } from '@graphql-cache/index';
+import {
+  type CalendarRangeCacheArgs,
+  validateRecordSelectionKeys,
+} from '@graphql-cache/index';
 import type {
   CalendarEventFieldsFragment,
   CalendarMutationPayloadFieldsFragment,
@@ -12,6 +15,7 @@ import {
   committedEvent,
   executeGraphqlCreate,
   executeGraphqlDelete,
+  executeGraphqlInviteGuests,
   executeGraphqlRsvp,
   executeGraphqlUpdate,
   trackCalendarCreateSettlements,
@@ -67,9 +71,10 @@ function fakeHost(
       revision: '2' as never,
       changed: [],
     })),
+    // Bounded like the worker and native hosts.
     readRecordsByKeys: vi.fn(async ({ keys }: { keys: string[] }) => ({
       revision: '1' as never,
-      records: keys.flatMap((recordKey) => {
+      records: validateRecordSelectionKeys(keys).flatMap((recordKey) => {
         const record = records.get(recordKey);
         return record ? [{ recordKey, record }] : [];
       }),
@@ -153,6 +158,16 @@ function fakeClient(
                 isSubscription: false,
                 syncError: null,
                 defaultReminders: [],
+                provider: 'GOOGLE',
+                capabilities: {
+                  autoDecline: true,
+                  conferenceProvider: 'GOOGLE_MEET',
+                  customRecurrence: true,
+                  emailReminders: true,
+                  removeConference: true,
+                  resetRsvp: true,
+                  guestPolicy: true,
+                },
               },
             ],
           },
@@ -235,6 +250,87 @@ describe('executeGraphqlRsvp', () => {
     });
     expect(calls[1]?.optimistic.uuid).toBe(calls[0]?.optimistic.uuid);
     expect(host.calendarCommit).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeGraphqlInviteGuests', () => {
+  it('adds guests to the series and every instance carrying its own attendee list', async () => {
+    const declined = instance(6, {
+      overrideAttendees: [attendee('me@example.com', 'DECLINED')],
+    });
+    const host = fakeHost(graphqlEvent(), [instance(5), declined]);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlInviteGuests(
+      host,
+      {
+        eventId: 'event-1',
+        guests: [
+          { email: 'dana@example.com', optional: true },
+          { email: 'ME@example.com' },
+        ],
+      },
+      client
+    );
+
+    const [call] = calls;
+    expect(call?.variables.input).toEqual({
+      eventId: 'event-1',
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'ME@example.com', optional: false },
+      ],
+      scope: 'ALL',
+    });
+    const optimistic = response(call!);
+    const dana = {
+      ...attendee('dana@example.com', 'NEEDS_ACTION'),
+      isOptional: true,
+    };
+    expect(optimistic.event?.attendees).toEqual([
+      attendee('me@example.com', 'NEEDS_ACTION'),
+      dana,
+    ]);
+    expect(optimistic.occurrences).toEqual([
+      {
+        __typename: 'GraphqlCalendarOccurrence',
+        id: declined.id,
+        overrideAttendees: [attendee('me@example.com', 'DECLINED'), dana],
+      },
+    ]);
+  });
+
+  it('adds guests to one instance alone', async () => {
+    const host = fakeHost(graphqlEvent(), [instance(5), instance(6)]);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlInviteGuests(
+      host,
+      {
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+        scope: 'this_event',
+        recurrenceId: 'r6',
+        occurrenceKey: '2026-10-06T09:00:00+00:00',
+      },
+      client
+    );
+
+    const optimistic = response(calls[0]!);
+    expect(optimistic.event).toBeUndefined();
+    expect(optimistic.occurrences).toEqual([
+      expect.objectContaining({
+        id: 'event-1:2026-10-06T09:00:00+00:00',
+        overrideAttendees: [
+          attendee('me@example.com', 'NEEDS_ACTION'),
+          attendee('dana@example.com', 'NEEDS_ACTION'),
+        ],
+      }),
+    ]);
+    expect(calls[0]?.variables.input).toMatchObject({
+      scope: 'THIS_EVENT',
+      recurrenceId: 'r6',
+    });
   });
 });
 
@@ -435,6 +531,37 @@ describe('executeGraphqlDelete', () => {
     expect(calls[0]?.variables.input).toMatchObject({
       scope: 'THIS_AND_FOLLOWING',
     });
+  });
+
+  it('cancels one occurrence of a series cached past one selection page', async () => {
+    const occurrences = Array.from({ length: 600 }, (_, day) => {
+      const startsAt = new Date(Date.UTC(2026, 0, 1 + day, 9)).toISOString();
+      return graphqlOccurrence({
+        id: `event-1:${startsAt}`,
+        occurrenceKey: startsAt,
+      });
+    });
+    const host = fakeHost(graphqlEvent(), occurrences);
+    const { calls, client } = fakeClient('committed');
+
+    await executeGraphqlDelete(
+      host,
+      {
+        eventId: 'event-1',
+        scope: 'this_event',
+        recurrenceId: 'r600',
+        occurrenceKey: '2027-08-23T09:00:00.000Z',
+      },
+      client
+    );
+
+    expect(response(calls[0]!).occurrences).toEqual([
+      {
+        __typename: 'GraphqlCalendarOccurrence',
+        id: 'event-1:2027-08-23T09:00:00.000Z',
+        isCancelled: true,
+      },
+    ]);
   });
 
   it('drops one copy of a multi-calendar event and re-projects the next', async () => {

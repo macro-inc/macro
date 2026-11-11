@@ -34,7 +34,7 @@ export function DocumentDiscussion(props: DocumentDiscussionProps) {
 }
 
 function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
-  const { documentId, kind, permissions } = useMarkdownDocument();
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
@@ -52,6 +52,7 @@ function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
     <EntityDiscussion
       parent={parent()}
       targetId={discussionTarget()}
+      scrollReady={state.editor.md.locationReady === true}
       canWrite={permissions.canComment()}
       canModerate={permissions.isOwner()}
       link={{ type: blockName, id }}

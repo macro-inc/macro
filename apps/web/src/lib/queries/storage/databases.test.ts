@@ -1,12 +1,14 @@
+import { loadDatabase } from '@app/features/block-database/queries/load-database';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
-import { errAsync, okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyDatabaseOps,
   applyDatabaseTableVersions,
   createDatabase,
+  databaseDetailQueryOptions,
   fetchViewerDatabases,
   onDatabaseBatchCommitted,
 } from './databases';
@@ -46,6 +48,7 @@ const detail: DatabaseDetail = {
     owner_id: 'owner',
     created_at: '',
     trashed_at: null,
+    project_id: null,
   },
   grant: 'owner',
   tables: [
@@ -426,6 +429,83 @@ describe('shared ops cache effects', () => {
     ).toBe(6);
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
+  it('reports committed row writes by kind without cell contents', async () => {
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'insert', rows: [[], []] },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: { kind: 'uniform', rows: ['a', 'b', 'c'], cells: [] },
+        },
+      },
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(mock.track).toHaveBeenCalledExactlyOnceWith('database_rows_edited', {
+      databaseId: 'db',
+      insertedRows: 2,
+      updatedRows: 3,
+      deletedRows: 0,
+    });
+  });
+  it('does not report schema-only or refused batches as row edits', async () => {
+    mock.applyOps.mockReturnValueOnce(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    mock.applyOps.mockReturnValueOnce(
+      errAsync([{ code: 'CONFLICT', message: 'Changed.', refusal: null }])
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(mock.track).not.toHaveBeenCalled();
+  });
+  it('does not report the cells a column type conversion copies as row edits', async () => {
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      {
+        kind: 'column',
+        table: 'tasks',
+        column: 'status-as-select',
+        change: {
+          kind: 'create',
+          definition: {
+            source: 'new',
+            name: 'Status',
+            type: { type: 'select', multi: false },
+            options: [],
+          },
+          after: 'status',
+        },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: {
+            kind: 'per_row',
+            rows: [
+              { row: 'a', cells: [] },
+              { row: 'b', cells: [] },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(mock.track).not.toHaveBeenCalled();
+  });
   it('invalidates optimistic state after a refused batch', async () => {
     queryClient.setQueryData(key, detail);
     mock.applyOps.mockReturnValue(
@@ -644,4 +724,42 @@ it('does not hold a cell write while refreshing a newly minted option', async ()
     release();
     invalidate.mockRestore();
   }
+});
+
+it('shares the block loader schema read with the mounted database view', async () => {
+  mock.get.mockReturnValue(okAsync(detail));
+  const loaded = await loadDatabase('db');
+  expect(loaded.isOk()).toBe(true);
+  const mounted = await queryClient.fetchQuery(
+    databaseDetailQueryOptions('db')
+  );
+  expect(mounted).toEqual(detail);
+  expect(mock.get).toHaveBeenCalledOnce();
+});
+
+it('deduplicates a block load with an in-flight schema read', async () => {
+  let finish!: (value: DatabaseDetail) => void;
+  mock.get.mockReturnValue(
+    ResultAsync.fromSafePromise(
+      new Promise<DatabaseDetail>((resolve) => {
+        finish = resolve;
+      })
+    )
+  );
+  const mounted = queryClient.fetchQuery(databaseDetailQueryOptions('db'));
+  const loaded = loadDatabase('db');
+  expect(mock.get).toHaveBeenCalledOnce();
+  finish(detail);
+  await mounted;
+  expect((await loaded).isOk()).toBe(true);
+  expect(mock.get).toHaveBeenCalledOnce();
+});
+
+it('propagates a refused database load without seeding its schema cache', async () => {
+  const errors = [{ code: 'FORBIDDEN', message: 'Access denied' }];
+  mock.get.mockReturnValue(errAsync(errors));
+  const loaded = await loadDatabase('db');
+  expect(loaded.isErr()).toBe(true);
+  expect(loaded._unsafeUnwrapErr()).toEqual(errors);
+  expect(queryClient.getQueryData(key)).toBeUndefined();
 });

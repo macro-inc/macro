@@ -379,13 +379,7 @@
 		grid-template-rows: 0fr;
 		margin-inline: 12px;
 		border-radius: 0 0 26px 26px;
-		background: color-mix(in srgb, var(--panel) 95%, var(--ink));
-		&:where([data-theme-light="false"] *) {
-			background: rgb(20 20 20);
-		}
-		&:where([data-theme-light="true"] *) {
-			background: rgb(250 250 250);
-		}
+		background: color-mix(in srgb, var(--panel) 99%, var(--ink));
 		opacity: 0;
 		visibility: hidden;
 		transition: grid-template-rows 100ms cubic-bezier(0.77, 0, 0.175, 1), opacity 100ms cubic-bezier(0.23, 1, 0.32, 1), visibility 100ms;
@@ -811,11 +805,11 @@
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .scard > * + * {
+	:where(.agents-view, .agents-view-portal) .scard > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > * + * {
+	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
@@ -1367,8 +1361,8 @@
 		background: var(--surface-1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .results > * + *,
-	:where(.agents-view, .agents-view-portal) .picker .picked > * + * {
+	:where(.agents-view, .agents-view-portal) .picker .results > :not(:first-child),
+	:where(.agents-view, .agents-view-portal) .picker .picked > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
@@ -1759,7 +1753,7 @@
 		scrollbar-color: var(--surface-4) transparent;
 	}
 
-	:where(.agents-view, .agents-view-portal) .plist > * + * {
+	:where(.agents-view, .agents-view-portal) .plist > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
@@ -2158,6 +2152,12 @@
 	:where(.agents-view, .agents-view-portal) .pane .dock {
 		padding: 0 16px 10px;
 		flex-shrink: 0;
+	}
+
+	@container agent-session (min-width: 900px) {
+		:where(.agents-view, .agents-view-portal) .pane .dock {
+			padding-right: max(16px, var(--details-clearance, 0px));
+		}
 	}
 
 	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
