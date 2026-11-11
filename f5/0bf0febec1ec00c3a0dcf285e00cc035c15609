@@ -1,0 +1,51 @@
+crates/native_app_service/src/inbound.rs
+  s_0ace76a62ffacf::t_eb528ba4f488e6 68,81-82
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_0ace76a62ffacf::t_bc54a8f85590f1 157,166
+  s_0ace76a62ffacf::t_8f726de55eb4dc 141-144,181-183
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client.rs
+  s_0ace76a62ffacf::t_17d82702d3efee 3-4
+  s_0ace76a62ffacf::t_8f726de55eb4dc 63-64
+  s_0ace76a62ffacf::t_3a3a897c77dc6c 2,5
+apps/web/min-native-build.json
+  s_0ace76a62ffacf::t_bc54a8f85590f1 3
+crates/native_app_service/src/domain/models.rs
+  s_0ace76a62ffacf::t_bc54a8f85590f1 82,89,91
+  s_0ace76a62ffacf::t_eb528ba4f488e6 106-108,171-173
+crates/native_app_service/src/domain/service.rs
+  s_0ace76a62ffacf::t_eb528ba4f488e6 38,59-61
+  s_0ace76a62ffacf::t_17d82702d3efee 3-5
+  s_0ace76a62ffacf::t_e8e64d0c2ee02c 11-12
+  s_0ace76a62ffacf::t_4ef53dcd0b8b5d 13,62-64
+crates/native_app_service/src/tests.rs
+  s_0ace76a62ffacf::t_f68f07744a6620 442,445-446,450-458,460,462,466,468,472,474-478,482-485,494-506
+  s_0ace76a62ffacf::t_eb528ba4f488e6 131
+  s_0ace76a62ffacf::t_17d82702d3efee 486-493
+  s_0ace76a62ffacf::t_bc54a8f85590f1 418,527-528
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models/test.rs
+  s_0ace76a62ffacf::t_3a3a897c77dc6c 10,23-33
+  s_0ace76a62ffacf::t_5e2216d3976be3 34
+apps/web/tauri/src-tauri/README.md
+  s_0ace76a62ffacf::t_bc54a8f85590f1 443
+  s_0ace76a62ffacf::t_17d82702d3efee 451-456
+apps/web/tauri/macro_bundle_updater_plugin/src/outbound/api_client/test.rs
+  s_0ace76a62ffacf::t_8f726de55eb4dc 32,46,62
+apps/web/justfile
+  s_0ace76a62ffacf::t_bc54a8f85590f1 163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f50bf0febec1ec00c3a0dcf285e00cc035c15609",
+  "prompts": {},
+  "sessions": {
+    "s_0ace76a62ffacf": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "14dbdc2c-a8d5-44b6-be66-bf47855b0493",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
