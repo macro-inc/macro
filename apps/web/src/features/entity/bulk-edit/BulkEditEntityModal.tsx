@@ -43,8 +43,19 @@ const BulkEditEntityModalContent = (props: {
     props.onError?.(error);
   };
 
+  // The delete view's first tab stop is an item chip, whose preview card
+  // opens on focus. Focus the dialog itself so the card waits for a hover.
+  let content: HTMLDivElement | undefined;
+  const focusDialogOnDelete = (event: Event) => {
+    if (props.view !== 'delete') return;
+    event.preventDefault();
+    content?.focus();
+  };
+
   return (
     <Dialog
+      contentRef={(element) => (content = element)}
+      onOpenAutoFocus={focusDialogOnDelete}
       open={props.isOpen()}
       position={props.view === 'moveToProject' ? 'top' : 'center'}
       class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
