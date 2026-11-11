@@ -1,0 +1,21 @@
+docs/agent-guide/calls.md
+  s_1d87757ab57cf0::t_ccdad6547f327c 100-101,106-107
+docs/design/call-chat-in-channel.md
+  s_1d87757ab57cf0::t_20f1884ea37038 325-326
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "00db589ddf5368368c2fbcdf7b3fa7ed7aa43897",
+  "prompts": {},
+  "sessions": {
+    "s_1d87757ab57cf0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c40ca39f-98af-4021-8e4a-3bbd8c1d134d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
