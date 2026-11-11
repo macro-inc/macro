@@ -88,6 +88,40 @@ export function applyElementDirection(
   else if (node.kind !== 'root' && automatic) dom.dir = 'auto';
   else dom.removeAttribute('dir');
 }
+const isList = (node: ViewNode | null | undefined) =>
+  node?.type === 'list' || node?.type === 'task-list';
+const isListItem = (node: ViewNode) =>
+  node.type === 'listitem' || node.type === 'task-list-item';
+
+/**
+ * Upstream ListNode/ListItemNode.createDOM attributes, written before the theme
+ * classes: list `start` (only when not 1); item checklist role, then `value`.
+ */
+function listProps(node: ViewNode, dom: HTMLElement, ctx: RenderContext): void {
+  const props = node.props();
+  if (isList(node)) {
+    if (typeof props.start === 'number' && props.start !== 1)
+      dom.setAttribute('start', String(props.start));
+    else dom.removeAttribute('start');
+    return;
+  }
+  if (!isListItem(node)) return;
+  const parent = node.parent === null ? null : ctx.view.node(node.parent);
+  const firstKey = node.children[0];
+  const first = firstKey === undefined ? undefined : ctx.view.node(firstKey);
+  const isCheckList = isList(parent) && parent?.props().listType === 'check';
+  if (isCheckList && !isList(first)) {
+    dom.setAttribute('role', 'checkbox');
+    dom.setAttribute('tabIndex', '-1');
+    dom.setAttribute('aria-checked', props.checked ? 'true' : 'false');
+  } else {
+    dom.removeAttribute('role');
+    dom.removeAttribute('tabIndex');
+    dom.removeAttribute('aria-checked');
+  }
+  if (typeof props.value === 'number')
+    dom.setAttribute('value', String(props.value));
+}
 function elementProps(
   node: ViewNode,
   dom: HTMLElement,
@@ -95,7 +129,6 @@ function elementProps(
 ): void {
   const props = node.props(),
     fields = node.elementProps;
-  const parent = node.parent === null ? null : ctx.view.node(node.parent);
   applyElementDirection(node, dom, ctx);
   if (node.kind === 'root') {
     dom.style.userSelect = 'text';
@@ -119,32 +152,7 @@ function elementProps(
       else dom.removeAttribute(name);
     }
   }
-  if (node.type === 'list' || node.type === 'task-list') {
-    dom.setAttribute('data-list-type', String(props.listType ?? 'bullet'));
-    if (typeof props.start === 'number' && props.start !== 1)
-      dom.setAttribute('start', String(props.start));
-    else dom.removeAttribute('start');
-  }
-  if (node.type === 'listitem' || node.type === 'task-list-item') {
-    if (typeof props.value === 'number')
-      dom.setAttribute('value', String(props.value));
-    const firstKey = node.children[0];
-    const first = firstKey === undefined ? undefined : ctx.view.node(firstKey);
-    const isCheckList =
-      parent &&
-      (parent.type === 'list' || parent.type === 'task-list') &&
-      parent.props().listType === 'check';
-    const firstIsList = first?.type === 'list' || first?.type === 'task-list';
-    if (isCheckList && !firstIsList) {
-      dom.setAttribute('role', 'checkbox');
-      dom.setAttribute('tabIndex', '-1');
-      dom.setAttribute('aria-checked', props.checked ? 'true' : 'false');
-    } else {
-      dom.removeAttribute('role');
-      dom.removeAttribute('tabIndex');
-      dom.removeAttribute('aria-checked');
-    }
-  }
+  listProps(node, dom, ctx);
   if (node.type === 'tablerow' && typeof props.height === 'number')
     dom.style.height = `${props.height}px`;
   if (node.type === 'tablecell') {
@@ -190,12 +198,27 @@ function elementClasses(node: ViewNode, ctx: RenderContext): string {
     ) {
       if (parent.type === 'list' || parent.type === 'task-list') depth++;
     }
-    return [
+    // Upstream $setListThemeClassNames: tag, checklist, depth level, nested,
+    // added through classList, so repeated tokens appear once.
+    const listTheme: unknown = ctx.theme.list;
+    const levels: unknown =
+      typeof listTheme === 'object' && listTheme !== null
+        ? Reflect.get(listTheme, listTag + 'Depth')
+        : undefined;
+    const entry: unknown =
+      Array.isArray(levels) && levels.length > 0
+        ? levels[depth % levels.length]
+        : undefined;
+    const level = typeof entry === 'string' ? entry : '';
+    const tokens = [
       themeClass(ctx.theme, 'list', listTag),
-      themeClass(ctx.theme, 'list', listTag + 'Depth', String(depth)),
-    ]
-      .filter(Boolean)
-      .join(' ');
+      props.listType === 'check'
+        ? themeClass(ctx.theme, 'list', 'checklist')
+        : '',
+      level,
+      depth > 1 ? themeClass(ctx.theme, 'list', 'nested', 'list') : '',
+    ].flatMap((value) => value.split(/\s+/).filter(Boolean));
+    return [...new Set(tokens)].join(' ');
   }
   if (node.type === 'listitem' || node.type === 'task-list-item') {
     const parent = node.parent === null ? null : ctx.view.node(node.parent);
@@ -234,6 +257,7 @@ function elementClasses(node: ViewNode, ctx: RenderContext): string {
 const element: NodeView = {
   createDOM(node, ctx) {
     const dom = ctx.document.createElement(tag(node));
+    listProps(node, dom, ctx);
     const classes = elementClasses(node, ctx);
     if (classes) dom.className = classes;
     elementProps(node, dom, ctx);
@@ -241,6 +265,9 @@ const element: NodeView = {
   },
   updateDOM(previous, next, dom, ctx) {
     if (tag(previous) !== tag(next)) return true;
+    // Upstream ListNode.updateDOM recreates the element for a new list type.
+    if (isList(next) && previous.props().listType !== next.props().listType)
+      return true;
     elementProps(next, dom, ctx);
     if (next.kind !== 'root') {
       const classes = elementClasses(next, ctx);
