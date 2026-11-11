@@ -15,6 +15,11 @@ alwaysApply: false
   import one into a shared hub (`Root`, `Layout`, `AppProviders`,
   `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block
   `definition.ts`, Lexical `init.ts`).
+- A `route-views.tsx` that always renders one view imports it statically.
+  `LIKELY_NEXT_VIEWS` and the router preload only the route's own chunk, so a
+  view behind a second `lazy()` stays cold and its first open shows the route
+  skeleton however long the app has been running. Nest a `lazy()` there only
+  when the route picks between views.
 - Each top-level route picks its shell in `app-router-view.tsx`
   (`routes/shells.tsx`): `authRoute` pages and booking links render without app
   chrome, and `appRoute` renders `AppShell` — the app's providers
