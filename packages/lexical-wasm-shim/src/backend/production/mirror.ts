@@ -5,6 +5,11 @@ import type {
 } from '@macro-inc/collaboration/session/compatibility.generated';
 import { publicKey } from './values';
 
+export interface CaptureRetentionDelta {
+  readonly retain: readonly IForeignRecordRef[];
+  readonly release: readonly IForeignRecordRef[];
+}
+
 interface Stamp {
   readonly version: bigint;
   readonly order: number;
@@ -36,6 +41,49 @@ interface Membership {
 
 /** An index of acknowledged native records, never another editable graph. */
 export class RecordMirror {
+  private readonly retained = new Map<IForeignRecordRef, number>();
+  private readonly retentionBefore = new Map<IForeignRecordRef, number>();
+  private transitioning = false;
+
+  constructor(
+    private readonly observeRetention?: (delta: CaptureRetentionDelta) => void
+  ) {}
+
+  private own(record: IForeignRecordRef | null, change: 1 | -1): void {
+    if (record === null) return;
+    const before = this.retained.get(record) ?? 0;
+    if (!this.retentionBefore.has(record))
+      this.retentionBefore.set(record, before);
+    const after = before + change;
+    if (after < 0) throw new Error('Native mirror capture ownership underflow');
+    if (after === 0) this.retained.delete(record);
+    else this.retained.set(record, after);
+  }
+
+  private transition(body: () => void): void {
+    if (this.transitioning)
+      throw new Error('Native mirror retention observer must not reenter');
+    this.transitioning = true;
+    try {
+      body();
+    } finally {
+      const retain: IForeignRecordRef[] = [];
+      const release: IForeignRecordRef[] = [];
+      for (const [record, before] of this.retentionBefore) {
+        const after = this.retained.get(record) ?? 0;
+        if (before === 0 && after > 0) retain.push(record);
+        else if (before > 0 && after === 0) release.push(record);
+      }
+      this.retentionBefore.clear();
+      try {
+        if (retain.length > 0 || release.length > 0)
+          this.observeRetention?.({ retain, release });
+      } finally {
+        this.transitioning = false;
+      }
+    }
+  }
+
   private readonly histories = new Map<string, Revision[]>();
   private readonly versions = new Set<bigint>();
   private readonly states = new Map<bigint, VersionState>();
@@ -89,6 +137,13 @@ export class RecordMirror {
     version: bigint,
     records: readonly IForeignRenderRecord[],
     removed: readonly IForeignKey[] = []
+  ): void {
+    this.transition(() => this.applyRecords(version, records, removed));
+  }
+  private applyRecords(
+    version: bigint,
+    records: readonly IForeignRenderRecord[],
+    removed: readonly IForeignKey[]
   ): void {
     this.ensure(version);
     for (const record of records)
@@ -145,6 +200,7 @@ export class RecordMirror {
         this.undo.set(version, undo);
       }
       undo.set(key, previous);
+      this.own(previous.record, 1);
     }
     changed.add(key);
     let history = this.histories.get(key);
@@ -158,9 +214,11 @@ export class RecordMirror {
         : { version, order: state.nextOrder++ };
     const revision: Revision = { version, record, inserted };
     const index = this.upperBound(history, version);
-    if (index > 0 && history[index - 1].version === version)
+    this.own(record, 1);
+    if (index > 0 && history[index - 1].version === version) {
+      this.own(history[index - 1].record, -1);
       history[index - 1] = revision;
-    else history.splice(index, 0, revision);
+    } else history.splice(index, 0, revision);
     this.updateCounts(key, memberships);
   }
   private upperBound(history: readonly Revision[], version: bigint): number {
@@ -249,6 +307,12 @@ export class RecordMirror {
   }
   /** Full enumeration is reserved for explicit initial/replacement snapshots. */
   replace(version: bigint, records: readonly IForeignRenderRecord[]): void {
+    this.transition(() => this.replaceRecords(version, records));
+  }
+  private replaceRecords(
+    version: bigint,
+    records: readonly IForeignRenderRecord[]
+  ): void {
     this.ensure(version);
     const order = new Map<string, number>();
     for (const record of records) {
@@ -279,6 +343,9 @@ export class RecordMirror {
   }
 
   discard(version: bigint): void {
+    this.transition(() => this.discardVersion(version));
+  }
+  private discardVersion(version: bigint): void {
     if (!this.states.has(version) || this.head?.version !== version)
       throw new Error('Only the active head version can be discarded');
     const restoreHead = this.head?.version === version;
@@ -300,29 +367,49 @@ export class RecordMirror {
         this.histories.set(key, history);
       }
       const memberships = this.memberships(key, version);
-      const index = this.upperBound(history, version) - 1;
-      if (index >= 0 && history[index].version === version)
-        history.splice(index, 1);
-      if (previous && previous.version !== version) {
-        const at = this.upperBound(history, previous.version);
-        if (at === 0 || history[at - 1].version !== previous.version)
-          history.splice(at, 0, previous);
-      }
+      this.restoreRevision(history, version, previous);
       if (history.length === 0) this.histories.delete(key);
-      else this.prune(key, history);
+      else this.prune(key, history, previousHead);
       this.updateCounts(key, memberships);
     }
-    this.releaseWaiting(version);
+    if (undo)
+      for (const previous of undo.values()) this.own(previous.record, -1);
     if (restoreHead) this.head = previousHead;
+    this.releaseWaiting(version);
+  }
+
+  private restoreRevision(
+    history: Revision[],
+    version: bigint,
+    previous: Revision | undefined
+  ): void {
+    const index = this.upperBound(history, version) - 1;
+    if (index >= 0 && history[index].version === version) {
+      this.own(history[index].record, -1);
+      history.splice(index, 1);
+    }
+    if (previous && previous.version !== version) {
+      const at = this.upperBound(history, previous.version);
+      if (at === 0 || history[at - 1].version !== previous.version) {
+        this.own(previous.record, 1);
+        history.splice(at, 0, previous);
+      }
+    }
   }
 
   release(version: bigint): void {
+    this.transition(() => this.releaseVersion(version));
+  }
+  private releaseVersion(version: bigint): void {
     this.versions.delete(version);
     this.states.delete(version);
     this.parents.delete(version);
     const changed = this.changed.get(version);
     this.changed.delete(version);
+    const undo = this.undo.get(version);
     this.undo.delete(version);
+    if (undo)
+      for (const previous of undo.values()) this.own(previous.record, -1);
     if (changed !== undefined) {
       for (const key of changed) {
         const history = this.histories.get(key);
@@ -342,38 +429,72 @@ export class RecordMirror {
     }
   }
 
-  private prune(key: string, history: Revision[]): void {
+  private waitFor(owner: bigint, key: string): void {
+    let waiting = this.waiting.get(owner);
+    if (waiting === undefined) {
+      waiting = new Set();
+      this.waiting.set(owner, waiting);
+    }
+    waiting.add(key);
+  }
+
+  private isBasisRevision(
+    key: string,
+    revision: Revision,
+    basis?: Head
+  ): boolean {
+    if (basis && this.revision(basis.version, key, basis.state) === revision)
+      return true;
+    if (
+      this.head &&
+      this.revision(this.head.version, key, this.head.state) === revision
+    )
+      return true;
+    let retained = false;
+    for (const [owner, parent] of this.parents)
+      if (
+        parent &&
+        this.revision(parent.version, key, parent.state) === revision
+      ) {
+        this.waitFor(owner, key);
+        retained = true;
+      }
+    return retained;
+  }
+
+  private prune(key: string, history: Revision[], restoringHead?: Head): void {
     const retained: Revision[] = [];
     for (let index = 0; index < history.length; index++) {
       const revision = history[index];
       const next = history[index + 1];
-      // The newest acknowledged record backs subsequent sparse versions even
-      // when its allocation version is collected. It needs no per-version carry.
-      if (next === undefined) {
-        retained.push(revision);
-        continue;
-      }
       let owner: bigint | undefined;
       for (const version of this.versions) {
         if (
           version >= revision.version &&
-          version < next.version &&
-          (owner === undefined || version < owner)
+          (next === undefined || version < next.version) &&
+          (owner === undefined || version < owner) &&
+          this.revision(version, key) === revision
         )
           owner = version;
       }
-      if (owner === undefined) continue;
+      // A carried record survives allocation GC only while an exact live/head
+      // basis can see it. A newer full snapshot can hide even the latest entry.
+      if (
+        owner === undefined &&
+        !this.isBasisRevision(key, revision, restoringHead)
+      ) {
+        this.own(revision.record, -1);
+        continue;
+      }
       retained.push(revision);
-      if (owner !== revision.version) {
-        let waiting = this.waiting.get(owner);
-        if (waiting === undefined) {
-          waiting = new Set();
-          this.waiting.set(owner, waiting);
-        }
-        waiting.add(key);
+      if (owner !== undefined && owner !== revision.version) {
+        this.waitFor(owner, key);
       }
     }
-    if (retained.length === 1 && retained[0].record === null)
+    if (
+      retained.length === 0 ||
+      (retained.length === 1 && retained[0].record === null)
+    )
       this.histories.delete(key);
     else this.histories.set(key, retained);
   }

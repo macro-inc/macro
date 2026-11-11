@@ -32,6 +32,44 @@ its count/order basis after every exposed allocation version is collected; the
 next sparse receipt does not require a second full snapshot. Released version
 reads still reject.
 
+`RecordMirror` accepts an optional nonthrowing, nonreentrant retention observer:
+
+```ts
+interface CaptureRetentionDelta {
+  readonly retain: readonly IForeignRecordRef[];
+  readonly release: readonly IForeignRecordRef[];
+}
+new RecordMirror((delta: CaptureRetentionDelta) => bufferLeases(delta));
+```
+
+Each nonempty notification describes one completed `apply`, `replace`, `release`
+or `discard` transition. The observer only buffers work. Before releasing the
+native graph/version, the backend must process **all retains before any releases**
+in each batch. Observer failure is outside this contract: the mirror has already
+mutated and cannot roll back external lease effects. Reentrant mutation throws.
+
+Ownership counts use exact wire-reference object identity, without reconstructing
+or normalizing reference fields. Distinct decoded objects are reported separately,
+even if their fields match; the backend owns any native lease aggregation. History
+entries and provisional undo entries each own their references. Shared ownership
+emits one retain when the first entry arrives and one release when the last entry
+leaves. Replacements within one transition are reduced to net changes, so transient
+refs and undo-to-history transfers never create lease gaps. Reads and enumeration
+emit nothing. Raw node wrappers have independent leases and are not covered by
+this observer.
+
+Head and parent metadata contain no record refs; their visible basis records
+remain in history or undo after exposed version collection. Per-key pruning checks exact
+snapshot visibility, so a historical key hidden by a newer full snapshot releases
+its lease when its last reader/rollback basis leaves. Parent-basis waiting indexes
+revisit that key when the owning lineage entry is collected. A released allocation
+version therefore does not release a carried latest record. Head discard transfers undo
+ownership back into history before its lease can leave. Releasing undo and pruning
+history visit only changed/waiting keys; ownership bookkeeping visits only refs
+touched by that transition. Explicit full snapshot installation remains the only
+operation allowed to enumerate the document. Collecting every exposed version
+preserves the head basis intentionally; it is not mirror disposal.
+
 `LazyNodeMap<Node>` extends the real `Map<string, Node>` class. Construction,
 `size`, `has` and `keys` do not instantiate nodes. `get` resolves one requested
 record through the injected actual producer; values, entries and `forEach`

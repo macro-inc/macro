@@ -1,10 +1,11 @@
 import {
   ForeignAccess,
   ForeignNodeKind,
+  type IForeignRecordRef,
   type IForeignRenderRecord,
 } from '@macro-inc/collaboration/session/compatibility.generated';
 import { expect, test } from 'vitest';
-import { RecordMirror } from './mirror';
+import { type CaptureRetentionDelta, RecordMirror } from './mirror';
 import { LazyNodeMap } from './node-map';
 
 function ack(index: number, version: bigint): IForeignRenderRecord {
@@ -185,7 +186,16 @@ test('large sparse commits and lifecycle operations never request key enumeratio
 });
 
 test('sparse linear receipts match JavaScript Map ordering through retained snapshots and GC', () => {
-  const mirror = new RecordMirror();
+  const leased = new Set<IForeignRecordRef>();
+  const mirror = new RecordMirror(({ retain, release }) => {
+    for (const record of retain) {
+      expect(leased.has(record)).toBe(false);
+      leased.add(record);
+    }
+    for (const record of release) {
+      expect(leased.delete(record)).toBe(true);
+    }
+  });
   const initial = ack(1, 1n);
   mirror.replace(1n, [initial]);
   const states = new Map<bigint, Map<string, IForeignRenderRecord>>([
@@ -229,8 +239,10 @@ test('sparse linear receipts match JavaScript Map ordering through retained snap
     for (const [version, expected] of states) {
       expect(mirror.count(version)).toBe(expected.size);
       expect([...mirror.keys(version)]).toEqual([...expected.keys()]);
-      for (const [key, value] of expected)
+      for (const [key, value] of expected) {
         expect(mirror.get(version, key)).toBe(value.record);
+        expect(leased.has(value.record)).toBe(true);
+      }
     }
   }
 }, 30000);
@@ -279,4 +291,140 @@ test('nonhead discard rejects before changing acknowledged descendants', () => {
   pending.apply(3n, []);
   expect([...pending.keys(3n)]).toEqual(['1', '2']);
   expect(pending.count(3n)).toBe(2);
+});
+
+test('capture leases survive allocation GC through undo and released head bases', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const a = ack(1, 1n),
+    b = ack(1, 2n),
+    c = ack(1, 3n);
+  mirror.replace(1n, [a]);
+  mirror.apply(2n, [b]);
+  mirror.release(1n);
+  expect(deltas).toEqual([
+    { retain: [a.record], release: [] },
+    { retain: [b.record], release: [] },
+  ]);
+  mirror.apply(3n, [c]);
+  mirror.release(2n);
+  expect(deltas.at(-1)).toEqual({ retain: [], release: [a.record] });
+  // b's history entry is gone, but provisional version 3 still owns its undo.
+  mirror.discard(3n);
+  expect(deltas.at(-1)).toEqual({ retain: [], release: [c.record] });
+  mirror.apply(4n, []);
+  expect(mirror.get(4n, '1')).toBe(b.record);
+  mirror.release(4n);
+  mirror.apply(5n, []);
+  expect(mirror.get(5n, '1')).toBe(b.record);
+  mirror.apply(6n, [], [{ index: 1, generation: 0 }]);
+  mirror.release(5n);
+  const before = deltas.length;
+  mirror.release(6n);
+  expect(deltas.slice(before)).toEqual([{ retain: [], release: [b.record] }]);
+});
+
+test('one transition reports only net exact refs, retaining before releasing', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const a = ack(1, 1n),
+    b = ack(1, 1n),
+    c = ack(1, 1n);
+  mirror.replace(1n, [a]);
+  // Distinct decoded objects remain exact authorities even with equal fields.
+  mirror.apply(1n, [b, c]);
+  expect(deltas).toHaveLength(2);
+  expect(deltas[1].retain).toHaveLength(1);
+  expect(deltas[1].retain[0]).toBe(c.record);
+  expect(deltas[1].release).toHaveLength(1);
+  expect(deltas[1].release[0]).toBe(a.record);
+  mirror.apply(1n, [c, c]);
+  expect(deltas).toHaveLength(2);
+  mirror.discard(1n);
+  expect(deltas[2]).toEqual({ retain: [], release: [c.record] });
+});
+
+test('historical readers and full snapshot absence keep exact leases until collection', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const a = ack(1, 1n),
+    b = ack(2, 1n),
+    c = ack(1, 2n);
+  mirror.replace(1n, [a, b]);
+  mirror.replace(2n, [c]);
+  mirror.apply(3n, []);
+  mirror.release(2n);
+  expect(deltas).toEqual([
+    { retain: [a.record, b.record], release: [] },
+    { retain: [c.record], release: [] },
+  ]);
+  expect([...mirror.records(1n)]).toEqual([a.record, b.record]);
+  mirror.release(1n);
+  expect(deltas.at(-1)).toEqual({ retain: [], release: [a.record, b.record] });
+  expect([...mirror.records(3n)]).toEqual([c.record]);
+});
+
+test('sparse leases scale with changed refs and empty or rejected transitions emit nothing', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const full = Array.from({ length: 12000 }, (_, index) => ack(index, 1n));
+  mirror.replace(1n, full);
+  const changed = ack(30, 2n);
+  mirror.apply(2n, [changed]);
+  expect(deltas[0].retain).toHaveLength(12000);
+  expect(deltas[1]).toEqual({ retain: [changed.record], release: [] });
+  mirror.apply(3n, []);
+  mirror.release(1n);
+  expect(() => mirror.discard(2n)).toThrow('active head');
+  expect(deltas).toHaveLength(2);
+  mirror.release(2n);
+  expect(deltas[2]).toEqual({ retain: [], release: [full[30].record] });
+  const before = deltas.length;
+  mirror.release(2n);
+  mirror.release(3n);
+  expect(deltas).toHaveLength(before);
+});
+
+test('retention callbacks cannot mutate the mirror reentrantly', () => {
+  let mirror: RecordMirror;
+  mirror = new RecordMirror(() => {
+    expect(() => mirror.apply(2n, [])).toThrow('must not reenter');
+  });
+  const a = ack(1, 1n);
+  mirror.replace(1n, [a]);
+  expect(mirror.get(1n, '1')).toBe(a.record);
+  mirror.apply(2n, []);
+  expect(mirror.get(2n, '1')).toBe(a.record);
+});
+
+test('collecting an absent historical key releases its last capture', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const current = ack(1, 5n),
+    historical = ack(2, 2n);
+  mirror.replace(5n, [current]);
+  mirror.replace(2n, [historical]);
+  expect(mirror.get(5n, '2')).toBeNull();
+  mirror.release(2n);
+  expect(deltas.at(-1)).toEqual({ retain: [], release: [historical.record] });
+  mirror.release(5n);
+  mirror.apply(6n, []);
+  expect([...mirror.records(6n)]).toEqual([current.record]);
+});
+
+test('parent-only basis leases are revisited when the owning lineage entry leaves', () => {
+  const deltas: CaptureRetentionDelta[] = [];
+  const mirror = new RecordMirror((delta) => deltas.push(delta));
+  const b = ack(2, 1n);
+  mirror.replace(1n, [b]);
+  mirror.apply(3n, []);
+  mirror.release(1n);
+  // This historical absence propagates to sparse head 3, but parent 1 remains
+  // the rollback basis of 3 even after allocation version 1 was collected.
+  mirror.replace(2n, []);
+  mirror.release(2n);
+  expect(mirror.get(3n, '2')).toBeNull();
+  expect(deltas).toEqual([{ retain: [b.record], release: [] }]);
+  mirror.release(3n);
+  expect(deltas.at(-1)).toEqual({ retain: [], release: [b.record] });
 });
