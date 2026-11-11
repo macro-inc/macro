@@ -14,6 +14,16 @@ milliseconds instead of waiting on container provisioning.
 - `src/domain/engine.rs`: `TurnEngine` port — the seam `rig_engine` fills.
 - `src/outbound/manager.rs`: `InMemAgentManager` — provisions per-session
   agent tasks, implements the container-manager port the harness expects.
+  `teardown` drops a session's conversation, agent task and token; the
+  harness calls it on delete and when it releases an idle session, and the
+  next `attach` rebuilds the conversation from the log (`rebuilt_state`).
+  `rebuilds_identically` gates the idle release: the rebuilt model context
+  (history without reasoning parts and with adjacent text merged, as
+  `agent::to_rig_messages` builds it; model, effort, speed, identity,
+  instructions) must equal the live one, with no summary in flight, failed, or
+  image descriptions cached, since none of that is in the log. A replay change
+  that drifts from the live history stops sessions from releasing; the
+  manager tests with MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
@@ -100,6 +110,11 @@ DecideReview are eager internal tools in both standard and code modes.
   measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
+  An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the
+  live agent recorded (split by `mcp_toolset::unmangle`, the title as its
+  display name when it differs), and its result keeps the mangled name. A
+  failed turn's last text chunk is the failure reply the live history never
+  held; replay strips it and keeps the turn.
 
 ## Related
 

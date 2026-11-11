@@ -42,6 +42,10 @@ export class ConnectedAppNamespace {
    * List the apps a running code execution's session agent may use; pass the
    * `execution` given to `main`. Fails outside a running execution of the
    * session's current turn.
+   *
+   * @readonly
+   * @openworld
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   list(execution: CodeExecution): Promise<ConnectedApp[]> {
     return ConnectedApp.list(this.client, execution);
@@ -52,6 +56,10 @@ export class ConnectedAppNamespace {
    * by keywords matched against tool names and descriptions (e.g. `linear
    * issue`), best first, at most 20. Apps whose tools could not be read come
    * back in `unsearched`, not as an error.
+   *
+   * @readonly
+   * @openworld
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   searchTools(
     execution: CodeExecution,
@@ -64,6 +72,9 @@ export class ConnectedAppNamespace {
    * Search the catalog of apps the user could connect, by app name (e.g.
    * `Linear`, not a task description). Inspect a result before recommending
    * it: its description alone does not show what it can do.
+   *
+   * @readonly
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   discover(
     execution: CodeExecution,
@@ -78,6 +89,11 @@ export class ConnectedAppNamespace {
    * never guess. Most servers then need the user to sign in under
    * Settings → Connections, which the result's `summary` says. A URL the
    * user already has is left as it is.
+   *
+   * @write
+   * @idempotent
+   * @openworld
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   async addServer(
     execution: CodeExecution,
