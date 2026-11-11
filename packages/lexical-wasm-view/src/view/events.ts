@@ -255,6 +255,7 @@ export function registerEvents(view: EditorView): {
     listener: (event: HTMLElementEventMap[K]) => void
   ): void {
     const wrapped = (event: HTMLElementEventMap[K]) => {
+      if (!view.isEditable && name !== 'copy' && name !== 'click') return;
       const allowDecorator = [
         'click',
         'pointerdown',

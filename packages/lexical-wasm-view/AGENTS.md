@@ -11,6 +11,8 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 ## Boundaries
 
+- Gate native root events on current view editability except copy and click, matching Source; recheck editability after lazy clipboard preparation before admission.
+
 - Match ListItemNode's parent-check/first-child-list checkbox predicate; nested wrappers have no role/tabIndex/aria-checked, while nested theme classes depend on any list child. Verify literal item attributes against actual Source with `browser-test/list-item-wrapper.playwright.config.ts`.
 
 - Set the decorator marker before contentEditable, preserving Source DOM attribute order.

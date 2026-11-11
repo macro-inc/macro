@@ -18,6 +18,11 @@ and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Verify engine parity before treating the flagged path as
 ready; native menus and anchored comments also require their view installers.
 
+Switch the body read-only and try paste, cut, drop and composition input: the
+model must stay unchanged while selecting and copying remain available. Unlock
+the same view and verify editing resumes. A rich paste waiting for its HTML
+import must cancel if the view becomes read-only before admission.
+
 The native body installs its checkbox pointer bridge through `installOverlays`.
 Click or tap a checklist marker, switch the view read-only, then unlock it and
 repeat; revoked Session write access must reject the toggle even if the local UI

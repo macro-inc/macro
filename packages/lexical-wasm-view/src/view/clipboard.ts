@@ -63,8 +63,9 @@ export class ClipboardAccess {
     selection: ViewSelection = readSelection(this.view),
     intent: IPasteIntentMsg = { plainOnly: false }
   ): Promise<boolean> {
-    const plainOnly = intent.plainOnly;
     const view = this.view;
+    if (!view.isEditable || !view.isMounted) return false;
+    const plainOnly = intent.plainOnly;
     const measurement = startEditorPerformance(view, 'editor.paste');
     const span = measurement.span;
     const facts: ClipboardFacts[] = [];
@@ -136,6 +137,7 @@ export class ClipboardAccess {
       if (
         !view.root.isConnected ||
         !view.isMounted ||
+        !view.isEditable ||
         view.revision !== revision ||
         !sameSelection(originalSelection, readSelection(view))
       )
