@@ -5,20 +5,20 @@
  * capability's JSON goes) unless NODE_ENV says production before it loads.
  */
 import type {
-	connectRoom as ConnectRoom,
-	publishScreen as PublishScreen,
-} from "@macro-inc/sdk/calls/node";
+  connectRoom as ConnectRoom,
+  publishScreen as PublishScreen,
+} from '@macro-inc/sdk/calls/node';
 
 const rooms = () => {
-	process.env.NODE_ENV ??= "production";
-	return import("@macro-inc/sdk/calls/node");
+  process.env.NODE_ENV ??= 'production';
+  return import('@macro-inc/sdk/calls/node');
 };
 
 export const connectRoom: typeof ConnectRoom = async (target, options) =>
-	(await rooms()).connectRoom(target, options);
+  (await rooms()).connectRoom(target, options);
 
 export const publishScreen: typeof PublishScreen = async (
-	room,
-	frames,
-	options,
+  room,
+  frames,
+  options
 ) => (await rooms()).publishScreen(room, frames, options);

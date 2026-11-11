@@ -2,30 +2,30 @@
  * Talking in Macro: the capabilities the agent uses to post, reply, react
  * and read conversations, as its own account.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import type { ChatContext } from "./context.ts";
-import type { Line, Posted } from "./macro.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import type { ChatContext } from './context.ts';
+import type { Line, Posted } from './macro.ts';
 
 /**
  * The message to send, trimmed. A flag where a message should be is a
  * mistyped command, not something to send.
  */
 const message = (text: string): string => {
-	const trimmed = text.trim();
-	if (trimmed === "") throw new Error("text: empty message");
-	if (/^--?\w[\w-]*$/.test(trimmed))
-		throw new Error("text: refusing to send a flag as a message");
-	return trimmed;
+  const trimmed = text.trim();
+  if (trimmed === '') throw new Error('text: empty message');
+  if (/^--?\w[\w-]*$/.test(trimmed))
+    throw new Error('text: refusing to send a flag as a message');
+  return trimmed;
 };
 
 /** The agent has answered in this channel: stop typing, and note when. */
 const answer = async (
-	{ typing, answered, clock }: ChatContext,
-	channelId: string,
+  { typing, answered, clock }: ChatContext,
+  channelId: string
 ): Promise<void> => {
-	if (!answered.has(channelId)) answered.set(channelId, clock.now());
-	await typing.stop(channelId);
+  if (!answered.has(channelId)) answered.set(channelId, clock.now());
+  await typing.stop(channelId);
 };
 
 /** The Macro channels you are in, with their ids. */
@@ -33,20 +33,20 @@ export const listChannels = ({ chat }: ChatContext) => chat.channels();
 
 /** Join a Macro team channel, which you must do before posting in it. */
 export const joinChannel = async (
-	{ chat }: ChatContext,
-	{ channelId }: { readonly channelId: string },
+  { chat }: ChatContext,
+  { channelId }: { readonly channelId: string }
 ): Promise<null> => {
-	await chat.join(channelId);
-	return null;
+  await chat.join(channelId);
+  return null;
 };
 
 /** Leave a Macro channel. */
 export const leaveChannel = async (
-	{ chat }: ChatContext,
-	{ channelId }: { readonly channelId: string },
+  { chat }: ChatContext,
+  { channelId }: { readonly channelId: string }
 ): Promise<null> => {
-	await chat.leave(channelId);
-	return null;
+  await chat.leave(channelId);
+  return null;
 };
 
 /**
@@ -59,12 +59,12 @@ export const leaveChannel = async (
  * flag.
  */
 export const postMessage = async (
-	context: ChatContext,
-	{ channelId, text }: { readonly channelId: string; readonly text: string },
+  context: ChatContext,
+  { channelId, text }: { readonly channelId: string; readonly text: string }
 ): Promise<Posted> => {
-	const posted = await context.chat.send(channelId, message(text));
-	await answer(context, channelId);
-	return posted;
+  const posted = await context.chat.send(channelId, message(text));
+  await answer(context, channelId);
+  return posted;
 };
 
 /**
@@ -74,20 +74,20 @@ export const postMessage = async (
  * `text` mustn't be empty or a flag.
  */
 export const replyInThread = async (
-	context: ChatContext,
-	{
-		channelId,
-		root,
-		text,
-	}: {
-		readonly channelId: string;
-		readonly root: string;
-		readonly text: string;
-	},
+  context: ChatContext,
+  {
+    channelId,
+    root,
+    text,
+  }: {
+    readonly channelId: string;
+    readonly root: string;
+    readonly text: string;
+  }
 ): Promise<Posted> => {
-	const posted = await context.chat.reply(channelId, root, message(text));
-	await answer(context, channelId);
-	return posted;
+  const posted = await context.chat.reply(channelId, root, message(text));
+  await answer(context, channelId);
+  return posted;
 };
 
 /**
@@ -96,23 +96,23 @@ export const replyInThread = async (
  * A reaction answers a message that only needs an ack. Pass `remove: true` to take one of your reactions back.
  */
 export const react = async (
-	context: ChatContext,
-	{
-		channelId,
-		messageId,
-		emoji,
-		remove,
-	}: {
-		readonly channelId: string;
-		readonly messageId: string;
-		readonly emoji: string;
-		readonly remove?: boolean;
-	},
+  context: ChatContext,
+  {
+    channelId,
+    messageId,
+    emoji,
+    remove,
+  }: {
+    readonly channelId: string;
+    readonly messageId: string;
+    readonly emoji: string;
+    readonly remove?: boolean;
+  }
 ): Promise<null> => {
-	if (emoji === "") throw new Error("empty emoji");
-	await context.chat.react(channelId, messageId, emoji, remove !== true);
-	if (remove !== true) await answer(context, channelId);
-	return null;
+  if (emoji === '') throw new Error('empty emoji');
+  await context.chat.react(channelId, messageId, emoji, remove !== true);
+  if (remove !== true) await answer(context, channelId);
+  return null;
 };
 
 /**
@@ -120,8 +120,8 @@ export const react = async (
  * mustn't be empty or a flag.
  */
 export const dmOwner = async (
-	{ chat, config }: ChatContext,
-	{ text }: { readonly text: string },
+  { chat, config }: ChatContext,
+  { text }: { readonly text: string }
 ): Promise<Posted> => chat.dm(config.owner, message(text));
 
 /**
@@ -131,12 +131,12 @@ export const dmOwner = async (
  * flag.
  */
 export const dmPerson = async (
-	{ chat }: ChatContext,
-	{ userId, text }: { readonly userId: string; readonly text: string },
+  { chat }: ChatContext,
+  { userId, text }: { readonly userId: string; readonly text: string }
 ): Promise<Posted> => {
-	if (!userId.startsWith("macro|"))
-		throw new Error('userId: must start with "macro|"');
-	return chat.dm(userId, message(text));
+  if (!userId.startsWith('macro|'))
+    throw new Error('userId: must start with "macro|"');
+  return chat.dm(userId, message(text));
 };
 
 /**
@@ -146,8 +146,8 @@ export const dmPerson = async (
  * latest root messages, oldest first.
  */
 export const readConversation = (
-	{ chat }: ChatContext,
-	{ channelId, root }: { readonly channelId: string; readonly root?: string },
+  { chat }: ChatContext,
+  { channelId, root }: { readonly channelId: string; readonly root?: string }
 ): Promise<readonly Line[]> => chat.context(channelId, root);
 
 const recallDefault = 50;
@@ -162,17 +162,17 @@ const recallMost = 1000;
  * `count` is how many, a whole number from 1, 50 unless given, at most 1000.
  */
 export const recallConversation = async (
-	{ history }: ChatContext,
-	{ channelId, count }: { readonly channelId: string; readonly count?: number },
+  { history }: ChatContext,
+  { channelId, count }: { readonly channelId: string; readonly count?: number }
 ) => {
-	if (
-		count !== undefined &&
-		!(Number.isInteger(count) && count > 0 && count <= recallMost)
-	)
-		throw new Error(
-			`count: must be a whole number from 1 to ${recallMost}, not ${count}`,
-		);
-	return history.recent(channelId, count ?? recallDefault);
+  if (
+    count !== undefined &&
+    !(Number.isInteger(count) && count > 0 && count <= recallMost)
+  )
+    throw new Error(
+      `count: must be a whole number from 1 to ${recallMost}, not ${count}`
+    );
+  return history.recent(channelId, count ?? recallDefault);
 };
 
 /**
@@ -182,20 +182,20 @@ export const recallConversation = async (
  * your owner's, to read only what they wrote.
  */
 export const messagesSince = async (
-	{ chat }: ChatContext,
-	{
-		channelId,
-		since,
-		senderId,
-	}: {
-		readonly channelId: string;
-		readonly since: string;
-		readonly senderId?: string;
-	},
+  { chat }: ChatContext,
+  {
+    channelId,
+    since,
+    senderId,
+  }: {
+    readonly channelId: string;
+    readonly since: string;
+    readonly senderId?: string;
+  }
 ): Promise<readonly Line[]> =>
-	(await chat.since(channelId, since)).filter(
-		({ sender_id }) => senderId === undefined || sender_id === senderId,
-	);
+  (await chat.since(channelId, since)).filter(
+    ({ sender_id }) => senderId === undefined || sender_id === senderId
+  );
 
 /**
  * Read an email thread attached to a Macro message.
@@ -205,29 +205,29 @@ export const messagesSince = async (
  * claims to be from.
  */
 export const readEmailThread = (
-	{ chat }: ChatContext,
-	{ threadId }: { readonly threadId: string },
+  { chat }: ChatContext,
+  { threadId }: { readonly threadId: string }
 ) => chat.email(threadId);
 
 export const chatModule = module({
-	name: "chat",
-	summary:
-		"Talking in Macro as yourself: post, reply, react, DM, and read conversations.",
-	file: import.meta.path,
-	functions: {
-		listChannels,
-		joinChannel,
-		leaveChannel,
-		postMessage,
-		replyInThread,
-		react,
-		dmOwner,
-		dmPerson,
-		readConversation,
-		recallConversation,
-		messagesSince,
-		readEmailThread,
-	},
+  name: 'chat',
+  summary:
+    'Talking in Macro as yourself: post, reply, react, DM, and read conversations.',
+  file: import.meta.path,
+  functions: {
+    listChannels,
+    joinChannel,
+    leaveChannel,
+    postMessage,
+    replyInThread,
+    react,
+    dmOwner,
+    dmPerson,
+    readConversation,
+    recallConversation,
+    messagesSince,
+    readEmailThread,
+  },
 });
 
 export const chatCapabilities = behavior<ChatContext>().capability(chatModule);

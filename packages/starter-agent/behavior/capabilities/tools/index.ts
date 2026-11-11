@@ -3,18 +3,18 @@
  * without seeing it, and handing one to a program without passing through
  * the model.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import { credentialLog } from "./config.ts";
-import type { ToolsContext } from "./context.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import { credentialLog } from './config.ts';
+import type { ToolsContext } from './context.ts';
 import {
-	checkName,
-	checkSecret,
-	newPassword,
-	printedValue,
-	redact,
-} from "./secrets.ts";
-import { totp } from "./totp.ts";
+  checkName,
+  checkSecret,
+  newPassword,
+  printedValue,
+  redact,
+} from './secrets.ts';
+import { totp } from './totp.ts';
 
 /** The parts of the context a capability reads. */
 type Needs<Keys extends keyof ToolsContext> = Pick<ToolsContext, Keys>;
@@ -29,13 +29,13 @@ type Needs<Keys extends keyof ToolsContext> = Pick<ToolsContext, Keys>;
  * it with setCredential.
  */
 export const listCredentials = ({
-	credentials,
-}: Needs<"credentials">): Promise<readonly string[]> => credentials.names();
+  credentials,
+}: Needs<'credentials'>): Promise<readonly string[]> => credentials.names();
 
 /** Whether you hold a credential by this name. */
 export const hasCredential = (
-	{ credentials }: Needs<"credentials">,
-	{ name }: { readonly name: string },
+  { credentials }: Needs<'credentials'>,
+  { name }: { readonly name: string }
 ): Promise<boolean> => credentials.has(name);
 
 /**
@@ -54,51 +54,51 @@ export const hasCredential = (
  * value's length, never the value.
  */
 export const setCredential = async (
-	{
-		credentials,
-		random,
-		shell,
-		log,
-		tools,
-	}: Needs<"credentials" | "random" | "shell" | "log" | "tools">,
-	{
-		name,
-		generate,
-		fromCommand,
-		value,
-	}: {
-		readonly name: string;
-		readonly generate?: true;
-		readonly fromCommand?: readonly [string, ...string[]];
-		readonly value?: string;
-	},
+  {
+    credentials,
+    random,
+    shell,
+    log,
+    tools,
+  }: Needs<'credentials' | 'random' | 'shell' | 'log' | 'tools'>,
+  {
+    name,
+    generate,
+    fromCommand,
+    value,
+  }: {
+    readonly name: string;
+    readonly generate?: true;
+    readonly fromCommand?: readonly [string, ...string[]];
+    readonly value?: string;
+  }
 ): Promise<{ readonly name: string; readonly length: number }> => {
-	const given = [generate, fromCommand, value].filter(
-		(way) => way !== undefined,
-	).length;
-	if (given !== 1)
-		throw new Error("give exactly one of generate, fromCommand and value");
-	// The name is checked before anything runs, so a bad one costs nothing.
-	checkName(name);
-	const found = async (argv: readonly string[]): Promise<string> => {
-		const ran = await shell.run(argv, { timeoutMs: tools.commandTimeoutMs });
-		if (ran.code !== 0)
-			throw new Error(
-				`${argv[0]} exited ${ran.code}; nothing stored for ${name}`,
-			);
-		return printedValue(ran.stdout);
-	};
-	const checked = checkSecret(
-		name,
-		generate === true
-			? newPassword(random)
-			: fromCommand !== undefined
-				? await found(fromCommand)
-				: (value ?? ""),
-	);
-	await credentials.set(name, checked);
-	await log.event(credentialLog, { set: name, length: checked.length });
-	return { name, length: checked.length };
+  const given = [generate, fromCommand, value].filter(
+    (way) => way !== undefined
+  ).length;
+  if (given !== 1)
+    throw new Error('give exactly one of generate, fromCommand and value');
+  // The name is checked before anything runs, so a bad one costs nothing.
+  checkName(name);
+  const found = async (argv: readonly string[]): Promise<string> => {
+    const ran = await shell.run(argv, { timeoutMs: tools.commandTimeoutMs });
+    if (ran.code !== 0)
+      throw new Error(
+        `${argv[0]} exited ${ran.code}; nothing stored for ${name}`
+      );
+    return printedValue(ran.stdout);
+  };
+  const checked = checkSecret(
+    name,
+    generate === true
+      ? newPassword(random)
+      : fromCommand !== undefined
+        ? await found(fromCommand)
+        : (value ?? '')
+  );
+  await credentials.set(name, checked);
+  await log.event(credentialLog, { set: name, length: checked.length });
+  return { name, length: checked.length };
 };
 
 /**
@@ -114,69 +114,69 @@ export const setCredential = async (
  * them. Never put a value in `argv`.
  */
 export const useCredential = async (
-	{
-		credentials,
-		shell,
-		clock,
-		tools,
-	}: Needs<"credentials" | "shell" | "clock" | "tools">,
-	{
-		argv,
-		stdin,
-		env,
-		cwd,
-	}: {
-		readonly argv: readonly [string, ...string[]];
-		readonly stdin?: {
-			readonly credential: string;
-			readonly as?: "value" | "totp";
-		};
-		readonly env?: Readonly<Record<string, string>>;
-		readonly cwd?: string;
-	},
+  {
+    credentials,
+    shell,
+    clock,
+    tools,
+  }: Needs<'credentials' | 'shell' | 'clock' | 'tools'>,
+  {
+    argv,
+    stdin,
+    env,
+    cwd,
+  }: {
+    readonly argv: readonly [string, ...string[]];
+    readonly stdin?: {
+      readonly credential: string;
+      readonly as?: 'value' | 'totp';
+    };
+    readonly env?: Readonly<Record<string, string>>;
+    readonly cwd?: string;
+  }
 ): Promise<{
-	readonly code: number;
-	readonly stdout: string;
-	readonly stderr: string;
+  readonly code: number;
+  readonly stdout: string;
+  readonly stderr: string;
 }> => {
-	const typed =
-		stdin === undefined
-			? undefined
-			: stdin.as === "totp"
-				? await totp(await credentials.get(stdin.credential), clock.now())
-				: await credentials.get(stdin.credential);
-	const variables = await Promise.all(
-		Object.entries(env ?? {}).map(
-			async ([variable, name]) =>
-				[variable, await credentials.get(name)] as const,
-		),
-	);
-	const ran = await shell.run(argv, {
-		cwd,
-		stdin: typed,
-		env: Object.fromEntries(variables),
-		timeoutMs: tools.commandTimeoutMs,
-	});
-	const secrets = [typed ?? "", ...variables.map(([, value]) => value)];
-	return {
-		code: ran.code,
-		stdout: redact(ran.stdout, secrets),
-		stderr: redact(ran.stderr, secrets),
-	};
+  const typed =
+    stdin === undefined
+      ? undefined
+      : stdin.as === 'totp'
+        ? await totp(await credentials.get(stdin.credential), clock.now())
+        : await credentials.get(stdin.credential);
+  const variables = await Promise.all(
+    Object.entries(env ?? {}).map(
+      async ([variable, name]) =>
+        [variable, await credentials.get(name)] as const
+    )
+  );
+  const ran = await shell.run(argv, {
+    cwd,
+    stdin: typed,
+    env: Object.fromEntries(variables),
+    timeoutMs: tools.commandTimeoutMs,
+  });
+  const secrets = [typed ?? '', ...variables.map(([, value]) => value)];
+  return {
+    code: ran.code,
+    stdout: redact(ran.stdout, secrets),
+    stderr: redact(ran.stderr, secrets),
+  };
 };
 
 export const toolsModule = module({
-	name: "tools",
-	summary:
-		"Your credentials, by name only: which you hold, storing one, and handing one to a program.",
-	file: import.meta.path,
-	functions: {
-		listCredentials,
-		hasCredential,
-		setCredential,
-		useCredential,
-	},
+  name: 'tools',
+  summary:
+    'Your credentials, by name only: which you hold, storing one, and handing one to a program.',
+  file: import.meta.path,
+  functions: {
+    listCredentials,
+    hasCredential,
+    setCredential,
+    useCredential,
+  },
 });
 
 export const toolsCapabilities =
-	behavior<ToolsContext>().capability(toolsModule);
+  behavior<ToolsContext>().capability(toolsModule);

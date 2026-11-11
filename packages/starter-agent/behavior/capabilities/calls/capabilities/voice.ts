@@ -2,21 +2,21 @@
  * One call's capabilities: the process that sits in a Macro call as the
  * agent, and a way to check what it hears without a call.
  */
-import type { Base } from "../../../context/index.ts";
-import { parseWav } from "../audio.ts";
-import { joinCapability } from "../config.ts";
-import type { Voice } from "../context/voice.ts";
-import { joinCall as join, type Outcome } from "../join.ts";
+import type { Base } from '../../../context/index.ts';
+import { parseWav } from '../audio.ts';
+import { joinCapability } from '../config.ts';
+import type { Voice } from '../context/voice.ts';
+import { joinCall as join, type Outcome } from '../join.ts';
 import {
-	askedLine,
-	heardRecordings,
-	isRecording,
-	replay,
-	resolveCall,
-	stubBrain,
-} from "../replay.ts";
-import type { JoinKind } from "../types.ts";
-import { filled } from "./filled.ts";
+  askedLine,
+  heardRecordings,
+  isRecording,
+  replay,
+  resolveCall,
+  stubBrain,
+} from '../replay.ts';
+import type { JoinKind } from '../types.ts';
+import { filled } from './filled.ts';
 
 export type VoiceContext = Base & { readonly voice: Voice };
 
@@ -53,27 +53,27 @@ export type VoiceContext = Base & { readonly voice: Voice };
  * connected, rate limited, refused, programmatic calls off).
  */
 export const joinCall = async (
-	{ voice }: VoiceContext,
-	input: {
-		readonly kind: JoinKind;
-		readonly id: string;
-		readonly callId?: string;
-		readonly uninvited?: string;
-		readonly onOtherCall?: "switch";
-		readonly replace?: boolean;
-		readonly echo?: boolean;
-	},
+  { voice }: VoiceContext,
+  input: {
+    readonly kind: JoinKind;
+    readonly id: string;
+    readonly callId?: string;
+    readonly uninvited?: string;
+    readonly onOtherCall?: 'switch';
+    readonly replace?: boolean;
+    readonly echo?: boolean;
+  }
 ): Promise<Outcome> => {
-	filled(input.id, "id");
-	// A join ends by exiting its process, and its token request can evict the
-	// agent from a call: inside its main process either would be a disaster.
-	if (!voice.ownProcess())
-		throw new Error(
-			`${joinCapability} runs only as its own process, started by the calls watcher`,
-		);
-	const outcome = await join(voice.join, input);
-	voice.exit(outcome.code);
-	return outcome;
+  filled(input.id, 'id');
+  // A join ends by exiting its process, and its token request can evict the
+  // agent from a call: inside its main process either would be a disaster.
+  if (!voice.ownProcess())
+    throw new Error(
+      `${joinCapability} runs only as its own process, started by the calls watcher`
+    );
+  const outcome = await join(voice.join, input);
+  voice.exit(outcome.code);
+  return outcome;
 };
 
 /**
@@ -93,43 +93,43 @@ export const joinCall = async (
  * Needs DEEPGRAM_API_KEY.
  */
 export const replayCall = async (
-	{ voice, disk, clock, join: path }: VoiceContext,
-	{ call, events }: { readonly call: string; readonly events?: boolean },
+  { voice, disk, clock, join: path }: VoiceContext,
+  { call, events }: { readonly call: string; readonly events?: boolean }
 ): Promise<
-	readonly { readonly recording: string; readonly asked: readonly string[] }[]
+  readonly { readonly recording: string; readonly asked: readonly string[] }[]
 > => {
-	filled(call, "call");
-	const directory = isRecording(call)
-		? undefined
-		: voice.paths.call(resolveCall(call, await disk.list(voice.paths.calls)));
-	const recordings =
-		directory === undefined
-			? [call]
-			: heardRecordings(await disk.list(directory)).map((name) =>
-					path(directory, name),
-				);
-	const livekit = await voice.livekit();
-	const replayed: { recording: string; asked: readonly string[] }[] = [];
-	for (const recording of recordings) {
-		const pcm = parseWav(await voice.readBytes(recording));
-		const asks: string[] = [];
-		const began = voice.monotonic();
-		const log = voice.log({
-			elapsed: () => voice.monotonic() - began,
-			echo: events === true ? voice.print : undefined,
-		});
-		const session = await livekit.replaySession({
-			brain: stubBrain((content) => asks.push(content)),
-			emit: log.emit,
-			now: log.now,
-		});
-		await replay({
-			pcm,
-			session,
-			monotonic: voice.monotonic,
-			sleep: clock.sleep,
-		});
-		replayed.push({ recording, asked: asks.map(askedLine) });
-	}
-	return replayed;
+  filled(call, 'call');
+  const directory = isRecording(call)
+    ? undefined
+    : voice.paths.call(resolveCall(call, await disk.list(voice.paths.calls)));
+  const recordings =
+    directory === undefined
+      ? [call]
+      : heardRecordings(await disk.list(directory)).map((name) =>
+          path(directory, name)
+        );
+  const livekit = await voice.livekit();
+  const replayed: { recording: string; asked: readonly string[] }[] = [];
+  for (const recording of recordings) {
+    const pcm = parseWav(await voice.readBytes(recording));
+    const asks: string[] = [];
+    const began = voice.monotonic();
+    const log = voice.log({
+      elapsed: () => voice.monotonic() - began,
+      echo: events === true ? voice.print : undefined,
+    });
+    const session = await livekit.replaySession({
+      brain: stubBrain((content) => asks.push(content)),
+      emit: log.emit,
+      now: log.now,
+    });
+    await replay({
+      pcm,
+      session,
+      monotonic: voice.monotonic,
+      sleep: clock.sleep,
+    });
+    replayed.push({ recording, asked: asks.map(askedLine) });
+  }
+  return replayed;
 };

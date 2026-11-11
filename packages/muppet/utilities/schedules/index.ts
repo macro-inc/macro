@@ -7,19 +7,19 @@
  *     .on((sources) => sources.schedules, async ({ name, data }) =>
  *       name === "standup" ? [{ kind: "wake", request: "Run standup." }] : [])
  */
-import { behavior } from "../../core/behavior.ts";
-import { module } from "../../core/capability.ts";
-import type { Clock } from "../time/index.ts";
-import { grace } from "./due.ts";
-import type { Schedule } from "./schedule.ts";
-import { scheduler } from "./scheduler.ts";
-import type { Changed, Schedules, Status } from "./schedules.ts";
-import type { ScheduleStore } from "./store.ts";
+import { behavior } from '../../core/behavior.ts';
+import { module } from '../../core/capability.ts';
+import type { Clock } from '../time/index.ts';
+import { grace } from './due.ts';
+import type { Schedule } from './schedule.ts';
+import { scheduler } from './scheduler.ts';
+import type { Changed, Schedules, Status } from './schedules.ts';
+import type { ScheduleStore } from './store.ts';
 
-export type { Schedule } from "./schedule.ts";
-export { scheduler } from "./scheduler.ts";
-export type { Changed, Fired, Schedules, Status } from "./schedules.ts";
-export { fileStore, memoryStore, type ScheduleStore } from "./store.ts";
+export type { Schedule } from './schedule.ts';
+export { scheduler } from './scheduler.ts';
+export type { Changed, Fired, Schedules, Status } from './schedules.ts';
+export { fileStore, memoryStore, type ScheduleStore } from './store.ts';
 
 type Context = { readonly schedules: Schedules };
 
@@ -34,58 +34,58 @@ type Named = { readonly name: string };
 
 /** Adds a schedule, or replaces one by the same name. Replacing a schedule forgets what it has done, and unpauses it. */
 export const setSchedule = (
-	{ schedules }: Context,
-	{ name, schedule }: { readonly name: string; readonly schedule: Schedule },
+  { schedules }: Context,
+  { name, schedule }: { readonly name: string; readonly schedule: Schedule }
 ): Promise<Changed> => schedules.set(name, schedule);
 
 /** Removes a schedule. */
 export const removeSchedule = (
-	{ schedules }: Context,
-	{ name }: Named,
+  { schedules }: Context,
+  { name }: Named
 ): Promise<Changed> => schedules.remove(name);
 
 /** Stops a schedule firing until it is resumed. */
 export const pauseSchedule = (
-	{ schedules }: Context,
-	{ name }: Named,
+  { schedules }: Context,
+  { name }: Named
 ): Promise<Changed> => schedules.pause(name);
 
 /** Lets a paused schedule fire again. */
 export const resumeSchedule = (
-	{ schedules }: Context,
-	{ name }: Named,
+  { schedules }: Context,
+  { name }: Named
 ): Promise<Changed> => schedules.resume(name);
 
 /** Every schedule, soonest first, with when it next fires. */
 export const listSchedules = ({
-	schedules,
+  schedules,
 }: Context): Promise<readonly Status[]> => schedules.list();
 
 export const scheduleControl = module({
-	name: "schedules",
-	summary: "Add, change, pause and read your schedules.",
-	docs: format,
-	file: import.meta.path,
-	functions: {
-		setSchedule,
-		removeSchedule,
-		pauseSchedule,
-		resumeSchedule,
-		listSchedules,
-	},
+  name: 'schedules',
+  summary: 'Add, change, pause and read your schedules.',
+  docs: format,
+  file: import.meta.path,
+  functions: {
+    setSchedule,
+    removeSchedule,
+    pauseSchedule,
+    resumeSchedule,
+    listSchedules,
+  },
 });
 
 export const scheduling = (options: {
-	readonly store: ScheduleStore;
-	readonly clock: Clock;
-	/** The zone a rule's wall clock means, unless it names its own. */
-	readonly tz: string;
-	/** Ends the schedules source, e.g. on shutdown. */
-	readonly signal?: AbortSignal;
+  readonly store: ScheduleStore;
+  readonly clock: Clock;
+  /** The zone a rule's wall clock means, unless it names its own. */
+  readonly tz: string;
+  /** Ends the schedules source, e.g. on shutdown. */
+  readonly signal?: AbortSignal;
 }) => {
-	const schedules = scheduler(options);
-	return behavior()
-		.decorate({ schedules })
-		.source({ schedules: schedules.fired })
-		.capability(scheduleControl);
+  const schedules = scheduler(options);
+  return behavior()
+    .decorate({ schedules })
+    .source({ schedules: schedules.fired })
+    .capability(scheduleControl);
 };

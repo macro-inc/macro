@@ -10,20 +10,20 @@
  * It needs Chromium and ffmpeg on the system: add this directory's flake to
  * the agent's flake, as its comment shows.
  */
-import type { Room } from "@livekit/rtc-node";
-import type { Publish } from "./share.ts";
+import type { Room } from '@livekit/rtc-node';
+import type { Publish } from './share.ts';
 
-export * from "./frames.ts";
-export * from "./policy.ts";
-export * from "./share.ts";
+export * from './frames.ts';
+export * from './policy.ts';
+export * from './share.ts';
 
 /**
  * Publishes to a call's room. The SDK's call helpers load LiveKit's native
  * library, so they're imported only when a share starts.
  */
 export const publishTo =
-	(room: Room): Publish =>
-	async (frames, { fps }) => {
-		const { publishScreen } = await import("@macro-inc/sdk/calls/node");
-		return publishScreen(room, frames, { fps });
-	};
+  (room: Room): Publish =>
+  async (frames, { fps }) => {
+    const { publishScreen } = await import('@macro-inc/sdk/calls/node');
+    return publishScreen(room, frames, { fps });
+  };

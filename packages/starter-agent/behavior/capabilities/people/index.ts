@@ -3,15 +3,15 @@
  * next to this file. Everything here stays on this machine: nothing these
  * return goes in notes, tasks, issues, PRs, commits, or Macro docs.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import { isoText } from "@muppet/lib/utilities/time";
-import { z } from "zod";
-import { card } from "./card.ts";
-import type { PeopleContext } from "./context.ts";
-import { forgotten, forgottenReply, remembered } from "./memory.ts";
-import { feel, isPerson } from "./rules.ts";
-import { CallEvent, callSaid, worthAppraising } from "./transcript.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import { isoText } from '@macro-inc/muppet/utilities/time';
+import { z } from 'zod';
+import { card } from './card.ts';
+import type { PeopleContext } from './context.ts';
+import { forgotten, forgottenReply, remembered } from './memory.ts';
+import { feel, isPerson } from './rules.ts';
+import { CallEvent, callSaid, worthAppraising } from './transcript.ts';
 
 /**
  * The message that asked: Macro's record of it says who its author is.
@@ -21,8 +21,8 @@ type Asking = { readonly channelId: string; readonly messageId: string };
 
 /** Only a Macro id names a person here. */
 const macroId = (id: string): string => {
-	if (!id.startsWith("macro|")) throw new Error('id: must start with "macro|"');
-	return id;
+  if (!id.startsWith('macro|')) throw new Error('id: must start with "macro|"');
+  return id;
 };
 
 /**
@@ -38,13 +38,13 @@ const macroId = (id: string): string => {
  * `macro|`.
  */
 export const personCard = async (
-	{ keeping: { store, who }, clock }: Pick<PeopleContext, "keeping" | "clock">,
-	{ id, private: alone }: { readonly id: string; readonly private?: boolean },
+  { keeping: { store, who }, clock }: Pick<PeopleContext, 'keeping' | 'clock'>,
+  { id, private: alone }: { readonly id: string; readonly private?: boolean }
 ): Promise<string> => {
-	const person = await store.load(macroId(id));
-	return person === undefined
-		? "You don't know them yet."
-		: card(person, alone === true ? "private" : "shared", clock.now(), who);
+  const person = await store.load(macroId(id));
+  return person === undefined
+    ? "You don't know them yet."
+    : card(person, alone === true ? 'private' : 'shared', clock.now(), who);
 };
 
 /**
@@ -58,14 +58,14 @@ export const personCard = async (
  * conversation, what they said in private is left out; offer that in a DM.
  */
 export const whatIRemember = async (
-	{ keeping: { store, authorOf } }: Pick<PeopleContext, "keeping">,
-	{ channelId, messageId }: Asking,
+  { keeping: { store, authorOf } }: Pick<PeopleContext, 'keeping'>,
+  { channelId, messageId }: Asking
 ): Promise<string> => {
-	const author = await authorOf(channelId, messageId);
-	return remembered(
-		await store.load(author.id),
-		author.dm ? "private" : "shared",
-	);
+  const author = await authorOf(channelId, messageId);
+  return remembered(
+    await store.load(author.id),
+    author.dm ? 'private' : 'shared'
+  );
 };
 
 /**
@@ -80,13 +80,13 @@ export const whatIRemember = async (
  * conversation history.
  */
 export const forgetPerson = async (
-	{ keeping: { store, who, authorOf } }: Pick<PeopleContext, "keeping">,
-	{ channelId, messageId }: Asking,
+  { keeping: { store, who, authorOf } }: Pick<PeopleContext, 'keeping'>,
+  { channelId, messageId }: Asking
 ): Promise<string> => {
-	const author = await authorOf(channelId, messageId);
-	if (!isPerson(author.id, who)) throw new Error("not a person");
-	await store.update(author.id, "", forgotten);
-	return forgottenReply;
+  const author = await authorOf(channelId, messageId);
+  if (!isPerson(author.id, who)) throw new Error('not a person');
+  await store.update(author.id, '', forgotten);
+  return forgottenReply;
 };
 
 /**
@@ -96,11 +96,11 @@ export const forgetPerson = async (
  * owner can order it. `id` starts with `macro|`.
  */
 export const purgePerson = async (
-	{ keeping: { store } }: Pick<PeopleContext, "keeping">,
-	{ id }: { readonly id: string },
-): Promise<"removed"> => {
-	await store.remove(macroId(id));
-	return "removed";
+  { keeping: { store } }: Pick<PeopleContext, 'keeping'>,
+  { id }: { readonly id: string }
+): Promise<'removed'> => {
+  await store.remove(macroId(id));
+  return 'removed';
 };
 
 /**
@@ -113,13 +113,13 @@ export const purgePerson = async (
  * `id` starts with `macro|`.
  */
 export const peopleReport = async (
-	{ keeping: { store }, clock }: Pick<PeopleContext, "keeping" | "clock">,
-	{ id }: { readonly id: string },
+  { keeping: { store }, clock }: Pick<PeopleContext, 'keeping' | 'clock'>,
+  { id }: { readonly id: string }
 ) => {
-	const person = await store.load(macroId(id));
-	return person === undefined
-		? null
-		: { feeling: feel(person.events, clock.now()), person };
+  const person = await store.load(macroId(id));
+  return person === undefined
+    ? null
+    : { feeling: feel(person.events, clock.now()), person };
 };
 
 /** A call's event log is written by the call's own process: what it holds is parsed, not assumed. */
@@ -138,40 +138,40 @@ const CallEvents = z.array(CallEvent);
  * `callId` mustn't be empty.
  */
 export const appraiseCall = async (
-	{
-		keeping: { who, appraise },
-		clock,
-	}: Pick<PeopleContext, "keeping" | "clock">,
-	input: {
-		readonly callId: string;
-		readonly channelId?: string;
-		// A log line carries more than is read here, and the compiler would refuse the rest: the schema below takes what it needs.
-		readonly events: readonly Readonly<Record<string, unknown>>[];
-	},
+  {
+    keeping: { who, appraise },
+    clock,
+  }: Pick<PeopleContext, 'keeping' | 'clock'>,
+  input: {
+    readonly callId: string;
+    readonly channelId?: string;
+    // A log line carries more than is read here, and the compiler would refuse the rest: the schema below takes what it needs.
+    readonly events: readonly Readonly<Record<string, unknown>>[];
+  }
 ) => {
-	const { callId } = input;
-	if (callId === "") throw new Error("callId: empty");
-	const events = CallEvents.parse(input.events);
-	const said = callSaid(events, callId, isoText(clock.now()), who);
-	return said !== undefined && worthAppraising(said.messages)
-		? appraise(said.messages, said.context)
-		: [];
+  const { callId } = input;
+  if (callId === '') throw new Error('callId: empty');
+  const events = CallEvents.parse(input.events);
+  const said = callSaid(events, callId, isoText(clock.now()), who);
+  return said !== undefined && worthAppraising(said.messages)
+    ? appraise(said.messages, said.context)
+    : [];
 };
 
 export const peopleModule = module({
-	name: "people",
-	summary:
-		"Your relationships: how you feel about someone, what you remember of them, and forgetting it. All of it stays on this machine.",
-	file: import.meta.path,
-	functions: {
-		personCard,
-		whatIRemember,
-		forgetPerson,
-		purgePerson,
-		peopleReport,
-		appraiseCall,
-	},
+  name: 'people',
+  summary:
+    'Your relationships: how you feel about someone, what you remember of them, and forgetting it. All of it stays on this machine.',
+  file: import.meta.path,
+  functions: {
+    personCard,
+    whatIRemember,
+    forgetPerson,
+    purgePerson,
+    peopleReport,
+    appraiseCall,
+  },
 });
 
 export const peopleCapabilities =
-	behavior<PeopleContext>().capability(peopleModule);
+  behavior<PeopleContext>().capability(peopleModule);

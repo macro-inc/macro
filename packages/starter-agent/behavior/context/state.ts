@@ -1,4 +1,4 @@
-import type { StatePaths } from "@muppet/lib/core/state";
+import type { StatePaths } from '@macro-inc/muppet/core/state';
 
 /**
  * Where the agent records anything. Everything is under one state directory, in
@@ -15,43 +15,43 @@ import type { StatePaths } from "@muppet/lib/core/state";
  * memory any of them may use: notes, asks, and the like.
  */
 export type State = StatePaths & {
-	readonly memory: (owner: string) => string;
-	readonly private: (owner: string) => string;
-	readonly run: (owner: string) => string;
-	readonly log: (owner: string) => string;
-	/** A file in the shared memory, e.g. `notes.md`. */
-	readonly sharedFile: (name: string) => string;
+  readonly memory: (owner: string) => string;
+  readonly private: (owner: string) => string;
+  readonly run: (owner: string) => string;
+  readonly log: (owner: string) => string;
+  /** A file in the shared memory, e.g. `notes.md`. */
+  readonly sharedFile: (name: string) => string;
 };
 
 export const buckets = {
-	memory: { committed: true },
-	private: { committed: false },
-	run: { committed: false },
-	log: { committed: false },
+  memory: { committed: true },
+  private: { committed: false },
+  run: { committed: false },
+  log: { committed: false },
 } as const;
 
 export type Bucket = keyof typeof buckets;
 
-const stateDirectory = "state";
-const sharedDirectory = "shared";
+const stateDirectory = 'state';
+const sharedDirectory = 'shared';
 
 export const state = ({
-	root,
-	join,
+  root,
+  join,
 }: {
-	readonly root: string;
-	readonly join: (...parts: readonly string[]) => string;
+  readonly root: string;
+  readonly join: (...parts: readonly string[]) => string;
 }): State => {
-	const bucket = (name: Bucket) => (owner: string) =>
-		join(root, stateDirectory, name, owner);
-	const memory = bucket("memory");
-	return {
-		shared: memory(sharedDirectory),
-		sharedFile: (name) => join(memory(sharedDirectory), name),
-		capability: memory,
-		memory,
-		private: bucket("private"),
-		run: bucket("run"),
-		log: bucket("log"),
-	};
+  const bucket = (name: Bucket) => (owner: string) =>
+    join(root, stateDirectory, name, owner);
+  const memory = bucket('memory');
+  return {
+    shared: memory(sharedDirectory),
+    sharedFile: (name) => join(memory(sharedDirectory), name),
+    capability: memory,
+    memory,
+    private: bucket('private'),
+    run: bucket('run'),
+    log: bucket('log'),
+  };
 };

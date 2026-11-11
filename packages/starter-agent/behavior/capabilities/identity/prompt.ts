@@ -21,8 +21,8 @@ Don't ask all of it at once, and don't interrogate: a few questions, then get on
 
 /** Added to every wake once the agent has written who it is. */
 export const known = (identity: string): string =>
-	`## Who you are\n\nThis is what you have written about yourself, from what your owner told you. It is yours to revise with writeIdentity as you learn more.\n\n${identity}`;
+  `## Who you are\n\nThis is what you have written about yourself, from what your owner told you. It is yours to revise with writeIdentity as you learn more.\n\n${identity}`;
 
 /** What the agent is asked on the first wake of its life. */
 export const introduce =
-	"You have just been set up, and this is the first time you have run. DM your owner with dmOwner: say in a line or two that you are their new agent and that you don't yet know who you are, then ask your first question or two about who you should be. Keep it short and warm, and ask nothing else yet.";
+  "You have just been set up, and this is the first time you have run. DM your owner with dmOwner: say in a line or two that you are their new agent and that you don't yet know who you are, then ask your first question or two about who you should be. Keep it short and warm, and ask nothing else yet.";

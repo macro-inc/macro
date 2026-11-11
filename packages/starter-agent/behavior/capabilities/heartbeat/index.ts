@@ -3,34 +3,34 @@
  * it records, and how its repository changes. Each is what the tick, a hook or
  * a schedule runs, so it can also be run by hand and read in a log.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import type { Schedule } from "@muppet/lib/utilities/schedules/schedule";
-import type { Changed } from "@muppet/lib/utilities/schedules/schedules";
-import { z } from "zod";
-import { lastLines, readJson } from "../../context/disk.ts";
-import { buckets } from "../../context/state.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import type { Schedule } from '@macro-inc/muppet/utilities/schedules/schedule';
+import type { Changed } from '@macro-inc/muppet/utilities/schedules/schedules';
+import { z } from 'zod';
+import { lastLines, readJson } from '../../context/disk.ts';
+import { buckets } from '../../context/state.ts';
 import {
-	type CommitResult,
-	commit as commitChanges,
-	concerns,
-	selfEditMessage,
-} from "./commit.ts";
-import { limits, type logs } from "./config.ts";
-import { type GuardResult, guardTick } from "./guard.ts";
-import { land as landBranch, mergeRow } from "./land.ts";
+  type CommitResult,
+  commit as commitChanges,
+  concerns,
+  selfEditMessage,
+} from './commit.ts';
+import { limits, type logs } from './config.ts';
+import { type GuardResult, guardTick } from './guard.ts';
+import { land as landBranch, mergeRow } from './land.ts';
 import {
-	collectNow,
-	landDepsOf,
-	mergedPr,
-	misplacedNow,
-	type Needs,
-	pruneNow,
-	repositoryOf,
-} from "./live.ts";
-import type { Act } from "./schedules.ts";
-import { bucketNames, what } from "./state.ts";
-import { Cursor, snapshotHash, wakeReason } from "./tick.ts";
+  collectNow,
+  landDepsOf,
+  mergedPr,
+  misplacedNow,
+  type Needs,
+  pruneNow,
+  repositoryOf,
+} from './live.ts';
+import type { Act } from './schedules.ts';
+import { bucketNames, what } from './state.ts';
+import { Cursor, snapshotHash, wakeReason } from './tick.ts';
 
 /**
  * Whether your next heartbeat tick would wake you, and why, with the
@@ -44,28 +44,28 @@ import { Cursor, snapshotHash, wakeReason } from "./tick.ts";
  * woke you.
  */
 export const heartbeatCheck = async (
-	context: Needs,
+  context: Needs
 ): Promise<{
-	readonly wake: boolean;
-	readonly reason?: string;
-	readonly snapshot: string;
-	readonly hash: string;
-	readonly lastHash?: string;
-	readonly lastRun?: string;
+  readonly wake: boolean;
+  readonly reason?: string;
+  readonly snapshot: string;
+  readonly hash: string;
+  readonly lastHash?: string;
+  readonly lastRun?: string;
 }> => {
-	const { heartbeat, disk } = context;
-	const snapshot = (await collectNow(context)).trimEnd();
-	const hash = snapshotHash(heartbeat.digest, snapshot);
-	const cursor = await readJson(disk, heartbeat.paths.cursor, Cursor);
-	const reason = wakeReason({ hash, lastHash: cursor?.hash, snapshot });
-	return {
-		wake: reason !== undefined,
-		...(reason === undefined ? {} : { reason }),
-		snapshot,
-		hash,
-		...(cursor === undefined ? {} : { lastHash: cursor.hash }),
-		...(cursor?.lastRun === undefined ? {} : { lastRun: cursor.lastRun }),
-	};
+  const { heartbeat, disk } = context;
+  const snapshot = (await collectNow(context)).trimEnd();
+  const hash = snapshotHash(heartbeat.digest, snapshot);
+  const cursor = await readJson(disk, heartbeat.paths.cursor, Cursor);
+  const reason = wakeReason({ hash, lastHash: cursor?.hash, snapshot });
+  return {
+    wake: reason !== undefined,
+    ...(reason === undefined ? {} : { reason }),
+    snapshot,
+    hash,
+    ...(cursor === undefined ? {} : { lastHash: cursor.hash }),
+    ...(cursor?.lastRun === undefined ? {} : { lastRun: cursor.lastRun }),
+  };
 };
 
 /**
@@ -77,15 +77,15 @@ export const heartbeatCheck = async (
  * (both trimmed only at twice the cap). The limits are in your config.
  */
 export const prune = (
-	context: Needs,
+  context: Needs
 ): Promise<{ readonly removed: number; readonly trimmed: number }> =>
-	pruneNow(context);
+  pruneNow(context);
 
 /** `value` trimmed, refusing one that is empty: a blank message or branch is a mistake, never a choice. */
 const filled = (value: string, what: string): string => {
-	const trimmed = value.trim();
-	if (trimmed === "") throw new Error(`${what} must not be empty`);
-	return trimmed;
+  const trimmed = value.trim();
+  if (trimmed === '') throw new Error(`${what} must not be empty`);
+  return trimmed;
 };
 
 /**
@@ -104,28 +104,28 @@ const filled = (value: string, what: string): string => {
  * merge from the remote in this repository. `message` mustn't be blank.
  */
 export const commit = async (
-	context: Needs,
-	input: { readonly message: string },
+  context: Needs,
+  input: { readonly message: string }
 ): Promise<{ readonly result: CommitResult }> => {
-	const message = filled(input.message, "message");
-	return {
-		result: await commitChanges(
-			repositoryOf(context),
-			message,
-			limits.commitLockWait,
-		),
-	};
+  const message = filled(input.message, 'message');
+  return {
+    result: await commitChanges(
+      repositoryOf(context),
+      message,
+      limits.commitLockWait
+    ),
+  };
 };
 
 const Hook = z.object({
-	hook_event_name: z.string().optional(),
-	cwd: z.string().optional(),
-	tool_input: z
-		.object({
-			file_path: z.string().optional(),
-			notebook_path: z.string().optional(),
-		})
-		.optional(),
+  hook_event_name: z.string().optional(),
+  cwd: z.string().optional(),
+  tool_input: z
+    .object({
+      file_path: z.string().optional(),
+      notebook_path: z.string().optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -139,23 +139,23 @@ const Hook = z.object({
  * names the files and the session's folder.
  */
 export const commitSelfEdit = async (
-	context: Needs,
-	// Claude Code sends far more than is read here, and adds to it: a closed
-	// type would refuse the hook's own JSON. What is read is parsed out.
-	hook: Readonly<Record<string, unknown>>,
-): Promise<{ readonly result: CommitResult | "skipped" }> => {
-	const input = Hook.parse(hook);
-	if (!concerns(input, context.config.root)) return { result: "skipped" };
-	const repository = repositoryOf(context);
-	const status = await repository.git(["status", "--porcelain"]);
-	if (status.code !== 0) return { result: "skipped" };
-	return {
-		result: await commitChanges(
-			repository,
-			selfEditMessage(status.stdout, input.cwd),
-			limits.commitLockWait,
-		),
-	};
+  context: Needs,
+  // Claude Code sends far more than is read here, and adds to it: a closed
+  // type would refuse the hook's own JSON. What is read is parsed out.
+  hook: Readonly<Record<string, unknown>>
+): Promise<{ readonly result: CommitResult | 'skipped' }> => {
+  const input = Hook.parse(hook);
+  if (!concerns(input, context.config.root)) return { result: 'skipped' };
+  const repository = repositoryOf(context);
+  const status = await repository.git(['status', '--porcelain']);
+  if (status.code !== 0) return { result: 'skipped' };
+  return {
+    result: await commitChanges(
+      repository,
+      selfEditMessage(status.stdout, input.cwd),
+      limits.commitLockWait
+    ),
+  };
 };
 
 /**
@@ -180,29 +180,29 @@ export const commitSelfEdit = async (
  * leaves main where it was. `branch` mustn't be blank.
  */
 export const land = async (
-	context: Needs,
-	input: { readonly branch: string; readonly what?: string },
+  context: Needs,
+  input: { readonly branch: string; readonly what?: string }
 ): Promise<
-	| {
-			readonly status: "landed";
-			readonly sha: string;
-			readonly pr?: number;
-			readonly merged: boolean;
-	  }
-	| { readonly status: "refused"; readonly reason: string }
+  | {
+      readonly status: 'landed';
+      readonly sha: string;
+      readonly pr?: number;
+      readonly merged: boolean;
+    }
+  | { readonly status: 'refused'; readonly reason: string }
 > => {
-	const branch = filled(input.branch, "branch");
-	const { what } = input;
-	const repository = repositoryOf(context);
-	const landed = await landBranch(
-		repository,
-		branch,
-		(what ?? "").trim(),
-		await landDepsOf(context, repository),
-	);
-	if (landed.status === "refused") return landed;
-	const { pr, ...rest } = landed;
-	return pr === undefined ? rest : { ...rest, pr };
+  const branch = filled(input.branch, 'branch');
+  const { what } = input;
+  const repository = repositoryOf(context);
+  const landed = await landBranch(
+    repository,
+    branch,
+    (what ?? '').trim(),
+    await landDepsOf(context, repository)
+  );
+  if (landed.status === 'refused') return landed;
+  const { pr, ...rest } = landed;
+  return pr === undefined ? rest : { ...rest, pr };
 };
 
 /**
@@ -218,9 +218,9 @@ export const land = async (
  * author are read: nothing comes in.
  */
 export const checkMain = async (
-	context: Needs,
-): Promise<{ readonly result: GuardResult | "busy" }> => ({
-	result: await guardTick(repositoryOf(context), limits.guardLockWait),
+  context: Needs
+): Promise<{ readonly result: GuardResult | 'busy' }> => ({
+  result: await guardTick(repositoryOf(context), limits.guardLockWait),
 });
 
 const ownerAndName = /^[\w.-]+\/[\w.-]+$/;
@@ -235,25 +235,25 @@ const ownerAndName = /^[\w.-]+\/[\w.-]+$/;
  * needs the AGENT_GITHUB_TOKEN credential.
  */
 export const logMerge = async (
-	context: Needs,
-	{
-		repo,
-		number,
-		what,
-	}: { readonly repo: string; readonly number: number; readonly what?: string },
+  context: Needs,
+  {
+    repo,
+    number,
+    what,
+  }: { readonly repo: string; readonly number: number; readonly what?: string }
 ): Promise<{ readonly row: string }> => {
-	if (!ownerAndName.test(repo))
-		throw new Error(`repo must be owner/name, not "${repo}"`);
-	if (!Number.isInteger(number) || number <= 0)
-		throw new Error("number must be a positive integer");
-	const row = mergeRow(
-		repo,
-		number,
-		await mergedPr(context, repo, number),
-		(what ?? "").trim(),
-	);
-	await context.disk.append(context.heartbeat.paths.merges, `${row}\n`);
-	return { row };
+  if (!ownerAndName.test(repo))
+    throw new Error(`repo must be owner/name, not "${repo}"`);
+  if (!Number.isInteger(number) || number <= 0)
+    throw new Error('number must be a positive integer');
+  const row = mergeRow(
+    repo,
+    number,
+    await mergedPr(context, repo, number),
+    (what ?? '').trim()
+  );
+  await context.disk.append(context.heartbeat.paths.merges, `${row}\n`);
+  return { row };
 };
 
 /**
@@ -266,37 +266,37 @@ export const logMerge = async (
  * `owner`, the files that owner has in each bucket.
  */
 export const stateWhere = async (
-	{ heartbeat, join }: Needs,
-	{ owner }: { readonly owner?: string },
+  { heartbeat, join }: Needs,
+  { owner }: { readonly owner?: string }
 ): Promise<{
-	readonly root: string;
-	readonly buckets: readonly {
-		readonly bucket: string;
-		readonly committed: boolean;
-		readonly what: string;
-		readonly path: string;
-		/** The areas with a directory in this bucket, or the owner's files. */
-		readonly holds: readonly string[];
-	}[];
+  readonly root: string;
+  readonly buckets: readonly {
+    readonly bucket: string;
+    readonly committed: boolean;
+    readonly what: string;
+    readonly path: string;
+    /** The areas with a directory in this bucket, or the owner's files. */
+    readonly holds: readonly string[];
+  }[];
 }> => ({
-	root: heartbeat.stateRoot,
-	buckets: await Promise.all(
-		bucketNames.map(async (bucket) => {
-			const path =
-				owner === undefined
-					? heartbeat.buckets[bucket]
-					: join(heartbeat.buckets[bucket], owner);
-			return {
-				bucket,
-				committed: buckets[bucket].committed,
-				what: what[bucket],
-				path,
-				holds: (await heartbeat.tree.entries(path)).map(
-					({ name, directory }) => (directory ? `${name}/` : name),
-				),
-			};
-		}),
-	),
+  root: heartbeat.stateRoot,
+  buckets: await Promise.all(
+    bucketNames.map(async (bucket) => {
+      const path =
+        owner === undefined
+          ? heartbeat.buckets[bucket]
+          : join(heartbeat.buckets[bucket], owner);
+      return {
+        bucket,
+        committed: buckets[bucket].committed,
+        what: what[bucket],
+        path,
+        holds: (await heartbeat.tree.entries(path)).map(
+          ({ name, directory }) => (directory ? `${name}/` : name)
+        ),
+      };
+    })
+  ),
 });
 
 /**
@@ -308,27 +308,27 @@ export const stateWhere = async (
  * one with `git rm --cached <file>` and by moving it where it belongs.
  */
 export const stateCheck = async (
-	context: Needs,
+  context: Needs
 ): Promise<{
-	readonly ok: boolean;
-	readonly local: readonly string[];
-	readonly stray: readonly string[];
+  readonly ok: boolean;
+  readonly local: readonly string[];
+  readonly stray: readonly string[];
 }> => {
-	const { local, stray } = await misplacedNow(context);
-	return {
-		ok: local.length === 0 && stray.length === 0,
-		local: [...local],
-		stray: [...stray],
-	};
+  const { local, stray } = await misplacedNow(context);
+  return {
+    ok: local.length === 0 && stray.length === 0,
+    local: [...local],
+    stray: [...stray],
+  };
 };
 
 /** `value`, refusing an empty one: an act with nothing to say or watch does nothing when it fires. */
 const unlessEmpty = (
-	value: string | undefined,
-	what: string,
+  value: string | undefined,
+  what: string
 ): string | undefined => {
-	if (value === "") throw new Error(`${what} must not be empty`);
-	return value;
+  if (value === '') throw new Error(`${what} must not be empty`);
+  return value;
 };
 
 /**
@@ -347,27 +347,27 @@ const unlessEmpty = (
  * with removeSchedule. `dmOwner`, `wake` and `ifFile` mustn't be empty.
  */
 export const scheduleAction = async (
-	{ schedules }: Needs,
-	input: {
-		readonly name: string;
-		readonly schedule: Schedule;
-		readonly dmOwner?: string;
-		readonly wake?: string;
-		readonly ifFile?: string;
-	},
+  { schedules }: Needs,
+  input: {
+    readonly name: string;
+    readonly schedule: Schedule;
+    readonly dmOwner?: string;
+    readonly wake?: string;
+    readonly ifFile?: string;
+  }
 ): Promise<Changed> => {
-	const { name, schedule } = input;
-	const dmOwner = unlessEmpty(input.dmOwner, "dmOwner");
-	const wake = unlessEmpty(input.wake, "wake");
-	const ifFile = unlessEmpty(input.ifFile, "ifFile");
-	if ((dmOwner === undefined) === (wake === undefined))
-		return { kind: "invalid", error: "give exactly one of dmOwner or wake" };
-	const act: Act = {
-		...(dmOwner === undefined ? {} : { dmOwner }),
-		...(wake === undefined ? {} : { wake }),
-		...(ifFile === undefined ? {} : { ifFile }),
-	};
-	return schedules.set(name, { ...schedule, data: act });
+  const { name, schedule } = input;
+  const dmOwner = unlessEmpty(input.dmOwner, 'dmOwner');
+  const wake = unlessEmpty(input.wake, 'wake');
+  const ifFile = unlessEmpty(input.ifFile, 'ifFile');
+  if ((dmOwner === undefined) === (wake === undefined))
+    return { kind: 'invalid', error: 'give exactly one of dmOwner or wake' };
+  const act: Act = {
+    ...(dmOwner === undefined ? {} : { dmOwner }),
+    ...(wake === undefined ? {} : { wake }),
+    ...(ifFile === undefined ? {} : { ifFile }),
+  };
+  return schedules.set(name, { ...schedule, data: act });
 };
 
 const reportMax = 500;
@@ -381,50 +381,50 @@ const reportMax = 500;
  * whole number from 1 to 500; 20 by default.
  */
 export const clockReport = async (
-	{ disk, log }: Needs,
-	{
-		stream,
-		count,
-	}: {
-		readonly stream: (typeof logs)[keyof typeof logs];
-		readonly count?: number;
-	},
+  { disk, log }: Needs,
+  {
+    stream,
+    count,
+  }: {
+    readonly stream: (typeof logs)[keyof typeof logs];
+    readonly count?: number;
+  }
 ): Promise<readonly unknown[]> => {
-	if (
-		count !== undefined &&
-		(!Number.isInteger(count) || count <= 0 || count > reportMax)
-	)
-		throw new Error(`count must be a whole number from 1 to ${reportMax}`);
-	return lastLines((await disk.read(log.file(stream))) ?? "", count ?? 20).map(
-		(line): unknown => {
-			try {
-				return JSON.parse(line);
-			} catch {
-				return line;
-			}
-		},
-	);
+  if (
+    count !== undefined &&
+    (!Number.isInteger(count) || count <= 0 || count > reportMax)
+  )
+    throw new Error(`count must be a whole number from 1 to ${reportMax}`);
+  return lastLines((await disk.read(log.file(stream))) ?? '', count ?? 20).map(
+    (line): unknown => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return line;
+      }
+    }
+  );
 };
 
 export const heartbeatModule = module({
-	name: "heartbeat",
-	summary:
-		"Your own clock, the hygiene of what you record, and how your repository changes: commits, landings and the merge log.",
-	file: import.meta.path,
-	functions: {
-		heartbeatCheck,
-		prune,
-		commit,
-		commitSelfEdit,
-		land,
-		checkMain,
-		logMerge,
-		stateWhere,
-		stateCheck,
-		scheduleAction,
-		clockReport,
-	},
+  name: 'heartbeat',
+  summary:
+    'Your own clock, the hygiene of what you record, and how your repository changes: commits, landings and the merge log.',
+  file: import.meta.path,
+  functions: {
+    heartbeatCheck,
+    prune,
+    commit,
+    commitSelfEdit,
+    land,
+    checkMain,
+    logMerge,
+    stateWhere,
+    stateCheck,
+    scheduleAction,
+    clockReport,
+  },
 });
 
 export const heartbeatCapabilities =
-	behavior<Needs>().capability(heartbeatModule);
+  behavior<Needs>().capability(heartbeatModule);

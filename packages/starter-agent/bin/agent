@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# bin/agent <command> [input]: the agent's command line (cli.ts), in its flake's
-# shell, which has bun, sops and what calls need.
+# bin/agent <command> [input]: the agent's command line (cli.ts).
 here=$(cd "$(dirname "$0")/.." && pwd)
-if [[ -n ${AGENT_SHELL:-} ]]; then exec bun "$here/cli.ts" "$@"; fi
-AGENT_SHELL=1 exec nix develop "$here" --command bun "$here/cli.ts" "$@"
+exec bun "$here/cli.ts" "$@"

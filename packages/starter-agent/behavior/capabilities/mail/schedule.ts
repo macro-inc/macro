@@ -1,5 +1,5 @@
-import type { Schedules } from "@muppet/lib/utilities/schedules";
-import { reviewHours, reviewSchedule } from "./config.ts";
+import type { Schedules } from '@macro-inc/muppet/utilities/schedules';
+import { reviewHours, reviewSchedule } from './config.ts';
 
 /**
  * Makes sure the daily review of the filter is scheduled. A schedule is
@@ -8,13 +8,13 @@ import { reviewHours, reviewSchedule } from "./config.ts";
  * its handler does nothing.
  */
 export const ensureMailSchedules = async (
-	schedules: Pick<Schedules, "list" | "set">,
+  schedules: Pick<Schedules, 'list' | 'set'>
 ): Promise<void> => {
-	if ((await schedules.list()).some(({ name }) => name === reviewSchedule))
-		return;
-	const added = await schedules.set(reviewSchedule, {
-		every: `${reviewHours}h`,
-		why: "Wakes the agent to look at what the mail filter dropped, and tune it if it keeps missing. Does nothing until mail is set up.",
-	});
-	if (added.kind === "invalid") throw new Error(added.error);
+  if ((await schedules.list()).some(({ name }) => name === reviewSchedule))
+    return;
+  const added = await schedules.set(reviewSchedule, {
+    every: `${reviewHours}h`,
+    why: 'Wakes the agent to look at what the mail filter dropped, and tune it if it keeps missing. Does nothing until mail is set up.',
+  });
+  if (added.kind === 'invalid') throw new Error(added.error);
 };

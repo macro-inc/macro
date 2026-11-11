@@ -4,11 +4,11 @@
  * a shared screen can't show mail or codes. Why it is built this way is in
  * `DESIGN.md`.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import type { ScreenContext } from "./context.ts";
-import { type MeasureInput, type Measured, measure } from "./measure.ts";
-import { type Status, serve, status } from "./screen.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import type { ScreenContext } from './context.ts';
+import { type Measured, type MeasureInput, measure } from './measure.ts';
+import { type Status, serve, status } from './screen.ts';
 
 /**
  * Runs the share browser: Xvfb, its sound server and Chromium, restarted when
@@ -22,20 +22,20 @@ import { type Status, serve, status } from "./screen.ts";
  * times it started them.
  */
 export const serveScreen = async ({
-	screen,
-	disk,
-	clock,
-	shell,
+  screen,
+  disk,
+  clock,
+  shell,
 }: ScreenContext): Promise<{ starts: number }> => ({
-	starts: await serve({
-		config: screen.config,
-		disk,
-		clock,
-		alive: shell.alive,
-		start: screen.start,
-		stopped: screen.stopped(),
-		log: screen.log,
-	}),
+  starts: await serve({
+    config: screen.config,
+    disk,
+    clock,
+    alive: shell.alive,
+    start: screen.start,
+    stopped: screen.stopped(),
+    log: screen.log,
+  }),
 });
 
 /**
@@ -50,7 +50,7 @@ export const serveScreen = async ({
  * which a share records.
  */
 export const screenStatus = ({ screen }: ScreenContext): Promise<Status> =>
-	status({ config: screen.config, get: screen.get });
+  status({ config: screen.config, get: screen.get });
 
 /** The longest a measurement runs, and the most frames a second it asks for. */
 const mostSeconds = 600;
@@ -58,10 +58,10 @@ const mostFps = 60;
 
 /** Refuses a number given that isn't above 0 and at most `most`. */
 const upTo = (value: number | undefined, most: number, what: string): void => {
-	if (value !== undefined && !(value > 0 && value <= most))
-		throw new Error(
-			`${what} must be above 0 and at most ${most}, not ${value}`,
-		);
+  if (value !== undefined && !(value > 0 && value <= most))
+    throw new Error(
+      `${what} must be above 0 and at most ${most}, not ${value}`
+    );
 };
 
 /**
@@ -81,35 +81,35 @@ const upTo = (value: number | undefined, most: number, what: string): void => {
  * (screenStatus).
  */
 export const measureScreen = (
-	{ screen, clock }: ScreenContext,
-	input: MeasureInput = {},
+  { screen, clock }: ScreenContext,
+  input: MeasureInput = {}
 ): Promise<Measured> => {
-	upTo(input.seconds, mostSeconds, "seconds");
-	upTo(input.fps, mostFps, "fps");
-	if (input.slowMs !== undefined && !(input.slowMs >= 0))
-		throw new Error(`slowMs must not be negative, not ${input.slowMs}`);
-	return measure(
-		{
-			config: screen.config,
-			clock,
-			tab: screen.tab,
-			capture: screen.capture,
-			processes: screen.processes,
-			ownCpu: screen.ownCpu,
-			save: screen.save,
-		},
-		input,
-	);
+  upTo(input.seconds, mostSeconds, 'seconds');
+  upTo(input.fps, mostFps, 'fps');
+  if (input.slowMs !== undefined && !(input.slowMs >= 0))
+    throw new Error(`slowMs must not be negative, not ${input.slowMs}`);
+  return measure(
+    {
+      config: screen.config,
+      clock,
+      tab: screen.tab,
+      capture: screen.capture,
+      processes: screen.processes,
+      ownCpu: screen.ownCpu,
+      save: screen.save,
+    },
+    input
+  );
 };
 
 /** `screen` is the context's own value, so the module can't have the name. */
 export const screenModule = module({
-	name: "screen",
-	summary:
-		"The browser you share from on a call: run it, check it is up, and measure its frames and latency.",
-	file: import.meta.path,
-	functions: { serveScreen, screenStatus, measureScreen },
+  name: 'screen',
+  summary:
+    'The browser you share from on a call: run it, check it is up, and measure its frames and latency.',
+  file: import.meta.path,
+  functions: { serveScreen, screenStatus, measureScreen },
 });
 
 export const screenCapabilities =
-	behavior<ScreenContext>().capability(screenModule);
+  behavior<ScreenContext>().capability(screenModule);

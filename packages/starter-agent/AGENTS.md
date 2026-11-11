@@ -1,8 +1,8 @@
 # starter-agent
 
 A template for a new agent on the muppet library: Claude, woken by events,
-running from this repository. Once `bin/setup` has run, this copy is one
-particular agent, with an owner (`agent.json`).
+running from this repository. Each copy is one particular agent, with an
+owner (`agent.json`).
 
 In one of the agent's own runs, `AGENT.md` is already your system prompt. In
 any other session here, you are working on the agent: read `AGENT.md` before
@@ -29,15 +29,12 @@ functions), and a shell calls the same ones it does:
 Every script, and every `bin/agent <function>` call, is type-checked before it
 runs: input a function doesn't take is refused with the compiler's error.
 
-`bin/agent` enters the nix shell by itself. Already inside it (`nix develop`),
-set `AGENT_SHELL=1`.
-
 ## Rules
 
 - This checkout is live once the agent is running. Change code in a worktree
   (`.worktrees/`), never here, and bring it in with `bin/agent land`. Memory
   and `AGENT.md` are edited in place.
-- Never edit `../muppet`: the library is a dependency.
+- Never edit `node_modules/@macro-inc/muppet`: the library is a dependency.
 - Never start a second `bin/agent run`: two would answer the same messages.
 - Nothing in this repository names a particular agent, owner or product,
   outside `agent.json` and `state/`. Keep it that way: it is a template.

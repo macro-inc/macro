@@ -1,11 +1,11 @@
 /**
  * Placing calls, being asked onto one, leaving one, and reading one back.
  */
-import type { Base } from "../../../context/index.ts";
-import { callsPaths, deepgramKey, noVoice, placePrefix } from "../config.ts";
-import type { LedgerPorts } from "../context/ledgers.ts";
-import { formatReport, readEvents, resolveCall } from "../report.ts";
-import { filled } from "./filled.ts";
+import type { Base } from '../../../context/index.ts';
+import { callsPaths, deepgramKey, noVoice, placePrefix } from '../config.ts';
+import type { LedgerPorts } from '../context/ledgers.ts';
+import { formatReport, readEvents, resolveCall } from '../report.ts';
+import { filled } from './filled.ts';
 
 type Context = Base & { readonly ledgers: LedgerPorts };
 
@@ -14,7 +14,7 @@ type MessageRef = { readonly channelId: string; readonly id: string };
 
 /** Calls need a voice: without its key nothing is queued, so nothing waits on a join that can't happen. */
 const needVoice = async ({ credentials }: Base): Promise<void> => {
-	if (!(await credentials.has(deepgramKey))) throw new Error(noVoice);
+  if (!(await credentials.has(deepgramKey))) throw new Error(noVoice);
 };
 
 /**
@@ -43,33 +43,33 @@ const needVoice = async ({ credentials }: Base): Promise<void> => {
  * it in a line you can pass on.
  */
 export const placeCall = async (
-	context: Context,
-	{
-		who,
-		why,
-		message,
-	}: {
-		readonly who: string;
-		readonly why: string;
-		readonly message?: MessageRef;
-	},
+  context: Context,
+  {
+    who,
+    why,
+    message,
+  }: {
+    readonly who: string;
+    readonly why: string;
+    readonly message?: MessageRef;
+  }
 ) => {
-	filled(who, "who");
-	await needVoice(context);
-	const outcome = await context.ledgers.place({
-		target: who,
-		reason: why,
-		message:
-			message === undefined
-				? undefined
-				: { channel: message.channelId, id: message.id },
-	});
-	return {
-		...outcome,
-		text: outcome.ok
-			? `queued ${outcome.id} (${outcome.rule}): rings within seconds, or when you're free`
-			: `refused (${outcome.rule}): ${outcome.why}`,
-	};
+  filled(who, 'who');
+  await needVoice(context);
+  const outcome = await context.ledgers.place({
+    target: who,
+    reason: why,
+    message:
+      message === undefined
+        ? undefined
+        : { channel: message.channelId, id: message.id },
+  });
+  return {
+    ...outcome,
+    text: outcome.ok
+      ? `queued ${outcome.id} (${outcome.rule}): rings within seconds, or when you're free`
+      : `refused (${outcome.rule}): ${outcome.why}`,
+  };
 };
 
 /**
@@ -80,18 +80,18 @@ export const placeCall = async (
  * off it.
  */
 export const noCall = async (
-	{ ledgers }: Context,
-	{ who, remove }: { readonly who: string; readonly remove?: boolean },
+  { ledgers }: Context,
+  { who, remove }: { readonly who: string; readonly remove?: boolean }
 ): Promise<{ who: string; callable: boolean; text: string }> => {
-	filled(who, "who");
-	const callable = remove === true;
-	if (callable) await ledgers.noCall.remove(who);
-	else await ledgers.noCall.add(who);
-	return {
-		who,
-		callable,
-		text: callable ? `${who} can be called` : `${who} won't be called`,
-	};
+  filled(who, 'who');
+  const callable = remove === true;
+  if (callable) await ledgers.noCall.remove(who);
+  else await ledgers.noCall.add(who);
+  return {
+    who,
+    callable,
+    text: callable ? `${who} can be called` : `${who} won't be called`,
+  };
 };
 
 /**
@@ -109,63 +109,63 @@ export const noCall = async (
  * key yet.
  */
 export const askOntoCall = async (
-	context: Context,
-	{
-		message,
-		channelId,
-		callId,
-	}: {
-		readonly message: MessageRef;
-		readonly channelId?: string;
-		readonly callId?: string;
-	},
+  context: Context,
+  {
+    message,
+    channelId,
+    callId,
+  }: {
+    readonly message: MessageRef;
+    readonly channelId?: string;
+    readonly callId?: string;
+  }
 ): Promise<{
-	recorded: boolean;
-	id?: string;
-	why?: string;
-	text: string;
+  recorded: boolean;
+  id?: string;
+  why?: string;
+  text: string;
 }> => {
-	await needVoice(context);
-	const outcome = await context.ledgers.ask({
-		message: { channel: message.channelId, id: message.id },
-		channel: channelId,
-		callId,
-	});
-	return outcome.ok
-		? {
-				recorded: true,
-				id: outcome.id,
-				text: `recorded ${outcome.id}: they get one line back within seconds, from the call system. Don't answer it yourself.`,
-			}
-		: {
-				recorded: false,
-				why: outcome.why,
-				text: `not recorded: ${outcome.why}`,
-			};
+  await needVoice(context);
+  const outcome = await context.ledgers.ask({
+    message: { channel: message.channelId, id: message.id },
+    channel: channelId,
+    callId,
+  });
+  return outcome.ok
+    ? {
+        recorded: true,
+        id: outcome.id,
+        text: `recorded ${outcome.id}: they get one line back within seconds, from the call system. Don't answer it yourself.`,
+      }
+    : {
+        recorded: false,
+        why: outcome.why,
+        text: `not recorded: ${outcome.why}`,
+      };
 };
 
 /** The call whose event log was written to last. Placed calls' seats aren't calls. */
 const latestCall = async (
-	{ disk }: Base,
-	paths: ReturnType<typeof callsPaths>,
+  { disk }: Base,
+  paths: ReturnType<typeof callsPaths>
 ) => {
-	const ids = (await disk.list(paths.calls)).filter(
-		(id) => !id.startsWith(placePrefix),
-	);
-	const logged = await Promise.all(
-		ids.map(async (id) => ({
-			id,
-			at: await disk.modified(paths.events(id)),
-		})),
-	);
-	let latest: { id: string; at: Temporal.Instant } | undefined;
-	for (const { id, at } of logged)
-		if (
-			at !== undefined &&
-			(latest === undefined || Temporal.Instant.compare(at, latest.at) > 0)
-		)
-			latest = { id, at };
-	return latest?.id;
+  const ids = (await disk.list(paths.calls)).filter(
+    (id) => !id.startsWith(placePrefix)
+  );
+  const logged = await Promise.all(
+    ids.map(async (id) => ({
+      id,
+      at: await disk.modified(paths.events(id)),
+    }))
+  );
+  let latest: { id: string; at: Temporal.Instant } | undefined;
+  for (const { id, at } of logged)
+    if (
+      at !== undefined &&
+      (latest === undefined || Temporal.Instant.compare(at, latest.at) > 0)
+    )
+      latest = { id, at };
+  return latest?.id;
 };
 
 /**
@@ -176,17 +176,17 @@ const latestCall = async (
  * latest call. Returns the calls it marked.
  */
 export const hangUp = async (
-	context: Context,
-	{ callIds }: { readonly callIds?: readonly string[] } = {},
+  context: Context,
+  { callIds }: { readonly callIds?: readonly string[] } = {}
 ): Promise<{ hungUp: readonly string[] }> => {
-	const given = (callIds ?? []).map((id) => filled(id, "a call id"));
-	const latest =
-		given.length > 0
-			? undefined
-			: await latestCall(context, callsPaths(context));
-	const ids = given.length > 0 ? given : latest === undefined ? [] : [latest];
-	for (const id of ids) await context.ledgers.hungUp.add(id);
-	return { hungUp: ids };
+  const given = (callIds ?? []).map((id) => filled(id, 'a call id'));
+  const latest =
+    given.length > 0
+      ? undefined
+      : await latestCall(context, callsPaths(context));
+  const ids = given.length > 0 ? given : latest === undefined ? [] : [latest];
+  for (const id of ids) await context.ledgers.hungUp.add(id);
+  return { hungUp: ids };
 };
 
 /**
@@ -200,13 +200,13 @@ export const hangUp = async (
  * the disk dropped. `all: true` adds the interim transcripts.
  */
 export const callReport = async (
-	context: Context,
-	{ call, all }: { readonly call: string; readonly all?: boolean },
+  context: Context,
+  { call, all }: { readonly call: string; readonly all?: boolean }
 ): Promise<{ callId: string; text: string }> => {
-	filled(call, "call");
-	const paths = callsPaths(context);
-	const callId = resolveCall(await context.disk.list(paths.calls), call);
-	const events = await readEvents(context.disk, paths.events(callId));
-	if (events === undefined) throw new Error(`call ${callId} has no events`);
-	return { callId, text: formatReport(events, { all }) };
+  filled(call, 'call');
+  const paths = callsPaths(context);
+  const callId = resolveCall(await context.disk.list(paths.calls), call);
+  const events = await readEvents(context.disk, paths.events(callId));
+  if (events === undefined) throw new Error(`call ${callId} has no events`);
+  return { callId, text: formatReport(events, { all }) };
 };

@@ -1,50 +1,29 @@
 # starter-agent
 
-A new agent, ready to become someone's. Copy this directory, point it at the
-muppet library, run `bin/setup`, and you have an agent with its
-own Macro account that talks with you in chat, joins calls with its voice,
-shares its screen, keeps its own memory, and can change its own code.
+A new agent, ready to become someone's: an agent with its own Macro account
+that talks with you in chat, joins calls with its voice, shares its screen,
+keeps its own memory, and can change its own code.
 
-It is not anyone yet. It has no name, no purpose and no personality: the
-first thing it does is DM its owner to ask who it should be, and what it is
-told becomes part of every later run.
+When its owner described it in the invite, that is who it is
+(`state/memory/identity/identity.md`). When they didn't, it is not anyone
+yet: the first thing it does is DM its owner to ask who it should be, and
+what it is told becomes part of every later run.
 
 - `AGENT.md` is its charter: how it works. It says nothing about who it is.
 - `ARCHITECTURE.md` is how the code is laid out and the rules it keeps.
 - `ENGINEERING.md` is how a change or a bug fix is made.
 - `CLAUDE.md` is where a Claude Code session in this repository starts.
-- This file is how to set one up and run it.
+- This file is how one is made and run.
 
-## Set one up
+## How one is made
 
-You need:
-
-- **nix**, with flakes. `flake.nix` provides bun, sops, age, git, ffmpeg and
-  chromium; `bin/agent` and `bin/setup` enter that shell by themselves.
-- **Claude Code**, installed and signed in as the user the agent runs as. The
-  agent is Claude Code, through the Agent SDK.
-- **muppet**, on this machine: beside the agent's directory (`../muppet`), or
-  `MUPPET` set to where it is.
-- **A Macro account for the agent**, separate from yours, and an API key for
-  it.
-
-Then, one copy of this directory per agent, named for the agent or its owner,
-somewhere that is not inside another git repository. The agent commits its
-memory to its own repository after every wake, so `bin/setup` refuses to run
-inside someone else's.
-
-    cp -r starter-agent ~/ada-agent
-    cd ~/ada-agent
-    MUPPET=/path/to/muppet bin/setup
-
-`MUPPET` is only needed when muppet isn't at `../muppet` from the copy.
-
-`bin/setup` asks for your Macro email (the owner: the only account that can
-give the agent orders), the agent's Macro email and API key, and your time
-zone. It writes `agent.json`, encrypts the key into `secrets.enc.json` with an
-age key (made at `~/.config/sops/age/keys.txt` if this machine has none: back
-it up), installs packages, commits, and offers to install and start the
-agent as a systemd user service named after the directory.
+Inviting an agent teammate in Macro makes its account, buys it a computer and
+creates this repository for it on Macro's agent git server, rendered from
+`packages/starter-agent` in the Macro monorepo: `agent.json` names its owner
+(the admin who invited it) and itself. The computer's image clones the
+repository, provides `@macro-inc/muppet`, `@macro-inc/sdk`, Claude Code and
+the programs the capabilities use, and runs `bin/agent run` as a system
+service.
 
 Once it is running, it DMs you in Macro. Answer it: that conversation is how
 it learns its name, its purpose and how to talk. It writes what you tell it
@@ -92,8 +71,8 @@ adding one turns the feature on without a restart.
 
 ## How it runs
 
-One process, `bin/agent run`, under a systemd user unit. It builds the
-behavior in `behavior/`, shows the agent online in Macro, and waits on its
+One process, `bin/agent run`, under the computer's agent service. It builds
+the behavior in `behavior/`, shows the agent online in Macro, and waits on its
 event sources. A handler decides cheaply what each event needs, and wakes the
 agent (Claude Code, with `AGENT.md` and who it is as its system prompt) only
 when it is needed.
@@ -103,24 +82,16 @@ itself (`doLater`) and is woken for on its own. Every wake ends with a commit
 of this repository.
 
 Each call the agent is on is a process of its own (`bin/agent joinCall`), so
-a call outlives a restart of the agent. The browser it shares from is a
-second unit, `<name>-screen.service`.
+a call outlives a restart of the agent.
 
 ## Operate
-
-    systemctl --user status <name>          # is it up
-    systemctl --user restart <name>         # picks up new code, settings and credentials
-    journalctl --user -u <name> -f          # what it is doing
 
     bin/agent list                          # its catalog, one line per capability
     bin/agent describe <name>...            # a capability's docs, or one function's docs and signature
     bin/agent <function> '<json>'           # call a function; bare when it takes no input
     bin/agent exec <file|->                 # run a script exporting async main({ context, log })
 
-    nix develop --command bun run check     # typecheck, tests, format
-
-`<name>` is the directory's name. Several agents can run on one machine, each
-in its own copy, with its own Macro account, sharing the machine's age key.
+    bun run check                           # typecheck and tests
 
 Never start a second `bin/agent run` for the same agent: both would answer
 the same messages.
@@ -128,7 +99,6 @@ the same messages.
 ## Layout
 
     index.ts, cli.ts, bin/agent    build the behavior; run the agent, or call any function
-    bin/setup                      turn a fresh copy into one particular agent 
     AGENT.md                       the charter: every run's system prompt
     agent.json                     who it is in Macro, who owns it, the name it commits under
     secrets.enc.json, .sops.yaml   credentials, encrypted with SOPS (age)
@@ -144,4 +114,3 @@ the same messages.
       private/<owner>/             never committed: people, their messages, mail
       run/<owner>/                 never committed: queues, cursors, locks
       log/<owner>/                 never committed: logs and recordings
-    systemd/                       templates for its user units

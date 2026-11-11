@@ -1,7 +1,7 @@
 # How the agent is built
 
 The agent is Claude, woken by events, built on the muppet library
-(`@muppet/lib`, linked from `../muppet/packages/lib`). `AGENT.md` is its
+(`@macro-inc/muppet`, in `node_modules`). `AGENT.md` is its
 charter; this file is how the code is laid out and the rules it keeps.
 
 Never modify muppet. Read it; write only here.
@@ -92,7 +92,7 @@ internals:
   `wake.event.payload` with the owning area's zod schema to decide if the
   wake concerns it.
 - **Sources another area pushes to**, e.g. chat's `unanswered`.
-- **Schedules.** Anything on a clock is a schedule (`@muppet/lib/utilities/schedules`,
+- **Schedules.** Anything on a clock is a schedule (`@macro-inc/muppet/utilities/schedules`,
   already wired): a handler on `sources.schedules` acts on the firing's
   `name`. Declare a standing schedule by ensuring it exists at startup
   (see lib's `examples/heartbeat/index.ts`), never by a timer of your own.
@@ -127,7 +127,7 @@ restart can find them.
   and returns actions, and is where the tests are. Tests sit in
   `capabilities/<area>/test/*.test.ts`, use `bun:test`, never touch the
   network, and never sleep: time is a `Clock` you move.
-- **Time goes through Temporal** (`@muppet/lib/utilities/time`; Bun has
+- **Time goes through Temporal** (`@macro-inc/muppet/utilities/time`; Bun has
   `Temporal` built in, with types from `temporal-spec`). No `Date`, no epoch
   arithmetic, no comparing ISO strings.
 - **Secrets come from `credentials.get(name)`** and go no further: never
@@ -142,18 +142,16 @@ restart can find them.
 - **The agent's git identity is its environment** (`base.environment()`), never git
   config. Children that run git or gh get it through `env`.
 - **Comments say why**, in plain sentences, like the surrounding code. Format
-  with biome (tabs, double quotes).
+  like the surrounding code: two spaces, single quotes.
 
 ## Commands
 
 ```sh
-nix develop --command bash   # a shell with bun, sops, age, ffmpeg, chromium
 bun install                                   # once per checkout or worktree
 bunx tsc --noEmit -p .                        # typecheck
 bun test                                      # tests
-bunx biome format --write behavior index.ts cli.ts
-AGENT_SHELL=1 bin/agent list                      # the catalog (AGENT_SHELL=1 inside the nix shell)
-AGENT_SHELL=1 bin/agent <function> '<json>'
+bin/agent list                                # the catalog
+bin/agent <function> '<json>'
 ```
 
 Don't start `bin/agent run` beside a running agent: both would answer the

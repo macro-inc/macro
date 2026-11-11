@@ -1,10 +1,10 @@
-import type { Conversation, Entry, Queued } from "./entry.ts";
+import type { Conversation, Entry, Queued } from './entry.ts';
 
 /** Where to show typing, and to reply: top level in a DM, else the message's thread. */
 export const threadOf = (
-	message: Pick<Queued, "id" | "root" | "dm">,
+  message: Pick<Queued, 'id' | 'root' | 'dm'>
 ): string | undefined =>
-	message.dm ? undefined : (message.root ?? message.id) || undefined;
+  message.dm ? undefined : (message.root ?? message.id) || undefined;
 
 /** What the agent is asked when a conversation has messages for it. */
 export const replyRequest = `Messages in Macro may be for you. They are below, all from one conversation: answer them together.
@@ -30,22 +30,22 @@ Then check the relevance screen. If a message below wasn't for you, or the histo
 Your final reply is for the log, not for anyone in Macro: one line per message, replied or skipped, and why.`;
 
 const section = (title: string, lines: readonly unknown[]): string =>
-	[`## ${title}`, ...lines.map((line) => JSON.stringify(line))].join("\n");
+  [`## ${title}`, ...lines.map((line) => JSON.stringify(line))].join('\n');
 
 /** The request for one conversation: what to do, the messages, and the conversation's recent history. */
 export const replyPrompt = (
-	{ messages }: Conversation,
-	recent: readonly Entry[],
+  { messages }: Conversation,
+  recent: readonly Entry[]
 ): string =>
-	[
-		replyRequest,
-		section("Messages to consider", messages),
-		section("Recent history of this conversation", recent),
-	].join("\n\n");
+  [
+    replyRequest,
+    section('Messages to consider', messages),
+    section('Recent history of this conversation', recent),
+  ].join('\n\n');
 
 /** The task the agent hands itself when a reply run died before answering. */
 export const rescueTask = ({ messages }: Conversation, why: string): string =>
-	[
-		`A reply run ${why} before answering the messages below, so nobody has heard back. Answer them in this conversation in a few plain lines, within a few minutes. Don't mention the failed run.`,
-		...messages.map((message) => JSON.stringify(message)),
-	].join("\n");
+  [
+    `A reply run ${why} before answering the messages below, so nobody has heard back. Answer them in this conversation in a few plain lines, within a few minutes. Don't mention the failed run.`,
+    ...messages.map((message) => JSON.stringify(message)),
+  ].join('\n');

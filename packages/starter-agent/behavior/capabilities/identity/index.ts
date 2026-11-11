@@ -2,23 +2,23 @@
  * Identity: who the agent is, as its owner told it. One markdown file in its
  * memory, which the agent writes whole and is shown on every wake.
  */
-import { behavior } from "@muppet/lib/core/behavior";
-import { module } from "@muppet/lib/core/capability";
-import type { Base } from "../../context/index.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { module } from '@macro-inc/muppet/core/capability';
+import type { Base } from '../../context/index.ts';
 
 /** The state directory the identity lives in. */
-export const owner = "identity";
-const identityFile = "identity.md";
+export const owner = 'identity';
+const identityFile = 'identity.md';
 
 /** The little of the context identity needs, so a test can give it a fake. */
 export type Needs = {
-	readonly state: Pick<Base["state"], "memory">;
-	readonly disk: Pick<Base["disk"], "read" | "write">;
-	readonly join: Base["join"];
+  readonly state: Pick<Base['state'], 'memory'>;
+  readonly disk: Pick<Base['disk'], 'read' | 'write'>;
+  readonly join: Base['join'];
 };
 
-const file = ({ state, join }: Pick<Needs, "state" | "join">): string =>
-	join(state.memory(owner), identityFile);
+const file = ({ state, join }: Pick<Needs, 'state' | 'join'>): string =>
+  join(state.memory(owner), identityFile);
 
 /**
  * What you have written about who you are, or undefined if you haven't yet.
@@ -26,10 +26,10 @@ const file = ({ state, join }: Pick<Needs, "state" | "join">): string =>
  * a script.
  */
 export const readIdentity = async (
-	context: Needs,
+  context: Needs
 ): Promise<string | undefined> => {
-	const text = (await context.disk.read(file(context)))?.trim();
-	return text === undefined || text === "" ? undefined : text;
+  const text = (await context.disk.read(file(context)))?.trim();
+  return text === undefined || text === '' ? undefined : text;
 };
 
 /**
@@ -42,20 +42,20 @@ export const readIdentity = async (
  * still true. It is shown to you on every wake from the next one on.
  */
 export const writeIdentity = async (
-	context: Needs,
-	{ markdown }: { readonly markdown: string },
+  context: Needs,
+  { markdown }: { readonly markdown: string }
 ): Promise<void> => {
-	const text = markdown.trim();
-	if (text === "") throw new Error("markdown: empty identity");
-	await context.disk.write(file(context), `${text}\n`);
+  const text = markdown.trim();
+  if (text === '') throw new Error('markdown: empty identity');
+  await context.disk.write(file(context), `${text}\n`);
 };
 
 export const identityModule = module({
-	name: "identity",
-	summary:
-		"Who you are, as your owner told you: read it, and rewrite it as you learn more.",
-	file: import.meta.path,
-	functions: { readIdentity, writeIdentity },
+  name: 'identity',
+  summary:
+    'Who you are, as your owner told you: read it, and rewrite it as you learn more.',
+  file: import.meta.path,
+  functions: { readIdentity, writeIdentity },
 });
 
 export const identityCapabilities = behavior<Base>().capability(identityModule);

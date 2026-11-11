@@ -1,13 +1,13 @@
-import { behavior } from "@muppet/lib/core/behavior";
-import { source } from "@muppet/lib/core/event";
-import { deepgramKey } from "../../capabilities/calls/config.ts";
-import type { CallsContext } from "../../capabilities/calls/context.ts";
-import { followCalls, world, worlds } from "../../capabilities/calls/watch.ts";
+import { behavior } from '@macro-inc/muppet/core/behavior';
+import { source } from '@macro-inc/muppet/core/event';
+import { deepgramKey } from '../../capabilities/calls/config.ts';
+import type { CallsContext } from '../../capabilities/calls/context.ts';
+import { followCalls, world, worlds } from '../../capabilities/calls/watch.ts';
 
-const watchLog = "calls";
+const watchLog = 'calls';
 
-type Needs = Pick<CallsContext, "calls" | "config" | "clock" | "log"> & {
-	readonly credentials: Pick<CallsContext["credentials"], "has">;
+type Needs = Pick<CallsContext, 'calls' | 'config' | 'clock' | 'log'> & {
+  readonly credentials: Pick<CallsContext['credentials'], 'has'>;
 };
 
 /**
@@ -18,38 +18,38 @@ type Needs = Pick<CallsContext, "calls" | "config" | "clock" | "log"> & {
  * nothing, until calls have their speech key.
  */
 const readings = ({
-	calls: { watcher },
-	config,
-	clock,
-	log,
-	credentials,
+  calls: { watcher },
+  config,
+  clock,
+  log,
+  credentials,
 }: Needs) => {
-	const { api, pulse, next, allowed, hungUp } = watcher;
-	let following = false;
-	return worlds({
-		ready: async () => {
-			const ready = await credentials.has(deepgramKey);
-			// Macro's call events only matter once a call could be joined.
-			if (ready && !following) {
-				following = true;
-				void followCalls({
-					watch: api.watch,
-					wake: pulse.wake,
-					clock,
-					failed: (error) =>
-						void log.event(watchLog, { stream_error: String(error) }),
-				});
-			}
-			return ready;
-		},
-		read: async () =>
-			world({ api, me: await api.me(), owner: config.owner, allowed, hungUp }),
-		pulse,
-		next,
-		log: (entry) => void log.event(watchLog, entry),
-	});
+  const { api, pulse, next, allowed, hungUp } = watcher;
+  let following = false;
+  return worlds({
+    ready: async () => {
+      const ready = await credentials.has(deepgramKey);
+      // Macro's call events only matter once a call could be joined.
+      if (ready && !following) {
+        following = true;
+        void followCalls({
+          watch: api.watch,
+          wake: pulse.wake,
+          clock,
+          failed: (error) =>
+            void log.event(watchLog, { stream_error: String(error) }),
+        });
+      }
+      return ready;
+    },
+    read: async () =>
+      world({ api, me: await api.me(), owner: config.owner, allowed, hungUp }),
+    pulse,
+    next,
+    log: (entry) => void log.event(watchLog, entry),
+  });
 };
 
 /** Where calls' events come from: `calls` is the world of live calls, every few seconds. */
 export const callsSources = (context: Needs) =>
-	behavior().source({ calls: source(readings(context)) });
+  behavior().source({ calls: source(readings(context)) });

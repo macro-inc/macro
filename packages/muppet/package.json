@@ -1,22 +1,30 @@
 {
-	"name": "@muppet/lib",
-	"version": "0.0.0",
-	"private": true,
-	"type": "module",
-	"exports": {
-		"./core/*": "./core/*.ts",
-		"./agents/*": "./agents/*.ts",
-		"./runtimes/*": "./runtimes/*.ts",
-		"./utilities/*": "./utilities/*/index.ts",
-		"./utilities/schedules/*": "./utilities/schedules/*.ts"
-	},
-	"dependencies": {
-		"@anthropic-ai/claude-agent-sdk": "^0.3.321",
-		"@livekit/rtc-node": "1.2.1",
-		"@macro-inc/sdk": "0.4.1",
-		"playwright-core": "1.65.0",
-		"rrule-temporal": "^2.2.8",
-		"temporal-spec": "^1.0.1",
-		"zod": "^4.6.7"
-	}
+  "name": "@macro-inc/muppet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./core/*": "./core/*.ts",
+    "./agents/*": "./agents/*.ts",
+    "./runtimes/*": "./runtimes/*.ts",
+    "./utilities/*": "./utilities/*/index.ts",
+    "./utilities/schedules/*": "./utilities/schedules/*.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.322",
+    "@livekit/rtc-node": "1.2.2",
+    "@macro-inc/sdk": "workspace:*",
+    "playwright-core": "1.65.0",
+    "rrule-temporal": "^2.2.8",
+    "temporal-spec": "^1.0.1",
+    "zod": "4.4.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.5",
+    "typescript": "^5.9.3"
+  }
 }

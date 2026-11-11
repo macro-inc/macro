@@ -1,14 +1,14 @@
-import type { Config } from "./config.ts";
-import type { Credentials } from "./credentials.ts";
+import type { Config } from './config.ts';
+import type { Credentials } from './credentials.ts';
 
 /** The credential holding the token of the agent's own GitHub account. */
-export const githubToken = "AGENT_GITHUB_TOKEN";
+export const githubToken = 'AGENT_GITHUB_TOKEN';
 
 /**
  * Set in every environment the agent gives its children, with or without an
  * identity, so the guards can tell its sessions from the machine user's.
  */
-export const sessionMarker = "AGENT_SESSION";
+export const sessionMarker = 'AGENT_SESSION';
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -18,16 +18,16 @@ type Environment = Readonly<Record<string, string | undefined>>;
  * the machine's own account, which belongs to its user.
  */
 export const noIdentity: Environment = {
-	[sessionMarker]: "1",
-	GH_TOKEN: undefined,
-	GITHUB_TOKEN: undefined,
-	GH_CONFIG_DIR: "/nonexistent",
-	GIT_TERMINAL_PROMPT: "0",
-	GIT_SSH_COMMAND: "false",
-	GIT_AUTHOR_NAME: "",
-	GIT_AUTHOR_EMAIL: "",
-	GIT_COMMITTER_NAME: "",
-	GIT_COMMITTER_EMAIL: "",
+  [sessionMarker]: '1',
+  GH_TOKEN: undefined,
+  GITHUB_TOKEN: undefined,
+  GH_CONFIG_DIR: '/nonexistent',
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_SSH_COMMAND: 'false',
+  GIT_AUTHOR_NAME: '',
+  GIT_AUTHOR_EMAIL: '',
+  GIT_COMMITTER_NAME: '',
+  GIT_COMMITTER_EMAIL: '',
 };
 
 /**
@@ -37,24 +37,24 @@ export const noIdentity: Environment = {
  * shares. Without its token it fails closed.
  */
 export const agentEnvironment = async ({
-	config,
-	credentials,
+  config,
+  credentials,
 }: {
-	readonly config: Pick<Config, "identity">;
-	readonly credentials: Pick<Credentials, "get">;
+  readonly config: Pick<Config, 'identity'>;
+  readonly credentials: Pick<Credentials, 'get'>;
 }): Promise<Environment> => {
-	const token = await credentials.get(githubToken).catch(() => undefined);
-	if (token === undefined) return noIdentity;
-	return {
-		[sessionMarker]: "1",
-		GH_TOKEN: token,
-		GITHUB_TOKEN: undefined,
-		GH_CONFIG_DIR: undefined,
-		GIT_SSH_COMMAND: undefined,
-		GIT_TERMINAL_PROMPT: "0",
-		GIT_AUTHOR_NAME: config.identity.name,
-		GIT_AUTHOR_EMAIL: config.identity.email,
-		GIT_COMMITTER_NAME: config.identity.name,
-		GIT_COMMITTER_EMAIL: config.identity.email,
-	};
+  const token = await credentials.get(githubToken).catch(() => undefined);
+  if (token === undefined) return noIdentity;
+  return {
+    [sessionMarker]: '1',
+    GH_TOKEN: token,
+    GITHUB_TOKEN: undefined,
+    GH_CONFIG_DIR: undefined,
+    GIT_SSH_COMMAND: undefined,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_AUTHOR_NAME: config.identity.name,
+    GIT_AUTHOR_EMAIL: config.identity.email,
+    GIT_COMMITTER_NAME: config.identity.name,
+    GIT_COMMITTER_EMAIL: config.identity.email,
+  };
 };

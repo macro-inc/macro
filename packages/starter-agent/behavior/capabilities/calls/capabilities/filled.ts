@@ -5,6 +5,6 @@
 
 /** `value`, or an error naming `what` if it is empty. */
 export const filled = (value: string, what: string): string => {
-	if (value.length === 0) throw new Error(`${what} must not be empty`);
-	return value;
+  if (value.length === 0) throw new Error(`${what} must not be empty`);
+  return value;
 };

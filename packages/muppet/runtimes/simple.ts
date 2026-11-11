@@ -1,16 +1,16 @@
-import { serve } from "../core/behavior.ts";
-import { lifecycle } from "../core/hook.ts";
-import type { Runtime } from "../core/runtime.ts";
+import { serve } from '../core/behavior.ts';
+import { lifecycle } from '../core/hook.ts';
+import type { Runtime } from '../core/runtime.ts';
 import {
-	agentState,
-	type Options,
-	oneAtATime,
-	reportFailures,
-	systemPromptFor,
-	wakeAgent,
-	wakeContext,
-	wakeFromHandlers,
-} from "./pieces.ts";
+  agentState,
+  type Options,
+  oneAtATime,
+  reportFailures,
+  systemPromptFor,
+  wakeAgent,
+  wakeContext,
+  wakeFromHandlers,
+} from './pieces.ts';
 
 /**
  * The simplest runtime: runs every handler in this process until its source
@@ -27,19 +27,19 @@ import {
  * the behavior's context.
  */
 export const simple = ({ systemPrompt, ...scripts }: Options): Runtime => ({
-	run: async (behavior) => {
-		const run = lifecycle();
-		const state = agentState(behavior, scripts);
-		const build = wakeContext({
-			systemPrompt: systemPromptFor(state, systemPrompt),
-			state,
-		});
-		const wake = oneAtATime(
-			wakeAgent({ agent: behavior.decorations.agent, run }),
-		);
-		await serve(behavior, run, {
-			wakeFor: wakeFromHandlers({ run, build, wake }),
-			accept: reportFailures(run),
-		});
-	},
+  run: async (behavior) => {
+    const run = lifecycle();
+    const state = agentState(behavior, scripts);
+    const build = wakeContext({
+      systemPrompt: systemPromptFor(state, systemPrompt),
+      state,
+    });
+    const wake = oneAtATime(
+      wakeAgent({ agent: behavior.decorations.agent, run })
+    );
+    await serve(behavior, run, {
+      wakeFor: wakeFromHandlers({ run, build, wake }),
+      accept: reportFailures(run),
+    });
+  },
 });

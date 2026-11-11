@@ -17,12 +17,12 @@ fails isn't run.
 ## Start here
 
 - `DESIGN.md`: the layout an agent's repository follows, and why.
-- `packages/lib/core/behavior.ts`: the behavior builder and `serve`.
-- `packages/lib/core/capability.ts`, `core/code.ts`: capabilities as modules
+- `core/behavior.ts`: the behavior builder and `serve`.
+- `core/capability.ts`, `core/code.ts`: capabilities as modules
   of typed functions, and how scripts run.
-- `packages/lib/utilities/scripts/index.ts`: the type checker and loader for
+- `utilities/scripts/index.ts`: the type checker and loader for
   scripts.
-- `packages/lib/examples/`: two small agents that run without credentials.
+- `examples/`: two small agents that run without credentials.
 
 ## Scope
 
@@ -35,23 +35,31 @@ fails isn't run.
 ## Boundaries
 
 - Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript.
-- Used by: agents built from `../starter-agent`, which link `packages/lib`.
-- Not in the root workspace: it has its own `package.json`, `bun.lock` and
-  `flake.nix`, and the root checks don't cover it.
+- Used by: agents rendered from `../starter-agent` by `crates/agent_git`. In
+  the monorepo it resolves as the workspace package `@macro-inc/muppet`; an
+  agent's image places it at `node_modules/@macro-inc/muppet` (TS source, no
+  build).
+- `@macro-inc/sdk` is the in-repo `packages/sdk` (workspace), built to
+  `dist/` before typechecking (`bun run build` there).
 
 ## Checks
 
-Run from this directory:
+Run from this directory, after `bun install` at the root and `bun run build`
+in `packages/sdk`:
 
-- `nix develop --command sh -c 'bun install && bun run typecheck && bun test && bun run format:check'`
+- `bun run typecheck`, `bun test`
+- Biome: `just check` (the shared `biome.base.jsonc`).
 
 ## Gotchas
 
 - Follow `STYLE.md`: no type casts, no classes, pure functions with every
   dependency injected, and no path that isn't a variable.
 - The library does no IO of its own and holds no paths: an agent's context
-  provides both. A utility that needs a program on the system ships a
-  `flake.nix` beside it.
+  provides both. A program a utility needs on the system (chromium, ffmpeg,
+  sops) is provided by the agent's image (`nix/macro-box`), not by a flake
+  here.
+- Its own style wins over the web rules where they differ: Bun APIs and
+  Temporal are used on purpose (`STYLE.md`).
 - A capability is a module of ordinary typed functions: the context first,
   then one input object. There are no input or output schemas; zod is only
   for data another program produced.
