@@ -91,3 +91,19 @@ test('base static type lookup reads the prototype configuration without construc
     'config-only'
   );
 });
+
+test('static configuration entry getters preserve opaque errors', () => {
+  const failure = new Error('config getter');
+  class ConfigGetterNode extends TextNode {
+    $config() {
+      return {
+        get throwing(): never {
+          throw failure;
+        },
+      };
+    }
+  }
+  expect(() =>
+    Reflect.apply(LexicalNode.getType, ConfigGetterNode, [])
+  ).toThrow(failure);
+});
