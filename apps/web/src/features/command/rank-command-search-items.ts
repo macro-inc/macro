@@ -55,6 +55,10 @@ function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
   );
 }
 
+function isMacroPerson(item: CommandMenuItem) {
+  return item.bucket === 'dm' || item.bucket === 'person';
+}
+
 /** Rank cached and local candidates together using the command menu's rules. */
 export function rankCommandSearchItems<T extends CommandMenuItem>(
   items: T[],
@@ -97,9 +101,12 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const eligible = items.filter(
     (item) => item.kind !== 'command' || commandMatches.has(item.id)
   );
+  // Match quality decides first. Among equally good matches Macro users and
+  // DMs come before documents and channels.
   const scored = search(eligible, query).sort(
     (left, right) =>
       right.nameMatchRank - left.nameMatchRank ||
+      Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
       right.combinedScore - left.combinedScore ||
       compareRecency(left.item, right.item)
   );

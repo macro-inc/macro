@@ -362,10 +362,10 @@ describe('command menu search ranking', () => {
     expect(ids(items, 'jack')).toEqual([
       'recent-dm',
       'old-dm',
-      'channel-slot',
       'jack',
-      'command',
+      'channel-slot',
       'recent-crm',
+      'command',
       'older-crm',
     ]);
   });
@@ -568,5 +568,18 @@ describe('command menu search ranking', () => {
     expect(order.indexOf('adams')).toBeLessThan(order.indexOf('major'));
     expect(order.indexOf('exact-channel')).toBeLessThan(order.indexOf('major'));
     expect(order.indexOf('exact-note')).toBeLessThan(order.indexOf('major'));
+  });
+  it('lists a person before documents and channels that match equally well, and never above a better match', () => {
+    const items = [
+      channel('prefix-channel', 'jacob-team', NOW),
+      note('prefix-note', 'Jacob onboarding', NOW),
+      { ...person('prefix-person', 'Jacobson Amy'), personOrder: 0 },
+      note('exact-note', 'Jacob', NOW - 90 * DAY),
+    ];
+
+    expect(ids(items, 'jacob').slice(0, 2)).toEqual([
+      'exact-note',
+      'prefix-person',
+    ]);
   });
 });
