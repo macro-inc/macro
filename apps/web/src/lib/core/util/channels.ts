@@ -3,13 +3,13 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { invalidateContacts } from '@core/user/contactService';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateListChannels } from '@queries/channel/channels';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -72,7 +72,7 @@ export function useSendMessageToPeople() {
     if (!messageResponse) return;
 
     fireAndForget(invalidateListChannels(), 'messages');
-    fireAndForget(invalidateContacts(), 'messages');
+    requestContactRefresh();
 
     const navigateToChannel = async () => {
       replaceSplit({

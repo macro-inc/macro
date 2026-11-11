@@ -7,20 +7,38 @@ import { recordChannelActivity } from '@service-storage/graphql-channel-activity
 import { scheduleIdle } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  isCurrentQueryAccount,
+  type QueryAccount,
+} from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
 import { channelKeys } from './keys';
 
-function fetchChannelsActivity() {
-  return throwOnErr(storageServiceClient.getActivity);
+export function channelActivityQueryOptions(
+  account: QueryAccount | undefined,
+  enabled: boolean
+) {
+  return {
+    queryKey: channelKeys.activity(account?.userId).queryKey,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      assertQueryAccount(account);
+      signal.throwIfAborted();
+      const result = await throwOnErr(storageServiceClient.getActivity);
+      signal.throwIfAborted();
+      assertQueryAccount(account);
+      return result;
+    },
+    enabled: !!account && enabled,
+  };
 }
 
 export function useChannelsActivityQuery(
   enabled: Accessor<boolean> = () => true
 ) {
-  return useQuery(() => ({
-    queryKey: channelKeys.activity.queryKey,
-    queryFn: fetchChannelsActivity,
-    enabled: enabled(),
-  }));
+  const account = useQueryAccount();
+  return useQuery(() => channelActivityQueryOptions(account(), enabled()));
 }
 
 /** Replaces the channel's row in the activity list, or adds it. */
@@ -33,25 +51,30 @@ function upsertChannelActivity(
   return list.map((row, i) => (i === index ? activity : row));
 }
 
-async function recordChannelView(channelId: string) {
+async function recordChannelView(channelId: string, account: QueryAccount) {
+  if (!isCurrentQueryAccount(account)) return;
   const activity = await recordChannelActivity({
     channelId,
     activityType: 'view',
   });
   // The write returns the row, so the list needs no refetch.
+  if (!isCurrentQueryAccount(account)) return;
   queryClient.setQueryData<ChannelsActivity[]>(
-    channelKeys.activity.queryKey,
+    channelKeys.activity(account.userId).queryKey,
     (list) => list && upsertChannelActivity(list, activity)
   );
 }
 
 /** Idle callbacks wait at most this long behind a busy main thread. */
 const CHANNEL_VIEW_MAX_WAIT_MS = 2_000;
-const pendingChannelViews = new Set<string>();
+const pendingChannelViews = new Map<string, QueryAccount>();
 // Module scope, so a view recorded as its channel unmounts still lands.
 const flushChannelViews = scheduleIdle(() => {
-  for (const channelId of pendingChannelViews) {
-    fireAndForget(recordChannelView(channelId), 'channel-view-activity');
+  for (const [channelId, account] of pendingChannelViews) {
+    fireAndForget(
+      recordChannelView(channelId, account),
+      'channel-view-activity'
+    );
   }
   pendingChannelViews.clear();
 }, CHANNEL_VIEW_MAX_WAIT_MS);
@@ -64,6 +87,8 @@ const flushChannelViews = scheduleIdle(() => {
  * share a request.
  */
 export function recordChannelViewWhenIdle(channelId: string) {
-  pendingChannelViews.add(channelId);
+  const account = currentQueryAccount();
+  if (!account) return;
+  pendingChannelViews.set(channelId, account);
   flushChannelViews();
 }

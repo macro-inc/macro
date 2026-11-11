@@ -53,7 +53,7 @@ may import a block package, `@core/block`, or block-related signal modules.
   resolved presentation values and event callbacks. Its caller provides the
   rendering context, selection, expansion, reply actions, and footer.
 - `email-thread/email-thread.tsx` constructs the existing shared thread query,
-  source adapter, viewer/contact capabilities, thread commands, composer capabilities,
+  source adapter, viewer/scoped-recipient capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
   supplied contexts. It imports no production entry point for a nested
@@ -240,6 +240,24 @@ context and view callbacks. State creates one retained thread snapshot
 and passes that accessor to the injected command factory, so commands and reading
 state cannot disagree because they retained separate snapshots.
 
+## Personal recipient suggestions
+
+Production compose and thread composition no longer fetch the complete personal
+contact list. `EmailComposeContext.createRecipientSource` supplies a factory to each
+To/Cc/Bcc input; the input owns its open/query lifetime and one replaceable page.
+The field is required at composition boundaries, with explicit `undefined` for
+hosts that offer only a scoped pool (such as a generated draft's supplied recipients).
+`recipients` and reply-session options contain scoped extras and thread addresses,
+not an address-book catalog. Controllers still own selected values independently
+of suggestions. Closing, paging, sender changes and failed reads cannot erase them.
+
+Scoped addresses and personal-directory users are deduplicated by canonical email
+after matching, preserving the selected representation when a custom address later
+matches a known user. Main new-email and reply/forward views forward the factory;
+AI inference's separate people pool is not reduced to a suggestion page. The real
+composer fixture covers late contacts and scoped/directory deduplication on desktop
+and phone via `recipient-directory.app.e2e.ts` in the app browser configuration.
+
 ## Async completion and naming
 
 TanStack remains in the production/query adapters. A write capability is a plain
@@ -284,6 +302,20 @@ background. A queued write can wait out the mutation queue's request and
 delivery timeouts, and the optimistic delete empties a draft-only thread
 around the composer, so leaving cannot wait on either. A host that fails to
 leave is reported, and the deletion still runs.
+
+The working copy and the mutation queue are separate stores, so a discard is
+first recorded beside its copy (`deleteAttemptId`), which stays listed and
+editable. The copy becomes `deleting`, hidden and closed to edits, only when the
+queue admits the delete, and the queue admits it only for the revision it was
+requested on: an edit or a newer save drops the request, and a request that
+never reached the queue is inert. A discard on its way to the server is never
+shown as a failure. **Retry discard** follows a server rejection or a delete the
+queue lost (`delete-failed`); every copy that starts needing a retry logs
+`email_draft.sync_failed` with its status, cause and error code.
+
+A save can still be on the wire when its draft is sent, and the server refuses
+it once the send is admitted. That send carries the draft's content, so the
+refusal is ignored: the working copy is not marked failed and nothing is shown.
 
 The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
@@ -552,6 +584,12 @@ recognizable draft reservations for recovery.
 GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
+A thread shows an approved send as sent before the provider confirms it, while
+the server still holds that message as a draft and refuses a reply to a draft.
+So a reply to a message this device is still delivering waits for it: the
+dispatcher submits the reply's send only once the target is delivered,
+cancelled or failed, and `draft-queue.ts` keeps the reply's latest save off the
+mutation queue until then.
 Cancellation requested before any submission claim stays local; after a claim it
 requires authoritative server cancellation. The exception is a definitive inbox-access
 rejection of the first exclusive submission: the journal records local cancellation
