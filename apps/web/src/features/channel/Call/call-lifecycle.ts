@@ -5,6 +5,7 @@ import {
   createMachine,
   type MachineDef,
 } from '@macro-inc/machine';
+import { Telemetry } from '@macro-inc/observability';
 import type { CallTokenResponse } from '@service-call/client';
 import type { DisconnectReason } from 'livekit-client';
 import { match } from 'ts-pattern';
@@ -282,6 +283,14 @@ export function createCallLifecycle(options: {
         options.setError(null);
       },
       joining: ({ request }, dispatch) => {
+        const span = Telemetry.span('call.join');
+        span.setAttr('channel.id', request.channelId);
+        span.setAttr('call.join.source', request.source);
+        span.setAttr('call.join.intent', request.intent.kind);
+        span.setAttr('call.join.outcome', 'cancelled');
+        if (request.intent.kind === 'join' && request.intent.callId) {
+          span.setAttr('call.id', request.intent.callId);
+        }
         let active = true;
         let settled = false;
         let finishPreparation: (() => Promise<void>) | undefined;
@@ -292,6 +301,8 @@ export function createCallLifecycle(options: {
         };
         const fail = (error: unknown) => {
           if (!active) return;
+          span.setAttr('call.join.outcome', 'failed');
+          span.error(error);
           settled = true;
           request.reject(error);
           dispatch({ t: 'fail', error });
@@ -319,7 +330,9 @@ export function createCallLifecycle(options: {
             if (request.restoredCall) {
               let activeCall: ActiveCallLookup;
               try {
-                activeCall = await options.lookup(request.channelId);
+                activeCall = await span.span('call.lookup', () =>
+                  options.lookup(request.channelId)
+                );
               } catch (error) {
                 if (!active) return;
                 options.reportError(error);
@@ -346,7 +359,9 @@ export function createCallLifecycle(options: {
               let callId =
                 call?.channelId === request.channelId ? call.callId : null;
               if (!callId) {
-                const activeCall = await options.lookup(request.channelId);
+                const activeCall = await span.span('call.lookup', () =>
+                  options.lookup(request.channelId)
+                );
                 if (!active) return;
                 if (activeCall === 'unavailable') {
                   throw new Error('Unable to verify the active call');
@@ -359,6 +374,7 @@ export function createCallLifecycle(options: {
                 ]);
               }
               request.intent = { kind: 'join', callId };
+              span.setAttr('call.id', callId);
             }
             if (needsConnection || renewMembership) {
               if (options.prepareToken) {
@@ -378,9 +394,14 @@ export function createCallLifecycle(options: {
               const intent = request.intent;
               let tokenRequest: Promise<CallTokenResponse>;
               if (intent.kind === 'start') {
-                tokenRequest = options.startCall(request.channelId);
+                tokenRequest = span.span('call.token', () =>
+                  options.startCall(request.channelId)
+                );
               } else if (intent.callId) {
-                tokenRequest = options.requestToken(intent.callId);
+                const callId = intent.callId;
+                tokenRequest = span.span('call.token', () =>
+                  options.requestToken(callId)
+                );
               } else {
                 throw new Error('Missing call identity');
               }
@@ -420,7 +441,8 @@ export function createCallLifecycle(options: {
               }
               // Once Start allocated a session, retries are joins to that session.
               request.intent = { kind: 'join', callId: token.callId };
-              if (needsConnection) await options.connect(token);
+              span.setAttr('call.id', token.callId);
+              if (needsConnection) await span.run(() => options.connect(token));
               call = { channelId: token.channelId, callId: token.callId };
             } else {
               // Let the joining scope finish mounting before dispatching its
@@ -432,6 +454,7 @@ export function createCallLifecycle(options: {
             options.setError(null);
             settled = true;
             request.resolve();
+            span.setAttr('call.join.outcome', 'connected');
             const connected = call ?? {
               channelId: request.channelId,
               callId: null,
@@ -450,13 +473,14 @@ export function createCallLifecycle(options: {
             releasePreparation();
           }
         }
-        fireAndForget(connect(), 'channel-call');
+        fireAndForget(span.run(connect), 'channel-call');
         return () => {
           active = false;
           releasePreparation();
           clearTimeout(timeout);
           clearTimeout(delayTimer);
           finishDelay();
+          span.end();
           if (!settled) request.reject(new Error('Call join cancelled'));
         };
       },

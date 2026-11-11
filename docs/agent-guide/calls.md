@@ -42,6 +42,9 @@ Channel navigation carries `join_call=<callId>` for a selected call,
 `join_call=start` only for an explicit new-call action. Each intent is consumed
 once. A retry retains the original call ID, including after a Start request
 allocated a session but media connection failed.
+The `call.join` trace records the intent, source, session ID, and outcome.
+Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
+media connection also runs in that trace. No RTC tokens are recorded.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
