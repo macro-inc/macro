@@ -148,6 +148,28 @@ ${identifiers
   .join('\n')}
 }
 impl ShortcutTransformerId {
+    /// Stable source declaration-order wire ID; zero is reserved.
+    pub fn catalog_id(self) -> u16 {
+        match self {
+${identifiers
+  .map(({ variant }, index) => `            Self::${variant} => ${index + 1},`)
+  .join('\n')}
+        }
+    }
+
+    /// Resolve a source catalog wire ID; reserved and unknown IDs reject.
+    pub fn from_catalog_id(id: u16) -> Option<Self> {
+        match id {
+${identifiers
+  .map(
+    ({ variant }, index) =>
+      `            ${index + 1} => Some(Self::${variant}),`
+  )
+  .join('\n')}
+            _ => None,
+        }
+    }
+
     /// Node types required when registering a typing transformer.
     pub fn required_dependencies(self) -> &'static [&'static str] {
         match self {

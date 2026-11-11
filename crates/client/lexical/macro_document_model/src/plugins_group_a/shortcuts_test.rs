@@ -6,6 +6,31 @@ use lexical_rich_nodes::{
 };
 
 #[test]
+fn shortcut_catalog_ids_follow_source_order_and_round_trip_all_95_variants() {
+    use super::shortcuts::ShortcutTransformerId;
+    use strum::IntoEnumIterator;
+
+    assert_eq!(ShortcutTransformerId::IDatabaseQueryBlock.catalog_id(), 1);
+    assert_eq!(ShortcutTransformerId::BrTagToSpace.catalog_id(), 95);
+    let variants: Vec<_> = ShortcutTransformerId::iter().collect();
+    assert_eq!(variants.len(), 95);
+    for (index, variant) in variants.into_iter().enumerate() {
+        let id = u16::try_from(index + 1).expect("95 source catalog entries");
+        assert_eq!(variant.catalog_id(), id);
+        assert_eq!(ShortcutTransformerId::from_catalog_id(id), Some(variant));
+    }
+}
+
+#[test]
+fn shortcut_catalog_ids_reject_reserved_zero_and_unknown_values() {
+    use super::shortcuts::ShortcutTransformerId;
+
+    assert_eq!(ShortcutTransformerId::from_catalog_id(0), None);
+    assert_eq!(ShortcutTransformerId::from_catalog_id(96), None);
+    assert_eq!(ShortcutTransformerId::from_catalog_id(u16::MAX), None);
+}
+
+#[test]
 fn typed_heading_and_inline_format_shortcuts_publish_in_the_original_input_chain()
 -> Result<(), Error> {
     for (input, heading) in [("# ", true), ("**bold**", false)] {

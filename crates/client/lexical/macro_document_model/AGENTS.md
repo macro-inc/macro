@@ -61,7 +61,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
-- Keep source object order and regex metadata in transformers/catalog.json generated from TS.
+- Keep source object order, regex metadata and shortcut transformer IDs generated together from TS with `packages/lexical-conformance/corpus/transformers.ts`; use that declaration order for catalog IDs with zero reserved, and check outputs with `--check`.
 - Match transformer constructor arguments independently of static JSON import policy.
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.
