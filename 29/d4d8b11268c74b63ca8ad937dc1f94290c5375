@@ -1,0 +1,38 @@
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/SkillsMenu.tsx
+  s_6c17b9a8419783::t_832bc0cd62074b 124
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/hooks/useEntityMention.ts
+  s_6c17b9a8419783::t_f0fa3b735a09ca 14-18
+  s_6c17b9a8419783::t_4e25c4df877218 41
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_6c17b9a8419783::t_832bc0cd62074b 161,225,234,245,316-318
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.test.ts
+  s_6c17b9a8419783::t_69f73b28d39599 1544
+  s_6c17b9a8419783::t_c7f225522dc915 1556
+  s_6c17b9a8419783::t_d424f8018e892b 1539-1543,1545-1555,1557-1562
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_6c17b9a8419783::t_07e6bfb34ae2d6 449-450,452
+  s_6c17b9a8419783::t_c12dc8cb5396a6 18,137-142,225,429-448,451,453
+  s_6c17b9a8419783::t_c4088712c47d7f 454-455
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SnippetsMenu/SnippetsMenu.tsx
+  s_6c17b9a8419783::t_832bc0cd62074b 68
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SnippetsMenu/SnippetsMenu.test.tsx
+  s_6c17b9a8419783::t_409dd8b6c861d5 7-10,13-16,40-41,45
+apps/web/src/lib/core/context/quickAccess/QuickAccessSource.tsx
+  s_6c17b9a8419783::t_6f2f48e8b35820 1170-1172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "29d4d8b11268c74b63ca8ad937dc1f94290c5375",
+  "prompts": {},
+  "sessions": {
+    "s_6c17b9a8419783": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "045f4c7f-8948-4789-be73-bdc4d13ead34",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
