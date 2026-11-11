@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   createComponent,
+  createRenderEffect,
   createResource,
   createSignal,
   Suspense,
@@ -329,7 +330,7 @@ describe('channel rail virtualizer', () => {
     viewport.setAttribute('data-viewport', '');
     Object.defineProperty(viewport, 'clientHeight', { value: 200 });
     document.body.append(viewport);
-    const [keys, setKeys] = createSignal(['a', 'b', 'status']);
+    const [keys, setKeys] = createSignal(['a', 'b', 'c']);
     const [request, setRequest] = createSignal(0);
     let release = () => {};
     const [route] = createResource(request, (value) =>
@@ -343,8 +344,13 @@ describe('channel rail virtualizer', () => {
       () =>
         createComponent(Suspense, {
           get children() {
+            // Reading the route suspends this boundary while it loads.
+            const routeText = document.createTextNode('');
+            createRenderEffect(() => {
+              routeText.data = String(route() ?? '');
+            });
             return [
-              () => route(),
+              routeText,
               createComponent(ChannelRailVirtualizer<string>, {
                 get keys() {
                   return keys();
@@ -354,11 +360,7 @@ describe('channel rail virtualizer', () => {
                 children: (key) => {
                   const row = document.createElement('button');
                   row.textContent = key;
-                  // A section's trailing status row is empty when there is nothing to load.
-                  row.setAttribute(
-                    'data-height',
-                    key === 'status' ? '0' : '32'
-                  );
+                  row.setAttribute('data-height', '32');
                   return row;
                 },
               }),
@@ -373,14 +375,16 @@ describe('channel rail virtualizer', () => {
     fireAndForget(
       startTransition(() => {
         setRequest(1);
-        setKeys(['new', 'a', 'b', 'status']);
+        setKeys(['new', 'a', 'b', 'c']);
       }),
       'channels-view'
     );
     // Solid starts the transition in a microtask.
     await Promise.resolve();
-    // The rows on screen still show the previous keys when they are measured.
+    // The rows on screen still show the previous keys when one of them
+    // empties, as a section's status row does once nothing is left to load.
     expect(view.queryByText('new')).toBeNull();
+    view.getByText('b').setAttribute('data-height', '0');
     measure(200);
     release();
     // A resize observer reports only sizes that changed, so none arrive now.
@@ -389,7 +393,7 @@ describe('channel rail virtualizer', () => {
     expect(view.getByText('new').parentElement?.style.top).toBe('0px');
     expect(view.getByText('a').parentElement?.style.top).toBe('32px');
     expect(view.getByText('b').parentElement?.style.top).toBe('64px');
-    expect(view.getByText('status').parentElement?.style.top).toBe('96px');
+    expect(view.getByText('c').parentElement?.style.top).toBe('64px');
   });
 
   it('retains focused or dragged rows outside the viewport', () => {
