@@ -228,9 +228,10 @@ npm error A complete log of this run can be found in: /home/test/.npm/_logs/debu
 ";
     assert_eq!(
         npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
-        "code ETARGET; notarget No matching version found for \
-         @agentclientprotocol/codex-acp@0.0.0.; notarget In most cases you or one of your \
-         dependencies are requesting (npm log: /home/test/.npm/_logs/debug-0.log)"
+        "notarget No matching version found for @agentclientprotocol/codex-acp@0.0.0.; \
+         notarget In most cases you or one of your dependencies are requesting; \
+         notarget a package version that doesn't exist. \
+         (npm log: /home/test/.npm/_logs/debug-0.log)"
     );
 }
 
@@ -241,5 +242,16 @@ fn a_silent_npm_failure_reports_its_exit_status() {
     assert_eq!(
         npm_adapter::failure_summary("\n", std::process::ExitStatus::from_raw(1 << 8)),
         "npm exited with exit status: 1 and no error output"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_log_path_on_the_next_line_is_kept() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let stderr = "npm ERR! boom\nnpm ERR! A complete log of this run can be found in:\nnpm ERR!     /x/debug.log\n";
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "boom (npm log: /x/debug.log)"
     );
 }

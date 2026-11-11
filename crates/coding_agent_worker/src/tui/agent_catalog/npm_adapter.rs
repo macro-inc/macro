@@ -159,11 +159,17 @@ const SUMMARY_LINES: usize = 3;
 /// only the last line hid the actual error.
 const NPM_LOG_LINE: &str = "A complete log of this run can be found in:";
 
+/// npm's `key value` metadata lines; they come before the message and say
+/// less than it does.
+const METADATA_KEYS: [&str; 5] = ["code ", "syscall ", "errno ", "path ", "dest "];
+
 /// The reason npm gave for failing, on one line: its first few error lines
-/// without the `npm error` prefix, then the path of npm's full log.
+/// without the `npm error` prefix (metadata last), then the path of its full log.
 pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) -> String {
     let mut log = None;
+    let mut awaiting_log_path = false;
     let mut reasons = Vec::new();
+    let mut metadata = Vec::new();
     for line in stderr.lines() {
         let line = line
             .trim()
@@ -171,11 +177,22 @@ pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) ->
             .trim_start_matches("npm ERR!")
             .trim();
         if let Some(path) = line.strip_prefix(NPM_LOG_LINE) {
-            log = Some(path.trim());
-        } else if !line.is_empty() && reasons.len() < SUMMARY_LINES {
+            // npm 8 puts the path on the next line.
+            match path.trim() {
+                "" => awaiting_log_path = true,
+                path => log = Some(path),
+            }
+        } else if awaiting_log_path && !line.is_empty() {
+            log = Some(line);
+            awaiting_log_path = false;
+        } else if METADATA_KEYS.iter().any(|key| line.starts_with(key)) {
+            metadata.push(line);
+        } else if !line.is_empty() {
             reasons.push(line);
         }
     }
+    reasons.extend(metadata);
+    reasons.truncate(SUMMARY_LINES);
     let summary = if reasons.is_empty() {
         format!("npm exited with {status} and no error output")
     } else {
