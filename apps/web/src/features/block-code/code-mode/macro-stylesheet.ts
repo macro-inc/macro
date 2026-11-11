@@ -225,7 +225,14 @@ select { padding-right: 28px; appearance: none; cursor: pointer;
 input::placeholder, textarea::placeholder { color: var(--color-ink-placeholder); }
 input:focus-visible, select:focus-visible, textarea:focus-visible { box-shadow: 0 0 0 2px var(--color-edge-muted); }
 input[aria-invalid="true"], textarea[aria-invalid="true"] { border-color: var(--color-failure); }
-input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--color-accent); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-accent); }
+input.sm:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select.sm { min-height: var(--control-height-sm); padding: 2px 10px; font-size: var(--text-xs); }
+select.sm { padding-right: 26px; }
+input[type="range"] { appearance: none; height: 20px; background: transparent; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: var(--radius-full); background: color-mix(in oklch, var(--color-ink) 12%, transparent); }
+input[type="range"]::-moz-range-track { height: 4px; border-radius: var(--radius-full); background: color-mix(in oklch, var(--color-ink) 12%, transparent); }
+input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 1px solid var(--color-edge-frame); border-radius: 50%; background: var(--color-ink); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 1px solid var(--color-edge-frame); border-radius: 50%; background: var(--color-ink); }
 label { color: var(--color-ink-muted); font-size: var(--text-xs); font-weight: 500; }
 label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); font-weight: 400; color: var(--color-ink); cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -276,6 +283,10 @@ label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-fle
   white-space: nowrap;
 }
 .chip { border-color: var(--color-edge-muted); background: transparent; }
+/* A filter chip: a button.chip with aria-pressed. */
+button.chip { min-height: 24px; padding: 1px 10px; box-shadow: none; font: 500 var(--text-xs) / 1.5 var(--font-sans); }
+button.chip:hover { background: var(--color-hover); color: var(--color-ink); }
+button.chip[aria-pressed="true"] { border-color: var(--color-ink-subtle); background: var(--color-active); color: var(--color-ink); }
 .badge.accent { background: color-mix(in oklch, var(--color-accent) 12%, transparent); color: var(--color-accent); }
 .badge.success { background: color-mix(in oklch, var(--color-success) 12%, transparent); color: var(--color-success); }
 .badge.warning { background: color-mix(in oklch, var(--color-warning) 14%, transparent); color: var(--color-warning); }
@@ -389,6 +400,10 @@ tbody tr:hover td { background: var(--color-hover); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+/* A wrapped top bar would cover a phone screen, so it scrolls with the page. */
+@media (max-width: 720px) {
+  .bar { position: static; }
 }
 @media (pointer: coarse) {
   button, .button, input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select { min-height: 36px; }

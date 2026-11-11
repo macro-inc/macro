@@ -205,7 +205,9 @@ export class DocumentNamespace {
    * `--color-task-status-{not-started,in-progress,in-review,completed,canceled}`,
    * `--font-sans` and `--font-mono`; and styles: `body` and headings at
    * Macro's sizes; pill `button`s (`.primary` for the main action, `.ghost`,
-   * `.danger`, `.sm`, `.icon`), `input`, `select` and `textarea`; layout
+   * `.danger`, `.sm`, `.icon`), `input`, `select` (`.sm` for filters in a
+   * bar), `textarea` and range sliders; filter chips as `button.chip` with
+   * `aria-pressed`; layout
    * (`.page`, `.bar` for the top bar with `.actions` on the right,
    * `.content`, `.stack`, `.cluster`, `.spread`, `.grid`, `.split`); `.card`
    * (clickable as a `button` or `.interactive`, `aria-selected`),
