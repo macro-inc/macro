@@ -15,6 +15,8 @@ import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMar
 import { createNativeAgentSessionMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-host';
 import { createNativeAgentSessionMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
+import { createNativeDatabaseQueryContext } from '@core/component/LexicalMarkdown/decorator-host/native-database-query-host';
+import { createNativeDatabaseQueryViews } from '@core/component/LexicalMarkdown/decorator-host/native-database-query-views';
 import { createNativeDateMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-host';
 import { createNativeDateMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-views';
 import { createNativeDiffInsertContext } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-host';
@@ -196,6 +198,11 @@ export default function RustMarkdownEditor(props: {
     canInteractWithMedia
   );
   overlayLifecycle.add(() => agentSessionMentionContext.dispose());
+  const databaseQueryContext = createNativeDatabaseQueryContext(
+    theme,
+    canInteractWithMedia
+  );
+  overlayLifecycle.add(() => databaseQueryContext.dispose());
   const imageContext = createNativeImageContext(
     theme,
     canInteractWithMedia,
@@ -351,6 +358,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeTagMentionViews(tagMentionContext),
                   ...createNativeDateMentionViews(dateMentionContext),
+                  ...createNativeDatabaseQueryViews(databaseQueryContext),
                   ...createNativeAgentSessionMentionViews(
                     agentSessionMentionContext
                   ),
