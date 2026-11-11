@@ -48,6 +48,11 @@ import {
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import {
+  BlameTooltip,
+  createBlameTooltipStore,
+} from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
+import { registerNativeBlameTooltip } from '@core/component/LexicalMarkdown/plugins/blame-tooltip/native';
+import {
   type PersistentLocation,
   parsePersistentLocation,
 } from '@core/component/LexicalMarkdown/plugins/location/locationPlugin';
@@ -59,7 +64,11 @@ import { createNativeImageUploadController } from '@core/component/LexicalMarkdo
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import {
+  ENABLE_MARKDOWN_COMMENTS,
+  enableGitBlame,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -286,7 +295,8 @@ export default function RustMarkdownEditor(props: {
     if (!nativeGoToNodeId(view, id))
       toast.failure('Document reference not found');
   });
-  const bindLocation = (mounted: RustMarkdownRuntime) => {
+  const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
+  const bindLocationAndBlame = (mounted: RustMarkdownRuntime) => {
     overlayLifecycle.add(
       mounted.view.onCommit((commit) => {
         if (!navigatedLocation || !locationReady()) return;
@@ -296,6 +306,12 @@ export default function RustMarkdownEditor(props: {
         }
       })
     );
+    if (isFeatureEnabled(enableGitBlame))
+      overlayLifecycle.add(
+        registerNativeBlameTooltip(mounted.view, (blame) =>
+          setBlameTooltipStore(blame)
+        )
+      );
   };
   onMount(() => {
     const openStarted = performance.now();
@@ -445,7 +461,7 @@ export default function RustMarkdownEditor(props: {
               return;
             }
             setRuntime(mounted);
-            bindLocation(mounted);
+            bindLocationAndBlame(mounted);
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
@@ -584,6 +600,11 @@ export default function RustMarkdownEditor(props: {
             class="bg-accent/50"
           />
         )}
+      </Show>
+      <Show when={isFeatureEnabled(enableGitBlame)}>
+        <Suspense>
+          <BlameTooltip state={blameTooltipStore} documentId={documentId()} />
+        </Suspense>
       </Show>
       <Show when={runtime()?.overlays?.Overlays}>
         {(Overlays) => <Dynamic component={Overlays()} />}
