@@ -6,6 +6,7 @@
   pkgs,
   guest,
   macrod,
+  harnessd,
 }:
 let
   # A prebuilt glibc binary as an agent would download it: generic loader,
@@ -36,6 +37,7 @@ pkgs.testers.runNixOSTest {
       dataDisk
     ];
     macro.box.macrod = macrod;
+    macro.box.harnessd = harnessd;
     virtualisation.memorySize = 4096;
     virtualisation.diskSize = 4096;
     virtualisation.emptyDiskImages = [
@@ -53,6 +55,7 @@ pkgs.testers.runNixOSTest {
       dataDisk
     ];
     macro.box.macrod = macrod;
+    macro.box.harnessd = harnessd;
     virtualisation.memorySize = 4096;
     virtualisation.diskSize = 4096;
     virtualisation.qemu.drives = [
