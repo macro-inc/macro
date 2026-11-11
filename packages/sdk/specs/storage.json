@@ -60113,6 +60113,25 @@
           }
         }
       },
+      "UserPictureChangedMetadata": {
+        "type": "object",
+        "description": "Metadata for [`UserTopicEvent::PictureChanged`].",
+        "required": ["user_id"],
+        "properties": {
+          "file_id": {
+            "type": ["string", "null"],
+            "description": "Static file id of the new picture; `None` when it is not a static file\n(set by URL) or the picture was removed."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "URL of the new picture; `None` when the picture was removed."
+          },
+          "user_id": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "User whose profile picture changed."
+          }
+        }
+      },
       "UserPinsResponse": {
         "type": "object",
         "required": ["recent"],
@@ -60125,6 +60144,26 @@
             "description": "The pins returned from the query"
           }
         }
+      },
+      "UserTopicEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A user's profile picture changed or was removed.",
+            "required": ["metadata", "event_type"],
+            "properties": {
+              "event_type": {
+                "type": "string",
+                "enum": ["user.picture_changed"]
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/UserPictureChangedMetadata",
+                "description": "A user's profile picture changed or was removed."
+              }
+            }
+          }
+        ],
+        "description": "Events that can be published to [`MacroUsersTopic`]."
       },
       "UserViewsResponse": {
         "type": "object",
@@ -60765,6 +60804,10 @@
           {
             "$ref": "#/components/schemas/AgentSessionLifecycleEvent",
             "description": "Agent session lifecycle events from the `macro.agent_session_lifecycle`\ntopic."
+          },
+          {
+            "$ref": "#/components/schemas/UserTopicEvent",
+            "description": "User profile events from the `macro.users` topic."
           }
         ],
         "description": "Any entity event deliverable to a webhook endpoint.\n\nSerialized bodies carry an `event_type` tag naming the event (for example\n`document.created` or `message.posted`) and a `metadata` object\nwith the event payload. Endpoint validation additionally sends a\n`WebhookValidationTestEvent`, which is not part of this union."

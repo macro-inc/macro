@@ -81,6 +81,22 @@ export class Message extends FavoritableEntity<MessageRecord> {
   }
 
   /**
+   * The message's URL in the Macro web app: its channel, scrolled to it. Pass
+   * the message to `macro.ui.open` to show it to the user.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    const query = new URLSearchParams({ channel_message_id: this.id });
+    return `${this.client.webAppUrl}/app/channel/${this.channelId}?${query}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
+  /**
    * The channel this message is in.
    *
    * @readonly
