@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, Content, Implementation, ListToolsResult,
-    PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServerHandler, ServiceExt as _};
@@ -129,8 +129,8 @@ impl ArtifactServer {
 }
 
 impl ServerHandler for ArtifactServer {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info = Implementation::new(super::SERVER_NAME, env!("CARGO_PKG_VERSION"));
         info
     }
@@ -150,7 +150,7 @@ impl ServerHandler for ArtifactServer {
         &self,
         request: CallToolRequestParams,
         _: RequestContext<RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
         if request.name != TOOL_NAME {
             return Err(rmcp::ErrorData::invalid_params("unknown tool", None));
         }
@@ -159,9 +159,10 @@ impl ServerHandler for ArtifactServer {
         ))
         .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
         Ok(match self.publish(input).await {
-            Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
-            Err(error) => CallToolResult::error(vec![Content::text(error)]),
-        })
+            Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(error)]),
+        }
+        .into())
     }
 }
 
