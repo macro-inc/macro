@@ -6,7 +6,16 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text"
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        }
       ]
     },
     "nullable": []

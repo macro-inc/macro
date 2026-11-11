@@ -15,6 +15,7 @@ async fn quarantine_is_visible_only_to_its_team_and_refuses_lifecycle_commands()
     let id = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
+            purchase_key: key("buy-dialog-1"),
             team_id: TEAM,
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
@@ -22,7 +23,8 @@ async fn quarantine_is_visible_only_to_its_team_and_refuses_lifecycle_commands()
             extra_items: vec![],
         })
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
     service.repo.corrupt_ids.lock().unwrap().push(id);
     service.repo.events.lock().unwrap().clear();
 
@@ -40,7 +42,7 @@ async fn quarantine_is_visible_only_to_its_team_and_refuses_lifecycle_commands()
     ));
     assert!(matches!(
         service.set_power(TEAM, id, true).await,
-        Err(ComputerError::BadRequest(_))
+        Err(ComputerError::NeedsAttention)
     ));
     assert!(service.repo.events.lock().unwrap().is_empty());
 }

@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT login.id, login.signed_in_by, login.signed_in_at, login.expires_at,\n                   login.signed_out_at, account.id AS account_id, account.provider AS \"provider: AgentProvider\",\n                   account.external_account_id, account.display_email, account.display_org,\n                   account.plan\n            FROM harness_account_logins login\n            JOIN provider_accounts account ON account.id = login.provider_account_id\n            WHERE login.harness_id = $1 AND login.provider = $2 AND login.signed_out_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "signed_in_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "signed_in_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "signed_out_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider: AgentProvider",
+        "type_info": {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "external_account_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "display_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "display_org",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "plan",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "955a1dcc778ec38c5ffb0bcf1f4518c928e4c92b790e893114534e0776965dcc"
+}

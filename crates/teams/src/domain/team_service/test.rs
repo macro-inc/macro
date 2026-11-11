@@ -1323,6 +1323,50 @@ impl CustomerRepository for MockCustomerRepository {
         Ok(())
     }
 
+    async fn create_computer_price(
+        &self,
+        _: &stripe::PriceId,
+        _: &str,
+        _: &str,
+    ) -> Result<stripe::PriceId, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn add_computer_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::PriceId,
+        _: &str,
+        _: Vec<ItemQuantityChange>,
+        _: crate::domain::model::ItemProration,
+        _: &str,
+    ) -> Result<(), CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn remove_subscription_item(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: &stripe::SubscriptionItemId,
+        _: &str,
+    ) -> Result<crate::domain::model::ItemRemoval, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn subscription_items(
+        &self,
+        _: &stripe::SubscriptionId,
+    ) -> Result<Vec<crate::domain::model::SubscriptionItemView>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
+    async fn settle_item_change(
+        &self,
+        _: &str,
+    ) -> Result<crate::domain::model::ItemChangeSettlement, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
     async fn subscription_terms(
         &self,
         _: &stripe::SubscriptionId,

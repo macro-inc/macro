@@ -55,18 +55,12 @@ import type {
   GtmInviteLinkList,
   GtmInviteOffer,
   GtmInviteOfferStatus,
-  ImageUpdate,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
   InitGmailLinkResponse,
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
-  InternalGetComputerParams,
-  InternalPurchaseBody,
-  InternalQuoteComputerParams,
-  InternalRollbackComputerImageParams,
-  InternalUpdateImageBody,
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
@@ -2470,306 +2464,6 @@ export const healthHandler = async (
 };
 
 /**
- * @summary Buy a computer for a team; one subscription update covers the computer
-and `extraItems`.
- */
-export type internalPurchaseComputerResponse200 = {
-  data: Purchased;
-  status: 200;
-};
-
-export type internalPurchaseComputerResponse503 = {
-  data: ErrorResponse;
-  status: 503;
-};
-
-export type internalPurchaseComputerResponseSuccess =
-  internalPurchaseComputerResponse200 & {
-    headers: Headers;
-  };
-export type internalPurchaseComputerResponseError =
-  internalPurchaseComputerResponse503 & {
-    headers: Headers;
-  };
-
-export type internalPurchaseComputerResponse =
-  | internalPurchaseComputerResponseSuccess
-  | internalPurchaseComputerResponseError;
-
-export const getInternalPurchaseComputerUrl = () => {
-  return `/internal/computers`;
-};
-
-export const internalPurchaseComputer = async (
-  internalPurchaseBody: InternalPurchaseBody,
-  options?: RequestInit
-): Promise<internalPurchaseComputerResponse> => {
-  const res = await fetch(getInternalPurchaseComputerUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(internalPurchaseBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: internalPurchaseComputerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as internalPurchaseComputerResponse;
-};
-
-/**
- * @summary Quote a computer for an authenticated internal caller.
- */
-export type internalQuoteComputerResponse200 = {
-  data: Quote;
-  status: 200;
-};
-
-export type internalQuoteComputerResponse503 = {
-  data: ErrorResponse;
-  status: 503;
-};
-
-export type internalQuoteComputerResponseSuccess =
-  internalQuoteComputerResponse200 & {
-    headers: Headers;
-  };
-export type internalQuoteComputerResponseError =
-  internalQuoteComputerResponse503 & {
-    headers: Headers;
-  };
-
-export type internalQuoteComputerResponse =
-  | internalQuoteComputerResponseSuccess
-  | internalQuoteComputerResponseError;
-
-export const getInternalQuoteComputerUrl = (
-  params: InternalQuoteComputerParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/internal/computers/quote?${stringifiedParams}`
-    : `/internal/computers/quote`;
-};
-
-export const internalQuoteComputer = async (
-  params: InternalQuoteComputerParams,
-  options?: RequestInit
-): Promise<internalQuoteComputerResponse> => {
-  const res = await fetch(getInternalQuoteComputerUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: internalQuoteComputerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as internalQuoteComputerResponse;
-};
-
-/**
- * @summary Read computer status for an authenticated internal caller.
- */
-export type internalGetComputerResponse200 = {
-  data: ComputerStatus;
-  status: 200;
-};
-
-export type internalGetComputerResponseSuccess =
-  internalGetComputerResponse200 & {
-    headers: Headers;
-  };
-
-export type internalGetComputerResponse = internalGetComputerResponseSuccess;
-
-export const getInternalGetComputerUrl = (
-  computerId: string,
-  params: InternalGetComputerParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/internal/computers/${computerId}?${stringifiedParams}`
-    : `/internal/computers/${computerId}`;
-};
-
-export const internalGetComputer = async (
-  computerId: string,
-  params: InternalGetComputerParams,
-  options?: RequestInit
-): Promise<internalGetComputerResponse> => {
-  const res = await fetch(getInternalGetComputerUrl(computerId, params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: internalGetComputerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as internalGetComputerResponse;
-};
-
-/**
- * @summary Rebuild a running or stopped computer's root disk from another image,
-keeping its data disk.
- */
-export type internalUpdateComputerImageResponse200 = {
-  data: ImageUpdate;
-  status: 200;
-};
-
-export type internalUpdateComputerImageResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type internalUpdateComputerImageResponseSuccess =
-  internalUpdateComputerImageResponse200 & {
-    headers: Headers;
-  };
-export type internalUpdateComputerImageResponseError =
-  internalUpdateComputerImageResponse409 & {
-    headers: Headers;
-  };
-
-export type internalUpdateComputerImageResponse =
-  | internalUpdateComputerImageResponseSuccess
-  | internalUpdateComputerImageResponseError;
-
-export const getInternalUpdateComputerImageUrl = (computerId: string) => {
-  return `/internal/computers/${computerId}/image`;
-};
-
-export const internalUpdateComputerImage = async (
-  computerId: string,
-  internalUpdateImageBody: InternalUpdateImageBody,
-  options?: RequestInit
-): Promise<internalUpdateComputerImageResponse> => {
-  const res = await fetch(getInternalUpdateComputerImageUrl(computerId), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(internalUpdateImageBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: internalUpdateComputerImageResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as internalUpdateComputerImageResponse;
-};
-
-/**
- * @summary Update a computer back to the image it ran before its last update.
- */
-export type internalRollbackComputerImageResponse200 = {
-  data: ImageUpdate;
-  status: 200;
-};
-
-export type internalRollbackComputerImageResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type internalRollbackComputerImageResponseSuccess =
-  internalRollbackComputerImageResponse200 & {
-    headers: Headers;
-  };
-export type internalRollbackComputerImageResponseError =
-  internalRollbackComputerImageResponse409 & {
-    headers: Headers;
-  };
-
-export type internalRollbackComputerImageResponse =
-  | internalRollbackComputerImageResponseSuccess
-  | internalRollbackComputerImageResponseError;
-
-export const getInternalRollbackComputerImageUrl = (
-  computerId: string,
-  params: InternalRollbackComputerImageParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/internal/computers/${computerId}/image/rollback?${stringifiedParams}`
-    : `/internal/computers/${computerId}/image/rollback`;
-};
-
-export const internalRollbackComputerImage = async (
-  computerId: string,
-  params: InternalRollbackComputerImageParams,
-  options?: RequestInit
-): Promise<internalRollbackComputerImageResponse> => {
-  const res = await fetch(
-    getInternalRollbackComputerImageUrl(computerId, params),
-    {
-      ...options,
-      method: 'POST',
-    }
-  );
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: internalRollbackComputerImageResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as internalRollbackComputerImageResponse;
-};
-
-/**
  * @summary Generates a macro-api-token using the user's macro-access-token
 You can either have your access token in the cookies or in the request
 headers
@@ -5162,11 +4856,17 @@ export const listTeamComputers = async (
 };
 
 /**
- * @summary Buy a computer for the team, billed on the team subscription.
+ * @summary Buy a computer for the team, billed on the team subscription. An error
+means nothing was charged; 202 means the charge is still being confirmed.
  */
 export type purchaseTeamComputerResponse200 = {
   data: Purchased;
   status: 200;
+};
+
+export type purchaseTeamComputerResponse202 = {
+  data: Purchased;
+  status: 202;
 };
 
 export type purchaseTeamComputerResponse402 = {
@@ -5184,10 +4884,12 @@ export type purchaseTeamComputerResponse503 = {
   status: 503;
 };
 
-export type purchaseTeamComputerResponseSuccess =
-  purchaseTeamComputerResponse200 & {
-    headers: Headers;
-  };
+export type purchaseTeamComputerResponseSuccess = (
+  | purchaseTeamComputerResponse200
+  | purchaseTeamComputerResponse202
+) & {
+  headers: Headers;
+};
 export type purchaseTeamComputerResponseError = (
   | purchaseTeamComputerResponse402
   | purchaseTeamComputerResponse409
@@ -5600,6 +5302,66 @@ export const releaseTeamComputer = async (
     status: res.status,
     headers: res.headers,
   } as releaseTeamComputerResponse;
+};
+
+/**
+ * @summary Keep a computer whose billing ended, during retention: re-adds its
+billing item (the rest of the period is invoiced now) and keeps the
+stopped computer and its disk.
+ */
+export type restoreTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type restoreTeamComputerResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type restoreTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type restoreTeamComputerResponseSuccess =
+  restoreTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type restoreTeamComputerResponseError = (
+  | restoreTeamComputerResponse402
+  | restoreTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type restoreTeamComputerResponse =
+  | restoreTeamComputerResponseSuccess
+  | restoreTeamComputerResponseError;
+
+export const getRestoreTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/restore`;
+};
+
+export const restoreTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<restoreTeamComputerResponse> => {
+  const res = await fetch(getRestoreTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: restoreTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as restoreTeamComputerResponse;
 };
 
 /**

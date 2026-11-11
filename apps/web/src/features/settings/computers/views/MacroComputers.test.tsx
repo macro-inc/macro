@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   offers: [] as SizeOffer[],
   computers: [] as ComputerStatus[],
   release: vi.fn(),
+  restore: vi.fn(),
+  confirm: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
   notify: vi.fn(),
@@ -41,6 +43,10 @@ vi.mock('@queries/computers/computers', () => ({
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
   useUndoCancelComputerMutation: () => ({ isPending: false }),
+  useRestoreComputerMutation: () => ({
+    isPending: false,
+    mutateAsync: mocks.restore,
+  }),
   useReleaseComputerMutation: () => ({
     isPending: false,
     mutateAsync: mocks.release,
@@ -115,6 +121,11 @@ vi.mock('@queries/team/teams', () => ({
   useIsTeamOwner: () => () => true,
 }));
 
+vi.mock('@ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui')>()),
+  confirmDialog: mocks.confirm,
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: mocks.toastSuccess, failure: mocks.toastFailure },
 }));
@@ -180,10 +191,13 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   mocks.purchase
     .mockRejectedValueOnce(
       new ThrownResultError([
-        { code: 'SOLD_OUT', message: 'That size just sold out.' },
+        {
+          code: 'PURCHASE_CONFLICT',
+          message: 'That size just sold out.',
+        },
       ])
     )
-    .mockResolvedValueOnce({ computerId: 'computer-1' });
+    .mockResolvedValueOnce({ computerId: 'computer-1', state: 'confirming' });
   mocks.notify.mockResolvedValue({});
 
   render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
@@ -206,6 +220,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     'That size just sold out.'
   );
   expect(mocks.purchase).toHaveBeenNthCalledWith(1, {
+    purchaseKey: expect.any(String),
     size: 'large',
     name: "Maya's Agent Box",
   });
@@ -214,18 +229,55 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     target: { value: '  Build machine  ' },
   });
   fireEvent.click(buyButton);
-  await waitFor(() =>
-    expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      'Computer purchased. Provisioning now.'
-    )
-  );
+  await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledOnce());
+  // The retry reuses the dialog's key, so it can never charge twice.
   expect(mocks.purchase).toHaveBeenNthCalledWith(2, {
+    purchaseKey: mocks.purchase.mock.calls[0][0].purchaseKey,
     size: 'large',
     name: 'Build machine',
   });
 });
 
-it('removes a failed payment with the stored confirmation name and allows retry after an error', async () => {
+it('offers Restore instead of Turn on for a released computer still kept, and confirms before billing again', async () => {
+  const kept: ComputerStatus = {
+    id: 'computer-1',
+    name: 'Build machine',
+    size: 'standard',
+    vcpus: 4,
+    memoryGib: 8,
+    diskGib: 100,
+    catalogEntry: 'standard@2026-11',
+    status: 'stopped',
+    billing: 'ended',
+    poweredOn: false,
+    agentCount: 0,
+    canUndoCancel: false,
+    canRestore: true,
+    retainedUntil: '2026-12-01T00:00:00Z',
+    purchasedBy: 'viewer',
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+  mocks.computers = [kept];
+  mocks.confirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+  mocks.restore.mockResolvedValueOnce({ ...kept, billing: 'active' });
+
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+
+  expect(
+    screen.queryByRole('menuitem', { name: 'Cancel at period end' })
+  ).toBeNull();
+  expect(screen.queryByRole('menuitem', { name: 'Turn on' })).toBeNull();
+  const restore = screen.getByRole('menuitem', { name: 'Restore' });
+  fireEvent.click(restore);
+  await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce());
+  expect(mocks.restore).not.toHaveBeenCalled();
+
+  fireEvent.click(restore);
+  await waitFor(() => expect(mocks.restore).toHaveBeenCalledWith('computer-1'));
+  expect(screen.getByRole('menuitem', { name: 'Release now' })).toBeTruthy();
+});
+
+it('offers no power, cancel or release while a purchase is being confirmed', () => {
   mocks.computers = [
     {
       id: 'computer-1',
@@ -235,41 +287,21 @@ it('removes a failed payment with the stored confirmation name and allows retry 
       memoryGib: 8,
       diskGib: 100,
       catalogEntry: 'standard@2026-11',
-      status: 'payment_failed',
-      payment: 'unbilled',
+      status: 'purchasing',
+      billing: 'purchasing',
+      setup: { step: 'creating', position: 1, total: 4 },
       poweredOn: false,
       agentCount: 0,
-      canUndoCancel: true,
+      canUndoCancel: false,
+      canRestore: false,
       purchasedBy: 'viewer',
       createdAt: '2026-01-01T00:00:00Z',
     },
   ];
-  mocks.release
-    .mockRejectedValueOnce(new Error('Request failed'))
-    .mockResolvedValueOnce({});
 
   render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
 
-  const remove = screen.getByRole('menuitem', { name: 'Remove' });
-  fireEvent.click(remove);
-  await waitFor(() =>
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      "Couldn't remove the computer. Try again."
-    )
-  );
-  expect(mocks.release).toHaveBeenNthCalledWith(1, {
-    computerId: 'computer-1',
-    confirmName: 'Build machine',
-  });
-
-  fireEvent.click(remove);
-  await waitFor(() =>
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Build machine removed')
-  );
-  expect(mocks.release).toHaveBeenNthCalledWith(2, {
-    computerId: 'computer-1',
-    confirmName: 'Build machine',
-  });
+  expect(screen.queryAllByRole('menuitem')).toEqual([]);
 });
 
 it('keeps existing computers and release available with rollout off while hiding purchase', async () => {
@@ -284,10 +316,11 @@ it('keeps existing computers and release available with rollout off while hiding
       diskGib: 100,
       catalogEntry: 'standard@2026-11',
       status: 'ready',
-      payment: 'paid',
+      billing: 'active',
       poweredOn: true,
       agentCount: 0,
-      canUndoCancel: true,
+      canUndoCancel: false,
+      canRestore: false,
       purchasedBy: 'viewer',
       createdAt: '2026-01-01T00:00:00Z',
     },
@@ -312,6 +345,7 @@ it('keeps a zero-price offer included through review and purchase', async () => 
   fireEvent.click(screen.getByRole('button', { name: 'Buy' }));
   await waitFor(() =>
     expect(mocks.purchase).toHaveBeenCalledWith({
+      purchaseKey: expect.any(String),
       size: 'standard',
       name: "Maya's Agent Box",
     })
@@ -345,10 +379,11 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
     diskGib: 100,
     catalogEntry: 'standard@2026-11',
     status: 'ready',
-    payment: 'paid',
+    billing: 'active',
     poweredOn: true,
     agentCount: 0,
-    canUndoCancel: true,
+    canUndoCancel: false,
+    canRestore: false,
     purchasedBy: 'viewer',
     createdAt: '2026-01-01T00:00:00Z',
     harnessId: 'harness-build',

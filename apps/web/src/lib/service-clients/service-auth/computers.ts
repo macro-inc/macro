@@ -3,7 +3,10 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ResultError } from '@core/util/result';
 import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { match } from 'ts-pattern';
-import { getCompleteTeamComputerSetupUrl } from './generated/client';
+import {
+  getCompleteTeamComputerSetupUrl,
+  getRestoreTeamComputerUrl,
+} from './generated/client';
 
 import type {
   ComputerSize,
@@ -27,25 +30,30 @@ export type {
 } from './generated/schemas';
 
 type PurchaseComputerErrorCode =
-  | 'SOLD_OUT'
+  | 'PURCHASE_CONFLICT'
   | 'PAYMENT_FAILED'
-  | 'NOT_PURCHASABLE';
+  | 'NOT_PURCHASABLE'
+  | 'SALES_UNAVAILABLE';
 
 type ReleaseComputerErrorCode = 'NAME_MISMATCH';
+
+type RestoreComputerErrorCode = 'PAYMENT_FAILED' | 'NOT_RESTORABLE';
 
 const base = `${SERVER_HOSTS['auth-service']}/team/computers`;
 
 const computerUrl = (id: string, action: string) =>
   `${base}/${encodeURIComponent(id)}/${action}`;
 
+/** 409 is a sold-out size, or a purchase key that belongs to another purchase. */
 async function purchaseError(
   response: Response
 ): Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>> {
   return match(response.status)
     .returnType<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>>()
     .with(409, () => ({
-      code: 'SOLD_OUT',
-      message: 'That size just sold out.',
+      code: 'PURCHASE_CONFLICT',
+      message:
+        'That size just sold out, or an earlier attempt is still being confirmed.',
     }))
     .with(402, () => ({
       code: 'PAYMENT_FAILED',
@@ -55,6 +63,26 @@ async function purchaseError(
       code: 'NOT_PURCHASABLE',
       message:
         "Your team's subscription can't add a computer. Check Billing, or contact support.",
+    }))
+    .with(503, () => ({
+      code: 'SALES_UNAVAILABLE',
+      message: "Computers can't be bought right now. Try again later.",
+    }))
+    .otherwise(() => statusError(response.status));
+}
+
+async function restoreError(
+  response: Response
+): Promise<ResultError<BaseFetchErrorCode | RestoreComputerErrorCode>> {
+  return match(response.status)
+    .returnType<ResultError<BaseFetchErrorCode | RestoreComputerErrorCode>>()
+    .with(402, () => ({
+      code: 'PAYMENT_FAILED',
+      message: "Your team's payment method was declined.",
+    }))
+    .with(409, () => ({
+      code: 'NOT_RESTORABLE',
+      message: "This computer can't be restored anymore.",
     }))
     .otherwise(() => statusError(response.status));
 }
@@ -103,6 +131,12 @@ export const computersClient = {
         body: JSON.stringify({ confirmName } satisfies ReleaseBody),
         errorResponseHandler: releaseError,
       }
+    ),
+  /** Bills a released computer again while its disk is still retained. */
+  restore: (id: string) =>
+    fetchWithToken<ComputerStatus, RestoreComputerErrorCode>(
+      `${SERVER_HOSTS['auth-service']}${getRestoreTeamComputerUrl(encodeURIComponent(id))}`,
+      { method: 'POST', errorResponseHandler: restoreError }
     ),
   completeSetup: (id: string) =>
     fetchWithToken<ComputerStatus>(

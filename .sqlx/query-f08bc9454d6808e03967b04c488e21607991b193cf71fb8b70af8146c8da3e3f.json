@@ -6,7 +6,22 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
+        {
+          "Custom": {
+            "name": "computer_timer_kind",
+            "kind": {
+              "Enum": [
+                "macrod_missing",
+                "restart_due",
+                "power_on_retry",
+                "capacity_changed",
+                "billing_ends",
+                "past_due_grace",
+                "retention_expired"
+              ]
+            }
+          }
+        },
         "Timestamptz"
       ]
     },

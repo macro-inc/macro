@@ -39,6 +39,36 @@ fn config_values() -> serde_json::Value {
 }
 
 #[test]
+fn computer_retention_and_past_due_grace_default_to_two_weeks_and_a_week_and_refuse_zero() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.computer_billing_policy().unwrap(),
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(14, 7).unwrap()
+    );
+    for key in ["COMPUTER_RETENTION_DAYS", "COMPUTER_PAST_DUE_GRACE_DAYS"] {
+        let mut missing = config_values();
+        missing.as_object_mut().unwrap().remove(key);
+        let config: Config = serde_json::from_value(missing).unwrap();
+        assert_eq!(
+            config.computer_billing_policy().unwrap(),
+            hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(14, 7).unwrap(),
+            "{key} defaults"
+        );
+        let mut zero = config_values();
+        zero[key] = serde_json::json!(0);
+        let config: Config = serde_json::from_value(zero).unwrap();
+        assert!(
+            config
+                .computer_billing_policy()
+                .unwrap_err()
+                .to_string()
+                .contains(key),
+            "{key}"
+        );
+    }
+}
+
+#[test]
 fn ai_pricing_is_mandatory_and_validated() {
     use ai_billing::PlanTier;
 

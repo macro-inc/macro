@@ -79,6 +79,9 @@ pub struct TeamAgents {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateTeamAgent {
+    /// One key per Invite dialog, reused when the invite is retried, so a
+    /// retry never buys a second computer.
+    pub purchase_key: String,
     /// Display name.
     pub name: String,
     /// What the agent is responsible for. Seeds its workspace.
@@ -151,6 +154,8 @@ pub struct AgentRepo {
 /// A computer to buy for an agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerPurchase {
+    /// The buyer's key for this purchase.
+    pub purchase_key: String,
     /// The team that pays.
     pub team_id: Uuid,
     /// The admin buying it.
@@ -166,7 +171,9 @@ pub struct ComputerPurchase {
 /// The coarse status of an agent's computer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComputerState {
-    /// Being bought, created, booted or connected for the first time.
+    /// The charge is being confirmed.
+    Purchasing,
+    /// Being created, booted or connected for the first time.
     SettingUp,
     /// Up.
     Ready,
@@ -181,7 +188,7 @@ pub enum ComputerState {
 impl From<ComputerState> for TeamAgentStatus {
     fn from(state: ComputerState) -> Self {
         match state {
-            ComputerState::SettingUp => Self::Provisioning,
+            ComputerState::Purchasing | ComputerState::SettingUp => Self::Provisioning,
             ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,
@@ -199,6 +206,9 @@ pub enum TeamAgentError {
     /// The job description or personality is empty or too long.
     #[error("the job description and personality must be 1 to {MAX_PROFILE_CHARS} characters")]
     InvalidProfile,
+    /// The purchase key is empty, too long or not printable ASCII.
+    #[error("the purchase key must be 1 to 128 printable ASCII characters")]
+    InvalidPurchaseKey,
     /// The avatar is not an HTTPS URL.
     #[error("the avatar must be an https URL")]
     InvalidAvatar,

@@ -21,6 +21,7 @@ fn receipt<Permission: RequiredPermission>() -> EntityAccessReceipt<Permission> 
 
 fn request() -> CreateTeamAgent {
     CreateTeamAgent {
+        purchase_key: "invite-1".to_owned(),
         name: "  Sam Rivera ".to_owned(),
         job_description: "Runs vendor relations.".to_owned(),
         personality: "Dry, direct, kind.".to_owned(),

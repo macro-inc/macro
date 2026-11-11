@@ -158,14 +158,10 @@ export const authBacklog = [
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
   'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
-  'internalGetComputer', // Internal computer provisioning plumbing.
-  'internalPurchaseComputer', // Internal computer provisioning plumbing.
-  'internalQuoteComputer', // Internal computer provisioning plumbing.
-  'internalRollbackComputerImage', // Operator image rollback, internal key only.
-  'internalUpdateComputerImage', // Operator image update, internal key only.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
+  'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
   'quoteTeamComputer', // Computer checkout belongs to the app.
   'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.

@@ -16,10 +16,13 @@ use crate::domain::enrollment::{
 };
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::GuestImage;
-use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
+use crate::domain::lifecycle::{
+    Billing as ComputerBilling, BillingPolicy, Effect, EffectWorker, Event, HostId, Rejected,
+    SubscriptionItemId, TimerKind,
+};
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration, NewComputer,
-    Quote, SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration,
+    NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -91,17 +94,26 @@ pub enum ReserveError<Err> {
     Storage(Err),
 }
 
-/// Computers, hosts, the effect outbox and timers, in one store so an event
-/// and its effects commit together.
+/// What applying an event to a stored computer did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Applied {
+    /// The transition ran; the computer as stored afterwards.
+    Changed(Box<Computer>),
+    /// The lifecycle refused the request; nothing changed.
+    Rejected(Rejected),
+}
+
+/// Computers, reservations, hosts, the effect outbox and timers, in one
+/// store so an event and its effects commit together.
 pub trait ComputerRepo: Send + Sync + 'static {
     /// Adapter failure type.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Serializes payment resolution through its lifecycle write across replicas.
-    type PaymentGuard: Send;
-
     /// Serializes fleet enrollment with the harness claim transaction.
     type EnrollmentGuard: Send;
+
+    /// The deployment's retention and past-due grace, used by every transition.
+    fn policy(&self) -> BillingPolicy;
 
     /// Hold the enrollment guard through guest creation and claim checks.
     fn lock_enrollment(
@@ -109,30 +121,62 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Self::EnrollmentGuard, Self::Err>> + Send;
 
-    /// Hold the payment guard through billing resolution.
-    fn lock_payment(
-        &self,
-        computer_id: ComputerId,
-    ) -> impl Future<Output = Result<Self::PaymentGuard, Self::Err>> + Send;
-
-    /// Hold the computer's units on the host with the most sold capacity
-    /// left, and insert it in [`crate::domain::lifecycle::Phase::PendingPayment`]
-    /// with its delayed ConfirmPayment billing effect, in one transaction.
+    /// Under the host lock: return what `reservation.purchase_key` already
+    /// led to, or hold the purchase's units on the host with the most sold
+    /// capacity left (sold capacity minus live computers and unexpired
+    /// reservations) until `expires_at`.
     fn reserve(
         &self,
-        computer: NewComputer,
+        reservation: NewReservation,
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Computer, ReserveError<Self::Err>>> + Send;
+        expires_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Reserved, ReserveError<Self::Err>>> + Send;
+
+    /// In one transaction: delete the reservation, insert its computer with
+    /// `billing`, starting provisioning, and enqueue its creation. `None`
+    /// when the reservation is gone (another worker converted or deleted it).
+    fn convert_reservation(
+        &self,
+        reservation_id: ComputerId,
+        billing: ComputerBilling,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
+
+    /// Delete a reservation whose charge did not happen; false when it was already gone.
+    fn delete_reservation(
+        &self,
+        reservation_id: ComputerId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// One reservation.
+    fn reservation(
+        &self,
+        reservation_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<Reservation>, Self::Err>> + Send;
+
+    /// The team's reservations, oldest first.
+    fn team_reservations(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<Reservation>, Self::Err>> + Send;
+
+    /// Reservations created at or before `created_before`, oldest first, for the confirm worker.
+    fn reservations_created_before(
+        &self,
+        created_before: DateTime<Utc>,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<Reservation>, Self::Err>> + Send;
 
     /// Lock the computer and its host, run the lifecycle transition, and
     /// store the new state, its effects and its timers in one transaction.
-    /// `None` when the computer does not exist; quarantine rejects events without changing work.
+    /// `None` when the computer does not exist; quarantine rejects events
+    /// without changing work.
     fn apply(
         &self,
         computer_id: ComputerId,
         event: Event,
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Applied>, Self::Err>> + Send;
 
     /// Read a computer by identity, preserving quarantined rows as present.
     fn get(
@@ -173,8 +217,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_ids: &[ComputerId],
     ) -> impl Future<Output = Result<HashMap<ComputerId, u32>, Self::Err>> + Send;
 
-    /// Record the image the guest's root disk was built from; a different
-    /// image moves the current one to `previous_image`, the rollback target.
+    /// Record the image the guest was created from.
     fn record_image(
         &self,
         computer_id: ComputerId,
@@ -277,10 +320,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Sizes that no host can sell.
+    /// Sizes that no host can sell at `now`.
     fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
+        now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 
     /// Ask to hear when `size` can be bought again.
@@ -311,15 +355,38 @@ pub enum BillingError {
     /// The subscription interval has no computer price.
     #[error("computers are not sold on {0:?} billing")]
     IntervalNotSold(BillingInterval),
-    /// Purchase payment was refused.
+    /// The payment was refused; nothing was charged.
     #[error("the payment did not go through")]
     PaymentFailed,
-    /// The billing provider failed.
+    /// The billing provider failed; the change's outcome is unknown.
     #[error("billing provider error: {0:?}")]
     Provider(rootcause::Report),
 }
 
-/// The team subscription, where computers are billed as items.
+impl BillingError {
+    /// Whether the change definitely did not happen (as opposed to an unknown outcome).
+    pub fn is_definite(&self) -> bool {
+        match self {
+            Self::NotAvailable
+            | Self::NoSubscription
+            | Self::IntervalNotSold(_)
+            | Self::PaymentFailed => true,
+            Self::Provider(_) => false,
+        }
+    }
+}
+
+/// How an added item bills the part of the period already under way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemCharge {
+    /// Invoice the prorated rest of the period now (a purchase or a restore).
+    Prorated,
+    /// No proration: the period is already paid (undoing a cancellation).
+    NoProration,
+}
+
+/// The team subscription, where each computer is billed as its own item
+/// carrying its computer id in metadata.
 pub trait Billing: Send + Sync + 'static {
     /// Whether this environment sells computers, before reserving capacity.
     fn sales_available(&self) -> bool;
@@ -331,22 +398,43 @@ pub trait Billing: Send + Sync + 'static {
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
 
-    /// Add one computer at its saved `price_id` plus `extra_items` to the team subscription
-    /// in ONE update, invoiced now with proration. `idempotency_key` makes a
-    /// retried call a no-op.
+    /// Add the computer's own item at its saved `price_id`, plus
+    /// `extra_items`, in ONE update that fails rather than leaving an unpaid
+    /// invoice. `idempotency_key` makes a retried call a no-op returning the
+    /// same item.
     fn add_computer(
         &self,
         team_id: Uuid,
+        computer_id: ComputerId,
         price_id: &stripe::PriceId,
         extra_items: &[SubscriptionItem],
+        charge: ItemCharge,
         idempotency_key: &str,
-    ) -> impl Future<Output = Result<(), BillingError>> + Send;
+    ) -> impl Future<Output = Result<SubscriptionItemId, BillingError>> + Send;
 
-    /// Remove one computer at its saved `price_id`, without a refund.
+    /// Give up on an add whose outcome never became known: no later replay
+    /// may send it. Returns the computer's item if the add (or another)
+    /// put one on the subscription, `None` if nothing was charged.
+    fn settle_computer_add(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<SubscriptionItemId>, BillingError>> + Send;
+
+    /// The item carrying `computer_id`, if the subscription has one.
+    fn computer_item(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<SubscriptionItemId>, BillingError>> + Send;
+
+    /// Remove one computer's item without proration (no refund). An item
+    /// that is already gone counts as removed.
     fn remove_computer(
         &self,
         team_id: Uuid,
-        price_id: &stripe::PriceId,
+        subscription_item: &SubscriptionItemId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
@@ -380,16 +468,6 @@ pub trait Fleet: Send + Sync + 'static {
         enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> impl Future<Output = Result<GuestImage, Self::Err>> + Send;
-
-    /// Stop the guest, rebuild its root disk from `image` keeping its data
-    /// disk and enrollment, then start it when `start`. A guest already on
-    /// `image` is only brought to the requested power state.
-    fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Start the guest if stopped.
     fn start(&self, computer_id: ComputerId) -> impl Future<Output = Result<(), Self::Err>> + Send;

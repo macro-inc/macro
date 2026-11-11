@@ -17,6 +17,11 @@ use serde::{Deserialize, Serialize};
     strum::EnumIter,
 )]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "computer_size", rename_all = "snake_case")
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ComputerSize {

@@ -712,8 +712,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
   management actions available with rollout off. `useTeamComputers` loads by
   team membership and exposes `canPurchase` separately. Members read; admins
-  buy and manage. Show the exact price before buying, and release only after
-  the computer's name is typed. See the
+  buy and manage. Show the exact price before buying, send one `purchaseKey`
+  per Buy dialog on every retry (202 `confirming` is success), offer no power,
+  billing or release while `purchasing`, confirm Restore before billing again,
+  and release only after the computer's name is typed. See the
   [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the

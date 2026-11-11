@@ -67,6 +67,10 @@ macro_env_var::maybe_env_vars!(
     pub struct EnableNonUserOwners;
 );
 
+/// The shortest idle timeout a deployment may set; see
+/// [`Config::agent_session_idle_timeout`].
+pub const MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS: u64 = 30;
+
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
 fn default_pipedream_environment() -> String {
@@ -114,6 +118,11 @@ pub struct Config {
     /// replicas use the independent for_warming lifecycle marker.
     #[macro_config_default(false)]
     pub hide_agent_dm_sessions: bool,
+    /// Seconds a session's command worker waits for its next command before
+    /// it releases the quiet session from memory and exits. Lowered only to
+    /// exercise the release end to end.
+    #[macro_config_default(900)]
+    pub agent_session_idle_timeout_secs: u64,
     /// Backend feature flags, evaluated using the authenticated session owner.
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
@@ -150,6 +159,15 @@ pub struct Config {
     pub environment: Environment,
     /// Optional physical fleet selection; absence attaches no computer fleet.
     pub computers_fleet: Option<ComputerFleetKind>,
+    /// Days a Macro computer whose billing ended keeps its disk before it is
+    /// destroyed; the timers the fleet operator fires use it. The same value
+    /// authentication_service reads.
+    #[macro_config_default(14)]
+    pub computer_retention_days: u32,
+    /// Days a Macro computer keeps running on a past-due subscription before
+    /// it is turned off.
+    #[macro_config_default(7)]
+    pub computer_past_due_grace_days: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -307,6 +325,24 @@ impl Config {
             .filter(|value| !value.trim().is_empty())
     }
 
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits. Shorter than
+    /// [`MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS`] is refused rather than
+    /// clamped: a session could then release between any two of its commands
+    /// and every prompt would rebuild it from the log.
+    pub fn agent_session_idle_timeout(&self) -> anyhow::Result<std::time::Duration> {
+        if self.agent_session_idle_timeout_secs < MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS {
+            anyhow::bail!(
+                "AGENT_SESSION_IDLE_TIMEOUT_SECS must be at least \
+                 {MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS} seconds, got {}",
+                self.agent_session_idle_timeout_secs
+            );
+        }
+        Ok(std::time::Duration::from_secs(
+            self.agent_session_idle_timeout_secs,
+        ))
+    }
+
     /// The parsed `ENABLE_NON_USER_OWNERS` gate. Missing is disabled.
     pub fn non_user_owners(&self) -> anyhow::Result<NonUserOwners> {
         NonUserOwners::from_config_value(self.enable_non_user_owners.value())
@@ -407,6 +443,17 @@ impl Config {
             ));
         }
         Ok(())
+    }
+
+    /// Macro computers' retention and past-due grace.
+    pub fn computer_billing_policy(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::lifecycle::BillingPolicy> {
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(
+            self.computer_retention_days,
+            self.computer_past_due_grace_days,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
     }
 
     /// Load only the required settings for the explicitly selected fleet.

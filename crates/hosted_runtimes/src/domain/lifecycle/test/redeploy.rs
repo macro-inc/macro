@@ -2,18 +2,19 @@ use super::*;
 
 #[test]
 fn missing_macrod_uses_fleet_status_and_only_restarts_the_daemon() {
-    for phase in [Phase::Running { host: HOST }, Phase::Booting { host: HOST }] {
+    for phase in [Phase::Running, Phase::Booting] {
         for observed in [
             Some(InstanceStatus::Running),
             Some(InstanceStatus::Stopped),
             None,
         ] {
             for misses in 0..=MAX_MACROD_MISSES {
-                let mut state = ComputerState::reserved(HOST, now());
+                let mut state = billed(Phase::Stopped);
                 state.phase = phase.clone();
-                state.payment = PaymentOutcome::Paid;
                 state.macrod_misses = misses;
                 let context = Context {
+                    host: HOST,
+                    policy: policy(),
                     now: now(),
                     host_has_room: true,
                     enrollment_generation: Default::default(),
@@ -24,7 +25,8 @@ fn missing_macrod_uses_fleet_status_and_only_restarts_the_daemon() {
                         instance_status: observed,
                     },
                     context,
-                );
+                )
+                .unwrap();
                 if observed == Some(InstanceStatus::Running) {
                     assert_eq!(next.phase, phase);
                     assert!(next.recent_crashes.is_empty());
@@ -42,13 +44,22 @@ fn missing_macrod_uses_fleet_status_and_only_restarts_the_daemon() {
                     }
                     assert_eq!(effects, expected);
                 } else {
-                    assert_eq!(next.phase, Phase::Restarting { host: HOST });
+                    assert_eq!(
+                        next.phase,
+                        Phase::Crashed {
+                            restarts: 1,
+                            retry: Some(Retry {
+                                attempt: 0,
+                                next_at: now() + Duration::seconds(30),
+                            }),
+                        }
+                    );
                     assert_eq!(next.recent_crashes, vec![now()]);
                     assert_eq!(
                         effects,
                         vec![Effect::ScheduleTimer {
                             kind: TimerKind::RestartDue,
-                            at: now() + RESTART_BACKOFF
+                            at: now() + Duration::seconds(30)
                         }]
                     );
                 }
@@ -59,44 +70,45 @@ fn missing_macrod_uses_fleet_status_and_only_restarts_the_daemon() {
 
 #[test]
 fn reconnect_resets_misses_and_stale_timer_cannot_restart_macrod() {
-    let mut state = ComputerState::reserved(HOST, now());
-    state.phase = Phase::Booting { host: HOST };
+    let mut state = billed(Phase::Stopped);
+    state.phase = Phase::Booting;
     state.macrod_misses = MAX_MACROD_MISSES;
     let context = Context {
+        host: HOST,
+        policy: policy(),
         now: now(),
         host_has_room: true,
         enrollment_generation: Default::default(),
     };
-    let (connected, _) = transition(&state, &Event::MacrodConnected, context);
+    let (connected, _) = transition(&state, &Event::MacrodConnected, context).unwrap();
     assert_eq!(connected.macrod_misses, 0);
-    assert_eq!(connected.phase, Phase::Running { host: HOST });
+    assert_eq!(connected.phase, Phase::Running);
     let (next, effects) = transition(
         &connected,
         &Event::MacrodMissing {
             instance_status: Some(InstanceStatus::Running),
         },
         context,
-    );
+    )
+    .unwrap();
     assert_eq!(next, connected);
     assert!(effects.is_empty());
 }
 
 #[test]
 fn early_macrod_connection_survives_replayed_creation_completion() {
-    let mut state = ComputerState::reserved(HOST, now());
-    state.phase = Phase::Provisioning {
-        host: HOST,
-        start: true,
-    };
-    state.payment = PaymentOutcome::Paid;
+    let mut state = billed(Phase::Stopped);
+    state.phase = Phase::Provisioning { start: true };
     let context = Context {
+        host: HOST,
+        policy: policy(),
         now: now(),
         host_has_room: true,
         enrollment_generation: Default::default(),
     };
-    let (connected, _) = transition(&state, &Event::MacrodConnected, context);
-    let (completed, effects) = transition(&connected, &Event::InstanceStarted, context);
-    assert_eq!(completed.phase, Phase::Running { host: HOST });
+    let (connected, _) = transition(&state, &Event::MacrodConnected, context).unwrap();
+    let (completed, effects) = transition(&connected, &Event::InstanceStarted, context).unwrap();
+    assert_eq!(completed.phase, Phase::Running);
     assert!(completed.macrod_connected);
     assert!(effects.is_empty());
 }

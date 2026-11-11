@@ -69,6 +69,7 @@ impl IntoResponse for TeamAgentError {
             Self::InvalidName
             | Self::InvalidProfile
             | Self::InvalidAvatar
+            | Self::InvalidPurchaseKey
             | Self::InvalidAgentId => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::NotEnabled => StatusCode::FORBIDDEN,

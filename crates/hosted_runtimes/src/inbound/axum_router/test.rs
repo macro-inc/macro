@@ -175,13 +175,13 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
         };
         let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
         let internal_purchase = serde_json::json!({"billing": {"kind": "stripe"}, "teamId": TEAM,
-            "createdBy": "macro|admin@example.com", "size": "standard"})
+            "createdBy": "macro|admin@example.com", "size": "standard", "purchaseKey": "buy-dialog-1"})
         .to_string();
         for (method, path, body) in [
             (
                 Method::POST,
                 "/team/computers".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
+                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
             ),
             (
                 Method::GET,
@@ -202,7 +202,7 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             (
                 Method::POST,
                 "/team/computers/notify".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
+                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
             ),
             (
                 Method::POST,
@@ -242,16 +242,6 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             (
                 Method::GET,
                 format!("/internal/computers/{id}?teamId={TEAM}"),
-                String::new(),
-            ),
-            (
-                Method::POST,
-                format!("/internal/computers/{id}/image"),
-                serde_json::json!({"teamId": TEAM, "image": "macro-box/2026-11-10"}).to_string(),
-            ),
-            (
-                Method::POST,
-                format!("/internal/computers/{id}/image/rollback?teamId={TEAM}"),
                 String::new(),
             ),
         ] {
@@ -302,7 +292,11 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
     };
     let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
     for (method, path, body) in [
-        (Method::POST, "/team/computers", r#"{"size":"standard"}"#),
+        (
+            Method::POST,
+            "/team/computers",
+            r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
+        ),
         (Method::GET, "/team/computers/quote?size=standard", ""),
         (Method::GET, "/team/computers/offers", ""),
     ] {
@@ -325,10 +319,8 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
         "/internal/computers".to_owned(),
         format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
         format!("/internal/computers/{id}?teamId={TEAM}"),
-        format!("/internal/computers/{id}/image"),
-        format!("/internal/computers/{id}/image/rollback?teamId={TEAM}"),
     ] {
-        let method = if path == "/internal/computers" || path.contains("/image") {
+        let method = if path == "/internal/computers" {
             Method::POST
         } else {
             Method::GET

@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PurchaseState } from './purchaseState';
 
 /**
  * Answer of a purchase.
@@ -11,4 +12,6 @@
 export interface Purchased {
   /** Computer this operation addresses. */
   computerId: string;
+  /** Whether the computer exists yet. */
+  state: PurchaseState;
 }

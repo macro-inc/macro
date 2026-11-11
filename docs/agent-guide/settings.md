@@ -829,10 +829,14 @@ purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progres
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
-`Claude: not signed in`; a shimmer while the mode loads). A pending cancellation
-adds `Cancels <date>`, or `Turns off <date>` once billing has stopped
-(`canUndoCancel` false). The list polls every 3 seconds while any computer is
-setting up, waiting for capacity, starting or stopping.
+`Claude: not signed in`; a shimmer while the mode loads). A purchase whose
+charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
+computer (1 of 3)`. Then the billing state: `Payment past due` while the team
+subscription is past due, `Cancels <date>` while a cancellation is pending
+(`billing: ending`), or `Kept until <date>` once billing has ended and the disk
+is retained (`billing: ended`). The list polls every 3 seconds while any
+computer is purchasing, setting up, waiting for capacity, starting or
+stopping.
 
 The row's one action is **Finish setup** while guided setup is incomplete
 (only for the buyer and the team owner), else **Sign in with Claude** when the
@@ -841,8 +845,13 @@ in order: **Share** and **Don't ask before acting** (the runtime's Share menu
 and permission bypass, for its owner); **Turn off** (confirm: agents on it stop
 until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 **Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
-period end** or **Undo cancel** (hidden once billing has stopped); and **Release
-now** last. Release asks for the computer's exact name and says how many agents
+period end**, **Undo cancel** while the cancellation is pending, or **Restore**
+once billing has ended and the disk is still retained (`canRestore`; confirm:
+it is billed again, prorated for the rest of the period, and stays powered
+off; **Turn on** is hidden until then, since the server refuses it); and
+**Release now** last. A `purchasing` computer has none of power, billing or
+release (the server answers 409 until it is confirmed). Release asks for the
+computer's exact name and says how many agents
 it deletes (`<N> agents on this computer will be deleted`, naming them when
 there are three or fewer). Team admins and owners get power, billing and
 release; whoever manages the runtime gets the Claude items.
@@ -862,11 +871,16 @@ To buy one as a team admin:
    **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
    name); the price breakdown; and under **Buy** the heads-up "Next you'll name
    your agent and sign in to Claude (Pro or Max) — have claude.ai handy."
-3. **Buy · <price>/month** (or **Buy** for an included offer) adds it.
-   Failures stay in the step: sold out (409), payment declined (402), or a
-   subscription that can't add computers (422). On success the toast reads
-   "Computer purchased. Provisioning now." and the modal moves straight to
-   **Agent**.
+3. **Buy · <price>/month** (or **Buy** for an included offer) adds it. Each
+   opening of the modal makes one `purchaseKey`, sent again on every retry, so
+   a retried Buy never charges twice. Any error means nothing was charged and
+   stays in the step for a retry: sold out or a key used for another purchase
+   (409), payment declined (402), a subscription that can't add computers
+   (422), or sales unavailable (503). A 200 (`state: ready`) toasts "Computer
+   purchased. Provisioning now."; a 202 (`state: confirming`) is a success too
+   and toasts "Confirming your payment. Setup starts once it goes through.",
+   with the computer listed as `purchasing`. Either way the modal moves
+   straight to **Agent**.
 
 While the computer provisions, a thin bar at the top of the modal follows the
 same three phases the row shows (Creating the computer → Starting up →

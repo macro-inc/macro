@@ -21,6 +21,6 @@ export const ComputerStatusKind = {
   stopping: 'stopping',
   stopped: 'stopped',
   failed: 'failed',
-  payment_failed: 'payment_failed',
+  purchasing: 'purchasing',
   released: 'released',
 } as const;

@@ -26,7 +26,17 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
+        {
+          "Custom": {
+            "name": "computer_effect_worker",
+            "kind": {
+              "Enum": [
+                "fleet",
+                "billing"
+              ]
+            }
+          }
+        },
         "Int8",
         "Timestamptz",
         "Timestamptz",

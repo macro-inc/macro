@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::service::billing::{ObservedItem, SubscriptionObserved, SubscriptionStatus};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::str::FromStr;
 
@@ -19,6 +20,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
     let first = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
+            purchase_key: key("buy-dialog-1"),
             team_id: TEAM,
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
@@ -26,7 +28,8 @@ async fn catalog_changes_only_apply_to_new_purchases() {
             extra_items: vec![],
         })
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
     let service = service.with_catalog(vec![CatalogEntry {
         id: CatalogEntryId::try_new("standard@2026-12".to_owned()).unwrap(),
         size: ComputerSize::Standard,
@@ -39,6 +42,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
     let second = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
+            purchase_key: key("buy-dialog-2"),
             team_id: TEAM,
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
@@ -46,7 +50,8 @@ async fn catalog_changes_only_apply_to_new_purchases() {
             extra_items: vec![],
         })
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
     let old = service
         .repo
         .get(first)
@@ -100,60 +105,54 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         StaticFleetAttachment(FleetAttachment::Attached),
     );
     let old = service
-        .purchase(PurchaseRequest {
-            billing: PurchaseBilling::Stripe,
-            team_id: TEAM,
-            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
-            name: None,
-            extra_items: vec![],
-        })
+        .purchase(standard_purchase("buy-dialog-1"))
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
     service.billing.quote_price = Some(stripe::PriceId::from_str("price_new").unwrap());
     let new = service
-        .purchase(PurchaseRequest {
-            billing: PurchaseBilling::Stripe,
-            team_id: TEAM,
-            created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
-            size: ComputerSize::Standard,
-            name: None,
-            extra_items: vec![],
-        })
+        .purchase(standard_purchase("buy-dialog-2"))
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
+    let items: Vec<ObservedItem> = service
+        .billing
+        .items
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(subscription_item, computer_id)| ObservedItem {
+            subscription_item: subscription_item.clone(),
+            computer_id: Some(*computer_id),
+        })
+        .collect();
     service
-        .reconcile_billed_counts(
+        .observe_subscription(
             TEAM,
-            &[SubscriptionItem {
-                price_id: stripe::PriceId::from_str("price_old").unwrap(),
-                quantity: 1,
-            }],
+            SubscriptionObserved {
+                status: SubscriptionStatus::Active,
+                items,
+                current_period_end: now() + chrono::Duration::days(20),
+                observed_at: now(),
+            },
         )
         .await
         .unwrap();
-    assert!(
-        service
-            .repo
-            .get(old)
-            .await
-            .unwrap()
-            .unwrap()
-            .into_healthy()
-            .unwrap()
-            .is_billed()
-    );
-    assert!(
-        !service
-            .repo
-            .get(new)
-            .await
-            .unwrap()
-            .unwrap()
-            .into_healthy()
-            .unwrap()
-            .is_billed()
-    );
+    for id in [old, new] {
+        assert!(matches!(
+            service
+                .repo
+                .get(id)
+                .await
+                .unwrap()
+                .unwrap()
+                .into_healthy()
+                .unwrap()
+                .state
+                .billing,
+            BillingState::Active { .. }
+        ));
+    }
     assert_eq!(
         service
             .repo
@@ -163,24 +162,10 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
             .unwrap()
             .into_healthy()
             .unwrap()
-            .price_id
-            .unwrap()
-            .as_str(),
-        "price_old"
-    );
-    service
-        .release_now(TEAM, old, "Macro computer")
-        .await
-        .unwrap();
-    service.run_billing_effects().await.unwrap();
-    assert!(
-        service
-            .billing
-            .removals
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(price, _)| price.as_str() == "price_old")
+            .funding,
+        Funding::Stripe {
+            price_id: stripe::PriceId::from_str("price_old").unwrap()
+        }
     );
 }
 
@@ -214,7 +199,7 @@ fn catalog_accessors_return_the_composed_catalog_without_billing() {
     assert_eq!(service.size_spec(ComputerSize::Standard).unwrap(), &entry);
     assert!(matches!(
         service.size_spec(ComputerSize::Large),
-        Err(ComputerError::BadRequest(_))
+        Err(ComputerError::SizeNotOffered)
     ));
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }

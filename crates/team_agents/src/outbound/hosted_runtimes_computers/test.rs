@@ -16,8 +16,8 @@ fn an_attached_computer_maps_to_the_agents_state() {
         (ComputerStatusKind::Stopped, ComputerState::Paused),
         (ComputerStatusKind::NeedsAttention, ComputerState::Failed),
         (ComputerStatusKind::Failed, ComputerState::Failed),
-        (ComputerStatusKind::PaymentFailed, ComputerState::Failed),
         (ComputerStatusKind::Released, ComputerState::Released),
+        (ComputerStatusKind::Purchasing, ComputerState::Purchasing),
     ] {
         assert_eq!(
             computer_state(kind, FleetAttachment::Attached),

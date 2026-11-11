@@ -9,8 +9,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Who an agent's account belongs to. New providers widen the
-/// `provider_accounts.provider` and `harness_account_logins.provider` checks.
+/// Who an agent's account belongs to: the Postgres `agent_provider` enum of
+/// `provider_accounts.provider` and `harness_account_logins.provider`. New
+/// providers add a value there.
 #[derive(
     Debug,
     Clone,
@@ -24,6 +25,11 @@ use uuid::Uuid;
     strum::EnumString,
 )]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "agent_provider", rename_all = "snake_case")
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum AgentProvider {

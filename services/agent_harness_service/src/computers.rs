@@ -131,7 +131,7 @@ pub(crate) async fn operator(
     ServiceDeployment.deployment()?;
 
     let operator = ComputerOperator::start(
-        PgComputerRepo::new(pool.clone()),
+        PgComputerRepo::new(pool.clone(), config.computer_billing_policy()?),
         fleet,
         HostedHarnesses {
             service: harnesses,

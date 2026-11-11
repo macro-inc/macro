@@ -56,7 +56,9 @@ use crate::domain::{
         team_slug_from_name,
     },
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
-    owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
+    owned_entity_cleanup::{
+        OwnedEntityCleanup, OwnedEntityCleanupError, UnwiredOwnedEntityCleanup, clear_team,
+    },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
@@ -889,6 +891,16 @@ where
         let cleared = clear_team(&self.owned_entity_cleanup, team_id)
             .await
             .map_err(DeleteTeamError::OwnedEntityCleanup)?;
+        // Computers outlive the team row: release them first so their billing
+        // items, guests and harnesses go through their own lifecycle.
+        self.owned_entity_cleanup
+            .release_computers(team_id)
+            .await
+            .map_err(|source| {
+                DeleteTeamError::OwnedEntityCleanup(OwnedEntityCleanupError::ReleaseComputers {
+                    source: Box::new(source),
+                })
+            })?;
 
         let subscription_id = self
             .team_repository

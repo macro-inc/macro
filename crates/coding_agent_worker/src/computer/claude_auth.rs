@@ -22,13 +22,6 @@ impl ClaudeAuth {
         matches!(self.0, ClaudeAccount::SignedIn { .. })
     }
 
-    pub fn account(&self) -> Option<String> {
-        match &self.0 {
-            ClaudeAccount::SignedIn { account, .. } => account.clone(),
-            ClaudeAccount::SignedOut => None,
-        }
-    }
-
     /// The sign-in result for the control plane, `None` when signed out.
     pub fn signed_in_result(&self) -> Option<ComputerControlResult> {
         match &self.0 {

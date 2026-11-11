@@ -39,7 +39,7 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   writes only the config, the credential and its markers: no systemd units,
   users or anything under `/etc`, which is read-only on the NixOS guest (the
   image declares every unit). The marker (`<computer id>\n<generation>`)
-  lives on the data disk, so an image update finds it and macrod reconnects
+  lives on the data disk, so a new root disk (reboot onto a new image) finds it and macrod reconnects
   with its stored credential. A newer generation (a guest recreated on the
   old disk) or a marker-less disk enrolls again; the credential records the
   pairing it was claimed from (`credentials.pairing_id`), so only a new

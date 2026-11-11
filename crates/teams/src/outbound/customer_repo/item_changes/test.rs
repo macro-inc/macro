@@ -109,7 +109,7 @@ async fn an_unknown_charge_blocks_other_mutations_and_replays_the_exact_request(
         post.headers.get("Idempotency-Key").unwrap(),
         "computer-add:pending"
     );
-    let outcome = sqlx::query_scalar!("SELECT outcome FROM subscription_item_change WHERE idempotency_key = 'computer-add:pending'").fetch_one(&pool).await.unwrap();
+    let outcome = sqlx::query_scalar!(r#"SELECT outcome::text AS "outcome!" FROM subscription_item_change WHERE idempotency_key = 'computer-add:pending'"#).fetch_one(&pool).await.unwrap();
     assert_eq!(outcome, "succeeded");
 }
 

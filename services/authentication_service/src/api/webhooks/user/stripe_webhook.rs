@@ -857,60 +857,116 @@ async fn handle_team_subscription_event<'a>(
     result
 }
 
-/// Passes a complete subscription snapshot so computers whose items were
-/// removed outside Macro are cancelled. Reads the subscription fresh because webhook payloads
-/// arrive out of order. Never fails the webhook.
+/// Reports a complete subscription snapshot to the computer billing owner,
+/// which decides what it means for each computer. Reads the subscription
+/// fresh because webhook payloads arrive out of order, and stamps when it
+/// read, so a computer billed after the read is left alone. Never fails the
+/// webhook.
 #[tracing::instrument(skip(ctx))]
 async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
-    let subscription = match stripe::SubscriptionId::from_str(subscription_id) {
-        // Not the event payload: a stale item list from an out-of-order event
-        // would cancel computers the team has paid for.
-        Ok(id) => stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await,
+    let observed_at = chrono::Utc::now();
+    let id = match stripe::SubscriptionId::from_str(subscription_id) {
+        Ok(id) => id,
         Err(error) => {
             tracing::warn!(error = ?error, "invalid team subscription id; skipping computer reconcile");
             return;
         }
     };
-    let subscription = match subscription {
+    let subscription = match stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await {
         Ok(subscription) => subscription,
         Err(error) => {
             tracing::warn!(error = ?error, "could not read the team subscription; skipping computer reconcile");
             return;
         }
     };
-    let ended = matches!(
-        subscription.status,
-        stripe::SubscriptionStatus::Canceled | stripe::SubscriptionStatus::IncompleteExpired
-    );
-    if !ended && subscription.items.has_more {
-        // A partial item list would undercount and cancel paid computers.
-        tracing::warn!("team subscription items are paginated; skipping computer reconcile");
-        return;
-    }
-    let mut items = Vec::new();
-    if !ended {
-        for item in &subscription.items.data {
-            let Some(price) = &item.price else {
-                tracing::warn!("subscription item has no price; skipping computer reconcile");
-                return;
-            };
-            let price_id = price.id.clone();
-            let quantity = match u32::try_from(item.quantity.unwrap_or(1)) {
-                Ok(quantity) => quantity,
-                Err(error) => {
-                    tracing::warn!(error = ?error, "subscription quantity exceeds supported range; skipping computer reconcile");
-                    return;
-                }
-            };
-            items.push(hosted_runtimes::domain::models::SubscriptionItem { price_id, quantity });
+    let items = match subscription_items(ctx, &id).await {
+        Ok(items) => items,
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not list the team subscription items; skipping computer reconcile");
+            return;
         }
-    }
+    };
+    let Some(current_period_end) =
+        chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
+    else {
+        tracing::warn!("team subscription has an invalid period end; skipping computer reconcile");
+        return;
+    };
+    let observed = hosted_runtimes::domain::service::SubscriptionObserved {
+        status: subscription_status(subscription.status),
+        items,
+        current_period_end,
+        observed_at,
+    };
     if let Err(error) = ctx
         .computer_billing_observer
-        .billed_counts(*team_id, items)
+        .subscription_observed(*team_id, observed)
         .await
     {
         tracing::error!(error = ?error, "computer billing reconcile failed");
+    }
+}
+
+fn subscription_status(
+    status: stripe::SubscriptionStatus,
+) -> hosted_runtimes::domain::service::SubscriptionStatus {
+    use hosted_runtimes::domain::service::SubscriptionStatus;
+    match status {
+        stripe::SubscriptionStatus::Active => SubscriptionStatus::Active,
+        stripe::SubscriptionStatus::Trialing => SubscriptionStatus::Trialing,
+        stripe::SubscriptionStatus::PastDue => SubscriptionStatus::PastDue,
+        stripe::SubscriptionStatus::Unpaid => SubscriptionStatus::Unpaid,
+        stripe::SubscriptionStatus::Paused => SubscriptionStatus::Paused,
+        stripe::SubscriptionStatus::Incomplete => SubscriptionStatus::Incomplete,
+        stripe::SubscriptionStatus::IncompleteExpired => SubscriptionStatus::IncompleteExpired,
+        stripe::SubscriptionStatus::Canceled => SubscriptionStatus::Canceled,
+    }
+}
+
+/// Every item on the subscription, with the computer id its (or its
+/// price's) metadata names.
+async fn subscription_items(
+    ctx: &ApiContext,
+    id: &stripe::SubscriptionId,
+) -> Result<Vec<hosted_runtimes::domain::service::ObservedItem>, stripe::StripeError> {
+    let mut params = stripe::ListSubscriptionItems::new(id.clone());
+    params.limit = Some(100);
+    let mut items = Vec::new();
+    loop {
+        let page = stripe::SubscriptionItem::list(&ctx.stripe_client, &params).await?;
+        for item in &page.data {
+            let named = item
+                .metadata
+                .as_ref()
+                .and_then(|metadata| metadata.get("computer_id"))
+                .or_else(|| {
+                    item.price
+                        .as_ref()
+                        .and_then(|price| price.metadata.as_ref())
+                        .and_then(|metadata| metadata.get("computer_id"))
+                });
+            let computer_id = match named {
+                Some(id) => match hosted_runtimes::domain::ids::ComputerId::parse_uuid_str(id) {
+                    Ok(id) => Some(id),
+                    Err(_) => {
+                        tracing::warn!(subscription_item = %item.id, "subscription item has an invalid computer id");
+                        None
+                    }
+                },
+                None => None,
+            };
+            items.push(hosted_runtimes::domain::service::ObservedItem {
+                subscription_item: item.id.clone(),
+                computer_id,
+            });
+        }
+        if !page.has_more {
+            return Ok(items);
+        }
+        params.starting_after = page.data.last().map(|item| item.id.clone());
+        if params.starting_after.is_none() {
+            return Ok(items);
+        }
     }
 }
 

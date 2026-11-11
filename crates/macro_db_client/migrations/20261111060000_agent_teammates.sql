@@ -23,6 +23,15 @@ ALTER TABLE public.hosted_runtime
 CREATE UNIQUE INDEX hosted_runtime_agent_user_idx ON public.hosted_runtime (agent_user_id)
     WHERE agent_user_id IS NOT NULL;
 
+-- A purchase for an agent carries the link until it becomes the computer.
+-- The reservation is short-lived, so it goes with the account.
+ALTER TABLE public.computer_reservation
+    ADD COLUMN agent_user_id TEXT REFERENCES "User" (id) ON DELETE CASCADE;
+
+CREATE UNIQUE INDEX computer_reservation_agent_user_idx
+    ON public.computer_reservation (agent_user_id)
+    WHERE agent_user_id IS NOT NULL;
+
 -- New tables.
 
 -- An agent teammate. The account (`User`) and its team membership

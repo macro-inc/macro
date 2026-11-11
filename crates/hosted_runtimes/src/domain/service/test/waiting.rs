@@ -3,15 +3,9 @@ use super::*;
 #[tokio::test]
 async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
     for (phase, enrolled) in [
-        (
-            Phase::Provisioning {
-                host: HOST,
-                start: false,
-            },
-            false,
-        ),
-        (Phase::Stopped { host: HOST }, false),
-        (Phase::Stopped { host: HOST }, true),
+        (Phase::Provisioning { start: false }, false),
+        (Phase::Stopped, false),
+        (Phase::Stopped, true),
     ] {
         let service = ComputerService::new(
             FakeRepo {
@@ -27,6 +21,7 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
                 billing: PurchaseBilling::Comped {
                     reason: "capacity test".to_owned(),
                 },
+                purchase_key: key("buy-dialog-1"),
                 team_id: TEAM,
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
                 size: ComputerSize::Standard,
@@ -34,7 +29,8 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
                 extra_items: vec![],
             })
             .await
-            .unwrap();
+            .unwrap()
+            .computer_id();
         {
             let mut computers = service.repo.computers.lock().unwrap();
             let computer = computers.get_mut(&id).unwrap();

@@ -48,6 +48,9 @@ export class Harness extends MacroEntity<HarnessRecord> {
   /**
    * Allow or forbid agents here to bypass permission prompts. Live sessions
    * pick the change up at their next turn.
+   *
+   * @write
+   * @idempotent
    */
   async setPermissionBypass(allowed: boolean): Promise<void> {
     await this.mutate((c) =>
@@ -58,7 +61,12 @@ export class Harness extends MacroEntity<HarnessRecord> {
     );
   }
 
-  /** Rename the host. */
+  /**
+   * Rename the host.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.patchHarness({
@@ -89,12 +97,18 @@ export class Harness extends MacroEntity<HarnessRecord> {
    * grants access: agents cannot approve requests or share a host, even one
    * their own user owns. Tell the user it is pending with `owner()`, and check
    * `callerAccess()` later.
+   *
+   * @write
    */
   async requestAccess(role: 'read' | 'user' = 'user'): Promise<AccessRequest> {
     return this.access.request(role === 'read' ? 'view' : 'edit');
   }
 
-  /** Agents living on the host, for callers with at least `read`. */
+  /**
+   * Agents living on the host, for callers with at least `read`.
+   *
+   * @readonly
+   */
   async residents(): Promise<Agent[]> {
     return unwrap(
       await this.client.storage.listHarnessResidents({
@@ -103,7 +117,12 @@ export class Harness extends MacroEntity<HarnessRecord> {
     ).map((resident) => Agent.byId(this.client, resident.bot_id));
   }
 
-  /** Remove the host. */
+  /**
+   * Remove the host.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.deleteHarness({ path: { harness_id: this.id } }),

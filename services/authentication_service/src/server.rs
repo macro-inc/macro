@@ -587,6 +587,7 @@ async fn run_server() -> anyhow::Result<()> {
         None
     };
 
+    let computer_policy = config.computer_billing_policy()?;
     let plan_customer = CustomerRepositoryImpl::new(
         stripe_client.clone(),
         stripe_prices.seat_prices()?,
@@ -600,7 +601,7 @@ async fn run_server() -> anyhow::Result<()> {
         plan_customer,
         crate::outbound::subscription_billing::StripeBillingReader::new(
             teams_repo_impl.clone(),
-            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             stripe_prices.seat_prices()?,
             config.computer_prices()?,
         ),
@@ -679,6 +680,12 @@ async fn run_server() -> anyhow::Result<()> {
         internal_key.clone(),
         harness_url.clone(),
         scheduled_action_url.clone(),
+        // Needs only the repository: the billing-backed computer service is
+        // built after the team service it bills through.
+        Arc::new(hosted_runtimes::domain::service::TeamComputerRelease::new(
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
+            hosted_runtimes::domain::service::SystemClock,
+        )),
     )
     .map_err(|error| anyhow::anyhow!("{error:?}"))?;
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
@@ -701,7 +708,8 @@ async fn run_server() -> anyhow::Result<()> {
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
         .unwrap_or_default();
     let computer_prices = config.computer_prices()?;
-    let computer_repo = hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone());
+    let computer_repo =
+        hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy);
     let teams_service = Arc::new(teams_service_impl);
     let computer_service = Arc::new(
         hosted_runtimes::domain::service::ComputerService::new(
@@ -734,7 +742,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
             computer_service.clone(),
-            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone()),
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
         ),
         feature_flags.clone(),
         crate::outbound::agent_addresses::AgentAddresses,
@@ -768,13 +776,17 @@ async fn run_server() -> anyhow::Result<()> {
             invite_reminders_stop.clone().cancelled_owned(),
         ),
     );
-    // Carries out computers' billing effects (removing subscription items at
-    // period end or on release). Rows are leased, so every replica runs it.
-    invite_reminders.spawn(run_computer_billing_effects(
-        computer_service.clone(),
-        invite_reminders_stop.clone(),
-    ));
     invite_reminders.close();
+    // Carries out computers' billing effects (removing subscription items)
+    // and settles purchases whose charge is being confirmed. Rows are leased,
+    // so every replica runs it.
+    let computer_billing_stop = CancellationToken::new();
+    let computer_billing = TaskTracker::new();
+    computer_billing.spawn(run_computer_billing_effects(
+        computer_service.clone(),
+        computer_billing_stop.clone(),
+    ));
+    computer_billing.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -913,6 +925,18 @@ async fn run_server() -> anyhow::Result<()> {
         sweep.abort();
     }
 
+    // Lets a billing pass in progress finish its Stripe call and record it.
+    computer_billing_stop.cancel();
+    if tokio::time::timeout(COMPUTER_BILLING_DRAIN_TIMEOUT, computer_billing.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = COMPUTER_BILLING_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the computer billing pass to finish"
+        );
+    }
+
     // Lets a sweep in progress finish: its reminders are already counted as
     // sent, so abandoning the batch would drop them.
     invite_reminders_stop.cancel();
@@ -944,6 +968,7 @@ async fn run_server() -> anyhow::Result<()> {
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const COMPUTER_BILLING_DRAIN_TIMEOUT: Duration = Duration::from_secs(30);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 /// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";

@@ -219,6 +219,14 @@ pub struct Config {
     pub stripe_computer_standard_yearly_price_id: StripeComputerStandardYearlyPriceId,
     pub stripe_computer_large_yearly_price_id: StripeComputerLargeYearlyPriceId,
     pub stripe_computer_xl_yearly_price_id: StripeComputerXlYearlyPriceId,
+    /// Days a Macro computer whose billing ended keeps its disk, restorable,
+    /// before it is destroyed.
+    #[macro_config_default(14)]
+    pub computer_retention_days: u32,
+    /// Days a Macro computer keeps running on a past-due subscription before
+    /// it is turned off.
+    #[macro_config_default(7)]
+    pub computer_past_due_grace_days: u32,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -300,6 +308,18 @@ impl Config {
             }
         }
         Ok(())
+    }
+
+    /// Macro computers' retention and past-due grace.
+    pub fn computer_billing_policy(
+        &self,
+    ) -> anyhow::Result<hosted_runtimes::domain::lifecycle::BillingPolicy> {
+        Ok(
+            hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(
+                self.computer_retention_days,
+                self.computer_past_due_grace_days,
+            )?,
+        )
     }
 
     /// The Stripe price of each computer size per billing interval.

@@ -129,6 +129,7 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
         return Err(TeamAgentError::InvalidAvatar);
     }
     Ok(CreateTeamAgent {
+        purchase_key: request.purchase_key,
         name,
         job_description,
         personality,
@@ -349,6 +350,7 @@ where
         };
 
         let purchase = ComputerPurchase {
+            purchase_key: request.purchase_key.clone(),
             team_id,
             created_by: created_by.clone(),
             agent: user_id.clone(),

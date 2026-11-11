@@ -14,11 +14,8 @@ use crate::{
 };
 use ai_billing::domain::SubscriptionScope;
 use hosted_runtimes::domain::{
-    ids::ComputerId,
-    lifecycle::{PaymentOutcome, Phase},
-    models::BillingInterval,
-    ports::ComputerRepo,
-    size::CatalogEntry,
+    ids::ComputerId, lifecycle::Billing as ComputerBilling, models::BillingInterval,
+    ports::ComputerRepo, size::CatalogEntry,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -130,10 +127,17 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
             interval = Some(fixed.interval);
             let unit_amount = fixed.unit_amount;
             let price_id = price.id.clone();
+            // A computer's own price carries its id too (schedule phases drop item metadata).
             let computer_id = item
                 .metadata
                 .as_ref()
                 .and_then(|metadata| metadata.get("computer_id"))
+                .or_else(|| {
+                    price
+                        .metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.get("computer_id"))
+                })
                 .and_then(|id| ComputerId::parse_uuid_str(id).ok());
             let kind = RecurringItemKind::for_provider_price(
                 &self.seat_prices,
@@ -218,20 +222,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                     let Ok(computer) = record.into_healthy() else {
                         continue;
                     };
-                    if computer.state.phase == Phase::Destroyed
-                        || (computer.state.payment == PaymentOutcome::Paid
-                            && matches!(
-                                computer.state.billing,
-                                hosted_runtimes::domain::lifecycle::Billing::Canceled { .. }
-                            ))
-                        || !matches!(
-                            computer.state.payment,
-                            PaymentOutcome::Paid | PaymentOutcome::Comped
-                        )
+                    // A computer whose billing ended is no longer on the bill.
+                    if !computer.state.is_live()
+                        || matches!(computer.state.billing, ComputerBilling::EndsAt { .. })
                     {
                         continue;
                     }
-                    let status = computer.status(0).status;
+                    let status = computer
+                        .status(0, chrono::Utc::now(), self.computers.policy())
+                        .status;
                     computers.push(BillingComputer {
                         id: computer.id,
                         catalog_entry: CatalogEntry {
@@ -239,10 +238,15 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                             size: computer.size,
                             resources: computer.resources,
                         },
-                        price_id: computer.price_id,
+                        price_id: match &computer.funding {
+                            hosted_runtimes::domain::models::Funding::Stripe { price_id } => {
+                                Some(price_id.clone())
+                            }
+                            hosted_runtimes::domain::models::Funding::Comped { .. } => None,
+                        },
                         name: computer.name,
                         status,
-                        included: computer.state.payment == PaymentOutcome::Comped,
+                        included: matches!(computer.state.billing, ComputerBilling::Comped { .. }),
                     });
                 }
                 Ok((BillingAccess::Team(role), seats, computers))

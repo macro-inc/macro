@@ -243,8 +243,25 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             disk_gib: DiskGib::new(100),
         },
         catalog_entry: CatalogEntryId::try_new("standard@2026-11".to_owned()).unwrap(),
-        price_id: None,
-        state: ComputerState::reserved(HostId::new(Uuid::new_v4()), chrono::Utc::now()),
+        funding: hosted_runtimes::domain::models::Funding::Comped {
+            reason: "default agent test".to_owned(),
+        },
+        host: HostId::new(Uuid::new_v4()),
+        state: ComputerState {
+            provision_traceparent: None,
+            setup: None,
+            phase: hosted_runtimes::domain::lifecycle::Phase::Running,
+            billing: hosted_runtimes::domain::lifecycle::Billing::Comped {
+                reason: "default agent test".to_owned(),
+            },
+            billing_changed_at: chrono::Utc::now(),
+            power: hosted_runtimes::domain::lifecycle::Power::On,
+            macrod_connected: true,
+            macrod_misses: 0,
+            recent_crashes: vec![],
+            power_on_requested: false,
+            capacity_wait: None,
+        },
         harness_id: Some(harness_id),
         enrollment_generation: Default::default(),
         created_by: buyer.clone(),
@@ -253,13 +270,15 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
-        previous_image: None,
     };
     let harnesses = HostedHarnesses {
         service: Arc::new(HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))),
         default_agents: Arc::new(agents),
     };
-    let computers = PgComputerRepo::new(pool.clone());
+    let computers = PgComputerRepo::new(
+        pool.clone(),
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(14, 7).unwrap(),
+    );
     // What the release dialog warns about: the default agent and the private one.
     assert_eq!(
         computers.agent_counts(&[computer_id]).await.unwrap(),

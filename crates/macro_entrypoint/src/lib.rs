@@ -17,6 +17,7 @@ use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use rootcause::hooks::Hooks;
 use rootcause_tracing::{RootcauseLayer, SpanCollector};
@@ -120,7 +121,7 @@ impl Default for MacroEntrypoint {
 pub struct InitializedEntrypoint {
     tracer_provider: Option<SdkTracerProvider>,
     logger_provider: Option<SdkLoggerProvider>,
-    meter_provider: Option<opentelemetry_sdk::metrics::SdkMeterProvider>,
+    meter_provider: Option<SdkMeterProvider>,
 }
 
 /// Failure to flush telemetry before a serverless runtime freezes.
@@ -135,6 +136,9 @@ pub enum TelemetryFlushError {
     /// The log exporter could not flush.
     #[error("log flush failed")]
     Logs(#[source] opentelemetry_sdk::error::OTelSdkError),
+    /// The metric exporter could not flush.
+    #[error("metric flush failed")]
+    Metrics(#[source] opentelemetry_sdk::error::OTelSdkError),
 }
 
 impl InitializedEntrypoint {
@@ -146,26 +150,24 @@ impl InitializedEntrypoint {
     pub async fn force_flush(&self) -> Result<(), TelemetryFlushError> {
         let tracer = self.tracer_provider.clone();
         let logger = self.logger_provider.clone();
-        let (traces, logs) = tokio::task::spawn_blocking(move || {
+        let meter = self.meter_provider.clone();
+        let (traces, logs, metrics) = tokio::task::spawn_blocking(move || {
             (
                 tracer.map(|provider| provider.force_flush()),
                 logger.map(|provider| provider.force_flush()),
+                meter.map(|provider| provider.force_flush()),
             )
         })
         .await?;
         traces.transpose().map_err(TelemetryFlushError::Traces)?;
         logs.transpose().map_err(TelemetryFlushError::Logs)?;
+        metrics.transpose().map_err(TelemetryFlushError::Metrics)?;
         Ok(())
     }
 
     /// Gracefully shut down the OpenTelemetry providers.
     /// This should be called before the application exits to ensure all traces and logs are flushed.
     pub fn shutdown(&self) {
-        if let Some(provider) = &self.meter_provider
-            && let Err(error) = provider.shutdown()
-        {
-            tracing::error!(error = ?error, "failed to shutdown meter provider");
-        }
         if let Some(ref provider) = self.tracer_provider
             && let Err(e) = provider.shutdown()
         {
@@ -175,6 +177,11 @@ impl InitializedEntrypoint {
             && let Err(e) = provider.shutdown()
         {
             tracing::error!(error=?e, "failed to shutdown logger provider");
+        }
+        if let Some(ref provider) = self.meter_provider
+            && let Err(e) = provider.shutdown()
+        {
+            tracing::error!(error=?e, "failed to shutdown meter provider");
         }
     }
 }
@@ -474,6 +481,25 @@ fn init_otel_logs(deployment_environment: String) -> SdkLoggerProvider {
         .build()
 }
 
+/// OTLP metric export at the same endpoint the spans go to, installed as the
+/// global meter provider so a service's `opentelemetry::global::meter`
+/// instruments reach it. The SDK's periodic reader collects and exports every
+/// 60 seconds; a service that records nothing exports nothing.
+fn init_otel_metrics(deployment_environment: String) -> SdkMeterProvider {
+    let exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_tonic()
+        .with_endpoint(otel_endpoint())
+        .build()
+        .expect("failed to create OTLP metric exporter");
+
+    let provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter)
+        .with_resource(otel_resource(deployment_environment))
+        .build();
+    opentelemetry::global::set_meter_provider(provider.clone());
+    provider
+}
+
 /// Filter for the log bridge: mirror `RUST_LOG` verbosity, but never feed the
 /// exporter's own internals back into it — the OTel/tonic stack logs through
 /// `tracing`, so exporting those events would emit more of them (a
@@ -528,18 +554,4 @@ fn dependency_logs_allowed(suppressed: &[&str], target: &str) -> bool {
                 .strip_prefix(prefix)
                 .is_some_and(|suffix| suffix.starts_with("::"))
     })
-}
-
-fn init_otel_metrics(environment: String) -> opentelemetry_sdk::metrics::SdkMeterProvider {
-    let exporter = opentelemetry_otlp::MetricExporter::builder()
-        .with_tonic()
-        .with_endpoint(otel_endpoint())
-        .build()
-        .expect("failed to create OTLP metric exporter");
-    let provider = opentelemetry_sdk::metrics::SdkMeterProvider::builder()
-        .with_resource(otel_resource(environment))
-        .with_periodic_exporter(exporter)
-        .build();
-    opentelemetry::global::set_meter_provider(provider.clone());
-    provider
 }

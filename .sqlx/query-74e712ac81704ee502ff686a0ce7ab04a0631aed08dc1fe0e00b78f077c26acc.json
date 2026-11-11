@@ -8,7 +8,16 @@
         "Uuid",
         "Uuid",
         "Uuid",
-        "Text",
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        },
         "Text"
       ]
     },

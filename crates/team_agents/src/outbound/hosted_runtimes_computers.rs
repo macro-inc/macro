@@ -45,6 +45,12 @@ fn purchase_error(error: ComputerError) -> TeamAgentError {
         ComputerError::SoldOut => {
             TeamAgentError::ComputerUnavailable("this computer size is sold out".to_owned())
         }
+        ComputerError::SizeNotOffered => {
+            TeamAgentError::ComputerUnavailable("this computer size isn't offered".to_owned())
+        }
+        ComputerError::PurchaseKeyConflict => TeamAgentError::ComputerUnavailable(
+            "this invite was already used for a different purchase".to_owned(),
+        ),
         ComputerError::Billing(billing) => TeamAgentError::ComputerUnavailable(billing.to_string()),
         other => TeamAgentError::internal(other),
     }
@@ -57,17 +63,21 @@ fn computer_state(
 ) -> ComputerState {
     use models::ComputerStatusKind as Kind;
     let state = match kind {
+        Kind::Purchasing => ComputerState::Purchasing,
         Kind::SettingUp => ComputerState::SettingUp,
         Kind::Ready => ComputerState::Ready,
         Kind::WaitingForCapacity | Kind::Starting | Kind::Stopping | Kind::Stopped => {
             ComputerState::Paused
         }
-        Kind::NeedsAttention | Kind::Failed | Kind::PaymentFailed => ComputerState::Failed,
+        Kind::NeedsAttention | Kind::Failed => ComputerState::Failed,
         Kind::Released => ComputerState::Released,
     };
     match (availability, state) {
         // Without a fleet nothing runs, but terminal states stay terminal.
-        (FleetAttachment::Detached, ComputerState::Failed | ComputerState::Released) => state,
+        (
+            FleetAttachment::Detached,
+            ComputerState::Purchasing | ComputerState::Failed | ComputerState::Released,
+        ) => state,
         (FleetAttachment::Detached, _) => ComputerState::Paused,
         (FleetAttachment::Attached, state) => state,
     }
@@ -85,11 +95,14 @@ where
 {
     #[tracing::instrument(skip_all, fields(team_id = %purchase.team_id), err)]
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
+        let purchase_key = models::PurchaseKey::try_new(purchase.purchase_key)
+            .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
         self.service
             .purchase_for_agent(
                 models::PurchaseRequest {
                     // The service picks Stripe or a comp by team policy.
                     billing: models::PurchaseBilling::Stripe,
+                    purchase_key,
                     team_id: purchase.team_id,
                     created_by: purchase.created_by,
                     size: purchase.size,
@@ -99,6 +112,7 @@ where
                 purchase.agent,
             )
             .await
+            .map(models::Purchase::computer_id)
             .map_err(purchase_error)
     }
 
@@ -146,7 +160,9 @@ where
             .request_release(team_id, computer_id)
             .await
         {
-            Ok(_) | Err(ComputerError::NotFound) => Ok(()),
+            // A purchase still confirming settles uncharged or becomes a
+            // computer; nothing to release yet.
+            Ok(_) | Err(ComputerError::NotFound | ComputerError::NotPurchased) => Ok(()),
             Err(error) => Err(TeamAgentError::internal(error)),
         }
     }

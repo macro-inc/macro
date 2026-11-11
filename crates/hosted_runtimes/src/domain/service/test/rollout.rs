@@ -39,6 +39,7 @@ async fn purchase_for_team_refuses_flag_off_before_reserving_or_billing() {
     let result = service
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
+            purchase_key: key("buy-dialog-1"),
             team_id: TEAM,
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
@@ -111,6 +112,7 @@ async fn existing_computer_with_flag_off() -> (
     let id = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
+            purchase_key: key("buy-dialog-1"),
             team_id: TEAM,
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             size: ComputerSize::Standard,
@@ -118,7 +120,8 @@ async fn existing_computer_with_flag_off() -> (
             extra_items: vec![],
         })
         .await
-        .unwrap();
+        .unwrap()
+        .computer_id();
     (service, id)
 }
 
@@ -171,7 +174,10 @@ async fn retry_remains_available_with_flag_off() {
         .get_mut(&id)
         .unwrap()
         .state
-        .phase = Phase::Failed { host: HOST };
+        .phase = Phase::Crashed {
+        restarts: 3,
+        retry: None,
+    };
     service.retry(TEAM, id).await.unwrap();
 }
 
@@ -200,28 +206,45 @@ async fn internal_quote_and_purchase_remain_available_with_flag_off() {
 #[tokio::test]
 async fn webhook_reconcile_and_billing_workers_remain_available_with_flag_off() {
     let (service, id) = existing_computer_with_flag_off().await;
-    service.reconcile_billed_counts(TEAM, &[]).await.unwrap();
+    service
+        .observe_subscription(
+            TEAM,
+            crate::domain::service::billing::SubscriptionObserved {
+                status: crate::domain::service::billing::SubscriptionStatus::Active,
+                items: vec![],
+                current_period_end: now(),
+                observed_at: now(),
+            },
+        )
+        .await
+        .unwrap();
     service.release_now(TEAM, id, "Build box").await.unwrap();
     service.run_billing_effects().await.unwrap();
 }
 
 #[tokio::test]
-async fn undo_is_offered_until_billing_stops_ahead_of_the_renewal() {
+async fn undo_is_offered_until_the_paid_period_ends() {
     let (service, id) = existing_computer_with_flag_off().await;
 
     let canceled = service.cancel(TEAM, id).await.unwrap();
     assert!(canceled.can_undo_cancel);
+    assert_eq!(
+        canceled.cancels_at,
+        Some(now() + chrono::Duration::days(20))
+    );
 
     service
         .repo
-        .apply(id, Event::BillingStops, FixedClock.now())
+        .apply(id, Event::BillingEnds, now() + chrono::Duration::days(20))
         .await
         .unwrap();
-    let status = service.status(TEAM, id).await.unwrap();
-    assert!(!status.can_undo_cancel);
-    assert_eq!(status.cancels_at, canceled.cancels_at);
-    assert!(matches!(
-        service.undo_cancel(TEAM, id).await,
-        Err(ComputerError::BadRequest(_))
-    ));
+    let ended = service
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(ended.state.power, Power::Off);
 }

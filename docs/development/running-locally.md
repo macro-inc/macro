@@ -531,6 +531,10 @@ document storage, app and egress URLs) that the harness resolves through
 `macro_service_urls` when it issues the enrollment; xtask sets the harness's
 `OVERRIDE_*` values to the addresses the fleet's guests reach.
 
+`COMPUTER_RETENTION_DAYS` (default `14`) and `COMPUTER_PAST_DUE_GRACE_DAYS`
+(default `7`) set Macro computers' retention and past-due grace in both
+authentication_service and agent_harness_service; set them only to override.
+
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.
@@ -606,8 +610,8 @@ written to `infra/local/generated/<instance>/computers/enrollments`, which is
 mounted into the harness at the same absolute path, because the daemon resolves
 bind sources on the host. The harness writes them as root. Each computer's
 `/home` and `/var/lib/macrod` are named volumes (`macro-computer-<id>-home`,
-`-macrod`), so an image update recreates the container without losing them;
-releasing the computer deletes them. Starting the stack again removes the
+`-macrod`), like an Incus computer's data disk; releasing the computer
+deletes them. Starting the stack again removes the
 instance's computer containers and volumes along with its data.
 
 Computers use a separate local-only HTTP listener on the same Caddy proxy:

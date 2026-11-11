@@ -3,7 +3,7 @@ use super::*;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool.clone());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     let host = repo
         .register_host(HostRegistration {
             name: "timer-test-host".to_owned(),
@@ -13,12 +13,12 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
         })
         .await
         .unwrap();
-    let id = repo.reserve(standard(1), now()).await.unwrap().id;
-    for kind in ["macrod_missing", "retention_expired"] {
+    let id = bought(&repo, 1).await.id;
+    for kind in [TimerKind::MacrodMissing, TimerKind::RetentionExpired] {
         sqlx::query!(
             "INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, $2, $3)",
             id.as_uuid(),
-            kind,
+            kind as TimerKind,
             now()
         )
         .execute(&pool)
@@ -41,7 +41,7 @@ async fn startup_push_only_changes_this_hosts_macrod_timers(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool.clone());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     repo.register_host(HostRegistration {
         name: "lease-test-host".to_owned(),
         memory_gb: 31,
@@ -51,10 +51,7 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
     .await
     .unwrap();
     for number in 1..=4 {
-        let id = repo.reserve(standard(number), now()).await.unwrap().id;
-        repo.apply(id, Event::PaymentConfirmed, now())
-            .await
-            .unwrap();
+        bought(&repo, number).await;
     }
     let deadline = now() + Duration::minutes(10);
     let claimed = repo
@@ -98,20 +95,16 @@ async fn release_only_returns_own_unfinished_fleet_leases(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool.clone());
-    let host = repo
-        .register_host(HostRegistration {
-            name: "completion-test-host".to_owned(),
-            memory_gb: 31,
-            reserve_gb: 7,
-            oversell_factor: 3,
-        })
-        .await
-        .unwrap();
-    let id = repo.reserve(standard(1), now()).await.unwrap().id;
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
+    let repo = PgComputerRepo::new(pool.clone(), policy());
+    repo.register_host(HostRegistration {
+        name: "completion-test-host".to_owned(),
+        memory_gb: 31,
+        reserve_gb: 7,
+        oversell_factor: 3,
+    })
+    .await
+    .unwrap();
+    let id = bought(&repo, 1).await.id;
     let effect = repo
         .lease_effects(EffectWorker::Fleet, 1, now(), now() + Duration::minutes(10))
         .await
@@ -165,7 +158,7 @@ async fn completion_and_boot_timer_commit_together_or_roll_back_together(pool: P
             .unwrap()
             .state
             .phase,
-        Phase::Booting { host: host.id }
+        Phase::Booting
     );
     assert_eq!(
         repo.due_timers(now() + Duration::minutes(3), 10)

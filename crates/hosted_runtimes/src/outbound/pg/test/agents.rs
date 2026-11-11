@@ -23,44 +23,42 @@ async fn insert_agent(pool: &PgPool) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|ada-1@agents.macro.invalid".to_owned()).unwrap()
 }
 
-async fn register_host(repo: &PgComputerRepo) {
-    repo.register_host(HostRegistration {
-        name: "runtime-dev-1".to_owned(),
-        memory_gb: 31,
-        reserve_gb: 7,
-        oversell_factor: 3,
-    })
-    .await
-    .unwrap();
-}
-
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_computer_bought_for_an_agent_is_linked_to_it(pool: PgPool) {
+async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPool) {
     insert_team(&pool).await;
     let agent = insert_agent(&pool).await;
-    let repo = PgComputerRepo::new(pool);
-    register_host(&repo).await;
+    let repo = PgComputerRepo::new(pool, policy());
+    host(&repo, "runtime-dev-1", 31, 7, 3).await;
+    let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
 
-    let mut agent_computer = standard(1);
-    agent_computer.agent = Some(agent.clone());
-    repo.reserve(agent_computer, now()).await.unwrap();
-    repo.reserve(standard(2), now()).await.unwrap();
+    let mut for_agent = standard(1);
+    for_agent.agent = Some(agent.clone());
+    let reservation = reserve(&repo, for_agent).await;
+    bought(&repo, 2).await;
 
+    // Confirming: the reservation carries the link.
+    assert_eq!(repo.agent_of(id).await.unwrap(), Some(agent.clone()));
     assert_eq!(
-        repo.agent_of(ComputerId::new_from_uuid(Uuid::from_u128(1)))
-            .await
-            .unwrap(),
-        Some(agent.clone())
+        repo.computer_for_agent(TEAM, &agent).await.unwrap(),
+        Some(id)
+    );
+
+    repo.convert_reservation(reservation.id, active(1), now())
+        .await
+        .unwrap()
+        .unwrap();
+
+    // Bought: the computer carries it.
+    assert_eq!(repo.agent_of(id).await.unwrap(), Some(agent.clone()));
+    assert_eq!(
+        repo.computer_for_agent(TEAM, &agent).await.unwrap(),
+        Some(id)
     );
     assert_eq!(
         repo.agent_of(ComputerId::new_from_uuid(Uuid::from_u128(2)))
             .await
             .unwrap(),
         None
-    );
-    assert_eq!(
-        repo.computer_for_agent(TEAM, &agent).await.unwrap(),
-        Some(ComputerId::new_from_uuid(Uuid::from_u128(1)))
     );
     assert_eq!(
         repo.computer_for_agent(Uuid::from_u128(0xbad), &agent)
@@ -74,17 +72,18 @@ async fn a_computer_bought_for_an_agent_is_linked_to_it(pool: PgPool) {
 async fn an_agent_gets_only_one_computer(pool: PgPool) {
     insert_team(&pool).await;
     let agent = insert_agent(&pool).await;
-    let repo = PgComputerRepo::new(pool);
-    register_host(&repo).await;
+    let repo = PgComputerRepo::new(pool, policy());
+    host(&repo, "runtime-dev-1", 31, 7, 3).await;
 
     let mut first = standard(1);
     first.agent = Some(agent.clone());
-    repo.reserve(first, now()).await.unwrap();
+    reserve(&repo, first).await;
     let mut second = standard(2);
     second.agent = Some(agent);
 
     assert!(matches!(
-        repo.reserve(second, now()).await,
+        repo.reserve(second, now(), now() + Duration::minutes(15))
+            .await,
         Err(ReserveError::Storage(_))
     ));
 }

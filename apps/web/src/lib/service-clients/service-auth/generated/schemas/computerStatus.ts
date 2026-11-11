@@ -4,12 +4,13 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ComputerStatusBilling } from './computerStatusBilling';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
 import type { ComputerStatusDefaultAgentId } from './computerStatusDefaultAgentId';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
-import type { ComputerStatusPayment } from './computerStatusPayment';
+import type { ComputerStatusPastDueSince } from './computerStatusPastDueSince';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
 import type { ComputerStatusSetupCompletedAt } from './computerStatusSetupCompletedAt';
@@ -24,8 +25,11 @@ included: the ones releasing it deletes.
    * @minimum 0
    */
   agentCount: number;
-  /** Whether a cancel at period end can still be undone; false once its
-billing item was removed ahead of the renewal. */
+  billing?: ComputerStatusBilling;
+  /** Whether the computer can be restored (`POST .../restore`): billing
+ended and the disk is still retained. */
+  canRestore: boolean;
+  /** Whether a cancel at period end can still be undone (until `cancelsAt`). */
   canUndoCancel: boolean;
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
@@ -48,13 +52,14 @@ first connects. It can name an agent the team since deleted. */
   memoryGib: number;
   /** Display name. */
   name: string;
-  payment?: ComputerStatusPayment;
+  /** Since when the team subscription is past due. */
+  pastDueSince?: ComputerStatusPastDueSince;
   /** Whether validated state requests power on; false for quarantined records. */
   poweredOn: boolean;
   /** The Macro user who bought it; with the team owner, the one who may
 finish its setup and manage its Claude account. */
   purchasedBy: string;
-  /** When the disk is destroyed, for a canceled computer. */
+  /** When the disk is destroyed, for a computer whose billing ended. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
   /** When the team finished the guided setup; null while it is unfinished. */

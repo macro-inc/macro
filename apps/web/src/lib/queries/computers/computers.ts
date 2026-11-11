@@ -21,6 +21,7 @@ import { computerKeys } from './keys';
 const TRANSITION_POLL_MS = 3_000;
 
 const TRANSITIONAL_STATUSES: readonly ComputerStatusKind[] = [
+  'purchasing',
   'setting_up',
   'waiting_for_capacity',
   'starting',
@@ -131,6 +132,7 @@ async function purchaseComputer(request: PurchaseComputerRequest) {
         computersClient.purchase(request)
       );
       span.setAttr('computer.id', purchased.computerId);
+      span.setAttr('computer.purchase_state', purchased.state);
       return purchased;
     } catch (error) {
       span.error('Computer purchase failed');
@@ -194,6 +196,16 @@ export function useUndoCancelComputerMutation() {
     gcTime: 0,
     mutationFn: (computerId: string) =>
       throwOnErr(() => computersClient.undoCancel(computerId)),
+    onSuccess: storeComputer,
+  }));
+}
+
+/** Bills a released computer again while its disk is still retained. */
+export function useRestoreComputerMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.restore(computerId)),
     onSuccess: storeComputer,
   }));
 }

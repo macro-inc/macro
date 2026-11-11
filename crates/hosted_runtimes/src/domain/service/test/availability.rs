@@ -1,7 +1,6 @@
 use super::*;
 use crate::domain::models::FleetAttachment;
 use crate::domain::ports::StaticFleetAttachment;
-use std::str::FromStr;
 
 #[tokio::test]
 async fn detached_fleet_precedes_missing_rows_and_all_side_effects() {
@@ -21,6 +20,7 @@ async fn detached_fleet_precedes_missing_rows_and_all_side_effects() {
         service
             .purchase(PurchaseRequest {
                 billing: PurchaseBilling::Stripe,
+                purchase_key: key("buy-dialog-1"),
                 team_id: TEAM,
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 size: ComputerSize::Standard,
@@ -71,27 +71,16 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
         ..FakeRepo::default()
     };
     let id = ComputerId::new_from_uuid(Uuid::now_v7());
-    repo.reserve(
-        NewComputer {
+    repo.computers.lock().unwrap().insert(
+        id,
+        super::computer(
             id,
-            team_id: TEAM,
-            name: ComputerName::try_new("Build box").unwrap(),
-            billing: PurchaseBilling::Stripe,
-            extra_items: vec![],
-            size: ComputerSize::Standard,
-            resources: crate::domain::size::current_catalog()[0].resources,
-            catalog_entry: crate::domain::size::current_catalog()[0].id.clone(),
-            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            agent: None,
-        },
-        now(),
-    )
-    .await
-    .unwrap();
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
+            Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: super::item("si_1"),
+            },
+        ),
+    );
     let service = ComputerService::new(
         repo,
         FakeBilling::default(),
@@ -137,7 +126,7 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
     assert!(
         effects
             .iter()
-            .any(|pending| matches!(pending.effect, Effect::RemoveBillingItem))
+            .any(|pending| matches!(pending.effect, Effect::RemoveBillingItem { .. }))
     );
     assert!(
         effects
@@ -178,28 +167,16 @@ pub(crate) async fn detached_router_service(
         ..FakeRepo::default()
     };
     let id = ComputerId::new_from_uuid(Uuid::now_v7());
-    let entry = crate::domain::size::current_catalog().remove(0);
-    repo.reserve(
-        NewComputer {
+    repo.computers.lock().unwrap().insert(
+        id,
+        super::computer(
             id,
-            team_id: TEAM,
-            name: ComputerName::try_new("Build box").unwrap(),
-            billing: PurchaseBilling::Stripe,
-            extra_items: vec![],
-            size: entry.size,
-            resources: entry.resources,
-            catalog_entry: entry.id,
-            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
-            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            agent: None,
-        },
-        now(),
-    )
-    .await
-    .unwrap();
-    repo.apply(id, Event::PaymentConfirmed, now())
-        .await
-        .unwrap();
+            Phase::Running,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: super::item("si_1"),
+            },
+        ),
+    );
     repo.events.lock().unwrap().clear();
     repo.effects.lock().unwrap().clear();
     let mut service = ComputerService::new(
@@ -219,7 +196,7 @@ pub(crate) async fn detached_router_service(
 
 pub(crate) fn assert_no_http_work(service: &RouterService) {
     assert_eq!(service.repo.computers.lock().unwrap().len(), 1);
-    assert_eq!(*service.repo.reservations.lock().unwrap(), 1);
+    assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);
     assert_eq!(*service.billing.sales_checks.lock().unwrap(), 0);
     assert_eq!(*service.repo.notify_writes.lock().unwrap(), 0);
     assert!(service.repo.events.lock().unwrap().is_empty());

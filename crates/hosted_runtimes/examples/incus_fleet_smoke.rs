@@ -1,6 +1,6 @@
 //! Drive one throwaway computer through `IncusFleet` on a dev Incus host:
-//! create → stop → start → (rebuild with `--update-image`) → destroy,
-//! timing each step. Destroy also deletes the computer's data volume.
+//! create → stop → start → destroy, timing each step. Destroy also deletes
+//! the computer's data volume.
 //!
 //! ```sh
 //! cargo run -p hosted_runtimes --example incus_fleet_smoke -- \
@@ -25,7 +25,7 @@ use std::time::Instant;
 use chrono::Utc;
 use clap::Parser;
 use hosted_runtimes::domain::enrollment::Enrollment;
-use hosted_runtimes::domain::lifecycle::ComputerState;
+use hosted_runtimes::domain::lifecycle::{Billing, BillingPolicy, Context, provision};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::ports::Fleet;
 use hosted_runtimes::domain::size::ComputerSize;
@@ -58,9 +58,6 @@ struct Args {
     /// `https://images.linuxcontainers.org` with `--image ubuntu/24.04`.
     #[arg(long)]
     image_server: Option<String>,
-    /// Rebuild the root disk from this local alias after starting.
-    #[arg(long)]
-    update_image: Option<String>,
     #[arg(long)]
     profile: String,
     #[arg(long)]
@@ -119,7 +116,22 @@ async fn main() -> Result<(), rootcause::Report> {
     let fleet = IncusFleet::new(config)?;
 
     let now = Utc::now();
-    let mut computer = Computer {
+    let host = HostId::new(Uuid::now_v7());
+    let (state, _) = provision(
+        Billing::Comped {
+            reason: "fleet smoke test".to_owned(),
+        },
+        hosted_runtimes::domain::setup::SetupTimeline::started(now),
+        None,
+        Context {
+            host,
+            enrollment_generation: Default::default(),
+            now,
+            host_has_room: true,
+            policy: BillingPolicy::from_days(14, 7)?,
+        },
+    );
+    let computer = Computer {
         id: ComputerId::new_from_uuid(Uuid::now_v7()),
         team_id: Uuid::now_v7(),
         name: ComputerName::try_new("fleet smoke test")?,
@@ -132,8 +144,11 @@ async fn main() -> Result<(), rootcause::Report> {
         catalog_entry: hosted_runtimes::domain::size::CatalogEntryId::try_new(
             "standard@2026-11".to_owned(),
         )?,
-        price_id: Some("price_standard".parse::<stripe::PriceId>()?),
-        state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
+        funding: hosted_runtimes::domain::models::Funding::Comped {
+            reason: "fleet smoke test".to_owned(),
+        },
+        host,
+        state,
         harness_id: None,
         created_by: macro_user_id::user_id::MacroUserIdStr::try_from(
             "macro|smoke@example.com".to_owned(),
@@ -143,12 +158,7 @@ async fn main() -> Result<(), rootcause::Report> {
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
-        previous_image: None,
         enrollment_generation: Default::default(),
-    };
-    computer.state.phase = hosted_runtimes::domain::lifecycle::Phase::Provisioning {
-        host: HostId::new(Uuid::now_v7()),
-        start: true,
     };
     let enrollment = Enrollment {
         computer_id: computer.id,
@@ -169,12 +179,7 @@ async fn main() -> Result<(), rootcause::Report> {
     println!("instance {}", instance_name(id));
     println!("host {:?}", fleet.host().await?);
 
-    let update_image = args
-        .update_image
-        .as_deref()
-        .map(hosted_runtimes::domain::image::GuestImage::try_new)
-        .transpose()?;
-    let result = run(&fleet, &computer, &enrollment, update_image.as_ref()).await;
+    let result = run(&fleet, &computer, &enrollment).await;
     // Always clean up, even after a failed step.
     let started = Instant::now();
     fleet.destroy(id).await?;
@@ -193,7 +198,6 @@ async fn run(
     fleet: &IncusFleet,
     computer: &Computer,
     enrollment: &Enrollment,
-    update_image: Option<&hosted_runtimes::domain::image::GuestImage>,
 ) -> Result<(), rootcause::Report> {
     let id = computer.id;
     let started = Instant::now();
@@ -217,13 +221,6 @@ async fn run(
     fleet.start(id).await?;
     println!("start        {:>8.1?}", started.elapsed());
     print_status(fleet, id).await?;
-
-    if let Some(update_image) = update_image {
-        let started = Instant::now();
-        fleet.rebuild(computer, update_image, true).await?;
-        println!("rebuild      {:>8.1?} ({update_image})", started.elapsed());
-        print_status(fleet, id).await?;
-    }
 
     let started = Instant::now();
     fleet.clear_enrollment(id).await?;

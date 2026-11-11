@@ -208,9 +208,15 @@ async fn timer_delivery_consults_fleet_before_applying_missing_macrod() {
         assert_eq!(
             state.phase,
             if observed == Some(InstanceStatus::Running) {
-                Phase::Booting { host: HOST }
+                Phase::Booting
             } else {
-                Phase::Restarting { host: HOST }
+                Phase::Crashed {
+                    restarts: 1,
+                    retry: Some(crate::domain::lifecycle::Retry {
+                        attempt: 0,
+                        next_at: now() + Duration::seconds(30),
+                    }),
+                }
             }
         );
         assert!(operator.repo.events.lock().unwrap().contains(&(

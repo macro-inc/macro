@@ -11,7 +11,7 @@ use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass,
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
-    Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind,
+    Backoff, Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind, backoff,
 };
 use crate::domain::models::{Computer, ComputerRecord};
 use crate::domain::ports::{
@@ -25,6 +25,16 @@ mod test;
 
 /// A fleet effect is retried this many times before the computer fails.
 pub const MAX_EFFECT_ATTEMPTS: u32 = 5;
+/// Retries of a failed fleet effect: 10 s doubling to 10 min.
+pub const FLEET_EFFECT_BACKOFF: Backoff = Backoff {
+    first: std::time::Duration::from_secs(10),
+    max: std::time::Duration::from_secs(10 * 60),
+};
+/// Retries of host registration: 10 s doubling to 1 min.
+pub const HOST_REGISTRATION_BACKOFF: Backoff = Backoff {
+    first: std::time::Duration::from_secs(10),
+    max: std::time::Duration::from_secs(60),
+};
 /// Minimum guest age before orphan deletion, to avoid racing creation.
 pub const ORPHAN_GRACE: Duration = Duration::minutes(10);
 const EFFECT_BATCH: u32 = 16;
@@ -57,7 +67,7 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time> {
 struct HostReadiness {
     id: Option<HostId>,
     retry_at: Option<DateTime<Utc>>,
-    failures: u32,
+    failures: u8,
 }
 
 impl<Repo, Machines, Registry, Time> ComputerOperator<Repo, Machines, Registry, Time>
@@ -134,9 +144,10 @@ where
                 Ok(host.id)
             }
             Err(error) => {
-                let retry_seconds = (10 * 2_i64.pow(readiness.failures.min(3))).min(60);
+                let delay = backoff(HOST_REGISTRATION_BACKOFF, readiness.failures);
+                let retry_seconds = delay.num_seconds();
                 readiness.failures = readiness.failures.saturating_add(1);
-                readiness.retry_at = Some(self.clock.now() + Duration::seconds(retry_seconds));
+                readiness.retry_at = Some(self.clock.now() + delay);
                 tracing::error!(error = ?error, healthy = false, retry_seconds,
                     "computer host unavailable; retrying registration");
                 Err(error)
@@ -265,9 +276,12 @@ where
             Err(error) if pending.attempts + 1 < MAX_EFFECT_ATTEMPTS => {
                 super::telemetry::effect_failed(phase);
                 tracing::warn!(error = ?error, "computer effect failed; retrying");
-                let backoff = Duration::seconds(10 * 2_i64.pow(pending.attempts));
+                let delay = backoff(
+                    FLEET_EFFECT_BACKOFF,
+                    u8::try_from(pending.attempts).unwrap_or(u8::MAX),
+                );
                 self.repo
-                    .retry_effect(pending.id, error.to_string(), self.clock.now() + backoff)
+                    .retry_effect(pending.id, error.to_string(), self.clock.now() + delay)
                     .await
                     .map_err(internal)?;
             }
@@ -299,9 +313,8 @@ where
         if let Some(host) = effect_host(effect)
             && host != registered_host
         {
-            return Err(ComputerError::BadRequest(format!(
-                "effect for host {host} reached the operator of {}",
-                registered_host
+            return Err(ComputerError::Internal(rootcause::report!(
+                "effect for host {host} reached the operator of {registered_host}"
             )));
         }
 
@@ -321,9 +334,9 @@ where
                     return Ok(None);
                 }
                 if computer.enrollment_generation != *generation {
-                    return Err(ComputerError::BadRequest(
-                        "invalid enrollment generation".to_owned(),
-                    ));
+                    return Err(ComputerError::Internal(rootcause::report!(
+                        "invalid enrollment generation"
+                    )));
                 }
                 let enrollment = CreateEnrollment {
                     harnesses: &self.harnesses,
@@ -363,10 +376,7 @@ where
                 let computer = self.computer(computer_id).await?;
                 if computer.state.macrod_connected
                     || computer.state.macrod_misses < crate::domain::lifecycle::MAX_MACROD_MISSES
-                    || !matches!(
-                        computer.state.phase,
-                        Phase::Booting { .. } | Phase::Running { .. }
-                    )
+                    || !matches!(computer.state.phase, Phase::Booting | Phase::Running)
                 {
                     return Ok(None);
                 }
@@ -376,24 +386,6 @@ where
                 self.fleet.stop(computer_id).await,
                 Some(Event::InstanceStopped),
             ),
-            Effect::Rebuild { image, start, .. } => {
-                let computer = self.computer(computer_id).await?;
-                let result = self.fleet.rebuild(&computer, image, *start).await;
-                if result.is_ok() {
-                    self.repo
-                        .record_image(computer_id, image)
-                        .await
-                        .map_err(internal)?;
-                }
-                fleet_completion(
-                    result,
-                    Some(if *start {
-                        Event::InstanceStarted
-                    } else {
-                        Event::InstanceStopped
-                    }),
-                )
-            }
             Effect::Destroy { .. } => {
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
                 Ok(None)
@@ -408,11 +400,11 @@ where
                 tracing::error!(computer_id = %computer_id, reason = %reason, "computer needs an operator");
                 Ok(None)
             }
-            Effect::ConfirmPayment { .. }
-            | Effect::RemoveBillingItem
-            | Effect::ScheduleTimer { .. } => Err(ComputerError::BadRequest(format!(
-                "{effect:?} is not a fleet effect"
-            ))),
+            Effect::RemoveBillingItem { .. } | Effect::ScheduleTimer { .. } => {
+                Err(ComputerError::Internal(rootcause::report!(
+                    "a non-fleet effect reached the fleet worker"
+                )))
+            }
         }
     }
 
@@ -503,15 +495,19 @@ where
                 }
             }
             let crashed = match computer.state.phase {
-                Phase::Running { .. } | Phase::Booting { .. } => {
+                Phase::Running | Phase::Booting => {
                     observed.is_none() || observed == Some(InstanceStatus::Stopped)
                 }
-                _ => false,
+                Phase::Provisioning { .. }
+                | Phase::Crashed { .. }
+                | Phase::Stopping
+                | Phase::Stopped
+                | Phase::Destroying => false,
             };
             let lost = observed.is_none()
                 && matches!(
                     computer.state.phase,
-                    Phase::Failed { .. } | Phase::Stopped { .. }
+                    Phase::Crashed { retry: None, .. } | Phase::Stopped
                 );
             if crashed || lost {
                 use tracing::Instrument;
@@ -702,9 +698,7 @@ where
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?
             .into_healthy()
-            .map_err(|_| {
-                ComputerError::BadRequest("computer needs attention; contact support".to_owned())
-            })
+            .map_err(|_| ComputerError::NeedsAttention)
     }
 }
 
@@ -725,7 +719,7 @@ fn fleet_completion(
 fn is_gone(record: ComputerRecord) -> bool {
     record
         .healthy()
-        .is_some_and(|computer| computer.state.phase == Phase::Destroyed)
+        .is_some_and(|computer| !computer.state.is_live())
 }
 
 fn effect_host(effect: &Effect) -> Option<HostId> {
@@ -735,10 +729,8 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::Stop { host }
         | Effect::Restart { host }
         | Effect::RestartMacrod { host }
-        | Effect::Rebuild { host, .. }
         | Effect::Destroy { host } => Some(*host),
-        Effect::ConfirmPayment { .. }
-        | Effect::RemoveBillingItem
+        Effect::RemoveBillingItem { .. }
         | Effect::RevokeHarness
         | Effect::ScheduleTimer { .. }
         | Effect::PageOperator { .. } => None,

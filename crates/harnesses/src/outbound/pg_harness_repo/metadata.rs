@@ -111,7 +111,7 @@ impl PgHarnessRepo {
             WHERE harness_id = $1 AND provider = $2 AND signed_out_at IS NULL
             "#,
             harness_id.as_uuid(),
-            provider.as_ref(),
+            provider as AgentProvider,
         )
         .execute(&mut *tx)
         .await
@@ -135,7 +135,7 @@ impl PgHarnessRepo {
                 RETURNING id
                 "#,
                 Uuid::now_v7(),
-                provider.as_ref(),
+                provider as AgentProvider,
                 account.external_account_id,
                 account.display_email,
                 account.display_org,
@@ -153,7 +153,7 @@ impl PgHarnessRepo {
                 Uuid::now_v7(),
                 harness_id.as_uuid(),
                 account_id,
-                provider.as_ref(),
+                provider as AgentProvider,
                 signed_in_by.as_ref(),
             )
             .execute(&mut *tx)
@@ -174,7 +174,7 @@ impl PgHarnessRepo {
         let row = sqlx::query!(
             r#"
             SELECT login.id, login.signed_in_by, login.signed_in_at, login.expires_at,
-                   login.signed_out_at, account.id AS account_id, account.provider,
+                   login.signed_out_at, account.id AS account_id, account.provider AS "provider: AgentProvider",
                    account.external_account_id, account.display_email, account.display_org,
                    account.plan
             FROM harness_account_logins login
@@ -182,7 +182,7 @@ impl PgHarnessRepo {
             WHERE login.harness_id = $1 AND login.provider = $2 AND login.signed_out_at IS NULL
             "#,
             harness_id.as_uuid(),
-            provider.as_ref(),
+            provider as AgentProvider,
         )
         .fetch_optional(&self.pool)
         .await
@@ -206,7 +206,7 @@ impl PgHarnessRepo {
             harness_id,
             account: ProviderAccount {
                 id: row.account_id,
-                provider: row.provider.parse().map_err(|_| invalid("provider"))?,
+                provider: row.provider,
                 identity: ProviderAccountIdentity {
                     external_account_id: row.external_account_id,
                     display_email: row.display_email,

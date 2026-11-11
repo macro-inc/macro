@@ -1,6 +1,6 @@
 use std::str::FromStr;
 mod agent;
-mod image_update;
+mod data_disk;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -16,7 +16,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::fakes::{FakeError, FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::ComputerState;
-use crate::domain::models::{ControlPlaneId, HostRegistration, NewComputer};
+use crate::domain::models::{ControlPlaneId, HostRegistration, NewReservation};
 use crate::domain::ports::{DefaultAgent, HostedPairing};
 use crate::domain::size::ComputerSize;
 
@@ -115,22 +115,6 @@ impl Fleet for FakeFleet {
                 .or_insert_with(|| format!("data-{}", generation.get()));
         }
         Ok(image)
-    }
-
-    async fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> Result<(), FakeFleetError> {
-        if self.missing {
-            return Err(FakeFleetError::Missing);
-        }
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("rebuild {} {image} start={start}", computer.id));
-        Ok(())
     }
 
     async fn start(&self, id: ComputerId) -> Result<(), FakeFleetError> {
@@ -342,11 +326,13 @@ async fn paid_computer(
     operator
         .repo
         .reserve(
-            NewComputer {
-                billing: crate::domain::models::PurchaseBilling::Stripe,
-                extra_items: vec![],
+            NewReservation {
                 id,
                 team_id: TEAM,
+                purchase_key: crate::domain::models::PurchaseKey::try_new(
+                    "buy-dialog-1".to_owned(),
+                )
+                .unwrap(),
                 name: ComputerName::try_new("Ada").unwrap(),
                 size: ComputerSize::Standard,
                 resources: crate::domain::size::ComputerResources {
@@ -358,18 +344,30 @@ async fn paid_computer(
                     "standard@2026-11".to_owned(),
                 )
                 .unwrap(),
-                price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
+                funding: crate::domain::models::Funding::Stripe {
+                    price_id: stripe::PriceId::from_str("price_standard").unwrap(),
+                },
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+                extra_items: vec![],
+                provision_traceparent: None,
                 agent: None,
             },
             now(),
+            now() + Duration::minutes(15),
         )
         .await
         .unwrap();
     operator
         .repo
-        .apply(id, Event::PaymentConfirmed, now())
+        .convert_reservation(
+            id,
+            crate::domain::lifecycle::Billing::Active {
+                subscription_item: "si_1".parse().unwrap(),
+            },
+            now(),
+        )
         .await
+        .unwrap()
         .unwrap();
     id
 }
@@ -407,7 +405,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(booting.state.phase, Phase::Booting { host: HOST });
+    assert_eq!(booting.state.phase, Phase::Booting);
 
     assert!(operator.macrod_connected(HARNESS).await.unwrap());
     let ready = operator
@@ -418,7 +416,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(ready.state.phase, Phase::Running { host: HOST });
+    assert_eq!(ready.state.phase, Phase::Running);
     assert_eq!(ready.harness_id, Some(HARNESS));
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
@@ -449,7 +447,12 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
         .into_healthy()
         .unwrap();
     assert_eq!(ready.default_agent_id, Some(DEFAULT_AGENT));
-    assert_eq!(ready.status(0).default_agent_id, Some(DEFAULT_AGENT));
+    assert_eq!(
+        ready
+            .status(0, now(), crate::domain::fakes::policy())
+            .default_agent_id,
+        Some(DEFAULT_AGENT)
+    );
 }
 
 /// The agent is a convenience: failing to create it never holds up setup,
@@ -473,7 +476,7 @@ async fn a_failed_default_agent_still_makes_the_computer_ready() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(ready.state.phase, Phase::Running { host: HOST });
+    assert_eq!(ready.state.phase, Phase::Running);
     assert!(ready.enrolled_at.is_some());
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
@@ -510,7 +513,13 @@ async fn an_effect_that_keeps_failing_fails_the_computer() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(failed.state.phase, Phase::Failed { host: HOST });
+    assert_eq!(
+        failed.state.phase,
+        Phase::Crashed {
+            restarts: 0,
+            retry: None,
+        }
+    );
     // The page goes out, then nothing is left to do.
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 0);
@@ -535,7 +544,7 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
         let mut computers = operator.repo.computers.lock().unwrap();
         let computer = computers.get_mut(&id).unwrap();
         computer.state = ComputerState {
-            phase: Phase::Running { host: HOST },
+            phase: Phase::Running,
             macrod_connected: true,
             macrod_misses: 0,
             ..computer.state.clone()
@@ -552,7 +561,16 @@ async fn reconcile_turns_a_missing_instance_into_a_crash_and_removes_orphans() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(crashed.state.phase, Phase::Restarting { host: HOST });
+    assert_eq!(
+        crashed.state.phase,
+        Phase::Crashed {
+            restarts: 1,
+            retry: Some(crate::domain::lifecycle::Retry {
+                attempt: 0,
+                next_at: now() + Duration::seconds(30),
+            }),
+        }
+    );
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
         vec![format!("destroy {orphan}")]
@@ -596,13 +614,7 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
         .unwrap()
         .into_healthy()
         .unwrap();
-    assert_eq!(
-        lost.state.phase,
-        Phase::Provisioning {
-            host: HOST,
-            start: true
-        }
-    );
+    assert_eq!(lost.state.phase, Phase::Provisioning { start: true });
     assert!(!lost.state.macrod_connected);
     assert_eq!(lost.harness_id, Some(HARNESS));
     assert_eq!(operator.run_fleet_effects().await.unwrap(), 1);
@@ -616,7 +628,7 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
         .unwrap();
     assert_eq!(recreated.id, id);
     assert_eq!(recreated.harness_id, Some(HARNESS));
-    assert_eq!(recreated.state.phase, Phase::Booting { host: HOST });
+    assert_eq!(recreated.state.phase, Phase::Booting);
     {
         let enrollments = operator.fleet.enrollments.lock().unwrap();
         assert_eq!(enrollments.len(), 2);
@@ -635,7 +647,13 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
 
 #[tokio::test]
 async fn reconcile_recreates_missing_stopped_or_failed_guests_but_keeps_existing_guests() {
-    for phase in [Phase::Failed { host: HOST }, Phase::Stopped { host: HOST }] {
+    for phase in [
+        Phase::Crashed {
+            restarts: 0,
+            retry: None,
+        },
+        Phase::Stopped,
+    ] {
         for present in [false, true] {
             let operator = operator(FakeFleet::default()).await;
             let id = paid_computer(&operator).await;
@@ -676,10 +694,7 @@ async fn reconcile_recreates_missing_stopped_or_failed_guests_but_keeps_existing
                 if present {
                     phase.clone()
                 } else {
-                    Phase::Provisioning {
-                        host: HOST,
-                        start: true,
-                    }
+                    Phase::Provisioning { start: true }
                 }
             );
         }
@@ -792,14 +807,11 @@ async fn reconcile_keeps_quarantined_guests_and_processes_healthy_computers() {
         {
             let mut computers = operator.repo.computers.lock().unwrap();
             let mut computer = computers.get(&healthy).unwrap().clone();
-            computer.state.phase = Phase::Running { host: HOST };
+            computer.state.phase = Phase::Running;
             computers.insert(healthy, computer.clone());
             computer.id = corrupt;
             if !expected {
-                computer.state.phase = Phase::PendingPayment {
-                    host: HOST,
-                    since: now(),
-                };
+                computer.state.phase = Phase::Destroying;
             }
             computers.insert(corrupt, computer);
         }
