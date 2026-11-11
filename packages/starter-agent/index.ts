@@ -2,6 +2,8 @@
  * The agent's entrypoint: builds its real context and its behavior. `cli.ts` runs
  * it, or calls one of its capabilities from outside the running process.
  */
+// Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
+import 'temporal-polyfill/global';
 import { rm } from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { Scripts } from '@macro-inc/muppet/runtimes/pieces';

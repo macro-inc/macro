@@ -14,6 +14,8 @@
  * input is type-checked like any script's: a mistyped flag, or input the
  * function doesn't take, is refused before anything runs.
  */
+// Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
+import 'temporal-polyfill/global';
 import {
   describe,
   moduleOf,

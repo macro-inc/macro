@@ -1,5 +1,8 @@
-// Bun has Temporal, but TypeScript's own types for it aren't out yet.
+// TypeScript's own types for Temporal aren't out yet.
 /// <reference types="temporal-spec/global" />
+
+// Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
+import 'temporal-polyfill/global';
 
 /**
  * A small, opinionated layer over Temporal. Nothing here reads the clock:
