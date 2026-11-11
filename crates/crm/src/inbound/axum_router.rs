@@ -18,6 +18,9 @@ pub mod set_contact_email;
 /// Set the display name (`name`) on a `crm_contacts` row.
 pub mod set_contact_name;
 
+/// Read and replace a contact's phone numbers.
+pub mod contact_phones;
+
 /// List contacts of a `crm_companies` row. Role-aware: members see
 /// visible contacts only; admin/owner see hidden contacts too.
 pub mod list_company_contacts;
@@ -199,6 +202,11 @@ where
         .route(
             "/contacts/{contact_id}/name",
             put(set_contact_name::handler::<C, St, Eas, Auth>),
+        )
+        .route(
+            "/contacts/{contact_id}/phones",
+            get(contact_phones::get_handler::<C, St, Eas, Auth>)
+                .put(contact_phones::set_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/settings",

@@ -79,9 +79,11 @@ import {
 } from './queries/contact-edit';
 import { useContactEmailsQuery } from './queries/contact-emails';
 import {
+  useContactPhonesQuery,
   useContactQuery,
   useSetContactHiddenMutation,
   useSetContactNameMutation,
+  useSetContactPhonesMutation,
 } from './queries/contacts';
 import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
@@ -377,6 +379,8 @@ export function createAppCrmContext(): CrmContext {
     createCompanySource: (...args) => useCompanyQuery(deps, ...args),
     createContactSource: (...args) =>
       withReadyGate(useContactQuery(deps, ...args)),
+    createContactPhones: (...args) =>
+      withReadyGate(useContactPhonesQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
     createTeamConfigSource: createSettings,
     createBlockedDomains: () => useBlockedDomains(deps),
@@ -393,6 +397,7 @@ export function createAppCrmContext(): CrmContext {
     renameContact: (...args) => useSetContactNameMutation(deps, ...args),
     editContactEmail: () => useSetContactEmailMutation(deps),
     editContactCompany: () => useSetContactCompanyMutation(deps),
+    setContactPhones: (...args) => useSetContactPhonesMutation(deps, ...args),
     hideCompany: (...args) => useSetCompanyHiddenMutation(deps, ...args),
     hideContact: (...args) => useSetContactHiddenMutation(deps, ...args),
     setEmailSync: (...args) => useSetEmailSyncMutation(deps, ...args),

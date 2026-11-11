@@ -207,6 +207,15 @@ Contact properties use Tasks-style pills in the header and **Record details**.
 Cancel or Escape discards the draft, and invalid input stays open. Populated
 addresses are read-only: no replacement, clearing or additional email identity.
 
+Contact headers list the contact's phone numbers as pills after the email.
+On phones each pill is a `tel:` link to the device's dialer; on larger screens
+the number sits beside a **Call** link. **Add phone** / **Edit phones** opens a
+dialog of numbers, each needing its country code (`+…`); the server stores them
+in E.164 and refuses others. Numbers also arrive from contact CSV imports and
+from imported calls whose guest matched the contact by email. Imported calls
+(Granola today) link to the contact (email first, then phone) and appear in
+its Calls section for people who can open the call.
+
 Only contacts with a known personal-provider email can link or switch company.
 Their company pill opens the Tasks singleton picker; on touch, select a company
 then **Done**. Cancel keeps the original relation. There is no unlink action.
@@ -539,7 +548,10 @@ companies or contacts, then returns to Companies.
 CSV** reads the same shape, so an export imports into another team's pipeline.
 Rows match companies by domain and contacts by email, creating missing ones
 (personal domains such as gmail.com cannot be created); other headers fill the
-pipeline columns of the same name, adding missing select options. A record
+pipeline columns of the same name, adding missing select options. On a contact
+pipeline, a Phone, Phone number, Mobile, Mobile phone, Work phone or Telephone
+column with no column of its own saves its numbers to the contact; the result
+counts the numbers saved and the values without a country code. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,

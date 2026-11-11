@@ -858,6 +858,7 @@ export const mapApiSoupItemToEntity = (
         participantIds: item.data.participants.map((p) => p.userId),
         guests: item.data.guests,
         summary: item.data.summary ?? undefined,
+        provider: item.data.provider ?? undefined,
         properties: item.data.properties,
       } satisfies CallEntity;
     })

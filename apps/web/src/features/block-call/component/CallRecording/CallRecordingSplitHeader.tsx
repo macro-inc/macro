@@ -31,7 +31,9 @@ import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
+import { Show } from 'solid-js';
 import { callRecordingDownloadSource } from '../../queries/recording-download';
+import { CallSourceBadge } from '../CallSourceBadge';
 
 export function CallRecordingSplitHeaderLoading() {
   return (
@@ -157,6 +159,9 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
                 <PhoneCallIcon class="size-4 touch:size-6 shrink-0 text-ink-muted" />
               }
             />
+            <Show when={record().source}>
+              {(source) => <CallSourceBadge source={source()} />}
+            </Show>
           </div>
         </div>
       </SplitHeaderLeft>

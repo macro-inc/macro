@@ -3,6 +3,7 @@ import { thrownResultErrorHasCode } from '@core/util/result';
 import { Show } from 'solid-js';
 import { ContactCompanyProperty } from '../components/contact-company-property';
 import { ContactEmailProperty } from '../components/contact-email-property';
+import { ContactPhonesProperty } from '../components/contact-phones-property';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact } from '../core/contact';
 import { useCompanyQuery } from './use-crm';
@@ -36,6 +37,30 @@ export function ContactEmailField(props: { contact: CrmContact }) {
           }
           save={async (email) => {
             await mutation.mutateAsync({ contact: props.contact, email });
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+/** The contact's phone numbers; keyed like the other fields, so an open editor closes on navigation. */
+export function ContactPhonesField(props: { contact: CrmContact }) {
+  const context = useCrmContext();
+  const phones = context.createContactPhones(() => props.contact.id);
+  const mutation = context.setContactPhones();
+  return (
+    <Show when={props.contact.id} keyed>
+      {(contactId) => (
+        <ContactPhonesProperty
+          phones={phones.data?.map((phone) => phone.phone)}
+          errorMessage={(error) =>
+            thrownResultErrorHasCode(error, 'BAD_REQUEST')
+              ? t('crm.contactPhonesInvalid')
+              : editError(error)
+          }
+          save={async (next) => {
+            await mutation.mutateAsync({ contactId, phones: next });
           }}
         />
       )}

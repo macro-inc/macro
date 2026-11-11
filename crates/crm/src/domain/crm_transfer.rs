@@ -18,12 +18,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use databases::domain::models::Viewer;
 use futures::{StreamExt, stream};
+use phone_number::PhoneNumber;
 use uuid::Uuid;
 
 use super::{
     crm_csv::{
-        CsvTable, RecordRow, company_pipeline_rows, encode_csv, parse_csv, record_rows,
-        unique_companies,
+        CsvTable, RecordRow, company_pipeline_rows, encode_csv, is_phone_header, parse_csv,
+        record_rows, unique_companies,
     },
     model::CrmError,
     pipeline_workflows::{
@@ -114,6 +115,35 @@ async fn bounded<F: Future>(futures: Vec<F>) -> Vec<F::Output> {
         .buffer_unordered(CONCURRENCY)
         .collect()
         .await
+}
+
+/// The numbers in each contact row's `phone_headers` columns, for the row's
+/// contact, and how many values were not numbers with a country code.
+fn row_phones(
+    rows: &[RecordRow],
+    ids: &HashMap<String, Uuid>,
+    phone_headers: &[&str],
+) -> (Vec<(Uuid, PhoneNumber)>, usize) {
+    let mut phones = Vec::new();
+    let mut invalid = 0;
+    for row in rows {
+        let Some(&id) = ids.get(&row.key) else {
+            continue;
+        };
+        for (_, value) in row
+            .values
+            .iter()
+            .filter(|(header, _)| phone_headers.contains(&header.as_str()))
+        {
+            match PhoneNumber::parse(value) {
+                Some(phone) => phones.push((id, phone)),
+                None => invalid += 1,
+            }
+        }
+    }
+    phones.sort();
+    phones.dedup();
+    (phones, invalid)
 }
 
 /// The domain of an email address.
@@ -451,6 +481,7 @@ where
         let reserved = record_headers(record_type);
         let mut fields: Vec<(String, &PipelineField)> = Vec::new();
         let mut ignored_columns = Vec::new();
+        let mut phone_headers = Vec::new();
         for header in other_headers {
             if reserved
                 .iter()
@@ -462,12 +493,23 @@ where
                 !field.is_record() && importable(field) && field.name.eq_ignore_ascii_case(header)
             }) {
                 Some(field) => fields.push((header.clone(), field)),
+                // A contact's phone columns without a field of their own are
+                // saved on the contact itself.
+                None if record_type == PipelineRecordType::Contact && is_phone_header(header) => {
+                    phone_headers.push(header.as_str());
+                }
                 None => ignored_columns.push(header.clone()),
             }
         }
 
         let (ids, created_records, unresolved) =
             self.resolve(viewer, record_type, rows, domains).await?;
+        let (phones, invalid_phones) = row_phones(rows, &ids, &phone_headers);
+        let phones_saved = if phones.is_empty() {
+            0
+        } else {
+            self.records.add_contact_phones(viewer, phones).await?
+        };
         let record_ids: Vec<Uuid> = ids
             .values()
             .copied()
@@ -543,6 +585,8 @@ where
             filled_fields: fields.iter().map(|(_, field)| field.name.clone()).collect(),
             ignored_columns,
             added_options,
+            phones_saved,
+            invalid_phones,
         })
     }
 

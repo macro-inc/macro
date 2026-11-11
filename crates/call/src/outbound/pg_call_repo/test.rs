@@ -2981,7 +2981,7 @@ async fn get_call_record_people_returns_participants_only_without_a_meeting(
         user_ids,
         vec!["macro|user-a@test.com", "macro|user-b@test.com"]
     );
-    assert!(people.invitee_emails.is_empty());
+    assert!(people.guests.is_empty());
     Ok(())
 }
 
@@ -3133,7 +3133,12 @@ async fn get_call_record_people_includes_meeting_owner_and_calendar_invitees(
             "macro|user-c@test.com"
         ]
     );
-    let mut invitee_emails = people.invitee_emails;
+    assert!(people.guests.iter().all(|guest| guest.phone.is_none()));
+    let mut invitee_emails: Vec<String> = people
+        .guests
+        .into_iter()
+        .filter_map(|guest| guest.email)
+        .collect();
     invitee_emails.sort();
     assert_eq!(
         invitee_emails,

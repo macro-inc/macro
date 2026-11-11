@@ -8872,6 +8872,156 @@
         }
       }
     },
+    "/crm/contacts/{contact_id}/phones": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::contact_phones"],
+        "summary": "The contact's phone numbers. Access is enforced by\n[`CrmContactAccessLevelExtractor`], like reading the contact.",
+        "operationId": "get_crm_contact_phones",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactPhonesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["crm::inbound::axum_router::contact_phones"],
+        "summary": "Replace the contact's phone numbers. Access is enforced by\n[`CrmContactAccessLevelExtractor`], like adding the contact's email.",
+        "operationId": "set_crm_contact_phones",
+        "parameters": [
+          {
+            "name": "contact_id",
+            "in": "path",
+            "description": "The CRM contact",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetContactPhonesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactPhonesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/email-privacy": {
       "get": {
         "tags": ["crm::inbound::axum_router::email_privacy"],
@@ -32765,6 +32915,35 @@
         "description": "How a group's conditions combine.",
         "enum": ["and", "or"]
       },
+      "ContactPhone": {
+        "type": "object",
+        "description": "One of a contact's numbers.",
+        "required": ["phone", "source"],
+        "properties": {
+          "phone": {
+            "type": "string",
+            "description": "E.164: `+`, the country code and the number."
+          },
+          "source": {
+            "$ref": "#/components/schemas/PhoneSource",
+            "description": "Where the number came from."
+          }
+        }
+      },
+      "ContactPhonesResponse": {
+        "type": "object",
+        "description": "A contact's phone numbers, oldest first.",
+        "required": ["phones"],
+        "properties": {
+          "phones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContactPhone"
+            },
+            "description": "The numbers, oldest first."
+          }
+        }
+      },
       "ConversationId": {
         "type": "string",
         "description": "Source Slack conversation ID (C, G or D prefix); unique only within a source."
@@ -49985,6 +50164,11 @@
           }
         }
       },
+      "PhoneSource": {
+        "type": "string",
+        "description": "Where a contact's number came from.",
+        "enum": ["manual", "csv", "call"]
+      },
       "PinRequest": {
         "type": "object",
         "required": ["pinType"],
@@ -50293,7 +50477,9 @@
           "skippedRows",
           "filledFields",
           "ignoredColumns",
-          "addedOptions"
+          "addedOptions",
+          "phonesSaved",
+          "invalidPhones"
         ],
         "properties": {
           "added": {
@@ -50338,6 +50524,17 @@
               "$ref": "#/components/schemas/SkippedImportRecord"
             },
             "description": "Rows refused for a value their field cannot hold."
+          },
+          "invalidPhones": {
+            "type": "integer",
+            "description": "Phone values that were not numbers with a country code.",
+            "minimum": 0
+          },
+          "phonesSaved": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Phone numbers from a contact CSV newly saved to contacts.",
+            "minimum": 0
           },
           "pipelineId": {
             "type": "string",
@@ -53050,6 +53247,20 @@
           }
         }
       },
+      "SetContactPhonesRequest": {
+        "type": "object",
+        "description": "Request body for `PUT /contacts/{contact_id}/phones`.",
+        "required": ["phones"],
+        "properties": {
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every number the contact should have, as typed, each with its country\ncode. Formatting is ignored; numbers are stored in E.164. Numbers the\ncontact keeps keep their source. Empty removes them all (400 when one\nis not a number, or there are more than ten)."
+          }
+        }
+      },
       "SetDirectAccess": {
         "type": "object",
         "description": "Direct-grant change. A null level removes only that direct grant.",
@@ -54337,6 +54548,17 @@
                   "$ref": "#/components/schemas/SoupCallRecordParticipant"
                 },
                 "description": "Macro-account participants in the call."
+              },
+              "provider": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CallProvider",
+                    "description": "The provider an imported call came from; `None` for a Macro call."
+                  }
+                ]
               },
               "startedAt": {
                 "type": "string",

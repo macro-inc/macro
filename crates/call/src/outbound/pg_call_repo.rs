@@ -32,11 +32,11 @@ use crate::domain::meetings::{
     GuestId, Meeting, MeetingPreparation, MeetingToken, UpdateMeetingRequest,
 };
 use crate::domain::models::{
-    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
-    CallPeople, CallRecord, CallRecordGuest, CallRecordPage, CallRecordParticipant,
-    CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment, CustomSpeakerAssignment,
-    DeletedCallRecordStorageKeys, EditCallRecordRepoArgs, EnrichedCallTranscript,
-    TranscriptSegmentRequest, WithCallId,
+    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallGuest,
+    CallParticipant, CallPeople, CallRecord, CallRecordGuest, CallRecordPage,
+    CallRecordParticipant, CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment,
+    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
+    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 use property_clauses::{clause_params, property_clauses};
@@ -902,6 +902,11 @@ impl CallRepository for PgCallRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_call_record_people(&self, call_record_id: &Uuid) -> Result<CallPeople, Self::Err> {
+        let mut conn = self.pool.acquire().await?;
+        if let Some(people) = imported::imported_call_people(&mut conn, call_record_id).await? {
+            return Ok(people);
+        }
+        drop(conn);
         let user_ids = sqlx::query_scalar!(
             r#"
             SELECT p.user_id AS "user_id!"
@@ -981,7 +986,13 @@ impl CallRepository for PgCallRepo {
 
         Ok(CallPeople {
             user_ids,
-            invitee_emails,
+            guests: invitee_emails
+                .into_iter()
+                .map(|email| CallGuest {
+                    email: Some(email),
+                    phone: None,
+                })
+                .collect(),
         })
     }
 
@@ -2079,7 +2090,11 @@ impl CallRepository for PgCallRepo {
         }
 
         let mut conn = self.pool.acquire().await?;
-        guests_by_call.extend(imported::imported_guests(&mut conn, &imported_ids).await?);
+        for (call_id, people) in imported::imported_people(&mut conn, &imported_ids).await? {
+            participants_by_call.insert(call_id, people.participants);
+            guests_by_call.insert(call_id, people.guests);
+        }
+        let mut sources = imported::imported_sources(&mut conn, &imported_ids).await?;
         drop(conn);
 
         let call_ids: Vec<Uuid> = rows.iter().map(|row| row.call_id).collect();
@@ -2133,7 +2148,7 @@ impl CallRepository for PgCallRepo {
                 participants,
                 guests,
                 transcript: Vec::new(),
-                source: None,
+                source: sources.remove(&row.call_id),
             });
         }
 

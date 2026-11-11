@@ -11092,6 +11092,14 @@ export interface ToolPipelineImport {
    * Options added to select fields so the CSV's values fit.
    */
   addedOptions: ToolAddedOptions[];
+  /**
+   * Phone numbers from a contact CSV newly saved to contacts.
+   */
+  phonesSaved: number;
+  /**
+   * Phone values that were not numbers with a country code.
+   */
+  invalidPhones: number;
 }
 /**
  * A select field and the options an import added to it.
@@ -11434,6 +11442,14 @@ export interface ImportPipelineCsvResponse {
    * Options added to select fields so the CSV's values fit.
    */
   addedOptions: ToolAddedOptions[];
+  /**
+   * Phone numbers from a contact CSV newly saved to contacts.
+   */
+  phonesSaved: number;
+  /**
+   * Phone values that were not numbers with a country code.
+   */
+  invalidPhones: number;
   /**
    * What happened.
    */

@@ -1157,11 +1157,11 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
-    // Links archived calls to the CRM records of the people on them.
+    // Links archived and imported calls to the CRM records of the people on them.
     let crm_call_link_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
-        let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
+        let consumer = crm::inbound::call_events::CallLinkConsumer::new(
             crm::domain::call_links::CallRecordLinker::new(
                 call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                     db.clone(),

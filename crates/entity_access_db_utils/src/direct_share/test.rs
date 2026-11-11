@@ -45,3 +45,37 @@ async fn project_grant_skips_legacy_children_and_preserves_modern_grants(pool: P
         == macro_uuid::Uuid::from_u128(0x20000000000000000000000000000002)
         && grant.entity_type == "document"));
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn an_imported_call_can_be_shared_directly(pool: PgPool) {
+    let call_id = macro_uuid::Uuid::from_u128(0x20000000000000000000000000000006);
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
+        VALUES ('imported-call-share', NULL, NULL)"#
+    )
+    .execute(tx.as_mut())
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO call_entities (id, user_id, title, created_via, share_permission_id)
+        VALUES ($1, 'macro|owner@example.com', 'Call with Ada', 'import', 'imported-call-share')"#,
+        call_id
+    )
+    .execute(tx.as_mut())
+    .await
+    .unwrap();
+
+    let facts = facts(&mut tx, &call_id, EntityType::Call)
+        .await
+        .unwrap()
+        .expect("an imported call is a sharing target");
+    assert_eq!(facts.name, "Call with Ada");
+    assert_eq!(
+        facts.owner,
+        Owner::from_principal_str("macro|owner@example.com").unwrap()
+    );
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT p.call_id, p.id, p.display_name, p.email,\n               COALESCE(ce.started_at, ce.created_at) AS \"joined_at!\",\n               ce.ended_at\n        FROM call_entity_participants p\n        JOIN call_entities ce ON ce.id = p.call_id\n        WHERE p.call_id = ANY($1)\n        ORDER BY p.call_id, p.id\n        ",
+  "query": "\n        SELECT p.call_id, p.id, p.user_id, p.display_name, p.email, p.phone,\n               COALESCE(ce.started_at, ce.created_at) AS \"joined_at!\",\n               ce.ended_at\n        FROM call_entity_participants p\n        JOIN call_entities ce ON ce.id = p.call_id\n        WHERE p.call_id = ANY($1)\n        ORDER BY p.call_id, p.id\n        ",
   "describe": {
     "columns": [
       {
@@ -15,21 +15,31 @@
       },
       {
         "ordinal": 2,
-        "name": "display_name",
+        "name": "user_id",
         "type_info": "Text"
       },
       {
         "ordinal": 3,
-        "name": "email",
+        "name": "display_name",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "phone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "joined_at!",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 7,
         "name": "ended_at",
         "type_info": "Timestamptz"
       }
@@ -44,9 +54,11 @@
       false,
       true,
       true,
+      true,
+      true,
       null,
       true
     ]
   },
-  "hash": "3f4b6b5d5df79dc0fa278ebd367135b162479c7ab33b4f93fdab25060c2494e4"
+  "hash": "4f9b1f4d2c7909815df14ba28548f885f73d4cacd76ae7105ae905b91c1ec7b6"
 }

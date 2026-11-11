@@ -1,4 +1,4 @@
-/// Postgres store linking archived call records to CRM records
+/// Postgres store linking archived and imported call records to CRM records
 #[cfg(feature = "call_link")]
 pub mod call_link;
 /// Postgres implementation of the companies repository

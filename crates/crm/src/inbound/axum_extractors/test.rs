@@ -398,6 +398,31 @@ impl CrmService for FakeCrmService {
         panic!("unexpected set_contact_name call")
     }
 
+    async fn contact_phones(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<crate::domain::contact_phones::ContactPhone>, CrmError> {
+        unimplemented!("FakeCrmService.contact_phones")
+    }
+
+    async fn set_contact_phones(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _phones: &[String],
+    ) -> Result<Vec<crate::domain::contact_phones::ContactPhone>, CrmError> {
+        unimplemented!("FakeCrmService.set_contact_phones")
+    }
+
+    async fn import_contact_phones(
+        &self,
+        _access: &crate::domain::auth::CrmTeamReceipt<
+            entity_access::domain::models::MemberTeamRole,
+        >,
+        _phones: &[(uuid::Uuid, phone_number::PhoneNumber)],
+    ) -> Result<u64, CrmError> {
+        unimplemented!("FakeCrmService.import_contact_phones")
+    }
+
     async fn set_contact_hidden(
         &self,
         _access: &CrmContactReceipt<EditAccessLevel>,

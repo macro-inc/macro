@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod contact_listing;
+mod contact_phones;
 mod contact_update;
 mod email_privacy;
 

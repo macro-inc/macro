@@ -37,6 +37,7 @@ export default {
   windows: 'Windows',
   builtInDisplay: 'Built-in display',
   display: 'Display {{number}}',
+  openInProvider: 'Open in {{provider}}',
   noWindows: 'No other windows are open.',
   screenAccessNeeded:
     'Macro needs Screen Recording access. Turn on Macro in System Settings › Privacy & Security › Screen & System Audio Recording, then reopen Macro.',

@@ -4565,7 +4565,10 @@ async fn call_record_query_service_reads_the_people_on_a_call() {
 
     let people = CallPeople {
         user_ids: vec![user("rep@ours.com")],
-        invitee_emails: vec!["buyer@acme.com".to_string()],
+        guests: vec![crate::domain::models::CallGuest {
+            email: Some("buyer@acme.example".to_string()),
+            phone: None,
+        }],
     };
     let mut repo = MockCallRepository::new();
     let stored = people.clone();

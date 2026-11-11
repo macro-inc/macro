@@ -7,7 +7,11 @@ import { Avatar, Badge, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
-import { ContactCompanyField, ContactEmailField } from './contact-properties';
+import {
+  ContactCompanyField,
+  ContactEmailField,
+  ContactPhonesField,
+} from './contact-properties';
 import { ContactVisibilityButton } from './contact-visibility-button';
 import { useSetContactNameMutation } from './use-crm';
 
@@ -94,6 +98,7 @@ export function ContactHeader(props: {
             aria-label="Contact details"
           >
             <ContactEmailField contact={contact()} />
+            <ContactPhonesField contact={contact()} />
             <ContactCompanyField
               contact={contact()}
               onOpenCompany={props.onOpenCompany}

@@ -1,4 +1,7 @@
-import type { GetContactResponses } from '../../../generated/storage/types.gen';
+import type {
+  ContactPhone,
+  GetContactResponses,
+} from '../../../generated/storage/types.gen';
 import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -172,6 +175,37 @@ export class Contact extends FavoritableEntity<ContactDetail> {
         body: { companyId: company.id },
       }),
     );
+  }
+
+  /**
+   * The contact's phone numbers (E.164), oldest first, with where each came from.
+   *
+   * @readonly
+   */
+  async phones(): Promise<ContactPhone[]> {
+    const { phones } = unwrap(
+      await this.client.storage.getCrmContactPhones({
+        path: { contact_id: this.id },
+      }),
+    );
+    return phones;
+  }
+
+  /**
+   * Replace the contact's phone numbers. Each must include its country code,
+   * starting with `+`; formatting is ignored. Returns the saved numbers.
+   *
+   * @write
+   * @idempotent
+   */
+  async setPhones(phones: string[]): Promise<ContactPhone[]> {
+    const { phones: saved } = unwrap(
+      await this.client.storage.setCrmContactPhones({
+        path: { contact_id: this.id },
+        body: { phones },
+      }),
+    );
+    return saved;
   }
 
   /** The CRM record this contact's discussions hang off. */

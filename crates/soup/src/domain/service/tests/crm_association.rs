@@ -213,6 +213,29 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.set_contact_name")
     }
 
+    async fn contact_phones(
+        &self,
+        _access: &CrmContactReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<crm::domain::contact_phones::ContactPhone>, CrmError> {
+        unimplemented!("FakeCrm.contact_phones")
+    }
+
+    async fn set_contact_phones(
+        &self,
+        _access: &CrmContactReceipt<EditAccessLevel>,
+        _phones: &[String],
+    ) -> Result<Vec<crm::domain::contact_phones::ContactPhone>, CrmError> {
+        unimplemented!("FakeCrm.set_contact_phones")
+    }
+
+    async fn import_contact_phones(
+        &self,
+        _access: &crm::domain::auth::CrmTeamReceipt<entity_access::domain::models::MemberTeamRole>,
+        _phones: &[(uuid::Uuid, phone_number::PhoneNumber)],
+    ) -> Result<u64, CrmError> {
+        unimplemented!("FakeCrm.import_contact_phones")
+    }
+
     async fn crm_scope_precheck(
         &self,
         _team_id: &uuid::Uuid,

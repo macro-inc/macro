@@ -82,6 +82,10 @@ pub struct PipelineImportOutcome {
     pub ignored_columns: Vec<String>,
     /// Options added to select fields so the CSV's values fit: field, labels.
     pub added_options: Vec<(String, Vec<String>)>,
+    /// Phone numbers from a contact CSV newly saved to contacts.
+    pub phones_saved: u64,
+    /// Phone values that were not numbers with a country code.
+    pub invalid_phones: usize,
 }
 
 /// A pipeline's entries as CSV text.
@@ -192,6 +196,14 @@ pub trait TransferRecords: Send + Sync + 'static {
         name: &str,
         email: &str,
     ) -> impl Future<Output = Result<Created, TransferError>> + Send;
+
+    /// Save numbers to the viewer's team's contacts, keeping the ones they
+    /// have. Returns how many were new.
+    fn add_contact_phones(
+        &self,
+        viewer: &Viewer,
+        phones: Vec<(Uuid, phone_number::PhoneNumber)>,
+    ) -> impl Future<Output = Result<u64, TransferError>> + Send;
 }
 
 /// Reads and saves CSV files in Macro, as the viewer.

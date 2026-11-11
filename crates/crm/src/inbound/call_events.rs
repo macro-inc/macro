@@ -1,7 +1,7 @@
-//! Kafka consumer linking archived calls to CRM records.
+//! Kafka consumer linking calls to CRM records.
 //!
-//! Consumes the call topic and links each archived call record to the CRM
-//! companies and contacts of the people on it. Delivery is at least once:
+//! Consumes the call topic and links each archived or imported call to the
+//! CRM companies and contacts of the people on it. Delivery is at least once:
 //! malformed messages and other call events are committed so they cannot
 //! wedge a partition. A failed link is retried with backoff; one that still
 //! fails is logged and committed, so a bad record never stalls the calls
@@ -44,18 +44,27 @@ impl GroupName for CrmCallLinksGroup {
     const GROUP_NAME: &'static str = "crm-call-links";
 }
 
+/// The call an event asks to link, if any.
+fn linked_call(event: &CallTopicEvent) -> Option<Uuid> {
+    match event {
+        CallTopicEvent::RecordArchived(metadata) => Some(metadata.call_id),
+        CallTopicEvent::RecordImported(metadata) => Some(metadata.call_id),
+        _ => None,
+    }
+}
+
 /// Attempts per event before a failing link is logged and skipped.
 const MAX_ATTEMPTS: u32 = 4;
 /// Delay before the first retry; it doubles with each attempt.
 const FIRST_RETRY_DELAY: Duration = Duration::from_secs(1);
 
-/// Links archived call records to CRM records as their events arrive.
-pub struct CallArchivedConsumer<Q, L> {
+/// Links archived and imported calls to CRM records as their events arrive.
+pub struct CallLinkConsumer<Q, L> {
     linker: CallRecordLinker<Q, L>,
     first_retry_delay: Duration,
 }
 
-impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallArchivedConsumer<Q, L> {
+impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallLinkConsumer<Q, L> {
     /// Build the consumer over a call-record linker.
     pub fn new(linker: CallRecordLinker<Q, L>) -> Self {
         Self {
@@ -64,24 +73,21 @@ impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallArchivedConsumer<Q, 
         }
     }
 
-    /// Applies one call event: archived records are linked, every other
-    /// event is ignored.
+    /// Applies one call event: archived and imported records are linked,
+    /// every other event is ignored. Each import revision links again, but
+    /// links already written stay, so a revision only fills a Companies or
+    /// Contacts link still missing and teaches matched contacts new numbers.
     async fn apply(&self, event: &CallTopicEvent) -> Result<(), Report> {
-        match event {
-            CallTopicEvent::RecordArchived(metadata) => {
-                self.linker.link_archived_call(metadata.call_id).await
-            }
-            _ => Ok(()),
+        match linked_call(event) {
+            Some(call_id) => self.linker.link_call(call_id).await,
+            None => Ok(()),
         }
     }
 
     /// Applies one event, retrying failures with exponential backoff, and
     /// gives up after [`MAX_ATTEMPTS`] with an error log.
     async fn apply_with_retries(&self, event: &CallTopicEvent) {
-        let call_record_id: Option<Uuid> = match event {
-            CallTopicEvent::RecordArchived(metadata) => Some(metadata.call_id),
-            _ => None,
-        };
+        let call_record_id = linked_call(event);
         let mut delay = self.first_retry_delay;
         for attempt in 1..=MAX_ATTEMPTS {
             let Err(error) = self.apply(event).await else {
@@ -141,11 +147,11 @@ impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallArchivedConsumer<Q, 
                         }
                     };
                     let kafka_message = message.inner();
-                    let span = tracing::info_span!(
-                        "crm_call_link_event",
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
+                    // Continues the trace that published the event, so an
+                    // imported call's link joins its webhook-to-ingest trace.
+                    let span = kafka_util::consumer_span(
+                        kafka_message,
+                        CrmCallLinksGroup::GROUP_NAME,
                     );
                     let decoded = {
                         let _guard = span.enter();

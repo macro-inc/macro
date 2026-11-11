@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_entity_participants (call_id, id, user_id, display_name, email, phone)\n            SELECT $1, id, \"userId\", \"displayName\", email, phone FROM jsonb_to_recordset($2::jsonb)\n                AS p(id uuid, \"userId\" text, \"displayName\" text, email text, phone text)\n            ON CONFLICT (call_id, id) DO UPDATE SET user_id = EXCLUDED.user_id,\n                display_name = EXCLUDED.display_name, email = EXCLUDED.email, phone = EXCLUDED.phone",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e5afc3dfc8d5d0424bb3b68cd52c9109d991a2912c57a4f9960f70ee2c0fdeee"
+}

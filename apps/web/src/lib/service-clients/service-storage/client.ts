@@ -69,6 +69,7 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { ContactPhonesResponse } from './generated/schemas/contactPhonesResponse';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
@@ -175,6 +176,7 @@ import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRe
 import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
 import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
+import type { SetContactPhonesRequest } from './generated/schemas/setContactPhonesRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
@@ -3049,6 +3051,31 @@ export const storageServiceClient = {
   }: { contactId: string } & SetContactCompanyRequest) {
     return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
       `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async getContactPhones({
+    contactId,
+    signal,
+  }: {
+    contactId: string;
+    signal?: AbortSignal;
+  }) {
+    return await dssFetch<ContactPhonesResponse>(
+      `/crm/contacts/${contactId}/phones`,
+      { method: 'GET', signal }
+    );
+  },
+  async setContactPhones({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactPhonesRequest) {
+    return await fetchWithToken<ContactPhonesResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/phones`,
       {
         method: 'PUT',
         body: JSON.stringify(body),
