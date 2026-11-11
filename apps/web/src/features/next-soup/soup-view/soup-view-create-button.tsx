@@ -29,7 +29,7 @@ import { useMaybeSoupView } from './soup-view-context';
 const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['agent', 'chat', 'routine', 'skill'],
+  agents: ['agent', 'routine', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
