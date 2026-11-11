@@ -13,6 +13,7 @@ import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import { InviteAgentForm } from '../components/invite-agent-form';
+import { useVoicePickerSource } from '../components/voice-picker';
 
 /** What to tell the admin when the server refuses an invite. */
 function inviteFailure(error: unknown): string {
@@ -44,6 +45,7 @@ export function InviteAgentPanel(props: {
   const notify = useNotifyComputerSizeMutation();
   const upload = useUploadAgentAvatarMutation();
   const create = useCreateTeamAgentMutation();
+  const voices = useVoicePickerSource(() => props.teamId);
   const [error, setError] = createSignal<string>();
   // Closing the dialog mid-invite still toasts the result, but must not
   // close it again or write into a form that is gone.
@@ -86,6 +88,7 @@ export function InviteAgentPanel(props: {
       onNotify={(size) =>
         fireAndForget(requestNotify(size), 'team-agent.offers')
       }
+      voices={voices}
       uploadPicture={(file) => upload.mutateAsync(file)}
       pending={create.isPending}
       error={error()}

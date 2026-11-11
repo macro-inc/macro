@@ -62,17 +62,49 @@ const OFFERS = [
   },
 ];
 
+const VOICES = [
+  {
+    model: 'aura-2-arcas-en',
+    name: 'Arcas',
+    accent: 'American',
+    tags: ['masculine', 'confident'],
+    languages: ['en'],
+  },
+  {
+    model: 'aura-2-thalia-en',
+    name: 'Thalia',
+    accent: 'American',
+    tags: ['feminine', 'warm'],
+    languages: ['en'],
+  },
+];
+
+/** A header-only WAV: mono PCM16 at 24 kHz with no samples. */
+const SILENT_WAV = Buffer.from(
+  'UklGRiQAAABXQVZFZm10IBAAAAABAAEAwF0AAIC7AAACABAAZGF0YQAAAAA=',
+  'base64'
+);
+
 /**
- * The auth service the page talks to: the roster, the computer catalog and
- * `/team_agents`. A new agent reports `provisioning` until the list has been
- * read `provisioningReads` more times, then `running`.
+ * The services the page talks to: the roster, the computer catalog,
+ * `/team_agents` with its voices, and the agent harness's voice catalog.
+ * A new agent reports `provisioning` until the list has been read
+ * `provisioningReads` more times, then `running`.
  */
-async function scriptAuthService(page: Page, provisioningReads = 2) {
+async function scriptAuthService(
+  page: Page,
+  provisioningReads = 2,
+  options: { agents?: Agent[]; failedVoiceSaves?: number } = {}
+) {
   const backend = {
-    agents: [] as Agent[],
+    agents: [...(options.agents ?? [])],
     created: [] as unknown[],
     removed: [] as string[],
     reads: 0,
+    voices: {} as Record<string, string>,
+    voiceSaves: [] as unknown[],
+    failedVoiceSaves: options.failedVoiceSaves ?? 0,
+    samples: [] as string[],
   };
   const members = () => [
     { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
@@ -133,6 +165,35 @@ async function scriptAuthService(page: Page, provisioningReads = 2) {
       };
       backend.agents.push(agent);
       return json(201, agent);
+    }
+
+    if (path.endsWith('/voices')) return json(200, VOICES);
+    const sample = path.match(/\/voices\/([^/]+)\/sample$/);
+    if (sample) {
+      backend.samples.push(decodeURIComponent(sample[1] ?? ''));
+      return route.fulfill({
+        status: 200,
+        contentType: 'audio/wav',
+        body: SILENT_WAV,
+      });
+    }
+
+    const voice = path.match(/\/team_agents\/([^/]+)\/voice$/);
+    if (voice) {
+      const userId = decodeURIComponent(voice[1] ?? '');
+      if (request.method() === 'PUT') {
+        const body = request.postDataJSON();
+        backend.voiceSaves.push({ userId, ...body });
+        if (backend.failedVoiceSaves > 0) {
+          backend.failedVoiceSaves -= 1;
+          return json(502, { message: 'repository unavailable' });
+        }
+        backend.voices[userId] = body.model;
+        return json(200, body);
+      }
+      const model = backend.voices[userId];
+      // No voice set yet: the agent keeps its template's default.
+      return model ? json(200, { model }) : json(404, { message: 'no voice' });
     }
 
     if (path.includes('/team_agents/') && request.method() === 'DELETE') {
@@ -205,6 +266,13 @@ test('an admin invites an agent teammate and sees it come up', async ({
   await expect(dialog.getByRole('radio', { name: 'XL' })).toBeDisabled();
   await dialog.getByText('Large', { exact: true }).click();
   await expect(invite).toHaveText('Invite agent · $80.00/month');
+
+  // The personality suggests a voice; an explicit pick replaces it.
+  const voice = dialog.getByRole('combobox', { name: 'Voice' });
+  await expect(voice).toHaveValue('Thalia');
+  await dialog.getByRole('button', { name: 'Show voices' }).click();
+  await page.getByRole('option', { name: 'Arcas' }).click();
+  await expect(voice).toHaveValue('Arcas');
   await screenshot(page, testInfo, 'invite-agent');
 
   await invite.click();
@@ -217,6 +285,7 @@ test('an admin invites an agent teammate and sees it come up', async ({
       size: 'large',
       avatarUrl: null,
       purchaseKey: expect.any(String),
+      voice: 'aura-2-arcas-en',
     },
   ]);
 

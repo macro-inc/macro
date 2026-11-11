@@ -14,6 +14,8 @@ export type TeamAgentDraft = {
   personality: string;
   size: ComputerSize | undefined;
   avatarUrl: string | undefined;
+  /** The Aura-2 model picked; left out, the agent gets its template's voice. */
+  voice?: string;
   /** Minted once per dialog and reused on retry, so a retry buys nothing twice. */
   purchaseKey: string;
 };
@@ -75,5 +77,6 @@ export function teamAgentRequest(
     size: draft.size,
     avatarUrl: draft.avatarUrl ?? null,
     purchaseKey: draft.purchaseKey,
+    ...(draft.voice ? { voice: draft.voice } : {}),
   };
 }

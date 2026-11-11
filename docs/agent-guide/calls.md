@@ -787,3 +787,14 @@ push producer, notification/activity, permission and answer phases, and status
 HTTP requests; connection and cancellation outcomes end the incoming trace.
 For local collector verification and the exporter fixture, see
 [native call tracing](../development/android.md#native-call-tracing).
+
+### Calling an agent teammate
+
+An agent teammate (`enable-agent-teammates`) joins calls from its own computer
+and speaks with the voice in its repository's `config/voice.json`: the one
+picked when it was invited, or set later from **Team → Members** (see
+[agent teammates](settings.md#agent-teammates)). A changed voice applies from
+the agent's next call. Its speech runs through Macro's speech gateway on the
+agent harness service (`/brain/inference/stt` and `/brain/inference/tts`, the
+agent's own key), so call audio and synthesized text are billed as the agent's
+AI usage.

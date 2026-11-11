@@ -238,7 +238,14 @@ workspace that charged nothing). The new agent appears in **Team → Members** a
 its own row (name, **Agent** tag, job description) with a status in place of a
 role: **Setting up** with a spinner while its computer provisions (the list
 polls every 3 seconds), then **Running**, **Paused**, **Needs attention** or
-**Released**. Owners and admins remove an agent with its trash button and a
+**Released**. The invite form also has a **Voice** picker (`GET /voices` on the
+agent harness): it suggests a voice from the personality, **Play sample** plays
+a fixed line (the first play of a voice is billed to the team), and the chosen
+model goes out as `voice`. Owners and admins change a voice later with the
+row's waveform button (**Change voice**): **Save voice** calls
+`PUT /team_agents/{agent}/voice`, which commits `config/voice.json` in the
+agent's repository and applies from its next call; a failed save keeps the
+pick for retry. Owners and admins remove an agent with its trash button and a
 confirmation; that releases its computer and deletes its account. On phones the
 dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
