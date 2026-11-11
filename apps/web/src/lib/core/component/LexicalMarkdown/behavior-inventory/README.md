@@ -206,6 +206,11 @@ capture case attaches raw open/search/failed-download/closed JSON and DOM;
 `OVERLAY_GIF_CAPTURE` also retains per-project files. Input uses `hasTouch` so
 the same cases run in independently named browser projects. Keep these runs
 separate from historical inventory reports and their dependency epochs.
+The separate `mentions.html` fixture mounts the real Source mention plugin,
+menu, providers and user decorator over a supplied user list. Its keyboard,
+pointer/touch and Escape controls retain raw open/query/inserted model and DOM
+stages via `OVERLAY_MENTION_CAPTURE`. This scoped user-list fixture does not
+establish remote catalog IO, every mention kind or native binding.
 The opt-in `/?controls` route mounts the actual checklist collector/store and
 TaskListControlsRenderer with production query and user providers. Its cases
 exercise plain/task progress, task-only filter availability, status selection

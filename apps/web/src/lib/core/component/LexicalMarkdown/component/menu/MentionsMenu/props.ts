@@ -6,6 +6,7 @@ import type { EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor } from 'solid-js';
+import type { MentionMenuHost } from '../../../editing/overlay-hosts/mentions';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
   MentionItem,
@@ -14,7 +15,7 @@ import type {
 import type { MentionBucketId } from './MentionsMenuController';
 import type { NativeMentionPresentation } from './native-presentation';
 
-export type MentionsMenuProps = {
+export type MentionsMenuOptions = {
   /** Uses these exact providers/controller without mounting the DOM menu. */
   nativePresentation?: NativeMentionPresentation;
   menu: MenuOperations;
@@ -51,7 +52,27 @@ export type MentionsMenuProps = {
   includeContacts?: boolean;
   /** Repeated cell editing opens immediately instead of animating each picker. */
   animate?: boolean;
-} & (
-  | { editor: LexicalEditor; onPick?: never }
-  | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
-);
+};
+
+export type MentionsMenuProps = MentionsMenuOptions &
+  (
+    | { editor: LexicalEditor; onPick?: never }
+    | {
+        editor?: never;
+        anchor: HTMLElement;
+        onPick: (item: MentionItem) => void;
+      }
+  );
+
+export type HostedMentionsMenuProps = MentionsMenuOptions &
+  (
+    | {
+        createHost: (blockId: string | undefined) => MentionMenuHost;
+        onPick?: never;
+      }
+    | {
+        createHost?: never;
+        anchor: HTMLElement;
+        onPick: (item: MentionItem) => void;
+      }
+  );
