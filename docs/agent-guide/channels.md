@@ -1374,9 +1374,9 @@ The sectioned sidebar also offers **New section** in the same menu.
 Check each creation action with the sidebar flag on and off; changing the layout
 must not change the creation flow.
 
-When calls are enabled, `Live` appears below the rail's toolbar while an active
-quick call is available. It stays visible while browsing sections and during conversation
-search, and disappears when no active quick calls remain. Entries are titled
+Standalone quick calls retain a separate `Live` list below the rail's toolbar;
+this list does not contain channel-call indicators. It stays visible while
+browsing sections and searching, and disappears when no active quick calls remain. Entries are titled
 `Call with <creator's name>`. Clicking a call opens
 its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
 Live rows use the shaking incoming-phone icon, respecting reduced motion.
@@ -1556,32 +1556,25 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button at the bottom-right opens chat beside the video.
-**Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
-Active phone calls keep the channel header island and place Copy Meeting Url
-in a matching header island using the shared `CopyButton`. The media control bar
-fills the space beside the separate chat button, below the video and within side
-insets. Back keeps the call running. Controls and header islands stay visible;
-idle auto-hide is disabled. Phone calls hide the app's bottom navigation and
-channel Invite action; Invite returns when leaving the live call tab. Tap or click a participant to
-focus them and tap again to return to the grid; speakers have an accent border.
-The panel has a **Call chat** heading and
-spans the full call content height, including the media controls row. The controls
-stay centered under the video on wide panes. In narrow desktop panes, chat overlays
-the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
-to dismiss it. On desktop, **Close chat** or Escape closes the panel. Closing
-returns focus to the chat button, and reopening preserves the draft and scroll
-position. The call continues while chat is open or closed.
+The call header shows the live waveform and elapsed time, with Copy meeting link
+and Invite on desktop. Media controls stay centered below the tiles; Chat opens
+from its own adjacent toggle. The full-height panel has Chat and People tabs,
+with a desktop close action and a shared phone sheet. Narrow panes use compact
+controls and an inset chat overlay covering the whole call. Phone calls hide
+the dock, retain Back and the channel title, and keep their compact controls
+visible. Back returns to the app without leaving. Camera-off tiles use neutral
+initials; the speaker has a success-colored outline.
+
+Away from the call, the desktop rail opens its participant/control popover and
+can show a draggable mini player. Phones show a compact call island above the
+dock without replacing the current composer. Channel-call live and ringing
+indicators live on conversation rows; the separate `Live` list is only for
+standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
-panel. Guests in quick and scheduled calls can also open chat and read and send
-text without signing in. Guest authors appear as **Name (Guest)**. Their composer
-uses Enter to send on desktop and the Send button on touch devices, preserves drafts on close, and
-keeps failed messages available to retry. Guest chat refreshes while open and is
-available only while that guest is connected to the call. Check a signed-in
-participant and a guest exchanging messages in both directions, then verify the
-guest loses access after leaving or after the call ends. Guest messages remain
-in the saved call discussion. Each call session has one persistent message thread;
+panel. Guest chat is turned off for now: a guest in a quick or scheduled call
+sees only the participants list, with the **Chat** tab disabled, and cannot read
+or send messages. Each call session has one persistent message thread;
 signed-in participants use the
 shared message composer, attachments, reactions, and message actions. The `@`
 menu offers Macro and available owned and team agents. Mention an agent and send

@@ -35,7 +35,6 @@ import {
   CHANNEL_SECTION_ROW_HEIGHT,
 } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
@@ -905,7 +904,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div
         ref={(element) => {
           rail.registerRootRef(element);

@@ -13,9 +13,9 @@ import { Show } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { CHANNELS_TOUR } from '../../tour';
 import { formatDetailedTimestamp } from '../../utils';
+import { ChannelLiveCallBadge } from './ChannelLiveCallBadge';
 import {
   ChannelAvatar,
-  ChannelCallIndicator,
   ChannelRailItemContextMenu,
   IncomingCallActions,
   isPrimaryMouseDown,
@@ -215,8 +215,15 @@ export function ChannelOption(props: {
             <JoinChannelButton channelId={props.channel.id} hoverOnly />
           </Show>
           <span class="flex shrink-0 items-center gap-2">
-            {/* The hover timestamp leads so the indicators after it stay put. */}
-            <Show when={!unjoined() && !item().incomingCallId && timestamp()}>
+            {/* The hover timestamp leads so call and unread indicators stay put. */}
+            <Show
+              when={
+                !unjoined() &&
+                !item().incomingCallId &&
+                !item().callStatus &&
+                timestamp()
+              }
+            >
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
                   <span
@@ -244,9 +251,11 @@ export function ChannelOption(props: {
               )}
             </Show>
             <ChannelMutedIndicator muted={item().muted} />
-            <ChannelCallIndicator
-              status={item().incomingCallId ? undefined : item().callStatus}
-            />
+            <Show
+              when={!item().incomingCallId && item().callStatus === 'active'}
+            >
+              <ChannelLiveCallBadge channelId={props.channel.id} />
+            </Show>
             <Show when={!unjoined() && item().unread}>
               <span
                 aria-label="Unread"

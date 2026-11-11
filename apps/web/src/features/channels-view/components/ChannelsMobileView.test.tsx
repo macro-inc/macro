@@ -76,7 +76,13 @@ vi.mock(
     ChannelCardLayout: (props: {
       item: { entity: ChannelEntity };
       onClick: (event: MouseEvent) => void;
-    }) => <button onClick={props.onClick}>{props.item.entity.name}</button>,
+      trailing?: JSX.Element;
+    }) => (
+      <>
+        <button onClick={props.onClick}>{props.item.entity.name}</button>
+        {props.trailing}
+      </>
+    ),
   })
 );
 vi.mock('@queries/channel/notification-selection', () => ({
