@@ -2,7 +2,10 @@
 // This envelope does not alter the flat model Diff or session transport ABI.
 const uint32 COMPATIBILITY_PROTOCOL_MAJOR = 1;
 struct CompatBegin { string[] tags; }
-struct CompatConfig { uint32 editorId; ForeignClassRegistration[] classes; }
+struct CompatConfig {
+  uint32 editorId; ForeignClassRegistration[] classes;
+  CompatNativePluginConfig[] nativePlugins;
+}
 // Bind the actual JS object to this exact owned capture without graph writes.
 // Zero identifiers are not hydrated instances; native code validates ownership.
 struct CompatInstanceBind {
@@ -35,6 +38,7 @@ enum CompatOperation : uint16 {
   NodeSelectionHas = 53; SelectionHasFormat = 54;
   SetCompositionKey = 55; CreateTableSelection = 56;
   CreateRegisteredNode = 57;
+  Splice = 58;
 }
 struct CompatRequest {
   CompatOperation operation;
@@ -207,8 +211,11 @@ union CompatBatchOutcome {
   }
 }
 // Operation failure index equals the successful prefix results.length; finalize
-// failure follows all operation results. Failure always has published=false and
-// prevents admission for that request. The final delta includes partial failing-operation effects
+// failure follows all operation results. Operation failure prevents admission.
+// A finalization failure may follow a real publication: acknowledge its exact
+// receipt before surfacing the error, never claim rollback or retry admission.
+// No-op retirement returns the actual committed version, including zero.
+// The final delta includes partial failing-operation effects
 // needed by captures/selection (or explicit discard), not just successful results.
 // Changed detached selections also survive a failing operation with no result.
 // Noop and composition are part of this single final crossing.

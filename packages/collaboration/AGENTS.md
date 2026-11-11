@@ -7,6 +7,7 @@ Shared collaborative document models, transport and portable session host adapte
 ## Start here
 
 - `src/session/`: versioned native session executor, IndexedDB and telemetry adapters.
+- `src/session/native-plugins.md`: immutable per-editor plugin ownership, source-generated transformer IDs and mandatory duplicate-logic checks; metadata does not install native policy.
 - `src/collab/`: existing Loro manager, recoverable v1 storage and flag-off path.
 - `src/websocket/platform/`: browser/Tauri socket implementations and replay recovery.
 
@@ -65,7 +66,7 @@ before/after/reentrant Start and cancellation without Start, actual MAX request
 reply, disposal, Close idempotency and unchanged DOM. No DOM view is allocated.
 Generate session/compatibility.generated.ts from document_session_wasm/abi/compatibility.bop with generate-compatibility-schema.ts; preserve compiler output verbatim and keep typed rendering separate from the flat Diff ABI.
 
-Compatibility generation concatenates the four schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
+Compatibility generation concatenates the five schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Generate native plugin identities from the source-generated Rust shortcut catalog before compatibility generation; reject unknown IDs and preserve catalog order. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
 
 Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero owner/class/instance identifiers natively without changing graph state or invoking public serialization.
 
