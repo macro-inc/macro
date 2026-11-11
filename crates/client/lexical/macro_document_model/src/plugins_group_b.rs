@@ -15,6 +15,7 @@ mod list_insert;
 mod markdown_paste;
 mod media;
 mod media_properties;
+mod pr_mention_actions;
 pub use media_properties::{MediaMountAction, media_mount_action};
 mod metadata;
 mod movement;
@@ -87,7 +88,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = diff::register(builder);
     let builder = metadata::register(builder);
     let builder = decorator_actions::register(builder);
-    decorator_content_actions::register(builder)
+    let builder = decorator_content_actions::register(builder);
+    pr_mention_actions::register(builder)
 }
 
 #[cfg(test)]
@@ -154,6 +156,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = diff::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = pr_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if name == "group-b.select-all" {

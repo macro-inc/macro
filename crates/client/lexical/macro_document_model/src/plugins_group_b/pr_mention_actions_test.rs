@@ -214,3 +214,31 @@ fn pr_enrichment_decoder_requires_the_captured_identity_and_typed_effects() {
         assert!(decode_command("group-b.pr-enrich", json, 1, None).is_err());
     }
 }
+
+#[test]
+fn pr_enrichment_accepts_matching_null_optional_source_fields() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let mut prior = original();
+    prior.label = Maybe::Null;
+    prior.mention_uuid = Maybe::Null;
+    let (key, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let key = tx.create(prior.clone())?.key();
+        tx.append(paragraph, &[key])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(key)
+    })?;
+    let (handled, _) = editor.dispatch(&command(key, &prior, Some("Resolved"), None)?)?;
+    assert_eq!(handled, Handled::Yes);
+    let actual = editor
+        .state()
+        .view()
+        .get_or_err::<PullRequestMentionNode>(key)?;
+    assert_eq!(actual.label, Maybe::Value("Resolved".into()));
+    assert_eq!(actual.mention_uuid, Maybe::Null);
+    assert_eq!(actual.url, Maybe::Missing);
+    Ok(())
+}
