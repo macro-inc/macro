@@ -203,3 +203,6 @@ pub fn key_prevents_default(name: &str) -> Option<bool> {
 
 /// Read-only source checklist metadata, with no installed commands or listeners.
 pub mod checklist_controls;
+
+/// Pure checklist planning from collected metadata and actual external task facts.
+pub mod checklist_plan;
