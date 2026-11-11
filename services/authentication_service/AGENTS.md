@@ -104,7 +104,7 @@ Computer billing facts retain canonical `ComputerId` and `ComputerName` until
 the response renderer emits their UUID and string wire values.
 Match provider items to recorded computer IDs or price IDs and label them from
 the stored catalog entry and resources. Never infer an existing computer size
-from the current price table; unlinked legacy charges remain generic Computer rows.
+from the current price table.
 Every member seat is a human seat row. Comped computers appear as
 zero rows, and unmatched or ambiguous provider quantities remain `other` rather
 than invented per-account charges. Unsupported interval/price shapes have no
