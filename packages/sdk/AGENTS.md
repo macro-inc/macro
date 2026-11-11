@@ -92,7 +92,7 @@ enforced by the ordinary backend APIs.
   service, because static file storage does not accept API keys. `update` takes a
   `StaticImage` or its file id; `me.profilePicture()`, `User.profilePicture()`
   and `users.profilePictures()` read `POST /user/profile_pictures`, returning a
-  `StaticImage` for `${static-files}/file/<id>` URLs and an
+  `StaticImage` for static file URLs (path `/file/<uuid>`, any public base) and an
   `ExternalProfilePicture` (`{ url }`) for legacy ones (`users/profile-picture.ts`). `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition

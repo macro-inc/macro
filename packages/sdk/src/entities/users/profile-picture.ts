@@ -28,6 +28,14 @@ export class ExternalProfilePicture {
  */
 export type ProfilePicture = StaticImage | ExternalProfilePicture;
 
+/**
+ * A static file link: `<base>/file/<uuid>`. The base is the public static file
+ * address the auth service stamps, which can differ from the SDK's
+ * `static-files` host (a local stack's proxy), so only the path is matched.
+ */
+const STATIC_FILE_PATH =
+  /\/file\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
+
 /** Read a picture row; an empty URL means the user has no picture. */
 export function toProfilePicture(
   client: MacroClient,
@@ -35,10 +43,6 @@ export function toProfilePicture(
 ): ProfilePicture | undefined {
   const url = row?.url?.trim();
   if (!url) return undefined;
-  const prefix = `${client.hosts['static-files']}/file/`;
-  if (url.startsWith(prefix)) {
-    const id = url.slice(prefix.length).split(/[/?#]/)[0];
-    if (id) return StaticImage.byId(client, id);
-  }
-  return new ExternalProfilePicture(url);
+  const id = URL.parse(url)?.pathname.match(STATIC_FILE_PATH)?.[1];
+  return id ? StaticImage.byId(client, id) : new ExternalProfilePicture(url);
 }

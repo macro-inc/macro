@@ -7,6 +7,8 @@ import { ExternalProfilePicture } from './profile-picture';
 import { User } from './user';
 
 const STATIC_FILES = 'https://static.example';
+const ABC = '0190a3c2-0000-7000-8000-000000000abc';
+const MINE = '0190a3c2-0000-7000-8000-00000000a1e0';
 
 function makeClient(rows: { id: string; url: string }[]) {
   const calls = { lookups: [] as string[][], puts: [] as string[] };
@@ -44,15 +46,30 @@ function makeClient(rows: { id: string; url: string }[]) {
 describe('profile pictures', () => {
   test('a static file URL becomes a StaticImage', async () => {
     const { client, calls } = makeClient([
-      { id: 'macro|a@example.com', url: `${STATIC_FILES}/file/abc` },
+      { id: 'macro|a@example.com', url: `${STATIC_FILES}/file/${ABC}` },
     ]);
     const picture = await User.byId(
       client,
       'macro|a@example.com',
     ).profilePicture();
     expect(picture).toBeInstanceOf(StaticImage);
-    expect((picture as StaticImage).id).toBe('abc');
+    expect((picture as StaticImage).id).toBe(ABC);
     expect(calls.lookups).toEqual([['macro|a@example.com']]);
+  });
+
+  test('a static file URL on another public base still maps to its file id', async () => {
+    const { client } = makeClient([
+      {
+        id: 'macro|a@example.com',
+        url: `https://proxy.example:8443/static-file/file/${ABC}`,
+      },
+    ]);
+    const picture = await User.byId(
+      client,
+      'macro|a@example.com',
+    ).profilePicture();
+    expect(picture).toBeInstanceOf(StaticImage);
+    expect((picture as StaticImage).id).toBe(ABC);
   });
 
   test('a legacy URL stays a URL, and no row or empty URL is undefined', async () => {
@@ -76,23 +93,23 @@ describe('profile pictures', () => {
 
   test('users.profilePictures batches one request and omits users without one', async () => {
     const { client, calls } = makeClient([
-      { id: 'macro|a@example.com', url: `${STATIC_FILES}/file/abc` },
+      { id: 'macro|a@example.com', url: `${STATIC_FILES}/file/${ABC}` },
     ]);
     const a = User.byId(client, 'macro|a@example.com');
     const b = User.byId(client, 'macro|b@example.com');
     const pictures = await new UserNamespace(client).profilePictures([a, b]);
     expect(calls.lookups).toHaveLength(1);
     expect(pictures.size).toBe(1);
-    expect((pictures.get(a) as StaticImage).id).toBe('abc');
+    expect((pictures.get(a) as StaticImage).id).toBe(ABC);
     expect(pictures.has(b)).toBe(false);
   });
 
   test('me.profilePicture reads the caller, and update accepts a file id', async () => {
     const { client, calls } = makeClient([
-      { id: 'macro|me@example.com', url: `${STATIC_FILES}/file/mine` },
+      { id: 'macro|me@example.com', url: `${STATIC_FILES}/file/${MINE}` },
     ]);
     const me = new MeNamespace(client);
-    expect(((await me.profilePicture()) as StaticImage).id).toBe('mine');
+    expect(((await me.profilePicture()) as StaticImage).id).toBe(MINE);
     await me.update({ profilePicture: 'earlier' });
     await me.update({ profilePicture: StaticImage.byId(client, 'other') });
     expect(calls.puts).toEqual(['earlier', 'other']);
