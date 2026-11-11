@@ -826,6 +826,8 @@ impl EditorSurface {
                 self.checklist.observe(&error.committed);
                 SessionError::Model(error.error)
             })?;
+        #[cfg(feature = "application")]
+        self.checklist.observe(&output.commits);
         let created = output
             .effects
             .iter()
