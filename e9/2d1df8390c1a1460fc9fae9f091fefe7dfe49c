@@ -1,0 +1,44 @@
+crates/webhook/src/inbound/kafka_stream_consumer.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 8,86
+crates/webhook/src/domain/ingestion/stream.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 7,21,80-86
+  s_7679ed7d96d8ba::t_e96b737d0306f0 87-91
+crates/webhook/src/domain/ingestion.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 34,40,140-145,381-405,792-811
+  s_7679ed7d96d8ba::t_4897bb2bcf6cd2 812
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 76-77,236-239
+  s_7679ed7d96d8ba::t_1fcf41874932cd 240-242
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 132-134
+crates/webhook/src/topics.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 15,25
+crates/webhook/src/domain/ingestion/test.rs
+  s_7679ed7d96d8ba::t_dee46ff74ffb92 2002-2079
+crates/webhook/AGENTS.md
+  s_7679ed7d96d8ba::t_87c0883e596717 18,30
+crates/webhook/src/domain/events.rs
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 208-209
+crates/webhook/README.md
+  s_7679ed7d96d8ba::t_87c0883e596717 80,100-103
+crates/webhook/Cargo.toml
+  s_7679ed7d96d8ba::t_7c51048c3b0c37 35,45,111
+Cargo.lock
+  s_7679ed7d96d8ba::t_3b67c28113ebfd 22148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e92d1df8390c1a1460fc9fae9f091fefe7dfe49c",
+  "prompts": {},
+  "sessions": {
+    "s_7679ed7d96d8ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4d4aa90-5c93-410b-a992-495c874ce315",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
