@@ -35,6 +35,8 @@ export interface NativeCommentCommit {
 
 /** Comment capabilities of the native body, independent of any Lexical editor. */
 export interface NativeComments {
+  /** The native body view these marks render in. */
+  readonly view: EditorView;
   /** The editable body root whose clicks reselect caret marks. */
   readonly root: HTMLElement;
   /** Mark ids on the comment-mark node with this key, if it exists. */
@@ -235,6 +237,7 @@ export function createNativeComments(view: EditorView): NativeComments {
   };
 
   return {
+    view,
     root: view.root,
     markIds: (key) => marks.get(key),
     snapshot: () => [...marks.keys()].map((key) => change(key, undefined)),

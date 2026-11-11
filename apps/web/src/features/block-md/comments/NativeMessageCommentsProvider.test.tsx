@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { locks } from 'node:worker_threads';
+import { DRAFT_THREAD_ID } from '@core/comments/commentType';
 import { createNativeComments } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-comments';
 import * as native from '@core/document-session/wasm/document_session_wasm.js';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
@@ -59,6 +60,9 @@ vi.mock('@queries/messages/document-messages', () => ({
 vi.mock('@queries/messages/mutations', () => ({
   usePatchThreadMutation: () => ({ mutate: vi.fn() }),
 }));
+vi.mock('@queries/messages/posted-comment', () => ({
+  hasPostedComment: async () => false,
+}));
 vi.mock('@queries/messages/sync', () => ({
   onThreadStateUpdated: () => () => {},
 }));
@@ -68,6 +72,10 @@ vi.mock('./commentOperations', () => ({
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
 beforeAll(() => {
+  // jsdom has no layout for Range; the draft highlight reads no rectangles.
+  Range.prototype.getClientRects = () =>
+    Object.assign([], { item: () => null }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
   Object.defineProperty(navigator, 'locks', {
     configurable: true,
     value: locks,
@@ -252,6 +260,52 @@ test('a comment link waits for the native body, then opens its thread', async ()
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     expect(harness.scroll).toHaveBeenCalledOnce();
     expect(harness.state.comments.activeCommentThread).toBe('root');
+  } finally {
+    await harness.close();
+  }
+});
+
+test('a native draft opens from a real selection, survives a refused publication and discards', async () => {
+  const harness = setup();
+  try {
+    harness.finishLoading();
+    const controls = harness.state.editor.md.commentDraft;
+    if (!controls) throw new Error('Missing native draft controls');
+
+    // A collapsed caret has no commentable text (Source no_selection).
+    harness.caretInMark();
+    expect(controls.create()).toBe(false);
+
+    const before = [...harness.session.view.mirror.values()].find(
+      (node) => node.kind === 'text' && node.text === 'before '
+    );
+    if (!before) throw new Error('Missing native text');
+    harness.session.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: before.key, offset: 0, type: 'text' },
+      focus: { key: before.key, offset: 6, type: 'text' },
+    });
+    expect(controls.create()).toBe(true);
+    const id = controls.current();
+    if (!id) throw new Error('Missing draft id');
+    const mark = harness.state.comments.marks[id];
+    expect(mark?.isDraft).toBe(true);
+    expect(mark?.existsOnServer).toBe(false);
+    expect(mark?.publication?.text()).toBe('before');
+    expect(harness.state.comments.activeMarkIds).toEqual([id]);
+    expect(harness.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
+    // Retrying Comment keeps the one draft.
+    expect(controls.create()).toBe(true);
+    expect(controls.current()).toBe(id);
+
+    // No transport: the session refuses the mark, so the draft remains.
+    expect(await mark?.publication?.publish()).toBe(false);
+    expect(controls.current()).toBe(id);
+    expect(harness.state.comments.marks[id]).toBeDefined();
+
+    controls.discard();
+    expect(controls.current()).toBeUndefined();
+    expect(harness.state.comments.marks[id]).toBeUndefined();
   } finally {
     await harness.close();
   }

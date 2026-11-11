@@ -21,6 +21,7 @@ import type {
   MarkStore,
   ThreadStore,
 } from '../comments/commentType';
+import type { CommentDraftControls } from '../comments/NativeCommentDraft';
 
 import type { RustMarkdownRuntime } from '../component/RustMarkdownEditor';
 
@@ -39,6 +40,8 @@ type MdData = {
   commentMargin?: HTMLElement;
   contentRef?: HTMLElement;
   locationReady?: boolean;
+  /** Native body draft lifecycle; the Lexical body uses its editor commands. */
+  commentDraft?: CommentDraftControls;
 };
 
 type FindAndReplaceState = {

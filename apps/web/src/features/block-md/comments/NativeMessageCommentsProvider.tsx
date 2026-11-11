@@ -2,13 +2,17 @@ import type {
   NativeCommentMarkChange,
   NativeComments,
 } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-comments';
+import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
+import { hasPostedComment } from '@queries/messages/posted-comment';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   type CommentMarkFeed,
   createMessageCommentThreads,
 } from './messageCommentThreads';
+import { createNativeCommentDraft } from './NativeCommentDraft';
 
 /** Native engine adapter for the shared message comment threads. */
 export function NativeMessageCommentsProvider(props: {
@@ -17,6 +21,8 @@ export function NativeMessageCommentsProvider(props: {
   ready: Accessor<boolean>;
 }) {
   const { comments } = props;
+  const { documentId, state } = useMarkdownDocument();
+  const userId = useUserId();
   const selectionListeners = new Set<() => void>();
   let feed: CommentMarkFeed | undefined;
 
@@ -31,8 +37,14 @@ export function NativeMessageCommentsProvider(props: {
     feed?.setActiveIds([...ids]);
     comments.select(ids);
   };
+  let draftId: () => string | undefined = () => undefined;
   // Source $selectMarksAtCaret; a null selection leaves the current state.
   const selectMarksAtCaret = () => {
+    const localDraft = draftId();
+    if (localDraft) {
+      markSelected([localDraft]);
+      return;
+    }
     const ids = comments.caretMarkIds();
     if (ids === null) return;
     markSelected(ids);
@@ -53,6 +65,21 @@ export function NativeMessageCommentsProvider(props: {
     },
   });
   const threads = feed;
+  const draft = createNativeCommentDraft({
+    view: comments.view,
+    comments,
+    userId,
+    select: markSelected,
+    hasPostedComment: (markId) => hasPostedComment(documentId(), markId),
+    add: threads.addDraft,
+    remove: threads.removeDraft,
+  });
+  draftId = draft.controls.current;
+  state.editor.setMd('commentDraft', draft.controls);
+  onCleanup(() => {
+    if (state.editor.md.commentDraft === draft.controls)
+      state.editor.setMd('commentDraft', undefined);
+  });
 
   // Source CommentNode mutation listener: report removed ids, then each id.
   const apply = (
@@ -98,5 +125,5 @@ export function NativeMessageCommentsProvider(props: {
   onCleanup(() =>
     comments.root.removeEventListener('click', selectMarksAtCaret)
   );
-  return null;
+  return <draft.Highlight />;
 }
