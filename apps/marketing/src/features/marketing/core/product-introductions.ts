@@ -14,7 +14,7 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro tags work across your workspace. **Set up a routine** to tag incoming email or new tasks by customer, topic, or urgency, then use those same tags to find related work. Your team shares the tags, so everyone can use the same organization.',
     ],
     'Automatic permissions': [
-      'Sending someone a document should be enough for them to open it. We wanted sharing to follow the conversation, without a second round of access requests or a separate list of people to maintain on every file.',
+      'You’ve probably run into this: you share a link to, say, a Google Doc in Slack, only to receive a ping back: “Hey, I can’t open it.” The problem is that permissions are separate from channels. But what if permissions were granted when you shared anything, just like attaching a file to an email?',
       'In Macro, **access follows channel membership**. Share a document, email, or task in a channel and its members can open it. New members get that context too; people who leave lose the access that channel gave them. You can still manage access to an individual item from Share.',
     ],
     'Workspace events': [
