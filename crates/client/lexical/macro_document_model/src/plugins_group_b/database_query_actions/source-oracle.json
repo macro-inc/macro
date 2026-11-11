@@ -1,0 +1,687 @@
+{
+  "save-inline-only-child-to-table": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "database-query",
+                "version": 2,
+                "queryId": "q-1",
+                "prompt": "How many rows?",
+                "title": "Rows",
+                "displayMode": "scalar"
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "action": "save",
+    "data": {
+      "queryId": "q-2",
+      "prompt": "Count rows by day",
+      "title": "Rows by day",
+      "displayMode": "table"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-2",
+            "title": "Rows by day",
+            "prompt": "Count rows by day",
+            "displayMode": "table"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": [
+      []
+    ]
+  },
+  "save-inline-with-siblings-to-table": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "lead ",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              },
+              {
+                "type": "database-query",
+                "version": 2,
+                "queryId": "q-1",
+                "prompt": "How many rows?",
+                "title": "Rows",
+                "displayMode": "scalar"
+              },
+              {
+                "type": "text",
+                "version": 1,
+                "text": " tail",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "action": "save",
+    "data": {
+      "queryId": "q-2",
+      "prompt": "Count rows by day",
+      "title": "Rows by day",
+      "displayMode": "table"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "lead  tail",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-2",
+            "title": "Rows by day",
+            "prompt": "Count rows by day",
+            "displayMode": "table"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": [
+      []
+    ]
+  },
+  "save-block-to-scalar": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-1",
+            "prompt": "How many rows?",
+            "title": "Rows",
+            "displayMode": "table"
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "action": "save",
+    "data": {
+      "queryId": "q-2",
+      "prompt": "Count rows by day",
+      "title": "Rows by day",
+      "displayMode": "scalar"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "type": "database-query",
+                "version": 2,
+                "queryId": "q-2",
+                "title": "Rows by day",
+                "prompt": "Count rows by day",
+                "displayMode": "scalar"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": [
+      []
+    ]
+  },
+  "save-same-mode": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-1",
+            "prompt": "How many rows?",
+            "title": "Rows",
+            "displayMode": "table"
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "action": "save",
+    "data": {
+      "queryId": "q-2",
+      "prompt": "Count rows by day",
+      "title": "Rows by day",
+      "displayMode": "bar"
+    },
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-2",
+            "title": "Rows by day",
+            "prompt": "Count rows by day",
+            "displayMode": "bar"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "tags": [
+      []
+    ]
+  },
+  "discard-block": {
+    "input": {
+      "root": {
+        "type": "root",
+        "version": 1,
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "children": [
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "before",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          },
+          {
+            "type": "database-query",
+            "version": 2,
+            "queryId": "q-1",
+            "prompt": "How many rows?",
+            "title": "Rows",
+            "displayMode": "table"
+          },
+          {
+            "type": "paragraph",
+            "version": 1,
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "textFormat": 0,
+            "textStyle": "",
+            "children": [
+              {
+                "type": "text",
+                "version": 1,
+                "text": "after",
+                "format": 0,
+                "detail": 0,
+                "mode": "normal",
+                "style": ""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "action": "discard",
+    "data": null,
+    "output": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "before",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "after",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "anchor": [
+        1,
+        "element",
+        "paragraph",
+        "before"
+      ],
+      "focus": [
+        1,
+        "element"
+      ],
+      "collapsed": true
+    },
+    "tags": [
+      []
+    ]
+  }
+}
