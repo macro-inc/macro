@@ -1,0 +1,19 @@
+.github/workflows/desktop_qa_macos.yml
+  s_52c4561d9841c7::t_7a9f2a4593eb8e 5-6,37-38,45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c5af5ccbb8ad1fd2fea7acee8905cadec0161e41",
+  "prompts": {},
+  "sessions": {
+    "s_52c4561d9841c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38d2bb22-d81d-4f68-8258-7475843cc20c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
