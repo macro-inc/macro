@@ -21,6 +21,7 @@ import {
 } from './selection';
 import { consumeSelectionChangeFromDOMUpdate } from './selection-change';
 import { selectionMessage } from './session-port';
+import { getTableObserverFromTableElement } from './table/observer';
 import type { ViewSelection } from './types';
 
 const documents = new WeakMap<
@@ -756,6 +757,15 @@ export function registerEvents(view: EditorView): {
       )
     )
       return;
+    const current = view.selection().selection;
+    if (current.kind === 'table') {
+      const table = view.getElementByKey(current.table);
+      if (
+        table instanceof HTMLTableElement &&
+        getTableObserverFromTableElement(table)?.preserveDragSelection(dom)
+      )
+        return;
+    }
     const selection = readSelectionFromChange(view);
     const marked = view.recentSelectionMark();
     const markedRange =

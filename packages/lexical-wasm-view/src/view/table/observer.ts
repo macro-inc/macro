@@ -4,6 +4,7 @@
  * @lexical/table 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import type { EditorView } from '../editor-view';
+import { themeClass } from '../registry';
 
 export interface DOMCell {
   readonly element: HTMLTableCellElement;
@@ -66,11 +67,21 @@ export class TableObserver {
   private anchor: number | null = null;
   private focus: number | null = null;
   private pointerId: number | null = null;
+  private dragOwnsSelection = false;
+  private readonly selectedCellClasses: string[];
+  private readonly selectedTableClasses: string[];
   constructor(
     readonly view: EditorView,
     readonly key: number,
     readonly table: HTMLTableElement
   ) {
+    const theme = view.options.theme;
+    this.selectedCellClasses = themeClass(theme, 'tableCellSelected')
+      .split(/\s+/)
+      .filter(Boolean);
+    this.selectedTableClasses = themeClass(theme, 'tableSelection')
+      .split(/\s+/)
+      .filter(Boolean);
     observers.set(table, this);
     table.addEventListener('pointerdown', this.down);
     table.ownerDocument.addEventListener('pointermove', this.move);
@@ -95,6 +106,7 @@ export class TableObserver {
         this.domGrid.length = 0;
         this.selected.clear();
         this.selectionBounds = null;
+        this.table.classList.remove(...this.selectedTableClasses);
         return;
       }
       let first = 0;
@@ -239,6 +251,7 @@ export class TableObserver {
   }
   private unpaint(cell: DOMCell): void {
     if (getTableElement(cell.element) !== this.table) return;
+    cell.element.classList.remove(...this.selectedCellClasses);
     cell.element.removeAttribute('data-lexical-table-selected');
     cell.element.setAttribute('aria-selected', 'false');
   }
@@ -331,12 +344,32 @@ export class TableObserver {
       if (this.selected.has(key) && !changed?.has(key)) continue;
       const cell = this.cells.get(key);
       if (!cell) continue;
+      cell.element.classList.add(...this.selectedCellClasses);
       cell.element.setAttribute('data-lexical-table-selected', '');
       cell.element.setAttribute('aria-selected', 'true');
     }
+    if (selected.size) this.table.classList.add(...this.selectedTableClasses);
+    else this.table.classList.remove(...this.selectedTableClasses);
     this.selected = selected;
   }
+  /** The browser text drag must yield once this gesture owns a table range. */
+  preserveDragSelection(dom: Selection): boolean {
+    if (
+      !this.dragOwnsSelection ||
+      this.view.root.contentEditable !== 'true' ||
+      !this.ownsNode(dom.anchorNode) ||
+      !this.ownsNode(dom.focusNode)
+    )
+      return false;
+    dom.removeAllRanges();
+    return true;
+  }
+  private ownsNode(node: Node | null): boolean {
+    const element = node instanceof Element ? node : node?.parentElement;
+    return !!element && getTableElement(element) === this.table;
+  }
   private keyFromTarget(target: EventTarget | null): number | null {
+    if (!(target instanceof Node) || !this.ownsNode(target)) return null;
     const cell = getDOMCellFromTarget(target);
     if (!cell || getTableElement(cell) !== this.table) return null;
     const key = this.view.keyFromDOM(cell);
@@ -353,6 +386,7 @@ export class TableObserver {
       return;
     if (!event.shiftKey || this.anchor === null) this.anchor = key;
     this.pointerId = event.pointerId;
+    this.dragOwnsSelection = false;
     if (event.shiftKey) {
       event.preventDefault();
       this.submit(key);
@@ -360,25 +394,47 @@ export class TableObserver {
   };
   private move = (event: PointerEvent): void => {
     if (this.pointerId !== event.pointerId || this.anchor === null) return;
-    if (this.view.root.contentEditable !== 'true') {
+    if (!(event.buttons & 1) || this.view.root.contentEditable !== 'true') {
       this.pointerId = null;
+      this.dragOwnsSelection = false;
       return;
     }
-    const key = this.keyFromTarget(event.target);
+    const document = this.table.ownerDocument;
+    const target = event.target;
+    let key = this.keyFromTarget(target);
+    // Firefox can keep reporting the original cell after the pointer crosses it.
+    if (
+      typeof document.elementsFromPoint === 'function' &&
+      (document.defaultView?.navigator.userAgent.includes('Firefox') ||
+        (target instanceof Node && this.table.contains(target)))
+    ) {
+      key = null;
+      for (const element of document.elementsFromPoint(
+        event.clientX,
+        event.clientY
+      )) {
+        const owner = getTableElement(element);
+        if (owner && owner !== this.table) break;
+        key = this.keyFromTarget(element);
+        if (key !== null) break;
+      }
+    }
     if (
       key === null ||
-      key === this.focus ||
-      (key === this.anchor && this.focus === null)
+      (this.dragOwnsSelection ? key === this.focus : key === this.anchor)
     )
       return;
     event.preventDefault();
     this.submit(key);
   };
   private up = (event: PointerEvent): void => {
-    if (event.pointerId === this.pointerId) this.pointerId = null;
+    if (event.pointerId !== this.pointerId) return;
+    this.pointerId = null;
+    this.dragOwnsSelection = false;
   };
   private submit(key: number): void {
     if (this.anchor === null) return;
+    this.dragOwnsSelection = true;
     this.select(this.anchor, key);
     this.view.port.selectionFromView({
       kind: 'table',
@@ -393,6 +449,7 @@ export class TableObserver {
     this.table.ownerDocument.removeEventListener('pointerup', this.up);
     this.table.ownerDocument.removeEventListener('pointercancel', this.up);
     this.pointerId = null;
+    this.dragOwnsSelection = false;
     observers.delete(this.table);
     this.clear();
   }

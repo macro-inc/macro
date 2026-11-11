@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import {
+  Access,
   CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
@@ -16,7 +17,10 @@ beforeAll(initializeNativeSurfaceTests);
 test.each([8, 256])(
   'native table edits touch one row among %i rows',
   (size) => {
-    const fixture = nativeSurface();
+    const fixture = nativeSurface(Access.Edit, {
+      tableSelection: 'selected-table',
+      tableCellSelected: 'selected-cell selected-cell-overlay',
+    });
     try {
       fixture.port.setState(
         JSON.stringify({
@@ -62,6 +66,16 @@ test.each([8, 256])(
       expect(
         table.querySelectorAll('[data-lexical-table-selected]')
       ).toHaveLength(3);
+      expect(table.classList.contains('selected-table')).toBe(true);
+      expect(
+        table.querySelectorAll('.selected-cell.selected-cell-overlay')
+      ).toHaveLength(3);
+      observer.clear();
+      expect(table.classList.contains('selected-table')).toBe(false);
+      expect(
+        table.querySelectorAll('.selected-cell, .selected-cell-overlay')
+      ).toHaveLength(0);
+      observer.select(grid[0][0].key, grid[1][1].key);
       const reads = vi.spyOn(Map.prototype, 'get');
       const beforeReads = reads.mock.calls.length;
       for (let i = 0; i < 1000; i++) observer.getGrid();
