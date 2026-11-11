@@ -6,7 +6,6 @@ import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch } from '@core/util/freshSort';
-import { isEditableInput } from '@core/util/isEditableInput';
 import { preserveOrderedWindow } from '@core/util/ordered-window';
 import { useKeyPressed } from '@core/util/useKeyPressed';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
@@ -32,8 +31,6 @@ import {
   For,
   type JSX,
   on,
-  onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import {
@@ -500,20 +497,16 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (
-      e.defaultPrevented ||
-      (e.target instanceof HTMLElement && e.target.closest('button'))
-    )
+    if (e.defaultPrevented) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      (props.onCancel ?? props.onClose)?.();
       return;
-    // Another field on the page keeps its own keys.
-    if (
-      e.target !== searchInputRef &&
-      e.target instanceof Element &&
-      isEditableInput(e.target)
-    )
-      return;
+    }
     if (e.key === 'PageDown' && quickAccess.hasMore()) {
       e.preventDefault();
+      e.stopPropagation();
       if (!quickAccess.isLoadingMore()) loadNext();
       return;
     }
@@ -539,15 +532,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         if (entity) toggleEntity(entity, true);
       }
     }
+    if (e.defaultPrevented) e.stopPropagation();
   };
-
-  onMount(() => {
-    document.addEventListener('keydown', handleKeyDown);
-  });
-
-  onCleanup(() => {
-    document.removeEventListener('keydown', handleKeyDown);
-  });
 
   useSearchInputFocus(() => searchInputRef);
 
@@ -580,13 +566,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
             type="text"
             value={inputValue()}
             onInput={(e) => setInputValue(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                (props.onCancel ?? props.onClose)?.();
-              }
-            }}
+            // Handle picker navigation before the enclosing dropdown consumes it.
+            onKeyDown={handleKeyDown}
             placeholder={props.config.placeholder}
           />
         </div>

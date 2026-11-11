@@ -100,6 +100,13 @@ barrel. Legacy full-directory hooks throw. Tests cover zero closed-menu browse
 reads, explicit labels, Unassigned, unknown IDs, paging, query replacement, Only,
 reopening at page one and restoring the Owned constraint when a creator is cleared.
 
+`/assignee-keyboard.html` hosts the real entity selector inside `EditorPopover`
+and `PickerSheet` with a synthetic explicit roster. `assignee-keyboard.browser.e2e.ts`
+checks arrow navigation, Enter selection, Escape, search, single-person selection,
+and isolation from another input. It also checks the ordinary dropdown and the
+Tasks/next-soup Assignee facets through their existing fixtures. Both desktop and
+phone run without hosted data; phone filter facets remain checkbox sections.
+
 `/?channel-recipients=modal` and `/?channel-recipients=panel` mount the real
 channel invitation dialog and participant add control over a bounded virtual
 100k source. Desktop/phone cases cover pre-limit roster exclusions, page/search
