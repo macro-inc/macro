@@ -31,6 +31,13 @@ pub(crate) fn selection(
         _ => return Err(BoundaryError::Invalid("selection")),
     })
 }
+/// Convert a routed hot keyboard command using its admitted event.
+pub(crate) fn key_command(code: u32, event: &KeyEvent) -> Result<Command, BoundaryError> {
+    if code == generated::CommandCode::SelectAll as u32 {
+        return Ok(Command::SelectAll(Some(event.clone())));
+    }
+    command(code, 0, 0, None)
+}
 pub(crate) fn command(
     code: u32,
     a: u32,

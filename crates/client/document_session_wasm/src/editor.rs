@@ -670,7 +670,7 @@ impl EditorSession {
                 event: Some(event.clone()),
             })
         } else {
-            Some(editor_input::command(routed, 0, 0, None).map_err(js)?)
+            Some(editor_input::key_command(routed, &event).map_err(js)?)
         };
         self.machine
             .editor(

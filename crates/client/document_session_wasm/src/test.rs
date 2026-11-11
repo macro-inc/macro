@@ -921,3 +921,6 @@ mod checklist_plan;
 
 mod checklist_updates;
 mod table_facts;
+
+#[cfg(test)]
+mod keyboard_shortcuts;

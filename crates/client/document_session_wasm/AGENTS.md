@@ -24,6 +24,7 @@ b=0 preserves composition. EditorKeyDown carries the layout target through
 normal KeyDown listener dispatch before the routed deletion. Primitive keyDown
 inputs dispatch recognized key-specific listeners after generic KeyDown without
 claiming the browser default unless a handler consumes it.
+Hot routed SelectAll preserves the actual KeyEvent after generic KeyDown; direct programmatic SelectAll remains eventless.
 Append Click as CommandCode 18 in the existing command envelope and dispatch its
 native rich-text listener; keep decorator selection policy out of generic view
 auto-selection. The enum alone does not install a handler or enable ownership.
