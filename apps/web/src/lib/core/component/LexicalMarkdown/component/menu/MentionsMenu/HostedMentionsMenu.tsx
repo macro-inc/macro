@@ -27,6 +27,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import { Telemetry } from '@macro-inc/observability';
 import { useExternalChatsQuery } from '@queries/external-chats';
@@ -389,6 +390,7 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -401,21 +403,6 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
-  let previousPeopleWindow: string | undefined;
-  let previousPeopleQuery = '';
-  createEffect(
-    on(peopleWindowKey, (key) => {
-      if (key === undefined) return;
-      if (
-        previousPeopleWindow !== undefined &&
-        key !== previousPeopleWindow &&
-        previousPeopleQuery === searchTerm()
-      )
-        controller.selectItem(0);
-      previousPeopleWindow = key;
-      previousPeopleQuery = searchTerm();
-    })
-  );
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -595,6 +582,20 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     targetItems: TARGET_ITEMS,
   });
 
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
+  );
+
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null
   >('start');
@@ -650,9 +651,11 @@ function MentionsMenuInner(props: HostedMentionsMenuProps) {
     isActive: () => !props.nativePresentation && menuOpen(),
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {

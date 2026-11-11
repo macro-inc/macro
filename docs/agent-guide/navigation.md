@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides that alert on this device, across reloads, remembered by the alert's id in localStorage; a new alert shows again and clears the stored id |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -1324,6 +1324,15 @@ of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
 pass before the run is queued. Steps that act on the triggering item can't run
 on GitHub triggers, which have no Macro item.
 
+Presets and **Any GitHub event** only receive events selected on the installed
+GitHub App. Account linking alone does not enable delivery. The
+[registration guide](../../crates/github/README.md) lists the reviewed
+subscriptions and manual permission approval steps; changing its checked-in
+specification does not change the live app. After adding subscriptions, verify
+a controlled repository's delivery and matching routine history. Wildcard
+routines can run more often, and manually redelivering a webhook from GitHub
+can run a routine again.
+
 When `enable-routine-conditions` is on, every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
@@ -1541,8 +1550,9 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order; mixed menu scoring never reorders that window or drops
-reverse-word matches. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
+recent-first window order among equally good name matches; mixed menu scoring never
+drops reverse-word matches. In menus, further pages of people are listed below the
+earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.

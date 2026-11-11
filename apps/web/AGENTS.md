@@ -94,8 +94,14 @@ membership/context tokens, not previous result IDs or a scoring clock. Contact
 changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
-aliases only for their current window. Reset virtual focus/scroll on window
-replacement, not label updates. Keep explicit participant/team pools scoped and
+aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
+further pages of people and contact matches are listed below the earlier ones, up
+to a bound; property pickers keep a replaceable window with explicit paging. A
+window key names the page or growing list on screen, never a refresh of it. Reset
+virtual focus/scroll only on window replacement, not label updates or refreshes.
+Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
+results arrive; the highlight resets only when the query or category changes.
+The person list keeps its still-matching rows while the next read is pending. Keep explicit participant/team pools scoped and
 selected IDs/self independent of suggestion pages. Discussion mentions on documents,
 projects and calls delegate to the same bounded directory. In mention configuration,
 `users()` returning undefined selects that directory; [] remains an explicit empty
@@ -315,9 +321,10 @@ Contact decorators use a narrow published-selection/Normal-Enter host; preserve 
 Selection-only chips may receive a narrow `DecoratorSelectionHost`; preserve their actual LexicalWrapper selection fallback when it is absent. Verify OFF bytes, import-matched native DOM/JSON and actual selection with `decorator-host/selection-browser-test/playwright.config.ts` in all three engines; this fixture is not the complete application registry.
 Prove Source-admitted decorator values through actual parse and mounted controls before widening real UI inputs; keep public node props unchanged and never coerce inputs through an unchecked registry type. The Magic control lives in `decorator-host/magic-source-browser-test`.
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
-backend-free desktop/phone regression: the card reserves its height from
-`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
-never scrolls or clips inside:
+backend-free desktop/phone regression: while loading, the card draws its
+header with the question (the card's name, so it wraps as it will) above a body
+reserved from `previewData.poll.optionCount`, keeps that height through load,
+and never scrolls or clips inside:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a
@@ -355,10 +362,10 @@ blank slate, composer pinning, quote replies and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
-A call's own chat on a meeting page (the real `CallDiscussionContent` and
-`MeetingDiscussionHost` under only the providers `Root` gives every page) has a
-backend-free desktop and phone regression: the first message sent shows in the
-panel instead of leaving it on "Loading chat…":
+A call's own chat on a meeting page (the real `CallChat` under only the providers
+`Root` gives every page) has a backend-free desktop and phone regression: the
+first message sent shows in the panel, and a guest's message renders without
+the app's notification state:
 `bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
 A meeting page has none of `AppProviders`; anything rendering app messages there
 goes inside `MeetingDiscussionHost`, created by the host's render function.
@@ -397,7 +404,9 @@ beside a scrolling editor whose selection runs past its visible bottom
 
 The machine Share menu (teammates, team access, access requests, and the warning
 before shutting down a resident) and Settings → Machines' Teammates' machines
-section (Request access) have a backend-free desktop/phone regression:
+section (Request access), and its Pending requests section (one-click Approve
+with rows that stay mounted across refetches), have a backend-free
+desktop/phone regression:
 `bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
 It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
@@ -458,8 +467,11 @@ matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Personal contact rows instead preserve policy-5 source order; tune only
-ordinary entity relevance here.
+match. Among equally good name matches Cmd+K lists Macro users and DMs before
+other rows. Personal contact rows keep policy-5 source order among equally good
+name matches only, so a recent weaker match never takes a better match's slot.
+A row whose letters merely appear in order ranks below every row containing the
+typed words.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
@@ -836,6 +848,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Snapshot cache generation subscribers before dispatch and skip removed listeners;
+  reactive observers may resubscribe during notification and must not extend it.
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.
@@ -1421,9 +1435,9 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
-- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
+- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
 - If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
-- Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.
+- Interface glyphs never animate on press or hover; do not add shared or per-button bounce, turn, or scale effects. Disclosure carets and loading spinners keep their state-driven motion. Preserve accessible control names.
 
 ### Creation choices and notifications
 
