@@ -1,0 +1,42 @@
+apps/web/src/features/channel/Channel/create-delete-message-confirmation.tsx
+  s_c6a08203850d89::t_680c0131d10a07 14-19
+crates/messages/AGENTS.md
+  s_c6a08203850d89::t_3a6ba6b7cd9bc4 81-82
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_c6a08203850d89::t_505326a81e4268 399
+  s_c6a08203850d89::t_784840610eb0e6 400
+  s_c6a08203850d89::t_dc39cc026c88a8 354-398,401-402
+  s_19fbfce4712992::t_47b09902f2e164 353
+docs/agent-guide/calls.md
+  s_c6a08203850d89::t_23de8037e593de 239
+crates/messages/src/domain/service/test.rs
+  s_c6a08203850d89::t_13ac3b39c23458 103-108,173-178
+apps/web/src/features/channel/Channel/tests/create-delete-message-confirmation.test.tsx
+  s_c6a08203850d89::t_680c0131d10a07 80-97
+crates/messages/src/domain/service/guest_chat.rs
+  s_c6a08203850d89::t_a6088d7ac822bd 638-648
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c59aaab81037becfd35c118a8aa52a8116b30d8f",
+  "prompts": {},
+  "sessions": {
+    "s_19fbfce4712992": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9b372c92-24c8-4bb5-af58-09a4287203e2",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
