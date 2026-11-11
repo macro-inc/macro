@@ -89,7 +89,9 @@ Connections blocked on locks, or a transaction open for a long time.
   concurrent updates of the same rows have caused past overloads.
 - A long open transaction holds its locks and stops vacuum. The long-running
   transaction alert fires once the oldest transaction has stayed old for five
-  minutes. Find it and its SQL in `pg_stat_activity` (`xact_start`,
+  minutes: a warning when it is about 15 minutes old, critical at about 30.
+  One sample, however old, cannot trigger it. Find it and its SQL in
+  `pg_stat_activity` (`xact_start`,
   `state = 'idle in transaction'`) or Database Monitoring.
 - A single sample of `postgresql.activity.xact_start_age` as old as the
   newest `notification-service` task, at about :09 past the hour, is not a
