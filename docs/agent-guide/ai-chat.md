@@ -2632,7 +2632,8 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` identifies available agents and
+`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
+mode) identifies available agents and
 `CreateAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit

@@ -235,7 +235,6 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "DeleteInitiative",
         "ListAgents",
         "ConfigureAgent",
-        "CreateAgentSession",
     ] {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(
@@ -846,11 +845,13 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         assert!(!direct.deferred.iter().any(|t| t.name == name), "{name}");
     }
     // The SDK cannot show the model a render, create a pipeline with its
-    // stages and fields, or render the answer cards for agent updates.
+    // stages and fields, render the answer cards for agent updates, or prompt
+    // an agent that runs on its operator's machine.
     for name in [
         "RenderCanvas",
         "CreatePipeline",
         "ListAgentUpdates",
+        "CreateAgentSession",
         "Subagent",
         "SearchTools",
         "LoadTools",

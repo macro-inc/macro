@@ -171,6 +171,8 @@ remount company previews or request them again.
 Chats and agent sessions manage pipelines with their own tools, not the database
 tools: `ListPipelines`, `FindPipelineEntries`, `AddToPipeline`,
 `UpdatePipelineEntries`, `RemoveFromPipeline`, `CreatePipeline`, and `EditPipeline`.
+In code mode only `CreatePipeline` stays a direct tool; the rest run through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 They address entries by the company or contact they track, fields by name, and
 stages by label, so "move Acme to Negotiation in Sales" or "how many deals are in
 Demo?" work without ids. Each tool row shows a kanban icon and expands to the
