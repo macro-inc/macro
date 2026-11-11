@@ -12,14 +12,14 @@ use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    MacroUserAuthentication, UserOnly, is_agent_run,
+    MacroUserAuthentication, UserOnly,
 };
 use macro_uuid::Uuid;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    AttachDraft, IdeaCaller, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea,
+    Accept, AttachDraft, IdeaCaller, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea,
     RewriteIdea, SuggestIdea,
 };
 use crate::domain::ports::IdeaApi;
@@ -106,6 +106,9 @@ impl IntoResponse for IdeaApiError {
             Self::Service(error @ (IdeaError::NotGenerating | IdeaError::Generating)) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
+            Self::Service(error @ IdeaError::Changed) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
             Self::Service(IdeaError::Internal(report)) => {
                 tracing::error!(error = ?report, "ideas call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
@@ -114,17 +117,29 @@ impl IntoResponse for IdeaApiError {
     }
 }
 
-/// Who is at the feed: an agent when the credential carries an agent's
-/// attribution, a code-mode invocation, or comes from a program; the person
-/// otherwise. Only the signed invocation decides anything (a generation
-/// session's is refused); the rest labels the span.
+/// Acting on an idea, as the caller's copy of it shows it.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptIdeaRequest {
+    /// The idea's `updatedAt` as the caller read it. A background idea runs
+    /// only if it is unchanged since; otherwise the answer is 409.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Who is at the feed. Only the person's own session in the app, with no
+/// program's marks (a code-mode invocation, the code-execution header), is
+/// the person; any other credential (an agent's, an API token, a program)
+/// acts for them. When it can't be told, it is someone acting for them.
 fn caller(user: &MacroUserAuthentication, headers: &HeaderMap) -> IdeaCaller {
     // Validated against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
-    if correlation.is_some() || is_agent_run(user.agent_id.is_some(), headers) {
-        IdeaCaller::Agent { correlation }
-    } else {
+    if correlation.is_none()
+        && user.is_human_session()
+        && !headers.contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+    {
         IdeaCaller::User
+    } else {
+        IdeaCaller::Agent { correlation }
     }
 }
 
@@ -179,29 +194,41 @@ where
     tag = "ideas",
     operation_id = "accept_idea",
     params(("id" = String, Path, description = "ID of the idea")),
+    request_body = AcceptIdeaRequest,
     responses(
-        (status = 204, description = "Accepted"),
+        (status = 204, description = "Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing"),
+        (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String, description = "A generation session may not accept"),
-        (status = 404, body = String, description = "No proposed idea with this id for the caller, or ideas are off"),
+        (status = 409, body = String, description = "The idea changed since the caller read it: read it again"),
+        (status = 404, body = String, description = "No open or done idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller, or their own agent, acts on a proposed idea.
+/// The caller, or someone acting for them, acts on an idea: a background
+/// prompt idea starts its run when the person accepts it in the app (anyone
+/// else only takes it on); any other is done once they act on it (open its
+/// item, the composer, the routine), and shows in the feed's `done`.
 pub async fn accept_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    body: Result<Json<AcceptIdeaRequest>, JsonRejection>,
 ) -> Result<StatusCode, IdeaApiError>
 where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
+    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
     let caller = caller(&user.authorization, &headers);
+    let accept = Accept {
+        shown_updated_at: request.updated_at,
+        by_person: caller == IdeaCaller::User,
+    };
     state
         .service
-        .accept(&user.authorization.macro_user_id, caller, id)
+        .accept(&user.authorization.macro_user_id, caller, id, accept)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

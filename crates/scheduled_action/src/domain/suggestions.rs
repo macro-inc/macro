@@ -212,7 +212,11 @@ where
                 ))?)
             })
             .collect::<Result<Vec<Surface>>>()?;
-        tracing::Span::current().record("agent.session.id", session.session.to_string());
+        let span = tracing::Span::current();
+        span.record("agent.session.id", session.session.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok((user, session, surfaces))
     }
 
@@ -243,7 +247,7 @@ where
         allowed: &[Surface],
         request: SuggestRequest,
     ) -> Result<SuggestOutcome> {
-        let kept = self.repo.kept_by(session.session).await?;
+        let kept = self.repo.kept_by(user, session.session).await?;
         if kept >= MAX_KEPT_PER_SESSION {
             return Ok(rejected(vec![format!(
                 "you suggested {MAX_KEPT_PER_SESSION} routines; that is enough, stop now"
@@ -442,8 +446,8 @@ where
         }))
     }
 
-    async fn kept(&self, session: Uuid) -> Result<u32> {
-        self.repo.kept_by(session).await
+    async fn kept(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<u32> {
+        self.repo.kept_by(user, session).await
     }
 
     async fn record(&self, user: &MacroUserIdStr<'static>, report: RoutineGenerationReport) {
@@ -490,6 +494,7 @@ where
 
     #[tracing::instrument(name = "routine.suggestions.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestions.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -502,7 +507,7 @@ where
         let (stored, saved, kept) = tokio::try_join!(
             self.repo.suggestions(&user),
             self.repo.saved_from(&user),
-            self.repo.kept_by(session.session),
+            self.repo.kept_by(&user, session.session),
         )?;
         let saved: HashSet<Uuid> = saved.into_iter().collect();
         let suggestions: Vec<ReviewedSuggestion> = stored
@@ -539,6 +544,7 @@ where
 
     #[tracing::instrument(name = "routine.suggestions.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestion.id = %id,
         routine.suggestion.ok = tracing::field::Empty,
     ), err)]
@@ -559,6 +565,13 @@ where
                 decode::MAX_REASON_CHARS
             )]));
         };
+        if let Some(detail) = shown_text::personal_detail(&reason) {
+            span.record("routine.suggestion.ok", false);
+            return Ok(rejected(vec![format!(
+                "the reason names {detail}; say why it no longer fits in general terms, \
+                 without anyone's details"
+            )]));
+        }
         let saved = self.repo.saved_from(&user).await?;
         let retired = !saved.contains(&id)
             && self
@@ -628,6 +641,7 @@ where
     #[tracing::instrument(name = "routine.suggestions.suggest", skip_all, fields(
         routine.suggestion.kind = request.kind_name(),
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestion.ok = tracing::field::Empty,
         routine.suggestion.problems = tracing::field::Empty,
         routine.suggestion.id = tracing::field::Empty,

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea SET state = 'accepted', updated_at = $3,\n                   state_changed_at = CASE WHEN state = 'accepted' THEN state_changed_at ELSE $3 END\n               WHERE id = $1 AND user_id = $2 AND updated_at = $4\n                 AND EXISTS (SELECT 1 FROM idea_prompt p WHERE p.idea_id = idea.id AND p.run_mode = 'background')\n                 AND ((state = 'proposed' AND NOT EXISTS (\n                          SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id AND r.settled_at IS NULL))\n                      OR (state = 'accepted' AND NOT EXISTS (\n                          SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id\n                            AND (r.outcome IS DISTINCT FROM 'failed'))))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5280eb18523df61b0e05261f82f1a33a2546021ddc6adbbd00919aa3f57cb8b1"
+}

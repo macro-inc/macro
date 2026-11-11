@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,\n                      started_at, outcome\n               FROM idea_run WHERE user_id = $1\n               ORDER BY idea_id, started_at DESC",
+  "query": "SELECT s.session_id, s.generation_id, s.user_id, s.kind, s.surfaces, g.trace_id\n               FROM suggestion_generation_session s\n               JOIN suggestion_generation g ON g.id = s.generation_id\n               WHERE s.session_id = $1 AND s.closed_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "idea_id",
+        "name": "generation_id",
         "type_info": "Uuid"
       },
       {
@@ -20,28 +20,23 @@
       },
       {
         "ordinal": 3,
-        "name": "agent_id",
+        "name": "kind",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "action_id",
-        "type_info": "Uuid"
+        "name": "surfaces",
+        "type_info": "TextArray"
       },
       {
         "ordinal": 5,
-        "name": "started_at",
-        "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 6,
-        "name": "outcome",
+        "name": "trace_id",
         "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -50,9 +45,8 @@
       false,
       false,
       false,
-      false,
       true
     ]
   },
-  "hash": "bb65c646d507f635fb8f50b9e6439de3e8b6ef4e2bec719f1a30427f9138d06e"
+  "hash": "c2d7b2d9839ab9d82746aad0b0a81a120aced842ef31c809e886d87fdd7616bf"
 }

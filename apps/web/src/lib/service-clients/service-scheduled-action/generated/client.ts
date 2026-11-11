@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AcceptIdeaRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
@@ -82,7 +83,7 @@ export const scheduledActionHealth = async (
 };
 
 /**
- * @summary The caller's feed, for them or their own agent.
+ * @summary The caller's feed.
  */
 export type listIdeasResponse200 = {
   data: Ideas;
@@ -92,11 +93,6 @@ export type listIdeasResponse200 = {
 export type listIdeasResponse401 = {
   data: string;
   status: 401;
-};
-
-export type listIdeasResponse403 = {
-  data: string;
-  status: 403;
 };
 
 export type listIdeasResponse404 = {
@@ -114,7 +110,6 @@ export type listIdeasResponseSuccess = listIdeasResponse200 & {
 };
 export type listIdeasResponseError = (
   | listIdeasResponse401
-  | listIdeasResponse403
   | listIdeasResponse404
   | listIdeasResponse500
 ) & {
@@ -379,11 +374,18 @@ export const rewriteIdea = async (
 };
 
 /**
- * @summary The caller, or their own agent, acts on a proposed idea.
+ * @summary The caller acts on an idea: a background prompt idea is taken on; any
+other is done once they act on it (open its item, the composer, the
+routine), and shows in the feed's `done`.
  */
 export type acceptIdeaResponse204 = {
   data: void;
   status: 204;
+};
+
+export type acceptIdeaResponse400 = {
+  data: string;
+  status: 400;
 };
 
 export type acceptIdeaResponse401 = {
@@ -391,14 +393,14 @@ export type acceptIdeaResponse401 = {
   status: 401;
 };
 
-export type acceptIdeaResponse403 = {
-  data: string;
-  status: 403;
-};
-
 export type acceptIdeaResponse404 = {
   data: string;
   status: 404;
+};
+
+export type acceptIdeaResponse409 = {
+  data: string;
+  status: 409;
 };
 
 export type acceptIdeaResponse500 = {
@@ -410,9 +412,10 @@ export type acceptIdeaResponseSuccess = acceptIdeaResponse204 & {
   headers: Headers;
 };
 export type acceptIdeaResponseError = (
+  | acceptIdeaResponse400
   | acceptIdeaResponse401
-  | acceptIdeaResponse403
   | acceptIdeaResponse404
+  | acceptIdeaResponse409
   | acceptIdeaResponse500
 ) & {
   headers: Headers;
@@ -428,11 +431,14 @@ export const getAcceptIdeaUrl = (id: string) => {
 
 export const acceptIdea = async (
   id: string,
+  acceptIdeaRequest: AcceptIdeaRequest,
   options?: RequestInit
 ): Promise<acceptIdeaResponse> => {
   const res = await fetch(getAcceptIdeaUrl(id), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(acceptIdeaRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
@@ -446,7 +452,7 @@ export const acceptIdea = async (
 };
 
 /**
- * @summary The caller, or their own agent, isn't interested in an open idea.
+ * @summary The caller isn't interested in an open idea.
  */
 export type dismissIdeaResponse204 = {
   data: void;
@@ -456,11 +462,6 @@ export type dismissIdeaResponse204 = {
 export type dismissIdeaResponse401 = {
   data: string;
   status: 401;
-};
-
-export type dismissIdeaResponse403 = {
-  data: string;
-  status: 403;
 };
 
 export type dismissIdeaResponse404 = {
@@ -478,7 +479,6 @@ export type dismissIdeaResponseSuccess = dismissIdeaResponse204 & {
 };
 export type dismissIdeaResponseError = (
   | dismissIdeaResponse401
-  | dismissIdeaResponse403
   | dismissIdeaResponse404
   | dismissIdeaResponse500
 ) & {

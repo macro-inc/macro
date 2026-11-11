@@ -31,7 +31,7 @@
     "/ideas": {
       "get": {
         "tags": ["ideas"],
-        "summary": "The caller's feed, for them or their own agent.",
+        "summary": "The caller's feed.",
         "operationId": "list_ideas",
         "parameters": [
           {
@@ -57,16 +57,6 @@
           },
           "401": {
             "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "A generation session may not read the feed",
             "content": {
               "text/plain": {
                 "schema": {
@@ -327,7 +317,7 @@
     "/ideas/{id}/accept": {
       "post": {
         "tags": ["ideas"],
-        "summary": "The caller, or their own agent, acts on a proposed idea.",
+        "summary": "The caller acts on an idea: a background prompt idea is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
         "operationId": "accept_idea",
         "parameters": [
           {
@@ -340,9 +330,29 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptIdeaRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "204": {
-            "description": "Accepted"
+            "description": "Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "401": {
             "description": "",
@@ -354,8 +364,8 @@
               }
             }
           },
-          "403": {
-            "description": "A generation session may not accept",
+          "404": {
+            "description": "No open or done idea with this id for the caller, or ideas are off",
             "content": {
               "text/plain": {
                 "schema": {
@@ -364,8 +374,8 @@
               }
             }
           },
-          "404": {
-            "description": "No proposed idea with this id for the caller, or ideas are off",
+          "409": {
+            "description": "The idea changed since the caller read it: read it again",
             "content": {
               "text/plain": {
                 "schema": {
@@ -390,7 +400,7 @@
     "/ideas/{id}/dismiss": {
       "post": {
         "tags": ["ideas"],
-        "summary": "The caller, or their own agent, isn't interested in an open idea.",
+        "summary": "The caller isn't interested in an open idea.",
         "operationId": "dismiss_idea",
         "parameters": [
           {
@@ -409,16 +419,6 @@
           },
           "401": {
             "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "A generation session may not dismiss",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2186,6 +2186,18 @@
   },
   "components": {
     "schemas": {
+      "AcceptIdeaRequest": {
+        "type": "object",
+        "description": "Acting on an idea, as the caller's copy of it shows it.",
+        "required": ["updatedAt"],
+        "properties": {
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The idea's `updatedAt` as the caller read it. A background idea runs\nonly if it is unchanged since; otherwise the answer is 409."
+          }
+        }
+      },
       "ActionConfiguration": {
         "type": "object",
         "description": "Client configuration, the create body. Ownership and execution state are\nserver-owned.",

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './acceptIdeaRequest';
 export * from './actionConfiguration';
 export * from './actionConfigurationUpdate';
 export * from './actionConfigurationUpdateDescription';

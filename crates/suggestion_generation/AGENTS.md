@@ -24,9 +24,14 @@ those crates' tools. Hosted by the harness's scheduling runtime.
 - Nightly: people on a paid plan (`Plans`, from AI billing's entitlements)
   seen in the last week (`suggestion_audience`: an app load with ideas on,
   `POST /scheduled-action/suggestions/seen?timezone=` from the web app, the onboarding start, and ideas feed
-  reads with a time zone) whose local hour is 2 to 5, with no run going and no
-  nightly run in 20 hours; at most `MAX_NIGHTLY_RUNS` per process. A person
-  found unpaid leaves the audience. A nightly run includes the routines
+  reads with a time zone, the last through `audience::PaidAudience`). Each
+  row stores `next_run_at`, a time of the person's own inside 2 to 5 am in
+  their zone (`night.rs`); the tick reads only who is due, longest waiting
+  first, keeps reading while people are dropped (unpaid, inactive) or passed
+  over (their night ended: moved to the next one), and moves each person it
+  starts to their next night. At most `MAX_NIGHTLY_RUNS` per process; the
+  `suggestion.nightly_short` warning counts people due but not started. A
+  nightly run includes the routines
   session once a week (`ROUTINES_EVERY`); other nights only the ideas session
   runs. Onboarding runs for every plan. A run its process never finished (a deploy
   cancels runs in flight) counts as going only until `STALE_GENERATION`; then
@@ -41,8 +46,9 @@ those crates' tools. Hosted by the harness's scheduling runtime.
 
 - `src/domain/service.rs`: starting, running and sweeping generations.
 - `src/outbound/pg_generation_repo.rs`: the tables, and the adapter for the
-  ideas and routine suggestion crates' `GenerationSessions`,
-  `SuggestionAudience` and `GenerationStatuses` ports.
+  ideas and routine suggestion crates' `GenerationSessions` and
+  `GenerationStatuses` ports; `src/domain/audience.rs` is ideas'
+  `SuggestionAudience`.
 
 ## Scope
 

@@ -5,7 +5,7 @@
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use ideas::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use ideas::domain::ports::{GenerationSessions, SuggestionAudience};
+use ideas::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use scheduled_action::domain::suggestions::model::GenerationStatus;
@@ -200,13 +200,71 @@ impl GenerationRepo for PgGenerationRepo {
         user: &MacroUserIdStr<'_>,
         timezone: &str,
         now: DateTime<Utc>,
+        next_run: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
-            r#"INSERT INTO suggestion_audience (user_id, timezone, seen_at) VALUES ($1, $2, $3)
-               ON CONFLICT (user_id) DO UPDATE SET timezone = EXCLUDED.timezone, seen_at = EXCLUDED.seen_at"#,
+            r#"INSERT INTO suggestion_audience (user_id, timezone, seen_at, next_run_at)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (user_id) DO UPDATE SET
+                   seen_at = EXCLUDED.seen_at,
+                   timezone = EXCLUDED.timezone,
+                   next_run_at = CASE WHEN suggestion_audience.timezone = EXCLUDED.timezone
+                                      THEN suggestion_audience.next_run_at
+                                      ELSE EXCLUDED.next_run_at END"#,
             user.as_ref(),
             timezone,
             now,
+            next_run,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn account(&self, user: &MacroUserIdStr<'_>) -> Result<Option<Uuid>, Self::Err> {
+        let account = sqlx::query_scalar!(
+            r#"SELECT macro_user_id AS "macro_user_id?" FROM "User" WHERE id = $1"#,
+            user.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(account.flatten())
+    }
+
+    async fn prune_changes(&self, before: DateTime<Utc>, limit: u16) -> Result<u64, Self::Err> {
+        // Entries' ids are UUIDv7, ordered by when they were written: the
+        // primary key finds the old ones.
+        let deleted = sqlx::query!(
+            r#"DELETE FROM suggestion_change
+               WHERE id IN (SELECT id FROM suggestion_change WHERE id < $1 ORDER BY id LIMIT $2)"#,
+            uuid_v7_floor(before),
+            i64::from(limit),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(deleted.rows_affected())
+    }
+
+    async fn traced(&self, generation: Uuid, trace_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE suggestion_generation SET trace_id = $2 WHERE id = $1",
+            generation,
+            trace_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn reschedule(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE suggestion_audience SET next_run_at = $2 WHERE user_id = $1",
+            user.as_ref(),
+            at,
         )
         .execute(&self.pool)
         .await?;
@@ -243,35 +301,29 @@ impl GenerationRepo for PgGenerationRepo {
     async fn due(
         &self,
         now: DateTime<Utc>,
-        seen_since: DateTime<Utc>,
-        nightly_since: DateTime<Utc>,
         stale_before: DateTime<Utc>,
-        night: (u8, u8),
         limit: u16,
     ) -> Result<Vec<AudienceMember>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         let rows = sqlx::query!(
-            r#"SELECT a.user_id, a.timezone FROM suggestion_audience a
-               WHERE a.seen_at > $2
-                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int >= $4
-                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int < $5
+            r#"SELECT a.user_id, a.timezone, a.seen_at FROM suggestion_audience a
+               WHERE a.next_run_at <= $1
                  AND NOT EXISTS (
                      SELECT 1 FROM suggestion_generation g
-                     WHERE g.user_id = a.user_id
-                       AND ((g.status = 'generating' AND g.started_at >= $7)
-                            OR (g.trigger = 'nightly' AND g.started_at > $3
-                                AND NOT (g.status = 'generating' AND g.started_at < $7))))
-               ORDER BY a.seen_at
-               LIMIT $6"#,
+                     WHERE g.user_id = a.user_id AND g.status = 'generating'
+                       AND g.started_at >= $2)
+               ORDER BY a.next_run_at
+               LIMIT $3"#,
             now,
-            seen_since,
-            nightly_since,
-            i32::from(night.0),
-            i32::from(night.1),
-            i64::from(limit),
             stale_before,
+            i64::from(limit),
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         rows.into_iter()
             .map(|row| {
                 Ok(AudienceMember {
@@ -280,6 +332,7 @@ impl GenerationRepo for PgGenerationRepo {
                         .timezone
                         .parse()
                         .map_err(|_| PgGenerationRepoError::Decode("a time zone".to_owned()))?,
+                    seen_at: row.seen_at,
                 })
             })
             .collect()
@@ -293,9 +346,10 @@ impl GenerationSessions for PgGenerationRepo {
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report> {
         let row = sqlx::query!(
-            r#"SELECT session_id, generation_id, user_id, kind, surfaces
-               FROM suggestion_generation_session
-               WHERE session_id = $1 AND closed_at IS NULL"#,
+            r#"SELECT s.session_id, s.generation_id, s.user_id, s.kind, s.surfaces, g.trace_id
+               FROM suggestion_generation_session s
+               JOIN suggestion_generation g ON g.id = s.generation_id
+               WHERE s.session_id = $1 AND s.closed_at IS NULL"#,
             session,
         )
         .fetch_optional(&self.pool)
@@ -312,23 +366,10 @@ impl GenerationSessions for PgGenerationRepo {
                     .parse()
                     .map_err(|error| rootcause::Report::new(error).into_dynamic())?,
                 surfaces: row.surfaces,
+                trace_id: row.trace_id,
             })
         })
         .transpose()
-    }
-}
-
-#[async_trait::async_trait]
-impl SuggestionAudience for PgGenerationRepo {
-    async fn seen(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        timezone: &str,
-        now: DateTime<Utc>,
-    ) -> Result<(), rootcause::Report> {
-        self.see(user, timezone, now)
-            .await
-            .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }
 }
 
@@ -352,4 +393,15 @@ impl GenerationStatuses for PgGenerationRepo {
             .map(|status| Ok(status.parse::<GenerationStatus>()?))
             .transpose()
     }
+}
+
+/// The smallest UUIDv7 written at `at`: every v7 id written before it sorts
+/// below it.
+fn uuid_v7_floor(at: DateTime<Utc>) -> Uuid {
+    let millis = u64::try_from(at.timestamp_millis()).unwrap_or(0);
+    let mut bytes = [0_u8; 16];
+    bytes[..6].copy_from_slice(&millis.to_be_bytes()[2..]);
+    bytes[6] = 0x70;
+    bytes[8] = 0x80;
+    Uuid::from_bytes(bytes)
 }
