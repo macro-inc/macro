@@ -3319,6 +3319,11 @@ Enter handling. Close and reopen the document to check listener cleanup. A
 registered Contact renderer does not establish Contact picker insertion or
 successful navigation; verify those flows separately.
 
+In a native document containing an equation, click it, change its LaTeX and
+apply the edit. Reopen the menu to verify the saved expression. Check both
+inline and block equations, and confirm that closing the document releases
+the menu.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
