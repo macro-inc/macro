@@ -61,6 +61,30 @@ fn export_policy_does_not_reorder_callbacks_or_other_node_types() -> Result<(), 
     let direct = editor.state().view().export_json(NodeKey::ROOT)?;
     CALLS.with(|calls| assert_eq!(*calls.borrow(), ["root-a", "root-b"]));
     assert_eq!(direct["$"].to_string(), streamed["root"]["$"].to_string());
+    CALLS.with(|calls| calls.borrow_mut().clear());
+    let view = editor.state().view();
+    let buffer = view.export_json_reusing(NodeKey::ROOT, JsonExportBuffer::default())?;
+    assert_eq!(
+        buffer.json()["$"].to_string(),
+        streamed["root"]["$"].to_string()
+    );
+    let child = view.first_child(NodeKey::ROOT).expect("attached child");
+    let buffer = view.export_json_reusing(child, buffer)?;
+    assert_eq!(
+        buffer.json()["$"].to_string(),
+        streamed["root"]["children"][0]["$"].to_string()
+    );
+    let buffer = view.export_json_reusing(NodeKey::ROOT, buffer)?;
+    assert_eq!(
+        buffer.json()["$"].to_string(),
+        streamed["root"]["$"].to_string()
+    );
+    CALLS.with(|calls| {
+        assert_eq!(
+            *calls.borrow(),
+            ["root-a", "root-b", "child-a", "child-b", "root-a", "root-b"]
+        );
+    });
     Ok(())
 }
 
