@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (SELECT count(*) FROM (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.source_id = ANY($1) AND ea.entity_type = 'document' LIMIT $2\n                ) grants) = $2 AS \"document!\",\n                (SELECT count(*) FROM (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.source_id = ANY($1) AND ea.entity_type = 'chat' LIMIT $2\n                ) grants) = $2 AS \"chat!\",\n                (SELECT count(*) FROM (\n                    SELECT 1 FROM entity_access ea\n                    WHERE ea.source_id = ANY($1) AND ea.entity_type = 'project' LIMIT $2\n                ) grants) = $2 AS \"project!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "chat!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "project!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fbda072188825cc08fc53938bff4af2f2645e9c8c84b46d492fafa840339a40c"
+}

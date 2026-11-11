@@ -8,6 +8,7 @@ mod database_row;
 mod document_ids;
 mod initiative;
 mod property_filter;
+mod update_window;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
@@ -15,6 +16,7 @@ use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
 };
+use update_window::{WindowedArm, WindowedArms};
 
 #[cfg(test)]
 use item_filters::ast::initiative::InitiativeLiteral;
@@ -1698,6 +1700,7 @@ fn build_query<'a>(
     filter_ast: &'a EntityFilterAst,
     exclude_frecency: bool,
     sort: DynamicSort,
+    windowed: WindowedArms,
     document_ids: &mut DocumentIdArrays,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_method = sort.timestamp_method();
@@ -1803,6 +1806,25 @@ fn build_query<'a>(
         build_notification_items_cte(&mut builder, predicate, &item_types);
     }
 
+    let eligible = WindowedArms::eligible(filter_ast, sort);
+    let document_window = (include_documents && eligible.document && windowed.document)
+        .then_some(WindowedArm::Document);
+    let chat_window =
+        (include_chats && eligible.chat && windowed.chat).then_some(WindowedArm::Chat);
+    let project_window =
+        (include_projects && eligible.project && windowed.project).then_some(WindowedArm::Project);
+    for arm in [document_window, chat_window, project_window]
+        .into_iter()
+        .flatten()
+    {
+        builder.push(update_window::ctes(
+            arm,
+            sort_method,
+            exclude_frecency,
+            source_ids,
+        ));
+    }
+
     // TopItems CTE: lightweight id + sort_ts with filters, cursor, and limit
     builder.push("TopItems AS (");
     builder.push("SELECT all_items.item_type, all_items.id, all_items.sort_ts, ");
@@ -1813,6 +1835,9 @@ fn build_query<'a>(
 
     if include_documents {
         push_union_separator(&mut builder, &mut needs_separator);
+        if let Some(arm) = document_window {
+            builder.push(update_window::shortcut_rows(arm, sort_method));
+        }
         // Subtype is needed only for task-property filters or property-sort namespaces.
         let needs_task_property_joins = document_filter_needs_task_property_joins(document_filter);
         builder.push(document_top_clause(
@@ -1833,10 +1858,16 @@ fn build_query<'a>(
             filter_ast.properties_filter.as_deref(),
             "d.id",
         ));
+        if let Some(arm) = document_window {
+            builder.push(update_window::fallback_guard(arm));
+        }
     }
 
     if include_chats {
         push_union_separator(&mut builder, &mut needs_separator);
+        if let Some(arm) = chat_window {
+            builder.push(update_window::shortcut_rows(arm, sort_method));
+        }
         // Chat top clause (lightweight)
         builder.push(chat_top_clause(sort_method, property_sort));
         if optimized_notification_predicate.is_some() && chat_notification.is_some() {
@@ -1848,10 +1879,16 @@ fn build_query<'a>(
             filter_ast.properties_filter.as_deref(),
             "c.id",
         ));
+        if let Some(arm) = chat_window {
+            builder.push(update_window::fallback_guard(arm));
+        }
     }
 
     if include_projects {
         push_union_separator(&mut builder, &mut needs_separator);
+        if let Some(arm) = project_window {
+            builder.push(update_window::shortcut_rows(arm, sort_method));
+        }
         // Project top clause (lightweight)
         builder.push(project_top_clause(sort_method, property_sort));
         if optimized_notification_predicate.is_some() && project_notification.is_some() {
@@ -1863,6 +1900,9 @@ fn build_query<'a>(
             filter_ast.properties_filter.as_deref(),
             "p.id",
         ));
+        if let Some(arm) = project_window {
+            builder.push(update_window::fallback_guard(arm));
+        }
     }
 
     if include_initiatives {
@@ -2325,13 +2365,29 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    let mut transaction = begin_dynamic_query(db).await?;
+    let source_ids = fetch_user_source_ids(&mut transaction, args.user_id.as_ref()).await?;
+    let windowed = WindowedArms::eligible(args.cursor.filter(), *args.cursor.sort_method())
+        .with_many_grants(&mut transaction, &source_ids)
+        .await?;
+    let items = fetch_flat_page(&mut transaction, &args, &source_ids, windowed).await?;
+    transaction.commit().await?;
+    Ok(items)
+}
+
+async fn fetch_flat_page(
+    connection: &mut PgConnection,
+    args: &ExpandedDynamicCursorArgs<'_>,
+    source_ids: &[String],
+    windowed: WindowedArms,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
         cursor,
         exclude_frecency,
     } = args;
-    let query_limit = limit as i64;
+    let query_limit = *limit as i64;
     let sort_method_str = cursor.sort_method().timestamp_method().to_string();
     let (cursor_id, cursor_position) = cursor.vals();
     let cursor_timestamp = cursor_position.map(|position| position.timestamp());
@@ -2341,14 +2397,13 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut transaction = begin_dynamic_query(db).await?;
-    let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let mut document_ids =
         DocumentIdArrays::starting_at(first_document_id_slot(*cursor.sort_method(), false));
     let mut builder = build_query(
         cursor.filter(),
-        exclude_frecency,
+        *exclude_frecency,
         *cursor.sort_method(),
+        windowed,
         &mut document_ids,
     );
     let mut query = builder
@@ -2368,7 +2423,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     {
         query = query.bind(property_definition_id).bind(cursor_key);
     }
-    query = query.bind(&source_ids);
+    query = query.bind(source_ids);
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
@@ -2386,12 +2441,11 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             item.sort_key = row.try_get("sort_key")?;
             Ok(item)
         })
-        .fetch_all(&mut *transaction)
+        .fetch_all(connection)
         .instrument(query_span.clone())
         .await?;
     query_span.record("rows", items.len());
     drop(query_span);
-    transaction.commit().await?;
 
     Ok(items)
 }

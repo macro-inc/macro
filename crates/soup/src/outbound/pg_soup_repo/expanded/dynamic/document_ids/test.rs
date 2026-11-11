@@ -1,7 +1,7 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, build_document_filter,
+    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, WindowedArms, build_document_filter,
     build_grouped_query, build_query, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
@@ -194,7 +194,7 @@ fn arrays_follow_each_querys_fixed_binds() {
                 Expr::is_not(any_of(&absent(2, count))),
             ));
             let mut flat_ids = DocumentIdArrays::starting_at(flat_first);
-            let flat = build_query(&filter, false, sort, &mut flat_ids)
+            let flat = build_query(&filter, false, sort, WindowedArms::default(), &mut flat_ids)
                 .sql()
                 .to_owned();
             let grouping = GroupingConfig {

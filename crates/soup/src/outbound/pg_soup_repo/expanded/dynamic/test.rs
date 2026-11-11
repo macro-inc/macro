@@ -123,7 +123,13 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
         SimpleSortMethod::ViewedUpdated,
     ] {
         let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(sort.into(), false));
-        let query = build_query(&filter, false, sort.into(), &mut arrays);
+        let query = build_query(
+            &filter,
+            false,
+            sort.into(),
+            WindowedArms::default(),
+            &mut arrays,
+        );
         let top = query.sql().split("Combined AS").next().unwrap();
         assert!(!top.contains("JOIN document_sub_type"));
         assert!(!top.contains("property_entity_type"));
@@ -136,7 +142,13 @@ fn flat_timestamp_top_clauses_remain_lightweight() {
         direction: SoupSortDirection::Asc,
     };
     let mut arrays = DocumentIdArrays::starting_at(first_document_id_slot(property, false));
-    let query = build_query(&filter, false, property, &mut arrays);
+    let query = build_query(
+        &filter,
+        false,
+        property,
+        WindowedArms::default(),
+        &mut arrays,
+    );
     let top = query.sql().split("Combined AS").next().unwrap();
     assert!(top.contains("LEFT JOIN document_sub_type"));
     assert!(top.contains("THEN 'TASK'::property_entity_type"));
@@ -206,7 +218,7 @@ fn option_sorts_build_one_uncorrelated_option_map() {
         let query = if grouped {
             build_grouped_query(&filter, false, &grouping, sort, &mut arrays).0
         } else {
-            build_query(&filter, false, sort, &mut arrays)
+            build_query(&filter, false, sort, WindowedArms::default(), &mut arrays)
         };
         let parameter = if grouped { 11 } else { 9 };
         let sql = query.sql();
@@ -266,6 +278,7 @@ fn task_only_filters_omit_redundant_namespace_joins() {
             &filter,
             false,
             sort,
+            WindowedArms::default(),
             &mut DocumentIdArrays::starting_at(first_document_id_slot(sort, false)),
         );
         let (grouped, _) = build_grouped_query(
@@ -431,6 +444,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt.into(),
+            WindowedArms::default(),
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -444,6 +458,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             &filter,
             false,
             SimpleSortMethod::UpdatedAt.into(),
+            WindowedArms::default(),
             &mut DocumentIdArrays::starting_at(9),
         )
         .sql()
@@ -454,6 +469,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
         &filter,
         false,
         SimpleSortMethod::UpdatedAt.into(),
+        WindowedArms::default(),
         &mut DocumentIdArrays::starting_at(9),
     );
     let (candidates, details) = query.sql().split_once("Combined AS").unwrap();
