@@ -48,6 +48,9 @@ the Soup-backed thread list, and saved email views (flag
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
   ingress depth limit.
 - Unread dots are presence in a small first unread page per view, never a count.
+- `ViewShell.Main` holds the list at the width `use-reading-pane-list-width.ts`
+  reads beside the reading pane, so every drag must be saved through
+  `onWidthChangeEnd`; an unsaved one snaps back on the next resize.
 
 ## Checks
 
