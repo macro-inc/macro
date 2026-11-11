@@ -354,15 +354,19 @@ export class TableObserver {
   }
   /** The browser text drag must yield once this gesture owns a table range. */
   preserveDragSelection(dom: Selection): boolean {
-    if (
-      !this.dragOwnsSelection ||
-      this.view.root.contentEditable !== 'true' ||
-      !this.ownsNode(dom.anchorNode) ||
-      !this.ownsNode(dom.focusNode)
-    )
+    const root = this.view.root;
+    if (!this.dragOwnsSelection || root.contentEditable !== 'true')
+      return false;
+    // Chromium can re-anchor a cleared native text drag on the editable root.
+    if (this.isRootCaret(dom)) return true;
+    if (!this.ownsNode(dom.anchorNode) || !this.ownsNode(dom.focusNode))
       return false;
     dom.removeAllRanges();
     return true;
+  }
+  private isRootCaret(dom: Selection): boolean {
+    const root = this.view.root;
+    return dom.isCollapsed && dom.anchorNode === root && dom.focusNode === root;
   }
   private ownsNode(node: Node | null): boolean {
     const element = node instanceof Element ? node : node?.parentElement;
@@ -429,6 +433,18 @@ export class TableObserver {
   };
   private up = (event: PointerEvent): void => {
     if (event.pointerId !== this.pointerId) return;
+    const current = this.view.selection().selection;
+    if (
+      this.dragOwnsSelection &&
+      current.kind === 'table' &&
+      current.table === this.key &&
+      this.view.root.contentEditable === 'true'
+    ) {
+      const dom = this.table.ownerDocument.getSelection();
+      // Clear the release-time caret before its queued selectionchange runs.
+      if (dom && this.isRootCaret(dom)) dom.removeAllRanges();
+      else if (dom) this.preserveDragSelection(dom);
+    }
     this.pointerId = null;
     this.dragOwnsSelection = false;
   };
