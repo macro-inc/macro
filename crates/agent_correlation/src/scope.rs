@@ -23,6 +23,8 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
     ("POST", "/scheduled-actions/suggestions"),
     ("POST", "/scheduled-actions/suggestions/{id}/retire"),
     ("POST", "/email/drafts"),
+    // Tool free only: the route refuses a generation session tools.
+    ("POST", "/structured-completion"),
 ];
 
 /// Reads the SDK sends as POST (batch lookups, search); the harness checks
