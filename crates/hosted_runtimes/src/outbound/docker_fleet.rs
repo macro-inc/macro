@@ -27,7 +27,10 @@ use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssu
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::{GuestImage, InvalidGuestImage};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
+use crate::domain::ports::{
+    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
+};
+use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure, read_tail};
 
 #[cfg(test)]
 mod test;
@@ -123,6 +126,12 @@ pub enum DockerFleetError {
     /// Docker returned invalid output.
     #[error("unexpected docker output: {0}")]
     Malformed(String),
+    /// A guest program ended by a signal instead of exiting.
+    #[error("the program in {computer_id} ended without an exit code")]
+    ExecTerminated {
+        /// Computer the program ran in.
+        computer_id: ComputerId,
+    },
 }
 
 /// Computers as containers on the local Docker daemon.
@@ -412,6 +421,50 @@ impl Fleet for DockerFleet {
             oversell_factor: self.config.oversell_factor,
         })
     }
+
+    #[tracing::instrument(name = "docker_fleet.exec", skip(self, argv), err)]
+    async fn exec(
+        &self,
+        computer_id: ComputerId,
+        argv: &[&str],
+    ) -> Result<GuestProcess<DockerFleetError>, DockerFleetError> {
+        if self.state(computer_id).await?.is_none() {
+            return Err(DockerFleetError::Missing { computer_id });
+        }
+        let mut child = tokio::process::Command::new("docker")
+            .args(exec_args(computer_id, argv))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(DockerFleetError::Spawn)?;
+        let unpiped = || DockerFleetError::Malformed("docker exec without its pipes".to_owned());
+        let stdin = child.stdin.take().ok_or_else(unpiped)?;
+        let stdout = child.stdout.take().ok_or_else(unpiped)?;
+        let stderr = child.stderr.take().ok_or_else(unpiped)?;
+        // Drained on its own so a chatty stderr never blocks the program.
+        let stderr_tail = tokio::spawn(read_tail(stderr, STDERR_TAIL_BYTES));
+        let exit = async move {
+            let status = child.wait().await.map_err(DockerFleetError::Spawn)?;
+            let tail = stderr_tail
+                .await
+                .map_err(|error| DockerFleetError::Spawn(std::io::Error::other(error)))?;
+            let exit_code = status
+                .code()
+                .ok_or(DockerFleetError::ExecTerminated { computer_id })?;
+            if let Some(error) = exec_failure(computer_id, exit_code, &tail) {
+                return Err(error);
+            }
+            log_failure(computer_id, exit_code, &tail);
+            Ok::<_, DockerFleetError>(exit_code)
+        };
+        Ok(GuestProcess {
+            stdin: Box::pin(stdin),
+            stdout: Box::pin(stdout),
+            exit: Box::pin(exit),
+        })
+    }
 }
 
 /// Docker's `{{.State}}` for a container.
@@ -584,6 +637,40 @@ fn labels_args(computer_id: ComputerId) -> Vec<String> {
         .join("\t"),
         container_name(computer_id),
     ]
+}
+
+/// `docker exec` of `argv` as the guest's macro user, with stdin attached and
+/// no TTY.
+fn exec_args(computer_id: ComputerId, argv: &[&str]) -> Vec<String> {
+    [
+        "exec".to_owned(),
+        "-i".to_owned(),
+        "-u".to_owned(),
+        format!("{}:{}", GUEST_USER.uid, GUEST_USER.gid),
+        "-w".to_owned(),
+        GUEST_USER.home.to_owned(),
+        "-e".to_owned(),
+        format!("HOME={}", GUEST_USER.home),
+        "-e".to_owned(),
+        format!("PATH={}", GUEST_USER.path),
+        container_name(computer_id),
+    ]
+    .into_iter()
+    .chain(argv.iter().map(|arg| (*arg).to_owned()))
+    .collect()
+}
+
+/// Docker's own failure to reach a container that vanished after the state
+/// check, told apart from the guest program's exit code by its stderr.
+fn exec_failure(
+    computer_id: ComputerId,
+    exit_code: i32,
+    stderr: &[u8],
+) -> Option<DockerFleetError> {
+    String::from_utf8_lossy(stderr)
+        .starts_with("Error response from daemon: No such container")
+        .then_some(DockerFleetError::Missing { computer_id })
+        .filter(|_| exit_code != 0)
 }
 
 /// `docker <verb> macro-computer-<id>`.
