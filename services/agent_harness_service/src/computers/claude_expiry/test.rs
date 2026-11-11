@@ -34,15 +34,24 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
     .unwrap();
     let signed_in = ComputerId::new_from_uuid(Uuid::from_u128(1));
     let on_credits = ComputerId::new_from_uuid(Uuid::from_u128(2));
+    let host = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0b0b);
+    sqlx::query!(
+        "INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units) VALUES ($1, 'expiry-host', 3, 9)",
+        host,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     for computer in [signed_in, on_credits] {
         sqlx::query!(
             r#"
             INSERT INTO hosted_runtime
-                (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, state, created_by, price_id)
-            VALUES ($1, $2, 'Build box', 'standard', 4, 8, 100, 'standard@2026-11', '{}', 'macro|owner@example.com', 'price_standard')
+                (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, state, created_by, price_id, purchase_key, host_id)
+            VALUES ($1, $2, 'Build box', 'standard', 4, 8, 100, 'standard@2026-11', '{}', 'macro|owner@example.com', 'price_standard', $1::uuid::text, $3)
             "#,
             computer.as_uuid(),
             TEAM,
+            host,
         )
         .execute(&pool)
         .await

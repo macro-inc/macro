@@ -33,6 +33,8 @@ fn config_values() -> serde_json::Value {
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 2000,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 10000,
         "AI_USAGE_OVERAGE_MARKUP_PERCENT": 5,
+        "COMPUTER_RETENTION_DAYS": 14,
+        "COMPUTER_PAST_DUE_GRACE_DAYS": 7,
         "KAFKA_BROKERS": "localhost:9092",
         "DATABASE_URL": "postgres://user:password@localhost:5432/macrodb",
         "REDIS_URI": "redis://localhost:6379",
@@ -97,7 +99,9 @@ fn values() -> serde_json::Value {
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,
         "AI_USAGE_INCLUDED_ALLOWANCE_CENTS": 1500,
         "AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS": 15000,
-        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25
+        "AI_USAGE_OVERAGE_MARKUP_PERCENT": 25,
+        "COMPUTER_RETENTION_DAYS": 14,
+        "COMPUTER_PAST_DUE_GRACE_DAYS": 7
     });
     for key in [
         "FUSIONAUTH_BASE_URL",
@@ -246,4 +250,22 @@ fn computer_fleet_settings_require_the_selected_groups() {
             .to_string()
             .contains("COMPUTERS_IMAGE")
     );
+}
+
+#[test]
+fn computer_retention_and_past_due_grace_are_mandatory() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.computer_billing_policy().unwrap(),
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(14, 7).unwrap()
+    );
+    for key in ["COMPUTER_RETENTION_DAYS", "COMPUTER_PAST_DUE_GRACE_DAYS"] {
+        let mut missing = config_values();
+        missing.as_object_mut().unwrap().remove(key);
+        assert!(serde_json::from_value::<Config>(missing).is_err(), "{key}");
+        let mut zero = config_values();
+        zero[key] = serde_json::json!(0);
+        let config: Config = serde_json::from_value(zero).unwrap();
+        assert!(config.computer_billing_policy().is_err(), "{key}");
+    }
 }

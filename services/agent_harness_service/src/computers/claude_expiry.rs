@@ -71,7 +71,7 @@ impl ClaudeSignIns for PgClaudeSignIns {
                 login.signed_in_by,
                 login.signed_in_at,
                 login.expires_at,
-                login.notice_stage,
+                login.notice_stage AS "notice_stage: ClaudeSignInStage",
                 login.notice_expires_at,
                 h.capabilities AS "capabilities: Json<HarnessCapabilities>",
                 h.capabilities_reported_at
@@ -91,27 +91,19 @@ impl ClaudeSignIns for PgClaudeSignIns {
             .filter_map(|row| {
                 let computer_id = ComputerId::new_from_uuid(row.computer_id);
                 // One unreadable row is skipped, not the whole pass.
-                let signed_in_by = match row.signed_in_by.map(MacroUserIdStr::try_from).transpose() {
+                let signed_in_by = match row.signed_in_by.map(MacroUserIdStr::try_from).transpose()
+                {
                     Ok(signed_in_by) => signed_in_by,
                     Err(_) => {
                         tracing::error!(%computer_id, "computer has an invalid Claude signer");
                         return None;
                     }
                 };
-                let last_notice = match row.notice_stage {
-                    Some(stage) => {
-                        let Ok(stage) = stage.parse::<ClaudeSignInStage>() else {
-                            tracing::error!(%computer_id, "computer has an invalid Claude notice stage");
-                            return None;
-                        };
-                        Some(ClaudeSignInNotice {
-                            signed_in_at: row.signed_in_at,
-                            stage,
-                            expires_at: row.notice_expires_at,
-                        })
-                    }
-                    None => None,
-                };
+                let last_notice = row.notice_stage.map(|stage| ClaudeSignInNotice {
+                    signed_in_at: row.signed_in_at,
+                    stage,
+                    expires_at: row.notice_expires_at,
+                });
                 // Claude reports whether it is signed in; the login row holds
                 // the expiry its reports last carried.
                 let report = row.capabilities.0.claude.map(|account| match account {
@@ -148,7 +140,7 @@ impl ClaudeSignIns for PgClaudeSignIns {
             WHERE id = $1
             "#,
             login_id,
-            notice.stage.as_ref(),
+            notice.stage as ClaudeSignInStage,
             notice.expires_at,
         )
         .execute(&self.pool)
