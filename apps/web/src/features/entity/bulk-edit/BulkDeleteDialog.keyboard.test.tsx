@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntityData } from '../types/entity';
+import type { TaskEntity } from '../types/entity';
 import {
   GlobalBulkEditEntityModal,
   openBulkEditModal,
@@ -26,7 +26,14 @@ vi.mock('./components/EntityActionSelection', () => ({
   ),
 }));
 
-const task = { id: 'task', type: 'task', name: 'Task' } as EntityData;
+const task: TaskEntity = {
+  id: 'task',
+  name: 'Task',
+  ownerId: 'owner',
+  type: 'document',
+  fileType: 'md',
+  subType: { type: 'task' },
+};
 
 beforeEach(() => {
   mutateAsync.mockReset().mockResolvedValue([true]);
