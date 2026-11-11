@@ -224,6 +224,7 @@ where
                         actor: Some(owner_user),
                         announce: None,
                         context: None,
+                        client: None,
                     }),
                 )
                 .await
@@ -401,6 +402,7 @@ where
                     actor: Some(owner_user),
                     announce: None,
                     context: None,
+                    client: None,
                 }),
             )
             .await

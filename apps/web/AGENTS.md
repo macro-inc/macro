@@ -237,7 +237,8 @@ Keep panes in one keyed list positioned by the layout tree; nesting a
 
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
-own instance and keeps its own state, and reopening within a tab reuses it:
+own instance and keeps its own state, and reopening within a tab reuses it. The
+same suite checks that a menu's Open in new tab opens a new active tab:
 `bunx playwright test --config src/components/app/tab-layout/browser-test/playwright.config.ts`.
 
 Desktop app switches open the requested list in the target split when the
@@ -306,8 +307,23 @@ importance moves:
 
 A channel call's row and its call panel (the real `Channel` over synthetic service
 responses) have a backend-free desktop and phone regression: the collapsed row, the
-blank slate, composer pinning, quote replies and the outside-message popup:
+blank slate, a plain composer bound to the call discussion, explicit quote replies
+and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
+The same fixture exercises the real call panel and resize hosts with empty/populated
+threads, tab changes, and reopening; check composer geometry in the browser, not jsdom.
+Set `CALL_FULL_HOST=true` for the real CallOverlay host, Work gating against
+`origin/main`, and desktop toggle geometry; only call media and Work transport
+boundaries are substituted. No hosted account data is accessed.
+Keep the desktop discussion card attached across docked/overlay changes, and
+verify wrapped-thread reading gaps, drafts, fullscreen navigation, and local-volume
+indicators across call surfaces. Verify call-panel changes in the full call host
+with screenshots; list signed-in call checks separately instead of blocking on
+authentication.
+New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
+Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
+Initialize browser fixtures with the app's `data-touch-device` root attribute and
+`applyTheme`; setting `data-theme-light` alone does not apply the theme tokens.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
 A call's own chat on a meeting page (the real `CallChat` under only the providers
@@ -720,6 +736,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
+- Show email draft sync failure UI (the composer banner, a failure toast, a **Not synced** row) only when the user has to act: the server refused the write for good, or local storage needs a reload. A write that is in flight, queued, superseded by its own send, or failing in a way that can be retried stays silent and retries itself first; a false alarm costs more trust than a late one.
+- Email draft sync is tested whole in `src/lib/queries/email/draft-sync.scenarios.test.ts` and `draft-sync.fuzz.test.ts`, over the simulated server and queue in `tests/draft-sync-world.ts`. Add a scenario with every change to draft saving, discarding or sending, and run `bunx vitest run src/lib/queries/email/draft-sync` from `apps/web`. A fuzz failure prints a seed and path; replay it with `EMAIL_DRAFT_FUZZ_SEED` and `EMAIL_DRAFT_FUZZ_PATH`, and run more sessions with `EMAIL_DRAFT_FUZZ_RUNS`. The banner itself is covered in a browser by `bunx playwright test --config src/features/email-compose/browser-test/playwright.config.ts sync-status.browser.e2e.ts`.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
@@ -837,8 +855,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Follow [mobile layout and chrome](../../.agents/rules/web/mobile.md#layout-and-chrome) for full-frame views and record tabs; verify their first controls below the navigation with a nonzero safe area on phones and tablets.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
+- Routes are closed to agents (`macro.ui.open`) unless they set `info: OPEN_TO_AGENTS` in `routes/routes.ts`; open one only when showing it has no side effect (no call joins, auth or OAuth callbacks, prefilled composers, credential settings, debug views), then run `UPDATE_AGENT_ROUTE_TABLE=1 bun run test -- src/features/agent-navigation` so the server's copy in `agent_code_mode` matches.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
-- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click arms an open-in-new-tab intent: the split manager's `openWithSplit` consumes it first and opens the content as a tab (before reuse and leave guards), and `openInNewTabMiddleware` catches navigations that bypass it, so tab operations must disarm the intent tracker before navigating. Menus that offer Open in new split also offer Open in new tab (shown when `canOpenInNewTab()`): `openInNewTab` holds the same intent while the menu's ordinary current-split open runs, so add it beside any new Open in new split. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
@@ -905,10 +924,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.
-  See [Calls](../../docs/agent-guide/calls.md).
+  Keep the away-call phone island in the shared `call` float region between
+  composers and the dock, without displacing either. See [Calls](../../docs/agent-guide/calls.md).
+- Keep saved call detail on its shared playback and SidePanel composition; follow `src/features/block-call/AGENTS.md` for transcript/chat timing, phone dock ownership, and checks.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
+- Keep call layout in desktop `CallMoreMenu`; mirror participant visibility on the shared-screen edge, omit that edge toggle in Grid, and reset visibility when sharing ends. Desktop tile pins take Speaker placement unless Sidebar is selected, without changing saved Layout; keep every participant and share track mounted when moving tiles and clear stale pins when their source disappears. Phones stay on Auto; reserve phone pinning for long-press, not taps.
+- Keep `CallWaveform` static except for the current call's desktop chat-sidebar row, channel-header duration pill and app-rail item; pass `live` and the matching room identity only there. Live marks follow speech and reduced motion; phones stay static. Preserve AvatarGroup separator rings with inset speaking outlines and keep phone icons for call actions.
+- Keep call full screen scoped to its call root; mount call menus locally and keep tooltips in their owning fullscreen element.
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
 - Keep desktop OAuth consent in the system browser with a `macro://` return:
   `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
@@ -1197,6 +1221,7 @@ parameter typed as a union of literals. Commands that published plugins' own
 JavaScript packages call are not covered. Before adding a command to the list,
 raise `min-native-build.json` to the first build with it, or handle
 `Command … not found` in the caller (see the src-tauri README).
+Keep phone call audio-output commands optional for older native binaries, register their mobile capability, and fence route updates by call ID.
 
 ## Desktop release builds: generated WASM
 
@@ -1333,6 +1358,11 @@ Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
 `blockName: "routine"`; the `@` menu offers routines only to their owner in
 channel composers, where picking one shares it as a template.
+Macro `/app` links in agent replies (transcripts and agent channel messages)
+open in a new split like mention chips: `AgentReplyLinks` provides the opener
+that `LinkWithPreview` consults before `openExternalUrl`; keep other surfaces'
+links on `openExternalUrl`. Covered by
+`split-layout/split-router/agent-reply-links.test.tsx`.
 Direct local hosts use port 8101 with the existing feature prefixes; the
 instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
@@ -1403,6 +1433,7 @@ Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
 people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
+Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
 ### Sidebar tag dragging
 
