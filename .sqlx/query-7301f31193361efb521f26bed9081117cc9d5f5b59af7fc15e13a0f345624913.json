@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM suggestion_change\n               WHERE generation_id = $1 AND subject = 'suggestion'\n                 AND action IN ('created', 'restored')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7301f31193361efb521f26bed9081117cc9d5f5b59af7fc15e13a0f345624913"
+}

@@ -2454,7 +2454,7 @@
       },
       "Category": {
         "type": "string",
-        "description": "A filter on the feed. Not kinds: an idea may have several.",
+        "description": "A filter on the feed. Not kinds: a suggestion may have several.",
         "enum": ["important", "revisit", "save_money", "make_money"]
       },
       "CheckRoutineRequest": {
@@ -2976,7 +2976,7 @@
       },
       "EntityAction": {
         "type": "string",
-        "description": "What an entity idea suggests doing about its items.",
+        "description": "What an entity suggestion suggests doing about its items.",
         "enum": ["reply", "review", "follow_up"]
       },
       "EntityType": {
@@ -3217,261 +3217,6 @@
         },
         "additionalProperties": false
       },
-      "Idea": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/IdeaKind",
-            "description": "Its kind, with that kind's data."
-          },
-          {
-            "type": "object",
-            "required": [
-              "id",
-              "dedupKey",
-              "title",
-              "summary",
-              "importance",
-              "categories",
-              "state",
-              "about",
-              "produced",
-              "createdAt",
-              "updatedAt",
-              "stateChangedAt"
-            ],
-            "properties": {
-              "about": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Target"
-                },
-                "description": "The items it is about."
-              },
-              "categories": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Category"
-                },
-                "description": "The feed's filters it shows under."
-              },
-              "createdAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When it was first proposed."
-              },
-              "dedupKey": {
-                "type": "string",
-                "description": "Names the idea across nights: proposing the same key again changes\nthis idea instead of adding one."
-              },
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The idea's id."
-              },
-              "importance": {
-                "type": "integer",
-                "format": "int32",
-                "description": "0 to 100, for ordering.",
-                "minimum": 0
-              },
-              "produced": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Target"
-                },
-                "description": "What acting on it produced."
-              },
-              "state": {
-                "$ref": "#/components/schemas/IdeaState",
-                "description": "Where it is for the person."
-              },
-              "stateChangedAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When its state last changed, such as when it was dismissed."
-              },
-              "stateReason": {
-                "type": ["string", "null"],
-                "description": "Why it was resolved; only on resolved ideas."
-              },
-              "summary": {
-                "type": "string",
-                "description": "Why, in a line or two."
-              },
-              "title": {
-                "type": "string",
-                "description": "What to do, in a few words."
-              },
-              "updatedAt": {
-                "type": "string",
-                "format": "date-time",
-                "description": "When it last changed."
-              }
-            }
-          }
-        ],
-        "description": "One proactive suggestion for one person."
-      },
-      "IdeaKind": {
-        "oneOf": [
-          {
-            "type": "object",
-            "description": "A prompt for an agent: opened in the composer, or run in the\nbackground.",
-            "required": ["prompt", "runMode", "kind"],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["prompt"]
-              },
-              "prompt": {
-                "type": "string",
-                "description": "What the agent is asked to do."
-              },
-              "runMode": {
-                "$ref": "#/components/schemas/RunMode",
-                "description": "How it runs."
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A note about specific items, with what to do about them.",
-            "required": ["action", "kind"],
-            "properties": {
-              "action": {
-                "$ref": "#/components/schemas/EntityAction",
-                "description": "What to do about the items."
-              },
-              "draft": {
-                "oneOf": [
-                  {
-                    "type": "null"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Target",
-                    "description": "The draft made for it, once made."
-                  }
-                ]
-              },
-              "kind": {
-                "type": "string",
-                "enum": ["entity"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "A routine suggestion, shown among ideas.",
-            "required": ["routineSuggestionId", "kind"],
-            "properties": {
-              "kind": {
-                "type": "string",
-                "enum": ["routine"]
-              },
-              "routineSuggestionId": {
-                "type": "string",
-                "format": "uuid",
-                "description": "The suggestion it shows."
-              }
-            }
-          }
-        ],
-        "description": "What kind of idea it is, with that kind's data. A kind never changes."
-      },
-      "IdeaReview": {
-        "type": "object",
-        "description": "What a generation session reads before managing the person's ideas:\nevery idea they have, open or not, and how many more it may add.",
-        "required": ["ideas", "open", "openLimit", "newLeft"],
-        "properties": {
-          "ideas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Idea"
-            },
-            "description": "Open ideas first, best first, then closed ones newest first. A\ndismissed idea's `stateChangedAt` is when the person dismissed it."
-          },
-          "newLeft": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Ideas this generation may still add or bring back.",
-            "minimum": 0
-          },
-          "open": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Open ideas the person has, and the most they may have.",
-            "minimum": 0
-          },
-          "openLimit": {
-            "type": "integer",
-            "format": "int32",
-            "description": "The most open ideas a person may have.",
-            "minimum": 0
-          }
-        }
-      },
-      "IdeaState": {
-        "type": "string",
-        "description": "Where an idea is for the person.",
-        "enum": [
-          "proposed",
-          "accepted",
-          "done",
-          "dismissed",
-          "resolved",
-          "retired"
-        ]
-      },
-      "IdeaWriteOutcome": {
-        "type": "object",
-        "description": "What became of a session's write.",
-        "required": ["ok", "problems"],
-        "properties": {
-          "idea": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/Idea",
-                "description": "The idea as it now is."
-              }
-            ]
-          },
-          "ok": {
-            "type": "boolean",
-            "description": "Whether it was applied."
-          },
-          "problems": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Why it wasn't, to fix and try again."
-          }
-        }
-      },
-      "Ideas": {
-        "type": "object",
-        "description": "A person's feed: their open ideas, best first, and the ones they\nfinished in the last day, newest first.",
-        "required": ["ideas", "done"],
-        "properties": {
-          "done": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Idea"
-            },
-            "description": "Ideas done in the last 24 hours, with what they produced."
-          },
-          "ideas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Idea"
-            },
-            "description": "The open ideas."
-          }
-        }
-      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -3498,7 +3243,7 @@
       },
       "KindName": {
         "type": "string",
-        "description": "An idea's kind, without its data.",
+        "description": "A suggestion's kind, without its data.",
         "enum": ["prompt", "entity", "routine"]
       },
       "KnobName": {
@@ -3509,6 +3254,80 @@
         "type": "string",
         "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
         "enum": ["tag", "channel", "label"]
+      },
+      "NewSuggestion": {
+        "type": "object",
+        "description": "A new suggestion, or a new version of one with the same `dedupKey`, as a\ngeneration session hands it back through `macro.suggestions.suggest`.",
+        "required": ["kind", "dedupKey", "title", "summary", "importance"],
+        "properties": {
+          "about": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "description": "The items it is about."
+          },
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "An entity suggestion's action."
+              }
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "The feed's filters it shows under."
+          },
+          "dedupKey": {
+            "type": "string",
+            "description": "Names the suggestion across nights; the same key updates the same suggestion."
+          },
+          "importance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0 to 100.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KindName",
+            "description": "`prompt` or `entity`; routine suggestions come from `macro.routines.suggest`."
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "A prompt suggestion's prompt."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why, for the change log; required to bring back a suggestion the person\ndismissed."
+          },
+          "runMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "A prompt suggestion's run mode."
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "Why, in a line or two."
+          },
+          "title": {
+            "type": "string",
+            "description": "What to do, in a few words."
+          }
+        },
+        "additionalProperties": false
       },
       "PayloadCondition": {
         "type": "object",
@@ -3596,9 +3415,9 @@
         },
         "additionalProperties": false
       },
-      "RetireIdea": {
+      "RetireSuggestionRequest": {
         "type": "object",
-        "description": "Retiring an open idea that no longer matters.",
+        "description": "Retiring an open suggestion that no longer matters.",
         "required": ["reason"],
         "properties": {
           "reason": {
@@ -3678,7 +3497,7 @@
       },
       "RewriteIdea": {
         "type": "object",
-        "description": "Changes to an open idea; fields left out stay.",
+        "description": "Changes to an open suggestion; fields left out stay.",
         "required": ["reason"],
         "properties": {
           "about": {
@@ -3703,7 +3522,7 @@
           },
           "prompt": {
             "type": ["string", "null"],
-            "description": "Only on prompt ideas."
+            "description": "Only on prompt suggestions."
           },
           "reason": {
             "type": "string",
@@ -4216,7 +4035,7 @@
       },
       "RunMode": {
         "type": "string",
-        "description": "How a prompt idea runs.",
+        "description": "How a prompt suggestion runs.",
         "enum": ["composer", "background"]
       },
       "RunStart": {
@@ -4531,80 +4350,6 @@
           }
         }
       },
-      "SuggestIdea": {
-        "type": "object",
-        "description": "A new idea, or a new version of one with the same `dedupKey`, as a\ngeneration session hands it back through `macro.ideas.suggest`.",
-        "required": ["kind", "dedupKey", "title", "summary", "importance"],
-        "properties": {
-          "about": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Target"
-            },
-            "description": "The items it is about."
-          },
-          "action": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/EntityAction",
-                "description": "An entity idea's action."
-              }
-            ]
-          },
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Category"
-            },
-            "description": "The feed's filters it shows under."
-          },
-          "dedupKey": {
-            "type": "string",
-            "description": "Names the idea across nights; the same key updates the same idea."
-          },
-          "importance": {
-            "type": "integer",
-            "format": "int32",
-            "description": "0 to 100.",
-            "minimum": 0
-          },
-          "kind": {
-            "$ref": "#/components/schemas/KindName",
-            "description": "`prompt` or `entity`; routine ideas come from `macro.routines.suggest`."
-          },
-          "prompt": {
-            "type": ["string", "null"],
-            "description": "A prompt idea's prompt."
-          },
-          "reason": {
-            "type": ["string", "null"],
-            "description": "Why, for the change log; required to bring back an idea the person\ndismissed."
-          },
-          "runMode": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/RunMode",
-                "description": "A prompt idea's run mode."
-              }
-            ]
-          },
-          "summary": {
-            "type": "string",
-            "description": "Why, in a line or two."
-          },
-          "title": {
-            "type": "string",
-            "description": "What to do, in a few words."
-          }
-        },
-        "additionalProperties": false
-      },
       "SuggestOutcome": {
         "type": "object",
         "description": "What became of a suggestion handed back.",
@@ -4757,6 +4502,122 @@
           }
         ],
         "description": "What is suggested: a catalog routine with its knobs, or a routine AI\ndrafted and checked."
+      },
+      "Suggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestionKind",
+            "description": "Its kind, with that kind's data."
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "dedupKey",
+              "title",
+              "summary",
+              "importance",
+              "categories",
+              "state",
+              "about",
+              "produced",
+              "createdAt",
+              "updatedAt",
+              "stateChangedAt"
+            ],
+            "properties": {
+              "about": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "The items it is about."
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Category"
+                },
+                "description": "The feed's filters it shows under."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was first proposed."
+              },
+              "dedupKey": {
+                "type": "string",
+                "description": "Names the suggestion across nights: proposing the same key again changes\nthis suggestion instead of adding one."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The suggestion's id."
+              },
+              "importance": {
+                "type": "integer",
+                "format": "int32",
+                "description": "0 to 100, for ordering.",
+                "minimum": 0
+              },
+              "produced": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "What acting on it produced."
+              },
+              "state": {
+                "$ref": "#/components/schemas/SuggestionState",
+                "description": "Where it is for the person."
+              },
+              "stateChangedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When its state last changed, such as when it was dismissed."
+              },
+              "stateReason": {
+                "type": ["string", "null"],
+                "description": "Why it was resolved; only on resolved suggestions."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Why, in a line or two."
+              },
+              "title": {
+                "type": "string",
+                "description": "What to do, in a few words."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it last changed."
+              }
+            }
+          }
+        ],
+        "description": "One proactive suggestion for one person."
+      },
+      "SuggestionFeed": {
+        "type": "object",
+        "description": "A person's feed: their open suggestions, best first, and the ones they\nfinished in the last day, newest first.",
+        "required": ["suggestions", "done"],
+        "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "Suggestions done in the last 24 hours, with what they produced."
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "The open suggestions."
+          }
+        }
       },
       "SuggestionFrom": {
         "type": "string",

@@ -228,7 +228,7 @@ export type CatalogEntry = {
 };
 
 /**
- * A filter on the feed. Not kinds: an idea may have several.
+ * A filter on the feed. Not kinds: a suggestion may have several.
  */
 export type Category = 'important' | 'revisit' | 'save_money' | 'make_money';
 
@@ -498,7 +498,7 @@ export type EmptyResponse = {
 };
 
 /**
- * What an entity idea suggests doing about its items.
+ * What an entity suggestion suggests doing about its items.
  */
 export type EntityAction = 'reply' | 'review' | 'follow_up';
 
@@ -618,152 +618,6 @@ export type GithubSelector = {
     repositories?: Array<string>;
 };
 
-/**
- * One proactive suggestion for one person.
- */
-export type Idea = IdeaKind & {
-    /**
-     * The items it is about.
-     */
-    about: Array<Target>;
-    /**
-     * The feed's filters it shows under.
-     */
-    categories: Array<Category>;
-    /**
-     * When it was first proposed.
-     */
-    createdAt: string;
-    /**
-     * Names the idea across nights: proposing the same key again changes
-     * this idea instead of adding one.
-     */
-    dedupKey: string;
-    /**
-     * The idea's id.
-     */
-    id: string;
-    /**
-     * 0 to 100, for ordering.
-     */
-    importance: number;
-    /**
-     * What acting on it produced.
-     */
-    produced: Array<Target>;
-    /**
-     * Where it is for the person.
-     */
-    state: IdeaState;
-    /**
-     * When its state last changed, such as when it was dismissed.
-     */
-    stateChangedAt: string;
-    /**
-     * Why it was resolved; only on resolved ideas.
-     */
-    stateReason?: string | null;
-    /**
-     * Why, in a line or two.
-     */
-    summary: string;
-    /**
-     * What to do, in a few words.
-     */
-    title: string;
-    /**
-     * When it last changed.
-     */
-    updatedAt: string;
-};
-
-/**
- * What kind of idea it is, with that kind's data. A kind never changes.
- */
-export type IdeaKind = {
-    kind: 'prompt';
-    /**
-     * What the agent is asked to do.
-     */
-    prompt: string;
-    /**
-     * How it runs.
-     */
-    runMode: RunMode;
-} | {
-    /**
-     * What to do about the items.
-     */
-    action: EntityAction;
-    draft?: null | Target;
-    kind: 'entity';
-} | {
-    kind: 'routine';
-    /**
-     * The suggestion it shows.
-     */
-    routineSuggestionId: string;
-};
-
-/**
- * What a generation session reads before managing the person's ideas:
- * every idea they have, open or not, and how many more it may add.
- */
-export type IdeaReview = {
-    /**
-     * Open ideas first, best first, then closed ones newest first. A
-     * dismissed idea's `stateChangedAt` is when the person dismissed it.
-     */
-    ideas: Array<Idea>;
-    /**
-     * Ideas this generation may still add or bring back.
-     */
-    newLeft: number;
-    /**
-     * Open ideas the person has, and the most they may have.
-     */
-    open: number;
-    /**
-     * The most open ideas a person may have.
-     */
-    openLimit: number;
-};
-
-/**
- * Where an idea is for the person.
- */
-export type IdeaState = 'proposed' | 'accepted' | 'done' | 'dismissed' | 'resolved' | 'retired';
-
-/**
- * What became of a session's write.
- */
-export type IdeaWriteOutcome = {
-    idea?: null | Idea;
-    /**
-     * Whether it was applied.
-     */
-    ok: boolean;
-    /**
-     * Why it wasn't, to fix and try again.
-     */
-    problems: Array<string>;
-};
-
-/**
- * A person's feed: their open ideas, best first, and the ones they
- * finished in the last day, newest first.
- */
-export type Ideas = {
-    /**
-     * Ideas done in the last 24 hours, with what they produced.
-     */
-    done: Array<Idea>;
-    /**
-     * The open ideas.
-     */
-    ideas: Array<Idea>;
-};
-
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -771,7 +625,7 @@ export type InProgressExecution = {
 };
 
 /**
- * An idea's kind, without its data.
+ * A suggestion's kind, without its data.
  */
 export type KindName = 'prompt' | 'entity' | 'routine';
 
@@ -786,6 +640,52 @@ export type KnobName = string;
  * matches by name or lets them pick.
  */
 export type NamedItemKind = 'tag' | 'channel' | 'label';
+
+/**
+ * A new suggestion, or a new version of one with the same `dedupKey`, as a
+ * generation session hands it back through `macro.suggestions.suggest`.
+ */
+export type NewSuggestion = {
+    /**
+     * The items it is about.
+     */
+    about?: Array<Target>;
+    action?: null | EntityAction;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories?: Array<Category>;
+    /**
+     * Names the suggestion across nights; the same key updates the same suggestion.
+     */
+    dedupKey: string;
+    /**
+     * 0 to 100.
+     */
+    importance: number;
+    /**
+     * `prompt` or `entity`; routine suggestions come from `macro.routines.suggest`.
+     */
+    kind: KindName;
+    /**
+     * A prompt suggestion's prompt.
+     */
+    prompt?: string | null;
+    /**
+     * Why, for the change log; required to bring back a suggestion the person
+     * dismissed.
+     */
+    reason?: string | null;
+    runMode?: null | RunMode;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+};
 
 /**
  * `path` walks objects by key; `*` steps into every element of an array and
@@ -838,9 +738,9 @@ export type PropertySelector = {
 };
 
 /**
- * Retiring an open idea that no longer matters.
+ * Retiring an open suggestion that no longer matters.
  */
-export type RetireIdea = {
+export type RetireSuggestionRequest = {
     /**
      * Why, for the change log.
      */
@@ -885,7 +785,7 @@ export type ReviewedSuggestion = SuggestedPick & {
 /**
  * Changes to an open idea; fields left out stay.
  */
-export type RewriteIdea = {
+export type RewriteSuggestion = {
     /**
      * New items it is about.
      */
@@ -899,7 +799,7 @@ export type RewriteIdea = {
      */
     importance?: number | null;
     /**
-     * Only on prompt ideas.
+     * Only on prompt suggestions.
      */
     prompt?: string | null;
     /**
@@ -1214,7 +1114,7 @@ export type RunInfo = {
 };
 
 /**
- * How a prompt idea runs.
+ * How a prompt suggestion runs.
  */
 export type RunMode = 'composer' | 'background';
 
@@ -1396,52 +1296,6 @@ export type StepProblem = {
 };
 
 /**
- * A new idea, or a new version of one with the same `dedupKey`, as a
- * generation session hands it back through `macro.ideas.suggest`.
- */
-export type SuggestIdea = {
-    /**
-     * The items it is about.
-     */
-    about?: Array<Target>;
-    action?: null | EntityAction;
-    /**
-     * The feed's filters it shows under.
-     */
-    categories?: Array<Category>;
-    /**
-     * Names the idea across nights; the same key updates the same idea.
-     */
-    dedupKey: string;
-    /**
-     * 0 to 100.
-     */
-    importance: number;
-    /**
-     * `prompt` or `entity`; routine ideas come from `macro.routines.suggest`.
-     */
-    kind: KindName;
-    /**
-     * A prompt idea's prompt.
-     */
-    prompt?: string | null;
-    /**
-     * Why, for the change log; required to bring back an idea the person
-     * dismissed.
-     */
-    reason?: string | null;
-    runMode?: null | RunMode;
-    /**
-     * Why, in a line or two.
-     */
-    summary: string;
-    /**
-     * What to do, in a few words.
-     */
-    title: string;
-};
-
-/**
  * What became of a suggestion handed back.
  */
 export type SuggestOutcome = {
@@ -1503,6 +1357,80 @@ export type SuggestedPick = {
 } | {
     kind: 'routine';
     routine: ActionConfiguration;
+};
+
+/**
+ * One proactive suggestion for one person.
+ */
+export type Suggestion = SuggestionKind & {
+    /**
+     * The items it is about.
+     */
+    about: Array<Target>;
+    /**
+     * The feed's filters it shows under.
+     */
+    categories: Array<Category>;
+    /**
+     * When it was first proposed.
+     */
+    createdAt: string;
+    /**
+     * Names the suggestion across nights: proposing the same key again changes
+     * this suggestion instead of adding one.
+     */
+    dedupKey: string;
+    /**
+     * The suggestion's id.
+     */
+    id: string;
+    /**
+     * 0 to 100, for ordering.
+     */
+    importance: number;
+    /**
+     * What acting on it produced.
+     */
+    produced: Array<Target>;
+    /**
+     * Where it is for the person.
+     */
+    state: SuggestionState;
+    /**
+     * When its state last changed, such as when it was dismissed.
+     */
+    stateChangedAt: string;
+    /**
+     * Why it was resolved; only on resolved suggestions.
+     */
+    stateReason?: string | null;
+    /**
+     * Why, in a line or two.
+     */
+    summary: string;
+    /**
+     * What to do, in a few words.
+     */
+    title: string;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * A person's feed: their open suggestions, best first, and the ones they
+ * finished in the last day, newest first.
+ */
+export type SuggestionFeed = {
+    /**
+     * Suggestions done in the last 24 hours, with what they produced.
+     */
+    done: Array<Suggestion>;
+    /**
+     * The open suggestions.
+     */
+    suggestions: Array<Suggestion>;
 };
 
 /**
