@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { createRoot } from 'solid-js';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createNativeFormattingActions } from './native-actions';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 import * as snippetModule from './native-snippet';
 import { mount, select } from './native-test-fixture';
@@ -123,6 +124,31 @@ test('a copied snippet link carries the model location and resets on an actual s
     expect(toast.failure).not.toHaveBeenCalled();
     select(runtime, 'Second line');
     expect(link.copied()).toBe(false);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('a commit that keeps the selection keeps the copied icon', async () => {
+  const { runtime, bridge, cleanup } = setup();
+  try {
+    runtime.port.setState(state());
+    select(runtime, 'Alpha beta gamma');
+    const link = bridge()?.snippetLink();
+    if (!link) throw new Error('snippet link controller');
+    clipboard(async () => {});
+    await link.copy();
+    expect(link.copied()).toBe(true);
+    const actions = createNativeFormattingActions(
+      runtime.view,
+      () => true,
+      () => true
+    );
+    const before = runtime.view.selection().selection;
+    await actions.text('bold');
+    // Only valid as a no-change control while the range itself is unchanged.
+    expect(runtime.view.selection().selection).toEqual(before);
+    expect(link.copied()).toBe(true);
   } finally {
     await cleanup();
   }
