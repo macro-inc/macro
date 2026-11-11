@@ -115,6 +115,8 @@ pub enum Port {
     PreviewHttps = 8443,
     /// Local-only plaintext gateway reachable from Macro computers.
     ComputerGateway = 8112,
+    /// Agent workspace git remotes (`agent-git-service`).
+    AgentGit = 8111,
 }
 
 impl Port {

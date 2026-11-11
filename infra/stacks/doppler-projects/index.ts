@@ -21,6 +21,7 @@ const SERVICE_NAMES = [
   'slack-import-worker',
   'lexical-service',
   'whatsapp-session-service',
+  'agent-git-service',
 ];
 
 for (const service_name of SERVICE_NAMES) {

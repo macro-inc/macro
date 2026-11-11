@@ -91,6 +91,10 @@ fn docker_computers_dial_the_stack_in_network() {
                 "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL".to_string(),
                 "http://document-storage-service:8080".to_string(),
             ),
+            (
+                "OVERRIDE_AGENT_GIT_SERVICE_URL".to_string(),
+                "http://agent-git-service:8080".to_string(),
+            ),
         ])
     );
 }
@@ -171,6 +175,10 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
         devbox(Port::AgentHarness)
     );
     assert_eq!(
+        overrides["OVERRIDE_AGENT_GIT_SERVICE_URL"],
+        devbox(Port::AgentGit)
+    );
+    assert_eq!(
         overrides["OVERRIDE_APP_SERVICE_URL"],
         base["OVERRIDE_APP_SERVICE_URL"]
     );
@@ -183,6 +191,7 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
             instance.port(Port::DocStorage),
             instance.port(Port::Auth),
             instance.port(Port::ConnGateway),
+            instance.port(Port::AgentGit),
         ]
     );
 }
@@ -336,7 +345,7 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
             .into_iter()
             .filter(|(key, _)| key.starts_with("OVERRIDE_"))
             .collect();
-        assert_eq!(overrides.len(), 11);
+        assert_eq!(overrides.len(), 12);
         assert_eq!(
             overrides["OVERRIDE_APP_SERVICE_URL"],
             base["OVERRIDE_APP_SERVICE_URL"]
@@ -361,6 +370,7 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
                 "/scheduled-action",
             ),
             ("OVERRIDE_MCP_SERVICE_URL", Port::AgentHarness, "http", ""),
+            ("OVERRIDE_AGENT_GIT_SERVICE_URL", Port::AgentGit, "http", ""),
             (
                 "OVERRIDE_AGENT_HARNESS_EGRESS_URL",
                 Port::AgentHarnessEgress,

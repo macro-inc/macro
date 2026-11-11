@@ -257,6 +257,20 @@ pub const RUST_SERVICES: &[RustService] = &[
         opt_in: false,
     },
     RustService {
+        compose_name: "agent_git_service",
+        cargo_bin: "agent_git_service",
+        package: "agent_git_service",
+        host_port: Some(Port::AgentGit),
+        // Same prefix as the deployed gateway. Containers (Docker computers
+        // included) can also dial `agent-git-service:8080` in-network.
+        path_prefix: Some("/agent-git"),
+        is_websocket: false,
+        // Local-only: under `run-dev` it would write repositories to a local
+        // volume while dev's database rows point at the deployed service's EFS.
+        modes: &[Mode::Local],
+        opt_in: false,
+    },
+    RustService {
         compose_name: "whatsapp_session_service",
         cargo_bin: "whatsapp_session_service",
         package: "whatsapp_session_service",

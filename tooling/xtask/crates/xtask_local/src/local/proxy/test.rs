@@ -31,6 +31,7 @@ fn local_computers_have_an_http_gateway_without_guest_tls_or_host_dns() {
         "/scheduled-action/*",
         "/cognition/*",
         "/connection-gateway/*",
+        "/agent-git/*",
     ] {
         assert!(computer.contains(path), "missing computer route: {path}");
     }

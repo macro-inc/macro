@@ -7,6 +7,7 @@ on:
         required: true
         description: Select the service to deploy
         options:
+          - agent-git-service
           - agent-harness-service
           - agent-schedule-service
           - authentication-service

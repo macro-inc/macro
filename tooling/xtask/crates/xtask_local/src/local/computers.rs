@@ -75,6 +75,9 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
         Some(Port::ConnGateway),
     ),
     ("OVERRIDE_MCP_SERVICE_URL", Some(Port::AgentHarness)),
+    // Agent teammates clone and push their workspace repo here; the service
+    // builds clone URLs from this same override.
+    ("OVERRIDE_AGENT_GIT_SERVICE_URL", Some(Port::AgentGit)),
     ("OVERRIDE_APP_SERVICE_URL", None),
 ];
 
