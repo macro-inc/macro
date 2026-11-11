@@ -121,3 +121,103 @@ it('replaces ranked windows, forwards queries, excludes inboxes and retains no q
   expect(client.getQueryCache().getAll()).toHaveLength(0);
   client.clear();
 });
+
+it('keeps still-matching people listed while the next read is pending', async () => {
+  vi.useFakeTimers();
+  const viewer = 'macro|viewer@example.com';
+  const directory = ['Jacob Adams', 'Jacob Baker', 'Jane Cole'];
+  let changed: (() => void) | undefined;
+  const search = vi
+    .fn<PeopleCache['search']>()
+    .mockImplementation(async (request) => ({
+      kind: 'page',
+      policyVersion: 5,
+      people: directory
+        .filter((name) => name.toLowerCase().includes(request.query))
+        .map((name) => {
+          const id = name.toLowerCase().replace(' ', '.');
+          return {
+            recordKey: `GraphqlContact:${id}`,
+            userId: `macro|${id}@example.com`,
+            email: `${id}@example.com`,
+            name,
+            lastInteractionMs: 0,
+            matchRank: 2,
+            score: 1,
+            timestampMs: 0,
+          };
+        }),
+      truncated: false,
+      nextCursor: null,
+    }));
+  const host = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    currentStorageGeneration: async () =>
+      '00000000-0000-4000-8000-000000000001',
+    readQuery: async () => ({
+      kind: 'hit' as const,
+      data: { user: { id: viewer } },
+    }),
+    onCacheChanged: (callback: () => void) => {
+      changed = callback;
+      return () => {};
+    },
+    people: {
+      ...unsupportedContactSync,
+      readSql: vi
+        .fn<PeopleCache['readSql']>()
+        .mockResolvedValue({ kind: 'unsupported' }),
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
+      search,
+      context: vi.fn<PeopleCache['context']>(),
+      update: vi.fn<PeopleCache['update']>(),
+    },
+  };
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  const [query, setQuery] = createSignal('j');
+  let list: ReturnType<typeof createPersonList> | undefined;
+  function Harness() {
+    list = createPersonList({
+      scope: () => ({ userId: viewer, host }),
+      search: query,
+      enabled: () => true,
+      policy: () => ({ mode: 'command', excluded: [] }),
+      activity: () => new Map(),
+      conversation: () => undefined,
+      excluded: () => false,
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const names = () => list?.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(names()).toEqual(directory);
+
+  // Typing narrows what is shown at once; the read for the new text lands later.
+  setQuery('jac');
+  expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
+  expect(search).toHaveBeenLastCalledWith(
+    expect.objectContaining({ query: 'jac' })
+  );
+
+  // A contact change re-reads the page without emptying it.
+  changed?.();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
+  expect(search.mock.calls.length).toBeGreaterThan(2);
+
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+  vi.restoreAllMocks();
+});

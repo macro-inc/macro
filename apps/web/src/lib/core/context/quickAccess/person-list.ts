@@ -6,8 +6,18 @@ import {
   createContactDirectoryWindow,
 } from '@queries/contacts/directory-query';
 import { type Accessor, createMemo, createSignal, untrack } from 'solid-js';
+import { normalizeNameText } from '@core/util/name-match-score';
 import { contactUserItem } from './person-items';
 import type { EntityItem, QuickAccessList, UserItem } from './types';
+
+/** Whether a shown person can still be a match for the text typed since. */
+function stillMatches(search: string) {
+  const terms = normalizeNameText(search).split(' ').filter(Boolean);
+  return (item: UserItem) => {
+    const label = normalizeNameText(`${item.data.name} ${item.data.email}`);
+    return terms.every((term) => label.includes(term));
+  };
+}
 
 /** One replaceable person window per observer. Channel data is reused only to
  * resolve the bounded winners; no user rows are added to Quick Access's item cache. */
@@ -32,9 +42,23 @@ export function createPersonList(options: {
     })
   );
   const [loadingMore, setLoadingMore] = createSignal(false);
-  const items = createMemo(() => {
+  let shownFor: string | undefined;
+  const items = createMemo<UserItem[]>((shown) => {
     const page = window.data();
-    if (!page) return [];
+    const scope = options.scope();
+    const owner = `${scope.userId ?? ''}\n${scope.host?.clientId ?? ''}`;
+    if (!page) {
+      // The window drops its page while the next read is pending: after each
+      // keystroke, contact change, and page request. Keep showing the rows
+      // that still match rather than emptying the list until it lands.
+      const pending =
+        options.enabled() &&
+        shownFor === owner &&
+        window.loading() &&
+        !window.error();
+      return pending ? shown.filter(stillMatches(options.search())) : [];
+    }
+    shownFor = owner;
     const hints = new Map(
       page.people?.map((person) => [person.userId, person.directMessage])
     );
@@ -59,7 +83,7 @@ export function createPersonList(options: {
           ...(target ? { commandTarget: target } : {}),
         };
       });
-  });
+  }, []);
   return {
     items,
     windowKey: () => (items().length ? window.windowKey() : undefined),
