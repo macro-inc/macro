@@ -1,0 +1,23 @@
+crates/messages/src/domain/service/guest_chat.rs
+  s_c6a08203850d89::t_41490487421137 244-245
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_c6a08203850d89::t_7a57ddeb237186 369,388-391
+  s_c6a08203850d89::t_d5fe7e1c61ebd8 249-252,280-281,293-302
+  s_c6a08203850d89::t_784840610eb0e6 542-545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fbd7ca0f7ad5075d48a0f137d3ac555737efea0f",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
