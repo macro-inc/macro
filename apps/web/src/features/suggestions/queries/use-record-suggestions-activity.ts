@@ -20,7 +20,11 @@ export function useRecordSuggestionsActivity(): void {
   let recordedFor: string | undefined;
   createEffect(() => {
     const user = userInfo();
-    if (!user?.authenticated || !suggestions().enabled || recordedFor === user.id) {
+    if (
+      !user?.authenticated ||
+      !suggestions().enabled ||
+      recordedFor === user.id
+    ) {
       return;
     }
     recordedFor = user.id;
