@@ -113,6 +113,7 @@ impl NativeEditorSession {
         lock(&self.inner)?.handle(now, input)
     }
     /// Admit a command from the shared application command catalog.
+    /// Generation must match the current native diff before payload decoding.
     pub fn application_command(
         &self,
         now: FfiNow,
@@ -126,6 +127,9 @@ impl NativeEditorSession {
             return Err(invalid(
                 "application command requires an application preset",
             ));
+        }
+        if generation != host.session.surface().state().max_key().generation() {
+            return Err(invalid("application model generation changed"));
         }
         let command = macro_document_model::surface::decode_command(
             &name,
