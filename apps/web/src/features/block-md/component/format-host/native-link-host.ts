@@ -104,7 +104,7 @@ export function createNativeDocumentLinkMenuHost(
       });
       return;
     }
-    const text = view.port.clipboard(0).plain;
+    const text = view.clipboard.formats(0).plain;
     const epoch = ++openingEpoch;
     opening = true;
     let prepared:

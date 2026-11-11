@@ -215,7 +215,7 @@ export function createNativeDocumentFormattingHost(
         const selected = readNativeFormattingSelection(view);
         const table = readTables();
         const convertible = actions.canConvertList();
-        selectionText = view.port.clipboard(0).plain;
+        selectionText = view.clipboard.formats(0).plain;
         setSelection(selected);
         setTables(table);
         setCanConvertList(convertible);
