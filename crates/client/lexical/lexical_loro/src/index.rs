@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+mod test;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Slot {
     Node,
@@ -33,13 +35,12 @@ impl NodeIndex {
             Some(ValueOrContainer::Container(Container::Text(t))) => Some(t.id()),
             _ => None,
         };
-        let state = map.get("$").as_ref().map(schema::read_value).transpose()?;
-        let id = state
+        let id = map
+            .get("$")
             .as_ref()
-            .and_then(serde_json::Value::as_object)
-            .and_then(|v| v.get("id"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned);
+            .map(schema::validated_state_id)
+            .transpose()?
+            .flatten();
         self.unbind(key);
         self.owner.insert(map.id(), (key, Slot::Node));
         self.owned.insert(key, vec![map.id()]);

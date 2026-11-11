@@ -2,6 +2,8 @@
 use super::*;
 use loro::{LoroList, LoroMovableList, LoroText, LoroValue};
 use serde_json::Value;
+#[cfg(test)]
+pub(crate) mod test;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MapSchema {
     Node,
@@ -90,16 +92,53 @@ pub(crate) fn from_loro(value: &LoroValue) -> Result<Value> {
         LoroValue::Double(n) => lexical_model::json::js_number(*n),
         LoroValue::String(s) => Value::String(s.to_string()),
         LoroValue::List(l) => Value::Array(l.iter().map(from_loro).collect::<Result<_>>()?),
-        LoroValue::Map(m) => Value::Object(
-            m.iter()
-                .map(|(k, v)| Ok((k.clone(), from_loro(v)?)))
-                .collect::<Result<_>>()?,
-        ),
+        LoroValue::Map(m) => {
+            #[cfg(test)]
+            test::record_json_map();
+            Value::Object(
+                m.iter()
+                    .map(|(k, v)| Ok((k.clone(), from_loro(v)?)))
+                    .collect::<Result<_>>()?,
+            )
+        }
         _ => return Err(schema_error("non-JSON value")),
     })
 }
 pub(crate) fn read_value(value: &ValueOrContainer) -> Result<Value> {
     from_loro(&value.get_deep_value())
+}
+/// Validate the entire deep value before extracting its optional string ID.
+pub(crate) fn validated_state_id(value: &ValueOrContainer) -> Result<Option<String>> {
+    let value = value.get_deep_value();
+    validate_json_value(&value)?;
+    Ok(match &value {
+        LoroValue::Map(map) => match map.get("id") {
+            Some(LoroValue::String(id)) => Some(id.to_string()),
+            _ => None,
+        },
+        _ => None,
+    })
+}
+fn validate_json_value(value: &LoroValue) -> Result<()> {
+    match value {
+        LoroValue::Null
+        | LoroValue::Bool(_)
+        | LoroValue::I64(_)
+        | LoroValue::Double(_)
+        | LoroValue::String(_) => {}
+        LoroValue::List(values) => {
+            for value in values.iter() {
+                validate_json_value(value)?;
+            }
+        }
+        LoroValue::Map(values) => {
+            for (_, value) in values.iter() {
+                validate_json_value(value)?;
+            }
+        }
+        _ => return Err(schema_error("non-JSON value")),
+    }
+    Ok(())
 }
 pub(crate) fn map_at(value: Option<ValueOrContainer>, path: &str) -> Result<LoroMap> {
     match value {
