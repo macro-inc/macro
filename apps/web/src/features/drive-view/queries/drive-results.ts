@@ -75,6 +75,17 @@ export function driveEntityMatchesLocation(
   return documentMatchesTab(entity, location.tab, selection.scope, userId);
 }
 
+/** Matches the server's `name` order: case-insensitive, then newest update. */
+function compareNames(left: EntityData, right: EntityData): number {
+  const a = left.name?.toLocaleLowerCase();
+  const b = right.name?.toLocaleLowerCase();
+  if (!a && b) return 1;
+  if (a && !b) return -1;
+  if (a && b && a !== b) return a.localeCompare(b);
+
+  return compareDateDesc(left.updatedAt, right.updatedAt);
+}
+
 /** Preserve recency sorting and the local-search featured prefix. */
 export function orderDriveEntities(
   entities: readonly EntityData[],
@@ -95,9 +106,12 @@ export function orderDriveEntities(
     return entity.sortTs ?? entity.updatedAt;
   };
 
-  const ordered = [...entities].sort((a, b) =>
-    compareDateDesc(timestamp(a), timestamp(b))
-  );
+  const ordered =
+    sort === 'name'
+      ? [...entities].sort(compareNames)
+      : [...entities].sort((a, b) =>
+          compareDateDesc(timestamp(a), timestamp(b))
+        );
 
   if (featuredIds.length === 0) return ordered;
 

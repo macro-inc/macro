@@ -163,7 +163,8 @@ export function buildDriveQuery(
       expand: true,
       limit: 100,
       sort_method: sortMethod,
-      sort_direction: 'desc',
+      // Names read A to Z; every other Drive sort is newest first.
+      sort_direction: sortMethod === 'name' ? 'asc' : 'desc',
     },
     body,
   };
