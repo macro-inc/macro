@@ -1,0 +1,4 @@
+{
+  "perRunUsd": { "respond": 3, "heartbeat": 3, "work": 20 },
+  "perDayUsd": 50
+}

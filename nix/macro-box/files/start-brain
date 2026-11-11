@@ -1,0 +1,65 @@
+# Clones the agent's repo into its workspace on first start, configures git,
+# then runs the brain. `_agent-brain.nix` prepends `workspace`, `health_port`,
+# `helper` (the git credential helper) and `brain`.
+umask 077
+: "${HOME:?}" "${MACRO_REPO_URL:?}" "${MACRO_REPO_TOKEN:?}"
+: "${MACRO_AGENT_USER_ID:?}" "${MACRO_AGENT_NAME:?}"
+
+# The image owns these; the agent environment must not move them.
+for name in BRAIN_WORKSPACE BRAIN_HEALTH_PORT; do
+  if [[ -n "${!name+set}" ]]; then
+    echo "$name is set by the image; remove it from the agent environment" >&2
+    exit 1
+  fi
+done
+export BRAIN_WORKSPACE=$workspace BRAIN_HEALTH_PORT=$health_port
+
+if [[ "$MACRO_AGENT_USER_ID" != macro\|?*@?* ]] || [[ "$MACRO_AGENT_USER_ID" == *$'\n'* ]]; then
+  echo 'MACRO_AGENT_USER_ID must contain the agent email (macro|email)' >&2
+  exit 1
+fi
+
+if [[ "$MACRO_AGENT_NAME" == *$'\n'* ]]; then
+  echo 'MACRO_AGENT_NAME must be one line' >&2
+  exit 1
+fi
+
+# Reject credentials in the URL; the helper supplies them only to git.
+if [[ ! "$MACRO_REPO_URL" =~ ^https?://[^/@]+/ ]] || [[ "$MACRO_REPO_URL" == *$'\n'* ]]; then
+  echo 'MACRO_REPO_URL must be an HTTP(S) URL without credentials' >&2
+  exit 1
+fi
+
+export GIT_TERMINAL_PROMPT=0
+trace_args=()
+if [[ -n "${BRAIN_PROVISION_TRACEPARENT:-}" ]]; then
+  if [[ ! "$BRAIN_PROVISION_TRACEPARENT" =~ ^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$ ]] ||
+    [[ "$BRAIN_PROVISION_TRACEPARENT" =~ ^00-0{32}- ]] ||
+    [[ "$BRAIN_PROVISION_TRACEPARENT" =~ -0{16}- ]]; then
+    echo 'BRAIN_PROVISION_TRACEPARENT must be a valid W3C traceparent' >&2
+    exit 1
+  fi
+  trace_args=(-c "http.extraHeader=traceparent: $BRAIN_PROVISION_TRACEPARENT")
+fi
+
+if [[ ! -e "$workspace" ]]; then
+  # Clone into a temporary sibling: a failed clone never poisons first start.
+  staging=$(mktemp -d "$workspace.clone.XXXXXX")
+  trap 'rm -rf "$staging"' EXIT
+  git "${trace_args[@]}" -c credential.useHttpPath=true -c credential.helper= -c credential.helper="$helper" \
+    clone -- "$MACRO_REPO_URL" "$staging"
+  mv -T "$staging" "$workspace"
+  trap - EXIT
+fi
+
+# Follow a re-enrollment's repo URL. Store only the helper path, never the
+# token. The empty entry resets inherited helpers; the helper's store path
+# changes with each image.
+git -C "$workspace" remote set-url origin "$MACRO_REPO_URL"
+git -C "$workspace" config --local --replace-all credential.helper ''
+git -C "$workspace" config --local --add credential.helper "$helper"
+git -C "$workspace" config --local credential.useHttpPath true
+git -C "$workspace" config --local user.name "$MACRO_AGENT_NAME"
+git -C "$workspace" config --local user.email "${MACRO_AGENT_USER_ID#macro|}"
+cd "$workspace"
+exec "$brain" run

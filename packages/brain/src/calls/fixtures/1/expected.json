@@ -1,0 +1,15 @@
+{
+  "noise-gated": {
+    "seconds": 14,
+    "dbfs": -40,
+    "burstMs": 300,
+    "segments": [1.1, 6.1, 11.7],
+    "answered": 3
+  },
+  "normal-level": {
+    "seconds": 6,
+    "dbfs": -21,
+    "phrase": [0.44, 3.16],
+    "answered": 1
+  }
+}

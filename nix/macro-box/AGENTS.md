@@ -30,7 +30,12 @@ PID 1 (for the dev-only DockerFleet).
   `claude-agent-acp/package-lock.json` (without the SDK's per-platform Claude
   binaries); tmpfiles link it where macrod installs adapters,
   `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs npm.
-- `files/` holds the enrollment probe script and `/etc/claude-code/CLAUDE.md`;
+- `_agent-brain.nix` (imported by `_guest.nix`, options `macro.box.brain.*`)
+  runs the agent teammate's brain; `_brain.nix` builds it from
+  `packages/brain` (Node 24, the SDK bundled once, hash-pinned npm
+  dependencies with LiveKit's native addons patched).
+- `files/` holds the enrollment probe script, the brain's `start-brain` and
+  `git-credential-brain`, the VM test's git server and `/etc/claude-code/CLAUDE.md`;
   `skills/` is copied into `/etc/skel/.claude/skills` and macro's home.
 - herdr is built from the `herdr` flake input (`github:herdrdev/herdr/v<version>`)
   with its own `nix/package.nix`, and its official skill
@@ -46,6 +51,7 @@ PID 1 (for the dev-only DockerFleet).
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
+- `nix build .#macro-brain` → the `brain` CLI with its versioned library.
 - `nix build .#nixosConfigurations.macro-box.config.system.build.toplevel` →
   the system closure, without packing the disk.
 
@@ -67,6 +73,26 @@ PID 1 (for the dev-only DockerFleet).
   permission bypass as root), workspace `/home/macro/work`, after
   `macrod-enroll.service`. It restarts after 1 s, backing off to 30 s, and
   never hits a start limit.
+- One agent per computer. With an agent, `macrod enroll` writes
+  `/var/lib/macrod/agent.env` (KEY=VALUE, one line each, 0600, owned by
+  `macro`) and rewrites it on re-enrollment; without one the file is absent.
+  `macro-brain.service` runs `start-brain` as `macro` with that
+  `EnvironmentFile` (`ConditionPathExists`, after `macrod-enroll`, restarts
+  always) under `NoNewPrivileges`, `ProtectSystem=strict`,
+  `ReadWritePaths=/home/macro` and `PrivateTmp`. `macro-brain.path`
+  (`PathChanged`) runs `macro-brain-restart.service`, so writing, rewriting
+  or removing the file starts, restarts or stops the brain.
+- `start-brain` sets `BRAIN_WORKSPACE=/home/macro/agent-workspace` and
+  `BRAIN_HEALTH_PORT` (`macro.box.brain.healthPort`, 7801) and rejects either
+  in the agent environment. It requires `MACRO_REPO_URL` (HTTP(S), no
+  credentials), `MACRO_REPO_TOKEN`, `MACRO_AGENT_USER_ID` (`macro|email`) and
+  `MACRO_AGENT_NAME`, validates `BRAIN_PROVISION_TRACEPARENT`, clones into a
+  staging sibling on first start (a failed clone leaves nothing), points
+  `origin` at the current URL, sets git's identity and the exact-repo
+  credential helper (never the token), then execs `brain run`. The `brain`
+  wrapper sets `BRAIN_EXECUTABLE`, `BRAIN_LIBRARY_ROOT` and
+  `BRAIN_HEALTH_MINUTES=5`. The rest of the environment is
+  `packages/brain`'s config (README). Never put `PATH` or `HOME` in it.
 - Claude signs in through Claude Code's own `/login`, in a herdr pane; its
   credentials stay in `~macro/.claude` on the data disk.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
@@ -156,6 +182,14 @@ The control plane, per computer:
   and Xvnc and Chromium's CDP port come up. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
   enrollment marker; enrollment runs and its check passes without a source.
+  Before that, the brain stays down without `agent.env`, rejects a
+  credentialed repo URL without contacting the repo, and a rewritten file
+  restarts it: it clones from an in-VM git server (provisioning traceparent
+  sent, no token or traceparent in `.git/config`), passes the library's
+  fake-event boot and retries the unreachable events stream; removing the
+  file stops it.
+- After `packages/brain/package-lock.json` changes, update `npmDepsHash` in
+  `_brain.nix` from the fetch derivation's reported `got:` hash.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;

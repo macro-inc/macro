@@ -83,6 +83,8 @@ let
   };
 in
 {
+  imports = [ ./_agent-brain.nix ];
+
   options.macro.box = {
     macrod = lib.mkOption {
       type = lib.types.package;

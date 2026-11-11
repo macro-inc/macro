@@ -50,6 +50,7 @@ in
       packages = lib.optionalAttrs (system == "x86_64-linux") {
         macro-box-claude-code = box.claudeCode;
         macro-box-claude-agent-acp = box.claudeAgentAcp;
+        macro-brain = box.brain.package;
         # What `incus image import` takes.
         macro-box-incus = pkgs.runCommand "macro-box-incus" { } ''
           mkdir $out
