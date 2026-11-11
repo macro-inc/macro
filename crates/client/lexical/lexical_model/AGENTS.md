@@ -22,6 +22,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/foreign/publication.rs` notifies optional foreign adapters immediately after real publication and at existing speculative rollback boundaries; retain actual receipt identities and revoke rolled-back follow-ups before external delivery, without model, host or I/O work in the observer.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
+- `src/plugin/command_listener.rs` adds ordinary synchronous host listeners to the
+  same command lists without enabling foreign nodes; adapters own scoped host
+  transport, event guards and reentry permissions.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
 - `src/diff/` owns the versioned flat ABI; keep all 12 opcodes in sync with the independent TS decoder test. Native decorator signature sidecars are resolved by the consuming view, never serialized as state or observed by Commit.diff.
 - `src/core/` owns input policy, raw remote edits and host effects.
@@ -71,8 +74,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Stage plugin notifications with `emit`; consume typed events from a successful Commit, never call host callbacks inside transforms.
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
-- Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
 - Keep Click a normal indexed command; views supply DOM selection facts and registered rich-text listeners own selection clearing and format escaping.
+- Commands snapshot each priority when reached in every feature profile; current-bucket changes wait until the next dispatch and later-bucket changes remain visible. External dispatch flushes between levels, inline dispatch does not.
 - Hooks share one follow-up transaction per round; conditional hooks then run isolated transactions and discard false results, including early flushes. Keep the shared 99-round guard and roll back extension state with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
