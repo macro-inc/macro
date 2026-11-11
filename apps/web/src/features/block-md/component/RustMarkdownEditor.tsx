@@ -10,6 +10,9 @@ import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkd
 import { createNativeFastSelectionDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-selection-views';
 import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-static-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
+import { createNativeDiffInsertContext } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-host';
+import { createNativeDiffInsertViews } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-views';
+import { createNativeDiffElementView } from '@core/component/LexicalMarkdown/decorator-host/native-diff-view';
 import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
 import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
 import { createNativeHorizontalRuleViews } from '@core/component/LexicalMarkdown/decorator-host/native-horizontal-rule';
@@ -35,6 +38,7 @@ import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/e
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
+import { useUserId } from '@core/context/user';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -82,6 +86,7 @@ export default function RustMarkdownEditor(props: {
 }) {
   const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
+  const userId = useUserId();
   const owner = getOwner() ?? undefined;
   const { documentId, permissions, state } = useMarkdownDocument();
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
@@ -128,6 +133,8 @@ export default function RustMarkdownEditor(props: {
     'markdown-sync'
   );
   overlayLifecycle.add(() => magicContext.dispose());
+  const diffInsertContext = createNativeDiffInsertContext(theme);
+  overlayLifecycle.add(() => diffInsertContext.dispose());
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -181,7 +188,10 @@ export default function RustMarkdownEditor(props: {
               module,
               root: element,
               registry: registerMacroDecoratorViews(
-                registerMacroElementViews(createBuiltinRegistry()),
+                registerMacroElementViews(createBuiltinRegistry()).replace(
+                  'diff',
+                  createNativeDiffElementView(userId)
+                ),
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
@@ -195,6 +205,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastStaticDecoratorViews(selectionContext),
                   ...createNativeFastSelectionDecoratorViews(selectionContext),
                   ...createNativeFastCachedDecoratorViews(magicContext),
+                  ...createNativeDiffInsertViews(diffInsertContext),
                   ...createNativeHorizontalRuleViews(selectionContext.bindView),
                   ...createNativeFastHTMLDecoratorViews({
                     theme,

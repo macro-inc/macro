@@ -3349,6 +3349,11 @@ Open a native document containing an agent preview chip and sealed agent
 activity. Check the preview and completed steps, then reopen the document.
 
 
+Open a native document containing a diff owned by the current user and a diff
+owned by another user. Check that inserted content and Accept/Reject controls
+follow ownership. Accept one owned diff and reject another, then reopen the
+document to check that the shared diff renderer mounts again.
+
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
 optional-menu reply and confirm ordinary typing still works. Keep test transport
