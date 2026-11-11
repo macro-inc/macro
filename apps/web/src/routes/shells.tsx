@@ -9,6 +9,7 @@ import {
 } from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isTauri } from '@core/util/platform';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
@@ -105,15 +106,25 @@ function AppPage(props: ParentProps) {
 type PreloadableView = { preload: () => Promise<unknown> };
 type NetworkInformation = { saveData?: boolean };
 
+// Leave the first seconds to the landing view's own data and chunks.
+const WARM_START_DELAY_MS = 2500;
+// The native apps read chunks from their own bundle, so nothing downloads and
+// a view opened before its chunk is warm shows its skeleton for no reason.
+const NATIVE_WARM_START_DELAY_MS = 500;
+const NATIVE_WARM_GAP_MS = 50;
+
 /**
  * Warms the likely-next view chunks one at a time while the app is open,
  * leaving startup and hidden tabs alone and skipping Save-Data connections.
+ * The native apps load them back to back, pausing only to let input through.
  */
 function warmRouteViews(views: readonly PreloadableView[]): void {
   const connection = (
     navigator as Navigator & { connection?: NetworkInformation }
   ).connection;
   if (connection?.saveData) return;
+
+  const native = isTauri();
 
   const queue = [...views];
   let disposed = false;
@@ -133,15 +144,19 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
       document.addEventListener('visibilitychange', schedule, { once: true });
       return;
     }
-    if ('requestIdleCallback' in window) {
+    if (native) {
+      timer = setTimeout(next, NATIVE_WARM_GAP_MS);
+    } else if ('requestIdleCallback' in window) {
       window.requestIdleCallback(next, { timeout: 5000 });
     } else {
       timer = setTimeout(next, 1000);
     }
   }
 
-  // Leave the first seconds to the landing view's own data and chunks.
-  timer = setTimeout(schedule, 2500);
+  timer = setTimeout(
+    schedule,
+    native ? NATIVE_WARM_START_DELAY_MS : WARM_START_DELAY_MS
+  );
   onCleanup(() => {
     disposed = true;
     clearTimeout(timer);
