@@ -33,6 +33,7 @@ keyboard event; reject stale generations before decoding typed surface commands.
 Use clipboard kind 2 for complete block-drag subtrees; retain ordinary node-selection copy semantics for kinds 0 and 1.
 Use the surface decoder and key-default policy tables so migration groups append registrations independently; table-key routes let model effects decide browser prevention.
 Route application bulk reads through query kind 9 with the mirror generation in flags and a name/data JSON envelope in text; reject retired generations and unknown names.
+Query kind 8 returns the selection's durable Loro cursors in `nodes` and its exact `selection_text_content` in `text`; comment input kind 9 requires that text unchanged.
 
 ## Start here
 

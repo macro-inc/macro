@@ -219,6 +219,8 @@ pub(crate) fn query(
                 reply.nodes = vec![serde_json::to_string(&lexical_loro::encode_selection(
                     &cursors,
                 ))?];
+                // Comment publication requires this exact text under the cursors.
+                reply.text = view.selection_text_content()?;
             }
         }
         9 => {

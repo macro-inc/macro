@@ -13,10 +13,18 @@ import {
   SessionInputMsg,
   TypeTableMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
-import type { SessionExecutor } from '@macro-inc/collaboration/session/executor';
+import type {
+  CommentMarkAction,
+  CommentMarkReply,
+  SessionExecutor,
+} from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
+import {
+  type CommentSelection,
+  parseCommentSelection,
+} from './comment-selection';
 import type { NativeCommandKey } from './native-enter';
 import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
@@ -79,7 +87,12 @@ export class SessionPort implements EditorPort {
       SessionExecutor<EditorSession>,
       'session' | 'run' | 'now'
     > &
-      Partial<Pick<SessionExecutor<EditorSession>, 'runSync' | 'runSettled'>>,
+      Partial<
+        Pick<
+          SessionExecutor<EditorSession>,
+          'runSync' | 'runSettled' | 'comment'
+        >
+      >,
     private readonly view: ViewSink,
     private readonly debug = import.meta.env.DEV,
     private readonly commands?: NativeEnterBinding
@@ -506,6 +519,21 @@ export class SessionPort implements EditorPort {
   clipboard(kind: number) {
     this.assertRootAdmission();
     return ClipboardMsg.decode(this.executor.session.clipboard(kind));
+  }
+  /** Current durable selection cursors and their exact model text. */
+  commentSelection(): CommentSelection | null {
+    const reply = this.query({ kind: 8, key: 0, flags: 0, text: '' });
+    return parseCommentSelection(reply.nodes, reply.text);
+  }
+  /** Publish or remove an annotation from the session's isolated staging peer. */
+  comment(
+    markId: string,
+    action: CommentMarkAction
+  ): Promise<CommentMarkReply> {
+    this.assertRootAdmission();
+    const comment = this.executor.comment;
+    if (!comment) throw new Error('Comment publication is unavailable');
+    return comment.call(this.executor, markId, action);
   }
   query(query: IQueryMsg) {
     this.assertRootAdmission();

@@ -8,7 +8,9 @@ import {
   ClosedReason,
   ConnectMsg,
   Failure,
+  type INodeCursorMsg,
   type IViewEffectMsg,
+  NodeCursorMsg,
   SaveReason,
   SessionInputMsg,
   StorageOpMsg,
@@ -77,6 +79,25 @@ export class SessionInputError extends Error {
     this.name = 'SessionInputError';
   }
 }
+/** Server-current annotation change, published from an isolated staging peer. */
+export type CommentMarkAction =
+  | {
+      readonly kind: 'add';
+      readonly anchor: INodeCursorMsg;
+      readonly focus: INodeCursorMsg;
+      /** Exact text expected between the durable cursors. */
+      readonly text: string;
+    }
+  | { readonly kind: 'remove' };
+export type CommentMarkReply =
+  | { readonly kind: 'accepted' }
+  | { readonly kind: 'not-acked' }
+  | { readonly kind: 'refused'; readonly reason: string };
+const COMMENT_REPLY_CODE = 2;
+const REPLY_EFFECT = 5;
+/** Stop owns 0xffffffff; comment requests cycle below it. */
+const MAX_COMMENT_REQUEST = 0xfffffffe;
+
 export interface ExecutorOptions<S extends NativeSession> {
   doc: string;
   owner: string;
@@ -122,6 +143,14 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private closing?: Promise<void>;
   private readonly tasks = new Set<Promise<void>>();
   private stopped?: () => void;
+  private nextCommentRequest = 1;
+  private readonly commentReplies = new Map<
+    number,
+    {
+      resolve: (reply: CommentMarkReply) => void;
+      reject: (error: Error) => void;
+    }
+  >();
   private readonly unsubscribe: () => void;
   private readonly t0: number;
   private detachRoute?: () => void;
@@ -456,7 +485,9 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     this.options.view.apply(out.view, out.strings, out.viewEffects);
     for (const effect of out.viewEffects) {
       if (effect.kind === 3) this.options.onStatus?.(effect);
-      if (effect.kind === 5 && effect.code === 0) this.stopped?.();
+      if (effect.kind === REPLY_EFFECT && effect.code === 0) this.stopped?.();
+      if (effect.kind === REPLY_EFFECT && effect.code === COMMENT_REPLY_CODE)
+        this.settleComment(effect);
     }
     for (const effect of out.effects) this.execute(effect, tickSequence);
     if (flags & Flag.NeedPeerIds) {
@@ -473,6 +504,57 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         )
       );
     }
+  }
+  /** Resolves with the session's reply; rejects if the session closes first. */
+  comment(
+    markId: string,
+    action: CommentMarkAction
+  ): Promise<CommentMarkReply> {
+    if (this.closed || this.closing)
+      return Promise.reject(new Error('Session closed before the comment'));
+    const request = this.nextCommentRequest;
+    this.nextCommentRequest = request >= MAX_COMMENT_REQUEST ? 1 : request + 1;
+    const reply = new Promise<CommentMarkReply>((resolve, reject) => {
+      this.commentReplies.set(request, { resolve, reject });
+    });
+    const input = {
+      ...emptyInput(9),
+      request,
+      markId,
+      ...(action.kind === 'add'
+        ? {
+            code: 1,
+            // Bebop encodes into one shared buffer; copy before the next encode.
+            anchor: NodeCursorMsg.encode(action.anchor).slice(),
+            focus: NodeCursorMsg.encode(action.focus).slice(),
+            expectedText: action.text,
+          }
+        : { code: 0 }),
+    };
+    this.run(() =>
+      this.session.input(
+        SessionInputMsg.encode(input),
+        this.now(),
+        this.clock.wall()
+      )
+    );
+    return reply;
+  }
+  private settleComment(effect: IViewEffectMsg): void {
+    const pending = this.commentReplies.get(effect.request);
+    if (!pending) return;
+    this.commentReplies.delete(effect.request);
+    if (effect.detail === 0) pending.resolve({ kind: 'accepted' });
+    else if (effect.detail === 1) pending.resolve({ kind: 'not-acked' });
+    else if (effect.detail === 2)
+      pending.resolve({ kind: 'refused', reason: effect.text });
+    else pending.reject(new Error('Unknown comment reply ' + effect.detail));
+  }
+  private rejectComments(): void {
+    const pending = [...this.commentReplies.values()];
+    this.commentReplies.clear();
+    for (const { reject } of pending)
+      reject(new Error('Session closed before the comment reply'));
   }
   private scheduleWake(): void {
     clearTimeout(this.timer);
@@ -830,6 +912,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       // Required durability completions have settled; do not admit new work
       // while asynchronous lock release hands ownership to another session.
       this.closed = true;
+      this.rejectComments();
       this.queue = this.queue.filter((call) => {
         const entry = this.settlements.get(call);
         if (!entry || entry.started) return true;
