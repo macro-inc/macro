@@ -63,3 +63,5 @@ Read group-b.checklist-plan through the existing generation-checked application_
 Forward the shared group-b.table-facts JSON through application_query; preserve all-or-error generation/attached/type checks and never implement table-map placement or resize capture in the adapter.
 
 Reject stale application model generations before decoding commands; retain normal session readiness and access admission.
+
+Compute decoded media layout through renderer-local MediaLayouts queries using plain data clones and the shared constraint helper; never mutate document dimensions or invoke clone hooks for SessionRead presentation.

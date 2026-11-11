@@ -107,6 +107,11 @@ pub enum FfiQuery {
         /// Current attached list-item identities from the view patch.
         keys: Vec<NodeKey>,
     },
+    /// Compute media layout from host decoding without changing document state or history.
+    MediaLayouts {
+        /// Renderer-local natural dimensions; shared constraints and stored scale still apply.
+        measurements: Vec<FfiMediaMeasurement>,
+    },
 }
 /// A native query result, with only the requested payload.
 #[derive(uniffi::Enum)]
@@ -177,7 +182,7 @@ pub enum FfiQueryReply {
         /// Selection focus.
         focus: Option<NativeCursor>,
     },
-    /// Model-owned decorator facts, in requested key order.
+    /// Decorator facts in requested key order; media measurement overrides are query-local.
     Decorators {
         /// Current attached decorators.
         nodes: Vec<FfiDecorator>,
@@ -239,6 +244,9 @@ pub(crate) fn query(
         },
         FfiQuery::Decorators { keys } => FfiQueryReply::Decorators {
             nodes: decorator::facts(state, keys)?,
+        },
+        FfiQuery::MediaLayouts { measurements } => FfiQueryReply::Decorators {
+            nodes: decorator::measured_facts(state, measurements)?,
         },
         FfiQuery::ShouldInsertText { text } => FfiQueryReply::Boolean {
             value: match state.selection().and_then(Selection::as_range) {
