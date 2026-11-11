@@ -316,6 +316,7 @@ async fn event_built_for_a_routine_run_carries_its_routine() {
     let attribution = agent_correlation::context::Attribution {
         correlation_id: None,
         routine_id: Some(routine_id),
+        ..agent_correlation::context::Attribution::default()
     };
 
     let event =
