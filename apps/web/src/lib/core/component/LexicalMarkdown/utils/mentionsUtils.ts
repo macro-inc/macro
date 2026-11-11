@@ -6,6 +6,7 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { AgentSessionEntity, EmailEntity } from '@entity';
+import type { UserMentionInfo } from '@macro-inc/lexical-core';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
@@ -138,7 +139,7 @@ const getItemName = (item: CombinedEntity): string => {
  * dependencies have to be injected via the component.
  */
 export type HandlerDependencies = {
-  editor: LexicalEditor;
+  editor: Pick<LexicalEditor, 'dispatchCommand'>;
   blockName?: BlockName;
   blockId?: string;
   onUserMention?: (record: UserMentionRecord) => void;
@@ -147,17 +148,50 @@ export type HandlerDependencies = {
   onEmailMention?: (item: EmailEntity) => void;
 };
 
+/** Prepared at the original synchronous entry point, before tracking can await. */
+export type UserMentionInsertion = Pick<
+  HandlerDependencies,
+  'blockName' | 'blockId' | 'onUserMention' | 'disableMentionTracking'
+> & {
+  insert(buildPayload: () => UserMentionInfo): void | Promise<void>;
+};
+
 /**
  * Handles user mentions by lexical inserting and potentially up-serting to the notification service.
  * @param user The user to mention.
  * @param dependencies The dependencies required to handle the user mention.
  */
-export async function handleUserMention(
+export function handleUserMention(
   user: IUser,
   dependencies: HandlerDependencies
-) {
-  const { editor, blockName, blockId, onUserMention, disableMentionTracking } =
-    dependencies;
+): Promise<void> {
+  return handleUserMentionWithInsertion(user, () => {
+    const {
+      editor,
+      blockName,
+      blockId,
+      onUserMention,
+      disableMentionTracking,
+    } = dependencies;
+    return {
+      blockName,
+      blockId,
+      onUserMention,
+      disableMentionTracking,
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, buildPayload());
+      },
+    };
+  });
+}
+
+/** Share actual notification/tracking I/O without supplying an editor facade. */
+export async function handleUserMentionWithInsertion(
+  user: IUser,
+  prepare: () => UserMentionInsertion
+): Promise<void> {
+  const { blockName, blockId, onUserMention, disableMentionTracking, insert } =
+    prepare();
   let mentionId: string | undefined;
 
   if (blockName !== 'channel') {
@@ -177,12 +211,13 @@ export async function handleUserMention(
     }
   }
 
-  editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
+  const completion = insert(() => ({
     userId: user.id,
     email: user.email,
     displayName: getUserMentionDisplayName(user),
     mentionUuid: mentionId,
-  });
+  }));
+  if (completion !== undefined) await completion;
 }
 
 /**

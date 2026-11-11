@@ -1,14 +1,28 @@
+import { runtimeCapture, sendRecordedInput } from "./transcript";
 import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
-import { assert } from 'vitest';
+import { afterAll, assert, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
   FromRemote,
   FromPeer,
-} from '../bebop/generated/schema';
+} from '../../../crates/sync_protocol/bebop/generated/schema';
 import fs from 'node:fs';
 import { verify } from 'node:crypto';
+
+const rawDispatches = new WeakMap<Miniflare, Miniflare['dispatchFetch']>();
+const runtimes = new Set<Miniflare>();
+
+afterAll(async () => {
+  await Promise.all([...runtimes].map(runtime => runtime.dispose()));
+}, 60_000);
+
+export function dispatchConcurrent(mf: Miniflare, ...args: Parameters<Miniflare['dispatchFetch']>) {
+  return rawDispatches.get(mf)!(...args);
+}
+
+const evictionOwners = new WeakMap<object, Miniflare>();
 
 export const INTERNAL_API_SECRET = 'local';
 
@@ -35,21 +49,32 @@ export async function setupMiniflare(
   options: {
     persistPath?: string;
     migrate?: boolean;
+    holdAlarms?: boolean;
+    workerScriptPath?: string;
+    record?: boolean;
+    fixedWallTime?: number;
+    measureMessages?: boolean;
+    inspectorPort?: number;
     dssUrl?: string;
     lexicalServiceUrl?: string;
     lexicalServiceAuthKey?: string | null;
+    commentGateMode?: "http" | "in_process" | "shadow";
     fetchMock?: MiniflareOptions['fetchMock'];
   } = {},
 ) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
+  const capture = process.env.SYNC_RECORD === "1" && options.record !== false ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath, options.persistPath) : undefined;
   const mf = new Miniflare({
+    ...(options.inspectorPort !== undefined ? {inspectorPort: options.inspectorPort} : {}),
+    ...(capture ? { handleRuntimeStdio: capture.stdio } : {}),
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
     },
-    scriptPath: "./build/worker/shim.mjs",
+    scriptPath: options.workerScriptPath ?? "./tests/worker.mjs",
+    ...(options.workerScriptPath ? { modulesRoot: "/" } : {}),
     modules: true,
     modulesRules: [
-      { type: "ESModule", include: ["**/build/index.js"] },
+      { type: "ESModule", include: ["**/build/index.js", "**/*.mjs", "**/src/transcript/*.js"] },
       { type: "CompiledWasm", include: ["**/*.wasm"], fallthrough: true },
     ],
     durableObjects: {
@@ -70,6 +95,11 @@ export async function setupMiniflare(
     r2Persist: persist('r2'),
     fetchMock: options.fetchMock,
     bindings: {
+      COMMENT_GATE_MODE: options.commentGateMode ?? "http",
+      SYNC_RECORD: process.env.SYNC_RECORD === "1" && options.record !== false,
+      ...(options.holdAlarms ? { SYNC_TEST_HOLD_ALARMS: true } : {}),
+      ...(options.measureMessages ? { SYNC_TEST_MESSAGE_TIMING: true } : {}),
+      ...(options.fixedWallTime !== undefined ? { SYNC_TEST_WALL_MS: options.fixedWallTime } : {}),
       ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",
       INTERNAL_API_SECRET_KEY: "INTERNAL_API_SECRET",
@@ -82,8 +112,34 @@ export async function setupMiniflare(
         ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, ...(options.lexicalServiceAuthKey === null ? {} : { LEXICAL_SERVICE_AUTH_KEY: options.lexicalServiceAuthKey ?? "lexical-key" }) }
         : {}),
     },
+    compatibilityFlags: ['unsafe_module'],
     compatibilityDate: '2025-03-05'
   });
+
+  const getNamespace = mf.getDurableObjectNamespace.bind(mf);
+  mf.getDurableObjectNamespace = async (...args: Parameters<typeof getNamespace>) => {
+    const namespace = await getNamespace(...args);
+    return new Proxy(namespace, {
+      get(target, key) {
+        if (key === 'get') return (...args: Parameters<typeof target.get>) => {
+          const stub = target.get(...args);
+          evictionOwners.set(stub, mf);
+          return stub;
+        };
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  };
+  rawDispatches.set(mf, mf.dispatchFetch.bind(mf));
+  capture?.attach(mf);
+  const dispose = mf.dispose.bind(mf);
+  let disposal: Promise<void> | undefined;
+  mf.dispose = () => {
+    disposal ??= dispose().finally(() => runtimes.delete(mf));
+    return disposal;
+  };
+  runtimes.add(mf);
 
   if (options.migrate !== false) await migrateDatabase(mf);
 
@@ -96,7 +152,10 @@ type UserOptions = {
 };
 
 function randInt(maxNum) {
-    return Math.floor(Math.random() * maxNum)
+    const random = process.env.SYNC_RECORD === '1'
+      ? Number.parseInt(crypto.randomUUID().slice(0, 8), 16) / 0x100000000
+      : Math.random();
+    return Math.floor(random * maxNum)
 }
 function randName(length = 6) {
     let out = '';
@@ -171,6 +230,10 @@ export async function createTestUser(mf: Miniflare, documentId = 'test-doc', opt
 
 
   connection.send(registrationMessage);
+  if (process.env.SYNC_RECORD === '1') {
+    connection.send('ping');
+    assert(await connection.waitForNextMessage() === 'pong');
+  }
 
   return {
     doc: loroDoc,
@@ -266,11 +329,12 @@ export function createTestWebSocket(ws: WebSocket) {
     },
 
     send(message: string | ArrayBuffer | Uint8Array): void {
-      if (typeof message === 'string') {
-        ws.send(message);
-        return;
-      }
-      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
+      // The generated codec reuses its backing buffer; queued inputs own bytes.
+      const payload = typeof message === 'string' ? message : new Uint8Array(message).slice();
+      sendRecordedInput(ws, () => {
+        if (typeof payload === 'string') ws.send(payload);
+        else for (const frame of intoFrames(payload)) ws.send(frame);
+      }, payload === 'ping');
     },
 
     getWebSocket() {
@@ -335,4 +399,12 @@ export async function connectToDocumentForTesting(
   ws.accept();
 
   return wsWrapper;
+}
+
+/** Evict this local DO while keeping its native hibernatable sockets and storage. */
+export async function abortObjectBetweenMessages(stub: { id: { toString(): string } }) {
+  const owner = evictionOwners.get(stub);
+  if (!owner) throw new Error('Use a stub from setupMiniflare()');
+  const response = await owner.dispatchFetch(`http://sync-test/__sync_test_evict?room=${stub.id.toString()}`);
+  assert(response.status === 204);
 }

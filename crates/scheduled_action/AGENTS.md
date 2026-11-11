@@ -246,3 +246,6 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/guardrails.md`
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.

@@ -1,0 +1,61 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query data",
+      "keeps a node whose chart carries the null color the prompt asks for"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryData",
+      "args": [
+        {
+          "queryId": "q",
+          "prompt": "Tickets by month",
+          "displayMode": "bar",
+          "chart": {
+            "x": "Month",
+            "y": [
+              "Tickets"
+            ],
+            "title": "Tickets",
+            "color": null,
+            "stack": false
+          }
+        }
+      ],
+      "ret": {
+        "queryId": "q",
+        "prompt": "Tickets by month",
+        "displayMode": "bar",
+        "chart": {
+          "x": "Month",
+          "y": [
+            "Tickets"
+          ],
+          "title": "Tickets"
+        }
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

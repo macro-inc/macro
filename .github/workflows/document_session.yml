@@ -1,0 +1,50 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/lexical_conformance.rs
+name: Document session
+'on':
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  session:
+    name: Document session client contract
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 60
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Clear prior execution evidence
+      run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Enforce native editor feature isolation
+      run: bun apps/web/scripts/native-editor-features.ts
+    - name: Session wasm, size and host contract
+      run: bun packages/lexical-conformance/coverage/document-session.ts
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

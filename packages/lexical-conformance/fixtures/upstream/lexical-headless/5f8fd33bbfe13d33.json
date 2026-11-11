@@ -1,0 +1,135 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-headless/src/__tests__/unit/LexicalHeadlessEditor.test.ts",
+    "test": [
+      "LexicalHeadlessEditor",
+      "should be headless environment"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "root",
+      "text",
+      "linebreak",
+      "tab",
+      "paragraph",
+      "artificial"
+    ],
+    "nodeClasses": {
+      "root": {
+        "$fn": "lexical.RootNode"
+      },
+      "text": {
+        "$fn": "lexical.TextNode"
+      },
+      "linebreak": {
+        "$fn": "lexical.LineBreakNode"
+      },
+      "tab": {
+        "$fn": "lexical.TabNode"
+      },
+      "paragraph": {
+        "$fn": "lexical.ParagraphNode"
+      },
+      "artificial": {
+        "$fn": "lexical.ArtificialNode__DO_NOT_USE"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "root",
+          "text",
+          "linebreak",
+          "tab",
+          "paragraph",
+          "artificial"
+        ],
+        "nodeClasses": {
+          "root": {
+            "$fn": "lexical.RootNode"
+          },
+          "text": {
+            "$fn": "lexical.TextNode"
+          },
+          "linebreak": {
+            "$fn": "lexical.LineBreakNode"
+          },
+          "tab": {
+            "$fn": "lexical.TabNode"
+          },
+          "paragraph": {
+            "$fn": "lexical.ParagraphNode"
+          },
+          "artificial": {
+            "$fn": "lexical.ArtificialNode__DO_NOT_USE"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "",
+    "nodeMapKeys": [
+      "root"
+    ]
+  }
+}

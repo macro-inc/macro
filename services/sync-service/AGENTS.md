@@ -12,22 +12,30 @@ updates over WebSocket.
 - `README.md`: project structure, Durable Object lifecycle (in-memory vs
   persistent state, the keep-alive alarm), JWT auth, and Bebop codegen. Read
   it before changing this service.
+- `../../crates/sync_server_core/src/domain/room/http.rs`: initialization, reads and source-request gate policy; handlers retain deferred body reads.
+- `../../crates/sync_server_core/src/domain/room/alarm.rs`: persistence alarms and blame flushing; callbacks map its empty/ok outcomes.
+- `../../crates/sync_server_core/src/domain/room/frame.rs`: inbound frame policy and message telemetry, including the fail-closed configured comment gate.
 - `src/inbound/durable_object.rs` + `src/inbound/durable_object/document_api.rs`: the Durable
   Object — WebSocket handling, loro document state, alarm-driven snapshotting.
 - `src/inbound/durable_object/surface_api.rs`, `surface_migration.rs`: non-document
   surfaces (spreadsheets, forms, etc.) hosted the same way.
-- `src/outbound/storage/` + `src/outbound/storage/backends/`: snapshot/op-log persistence,
-  pluggable across D1/KV/R2/combined backends (see the Cargo feature flags).
+- `src/outbound/room_ports.rs`: Worker implementations of the core room ports.
+- `src/outbound/storage/` + `src/outbound/storage/backends/`: snapshot/op-log transport,
+  pluggable across D1/KV/R2/combined backends (see the Cargo feature flags);
+  write ordering and replay policy live in `sync_server_core::domain::operation_log`.
 - `src/inbound/auth.rs` + `src/inbound/credentials.rs`: route-specific access
   extractors and JWT verification against tokens minted by
   `document_storage_service`.
-- `build.rs` + `bebop-schema/`, `bebop/`: Bebop wire schema and codegen for
-  Rust and TypeScript bindings.
+- `../../crates/sync_protocol/`: shared Bebop wire types, schema and codegen
+  for Rust and TypeScript bindings.
 
 - `src/inbound/router.rs` + `src/inbound/worker.rs`: Axum document/surface
   routing and worker proxy/copy orchestration.
-- `src/domain/permissions.rs` + `src/domain/document.rs`: session permission
-  policy and content-agnostic atomic update use cases.
+- `../../crates/sync_server_core/src/domain/`: shared session permission policy,
+  atomic update use cases, connection metadata and migration state.
+- `src/domain.rs`: compatibility re-exports of the shared core.
+- `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
+- `src/outbound/room_ports.rs`: Worker clocks; document state and migration proof decoding live in core.
 
 ## Scope
 
@@ -41,15 +49,15 @@ updates over WebSocket.
 
 - Change the wire protocol with the repository-pinned Bebop generator; update
   both service and collaboration package bindings (see README), then
-  `worker-build` regenerates Rust bindings via `build.rs`.
+  `node ../../crates/sync_protocol/bebop/generate.mjs` regenerates both bindings.
 - Add a storage backend: `src/outbound/storage/backends/` (new file + `mod.rs`) → gate
   it behind a new feature in `Cargo.toml` → wire into `src/outbound/storage.rs`.
 - Add a non-document surface: `src/inbound/durable_object/surface_api.rs` →
-  `src/domain/` (surface-specific logic) → migration in
-  `src/inbound/durable_object/surface_migration.rs` if it changes stored shape.
+  `../../crates/sync_server_core/src/domain/room/surface.rs` → migration policy in
+  `../../crates/sync_server_core/src/domain/room/migration.rs` if it changes stored shape.
 
 Active-peer queries with `include_ai=false` exclude signed agent actors and the
-reserved AI peer blocks (`ai_peer.rs`); Canvas workers use random full-width
+reserved AI peer blocks (`sync_server_core::domain::ai_peer`); Canvas workers use random full-width
 peer IDs. `peer_user_map` records each peer's user and agent actor; history and
 blame attribute edits from it, so never reuse an AI peer id.
 
@@ -64,18 +72,24 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   from this directory.
 - `just test-no-alarm` to verify the legacy feature selection; alarms now run
   regardless of the retained `alarm-keep-alive` compatibility flag.
+- `setupMiniflare` tracks runtimes and awaits disposal at suite teardown; explicit
+  disposal remains safe and is shared with transcript finalization.
 - Use Node.js 22.12+/24.x/26+ for Vitest 5; install JS deps with `npm ci`
   (`package-lock.json` is authoritative, not `bun.lock`).
 
+- `COMMENT_GATE_MODE` is required per room (`http`, `in_process`, `shadow`); every checked-in environment defaults to HTTP. Invalid configuration refuses gate checks; shadow returns HTTP and reports equality. The gate span records the `gate.comment_only` verdict alongside mode, sizes and timing.
+
 ## Gotchas
 
-- Bumping `loro-crdt` touches three lockfiles: `bun.lock`, the workspace
-  `Cargo.lock`, and this directory's `package-lock.json` — update all three.
+- Keep the transcript test driver's `loro-crdt` pinned to 1.16.3 so committed
+  client input bytes remain reproducible. Editor/session peers use the root
+  1.17.1 catalog; verify their interoperability in sync_sim. A test-driver
+  upgrade changes the corpus and requires its own explicit compatibility decision.
 - Durable Object in-memory state (including the loro document) evicts after
   10s of inactivity even with open connections; the alarm-based heartbeat in
   `src/keepalive.rs` is what keeps it warm, not WebSocket traffic.
 - The Durable Object handles one request or WebSocket message at a time
-  (`mutation_barrier` in `src/inbound/durable_object.rs`). Keep per-update work
+  (`Arc<futures::lock::Mutex<Room<WorkerPorts>>>` in `src/inbound/durable_object.rs`). Keep per-update work
   proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
   that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
   makes the front worker fail connects, which clients see as close 1006.
@@ -86,6 +100,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   source's mappings first. A peer's first owner keeps it; registration only
   claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
+- `transcript` is test-only boundary capture; never enable it in a deployed worker.
+  `just record-transcripts` records the Vitest suite; `just diff-transcripts`
+  compares it with the committed corpus; oversized recordings retain deterministic gzip storage. See `../../crates/sync_server_sim/tests/transcripts/COVERAGE.md`.
+  The local test wrapper uses Miniflare 4.20260625+ for socket-preserving eviction.
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).
 - Provision `LEXICAL_SERVICE_AUTH_KEY` to match lexical-service before deploying; `just check-secrets <environment>` checks binding presence without reading values.
@@ -104,3 +122,65 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
 
 - Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.
+
+The request gate and Axum handler share one owned room guard (CS-61). `HttpHandlers`
+borrows only Room for request decoding and response serialization; it owns no session
+memory. WebSocket/alarm/close adapters call Room directly. The error callback stays
+lock-free. Background effects receive owned snapshots and editor batches. Same-session exists/initialize retain the operation log. Compaction retains
+unresolved updates until their dependencies arrive.
+
+All room policy lives under `../../crates/sync_server_core/src/domain/room/`:
+connections/frames, HTTP reads/atomic updates, alarms/deletion, surfaces/migration.
+The Worker retains credential verification, body limits, HTTP parsing and runtime
+transports. Native replay and fault recovery run with
+`cargo test -p sync_server_core -p sync_server_sim -p sync_protocol` from the root;
+see `../../crates/sync_server_sim/AGENTS.md` for coverage and transcript recipes.
+
+Oversized operation persistence has an unconditional chunk reader and a typed,
+default-off `chunked-operation-writes` build feature. Keep the writer OFF for the
+first deployment; activate only after all rooms use the reader-capable release.
+Follow README's operation-storage rollout and rollback procedure. Never roll back
+an activated namespace to a build without the reader: legacy readers interpret
+manifests as Loro bytes and cannot load those operations. Disabling the writer
+retains reader support and is the safe rollback configuration.
+
+The explicit oversized-operation workerd tests use `record: false` because they
+validate the new physical format, multi-megabyte payloads and cross-build storage
+outside the existing small-message golden corpus. They still run with the
+transcript feature built; all existing 155 scenarios retain unchanged capture.
+Never disable recording for an existing corpus scenario to conceal a difference.
+
+The same default-off writer switch activates dedup, per-row archive receipts and
+`o/~fanout` resolved-history notification debt. Include the debt reader in the
+rollback floor; the production legacy reader imports that key as Loro and fails.
+Keep its reader unconditional and discover metadata in the existing pending-prefix
+read, with no additional I/O for ordinary updates.
+Deploy the reader for chunks, embedded Complete receipts and failure sidecars
+before activation; an earlier chunk-only reader is below the new rollback floor.
+Common appends atomically write pending, archive and original attribution with an
+embedded receipt, without a separate status write. Failed archive appends roll
+back, then retain pending+Incomplete before returning failure/no ACK. Retain that
+debt through GC and repair it before a duplicate ACK. Legacy unwrapped rows need
+one conservative archive repair. Never infer a duplicate from an unchanged import
+alone: novel causal-pending operations still need durability.
+
+A duplicate ACK guarantees completion of pending-origin archives. History already
+covered by a durable snapshot (initialization/copy or after pending GC) remains
+covered by that snapshot; duplicate exports do not create per-update archives.
+Require zero-write controls for snapshot-initialized and post-GC cold duplicates.
+
+Audit activated storage fixtures with `bun scripts/audit-activated-transcripts.mjs`
+through the shared normalizer loader against a reachable default-corpus reference;
+keep historical case counts separate. Keep the generated ledger with the activated
+corpus; require exact wire hashes, pre-import VV proofs for removed writes and
+unchanged remaining effects. Never use storage projection to normalize wire data
+or conceal clock/alarm changes.
+
+Capture atomic storage transactions losslessly, including each retry, argument,
+return, error and commit. Normalize recorded clock/entropy IDs in bulk put keys
+with the same rules as string keys; never normalize payload values or arbitrary
+object keys to conceal a storage or wire difference.
+
+Treat `.jsonl` and `.jsonl.gz` as the same logical transcript in directory and Git
+comparisons; decode gzip losslessly and reject duplicate logical names or damaged
+compressed input. Never omit a compressed case from the diff.

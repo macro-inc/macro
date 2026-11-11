@@ -1,0 +1,43 @@
+[package]
+name = "document_session_wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["bebop-owned-all"]
+# Only the explicit Lexical compatibility web artifact hosts JS classes.
+compat-web = ["bebop-owned-all", "compatibility"]
+bebop-owned-all = []
+compatibility = ["document_session/compatibility"]
+
+[dependencies]
+document_session = { workspace = true, features = ["application"] }
+macro_document_model = { workspace = true, features = ["html"] }
+doc_sync_core.workspace = true
+lexical_model.workspace = true
+lexical_markdown.workspace = true
+lexical_html.workspace = true
+lexical_rich_nodes.workspace = true
+lexical_loro.workspace = true
+loro.workspace = true
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+scoped-tls-hkt.workspace = true
+bebop.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# HostSubscriber exports INFO and above; DEBUG/TRACE never reach the host.
+tracing = { workspace = true, features = ["release_max_level_info"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]
+
+[dev-dependencies]
+sync_protocol.workspace = true

@@ -1,0 +1,477 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-context.test.ts",
+    "test": [
+      "composeAgentContextPrompt",
+      "tells the agent a private conversation is read live"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "what changed?",
+          "trigger": {
+            "kind": "conversation",
+            "surface": {
+              "type": "channel",
+              "id": "dm-1",
+              "channel_type": "direct_message"
+            },
+            "prompt_message_id": "m-1",
+            "sender": {
+              "id": "macro|ada@example.com",
+              "name": "Ada"
+            },
+            "reply_target": {
+              "kind": "none"
+            }
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003ctrigger kind=\\\"conversation\\\">\\n  \\u003cnote>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.\\u003c/note>\\n  \\u003cdiscussion>\\n    \\u003cchannel id=\\\"dm-1\\\" type=\\\"direct_message\\\"/>\\n    \\u003corigin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.\\u003c/origin>\\n    \\u003csender name=\\\"Ada\\\" id=\\\"macro|ada@example.com\\\"/>\\n    \\u003creply_target kind=\\\"none\\\">\\n      \\u003cnote>The prompt was posted at the top level of the channel and replies to no particular message.\\u003c/note>\\n    \\u003c/reply_target>\\n  \\u003c/discussion>\\n\\u003c/trigger>\"}</m-agent-context>\n\nwhat changed?"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003ctrigger kind=\\\"conversation\\\">\\n  \\u003cnote>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.\\u003c/note>\\n  \\u003cdiscussion>\\n    \\u003cchannel id=\\\"dm-1\\\" type=\\\"direct_message\\\"/>\\n    \\u003corigin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.\\u003c/origin>\\n    \\u003csender name=\\\"Ada\\\" id=\\\"macro|ada@example.com\\\"/>\\n    \\u003creply_target kind=\\\"none\\\">\\n      \\u003cnote>The prompt was posted at the top level of the channel and replies to no particular message.\\u003c/note>\\n    \\u003c/reply_target>\\n  \\u003c/discussion>\\n\\u003c/trigger>\"}</m-agent-context>\n\nwhat changed?"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what changed?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        67,
+        192,
+        238,
+        45,
+        85,
+        251,
+        99,
+        140
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what changed?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what changed?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what changed?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what changed?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what changed?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what changed?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+      },
+      "args": [],
+      "ret": "<trigger kind=\"conversation\">\n  <note>Ada wrote to you in your private conversation with them. Their message is the prompt; the conversation before it is this session&apos;s history.</note>\n  <discussion>\n    <channel id=\"dm-1\" type=\"direct_message\"/>\n    <origin>This prompt was posted in your private conversation with the user, not the agent session view. They read it as you work: your reply is posted there, and a question you ask with AskUser or a draft you open for review appears there for them to answer.</origin>\n    <sender name=\"Ada\" id=\"macro|ada@example.com\"/>\n    <reply_target kind=\"none\">\n      <note>The prompt was posted at the top level of the channel and replies to no particular message.</note>\n    </reply_target>\n  </discussion>\n</trigger>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

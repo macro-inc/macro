@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "paths": {
+      "@macro-inc/collaboration/session/compatibility.generated": [
+        "../../../../collaboration/src/session/compatibility.generated.ts"
+      ]
+    }
+  },
+  "include": [
+    "mirror.ts",
+    "node-map.ts",
+    "mirror.test.ts",
+    "mirror.vitest.config.mts"
+  ]
+}

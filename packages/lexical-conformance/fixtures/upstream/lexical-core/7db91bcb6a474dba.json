@@ -1,0 +1,53 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/connect-app.test.ts",
+    "test": [
+      "connect-app chip",
+      "reads as its call to action in plain and embedding text"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "Do this: <m-connect-app>{\"appSlug\":\"linear\",\"name\":\"Linear\"}</m-connect-app>"
+      ],
+      "ret": "Do this: Connect Linear"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "Do this: <m-connect-app>{\"appSlug\":\"linear\",\"name\":\"Linear\"}</m-connect-app>"
+      ],
+      "ret": "Do this: Connect Linear"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "Do this: <m-connect-app>{\"appSlug\":\"cursor\",\"name\":\"Cursor\",\"target\":\"harness\"}</m-connect-app>"
+      ],
+      "ret": "Do this: Connect Cursor"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

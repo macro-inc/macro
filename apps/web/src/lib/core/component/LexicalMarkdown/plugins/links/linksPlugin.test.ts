@@ -287,7 +287,7 @@ describe('composer link persistence', () => {
     { kind: 'imported', url: 'example.com', protocol: false },
     { kind: 'imported', url: 'example.com', protocol: true },
   ])(
-    'keeps a $kind $url link removed after saving and opening the editor again',
+    'keeps a $kind $url link removed after saving and opening the editor again (protocol=$protocol)',
     ({ kind, url, protocol }) => {
       const editor = createEditor({
         nodes: SupportedNodeTypes,

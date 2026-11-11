@@ -535,3 +535,14 @@ updated atomically with fenced deferral; absent metadata starts at zero for
 existing queued writes. Commit, rollback, replacement, and clear remove it.
 The storage schema/database identity and the all-attempt backoff counter stay
 unchanged. Failed mutations are not retained in a DLQ.
+
+## Portable Lexical editor
+
+[`lexical/`](lexical/README.md) contains the Rust Lexical model packages and their
+workspace compatibility tests. These are independent of the GraphQL cache and
+inherit the client hakari exclusion. Loro stays pinned to the same release in
+Cargo, the Bun catalog and the sync-service npm package.
+
+[`document_session/`](document_session/README.md) composes the portable editor or
+generic Loro containers with the sans-I/O sync core, collaborative history,
+presence and fresh-peer comment publication. Hosts execute its returned effects.

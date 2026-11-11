@@ -71,3 +71,33 @@ describe('markdownShortcutsPlugin ordered lists', () => {
     });
   });
 });
+
+it.each([
+  [0, 0],
+  [1, 1],
+  [0, 2],
+  [2, 0],
+])(
+  'source Enter converts a first-child marker at range %s,%s',
+  (anchor, focus) => {
+    const editor = createTestEditor();
+    editor.update(
+      () => {
+        const text = $createTextNode('6.');
+        $getRoot().clear().append($createParagraphNode().append(text));
+        text.select(anchor, focus);
+      },
+      { discrete: true }
+    );
+    editor.dispatchCommand(
+      KEY_ENTER_COMMAND,
+      new KeyboardEvent('keydown', { key: 'Enter' })
+    );
+    editor.read(() => {
+      const list = $getRoot().getFirstChild();
+      expect($isListNode(list)).toBe(true);
+      if (!$isListNode(list)) throw new Error('Expected numbered list');
+      expect(list.getStart()).toBe(6);
+    });
+  }
+);

@@ -25,8 +25,14 @@ import {
   realAwarenessSource,
 } from './ai-editing/awareness';
 import { Doc } from './ai-editing/doc';
-import type { Writer } from './ai-editing/tools';
 import { createWorkerAwareness } from './sources';
+
+/** Writer capability borrowed from this workspace; independent of agent orchestration. */
+export type Writer = {
+  doc: Doc;
+  awarenessSource: AwarenessSource;
+  release: () => void;
+};
 
 export type EditingWorkspaceOptions = {
   pool?: PeerPool;

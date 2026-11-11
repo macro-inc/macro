@@ -1,0 +1,134 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query chart settings",
+      "rejects duplicate, missing, or too many series"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": [
+            "Revenue",
+            "Revenue"
+          ]
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": [
+            "Month"
+          ]
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": []
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "",
+          "y": [
+            "Revenue"
+          ]
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E",
+            "F"
+          ]
+        }
+      ],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E"
+          ]
+        }
+      ],
+      "ret": {
+        "x": "Month",
+        "y": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+        ]
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

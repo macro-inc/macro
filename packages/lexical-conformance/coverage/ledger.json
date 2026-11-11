@@ -1,0 +1,3002 @@
+[
+  {
+    "id": "S2:lexical:$caretFromPoint",
+    "reason": "view-only",
+    "source": "S2:120"
+  },
+  {
+    "id": "S2:lexical:BEFORE_INPUT_COMMAND",
+    "reason": "not-ported",
+    "source": "S1:5232"
+  },
+  {
+    "id": "S2:lexical:BLUR_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5233"
+  },
+  {
+    "id": "S2:lexical:CLICK_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5238"
+  },
+  {
+    "id": "S2:lexical:COPY_COMMAND",
+    "reason": "not-ported",
+    "source": "S1:5242"
+  },
+  {
+    "id": "S2:lexical:CUT_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5244"
+  },
+  {
+    "id": "S2:lexical:DRAGEND_COMMAND",
+    "reason": "not-ported",
+    "source": "S1:5248"
+  },
+  {
+    "id": "S2:lexical:DRAGOVER_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5249"
+  },
+  {
+    "id": "S2:lexical:DRAGSTART_COMMAND",
+    "reason": "not-ported",
+    "source": "S1:5250"
+  },
+  {
+    "id": "S2:lexical:DROP_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5251"
+  },
+  {
+    "id": "S2:lexical:FOCUS_COMMAND",
+    "reason": "js-by-design",
+    "source": "S1:5252"
+  },
+  {
+    "id": "S2:lexical:INPUT_COMMAND",
+    "reason": "not-ported",
+    "source": "S1:5256"
+  },
+  {
+    "id": "S2:lexical:DOMSlot",
+    "reason": "view-only",
+    "source": "S2:197"
+  },
+  {
+    "id": "S2:lexical:ElementDOMSlot",
+    "reason": "view-only",
+    "source": "S2:198"
+  },
+  {
+    "id": "S2:lexical:DEFAULT_EDITOR_DOM_CONFIG",
+    "reason": "view-only",
+    "source": "S2:238"
+  },
+  {
+    "id": "S2:lexical:getTransformSetFromKlass",
+    "reason": "not-ported",
+    "source": "S1:5351"
+  },
+  {
+    "id": "S2:lexical:$isEditorState",
+    "reason": "not-ported",
+    "source": "S1:5360"
+  },
+  {
+    "id": "S2:lexical:stopLexicalPropagation",
+    "reason": "js-by-design",
+    "source": "S2:245"
+  },
+  {
+    "id": "S2:lexical:$isLexicalNode",
+    "reason": "not-ported",
+    "source": "S1:5393"
+  },
+  {
+    "id": "S2:lexical:buildImportMap",
+    "reason": "not-ported",
+    "source": "S1:5394"
+  },
+  {
+    "id": "S2:lexical:$createRangeSelectionFromDom",
+    "reason": "view-only",
+    "source": "S2:293"
+  },
+  {
+    "id": "S2:lexical:$updateDOMSelection",
+    "reason": "js-by-design",
+    "source": "S2:303"
+  },
+  {
+    "id": "S2:lexical:isCurrentlyReadOnlyMode",
+    "reason": "js-by-design",
+    "source": "S1:5455"
+  },
+  {
+    "id": "S2:lexical:$applyNodeReplacement",
+    "reason": "js-by-design",
+    "source": "S1:5462"
+  },
+  {
+    "id": "S2:lexical:$getDOMSlot",
+    "reason": "view-only",
+    "source": "S2:318"
+  },
+  {
+    "id": "S2:lexical:$getDOMTextNode",
+    "reason": "view-only",
+    "source": "S2:319"
+  },
+  {
+    "id": "S2:lexical:$getEditor",
+    "reason": "js-by-design",
+    "source": "S1:5472"
+  },
+  {
+    "id": "S2:lexical:$getEditorDOMRenderConfig",
+    "reason": "view-only",
+    "source": "S2:321"
+  },
+  {
+    "id": "S2:lexical:$getNearestNodeFromDOMNode",
+    "reason": "js-by-design",
+    "source": "S2:322"
+  },
+  {
+    "id": "S2:lexical:$getNodeFromDOMNode",
+    "reason": "view-only",
+    "source": "S2:326"
+  },
+  {
+    "id": "S2:lexical:$isElementDOMSlot",
+    "reason": "view-only",
+    "source": "S2:330"
+  },
+  {
+    "id": "S2:lexical:$onUpdate",
+    "reason": "not-ported",
+    "source": "S1:5489"
+  },
+  {
+    "id": "S2:lexical:$setDirectionFromDOM",
+    "reason": "not-ported",
+    "source": "S1:5492"
+  },
+  {
+    "id": "S2:lexical:$setFormatFromDOM",
+    "reason": "not-ported",
+    "source": "S1:5493"
+  },
+  {
+    "id": "S2:lexical:getDOMOwnerDocument",
+    "reason": "view-only",
+    "source": "S2:344"
+  },
+  {
+    "id": "S2:lexical:getDOMSelection",
+    "reason": "js-by-design",
+    "source": "S2:345"
+  },
+  {
+    "id": "S2:lexical:getDOMSelectionFromTarget",
+    "reason": "view-only",
+    "source": "S2:346"
+  },
+  {
+    "id": "S2:lexical:getDOMTextNode",
+    "reason": "view-only",
+    "source": "S2:347"
+  },
+  {
+    "id": "S2:lexical:getEditorPropertyFromDOMNode",
+    "reason": "view-only",
+    "source": "S2:348"
+  },
+  {
+    "id": "S2:lexical:getNearestEditorFromDOMNode",
+    "reason": "js-by-design",
+    "source": "S2:349"
+  },
+  {
+    "id": "S2:lexical:getStaticNodeConfig",
+    "reason": "not-ported",
+    "source": "S1:5504"
+  },
+  {
+    "id": "S2:lexical:isBlockDomNode",
+    "reason": "view-only",
+    "source": "S2:355"
+  },
+  {
+    "id": "S2:lexical:isDocumentFragment",
+    "reason": "view-only",
+    "source": "S2:356"
+  },
+  {
+    "id": "S2:lexical:isDOMDocumentNode",
+    "reason": "view-only",
+    "source": "S2:357"
+  },
+  {
+    "id": "S2:lexical:isDOMNode",
+    "reason": "view-only",
+    "source": "S2:358"
+  },
+  {
+    "id": "S2:lexical:isDOMTextNode",
+    "reason": "view-only",
+    "source": "S2:359"
+  },
+  {
+    "id": "S2:lexical:isDOMUnmanaged",
+    "reason": "view-only",
+    "source": "S2:360"
+  },
+  {
+    "id": "S2:lexical:isExactShortcutMatch",
+    "reason": "view-only",
+    "source": "S2:361"
+  },
+  {
+    "id": "S2:lexical:isHTMLAnchorElement",
+    "reason": "view-only",
+    "source": "S2:362"
+  },
+  {
+    "id": "S2:lexical:isHTMLElement",
+    "reason": "js-by-design",
+    "source": "S2:363"
+  },
+  {
+    "id": "S2:lexical:isHTMLTableCellElement",
+    "reason": "view-only",
+    "source": "S2:364"
+  },
+  {
+    "id": "S2:lexical:isHTMLTableRowElement",
+    "reason": "view-only",
+    "source": "S2:365"
+  },
+  {
+    "id": "S2:lexical:isInlineDomNode",
+    "reason": "view-only",
+    "source": "S2:366"
+  },
+  {
+    "id": "S2:lexical:isLexicalEditor",
+    "reason": "not-ported",
+    "source": "S1:5519"
+  },
+  {
+    "id": "S2:lexical:isModifierMatch",
+    "reason": "view-only",
+    "source": "S2:368"
+  },
+  {
+    "id": "S2:lexical:isSelectionCapturedInDecoratorInput",
+    "reason": "view-only",
+    "source": "S2:369"
+  },
+  {
+    "id": "S2:lexical:isSelectionWithinEditor",
+    "reason": "view-only",
+    "source": "S2:370"
+  },
+  {
+    "id": "S2:lexical:setDOMUnmanaged",
+    "reason": "js-by-design",
+    "source": "S2:373"
+  },
+  {
+    "id": "S2:lexical:setNodeIndentFromDOM",
+    "reason": "not-ported",
+    "source": "S1:5526"
+  },
+  {
+    "id": "S2:lexical:CAN_USE_BEFORE_INPUT",
+    "reason": "view-only",
+    "source": "S2:416"
+  },
+  {
+    "id": "S2:lexical:CAN_USE_DOM",
+    "reason": "view-only",
+    "source": "S2:417"
+  },
+  {
+    "id": "S2:lexical:IS_ANDROID",
+    "reason": "view-only",
+    "source": "S2:418"
+  },
+  {
+    "id": "S2:lexical:IS_ANDROID_CHROME",
+    "reason": "view-only",
+    "source": "S2:419"
+  },
+  {
+    "id": "S2:lexical:IS_APPLE",
+    "reason": "js-by-design",
+    "source": "S2:420"
+  },
+  {
+    "id": "S2:lexical:IS_APPLE_WEBKIT",
+    "reason": "view-only",
+    "source": "S2:421"
+  },
+  {
+    "id": "S2:lexical:IS_CHROME",
+    "reason": "view-only",
+    "source": "S2:422"
+  },
+  {
+    "id": "S2:lexical:IS_FIREFOX",
+    "reason": "view-only",
+    "source": "S2:423"
+  },
+  {
+    "id": "S2:lexical:IS_IOS",
+    "reason": "js-by-design",
+    "source": "S2:424"
+  },
+  {
+    "id": "S2:lexical:IS_SAFARI",
+    "reason": "view-only",
+    "source": "S2:425"
+  },
+  {
+    "id": "S2:lexical:configTypeSymbol",
+    "reason": "not-ported",
+    "source": "S1:5622"
+  },
+  {
+    "id": "S2:lexical:declarePeerDependency",
+    "reason": "not-ported",
+    "source": "S1:5623"
+  },
+  {
+    "id": "S2:lexical:initTypeSymbol",
+    "reason": "not-ported",
+    "source": "S1:5631"
+  },
+  {
+    "id": "S2:lexical:outputTypeSymbol",
+    "reason": "not-ported",
+    "source": "S1:5645"
+  },
+  {
+    "id": "S2:lexical:safeCast",
+    "reason": "not-ported",
+    "source": "S1:5646"
+  },
+  {
+    "id": "S2:lexical:addClassNamesToElement",
+    "reason": "view-only",
+    "source": "S2:456"
+  },
+  {
+    "id": "S2:lexical:normalizeClassNames",
+    "reason": "view-only",
+    "source": "S2:457"
+  },
+  {
+    "id": "S2:lexical:removeClassNamesFromElement",
+    "reason": "view-only",
+    "source": "S2:458"
+  },
+  {
+    "id": "S2:lexical:mergeRegister",
+    "reason": "js-by-design",
+    "source": "S1:5656"
+  },
+  {
+    "id": "S2:lexical:setDOMStyleFromCSS",
+    "reason": "view-only",
+    "source": "S2:461"
+  },
+  {
+    "id": "S2:lexical:setDOMStyleObject",
+    "reason": "view-only",
+    "source": "S2:462"
+  },
+  {
+    "id": "S2:@lexical/clipboard:caretFromPoint",
+    "reason": "view-only",
+    "source": "S2:468"
+  },
+  {
+    "id": "S2:@lexical/clipboard:copyToClipboard",
+    "reason": "not-ported",
+    "source": "S3:4530"
+  },
+  {
+    "id": "S2:@lexical/clipboard:setLexicalClipboardDataTransfer",
+    "reason": "view-only",
+    "source": "S2:487"
+  },
+  {
+    "id": "S2:@lexical/code-core:CodeExtension",
+    "reason": "not-ported",
+    "source": "S3:3623"
+  },
+  {
+    "id": "S2:@lexical/code-core:$createCodeHighlightNode",
+    "reason": "not-ported",
+    "source": "S3:3366"
+  },
+  {
+    "id": "S2:@lexical/code-core:CodeImportExtension",
+    "reason": "not-ported",
+    "source": "S3:3625"
+  },
+  {
+    "id": "S2:@lexical/code-core:CodeImportRules",
+    "reason": "not-ported",
+    "source": "S3:3625"
+  },
+  {
+    "id": "S2:@lexical/code-core:CodeIndentExtension",
+    "reason": "not-ported",
+    "source": "S3:3624"
+  },
+  {
+    "id": "S2:@lexical/code-core:registerCodeIndentation",
+    "reason": "not-ported",
+    "source": "S3:3624"
+  },
+  {
+    "id": "S2:@lexical/code-prism:CodePrismExtension",
+    "reason": "not-ported",
+    "source": "S3:3628"
+  },
+  {
+    "id": "S2:@lexical/code-prism:PrismTokenizer",
+    "reason": "js-by-design",
+    "source": "S3:3626"
+  },
+  {
+    "id": "S2:@lexical/code-prism:registerCodeHighlighting",
+    "reason": "js-by-design",
+    "source": "S3:3626"
+  },
+  {
+    "id": "S2:@lexical/code-prism:getCodeLanguages",
+    "reason": "js-by-design",
+    "source": "S3:3570"
+  },
+  {
+    "id": "S2:@lexical/code-prism:getCodeThemeOptions",
+    "reason": "view-only",
+    "source": "S2:571"
+  },
+  {
+    "id": "S2:@lexical/code-prism:isCodeLanguageLoaded",
+    "reason": "not-ported",
+    "source": "S3:3628"
+  },
+  {
+    "id": "S2:@lexical/code-prism:loadCodeLanguage",
+    "reason": "not-ported",
+    "source": "S3:3628"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:CodeHighlighterShikiExtension",
+    "reason": "not-ported",
+    "source": "S3:12029"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:CodeShikiExtension",
+    "reason": "not-ported",
+    "source": "S3:12029"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:registerCodeHighlighting",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:ShikiTokenizer",
+    "reason": "not-ported",
+    "source": "S3:12029"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:getCodeThemeOptions",
+    "reason": "view-only",
+    "source": "S2:589"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:isCodeLanguageLoaded",
+    "reason": "not-ported",
+    "source": "S3:3628"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:loadCodeLanguage",
+    "reason": "not-ported",
+    "source": "S3:3628"
+  },
+  {
+    "id": "S2:@lexical/code-shiki:loadCodeTheme",
+    "reason": "view-only",
+    "source": "S2:592"
+  },
+  {
+    "id": "S2:@lexical/devtools-core:TreeView",
+    "reason": "view-only",
+    "source": "S2:601"
+  },
+  {
+    "id": "S2:@lexical/devtools-core:useLexicalCommandsLog",
+    "reason": "view-only",
+    "source": "S2:603"
+  },
+  {
+    "id": "S2:@lexical/dragon:registerDragonSupport",
+    "reason": "view-only",
+    "source": "S2:611"
+  },
+  {
+    "id": "S2:@lexical/dragon:DragonExtension",
+    "reason": "view-only",
+    "source": "S2:613"
+  },
+  {
+    "id": "S2:@lexical/extension:AutoFocusExtension",
+    "reason": "view-only",
+    "source": "S2:620"
+  },
+  {
+    "id": "S2:@lexical/extension:$isDecoratorTextNode",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:applyFormatFromStyle",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:applyFormatToDom",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:DecoratorTextExtension",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:DecoratorTextNode",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:EditorStateExtension",
+    "reason": "not-ported",
+    "source": "S1:4555"
+  },
+  {
+    "id": "S2:@lexical/extension:HorizontalRuleExtension",
+    "reason": "not-ported",
+    "source": "S1:4562"
+  },
+  {
+    "id": "S2:@lexical/extension:INSERT_HORIZONTAL_RULE_COMMAND",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "S2:@lexical/extension:NestedEditorExtension",
+    "reason": "not-ported",
+    "source": "S1:4557"
+  },
+  {
+    "id": "S2:@lexical/extension:NormalizeInlineElementsExtension",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "S2:@lexical/extension:SelectionAlwaysOnDisplayExtension",
+    "reason": "view-only",
+    "source": "S2:663"
+  },
+  {
+    "id": "S2:@lexical/file:exportFile",
+    "reason": "view-only",
+    "source": "S2:704"
+  },
+  {
+    "id": "S2:@lexical/file:importFile",
+    "reason": "view-only",
+    "source": "S2:705"
+  },
+  {
+    "id": "S2:@lexical/headless/dom:withDOM",
+    "reason": "view-only",
+    "source": "S2:730"
+  },
+  {
+    "id": "S2:@lexical/history:SharedHistoryExtension",
+    "reason": "not-ported",
+    "source": "S1:4024"
+  },
+  {
+    "id": "S2:@lexical/html:$generateNodesFromDOM",
+    "reason": "js-by-design",
+    "source": "S3:4455"
+  },
+  {
+    "id": "S2:@lexical/html:$generateDOMFromRoot",
+    "reason": "not-ported",
+    "source": "S3:6350"
+  },
+  {
+    "id": "S2:@lexical/html:domOverride",
+    "reason": "not-ported",
+    "source": "S3:6358"
+  },
+  {
+    "id": "S2:@lexical/html:DOMRenderExtension",
+    "reason": "not-ported",
+    "source": "S3:6357"
+  },
+  {
+    "id": "S2:@lexical/html:$distributeInlineWrapper",
+    "reason": "not-ported",
+    "source": "S2:780"
+  },
+  {
+    "id": "S2:@lexical/html:$generateNodesFromDOMViaExtension",
+    "reason": "not-ported",
+    "source": "S3:6352"
+  },
+  {
+    "id": "S2:@lexical/html:$getImportContextValue",
+    "reason": "not-ported",
+    "source": "S2:782"
+  },
+  {
+    "id": "S2:@lexical/html:$inlineStylesFromStyleSheets",
+    "reason": "not-ported",
+    "source": "S2:783"
+  },
+  {
+    "id": "S2:@lexical/html:$isBlockLevel",
+    "reason": "not-ported",
+    "source": "S2:784"
+  },
+  {
+    "id": "S2:@lexical/html:$withImportContext",
+    "reason": "not-ported",
+    "source": "S2:785"
+  },
+  {
+    "id": "S2:@lexical/html:BlockSchema",
+    "reason": "not-ported",
+    "source": "S2:786"
+  },
+  {
+    "id": "S2:@lexical/html:CoreImportExtension",
+    "reason": "not-ported",
+    "source": "S3:6353"
+  },
+  {
+    "id": "S2:@lexical/html:CoreImportRules",
+    "reason": "not-ported",
+    "source": "S2:788"
+  },
+  {
+    "id": "S2:@lexical/html:createImportState",
+    "reason": "not-ported",
+    "source": "S2:789"
+  },
+  {
+    "id": "S2:@lexical/html:defaultIsInline",
+    "reason": "not-ported",
+    "source": "S2:790"
+  },
+  {
+    "id": "S2:@lexical/html:defaultPreservesWhitespace",
+    "reason": "not-ported",
+    "source": "S2:791"
+  },
+  {
+    "id": "S2:@lexical/html:defineImportRule",
+    "reason": "not-ported",
+    "source": "S3:6354"
+  },
+  {
+    "id": "S2:@lexical/html:defineOverlayRules",
+    "reason": "not-ported",
+    "source": "S3:6356"
+  },
+  {
+    "id": "S2:@lexical/html:DOMImportExtension",
+    "reason": "not-ported",
+    "source": "S3:5638"
+  },
+  {
+    "id": "S2:@lexical/html:HorizontalRuleImportExtension",
+    "reason": "not-ported",
+    "source": "S3:6356"
+  },
+  {
+    "id": "S2:@lexical/html:HorizontalRuleImportRules",
+    "reason": "not-ported",
+    "source": "S2:797"
+  },
+  {
+    "id": "S2:@lexical/html:ImportOverlays",
+    "reason": "not-ported",
+    "source": "S2:798"
+  },
+  {
+    "id": "S2:@lexical/html:ImportSource",
+    "reason": "not-ported",
+    "source": "S2:799"
+  },
+  {
+    "id": "S2:@lexical/html:ImportSourceDataTransfer",
+    "reason": "not-ported",
+    "source": "S2:800"
+  },
+  {
+    "id": "S2:@lexical/html:ImportTextFormat",
+    "reason": "not-ported",
+    "source": "S2:802"
+  },
+  {
+    "id": "S2:@lexical/html:ImportTextStyle",
+    "reason": "not-ported",
+    "source": "S2:803"
+  },
+  {
+    "id": "S2:@lexical/html:ImportWhitespaceConfig",
+    "reason": "not-ported",
+    "source": "S2:804"
+  },
+  {
+    "id": "S2:@lexical/html:InlineSchema",
+    "reason": "not-ported",
+    "source": "S2:805"
+  },
+  {
+    "id": "S2:@lexical/html:isElementOfTag",
+    "reason": "not-ported",
+    "source": "S2:806"
+  },
+  {
+    "id": "S2:@lexical/html:NestedBlockSchema",
+    "reason": "not-ported",
+    "source": "S2:809"
+  },
+  {
+    "id": "S2:@lexical/html:parseSelector",
+    "reason": "not-ported",
+    "source": "S3:6355"
+  },
+  {
+    "id": "S2:@lexical/html:RootSchema",
+    "reason": "not-ported",
+    "source": "S2:811"
+  },
+  {
+    "id": "S2:@lexical/html:$getRenderContextValue",
+    "reason": "not-ported",
+    "source": "S3:6361"
+  },
+  {
+    "id": "S2:@lexical/html:$withRenderContext",
+    "reason": "not-ported",
+    "source": "S3:6361"
+  },
+  {
+    "id": "S2:@lexical/html:createRenderState",
+    "reason": "not-ported",
+    "source": "S3:6361"
+  },
+  {
+    "id": "S2:@lexical/link:ClickableLinkExtension",
+    "reason": "view-only",
+    "source": "S2:839"
+  },
+  {
+    "id": "S2:@lexical/link:registerClickableLink",
+    "reason": "view-only",
+    "source": "S2:840"
+  },
+  {
+    "id": "S2:@lexical/link:LinkImportExtension",
+    "reason": "not-ported",
+    "source": "S3:1621"
+  },
+  {
+    "id": "S2:@lexical/link:LinkImportRules",
+    "reason": "not-ported",
+    "source": "S3:1621"
+  },
+  {
+    "id": "S2:@lexical/link:toggleLink",
+    "reason": "not-ported",
+    "source": "S3:1619"
+  },
+  {
+    "id": "S2:@lexical/list:insertList",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "S2:@lexical/list:removeList",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "S2:@lexical/list:CheckListExtension",
+    "reason": "not-ported",
+    "source": "S3:1613"
+  },
+  {
+    "id": "S2:@lexical/list:ListImportExtension",
+    "reason": "not-ported",
+    "source": "S3:1611"
+  },
+  {
+    "id": "S2:@lexical/list:ListImportRules",
+    "reason": "not-ported",
+    "source": "S3:1611"
+  },
+  {
+    "id": "S2:@lexical/list:ListSchema",
+    "reason": "not-ported",
+    "source": "S3:1611"
+  },
+  {
+    "id": "S2:@lexical/list:registerCheckList",
+    "reason": "not-ported",
+    "source": "S3:1612"
+  },
+  {
+    "id": "S2:@lexical/mark:MarkExtension",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "S2:@lexical/overflow:OverflowExtension",
+    "reason": "not-ported",
+    "source": "S3:1624"
+  },
+  {
+    "id": "S2:@lexical/plain-text:PlainTextExtension",
+    "reason": "not-ported",
+    "source": "S3:632"
+  },
+  {
+    "id": "S2:@lexical/react/ExtensionComponent:ExtensionComponent",
+    "reason": "view-only",
+    "source": "S2:983"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:LexicalAutoEmbedPlugin",
+    "reason": "view-only",
+    "source": "S2:990"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:URL_MATCHER",
+    "reason": "view-only",
+    "source": "S2:993"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:INSERT_EMBED_COMMAND",
+    "reason": "view-only",
+    "source": "S2:994"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoEmbedPlugin:AutoEmbedOption",
+    "reason": "view-only",
+    "source": "S2:995"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoFocusPlugin:AutoFocusPlugin",
+    "reason": "view-only",
+    "source": "S2:1001"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalAutoLinkPlugin:AutoLinkPlugin",
+    "reason": "view-only",
+    "source": "S2:1007"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalBlockWithAlignableContents:BlockWithAlignableContents",
+    "reason": "view-only",
+    "source": "S2:1016"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCharacterLimitPlugin:CharacterLimitPlugin",
+    "reason": "view-only",
+    "source": "S2:1022"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCheckListPlugin:CheckListPlugin",
+    "reason": "view-only",
+    "source": "S2:1028"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalClearEditorPlugin:ClearEditorPlugin",
+    "reason": "view-only",
+    "source": "S2:1034"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalClickableLinkPlugin:ClickableLinkPlugin",
+    "reason": "view-only",
+    "source": "S2:1040"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCollaborationContext:LexicalCollaboration",
+    "reason": "view-only",
+    "source": "S2:1046"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCollaborationContext:useCollaborationContext",
+    "reason": "view-only",
+    "source": "S2:1047"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCollaborationContext:CollaborationContext",
+    "reason": "view-only",
+    "source": "S2:1049"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCollaborationPlugin:CollaborationPlugin",
+    "reason": "view-only",
+    "source": "S2:1055"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalCollaborationPlugin:CollaborationPluginV2__EXPERIMENTAL",
+    "reason": "view-only",
+    "source": "S2:1056"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposer:LexicalComposer",
+    "reason": "view-only",
+    "source": "S2:1062"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposerContext:createLexicalComposerContext",
+    "reason": "view-only",
+    "source": "S2:1070"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposerContext:useLexicalComposerContext",
+    "reason": "view-only",
+    "source": "S2:1071"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalComposerContext:LexicalComposerContext",
+    "reason": "view-only",
+    "source": "S2:1074"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalContentEditable:ContentEditableElement",
+    "reason": "view-only",
+    "source": "S2:1080"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalContentEditable:ContentEditable",
+    "reason": "view-only",
+    "source": "S2:1084"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalDecoratorBlockNode:$isDecoratorBlockNode",
+    "reason": "view-only",
+    "source": "S2:1090"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalDraggableBlockPlugin:DraggableBlockPlugin_EXPERIMENTAL",
+    "reason": "view-only",
+    "source": "S2:1098"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalEditorRefPlugin:EditorRefPlugin",
+    "reason": "view-only",
+    "source": "S2:1104"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalErrorBoundary:LexicalErrorBoundary",
+    "reason": "view-only",
+    "source": "S2:1110"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalExtensionComposer:LexicalExtensionComposer",
+    "reason": "view-only",
+    "source": "S2:1117"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalExtensionEditorComposer:LexicalExtensionEditorComposer",
+    "reason": "view-only",
+    "source": "S2:1124"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHashtagPlugin:HashtagPlugin",
+    "reason": "view-only",
+    "source": "S2:1131"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHistoryPlugin:HistoryPlugin",
+    "reason": "view-only",
+    "source": "S2:1137"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRuleNode:$createHorizontalRuleNode",
+    "reason": "view-only",
+    "source": "S2:1145"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalHorizontalRulePlugin:HorizontalRulePlugin",
+    "reason": "view-only",
+    "source": "S2:1155"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalLinkPlugin:LinkPlugin",
+    "reason": "view-only",
+    "source": "S2:1161"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalListPlugin:ListPlugin",
+    "reason": "view-only",
+    "source": "S2:1167"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalMarkdownShortcutPlugin:MarkdownShortcutPlugin",
+    "reason": "view-only",
+    "source": "S2:1174"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalMarkdownShortcutPlugin:DEFAULT_TRANSFORMERS",
+    "reason": "view-only",
+    "source": "S2:1175"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNestedComposer:LexicalNestedComposer",
+    "reason": "view-only",
+    "source": "S2:1181"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeContextMenuPlugin:NodeContextMenuOption",
+    "reason": "view-only",
+    "source": "S2:1188"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeContextMenuPlugin:NodeContextMenuPlugin",
+    "reason": "view-only",
+    "source": "S2:1189"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeContextMenuPlugin:NodeContextMenuSeparator",
+    "reason": "view-only",
+    "source": "S2:1190"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeEventPlugin:NodeEventPlugin",
+    "reason": "view-only",
+    "source": "S2:1196"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeMenuPlugin:LexicalNodeMenuPlugin",
+    "reason": "view-only",
+    "source": "S2:1202"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalNodeMenuPlugin:MenuOption",
+    "reason": "view-only",
+    "source": "S2:1204"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalOnChangePlugin:OnChangePlugin",
+    "reason": "view-only",
+    "source": "S2:1212"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalPlainTextPlugin:PlainTextPlugin",
+    "reason": "view-only",
+    "source": "S2:1218"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalRichTextPlugin:RichTextPlugin",
+    "reason": "view-only",
+    "source": "S2:1224"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalSelectionAlwaysOnDisplay:SelectionAlwaysOnDisplay",
+    "reason": "view-only",
+    "source": "S2:1230"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTabIndentationPlugin:TabIndentationPlugin",
+    "reason": "view-only",
+    "source": "S2:1236"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTableOfContentsPlugin:TableOfContentsPlugin",
+    "reason": "view-only",
+    "source": "S2:1243"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTablePlugin:TablePlugin",
+    "reason": "view-only",
+    "source": "S2:1250"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTreeView:TreeView",
+    "reason": "view-only",
+    "source": "S2:1257"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:getScrollParent",
+    "reason": "view-only",
+    "source": "S2:1263"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:useBasicTypeaheadTriggerMatch",
+    "reason": "view-only",
+    "source": "S2:1264"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:LexicalTypeaheadMenuPlugin",
+    "reason": "view-only",
+    "source": "S2:1265"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:PUNCTUATION",
+    "reason": "view-only",
+    "source": "S2:1266"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:useDynamicPositioning",
+    "reason": "view-only",
+    "source": "S2:1267"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:SCROLL_TYPEAHEAD_OPTION_INTO_VIEW_COMMAND",
+    "reason": "view-only",
+    "source": "S2:1268"
+  },
+  {
+    "id": "S2:@lexical/react/LexicalTypeaheadMenuPlugin:MenuOption",
+    "reason": "view-only",
+    "source": "S2:1270"
+  },
+  {
+    "id": "S2:@lexical/react/ReactExtension:DefaultEditorChildrenComponent",
+    "reason": "view-only",
+    "source": "S2:1280"
+  },
+  {
+    "id": "S2:@lexical/react/ReactExtension:ReactExtension",
+    "reason": "view-only",
+    "source": "S2:1284"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:mountReactExtensionComponent",
+    "reason": "view-only",
+    "source": "S2:1290"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:mountReactPluginComponent",
+    "reason": "view-only",
+    "source": "S2:1291"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:mountReactPluginElement",
+    "reason": "view-only",
+    "source": "S2:1292"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:mountReactPluginHost",
+    "reason": "view-only",
+    "source": "S2:1293"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:REACT_PLUGIN_HOST_MOUNT_ROOT_COMMAND",
+    "reason": "view-only",
+    "source": "S2:1297"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:REACT_PLUGIN_HOST_MOUNT_PLUGIN_COMMAND",
+    "reason": "view-only",
+    "source": "S2:1298"
+  },
+  {
+    "id": "S2:@lexical/react/ReactPluginHostExtension:ReactPluginHostExtension",
+    "reason": "view-only",
+    "source": "S2:1299"
+  },
+  {
+    "id": "S2:@lexical/react/ReactProviderExtension:ReactProviderExtension",
+    "reason": "view-only",
+    "source": "S2:1305"
+  },
+  {
+    "id": "S2:@lexical/react/TreeViewExtension:TreeViewExtensionComponent",
+    "reason": "view-only",
+    "source": "S2:1311"
+  },
+  {
+    "id": "S2:@lexical/react/TreeViewExtension:TreeViewExtension",
+    "reason": "view-only",
+    "source": "S2:1313"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionComponent:useExtensionDependency",
+    "reason": "view-only",
+    "source": "S2:1319"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionComponent:useOptionalExtensionDependency",
+    "reason": "view-only",
+    "source": "S2:1320"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionComponent:usePeerExtensionDependency",
+    "reason": "view-only",
+    "source": "S2:1321"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionComponent:useExtensionComponent",
+    "reason": "view-only",
+    "source": "S2:1322"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionSignalValue:useSignalValue",
+    "reason": "view-only",
+    "source": "S2:1328"
+  },
+  {
+    "id": "S2:@lexical/react/useExtensionSignalValue:useExtensionSignalValue",
+    "reason": "view-only",
+    "source": "S2:1329"
+  },
+  {
+    "id": "S2:@lexical/react/useLexicalEditable:useLexicalEditable",
+    "reason": "view-only",
+    "source": "S2:1336"
+  },
+  {
+    "id": "S2:@lexical/react/useLexicalIsTextContentEmpty:useLexicalIsTextContentEmpty",
+    "reason": "view-only",
+    "source": "S2:1342"
+  },
+  {
+    "id": "S2:@lexical/react/useLexicalNodeSelection:useLexicalNodeSelection",
+    "reason": "view-only",
+    "source": "S2:1348"
+  },
+  {
+    "id": "S2:@lexical/react/useLexicalSubscription:useLexicalSubscription",
+    "reason": "view-only",
+    "source": "S2:1354"
+  },
+  {
+    "id": "S2:@lexical/react/useLexicalTextEntity:useLexicalTextEntity",
+    "reason": "view-only",
+    "source": "S2:1361"
+  },
+  {
+    "id": "S2:@lexical/rich-text:eventFiles",
+    "reason": "view-only",
+    "source": "S2:1371"
+  },
+  {
+    "id": "S2:@lexical/rich-text:registerRichText",
+    "reason": "js-by-design",
+    "source": "S3:1600"
+  },
+  {
+    "id": "S2:@lexical/rich-text:RichTextImportExtension",
+    "reason": "not-ported",
+    "source": "S3:1603"
+  },
+  {
+    "id": "S2:@lexical/rich-text:RichTextImportRules",
+    "reason": "not-ported",
+    "source": "S3:1603"
+  },
+  {
+    "id": "S2:@lexical/selection:$addNodeStyle",
+    "reason": "not-ported",
+    "source": "S3:3978"
+  },
+  {
+    "id": "S2:@lexical/selection:$isParentElementRTL",
+    "reason": "not-ported",
+    "source": "S3:3974"
+  },
+  {
+    "id": "S2:@lexical/selection:$moveCaretSelection",
+    "reason": "not-ported",
+    "source": "S3:3976"
+  },
+  {
+    "id": "S2:@lexical/selection:$moveCharacter",
+    "reason": "not-ported",
+    "source": "S3:3977"
+  },
+  {
+    "id": "S2:@lexical/selection:$getComputedStyleForElement",
+    "reason": "not-ported",
+    "source": "S3:3973"
+  },
+  {
+    "id": "S2:@lexical/selection:$getComputedStyleForParent",
+    "reason": "not-ported",
+    "source": "S3:3973"
+  },
+  {
+    "id": "S2:@lexical/selection:$isParentRTL",
+    "reason": "not-ported",
+    "source": "S3:3974"
+  },
+  {
+    "id": "S2:@lexical/selection:createDOMRange",
+    "reason": "js-by-design",
+    "source": "S2:1409"
+  },
+  {
+    "id": "S2:@lexical/selection:createRectsFromDOMRange",
+    "reason": "js-by-design",
+    "source": "S2:1410"
+  },
+  {
+    "id": "S2:@lexical/table:$isScrollableTablesActive",
+    "reason": "view-only",
+    "source": "S2:1434"
+  },
+  {
+    "id": "S2:@lexical/table:setScrollableTablesActive",
+    "reason": "js-by-design",
+    "source": "S2:1436"
+  },
+  {
+    "id": "S2:@lexical/table:$getTableAndElementByKey",
+    "reason": "not-ported",
+    "source": "S3:3127"
+  },
+  {
+    "id": "S2:@lexical/table:registerTableSelectionObserver",
+    "reason": "js-by-design",
+    "source": "S3:3130"
+  },
+  {
+    "id": "S2:@lexical/table:applyTableHandlers",
+    "reason": "not-ported",
+    "source": "S3:3133"
+  },
+  {
+    "id": "S2:@lexical/table:getDOMCellFromTarget",
+    "reason": "js-by-design",
+    "source": "S2:1459"
+  },
+  {
+    "id": "S2:@lexical/table:getTableElement",
+    "reason": "js-by-design",
+    "source": "S2:1460"
+  },
+  {
+    "id": "S2:@lexical/table:getTableObserverFromTableElement",
+    "reason": "js-by-design",
+    "source": "S2:1461"
+  },
+  {
+    "id": "S2:@lexical/table:TableImportExtension",
+    "reason": "not-ported",
+    "source": "S3:3125"
+  },
+  {
+    "id": "S2:@lexical/table:TableImportRules",
+    "reason": "not-ported",
+    "source": "S3:3125"
+  },
+  {
+    "id": "S2:@lexical/table:TableRowSchema",
+    "reason": "not-ported",
+    "source": "S3:3125"
+  },
+  {
+    "id": "S2:@lexical/table:TableSchema",
+    "reason": "not-ported",
+    "source": "S3:3125"
+  },
+  {
+    "id": "S2:@lexical/tailwind:TailwindExtension",
+    "reason": "view-only",
+    "source": "S2:1497"
+  },
+  {
+    "id": "S2:@lexical/text:$canShowPlaceholderCurry",
+    "reason": "not-ported",
+    "source": "S3:4287"
+  },
+  {
+    "id": "S2:@lexical/text:$isRootTextContentEmptyCurry",
+    "reason": "not-ported",
+    "source": "S3:4286"
+  },
+  {
+    "id": "S2:@lexical/utils:isMimeType",
+    "reason": "view-only",
+    "source": "S2:1517"
+  },
+  {
+    "id": "S2:@lexical/utils:mediaFileReader",
+    "reason": "view-only",
+    "source": "S2:1518"
+  },
+  {
+    "id": "S2:@lexical/utils:objectKlassEquals",
+    "reason": "not-ported",
+    "source": "S3:4164"
+  },
+  {
+    "id": "S2:@lexical/utils:$filter",
+    "reason": "not-ported",
+    "source": "S3:4165"
+  },
+  {
+    "id": "S2:@lexical/utils:calculateZoomLevel",
+    "reason": "js-by-design",
+    "source": "S2:1539"
+  },
+  {
+    "id": "S2:@lexical/utils:$isEditorIsNestedEditor",
+    "reason": "not-ported",
+    "source": "S3:4166"
+  },
+  {
+    "id": "S2:@lexical/utils:makeStateWrapper",
+    "reason": "not-ported",
+    "source": "S3:12153"
+  },
+  {
+    "id": "S2:@lexical/utils:markSelection",
+    "reason": "view-only",
+    "source": "S2:1547"
+  },
+  {
+    "id": "S2:@lexical/utils:positionNodeOnRange",
+    "reason": "view-only",
+    "source": "S2:1548"
+  },
+  {
+    "id": "S2:@lexical/utils:selectionAlwaysOnDisplay",
+    "reason": "view-only",
+    "source": "S2:1549"
+  },
+  {
+    "id": "S2:@lexical/yjs:createUndoManager",
+    "reason": "not-ported",
+    "source": "S2:1580"
+  },
+  {
+    "id": "S2:@lexical/yjs:initLocalState",
+    "reason": "not-ported",
+    "source": "S2:1581"
+  },
+  {
+    "id": "S2:@lexical/yjs:setLocalStateFocus",
+    "reason": "not-ported",
+    "source": "S2:1582"
+  },
+  {
+    "id": "S2:@lexical/yjs:CONNECTED_COMMAND",
+    "reason": "not-ported",
+    "source": "S2:1584"
+  },
+  {
+    "id": "S2:@lexical/yjs:TOGGLE_CONNECT_COMMAND",
+    "reason": "not-ported",
+    "source": "S2:1585"
+  },
+  {
+    "id": "S2:@lexical/yjs:DIFF_VERSIONS_COMMAND__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1586"
+  },
+  {
+    "id": "S2:@lexical/yjs:CLEAR_DIFF_VERSIONS_COMMAND__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1587"
+  },
+  {
+    "id": "S2:@lexical/yjs:$getYChangeState",
+    "reason": "not-ported",
+    "source": "S2:1588"
+  },
+  {
+    "id": "S2:@lexical/yjs:renderSnapshot__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1589"
+  },
+  {
+    "id": "S2:@lexical/yjs:createBinding",
+    "reason": "not-ported",
+    "source": "S2:1601"
+  },
+  {
+    "id": "S2:@lexical/yjs:createBindingV2__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1602"
+  },
+  {
+    "id": "S2:@lexical/yjs:getAnchorAndFocusCollabNodesForUserState",
+    "reason": "not-ported",
+    "source": "S2:1603"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncCursorPositions",
+    "reason": "view-only",
+    "source": "S2:1604"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncLexicalUpdateToYjs",
+    "reason": "not-ported",
+    "source": "S2:1606"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncLexicalUpdateToYjsV2__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1607"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncYjsChangesToLexical",
+    "reason": "not-ported",
+    "source": "S2:1608"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncYjsChangesToLexicalV2__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1609"
+  },
+  {
+    "id": "S2:@lexical/yjs:syncYjsStateToLexicalV2__EXPERIMENTAL",
+    "reason": "not-ported",
+    "source": "S2:1610"
+  },
+  {
+    "id": "CMD-43",
+    "reason": "view-only",
+    "source": "S2:1721"
+  },
+  {
+    "id": "CMD-48",
+    "reason": "view-only",
+    "source": "S2:1726"
+  },
+  {
+    "id": "RT-21",
+    "reason": "view-only",
+    "source": "S2:1793"
+  },
+  {
+    "id": "RT-26",
+    "reason": "view-only",
+    "source": "S2:1798"
+  },
+  {
+    "id": "DRG-01",
+    "reason": "view-only",
+    "source": "S2:1838"
+  },
+  {
+    "id": "DRG-02",
+    "reason": "view-only",
+    "source": "S2:1839"
+  },
+  {
+    "id": "DRG-03",
+    "reason": "view-only",
+    "source": "S2:1840"
+  },
+  {
+    "id": "DRG-04",
+    "reason": "view-only",
+    "source": "S2:1841"
+  },
+  {
+    "id": "DRG-05",
+    "reason": "view-only",
+    "source": "S2:1842"
+  },
+  {
+    "id": "UPD-15",
+    "reason": "view-only",
+    "source": "S2:1970"
+  },
+  {
+    "id": "UPD-16",
+    "reason": "view-only",
+    "source": "S2:1971"
+  },
+  {
+    "id": "LNK-CL-01",
+    "reason": "view-only",
+    "source": "S2:2420"
+  },
+  {
+    "id": "LNK-CL-02",
+    "reason": "view-only",
+    "source": "S2:2421"
+  },
+  {
+    "id": "LNK-CL-03",
+    "reason": "view-only",
+    "source": "S2:2422"
+  },
+  {
+    "id": "LNK-CL-04",
+    "reason": "view-only",
+    "source": "S2:2423"
+  },
+  {
+    "id": "TW-01",
+    "reason": "view-only",
+    "source": "S2:2498"
+  },
+  {
+    "id": "FILE-01",
+    "reason": "view-only",
+    "source": "S2:2502"
+  },
+  {
+    "id": "FILE-02",
+    "reason": "view-only",
+    "source": "S2:2503"
+  },
+  {
+    "id": "FILE-03",
+    "reason": "view-only",
+    "source": "S2:2504"
+  },
+  {
+    "id": "FILE-04",
+    "reason": "view-only",
+    "source": "S2:2505"
+  },
+  {
+    "id": "FILE-05",
+    "reason": "view-only",
+    "source": "S2:2506"
+  },
+  {
+    "id": "RX-HR-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-DBN-01",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "RX-BWAC-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-NSEL-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TOC-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TOC-02",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TOC-03",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-EMBED-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-EMBED-02",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-EMBED-03",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "RX-TA-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TA-02",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "RX-TA-03",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TA-04",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TA-05",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-TA-06",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-NODEMENU-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-SAOD-01",
+    "reason": "not-ported",
+    "source": "S3:4169"
+  },
+  {
+    "id": "RX-HASH-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-CHARLIM-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-ONCHANGE-01",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "RX-AUTOFOCUS-01",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "RX-EMPTY-01",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "RX-RT-01",
+    "reason": "not-ported",
+    "source": "S3:1600"
+  },
+  {
+    "id": "RX-DRAG-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-NODEEVT-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "RX-SKIP-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "TBL-CELL-9",
+    "reason": "view-only",
+    "source": "S2:2578"
+  },
+  {
+    "id": "TBL-CELL-10",
+    "reason": "view-only",
+    "source": "S2:2579"
+  },
+  {
+    "id": "TBL-ROW-3",
+    "reason": "view-only",
+    "source": "S2:2587"
+  },
+  {
+    "id": "TBL-TBL-5",
+    "reason": "view-only",
+    "source": "S2:2596"
+  },
+  {
+    "id": "TBL-TBL-6",
+    "reason": "view-only",
+    "source": "S2:2597"
+  },
+  {
+    "id": "TBL-TBL-7",
+    "reason": "view-only",
+    "source": "S2:2598"
+  },
+  {
+    "id": "TBL-TBL-8",
+    "reason": "view-only",
+    "source": "S2:2599"
+  },
+  {
+    "id": "TBL-TBL-9",
+    "reason": "view-only",
+    "source": "S2:2600"
+  },
+  {
+    "id": "TBL-TBL-11",
+    "reason": "view-only",
+    "source": "S2:2602"
+  },
+  {
+    "id": "TBL-OBS-1",
+    "reason": "view-only",
+    "source": "S2:2667"
+  },
+  {
+    "id": "TBL-OBS-2",
+    "reason": "view-only",
+    "source": "S2:2668"
+  },
+  {
+    "id": "TBL-OBS-3",
+    "reason": "view-only",
+    "source": "S2:2669"
+  },
+  {
+    "id": "TBL-OBS-4",
+    "reason": "view-only",
+    "source": "S2:2670"
+  },
+  {
+    "id": "TBL-OBS-5",
+    "reason": "view-only",
+    "source": "S2:2671"
+  },
+  {
+    "id": "LST-NODE-6",
+    "reason": "view-only",
+    "source": "S2:2725"
+  },
+  {
+    "id": "LST-NODE-7",
+    "reason": "view-only",
+    "source": "S2:2726"
+  },
+  {
+    "id": "LST-NODE-8",
+    "reason": "view-only",
+    "source": "S2:2727"
+  },
+  {
+    "id": "LST-ITEM-17",
+    "reason": "view-only",
+    "source": "S2:2749"
+  },
+  {
+    "id": "LST-ITEM-18",
+    "reason": "view-only",
+    "source": "S2:2750"
+  },
+  {
+    "id": "LST-ITEM-19",
+    "reason": "view-only",
+    "source": "S2:2751"
+  },
+  {
+    "id": "LST-ITEM-20",
+    "reason": "view-only",
+    "source": "S2:2752"
+  },
+  {
+    "id": "CODE-NODE-9",
+    "reason": "view-only",
+    "source": "S2:2821"
+  },
+  {
+    "id": "CODE-NODE-10",
+    "reason": "view-only",
+    "source": "S2:2822"
+  },
+  {
+    "id": "CODE-HL-1",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-HL-2",
+    "reason": "not-ported",
+    "source": "S3:6374"
+  },
+  {
+    "id": "CODE-HL-3",
+    "reason": "not-ported",
+    "source": "S3:3615"
+  },
+  {
+    "id": "CODE-HL-4",
+    "reason": "not-ported",
+    "source": "S3:3615"
+  },
+  {
+    "id": "CODE-HL-5",
+    "reason": "not-ported",
+    "source": "S3:1590"
+  },
+  {
+    "id": "CODE-HL-6",
+    "reason": "not-ported",
+    "source": "S3:3615"
+  },
+  {
+    "id": "CODE-HL-7",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-1",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "CODE-PR-2",
+    "reason": "not-ported",
+    "source": "S3:6372"
+  },
+  {
+    "id": "CODE-PR-3",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-4",
+    "reason": "not-ported",
+    "source": "S3:3615"
+  },
+  {
+    "id": "CODE-PR-5",
+    "reason": "not-ported",
+    "source": "S3:3615"
+  },
+  {
+    "id": "CODE-PR-6",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-7",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-8",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-9",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-10",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-11",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-PR-12",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "CODE-SH-1",
+    "reason": "not-ported",
+    "source": "S3:3627"
+  },
+  {
+    "id": "CODE-SH-2",
+    "reason": "not-ported",
+    "source": "S3:6372"
+  },
+  {
+    "id": "CODE-SH-3",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "CODE-SH-4",
+    "reason": "not-ported",
+    "source": "S3:3627"
+  },
+  {
+    "id": "CODE-SH-5",
+    "reason": "not-ported",
+    "source": "S3:3627"
+  },
+  {
+    "id": "CODE-SH-6",
+    "reason": "not-ported",
+    "source": "S3:3627"
+  },
+  {
+    "id": "CODE-SH-7",
+    "reason": "not-ported",
+    "source": "S3:3627"
+  },
+  {
+    "id": "CODE-SH-8",
+    "reason": "not-ported",
+    "source": "S3:3626"
+  },
+  {
+    "id": "CODE-SH-9",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "CLP-24",
+    "reason": "view-only",
+    "source": "S2:2978"
+  },
+  {
+    "id": "CLP-25",
+    "reason": "view-only",
+    "source": "S2:2979"
+  },
+  {
+    "id": "CLP-26",
+    "reason": "view-only",
+    "source": "S2:2980"
+  },
+  {
+    "id": "CLP-27",
+    "reason": "view-only",
+    "source": "S2:2981"
+  },
+  {
+    "id": "CLP-52",
+    "reason": "view-only",
+    "source": "S2:3005"
+  },
+  {
+    "id": "CLP-57",
+    "reason": "view-only",
+    "source": "S2:3010"
+  },
+  {
+    "id": "HTML-01",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-02",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-03",
+    "reason": "not-ported",
+    "source": "S3:6347"
+  },
+  {
+    "id": "HTML-04",
+    "reason": "not-ported",
+    "source": "S3:1591"
+  },
+  {
+    "id": "HTML-05",
+    "reason": "not-ported",
+    "source": "S3:6344"
+  },
+  {
+    "id": "HTML-06",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HTML-07",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-08",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HTML-09",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-10",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-11",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-12",
+    "reason": "not-ported",
+    "source": "S3:6346"
+  },
+  {
+    "id": "HTML-13",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-14",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-15",
+    "reason": "not-ported",
+    "source": "S3:6347"
+  },
+  {
+    "id": "HTML-16",
+    "reason": "not-ported",
+    "source": "S3:4173"
+  },
+  {
+    "id": "HTML-17",
+    "reason": "not-ported",
+    "source": "S3:4173"
+  },
+  {
+    "id": "HTML-18",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-20",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-21",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HTML-22",
+    "reason": "not-ported",
+    "source": "S3:6374"
+  },
+  {
+    "id": "HTML-23",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-24",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-25",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-26",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-27",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-28",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-29",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-30",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-31",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-60",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-61",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HTML-62",
+    "reason": "not-ported",
+    "source": "S3:5617"
+  },
+  {
+    "id": "HTML-63",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HTML-64",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-01",
+    "reason": "not-ported",
+    "source": "S3:6361"
+  },
+  {
+    "id": "HREN-02",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-03",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HREN-04",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HREN-05",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-06",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HREN-07",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "HREN-08",
+    "reason": "not-ported",
+    "source": "S3:6365"
+  },
+  {
+    "id": "HREN-09",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-10",
+    "reason": "not-ported",
+    "source": "S3:6358"
+  },
+  {
+    "id": "HREN-11",
+    "reason": "not-ported",
+    "source": "S3:6363"
+  },
+  {
+    "id": "HREN-12",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-13",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-14",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-15",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HREN-16",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-17",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "HREN-18",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HREN-19",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-01",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "HIMP-02",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-03",
+    "reason": "not-ported",
+    "source": "S3:6343"
+  },
+  {
+    "id": "HIMP-04",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-05",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-06",
+    "reason": "not-ported",
+    "source": "S3:6352"
+  },
+  {
+    "id": "HIMP-07",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-08",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-09",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-10",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HIMP-11",
+    "reason": "not-ported",
+    "source": "S3:11288"
+  },
+  {
+    "id": "HIMP-12",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-13",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HIMP-14",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HIMP-15",
+    "reason": "not-ported",
+    "source": "S3:6356"
+  },
+  {
+    "id": "HIMP-16",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-20",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-21",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-22",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-23",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-23b",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "HIMP-24",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-25",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-26",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-27",
+    "reason": "not-ported",
+    "source": "S3:6374"
+  },
+  {
+    "id": "HIMP-28",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-29",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-30",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-31",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-40",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-41",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-42",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-43",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-44",
+    "reason": "not-ported",
+    "source": "S3:5609"
+  },
+  {
+    "id": "HIMP-45",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-50",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-51",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-52",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-53",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-54",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-55",
+    "reason": "not-ported",
+    "source": "S3:6341"
+  },
+  {
+    "id": "HIMP-60",
+    "reason": "not-ported",
+    "source": "S3:6374"
+  },
+  {
+    "id": "EXT-01",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-02",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-03",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-04",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-05",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-06",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-07",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-08",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-09",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-20",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-21",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-22",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-23",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-24",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-25",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-26",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-27",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-28",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-29",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-30",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-31",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-32",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-33",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-34",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-35",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-36",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-37",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-38",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-39",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-40",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "EXT-50",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-51",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-52",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "EXT-53",
+    "reason": "not-ported",
+    "source": "S3:6374"
+  },
+  {
+    "id": "XB-01",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-02",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "XB-03",
+    "reason": "not-ported",
+    "source": "S3:1615"
+  },
+  {
+    "id": "XB-05",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-06",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-07",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-08",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "XB-09",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "XB-10",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "XB-16",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-17",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-18",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-19",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "XB-20",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-21",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-22",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-23",
+    "reason": "not-ported",
+    "source": "S3:1628"
+  },
+  {
+    "id": "XB-24",
+    "reason": "not-ported",
+    "source": "S3:3769"
+  },
+  {
+    "id": "XB-25",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "XB-26",
+    "reason": "not-ported",
+    "source": "S3:1588"
+  },
+  {
+    "id": "YJS-01",
+    "reason": "not-ported",
+    "source": "S2:3227"
+  },
+  {
+    "id": "YJS-02",
+    "reason": "not-ported",
+    "source": "S2:3228"
+  },
+  {
+    "id": "YJS-03",
+    "reason": "not-ported",
+    "source": "S2:3229"
+  },
+  {
+    "id": "YJS-04",
+    "reason": "not-ported",
+    "source": "S2:3230"
+  },
+  {
+    "id": "YJS-05",
+    "reason": "not-ported",
+    "source": "S2:3231"
+  },
+  {
+    "id": "YJS-06",
+    "reason": "not-ported",
+    "source": "S2:3232"
+  },
+  {
+    "id": "YJS-07",
+    "reason": "not-ported",
+    "source": "S2:3233"
+  },
+  {
+    "id": "YJS-08",
+    "reason": "not-ported",
+    "source": "S2:3234"
+  },
+  {
+    "id": "YJS-09",
+    "reason": "not-ported",
+    "source": "S2:3235"
+  },
+  {
+    "id": "YJS-10",
+    "reason": "not-ported",
+    "source": "S2:3236"
+  },
+  {
+    "id": "YJS-11",
+    "reason": "not-ported",
+    "source": "S2:3237"
+  },
+  {
+    "id": "YJS-12",
+    "reason": "not-ported",
+    "source": "S2:3238"
+  },
+  {
+    "id": "YJS-13",
+    "reason": "not-ported",
+    "source": "S2:3239"
+  },
+  {
+    "id": "YJS-14",
+    "reason": "not-ported",
+    "source": "S2:3240"
+  },
+  {
+    "id": "YJS-15",
+    "reason": "not-ported",
+    "source": "S2:3241"
+  },
+  {
+    "id": "YJS-16",
+    "reason": "not-ported",
+    "source": "S2:3242"
+  },
+  {
+    "id": "LSEL-04",
+    "reason": "view-only",
+    "source": "S2:3254"
+  },
+  {
+    "id": "LSEL-39",
+    "reason": "view-only",
+    "source": "S2:3281"
+  },
+  {
+    "id": "LSEL-50",
+    "reason": "view-only",
+    "source": "S2:3286"
+  },
+  {
+    "id": "LSEL-51",
+    "reason": "view-only",
+    "source": "S2:3287"
+  },
+  {
+    "id": "UTL-31",
+    "reason": "view-only",
+    "source": "S2:3323"
+  },
+  {
+    "id": "UTL-32",
+    "reason": "view-only",
+    "source": "S2:3324"
+  },
+  {
+    "id": "UTL-40",
+    "reason": "view-only",
+    "source": "S2:3325"
+  },
+  {
+    "id": "UTL-41",
+    "reason": "view-only",
+    "source": "S2:3326"
+  },
+  {
+    "id": "UTL-42",
+    "reason": "view-only",
+    "source": "S2:3327"
+  },
+  {
+    "id": "S3:route:0",
+    "reason": "dropped-route",
+    "source": "S3:11342"
+  },
+  {
+    "id": "S3:route:1",
+    "reason": "dropped-route",
+    "source": "S3:11343"
+  },
+  {
+    "id": "S3:route:9",
+    "reason": "dropped-route",
+    "source": "S3:11351"
+  },
+  {
+    "id": "S7:14",
+    "reason": "removed",
+    "source": "S7:2107"
+  },
+  {
+    "id": "S7:23",
+    "reason": "removed",
+    "source": "S7:2116"
+  },
+  {
+    "id": "S7:94",
+    "reason": "removed",
+    "source": "S7:2187"
+  },
+  {
+    "id": "S7:100",
+    "reason": "removed",
+    "source": "S7:2193"
+  },
+  {
+    "id": "S7:102",
+    "reason": "removed",
+    "source": "S7:2195"
+  }
+]

@@ -11,8 +11,14 @@ fn write_executable(path: &Path, contents: &str) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+// Subprocess test executable lookup uses the harness PATH, not app configuration.
+#[allow(clippy::disallowed_methods)]
 fn path_with(dir: &Path) -> String {
-    format!("{}:{}", dir.display(), std::env::var("PATH").unwrap())
+    let inherited = std::env::var_os("PATH")
+        .expect("inherited tool path")
+        .into_string()
+        .expect("UTF-8 tool path");
+    format!("{}:{inherited}", dir.display())
 }
 
 /// Runs a script from `.github/scripts` so the fakes on `path` win: CI's Nix dev

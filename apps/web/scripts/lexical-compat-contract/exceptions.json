@@ -1,0 +1,227 @@
+{
+  "source": "src/compatibility-exceptions.ts",
+  "implementationCommit": "a7e6718f387150522bc1c86aebd6e1ecfbcc0e8b",
+  "implementationSha256": "bade62da7ec2b1b0ed466102b22dd2df87a5aac76082f2f1e57d68695fdeabf1",
+  "compilerControlCommit": "aa19bd3d2df10e58f2b9c200f0b51351f5e060ad",
+  "pointDelegationCommit": "0b84f77036",
+  "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "exceptions": [
+    {
+      "helper": "assumeNodeType",
+      "contract": "Upstream caller-asserted node generics have no runtime type witness.",
+      "guards": [
+        "actual compat LexicalNode instance",
+        "live weak-cache identity",
+        "exact active graph capture"
+      ],
+      "calls": [
+        "nodes/base.ts:getParent",
+        "nodes/base.ts:getPreviousSibling",
+        "nodes/base.ts:getNextSibling",
+        "nodes/base.ts:getCommonAncestor",
+        "nodes/runtime-primitives.ts:nodeByKey",
+        "nodes/runtime-primitives.ts:nodeWritable",
+        "nodes/replacement/helpers.ts:$applyNodeReplacement",
+        "nodes/replacement/helpers.ts:$create"
+      ],
+      "indirect": ["nodes/runtime-primitives.ts:nodeLatest through nodeByKey"],
+      "evidenceSha256": "e10a4c3ed18996ad3dede147327d8c04b2d7abf18f75a25fb051a1796601b299",
+      "reexports": ["nodes/runtime.ts:assumeNodeType"],
+      "replacementEvidenceSha256": "a02369f42051c68ec17917df06617ff903db31c1f45e8a9faf40402bca747628",
+      "replacementUpstreamSource": "packages/lexical/src/LexicalUtils.ts",
+      "sourceLocations": [
+        "nodes/replacement/helpers.ts:45",
+        "nodes/replacement/helpers.ts:58"
+      ]
+    },
+    {
+      "helper": "nodeConfigRecord",
+      "contract": "Exact upstream StaticNodeConfigRecord intersection with a single computed own key.",
+      "guards": ["exactly one own key", "own key equals requested type"],
+      "calls": ["nodes/base.ts:config"],
+      "upstreamSource": "packages/lexical/src/LexicalNode.ts:config",
+      "sourceLocations": ["nodes/base.ts:81"],
+      "reexports": ["nodes/runtime.ts:nodeConfigRecord"],
+      "sourceLocationCommit": "af059c0e64"
+    },
+    {
+      "helper": "createPointWithUpstreamType",
+      "contract": "Upstream creates a null-owned Point while declaring the narrower PointType owner.",
+      "guards": [
+        "new actual Point",
+        "null owner",
+        "key, offset and type preserved"
+      ],
+      "calls": ["selection/point.ts:$createPoint"],
+      "upstreamSource": "packages/lexical/src/LexicalSelection.ts:$createPoint"
+    },
+    {
+      "helper": "applyValueOrUpdater",
+      "contract": "Upstream calls callable values as updaters even when V itself is callable.",
+      "guards": [
+        "exact typeof function dispatch",
+        "no re-parsing or public constraint change"
+      ],
+      "calls": ["nodes/state/helpers.ts:$setState"],
+      "sourceLocations": ["nodes/state/helpers.ts:81"],
+      "upstreamSource": "packages/lexical/src/LexicalNodeState.ts:$setState",
+      "evidenceSha256": "320835f048ff3d44ef160998ec219d267fb9b5a7b4a479d68f3cfaa981dc08c1"
+    },
+    {
+      "helper": "nodeStateToJSON",
+      "contract": "Upstream public NodeStateJSON maps V while runtime serializes through unparse, including Date to string.",
+      "guards": ["original serialize/unparse result", "no value re-parsing"],
+      "calls": ["nodes/state/record.ts:toJSON"],
+      "sourceLocations": ["nodes/state/record.ts:81"],
+      "upstreamSource": "packages/lexical/src/LexicalNodeState.ts:NodeState.toJSON",
+      "evidenceSha256": "320835f048ff3d44ef160998ec219d267fb9b5a7b4a479d68f3cfaa981dc08c1"
+    },
+    {
+      "helper": "commandBucket",
+      "contract": "A command identity indexes exactly its own typed listener payload bucket; arbitrary command payloads remain in JS.",
+      "guards": [
+        "exact command-identity lookup",
+        "real array of length five",
+        "all five entries are real DequeSet priority groups, including sparse-array rejection"
+      ],
+      "calls": ["command/registry.ts:lookup"],
+      "sourceLocations": ["command/registry.ts:22"],
+      "upstreamSource": "packages/lexical/src/LexicalUpdates.ts:triggerCommandListeners",
+      "evidenceSha256": "1887977cb2d598301efed3b959c13baaacdd76423c08bd548350b90229c9e159"
+    },
+    {
+      "helper": "invokeDOMConversionWithNode",
+      "contract": "Upstream HTMLElement-declared DOM conversion factories and callbacks receive the actual Node, including Text for #text, with original exception order.",
+      "guards": [
+        "original Node identity and arguments",
+        "generic return type preserved",
+        "no HTMLElement guard or conversion"
+      ],
+      "calls": [
+        "configuration/html-conversions.ts:getDOMNodeConversionFunction",
+        "configuration/html-conversions.ts:getDOMNodeConversionFunction"
+      ],
+      "sourceLocations": [
+        "configuration/html-conversions.ts:77",
+        "configuration/html-conversions.ts:87"
+      ],
+      "upstreamSource": "packages/lexical-html/src/index.ts:getConversionFunction and $createNodesFromDOM",
+      "evidenceSha256": "2fa4d95e782f1d24e7fff548eaf410a64762c5bea6dbc084fe399a93465244d5",
+      "callForms": ["variable-initializer", "returned-arrow-body"]
+    },
+    {
+      "helper": "compareNumberWithUpstreamType",
+      "contract": "Upstream declares a -1 | 0 | 1 caret ordering while Math.sign propagates NaN offsets unchanged.",
+      "guards": [
+        "original Math.sign(a - b) runtime result",
+        "no offset coercion or NaN replacement"
+      ],
+      "calls": ["caret/ancestry.ts:$comparePointCaretNext"],
+      "sourceLocations": ["caret/ancestry.ts:53"],
+      "upstreamSource": "packages/lexical/src/caret/LexicalCaret.ts:1207",
+      "upstreamSourceSha256": "a52bdcf014f191a7d07a4ec76ce6477e04bf4d61d298cc5b4f37e95136687a49",
+      "evidenceUpstreamCommit": "ead730cf50f4d3e3f93b7c1d23a443a6d14f50d1",
+      "evidenceSha256": "84bc6ca0f2379fca035e8d521e79e0ead26c549226fd40eb198b36b35db4847e",
+      "evidenceScriptSha256": "0ccc99e38cbf7a1c59135245283778c45006afd4475b5ba365d7c6df24a3e399"
+    },
+    {
+      "helper": "widenTagConversionMap",
+      "contract": "Upstream returns tag-specific DOM conversion factory maps unchanged with a widened HTMLElement map declaration.",
+      "guards": [
+        "exact original map identity",
+        "no enumeration, validation, clone or callback execution"
+      ],
+      "calls": ["nodes/build-import-map.ts:buildImportMap"],
+      "sourceLocations": ["nodes/build-import-map.ts:13"],
+      "upstreamSource": "packages/lexical/src/LexicalNode.ts:365-368",
+      "upstreamSourceSha256": "5503cc78ad06a3ed945f9805db9224fd2610da7fb597a078c0ab899939e43530"
+    }
+  ],
+  "scope": "Exactly nine named assertions, one sound runtime-witness guard, and one separate public extension wildcard type-only entry (four aliases, nine AnyKeyword tokens): ten named compatibility entries. No further assertion, namespace or native acceptance.",
+  "commandConsumerCommit": "741092a441",
+  "runtimeGuards": [
+    {
+      "helper": "isInstanceOfKlass",
+      "kind": "runtime-witness guard (sound)",
+      "body": "return value instanceof klass;",
+      "assertions": 0,
+      "calls": ["nodes/replacement/bind.ts:bindReplacement"],
+      "sourceLocations": ["nodes/replacement/bind.ts:39"],
+      "evidenceSha256": "a02369f42051c68ec17917df06617ff903db31c1f45e8a9faf40402bca747628",
+      "sourceLocationCommit": "2ec91cf1e0fa3b8682701b5207f629c7b62bf124"
+    }
+  ],
+  "unsupportedInternalMutation": {
+    "member": "NodeState.knownState",
+    "reads": "Real live Map contents support get, has, entries, iteration and size, including the upstream devtools reader.",
+    "mutation": "Unsupported; direct mutations throw a clear internal field/use $setState error.",
+    "upstreamProductionReader": "packages/lexical-devtools-core/src/generateContent.ts:412",
+    "externalProductionMutationSites": 0,
+    "evidenceSha256": "f58a4d41d4ea00d50577077839ad550cfc0c8406b310a66b063feb4c6ee37458"
+  },
+  "replacementConsumerCommit": "57d67c915f2ec7f9b2f69fa1fc93b04c4c4ba6b6",
+  "publicReplacementAlias": {
+    "source": "nodes/replacement/types.ts:6",
+    "barrel": "nodes/replacement/index.ts:15",
+    "upstream": "lexical:LexicalNodeReplacement",
+    "declarationEvidenceSha256": "f9aaab6e1d20489c5f8f9cb8e67988714f927d7a4e92715b5f95e22fa6bb1815"
+  },
+  "typeOnlyException": {
+    "kind": "public extension wildcard types (type-only)",
+    "assertions": 0,
+    "anyKeywords": 9,
+    "aliases": {
+      "AnyLexicalExtension": "export type AnyLexicalExtension = LexicalExtension<any, string, any, any>;",
+      "AnyLexicalExtensionArgument": "export type AnyLexicalExtensionArgument = AnyLexicalExtension | AnyNormalizedLexicalExtensionArgument;",
+      "AnyNormalizedLexicalExtensionArgument": "export type AnyNormalizedLexicalExtensionArgument = NormalizedLexicalExtensionArgument<any, string, any, any>;",
+      "OutputExtension": "export type OutputExtension<Output> = LexicalExtension<any, any, Output, any>;"
+    },
+    "references": [
+      "extension-core/types.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:ImportSpecifier",
+      "extension-core/types.ts:OutputExtension:ImportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtension:ExportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/types.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/types.ts:OutputExtension:ExportSpecifier",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtensionArgument:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/types.ts:OutputExtension:TypeReference",
+      "compatibility-exceptions.ts:AnyLexicalExtension:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:AnyLexicalExtensionArgument:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:AnyLexicalExtension:TypeReference",
+      "compatibility-exceptions.ts:AnyNormalizedLexicalExtensionArgument:TypeReference",
+      "compatibility-exceptions.ts:AnyNormalizedLexicalExtensionArgument:TypeAliasDeclaration",
+      "compatibility-exceptions.ts:OutputExtension:TypeAliasDeclaration",
+      "extension-core/defineExtension.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/defineExtension.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/contract.type-test.ts:AnyLexicalExtension:ImportSpecifier",
+      "extension-core/contract.type-test.ts:OutputExtension:ImportSpecifier",
+      "extension-core/contract.type-test.ts:AnyLexicalExtension:TypeReference",
+      "extension-core/contract.type-test.ts:OutputExtension:TypeReference",
+      "extension-core/index.ts:AnyLexicalExtension:ExportSpecifier",
+      "extension-core/index.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/index.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "extension-core/index.ts:OutputExtension:ExportSpecifier",
+      "index.ts:AnyLexicalExtension:ExportSpecifier",
+      "index.ts:AnyLexicalExtensionArgument:ExportSpecifier",
+      "index.ts:AnyNormalizedLexicalExtensionArgument:ExportSpecifier",
+      "index.ts:OutputExtension:ExportSpecifier"
+    ],
+    "evidenceSha256": "bd1277e407fdb4a75ba25206510ddac27d46da43ee1c7c3d2c711f3fbec11258",
+    "rootForwardingCommit": "eb1d5238fb",
+    "ordinaryDeclarationSha256": "fd0220616ab92809a406f2cbb91c8b9be41708a4a3e906b21c056e6983428788",
+    "verifiedCompiler": "6.0.3",
+    "ordinaryDeclarationCommit": "b46db54ee1212fb0749736f36a9993c97892989f"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "activation": "chunked-operation-writes",
+  "existingCases": 155,
+  "existingCaseDiffs": [],
+  "newCases": [
+    {
+      "path": "resolved_pending.test/joined_reader_receives_a_durable_suffix_when_its_missing_parent_arrives_through_websocket.jsonl.gz",
+      "sha256": "23095e058301ad273fb31d6ee375485d703e57801cac1bc3b83d37133f5c174f",
+      "callback": 13,
+      "update": "parent",
+      "addedPolicyWrites": [
+        {
+          "line": 115,
+          "operation": "storage.put",
+          "reason": "retain parent resolution notification debt before parent persistence"
+        },
+        {
+          "line": 125,
+          "operation": "storage.delete",
+          "reason": "clear debt only after every resolved-delta send succeeds"
+        }
+      ],
+      "addedResolvedFrames": [
+        {
+          "line": 123,
+          "type": "RemoteUpdate",
+          "frameSha256": "0193152452d4e2e03e5316645896b38d9a97369e8f57501c38445036993be149",
+          "payloadSha256": "d3a62bdc4f5d9533b56857b1e9399ded471f6853c627b6784bea2172e9f2e305",
+          "reason": "newly applied durable suffix reaches the joined reader and parent sender; duplicate import is a no-op"
+        },
+        {
+          "line": 124,
+          "type": "RemoteUpdate",
+          "frameSha256": "0193152452d4e2e03e5316645896b38d9a97369e8f57501c38445036993be149",
+          "payloadSha256": "d3a62bdc4f5d9533b56857b1e9399ded471f6853c627b6784bea2172e9f2e305",
+          "reason": "newly applied durable suffix reaches the joined reader and parent sender; duplicate import is a no-op"
+        }
+      ]
+    },
+    {
+      "path": "resolved_pending.test/joined_reader_receives_a_durable_suffix_when_its_missing_parent_arrives_through_http.jsonl.gz",
+      "sha256": "f21f050dbe5729218b1b7d36ff84c51a8acedec2d1938fd4112f4fbac36037b1",
+      "callback": 13,
+      "update": "parent",
+      "addedPolicyWrites": [
+        {
+          "line": 111,
+          "operation": "storage.put",
+          "reason": "retain parent resolution notification debt before parent persistence"
+        },
+        {
+          "line": 122,
+          "operation": "storage.delete",
+          "reason": "clear debt only after every resolved-delta send succeeds"
+        }
+      ],
+      "addedResolvedFrames": [
+        {
+          "line": 119,
+          "type": "RemoteUpdate",
+          "frameSha256": "481e72542ed5a06ca03176873a3c7ee96a551d9cb856fe16d06f76e8d743890d",
+          "payloadSha256": "f911edf671ab94196fa2e08d0d6025ae906f427b01f6acaf1b23488e5db206c5",
+          "reason": "newly applied durable suffix reaches the joined reader and parent sender; duplicate import is a no-op"
+        },
+        {
+          "line": 120,
+          "type": "RemoteUpdate",
+          "frameSha256": "481e72542ed5a06ca03176873a3c7ee96a551d9cb856fe16d06f76e8d743890d",
+          "payloadSha256": "f911edf671ab94196fa2e08d0d6025ae906f427b01f6acaf1b23488e5db206c5",
+          "reason": "newly applied durable suffix reaches the joined reader and parent sender; duplicate import is a no-op"
+        }
+      ]
+    }
+  ],
+  "scope": "Only new pending-dependency scenarios. Existing 155 activated and default scenarios normalize unchanged. No existing wire or storage event is refreshed."
+}

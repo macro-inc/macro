@@ -1,0 +1,110 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/xml.test.ts",
+    "test": [
+      "xml",
+      "serializes a database answer with its chart"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/transformers/xml.toXml",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "type": "database-query",
+                "version": 2,
+                "queryId": "q-1",
+                "databaseId": "db-1",
+                "prompt": "Projects per owner",
+                "title": "By owner",
+                "displayMode": "bar",
+                "chart": {
+                  "x": "owner",
+                  "y": [
+                    "projects"
+                  ],
+                  "stack": true
+                },
+                "height": 320,
+                "$": {
+                  "id": "chart"
+                }
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Total: ",
+                    "type": "text",
+                    "version": 1,
+                    "$": {
+                      "id": "t1"
+                    }
+                  },
+                  {
+                    "type": "database-query",
+                    "version": 2,
+                    "queryId": "q-2",
+                    "prompt": "How many projects?",
+                    "displayMode": "scalar",
+                    "$": {
+                      "id": "n"
+                    }
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "$": {
+                  "id": "p1"
+                },
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1,
+            "$": {
+              "documentMetadata": {
+                "version": 1.4,
+                "environmentTags": null
+              },
+              "id": "root"
+            }
+          }
+        }
+      ],
+      "ret": "\n<doc>\n  <database-query id=\"chart\" queryId=\"q-1\" databaseId=\"db-1\" displayMode=\"bar\" title=\"By owner\" prompt=\"Projects per owner\" chart=\"{&quot;x&quot;:&quot;owner&quot;,&quot;y&quot;:[&quot;projects&quot;],&quot;stack&quot;:true}\" height=\"320\"/>\n  <p id=\"p1\">\n    <t id=\"t1\">Total: </t>\n    <database-query id=\"n\" queryId=\"q-2\" displayMode=\"scalar\" prompt=\"How many projects?\"/>\n  </p>\n</doc>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

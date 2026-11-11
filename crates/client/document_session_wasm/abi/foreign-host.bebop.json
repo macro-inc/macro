@@ -1,0 +1,1 @@
+{"include":["foreign-host.bop","foreign-native-fields.bop"],"generators":{"rust":{"outFile":"../src/foreign_host_generated.rs"},"ts":{"outFile":"../../../../packages/collaboration/src/session/foreign-host.generated.ts"}}}

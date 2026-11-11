@@ -1,0 +1,465 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-context.test.ts",
+    "test": [
+      "composeAgentContextPrompt",
+      "states the current time in UTC when the time zone is unknown"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "what is due today?",
+          "currentTime": {
+            "iso": "2026-09-24T20:03:36+00:00",
+            "local": "Thursday, September 24, 2026, 8:03 PM"
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003ccurrent_time iso=\\\"2026-09-24T20:03:36+00:00\\\" time_zone=\\\"UTC\\\">Thursday, September 24, 2026, 8:03 PM\\n  \\u003cnote>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.\\u003c/note>\\n\\u003c/current_time>\"}</m-agent-context>\n\nwhat is due today?"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003ccurrent_time iso=\\\"2026-09-24T20:03:36+00:00\\\" time_zone=\\\"UTC\\\">Thursday, September 24, 2026, 8:03 PM\\n  \\u003cnote>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.\\u003c/note>\\n\\u003c/current_time>\"}</m-agent-context>\n\nwhat is due today?"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what is due today?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        67,
+        192,
+        238,
+        45,
+        85,
+        251,
+        99,
+        140
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what is due today?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what is due today?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what is due today?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what is due today?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what is due today?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what is due today?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+      },
+      "args": [],
+      "ret": "<current_time iso=\"2026-09-24T20:03:36+00:00\" time_zone=\"UTC\">Thursday, September 24, 2026, 8:03 PM\n  <note>The time this prompt was sent, in UTC, because the time zone of the user is unknown (no connected calendar). Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, 2026-09-24 for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.</note>\n</current_time>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

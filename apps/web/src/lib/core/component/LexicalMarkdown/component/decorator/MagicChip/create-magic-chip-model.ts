@@ -18,7 +18,6 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   MAGIC_CHIP_STATUSES,
-  type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
@@ -36,6 +35,7 @@ import {
   type MagicChipInteraction,
   type MagicChipPresentation,
 } from './presentation';
+import type { MagicChipUIData } from './types';
 
 function magicChipStatus(
   status: SessionStatusDto
@@ -106,7 +106,7 @@ function upsert(
  * The fold is the shared {@link AgentSession} for the id, so a chip and a
  * block showing the same session fold it once between them.
  */
-export function createMagicChipModel(props: MagicChipData): {
+export function createMagicChipModel(props: MagicChipUIData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   interactions: InteractionController;

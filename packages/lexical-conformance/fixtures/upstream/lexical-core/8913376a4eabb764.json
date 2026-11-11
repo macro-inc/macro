@@ -1,0 +1,37 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/mentions.test.ts",
+    "test": [
+      "markdownToEmbeddingText",
+      "keeps ids from document cards"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "<m-document-card>{\"documentId\":\"doc-2\",\"blockName\":\"md\",\"documentName\":\"Spec\",\"blockParams\":{}}</m-document-card>"
+      ],
+      "ret": "[Spec](md:doc-2)"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

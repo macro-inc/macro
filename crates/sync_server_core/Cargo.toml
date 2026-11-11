@@ -1,0 +1,28 @@
+[package]
+name = "sync_server_core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+in-process-gate = ["dep:macro_document_model"]
+openapi = ["dep:utoipa"]
+
+[dependencies]
+loro_server.workspace = true
+macro_document_model = { workspace = true, optional = true, default-features = false }
+bebop.workspace = true
+rootcause.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
+lazy-regex.workspace = true
+macro_sync_service_jwt.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid-types.workspace = true
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures.workspace = true

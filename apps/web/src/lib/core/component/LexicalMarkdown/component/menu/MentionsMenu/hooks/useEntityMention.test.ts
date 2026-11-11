@@ -8,6 +8,7 @@ const list = vi.hoisted(() => ({
   totalCount: () => 50,
   hasMore: () => true,
   isLoading: () => false,
+  error: () => undefined,
   isLoadingMore: () => true,
   loadMore: vi.fn(),
 }));

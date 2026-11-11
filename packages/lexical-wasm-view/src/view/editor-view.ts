@@ -1,0 +1,1114 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * MIT licensed. Retargeted LexicalReconciler.ts keyed children, terminating BR,
+ * LexicalMutations.ts observation and LexicalUpdates.ts listener ordering.
+ * Pin: Lexical 0.45.0 / 0cfcc169296723e07de2396cd42ea3434b5b79ed.
+ */
+
+import {
+  CommandCode,
+  EditorInputMsg,
+  type IViewEffectMsg,
+} from '@macro-inc/collaboration/session/abi.generated';
+import { type Span, Telemetry } from '@macro-inc/observability';
+import {
+  batch,
+  createComponent,
+  createSignal,
+  getOwner,
+  type Owner,
+} from 'solid-js';
+import { render } from 'solid-js/web';
+import { ClipboardAccess } from './clipboard';
+import type {
+  KeyRoute,
+  ViewCommand,
+  ViewCommandPriority,
+  ViewListener,
+} from './commands';
+import { textLeaf } from './dom';
+import { registerEvents } from './events';
+import {
+  managedLineBreak,
+  reconcileManagedLineBreak,
+} from './managed-line-break';
+import { MarkGeometry } from './mark-geometry';
+import { Mirror } from './mirror';
+import { NewSubtreeAttachments } from './new-subtrees';
+import {
+  type EditorPerformanceOperation,
+  startEditorPerformance,
+} from './performance';
+import type { EditorPort, TextFromView, ViewSink } from './port';
+import { PresenceLayer } from './presence';
+import { BulkQueries } from './queries';
+import type {
+  EditorThemeClasses,
+  ElementDOMSlot,
+  NodeViewRegistry,
+  RenderContext,
+} from './registry';
+import {
+  readFocusedRootSelection,
+  readSelection,
+  sameSelection,
+  writeSelection,
+} from './selection';
+import { selectionMessage } from './session-port';
+import { TableObserver } from './table/observer';
+import type {
+  AppliedDiff,
+  JsonValue,
+  MutationKind,
+  NodeKey,
+  NodeMutation,
+  TypeFlags,
+  ViewNode,
+  ViewSelection,
+  ViewSelectionInfo,
+} from './types';
+
+const roots = new WeakMap<Node, EditorView>();
+export interface CommitInfo {
+  readonly tags: readonly string[];
+  readonly keys: readonly NodeKey[];
+  readonly fullReconcile: boolean;
+  readonly selectionChanged: boolean;
+  readonly mutations: ReadonlyMap<NodeKey, NodeMutation>;
+  readonly children: ReadonlySet<NodeKey>;
+  readonly properties: ReadonlySet<NodeKey>;
+}
+export interface ViewOptions {
+  readonly namespace: string;
+  readonly theme: EditorThemeClasses;
+  readonly editable: boolean;
+  readonly preset: 'rich' | 'plain';
+  readonly onError: (error: unknown) => void;
+  /** Caller-owned loading span; never ended by the view. */
+  readonly parentSpan?: Span;
+  /** Host-owned UI operation, including shared browser timing and paint completion. */
+  readonly startPerformance?: (
+    name: 'editor.paste' | 'editor.reconcile'
+  ) => EditorPerformanceOperation;
+  /** Application/provider owner captured before an asynchronous mount. */
+  readonly owner?: Owner;
+}
+export class EditorView implements ViewSink {
+  private readonly owner: Owner | undefined;
+  readonly mirror: Mirror;
+  readonly query: BulkQueries;
+  readonly clipboard: ClipboardAccess;
+  readonly context: RenderContext;
+  private readonly pluginEvents = new Map<
+    string,
+    Set<(payload: JsonValue) => void>
+  >();
+  private readonly keyRoutes = new Set<
+    (event: KeyboardEvent) => KeyRoute | null
+  >();
+  private readonly viewCommands = new Map<string, ViewListener[]>();
+  private readonly rustListeners: ReadonlyMap<string, number>;
+  private readonly dom = new Map<NodeKey, HTMLElement>();
+  private readonly tables = new Map<NodeKey, TableObserver>();
+  private readonly keys = new WeakMap<Node, NodeKey>();
+  private readonly decorators = new Map<
+    NodeKey,
+    {
+      dispose: () => void;
+      update: (node: ViewNode) => void;
+      host: HTMLElement;
+      revision: bigint | undefined;
+    }
+  >();
+  private readonly commits = new Set<(info: CommitInfo) => void>();
+  private readonly mutations = new Map<
+    string,
+    Set<(mutations: ReadonlyMap<NodeKey, MutationKind>) => void>
+  >();
+  private readonly histories = new Set<
+    (state: { canUndo: boolean; canRedo: boolean }) => void
+  >();
+  private readonly decoratorListeners = new Set<
+    (keys: readonly NodeKey[]) => void
+  >();
+  private readonly observer: MutationObserver;
+  private readonly presence: PresenceLayer;
+  private readonly events: ReturnType<typeof registerEvents>;
+  private selectionMarkedAt = -Infinity;
+  private selectionMark: ViewSelectionInfo | null = null;
+  private selectionInfo: ViewSelectionInfo = {
+    selection: { kind: 'none' },
+    format: 0,
+    style: '',
+  };
+  private disposed = false;
+  private detaching = false;
+  private recovering = false;
+  private prevented = false;
+  private lastOps = 0;
+  private paintFrame: number | null = null;
+  private revisionValue = 0;
+  private historySelectionRevision: number | undefined;
+  private documentRevisionValue = 0;
+  private nextReconcileSample = 0;
+  get keyedDOMNodeCount(): number {
+    return this.dom.size;
+  }
+  get decoratorCount(): number {
+    return this.decorators.size;
+  }
+  /** Content revision for drags; selection-only commits keep the source valid. */
+  get documentRevision(): number {
+    return this.documentRevisionValue;
+  }
+  get revision(): number {
+    return this.revisionValue;
+  }
+  get isMounted(): boolean {
+    return !this.disposed && !this.detaching && roots.get(this.root) === this;
+  }
+  /** Block host actions immediately; native callback teardown finishes after return. */
+  beginTeardown(): void {
+    this.detaching = true;
+  }
+  private readonly cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
+  private constructor(
+    readonly root: HTMLElement,
+    readonly port: EditorPort,
+    readonly registry: NodeViewRegistry,
+    readonly options: ViewOptions,
+    private openingSpan: Span | undefined
+  ) {
+    this.owner = options.owner ?? getOwner() ?? undefined;
+    this.root.style.userSelect = 'text';
+    this.root.style.whiteSpace = 'pre-wrap';
+    this.root.style.wordBreak = 'break-word';
+    this.mirror = new Mirror(port.types());
+    this.query = new BulkQueries(this, port);
+    this.clipboard = new ClipboardAccess(this, port);
+    this.rustListeners = port.listeners();
+    this.context = {
+      document: root.ownerDocument,
+      namespace: options.namespace,
+      theme: options.theme,
+      view: this,
+    };
+    this.observer = new MutationObserver((records) => {
+      const seen = new Set<NodeKey>();
+      const repair = new Set<NodeKey>();
+      for (const record of records) {
+        const owner = EditorView.fromDOM(record.target);
+        if (owner && owner !== this) continue;
+        if (record.type === 'childList') {
+          const key = this.keyFromDOM(record.target);
+          if (key !== null && this.node(key)?.kind !== 'decorator')
+            repair.add(key);
+          continue;
+        }
+        if (record.type !== 'characterData') continue;
+        const key = this.keyFromDOM(record.target);
+        if (key === null || seen.has(key)) continue;
+        seen.add(key);
+        const node = this.node(key);
+        if (node?.kind === 'text' && record.target.nodeValue !== node.text)
+          this.submitText(key);
+      }
+      if (repair.size) {
+        this.observer.disconnect();
+        try {
+          for (const key of repair) {
+            const node = this.node(key),
+              dom = this.getElementByKey(key);
+            if (!node || !dom) continue;
+            if (node.kind === 'text') {
+              if (!textLeaf(dom)) this.replace(node, node, dom);
+            } else this.reconcileChildren(key);
+          }
+          const active = this.root.ownerDocument.activeElement;
+          if (active && this.ownsSelection(active))
+            writeSelection(this, this.selectionInfo.selection);
+        } finally {
+          this.observe();
+        }
+      }
+    });
+    roots.set(root, this);
+    root.setAttribute('data-lexical-editor', 'true');
+    root.setAttribute('role', 'textbox');
+    root.setAttribute('aria-multiline', 'true');
+    this.setEditable(options.editable);
+    this.observe();
+    this.events = registerEvents(this);
+    this.presence = new PresenceLayer(this);
+  }
+  static mount(
+    root: HTMLElement,
+    port: EditorPort,
+    registry: NodeViewRegistry,
+    options: ViewOptions
+  ): EditorView {
+    if (roots.has(root)) throw new Error('Editor root is already mounted');
+    const span =
+      options.parentSpan?.span('view.mount') ?? Telemetry.span('editor.open');
+    try {
+      return span.run(
+        () => new EditorView(root, port, registry, options, span)
+      );
+    } catch (error) {
+      span.error('view mount failed');
+      span.end();
+      throw error;
+    }
+  }
+  ownsSelection(node: Node): boolean {
+    return EditorView.fromDOM(node) === this;
+  }
+  static fromDOM(node: Node): EditorView | null {
+    for (
+      let current: Node | null = node;
+      current;
+      current = current.parentNode
+    ) {
+      const view = roots.get(current);
+      if (view) return view;
+    }
+    return null;
+  }
+  private observe(): void {
+    if (!this.disposed)
+      this.observer.observe(this.root, {
+        subtree: true,
+        characterData: true,
+        childList: true,
+      });
+  }
+  ownsEvent(target: EventTarget | null, allowDecorator: boolean): boolean {
+    if (!this.isMounted) return false;
+    const NodeType = this.root.ownerDocument.defaultView?.Node;
+    if (!NodeType || !(target instanceof NodeType)) return false;
+    for (let node: Node | null = target; node; node = node.parentNode) {
+      if (node === this.root) return true;
+      if (roots.has(node)) return false;
+      const key = this.keys.get(node);
+      if (
+        !allowDecorator &&
+        key !== undefined &&
+        this.node(key)?.kind === 'decorator'
+      )
+        return false;
+    }
+    return false;
+  }
+  node(key: NodeKey): ViewNode | null {
+    return this.mirror.node(key);
+  }
+  flags(node: ViewNode): TypeFlags | undefined {
+    return (
+      this.mirror.type(node.typeIndex).flags ??
+      this.registry.get(node.type).flags?.(node)
+    );
+  }
+  text(key: NodeKey): string | null {
+    return this.node(key)?.text ?? null;
+  }
+  getElementByKey(key: NodeKey): HTMLElement | null {
+    return this.dom.get(key) ?? null;
+  }
+  keyFromDOM(dom: Node): NodeKey | null {
+    for (
+      let current: Node | null = dom;
+      current;
+      current = current.parentNode
+    ) {
+      const key = this.keys.get(current);
+      if (key !== undefined) return key;
+      if (current === this.root) break;
+    }
+    return null;
+  }
+  slot(key: NodeKey): ElementDOMSlot | null {
+    const node = this.node(key),
+      dom = this.dom.get(key);
+    if (!node || !dom) return null;
+    const slot = this.registry.get(node.type).getDOMSlot?.(node, dom) ?? {
+      element: dom,
+    };
+    return {
+      element: slot.element,
+      get after() {
+        return slot.after;
+      },
+      get before() {
+        return managedLineBreak(slot.element) ?? slot.before;
+      },
+    };
+  }
+  recentSelectionMark(): ViewSelectionInfo | null {
+    return performance.now() < this.selectionMarkedAt + 200
+      ? this.selectionMark
+      : null;
+  }
+  selection(): ViewSelectionInfo {
+    return this.selectionInfo;
+  }
+  get lastDiffOps(): number {
+    return this.lastOps;
+  }
+  consumePreventDefault(): boolean {
+    const value = this.prevented;
+    this.prevented = false;
+    return value;
+  }
+  acknowledgeSelection(selection: ViewSelection): void {
+    if (
+      selection.kind === 'keep' ||
+      sameSelection(this.selectionInfo.selection, selection)
+    )
+      return;
+    const previous = this.selectionInfo.selection;
+    this.selectionInfo = { ...this.selectionInfo, selection };
+    if (selection.kind === 'table')
+      this.tables
+        .get(selection.table)
+        ?.select(selection.anchorCell, selection.focusCell);
+    else if (previous.kind === 'table')
+      this.tables.get(previous.table)?.clear();
+    this.notify(
+      {
+        mutations: new Map(),
+        children: new Set(),
+        properties: new Set(),
+        fullReconcile: false,
+        viewTextMatches: null,
+        opCount: 0,
+      },
+      true
+    );
+  }
+  acknowledgeText(input: TextFromView): void {
+    const diff = this.mirror.acknowledgeText(input.key, input.text);
+    if ((input.selectionKind ?? 'range') === 'range')
+      this.selectionInfo = {
+        ...this.selectionInfo,
+        selection: {
+          kind: 'range',
+          anchor: { key: input.key, offset: input.anchorOffset, type: 'text' },
+          focus: { key: input.key, offset: input.focusOffset, type: 'text' },
+        },
+      };
+    this.lastOps = 0;
+    // The DOM originated this edit. Only mirror observers run; no renderer,
+    // selection API, layout read or mutation-observer reconnection occurs.
+    this.notify(diff, false);
+  }
+  apply(
+    words: Uint32Array,
+    strings: Uint8Array,
+    effects: IViewEffectMsg[] = []
+  ): void {
+    if (this.disposed) throw new Error('Diff applied to a disposed view');
+    for (const effect of effects) {
+      if (effect.kind === 2)
+        this.options.onError(new Error(effect.text || 'Editor session failed'));
+    }
+    const initialize = effects.some((effect) => effect.kind === 8);
+    const paste = effects.some(
+      (effect) => effect.kind === 11 && effect.keys.includes('paste')
+    );
+    const now = performance.now();
+    const sampled =
+      Telemetry.config.sampled('perf') &&
+      (initialize ||
+        paste ||
+        words.byteLength + strings.byteLength >= 65536 ||
+        now >= this.nextReconcileSample);
+    if (!initialize && !paste && !sampled) {
+      this.applyOutput(words, strings, effects);
+      return;
+    }
+    if (sampled) this.nextReconcileSample = now + 1000;
+    const load = initialize
+      ? (this.openingSpan?.span('state.load') ?? Telemetry.span('state.load'))
+      : undefined;
+    const phase = load?.span('view.reconcile');
+    let measurement: ReturnType<typeof startEditorPerformance> | undefined;
+    if (sampled) {
+      measurement = phase
+        ? phase.run(() => startEditorPerformance(this, 'editor.reconcile'))
+        : startEditorPerformance(this, 'editor.reconcile');
+    }
+    measurement?.span.setAttr(
+      'editor.reconcile.diff_bytes',
+      words.byteLength + strings.byteLength
+    );
+    measurement?.span.setAttr('editor.reconcile.initialize', initialize);
+    measurement?.span.setAttr('editor.reconcile.paste', paste);
+    try {
+      const span = measurement?.span ?? phase;
+      if (span) span.run(() => this.applyOutput(words, strings, effects));
+      else this.applyOutput(words, strings, effects);
+      phase?.setAttr('nodes', this.dom.size);
+      phase?.setAttr('decorators', this.decorators.size);
+    } catch (error) {
+      measurement?.span.error('reconcile failed');
+      measurement?.finish('error');
+      throw error;
+    } finally {
+      measurement?.finish('success');
+      phase?.end();
+      load?.end();
+    }
+    const window = this.root.ownerDocument.defaultView;
+    if (initialize && window && this.openingSpan && this.paintFrame === null) {
+      this.paintFrame = window.requestAnimationFrame(() => {
+        this.paintFrame = window.requestAnimationFrame(() => {
+          this.paintFrame = null;
+          this.openingSpan?.end();
+          this.openingSpan = undefined;
+        });
+      });
+    }
+  }
+  private applyOutput(
+    words: Uint32Array,
+    strings: Uint8Array,
+    effects: IViewEffectMsg[]
+  ): void {
+    this.observer.disconnect();
+    try {
+      this.presence.update(effects);
+      if (effects.some((effect) => effect.kind === 9))
+        this.events.endComposition();
+      const initialize = effects.some((effect) => effect.kind === 8);
+      if (initialize) {
+        for (const table of this.tables.values()) table.dispose();
+        this.tables.clear();
+        for (const decorator of this.decorators.values()) decorator.dispose();
+        this.decorators.clear();
+        this.dom.clear();
+        this.root.replaceChildren();
+      }
+      const diff = initialize
+        ? this.mirror.initialize(words, strings)
+        : this.mirror.apply(words, strings);
+      this.lastOps = diff.opCount;
+      for (const [key, mutation] of diff.mutations) {
+        if (mutation.kind !== 'destroyed') continue;
+        this.tables.get(key)?.dispose();
+        this.tables.delete(key);
+        this.decorators.get(key)?.dispose();
+        this.decorators.delete(key);
+        this.dom.get(key)?.remove();
+        this.dom.delete(key);
+      }
+      for (const [key, mutation] of diff.mutations) {
+        const node = mutation.after;
+        if (!node) continue;
+        if (mutation.kind === 'created') this.create(node);
+        else if (diff.properties.has(key) && mutation.before) {
+          const dom = this.dom.get(key);
+          if (!dom) throw new Error('Missing DOM for updated key: ' + key);
+          if (
+            this.registry
+              .get(node.type)
+              .updateDOM(mutation.before, node, dom, this.context)
+          )
+            this.replace(mutation.before, node, dom);
+        }
+      }
+      let created: Set<NodeKey> | undefined;
+      for (const [key, mutation] of diff.mutations)
+        if (mutation.kind === 'created') {
+          created ??= new Set();
+          created.add(key);
+        }
+      const attachments = created
+        ? new NewSubtreeAttachments(
+            created,
+            (key) => this.node(key),
+            (key) => this.dom.get(key),
+            (node) => !this.registry.get(node.type).getDOMSlot
+          )
+        : undefined;
+      for (const key of diff.children) this.reconcileChildren(key, attachments);
+      const dirtyTables = new Map<number, Set<number>>();
+      for (const key of new Set([...diff.children, ...diff.properties])) {
+        const node = this.node(key);
+        if (!node) continue;
+        if (node.type === 'table') {
+          if (
+            diff.children.has(key) ||
+            this.tables.get(key)?.table !== this.dom.get(key)
+          )
+            dirtyTables.set(key, dirtyTables.get(key) ?? new Set());
+          continue;
+        }
+        const row =
+          node.type === 'tablerow'
+            ? node
+            : node.type === 'tablecell' && node.parent !== null
+              ? this.node(node.parent)
+              : null;
+        if (row?.type !== 'tablerow' || row.parent === null) continue;
+        // Text/paragraph changes inside cells cannot alter the grid. Cell DOM
+        // replacements and span changes rebuild their row and affected carries.
+        if (node.type === 'tablecell' && !diff.properties.has(key)) continue;
+        const rows = dirtyTables.get(row.parent) ?? new Set<number>();
+        rows.add(row.key);
+        dirtyTables.set(row.parent, rows);
+      }
+      for (const [key, rows] of dirtyTables) {
+        const dom = this.dom.get(key);
+        if (!(dom instanceof HTMLTableElement))
+          throw new Error('Table view must mount a table');
+        const observer = this.tables.get(key);
+        if (observer && observer.table === dom) observer.refresh(rows);
+        else {
+          observer?.dispose();
+          const next = new TableObserver(this, key, dom);
+          this.tables.set(key, next);
+          const selection = this.selectionInfo.selection;
+          if (observer && selection.kind === 'table' && selection.table === key)
+            next.select(selection.anchorCell, selection.focusCell);
+        }
+      }
+      attachments?.flush();
+      let selectionChanged = false;
+      const skipDomSelection = effects.some(
+        (effect) =>
+          effect.kind === 11 && effect.keys.includes('skip-dom-selection')
+      );
+      batch(() => {
+        for (const effect of effects) {
+          if (effect.kind !== 6) continue;
+          switch (effect.code) {
+            case 0: {
+              const previousSelection = this.selectionInfo.selection;
+              const next = effect.selection;
+              const point = (p: typeof next.anchor) =>
+                ({
+                  key: p.key,
+                  offset: p.offset,
+                  type: p.type === 0 ? 'text' : 'element',
+                }) as const;
+              const selection =
+                next.kind === 1
+                  ? ({ kind: 'none' } as const)
+                  : next.kind === 2
+                    ? ({
+                        kind: 'range',
+                        anchor: point(next.anchor),
+                        focus: point(next.focus),
+                      } as const)
+                    : next.kind === 3
+                      ? ({ kind: 'node', keys: next.nodes } as const)
+                      : next.kind === 4
+                        ? ({
+                            kind: 'table',
+                            table: next.table,
+                            anchorCell: next.anchor.key,
+                            focusCell: next.focus.key,
+                          } as const)
+                        : ({ kind: 'keep' } as const);
+              selectionChanged = !sameSelection(
+                this.selectionInfo.selection,
+                selection
+              );
+              const historyBoundary =
+                this.historySelectionRevision === this.revision &&
+                previousSelection.kind === 'none'
+                  ? readFocusedRootSelection(this)
+                  : null;
+              this.selectionInfo = {
+                selection,
+                format: effect.format,
+                style: effect.style,
+              };
+              if (
+                selection.kind === 'range' &&
+                selection.anchor.key === selection.focus.key &&
+                selection.anchor.offset === selection.focus.offset
+              ) {
+                this.selectionMarkedAt = performance.now();
+                this.selectionMark = this.selectionInfo;
+              }
+              if (selection.kind === 'table')
+                this.tables
+                  .get(selection.table)
+                  ?.select(selection.anchorCell, selection.focusCell);
+              else if (previousSelection.kind === 'table')
+                this.tables.get(previousSelection.table)?.clear();
+              // Only a focused history-awareness restore may override the
+              // content update's skip tag in this packet.
+              if (
+                effect.flag ||
+                (!skipDomSelection &&
+                  !(
+                    historyBoundary && sameSelection(historyBoundary, selection)
+                  ))
+              )
+                writeSelection(this, selection, previousSelection);
+              break;
+            }
+            case 1:
+              for (const listener of this.histories)
+                listener({
+                  canUndo: effect.flag,
+                  canRedo: effect.detail !== 0,
+                });
+              break;
+            case 2:
+              this.prevented = true;
+              break;
+            case 4:
+              this.scrollIntoView(effect.detail);
+              break;
+            case 9: {
+              const payload: JsonValue = effect.style
+                ? JSON.parse(effect.style)
+                : null;
+              for (const listener of this.pluginEvents.get(effect.text) ?? [])
+                listener(payload);
+              break;
+            }
+            case 7:
+              this.scheduleRemoveEmptyText(effect.detail, effect.format);
+              break;
+          }
+        }
+        for (const [key, mutation] of diff.mutations)
+          if (mutation.after) this.updateDecorator(key, mutation.after);
+      });
+      const tags = effects
+        .filter((effect) => effect.kind === 11)
+        .flatMap((effect) => effect.keys);
+      this.notify(diff, selectionChanged, tags);
+      this.recovering = false;
+      if (
+        skipDomSelection &&
+        tags.includes('historic') &&
+        tags.includes('from-loro') &&
+        this.selectionInfo.selection.kind === 'none'
+      ) {
+        // Removing a selected subtree can collapse the browser caret at the
+        // root without a selectionchange. Read it after the executor unwinds.
+        const revision = this.revision;
+        this.historySelectionRevision = revision;
+        queueMicrotask(() => {
+          try {
+            if (
+              this.disposed ||
+              revision !== this.revision ||
+              this.selectionInfo.selection.kind !== 'none'
+            )
+              return;
+            const selection = readFocusedRootSelection(this);
+            if (selection) this.port.selectionFromView(selection);
+          } finally {
+            if (this.historySelectionRevision === revision)
+              this.historySelectionRevision = undefined;
+          }
+        });
+      }
+    } catch (error) {
+      this.options.onError(error);
+      if (this.recovering) throw error;
+      this.recovering = true;
+      const span = Telemetry.span('editor.view_recover');
+      try {
+        span.setAttr('reason', error instanceof Error ? error.name : 'unknown');
+        span.run(() => this.port.initialize());
+      } finally {
+        span.end();
+      }
+    } finally {
+      this.observe();
+    }
+  }
+  private create(node: ViewNode): void {
+    const renderer = this.registry.get(node.type);
+    const dom =
+      node.kind === 'root' ? this.root : renderer.createDOM(node, this.context);
+    this.dom.set(node.key, dom);
+    this.keys.set(dom, node.key);
+    Reflect.set(dom, `__lexicalKey_${this.options.namespace}`, node.key);
+    if (node.kind === 'decorator') {
+      dom.setAttribute('data-lexical-decorator', 'true');
+      dom.contentEditable = 'false';
+    }
+  }
+  private replace(
+    before: ViewNode,
+    node: ViewNode,
+    previous: HTMLElement
+  ): void {
+    const oldSlot = this.registry
+      .get(node.type)
+      .getDOMSlot?.(before, previous) ?? { element: previous };
+    this.create(node);
+    const next = this.dom.get(node.key);
+    if (!next) throw new Error('Replacement DOM was not created');
+    const slot = this.slot(node.key);
+    if (slot && (node.kind === 'element' || node.kind === 'root')) {
+      for (const key of node.children) {
+        const child = this.dom.get(key);
+        if (child?.parentNode === oldSlot.element)
+          slot.element.insertBefore(child, slot.before ?? null);
+      }
+    }
+    const decorator = this.decorators.get(node.key);
+    if (decorator) next.appendChild(decorator.host);
+    previous.replaceWith(next);
+  }
+  private reconcileChildren(
+    key: NodeKey,
+    attachments?: NewSubtreeAttachments
+  ): void {
+    const node = this.node(key),
+      slot = this.slot(key);
+    if (!node || !slot) throw new Error('Missing child DOM slot');
+    let current = slot.after ? slot.after.nextSibling : slot.element.firstChild;
+    for (let index = 0; index < node.children.length; index++) {
+      const end = attachments?.deferRun(slot, node.children, index);
+      if (end !== undefined) {
+        index = end - 1;
+        continue;
+      }
+      const key = node.children[index];
+      const child = this.dom.get(key);
+      if (!child) throw new Error('Missing child DOM: ' + key);
+      if (child === current) current = current.nextSibling;
+      else slot.element.insertBefore(child, current ?? slot.before ?? null);
+    }
+    while (current && current !== slot.before) {
+      const next = current.nextSibling;
+      current.remove();
+      current = next;
+    }
+    reconcileManagedLineBreak(this, node, slot);
+  }
+  private updateDecorator(key: NodeKey, node: ViewNode): void {
+    const renderer = this.registry.get(node.type);
+    const component = renderer.decorator;
+    if (!component) return;
+    const existing = this.decorators.get(key);
+    if (existing) {
+      if (existing.revision === node.decoratorRevision) {
+        if (node.decoratorRevision === undefined) existing.update(node);
+        return;
+      }
+      existing.dispose();
+      this.decorators.delete(key);
+    }
+    const dom = this.dom.get(key);
+    if (!dom) throw new Error('Decorator mount DOM missing');
+    const [value, set] = createSignal(node);
+    let host: HTMLElement;
+    if (existing) {
+      host = existing.host;
+    } else if (renderer.createDecoratorHost) {
+      host = renderer.createDecoratorHost(dom, this.context);
+    } else {
+      host = this.root.ownerDocument.createElement('span');
+      host.style.display = 'contents';
+    }
+    if (!existing) dom.appendChild(host);
+    const dispose = render(
+      () => createComponent(component, { node: value, view: this }),
+      host,
+      undefined,
+      { owner: this.owner }
+    );
+    this.decorators.set(key, {
+      dispose,
+      host,
+      revision: node.decoratorRevision,
+      update: (next) => set(() => next),
+    });
+  }
+  private notify(
+    diff: AppliedDiff,
+    selectionChanged: boolean,
+    tags: readonly string[] = []
+  ): void {
+    if (diff.mutations.size || diff.fullReconcile) this.documentRevisionValue++;
+    if (diff.mutations.size || selectionChanged || diff.fullReconcile)
+      this.revisionValue++;
+    for (const [type, listeners] of this.mutations) {
+      const records = new Map<NodeKey, MutationKind>();
+      for (const [key, change] of diff.mutations)
+        if ((change.after ?? change.before)?.type === type)
+          records.set(key, change.kind);
+      if (records.size) for (const listener of listeners) listener(records);
+    }
+    const info = {
+      tags,
+      keys: [...diff.mutations.keys()],
+      fullReconcile: diff.fullReconcile,
+      selectionChanged,
+      mutations: diff.mutations,
+      children: diff.children,
+      properties: diff.properties,
+    };
+    for (const listener of this.commits) listener(info);
+    const keys = [...diff.mutations]
+      .filter(
+        ([, change]) => (change.after ?? change.before)?.kind === 'decorator'
+      )
+      .map(([key]) => key);
+    if (keys.length)
+      for (const listener of this.decoratorListeners) listener(keys);
+  }
+  submitText(
+    key: NodeKey,
+    compositionEnd = false,
+    compositionData?: string
+  ): void {
+    const node = this.node(key),
+      dom = textLeaf(this.dom.get(key));
+    if (node?.kind !== 'text' || dom?.nodeType !== 3) return;
+    const selection = readSelection(this);
+    this.port.textFromView({
+      key,
+      text: dom.nodeValue ?? '',
+      anchorOffset: selection.kind === 'range' ? selection.anchor.offset : 0,
+      focusOffset: selection.kind === 'range' ? selection.focus.offset : 0,
+      selectionKind: selection.kind === 'range' ? 'range' : 'keep',
+      compositionEnd,
+      compositionData,
+    });
+  }
+  private scheduleRemoveEmptyText(key: NodeKey, delay: number): void {
+    const expected = this.node(key);
+    if (expected?.kind !== 'text') return;
+    const timer = setTimeout(() => {
+      this.cleanupTimers.delete(timer);
+      if (
+        this.disposed ||
+        this.node(key) !== expected ||
+        !this.root.isContentEditable
+      )
+        return;
+      const current = readSelection(this);
+      if (
+        current.kind !== 'range' ||
+        current.anchor.key !== key ||
+        current.focus.key !== key
+      )
+        return;
+      const point = { key: 0, offset: 0, type: 0 };
+      const target = {
+        kind: 0,
+        anchor: point,
+        focus: point,
+        dirty: false,
+        backward: false,
+      };
+      this.port.input(
+        EditorInputMsg.fromEditorCommand({
+          command: CommandCode.RemoveText,
+          a: 0,
+          b: 0,
+          text: '',
+          selection: selectionMessage({
+            kind: 'range',
+            anchor: { key, offset: 0, type: 'text' },
+            focus: { key, offset: expected.text.length, type: 'text' },
+          }),
+          target,
+          characterTarget: target,
+        })
+      );
+    }, delay);
+    this.cleanupTimers.add(timer);
+  }
+  private scrollIntoView(key: NodeKey): void {
+    const dom = this.dom.get(key);
+    if (!dom) return;
+    const bounds = dom.getBoundingClientRect(),
+      root = this.root.getBoundingClientRect();
+    if (bounds.top < root.top || bounds.bottom > root.bottom)
+      dom.scrollIntoView({ block: 'nearest' });
+  }
+  dispatch(
+    code: number,
+    payload: { a?: number; b?: number; text?: string } = {}
+  ): boolean | undefined {
+    return this.port.command(code, payload.a, payload.b, payload.text);
+  }
+  /** Translate special keys into one admission, retaining model KeyDown precedence. */
+  registerKeyRoute(
+    resolve: (event: KeyboardEvent) => KeyRoute | null
+  ): () => void {
+    this.keyRoutes.add(resolve);
+    return () => this.keyRoutes.delete(resolve);
+  }
+  keyRoute(event: KeyboardEvent): KeyRoute | null {
+    for (const resolve of this.keyRoutes) {
+      const route = resolve(event);
+      if (route) return route;
+    }
+    return null;
+  }
+  registerViewCommand<P>(
+    command: ViewCommand<P>,
+    listener: (payload: P, view: EditorView) => boolean,
+    priority: ViewCommandPriority
+  ): () => void {
+    if (command.name === 'Key(Enter)' && this.port.nativeEnter) {
+      if (!this.isMounted) throw new Error('Native editor view is closing');
+      return this.port.nativeEnter.register(
+        (payload) => {
+          if (!command.accepts(payload))
+            throw new Error('Invalid view command payload: ' + command.name);
+          return listener(payload, this);
+        },
+        priority,
+        listener
+      );
+    }
+    if ((this.rustListeners.get(command.name) ?? 0) & (1 << priority))
+      throw new Error(
+        'View command priority ties a Rust listener: ' + command.name
+      );
+    const entry: ViewListener = {
+      priority,
+      invoke: (payload) => {
+        if (!command.accepts(payload))
+          throw new Error('Invalid view command payload: ' + command.name);
+        return listener(payload, this);
+      },
+    };
+    const entries = this.viewCommands.get(command.name) ?? [];
+    entries.push(entry);
+    entries.sort((left, right) => right.priority - left.priority);
+    this.viewCommands.set(command.name, entries);
+    return () => {
+      const index = entries.indexOf(entry);
+      if (index !== -1) entries.splice(index, 1);
+    };
+  }
+  runViewCommand(
+    name: string,
+    payload: unknown,
+    phase: 'before' | 'after'
+  ): boolean {
+    const levels = this.rustListeners.get(name) ?? 0;
+    const highest = levels ? Math.floor(Math.log2(levels)) : -1;
+    for (const entry of this.viewCommands.get(name) ?? []) {
+      if (
+        (phase === 'before'
+          ? entry.priority > highest
+          : entry.priority < highest) &&
+        entry.invoke(payload)
+      )
+        return true;
+    }
+    return false;
+  }
+  onCommit(listener: (info: CommitInfo) => void): () => void {
+    this.commits.add(listener);
+    return () => this.commits.delete(listener);
+  }
+  observeMarkGeometry<Id extends string>(
+    margin: HTMLElement,
+    update: (id: Id, top: number) => void
+  ): MarkGeometry<Id> {
+    return new MarkGeometry(this, margin, update);
+  }
+  isEmpty(): boolean | null {
+    return this.mirror.isEmpty;
+  }
+  onMutations(
+    type: string,
+    listener: (mutations: ReadonlyMap<NodeKey, MutationKind>) => void
+  ): () => void {
+    let listeners = this.mutations.get(type);
+    if (!listeners) {
+      listeners = new Set();
+      this.mutations.set(type, listeners);
+    }
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+  /** Host requests are delivered after the native transition and its Diff. */
+  onPluginEvent(
+    name: string,
+    listener: (payload: JsonValue) => void
+  ): () => void {
+    let listeners = this.pluginEvents.get(name);
+    if (!listeners) {
+      listeners = new Set();
+      this.pluginEvents.set(name, listeners);
+    }
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+  onHistory(
+    listener: (state: { canUndo: boolean; canRedo: boolean }) => void
+  ): () => void {
+    this.histories.add(listener);
+    return () => this.histories.delete(listener);
+  }
+  onDecorators(listener: (keys: readonly NodeKey[]) => void): () => void {
+    this.decoratorListeners.add(listener);
+    return () => this.decoratorListeners.delete(listener);
+  }
+  focus(): void {
+    this.root.focus();
+  }
+  blur(): void {
+    this.root.blur();
+  }
+  setEditable(editable: boolean): void {
+    this.root.contentEditable = String(editable);
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    let failure: { error: unknown } | undefined;
+    const cleanup = (call: () => void) => {
+      try {
+        call();
+      } catch (error) {
+        if (!failure) failure = { error };
+        else {
+          try {
+            Telemetry.error(error, { surface: 'editor.dispose.cleanup' });
+          } catch {
+            /* Preserve the first disposal cause. */
+          }
+        }
+      }
+    };
+    this.keyRoutes.clear();
+    this.pluginEvents.clear();
+    cleanup(() => this.clipboard.dispose());
+    const frame = this.paintFrame;
+    if (frame !== null)
+      cleanup(() =>
+        this.root.ownerDocument.defaultView?.cancelAnimationFrame(frame)
+      );
+    cleanup(() => this.openingSpan?.end());
+    this.openingSpan = undefined;
+    this.observer.disconnect();
+    for (const timer of this.cleanupTimers) clearTimeout(timer);
+    this.cleanupTimers.clear();
+    cleanup(() => this.events.dispose());
+    cleanup(() => this.presence.dispose());
+    for (const decorator of this.decorators.values())
+      cleanup(() => decorator.dispose());
+    this.decorators.clear();
+    cleanup(() => this.port.nativeEnter?.dispose());
+    for (const table of this.tables.values()) cleanup(() => table.dispose());
+    this.tables.clear();
+    roots.delete(this.root);
+    this.dom.clear();
+    this.viewCommands.clear();
+    this.commits.clear();
+    this.mutations.clear();
+    this.histories.clear();
+    this.decoratorListeners.clear();
+    if (failure) throw failure.error;
+  }
+}

@@ -41,6 +41,11 @@ initializes markdown content.
 - Change what counts as "finalized": `src/app.rs` (`DocumentUploadFinalizer`) →
   `src/ports.rs` if a new capability is needed → `src/outbound.rs`.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md). Its Lambda
+environment copies this nonsecret setting from the document-storage Doppler
+sync at stack update; changing the Lambda policy requires another stack update.
+
 ## Checks
 
 - `cargo test -p document_upload_finalizer_handler` (`SQLX_OFFLINE` unset).
@@ -48,3 +53,5 @@ initializes markdown content.
 ## Related
 
 - Skill: `new-service`
+
+The awaited markdown initializer and Lexical native exports share one SyncServiceClient, so the Lambda returns only after the snapshot is stored.

@@ -1,0 +1,50 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query node",
+      "writes the saved-query payload the assistant emits"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/DatabaseQueryNode.databaseQueryMarkdown",
+      "args": [
+        {
+          "queryId": "0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40",
+          "databaseId": "db-1",
+          "tableId": "projects-table",
+          "prompt": "How many projects?",
+          "displayMode": "bar",
+          "title": "Open projects",
+          "chart": {
+            "x": "Status",
+            "y": [
+              "Count"
+            ]
+          }
+        }
+      ],
+      "ret": "<m-db-query>{\"queryId\":\"0b7d2c52-6f0e-4a8e-9f1f-5b0c1d2e3f40\",\"databaseId\":\"db-1\",\"tableId\":\"projects-table\",\"title\":\"Open projects\",\"prompt\":\"How many projects?\",\"displayMode\":\"bar\",\"chart\":{\"x\":\"Status\",\"y\":[\"Count\"]}}</m-db-query>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

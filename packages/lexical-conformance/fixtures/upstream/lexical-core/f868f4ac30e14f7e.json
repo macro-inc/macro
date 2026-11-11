@@ -1,0 +1,45 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/account-manager-request.test.ts",
+    "test": [
+      "account manager request card",
+      "never leaks the payload into plain text or embeddings"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "<m-account-manager-request>{\"id\":\"019a4f2e-7c1b-7d3a-9e2f-3b1c8d5a6f70\"}</m-account-manager-request>"
+      ],
+      "ret": "Account manager request"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "<m-account-manager-request>{\"id\":\"019a4f2e-7c1b-7d3a-9e2f-3b1c8d5a6f70\"}</m-account-manager-request>"
+      ],
+      "ret": "Account manager request"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

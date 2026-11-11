@@ -1,0 +1,36 @@
+[package]
+name = "lexical_model"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+# Runtime hosting and suspended updates, including session compatibility.
+foreign-nodes = ["dep:syn"]
+bench-counters = []
+model-segmentation = ["dep:unicode-segmentation"]
+
+[dependencies]
+memchr = "2.8.0"
+smallvec = { workspace = true }
+imbl = { workspace = true }
+rustc-hash = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+strum = { workspace = true }
+nom = { workspace = true }
+ryu-js = { workspace = true }
+unicode-segmentation = { workspace = true, optional = true }
+
+[build-dependencies]
+syn = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[[bench]]
+name = "node_map"
+harness = false

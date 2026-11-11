@@ -1,0 +1,52 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/external-chat-references.test.ts",
+    "test": [
+      "External chat references in channel messages",
+      "extracts an external chat mention without treating it as a document"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"01a16445-9fdc-7bb1-80b4-8935a1243c98\",\"blockName\":\"external_chat\",\"documentName\":\"Design Crit\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "external_chat",
+          "entityId": "01a16445-9fdc-7bb1-80b4-8935a1243c98"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

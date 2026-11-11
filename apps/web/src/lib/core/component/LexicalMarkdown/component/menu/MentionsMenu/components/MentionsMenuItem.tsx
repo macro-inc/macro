@@ -10,11 +10,11 @@ import EmailIcon from '@icon/system/regular/envelope.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { cn } from '@ui';
 import { createEffect, type JSX, Show } from 'solid-js';
-import { match } from 'ts-pattern';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 import { isBotMentionItem } from '../utils/botMention';
 import {
   getBlockNameFromEntity,
+  getMentionItemLabelParts,
   getMentionItemName,
 } from '../utils/entityUtils';
 
@@ -41,29 +41,7 @@ export function MentionsMenuItem(props: {
 
   const name = () => getMentionItemName(props.item);
 
-  const labelParts = () =>
-    match(props.item)
-      .with({ kind: 'user' }, ({ data: { name, email } }) => ({
-        name: name || email,
-        detail: name && name !== email ? email : undefined,
-      }))
-      .with({ kind: 'entity', data: { type: 'crm_contact' } }, ({ data }) => ({
-        name: data.name || data.email,
-        detail: data.name && data.name !== data.email ? data.email : undefined,
-      }))
-      .with({ kind: 'agentSession' }, ({ data }) => ({
-        name: data.name || 'Agent session',
-        detail: data.bot?.name ? `@${data.bot.name}` : undefined,
-      }))
-      .with({ kind: 'bookingLink' }, ({ data }) => ({
-        name: data.title,
-        detail: `${data.durationMinutes} min · ${data.owner}`,
-      }))
-      .with({ kind: 'calendarEvent' }, ({ data }) => ({
-        name: data.title,
-        detail: data.when,
-      }))
-      .otherwise(() => ({ name: name(), detail: undefined }));
+  const labelParts = () => getMentionItemLabelParts(props.item);
 
   const icon = () => {
     switch (props.item.kind) {

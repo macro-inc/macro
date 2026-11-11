@@ -1,0 +1,414 @@
+import { getActiveEditor } from './editor';
+import { LineBreakNode, ParagraphNode, TabNode, TextNode } from './nodes';
+import { $applyNodeReplacement } from './nodes/replacement/helpers';
+
+export type {
+  CreateEditorArgs,
+  DOMExportOutputMap,
+  EditableListener,
+  EditorConfig,
+  EditorDOMRenderConfig,
+  EditorState,
+  HTMLConfig,
+  LexicalEditor,
+} from './editor';
+export {
+  $getEditorDOMRenderConfig,
+  $getNodeByKey,
+  $getRoot,
+  $isElementNode,
+  createEditor,
+  isCurrentlyReadOnlyMode,
+} from './editor';
+export {
+  DecoratorNode,
+  ElementNode,
+  LineBreakNode,
+  ParagraphNode,
+  RootNode,
+  TabNode,
+  TextNode,
+} from './nodes';
+
+export function $createTextNode(text = ''): TextNode {
+  return $applyNodeReplacement(new TextNode(text));
+}
+export function $createParagraphNode(): ParagraphNode {
+  return $applyNodeReplacement(new ParagraphNode());
+}
+export function $createLineBreakNode(): LineBreakNode {
+  return $applyNodeReplacement(new LineBreakNode());
+}
+export function $isTextNode(value: unknown): value is TextNode {
+  return value instanceof TextNode;
+}
+export function $isParagraphNode(value: unknown): value is ParagraphNode {
+  return value instanceof ParagraphNode;
+}
+export function $isLineBreakNode(value: unknown): value is LineBreakNode {
+  return value instanceof LineBreakNode;
+}
+export function $getEditor() {
+  return getActiveEditor();
+}
+
+export type {
+  DOMExportOutput,
+  EditorSetOptions,
+  EditorThemeClasses,
+  EditorThemeClassName,
+  EditorUpdateOptions,
+  ElementFormatType,
+  KlassConstructor,
+  LexicalUpdateJSON,
+  NodeKey,
+  NodeMutation,
+  SerializedEditor,
+  SerializedElementNode,
+  SerializedLineBreakNode,
+  SerializedParagraphNode,
+  SerializedRootNode,
+  SerializedTabNode,
+  SerializedTextNode,
+  Spread,
+  TextFormatType,
+  TextModeType,
+} from 'lexical';
+export type {
+  DOMSlot,
+  ElementDOMSlot,
+} from '../../lexical-wasm-view/src/compat/dom-slot';
+export {
+  CAN_USE_BEFORE_INPUT,
+  CAN_USE_DOM,
+  IS_ANDROID,
+  IS_ANDROID_CHROME,
+  IS_APPLE,
+  IS_APPLE_WEBKIT,
+  IS_CHROME,
+  IS_FIREFOX,
+  IS_IOS,
+  IS_SAFARI,
+} from '../../lexical-wasm-view/src/compat/environment';
+export type {
+  BaseCaret,
+  CaretDirection,
+  CaretRange,
+  CaretType,
+  ChildCaret,
+  CommonAncestorResult,
+  CommonAncestorResultAncestor,
+  CommonAncestorResultBranch,
+  CommonAncestorResultDescendant,
+  CommonAncestorResultSame,
+  FlipDirection,
+  NodeCaret,
+  PointCaret,
+  RootMode,
+  SiblingCaret,
+  StepwiseIteratorConfig,
+  TextPointCaret,
+  TextPointCaretSlice,
+  TextPointCaretSliceTuple,
+} from './caret';
+export {
+  $caretFromPoint,
+  $caretRangeFromSelection,
+  $comparePointCaretNext,
+  $extendCaretToRange,
+  $getAdjacentChildCaret,
+  $getAdjacentSiblingOrParentSiblingCaret,
+  $getCaretInDirection,
+  $getCaretRange,
+  $getCaretRangeInDirection,
+  $getChildCaret,
+  $getChildCaretAtIndex,
+  $getChildCaretOrSelf,
+  $getCollapsedCaretRange,
+  $getCommonAncestor,
+  $getCommonAncestorResultBranchOrder,
+  $getSiblingCaret,
+  $getTextNodeOffset,
+  $getTextPointCaret,
+  $getTextPointCaretSlice,
+  $isChildCaret,
+  $isExtendableTextPointCaret,
+  $isNodeCaret,
+  $isSiblingCaret,
+  $isTextPointCaret,
+  $isTextPointCaretSlice,
+  $normalizeCaret,
+  $removeTextFromCaretRange,
+  $rewindSiblingCaret,
+  $setPointFromCaret,
+  $setSelectionFromCaretRange,
+  $updateRangeSelectionFromCaretRange,
+  flipDirection,
+  makeStepwiseIterator,
+  type SplitAtPointCaretNextOptions,
+} from './caret';
+export {
+  BEFORE_INPUT_COMMAND,
+  BLUR_COMMAND,
+  CAN_REDO_COMMAND,
+  CAN_UNDO_COMMAND,
+  CLEAR_EDITOR_COMMAND,
+  CLEAR_HISTORY_COMMAND,
+  CLICK_COMMAND,
+  COMPOSITION_END_COMMAND,
+  COMPOSITION_START_COMMAND,
+  CONTROLLED_TEXT_INSERTION_COMMAND,
+  COPY_COMMAND,
+  type CommandListener,
+  type CommandPayloadType,
+  CUT_COMMAND,
+  createCommand,
+  DELETE_CHARACTER_COMMAND,
+  DELETE_LINE_COMMAND,
+  DELETE_WORD_COMMAND,
+  DRAGEND_COMMAND,
+  DRAGOVER_COMMAND,
+  DRAGSTART_COMMAND,
+  DROP_COMMAND,
+  FOCUS_COMMAND,
+  FORMAT_ELEMENT_COMMAND,
+  FORMAT_TEXT_COMMAND,
+  INDENT_CONTENT_COMMAND,
+  INPUT_COMMAND,
+  INSERT_LINE_BREAK_COMMAND,
+  INSERT_PARAGRAPH_COMMAND,
+  INSERT_TAB_COMMAND,
+  KEY_ARROW_DOWN_COMMAND,
+  KEY_ARROW_LEFT_COMMAND,
+  KEY_ARROW_RIGHT_COMMAND,
+  KEY_ARROW_UP_COMMAND,
+  KEY_BACKSPACE_COMMAND,
+  KEY_DELETE_COMMAND,
+  KEY_DOWN_COMMAND,
+  KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
+  KEY_MODIFIER_COMMAND,
+  KEY_SPACE_COMMAND,
+  KEY_TAB_COMMAND,
+  type LexicalCommand,
+  MOVE_TO_END,
+  MOVE_TO_START,
+  OUTDENT_CONTENT_COMMAND,
+  PASTE_COMMAND,
+  type PasteCommandType,
+  REDO_COMMAND,
+  REMOVE_TEXT_COMMAND,
+  SELECT_ALL_COMMAND,
+  SELECTION_CHANGE_COMMAND,
+  SELECTION_INSERT_CLIPBOARD_NODES_COMMAND,
+  UNDO_COMMAND,
+} from './commands';
+export {
+  COLLABORATION_TAG,
+  COMMAND_PRIORITY_BEFORE_CRITICAL,
+  COMMAND_PRIORITY_BEFORE_EDITOR,
+  COMMAND_PRIORITY_BEFORE_HIGH,
+  COMMAND_PRIORITY_BEFORE_LOW,
+  COMMAND_PRIORITY_BEFORE_NORMAL,
+  COMMAND_PRIORITY_CRITICAL,
+  COMMAND_PRIORITY_EDITOR,
+  COMMAND_PRIORITY_HIGH,
+  COMMAND_PRIORITY_LOW,
+  COMMAND_PRIORITY_NORMAL,
+  COMPOSITION_END_TAG,
+  COMPOSITION_START_TAG,
+  type CommandListenerPriority,
+  type CommandListenerPriorityBefore,
+  HISTORIC_TAG,
+  HISTORY_MERGE_TAG,
+  HISTORY_PUSH_TAG,
+  IS_ALL_FORMATTING,
+  IS_BOLD,
+  IS_CODE,
+  IS_HIGHLIGHT,
+  IS_ITALIC,
+  IS_STRIKETHROUGH,
+  IS_SUBSCRIPT,
+  IS_SUPERSCRIPT,
+  IS_UNDERLINE,
+  NODE_STATE_KEY,
+  PASTE_TAG,
+  SKIP_COLLAB_TAG,
+  SKIP_DOM_SELECTION_TAG,
+  SKIP_SCROLL_INTO_VIEW_TAG,
+  SKIP_SELECTION_FOCUS_TAG,
+  TEXT_TYPE_TO_FORMAT,
+  type UpdateTag,
+} from './constants';
+
+export { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
+export {
+  type AnyLexicalExtension,
+  type AnyLexicalExtensionArgument,
+  type AnyNormalizedLexicalExtensionArgument,
+  configExtension,
+  type configTypeSymbol,
+  declarePeerDependency,
+  defineExtension,
+  type ExtensionBuildState,
+  type ExtensionConfigBase,
+  type ExtensionInitState,
+  type ExtensionRegisterState,
+  type InitialEditorConfig,
+  type InitialEditorStateType,
+  type initTypeSymbol,
+  type LexicalEditorWithDispose,
+  type LexicalExtension,
+  type LexicalExtensionArgument,
+  type LexicalExtensionConfig,
+  type LexicalExtensionDependency,
+  type LexicalExtensionInit,
+  type LexicalExtensionInternal,
+  type LexicalExtensionName,
+  type LexicalExtensionOutput,
+  type NormalizedLexicalExtensionArgument,
+  type NormalizedPeerDependency,
+  type OutputComponentExtension,
+  type OutputExtension,
+  type outputTypeSymbol,
+  safeCast,
+  shallowMergeConfig,
+} from './extension-core';
+export type { LexicalNode } from './nodes';
+export { ArtificialNode__DO_NOT_USE } from './nodes/artificial';
+export { buildImportMap } from './nodes/build-import-map';
+export type {
+  BaseStaticNodeConfig,
+  StaticNodeConfigRecord,
+  StaticNodeConfigValue,
+} from './nodes/config';
+export {
+  getStyleObjectFromCSS,
+  setDOMStyleFromCSS,
+  setDOMStyleObject,
+} from './nodes/dom-style';
+export type {
+  DOMChildConversion,
+  DOMConversion,
+  DOMConversionFn,
+  DOMConversionMap,
+  DOMConversionOutput,
+  DOMConversionProp,
+  DOMConversionPropByTagName,
+  DOMConversionTagNameMap,
+} from './nodes/dom-types';
+export type { DOMSlotForNode } from './nodes/editor-config';
+export {
+  $applyNodeReplacement,
+  $create,
+  getRegisteredNode,
+  getRegisteredNodeOrThrow,
+  getTransformSetFromKlass,
+  type Klass,
+  type LexicalNodeReplacement,
+  type Transform,
+} from './nodes/replacement';
+export {
+  $getState,
+  $getStateChange,
+  $getWritableNodeState,
+  $setState,
+  type AnyStateConfig,
+  createState,
+  type NodeStateJSON,
+  type StateConfig,
+  type StateConfigKey,
+  type StateConfigValue,
+  type StateValueConfig,
+  type StateValueOrUpdater,
+  type ValueOrUpdater,
+} from './nodes/state';
+export {
+  createSharedNodeState,
+  getStaticNodeConfig,
+} from './nodes/static-config';
+export type {
+  BaseSelection,
+  ElementPoint,
+  NodeSelection,
+  Point,
+  PointType,
+  RangeSelection,
+  TextPoint,
+} from './selection';
+export {
+  $createNodeSelection,
+  $createPoint,
+  $createRangeSelection,
+  $generateNodesFromRawText,
+  $getCharacterOffsets,
+  $getPreviousSelection,
+  $getSelection,
+  $getTextContent,
+  $insertNodes,
+  $isBlockElementNode,
+  $isNodeSelection,
+  $isRangeSelection,
+  $normalizeSelection__EXPERIMENTAL,
+  $setSelection,
+} from './selection';
+export type { RawTextVisitor } from './selection/helpers';
+export { tokenizeRawText } from './selection/helpers';
+export {
+  $parseSerializedNode,
+  type SerializedEditorState,
+  type SerializedLexicalNode,
+} from './serialization';
+export {
+  addClassNamesToElement,
+  getDOMOwnerDocument,
+  getDOMSelection,
+  getDOMSelectionFromTarget,
+  getDOMTextNode,
+  getTextDirection,
+  isBlockDomNode,
+  isDOMDocumentNode,
+  isDOMNode,
+  isDOMTextNode,
+  isDOMUnmanaged,
+  isDocumentFragment,
+  isExactShortcutMatch,
+  isHTMLAnchorElement,
+  isHTMLElement,
+  isHTMLTableCellElement,
+  isHTMLTableRowElement,
+  isInlineDomNode,
+  isModifierMatch,
+  mergeRegister,
+  normalizeClassNames,
+  removeClassNamesFromElement,
+  setDOMUnmanaged,
+  stopLexicalPropagation,
+  toggleTextFormatType,
+} from './utilities';
+export function $createTabNode(): TabNode {
+  return $applyNodeReplacement(new TabNode());
+}
+
+export {
+  $isDecoratorNode,
+  $isInlineElementOrDecoratorNode,
+  $isLeafNode,
+  $isLexicalNode,
+  $isRootNode,
+  $isRootOrShadowRoot,
+  $isTabNode,
+  $isTokenOrSegmented,
+  $isTokenOrTab,
+} from './nodes/predicates';
+export {
+  $setDirectionFromDOM,
+  setNodeIndentFromDOM,
+} from './utilities/dom-config';
+export {
+  $createChildrenArray,
+  $findMatchingParent,
+  $getNearestRootOrShadowRoot,
+  $hasAncestor,
+  removeFromParent,
+} from './utilities/tree';

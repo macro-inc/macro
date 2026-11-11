@@ -1,0 +1,902 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-context.test.ts",
+    "test": [
+      "composeAgentContextPrompt",
+      "names the words a PDF highlight covers, or that it covers none known"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "what does this mean?",
+          "anchor": {
+            "type": "pdfHighlight",
+            "anchorId": "highlight-1",
+            "markedText": "indemnifies the lessor"
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation>\\n  \\u003canchor type=\\\"pdf_highlight\\\" highlight=\\\"highlight-1\\\">\\n    \\u003cmarked_text>indemnifies the lessor\\u003c/marked_text>\\n  \\u003c/anchor>\\n\\u003c/conversation>\"}</m-agent-context>\n\nwhat does this mean?"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation>\\n  \\u003canchor type=\\\"pdf_highlight\\\" highlight=\\\"highlight-1\\\">\\n    \\u003cmarked_text>indemnifies the lessor\\u003c/marked_text>\\n  \\u003c/anchor>\\n\\u003c/conversation>\"}</m-agent-context>\n\nwhat does this mean?"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what does this mean?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        67,
+        192,
+        238,
+        45,
+        85,
+        251,
+        99,
+        140
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what does this mean?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "1Dz5GQua"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what does this mean?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what does this mean?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "1Dz5GQua"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "1Dz5GQua"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+      },
+      "args": [],
+      "ret": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <marked_text>indemnifies the lessor</marked_text>\n  </anchor>\n</conversation>"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-context.composeAgentContextPrompt",
+      "args": [
+        {
+          "promptMarkdown": "what does this mean?",
+          "anchor": {
+            "type": "pdfHighlight",
+            "anchorId": "highlight-1"
+          }
+        }
+      ],
+      "ret": "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation>\\n  \\u003canchor type=\\\"pdf_highlight\\\" highlight=\\\"highlight-1\\\">\\n    \\u003cnote>The PDF highlight carries no text, so which words it covers is not known.\\u003c/note>\\n  \\u003c/anchor>\\n\\u003c/conversation>\"}</m-agent-context>\n\nwhat does this mean?"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.46612322330474854
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.9943393093999475
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-context>{\"version\":1,\"text\":\"\\u003cconversation>\\n  \\u003canchor type=\\\"pdf_highlight\\\" highlight=\\\"highlight-1\\\">\\n    \\u003cnote>The PDF highlight carries no text, so which words it covers is not known.\\u003c/note>\\n  \\u003c/anchor>\\n\\u003c/conversation>\"}</m-agent-context>\n\nwhat does this mean?"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "o7zhn7Yx"
+              },
+              "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what does this mean?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "Bj9tmeQT"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "VUW3IJTN"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_cOZYHwk"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.8750469204969704
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7114081925246865
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        245,
+        249,
+        39,
+        95,
+        175,
+        41,
+        126,
+        44
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        223,
+        84,
+        4,
+        243,
+        59,
+        212,
+        6
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        98,
+        11,
+        88,
+        33,
+        207,
+        104,
+        37,
+        156
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        203,
+        238,
+        2,
+        7,
+        255,
+        205,
+        116,
+        100
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-context",
+              "version": 1,
+              "$": {
+                "id": "o7zhn7Yx"
+              },
+              "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "what does this mean?",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "Bj9tmeQT"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "VUW3IJTN"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_cOZYHwk"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "o7zhn7Yx"
+            },
+            "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what does this mean?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "Bj9tmeQT"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "VUW3IJTN"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_cOZYHwk"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-context",
+            "version": 1,
+            "$": {
+              "id": "o7zhn7Yx"
+            },
+            "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "what does this mean?",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "Bj9tmeQT"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "VUW3IJTN"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_cOZYHwk"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "o7zhn7Yx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "Bj9tmeQT"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "VUW3IJTN"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "iter",
+      "this": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "o7zhn7Yx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "Bj9tmeQT"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "VUW3IJTN"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ],
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-context",
+          "version": 1,
+          "$": {
+            "id": "o7zhn7Yx"
+          },
+          "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "what does this mean?",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "Bj9tmeQT"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "VUW3IJTN"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "o7zhn7Yx"
+        },
+        "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+      },
+      "args": [],
+      "ret": "agent-context"
+    },
+    {
+      "op": "call",
+      "fn": "get:text",
+      "this": {
+        "type": "agent-context",
+        "version": 1,
+        "$": {
+          "id": "o7zhn7Yx"
+        },
+        "text": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+      },
+      "args": [],
+      "ret": "<conversation>\n  <anchor type=\"pdf_highlight\" highlight=\"highlight-1\">\n    <note>The PDF highlight carries no text, so which words it covers is not known.</note>\n  </anchor>\n</conversation>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

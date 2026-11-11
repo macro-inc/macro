@@ -9,6 +9,7 @@ import {
   RegisteredNodesByType,
   SupportedNodeTypes,
 } from '@macro-inc/lexical-core';
+import { registerExternalEditorRoot } from '@macro-inc/lexical-wasm-view/view/editor-roots';
 import { Telemetry } from '@macro-inc/observability';
 import type { NodeKey } from 'lexical';
 import {
@@ -26,6 +27,7 @@ import {
   type SelectionData,
 } from '../plugins';
 import { theme as baseTheme } from '../theme';
+import { allocateEditorNamespace } from './editor-namespace';
 
 type LexicalWrapperProps = {
   type: EditorType;
@@ -56,9 +58,6 @@ export type LexicalWrapper = LexicalWrapperBase | LexicalWrapperWithMapping;
 
 export const LexicalWrapperContext = createContext<LexicalWrapper>();
 
-// Simple increasing id to differentiate multiple editors on page.
-let _id = 0;
-
 /**
  * Create a Lexical wrapper with extra utilities for adding plugins and tracking
  * cleanup functions.
@@ -87,7 +86,7 @@ export function createLexicalWrapper({
   theme,
 }: LexicalWrapperProps): LexicalWrapper {
   const owner = getOwner();
-  _id++;
+  const editorNamespace = allocateEditorNamespace(namespace);
 
   const nodes = RegisteredNodesByType[type];
   const replacements = NodeReplacements.filter((replacement) => {
@@ -100,7 +99,7 @@ export function createLexicalWrapper({
 
   const editor = createEditor({
     theme: theme ?? baseTheme,
-    namespace: namespace + '_' + _id,
+    namespace: editorNamespace,
     nodes: [...nodes, ...replacements],
     onError: (error) =>
       Telemetry.error(error, {
@@ -110,6 +109,13 @@ export function createLexicalWrapper({
   });
 
   const plugins = createPluginManager(editor, type);
+  let releaseEditorRoot: (() => void) | undefined;
+  const releaseRootListener = editor.registerRootListener((root) => {
+    releaseEditorRoot?.();
+    releaseEditorRoot = root
+      ? registerExternalEditorRoot(root, editor)
+      : undefined;
+  });
 
   let mapping: NodeIdMappings | undefined;
 
@@ -130,6 +136,8 @@ export function createLexicalWrapper({
 
   const cleanup = () => {
     plugins.cleanup();
+    releaseRootListener();
+    releaseEditorRoot?.();
   };
 
   return {

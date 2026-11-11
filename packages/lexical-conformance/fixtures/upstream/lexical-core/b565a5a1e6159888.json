@@ -1,0 +1,46 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/reply-target-node.test.ts",
+    "test": [
+      "ReplyTargetNode",
+      "escapes a closing-tag injection in display text"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/ReplyTargetNode.buildReplyTargetMarkdown",
+      "args": [
+        {
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "reply-1",
+          "targetThreadId": "thread-1",
+          "displayText": "</m-reply-target>still visible",
+          "senderId": "macro|sender@example.com"
+        }
+      ],
+      "ret": "<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"reply-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"\\u003c/m-reply-target>still visible\",\"senderId\":\"macro|sender@example.com\"}</m-reply-target>"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

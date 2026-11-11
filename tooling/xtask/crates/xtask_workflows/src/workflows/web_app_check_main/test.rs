@@ -1,9 +1,11 @@
 use super::*;
 
+mod editor_artifacts;
+
 #[test]
 fn android_native_check_is_an_unconditional_required_merge_check() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let android = job(&yaml, "android-native-check", "typescript");
+    let android = job(&yaml, "android-native-check", "editor-wasm");
     assert!(
         !android.contains("\n    if:"),
         "native enforcement must always run (steps may be gated, the job may not): {android}"
@@ -161,6 +163,33 @@ fn typecheck_runs_lexical_service_check_and_tests() {
         typescript.contains("services/lexical-service"),
         "lexical-service steps must run in the service directory: {typescript}"
     );
+}
+
+#[test]
+fn typecheck_requires_complete_lexical_exports_and_fresh_failure_evidence() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let typescript = job(&yaml, "typescript", "generated-code");
+    let install = typescript
+        .find("Install standalone Lexical facade dependencies")
+        .expect("standalone install");
+    let clear = typescript
+        .find("rm -rf target/lexical-export-surface")
+        .expect("clear stale evidence");
+    let checks = typescript.find("- name: Run checks").expect("checks");
+    assert!(install < clear && clear < checks);
+    assert!(typescript.contains("tests/export-surface/tsconfig.json"));
+    assert!(typescript.contains("tests/export-surface/vitest.config.mts"));
+    assert!(typescript.contains(
+        "LEXICAL_EXPORT_OUTPUT=../../target/lexical-export-surface bun run check:exports"
+    ));
+    let upload = typescript
+        .find("Upload lexical-export-surface artifact")
+        .expect("failure report upload");
+    assert!(checks < upload);
+    assert!(typescript[upload..].contains("if: always()"));
+    let (should_run, _) = filters(&yaml);
+    assert!(should_run.contains("apps/web/**"));
+    assert!(should_run.contains("packages/**"));
 }
 
 #[test]
@@ -855,6 +884,11 @@ fn every_former_typecheck_step_still_runs() {
     let typescript = job(&yaml, "typescript", "generated-code");
     for (name, directory, command) in [
         ("Check Types", "apps/web", "bun run type-check"),
+        (
+            "Check Lexical Assertion Boundary",
+            "apps/web",
+            "bun run check:lexical-exceptions",
+        ),
         (
             "Check Floating Promises",
             ".",

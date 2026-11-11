@@ -1,8 +1,7 @@
 import { cn } from '@ui';
 import type { NodeKey } from 'lexical';
-import { createEffect, createSignal, onMount, useContext } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { TRY_UPDATE_EQUATION_COMMAND } from '../../plugins';
+import { createEffect, createSignal, onMount } from 'solid-js';
+import { useEquationHost } from '../../decorator-host/equation-host';
 
 // Lazy load katex - will be loaded on first render
 let katexModule: typeof import('katex') | null = null;
@@ -29,14 +28,8 @@ export function Equation(props: {
   >(undefined);
   const [isKatexReady, setIsKatexReady] = createSignal(katexLoaded);
 
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const selection = () => lexicalWrapper?.selection;
-
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key ?? '');
-  };
+  const host = useEquationHost();
+  const isSelectedAsNode = () => host.isSelected(props.key ?? '');
 
   onMount(async () => {
     if (!katexLoaded) {
@@ -72,10 +65,7 @@ export function Equation(props: {
       tabIndex={-1}
       onDblClick={() => {
         const key = props.key;
-        const editor = lexicalWrapper?.editor;
-        if (key && editor) {
-          editor.dispatchCommand(TRY_UPDATE_EQUATION_COMMAND, key);
-        }
+        if (key) host.equation.requestEdit(key);
       }}
     >
       <span ref={setKatexElementRef} class="block" />

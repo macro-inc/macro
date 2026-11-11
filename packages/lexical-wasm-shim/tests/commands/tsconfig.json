@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@pinned-core/commands": [
+        "../../../../node_modules/lexical/dist/LexicalCommands.d.ts"
+      ],
+      "@pinned-core/constants": [
+        "../../../../node_modules/lexical/dist/LexicalConstants.d.ts"
+      ],
+      "@pinned-core/tags": [
+        "../../../../node_modules/lexical/dist/LexicalUpdateTags.d.ts"
+      ]
+    },
+    "rootDir": "../../../..",
+    "noEmitOnError": true
+  },
+  "include": [
+    "../../src/commands.ts",
+    "../../src/constants.ts",
+    "./*.ts",
+    "./*.mts"
+  ]
+}

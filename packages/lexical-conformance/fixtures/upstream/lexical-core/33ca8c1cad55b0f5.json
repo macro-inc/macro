@@ -1,0 +1,4560 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/auto-link.test.ts",
+    "test": [
+      "Markdown URL imports",
+      "retains URL destinations through repeated save and reload"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "paragraph",
+      "text",
+      "code",
+      "custom-code",
+      "database-query",
+      "heading",
+      "link",
+      "autolink",
+      "list",
+      "task-list",
+      "listitem",
+      "quote",
+      "linebreak",
+      "document-mention",
+      "document-card",
+      "paste",
+      "user-mention",
+      "contact-mention",
+      "date-mention",
+      "pr-mention",
+      "booking-link-mention",
+      "agent-session-mention",
+      "reply-target",
+      "group-mention",
+      "inline-search",
+      "unlinked-text",
+      "code-highlight",
+      "tab",
+      "image",
+      "video",
+      "table",
+      "tablecell",
+      "tablerow",
+      "completion",
+      "mark",
+      "comment-mark",
+      "search-match",
+      "equation",
+      "snapshot",
+      "horizontalrule",
+      "diff",
+      "diff-insert",
+      "diff-delete",
+      "diff-text",
+      "html-render",
+      "classed-block",
+      "watermark",
+      "theme-mention",
+      "tag-mention",
+      "connect-app",
+      "account-manager-request",
+      "unknown-mention",
+      "await",
+      "magic-chip",
+      "agent-activity",
+      "agent-context",
+      "system-notification"
+    ],
+    "nodeClasses": {
+      "paragraph": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6.dependencies.0"
+      },
+      "text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+      },
+      "code": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71.dependencies.0"
+      },
+      "custom-code": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+      },
+      "database-query": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.0"
+      },
+      "heading": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69.dependencies.0"
+      },
+      "link": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.0"
+      },
+      "autolink": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+      },
+      "list": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82.dependencies.0"
+      },
+      "task-list": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+      },
+      "listitem": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15.dependencies.1"
+      },
+      "quote": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19.dependencies.0"
+      },
+      "linebreak": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16.dependencies.0"
+      },
+      "document-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25.dependencies.0"
+      },
+      "document-card": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27.dependencies.0"
+      },
+      "paste": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3.dependencies.0"
+      },
+      "user-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21.dependencies.0"
+      },
+      "contact-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36.dependencies.0"
+      },
+      "date-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38.dependencies.0"
+      },
+      "pr-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29.dependencies.0"
+      },
+      "booking-link-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30.dependencies.0"
+      },
+      "agent-session-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31.dependencies.0"
+      },
+      "reply-target": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43.dependencies.0"
+      },
+      "group-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23.dependencies.0"
+      },
+      "inline-search": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+      },
+      "unlinked-text": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.1"
+      },
+      "code-highlight": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+      },
+      "tab": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+      },
+      "image": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13.dependencies.0"
+      },
+      "video": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7.dependencies.0"
+      },
+      "table": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.0"
+      },
+      "tablecell": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.2"
+      },
+      "tablerow": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.1"
+      },
+      "completion": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+      },
+      "mark": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9.dependencies.0"
+      },
+      "comment-mark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+      },
+      "search-match": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10.dependencies.0"
+      },
+      "equation": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46.dependencies.0"
+      },
+      "snapshot": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2.dependencies.0"
+      },
+      "horizontalrule": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11.dependencies.0"
+      },
+      "diff": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+      },
+      "diff-insert": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+      },
+      "diff-delete": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+      },
+      "diff-text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+      },
+      "html-render": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4.dependencies.0"
+      },
+      "classed-block": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45.dependencies.0"
+      },
+      "watermark": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51.dependencies.0"
+      },
+      "theme-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47.dependencies.0"
+      },
+      "tag-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48.dependencies.0"
+      },
+      "connect-app": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49.dependencies.0"
+      },
+      "account-manager-request": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50.dependencies.0"
+      },
+      "unknown-mention": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.1"
+      },
+      "await": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40.dependencies.0"
+      },
+      "magic-chip": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41.dependencies.0"
+      },
+      "agent-activity": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42.dependencies.0"
+      },
+      "agent-context": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44.dependencies.0"
+      },
+      "system-notification": {
+        "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87.dependencies.0"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": false,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6.dependencies.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71.dependencies.0"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.0"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69.dependencies.0"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.0"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82.dependencies.0"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19.dependencies.0"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16.dependencies.0"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25.dependencies.0"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27.dependencies.0"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3.dependencies.0"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21.dependencies.0"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36.dependencies.0"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38.dependencies.0"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29.dependencies.0"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30.dependencies.0"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31.dependencies.0"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43.dependencies.0"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23.dependencies.0"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.1"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13.dependencies.0"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7.dependencies.0"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.0"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.2"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.1"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9.dependencies.0"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10.dependencies.0"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46.dependencies.0"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2.dependencies.0"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11.dependencies.0"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4.dependencies.0"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45.dependencies.0"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51.dependencies.0"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47.dependencies.0"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48.dependencies.0"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49.dependencies.0"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50.dependencies.0"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.1"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40.dependencies.0"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41.dependencies.0"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42.dependencies.0"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44.dependencies.0"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertFromMarkdownString",
+          "args": [
+            "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.5"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.18"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.20"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.22"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.24"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.26"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.28"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.33"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.34"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.35"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.37"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.39"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.52"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.53"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.54"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.55"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.56"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.57"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.58"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.59"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.60"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.61"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.62"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.63"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.64"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://apps.apple.com/us/app/macro-app/id6743133649",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": "https://apps.apple.com/us/app/macro-app/id6743133649"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": " ",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://example.com/a%2Fb?q=%25",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": null,
+                    "url": "https://example.com/a%2Fb?q=%25"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+        "nodeMapKeys": [
+          "root",
+          "2",
+          "3",
+          "4",
+          "5",
+          "7",
+          "8"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "3",
+            "5",
+            "8"
+          ],
+          "elements": [
+            [
+              "2",
+              true
+            ],
+            [
+              "4",
+              true
+            ],
+            [
+              "7",
+              true
+            ],
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 1
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertToMarkdownString",
+          "args": [
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.INTERNAL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>"
+        }
+      ],
+      "state": {
+        "$state": 1
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "createEditor",
+      "id": 1,
+      "config": {
+        "namespace": "ihwzg",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6.dependencies.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71.dependencies.0"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.0"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69.dependencies.0"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.0"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82.dependencies.0"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19.dependencies.0"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16.dependencies.0"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25.dependencies.0"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27.dependencies.0"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3.dependencies.0"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21.dependencies.0"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36.dependencies.0"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38.dependencies.0"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29.dependencies.0"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30.dependencies.0"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31.dependencies.0"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43.dependencies.0"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23.dependencies.0"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.1"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13.dependencies.0"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7.dependencies.0"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.0"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.2"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.1"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9.dependencies.0"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10.dependencies.0"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46.dependencies.0"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2.dependencies.0"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11.dependencies.0"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4.dependencies.0"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45.dependencies.0"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51.dependencies.0"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47.dependencies.0"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48.dependencies.0"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49.dependencies.0"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50.dependencies.0"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.1"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40.dependencies.0"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41.dependencies.0"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42.dependencies.0"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44.dependencies.0"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 2
+      }
+    },
+    {
+      "op": "update",
+      "editor": 1,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertFromMarkdownString",
+          "args": [
+            "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>",
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.5"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.18"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.20"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.22"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.24"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.26"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.28"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.33"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.34"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.35"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.37"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.39"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.52"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.53"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.54"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.55"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.56"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.57"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.58"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.59"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.60"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.61"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.62"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.63"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.64"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 1,
+      "index": 1,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://apps.apple.com/us/app/macro-app/id6743133649",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://apps.apple.com/us/app/macro-app/id6743133649"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": " ",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://example.com/a%2Fb?q=%25",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://example.com/a%2Fb?q=%25"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+        "nodeMapKeys": [
+          "root",
+          "10",
+          "11",
+          "12",
+          "13",
+          "15",
+          "16"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "11",
+            "13",
+            "16"
+          ],
+          "elements": [
+            [
+              "10",
+              true
+            ],
+            [
+              "12",
+              true
+            ],
+            [
+              "15",
+              true
+            ],
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 2
+      },
+      "ret": {
+        "$state": 3
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": [
+            {
+              "$h": 5,
+              "key": "10",
+              "type": "paragraph",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": [
+            {
+              "$h": 6,
+              "key": "12",
+              "type": "link",
+              "ver": 1
+            },
+            {
+              "$h": 7,
+              "key": "11",
+              "type": "text",
+              "ver": 1
+            },
+            {
+              "$h": 8,
+              "key": "15",
+              "type": "link",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": [
+            {
+              "$h": 9,
+              "key": "13",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 9
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 9
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 8
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 8
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 8
+          },
+          "ret": [
+            {
+              "$h": 10,
+              "key": "16",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 10
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 10
+            }
+          ],
+          "ret": false
+        }
+      ],
+      "state": {
+        "$state": 3
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 2
+      },
+      "ret": {
+        "$state": 3
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertToMarkdownString",
+          "args": [
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.INTERNAL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>"
+        }
+      ],
+      "state": {
+        "$state": 3
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.05054362863302231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3695183543022722
+    },
+    {
+      "op": "createEditor",
+      "id": 2,
+      "config": {
+        "namespace": "tivye",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6.dependencies.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71.dependencies.0"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.0"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69.dependencies.0"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.0"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82.dependencies.0"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19.dependencies.0"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16.dependencies.0"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25.dependencies.0"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27.dependencies.0"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3.dependencies.0"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21.dependencies.0"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36.dependencies.0"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38.dependencies.0"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29.dependencies.0"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30.dependencies.0"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31.dependencies.0"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43.dependencies.0"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23.dependencies.0"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.1"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13.dependencies.0"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7.dependencies.0"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.0"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.2"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.1"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9.dependencies.0"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10.dependencies.0"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46.dependencies.0"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2.dependencies.0"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11.dependencies.0"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4.dependencies.0"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45.dependencies.0"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51.dependencies.0"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47.dependencies.0"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48.dependencies.0"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49.dependencies.0"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50.dependencies.0"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.1"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40.dependencies.0"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41.dependencies.0"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42.dependencies.0"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44.dependencies.0"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 11
+      }
+    },
+    {
+      "op": "update",
+      "editor": 2,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertFromMarkdownString",
+          "args": [
+            "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>",
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.5"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.18"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.20"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.22"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.24"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.26"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.28"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.33"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.34"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.35"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.37"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.39"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.52"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.53"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.54"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.55"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.56"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.57"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.58"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.59"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.60"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.61"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.62"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.63"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.64"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 2,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 2,
+      "index": 1,
+      "updates": [
+        2
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://apps.apple.com/us/app/macro-app/id6743133649",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://apps.apple.com/us/app/macro-app/id6743133649"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": " ",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://example.com/a%2Fb?q=%25",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://example.com/a%2Fb?q=%25"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+        "nodeMapKeys": [
+          "root",
+          "18",
+          "19",
+          "20",
+          "21",
+          "23",
+          "24"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "19",
+            "21",
+            "24"
+          ],
+          "elements": [
+            [
+              "18",
+              true
+            ],
+            [
+              "20",
+              true
+            ],
+            [
+              "23",
+              true
+            ],
+            [
+              4,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 11
+      },
+      "ret": {
+        "$state": 12
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 13,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 13
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 13
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 13
+          },
+          "ret": [
+            {
+              "$h": 14,
+              "key": "18",
+              "type": "paragraph",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 14
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 14
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 14
+          },
+          "ret": [
+            {
+              "$h": 15,
+              "key": "20",
+              "type": "link",
+              "ver": 1
+            },
+            {
+              "$h": 16,
+              "key": "19",
+              "type": "text",
+              "ver": 1
+            },
+            {
+              "$h": 17,
+              "key": "23",
+              "type": "link",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 15
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 15
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 15
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 15
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 15
+          },
+          "ret": [
+            {
+              "$h": 18,
+              "key": "21",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 18
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 18
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 16
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 16
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 17
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 17
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 17
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 17
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 17
+          },
+          "ret": [
+            {
+              "$h": 19,
+              "key": "24",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 19
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 19
+            }
+          ],
+          "ret": false
+        }
+      ],
+      "state": {
+        "$state": 12
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 11
+      },
+      "ret": {
+        "$state": 12
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertToMarkdownString",
+          "args": [
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.INTERNAL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>"
+        }
+      ],
+      "state": {
+        "$state": 12
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7747629624791443
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.556188570568338
+    },
+    {
+      "op": "createEditor",
+      "id": 3,
+      "config": {
+        "namespace": "rwcnb",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6.dependencies.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71.dependencies.0"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.0"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69.dependencies.0"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.0"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82.dependencies.0"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19.dependencies.0"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16.dependencies.0"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25.dependencies.0"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27.dependencies.0"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3.dependencies.0"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21.dependencies.0"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36.dependencies.0"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38.dependencies.0"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29.dependencies.0"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30.dependencies.0"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31.dependencies.0"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43.dependencies.0"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23.dependencies.0"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8.dependencies.1"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13.dependencies.0"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7.dependencies.0"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.0"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.2"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17.dependencies.1"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9.dependencies.0"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10.dependencies.0"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46.dependencies.0"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2.dependencies.0"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11.dependencies.0"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4.dependencies.0"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45.dependencies.0"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51.dependencies.0"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47.dependencies.0"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48.dependencies.0"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49.dependencies.0"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50.dependencies.0"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0.dependencies.1"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40.dependencies.0"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41.dependencies.0"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42.dependencies.0"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44.dependencies.0"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 20
+      }
+    },
+    {
+      "op": "update",
+      "editor": 3,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertFromMarkdownString",
+          "args": [
+            "<m-link>{\"url\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"text\":\"https://apps.apple.com/us/app/macro-app/id6743133649\",\"title\":\"\"}</m-link> <m-link>{\"url\":\"https://example.com/a%2Fb?q=%25\",\"text\":\"https://example.com/a%2Fb?q=%25\",\"title\":\"\"}</m-link>",
+            [
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.0"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.1"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.2"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.3"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.4"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.5"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.6"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.7"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.8"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.9"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.10"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.11"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.12"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.13"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.14"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.15"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.16"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.17"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.18"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.19"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.20"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.21"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.22"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.23"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.24"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.25"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.26"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.27"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.28"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.29"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.30"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.31"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.32"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.33"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.34"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.35"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.36"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.37"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.38"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.39"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.40"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.41"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.42"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.43"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.44"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.45"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.46"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.47"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.48"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.49"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.50"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.51"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.52"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.53"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.54"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.55"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.56"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.57"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.58"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.59"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.60"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.61"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.62"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.63"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.64"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.65"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.66"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.67"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.68"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.69"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.70"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.71"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.72"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.73"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.74"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.75"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.76"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.77"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.78"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.79"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.80"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.81"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.82"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.83"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.84"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.85"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.86"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.87"
+              },
+              {
+                "$transformer": "@macro-inc/lexical-core/transformers.ALL_TRANSFORMERS.88"
+              }
+            ]
+          ],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ],
+      "id": 3,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 3,
+      "index": 1,
+      "updates": [
+        3
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://apps.apple.com/us/app/macro-app/id6743133649",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://apps.apple.com/us/app/macro-app/id6743133649"
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": " ",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "https://example.com/a%2Fb?q=%25",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "link",
+                    "version": 1,
+                    "rel": null,
+                    "target": null,
+                    "title": "",
+                    "url": "https://example.com/a%2Fb?q=%25"
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+        "nodeMapKeys": [
+          "root",
+          "26",
+          "27",
+          "28",
+          "29",
+          "31",
+          "32"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            "27",
+            "29",
+            "32"
+          ],
+          "elements": [
+            [
+              "26",
+              true
+            ],
+            [
+              "28",
+              true
+            ],
+            [
+              "31",
+              true
+            ],
+            [
+              13,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 20
+      },
+      "ret": {
+        "$state": 21
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 22,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 22
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 22
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 22
+          },
+          "ret": [
+            {
+              "$h": 23,
+              "key": "26",
+              "type": "paragraph",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 23
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 23
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 23
+          },
+          "ret": [
+            {
+              "$h": 24,
+              "key": "28",
+              "type": "link",
+              "ver": 1
+            },
+            {
+              "$h": 25,
+              "key": "27",
+              "type": "text",
+              "ver": 1
+            },
+            {
+              "$h": 26,
+              "key": "31",
+              "type": "link",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 24
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 24
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 24
+          },
+          "ret": "https://apps.apple.com/us/app/macro-app/id6743133649"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 24
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 24
+          },
+          "ret": [
+            {
+              "$h": 27,
+              "key": "29",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 27
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 27
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 25
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 25
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 26
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 26
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getURL",
+          "args": [],
+          "this": {
+            "$h": 26
+          },
+          "ret": "https://example.com/a%2Fb?q=%25"
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 26
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "LinkNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 26
+          },
+          "ret": [
+            {
+              "$h": 28,
+              "key": "32",
+              "type": "text",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/link.$isLinkNode",
+          "args": [
+            {
+              "$h": 28
+            }
+          ],
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 28
+            }
+          ],
+          "ret": false
+        }
+      ],
+      "state": {
+        "$state": 21
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "https://apps.apple.com/us/app/macro-app/id6743133649",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": "",
+                "url": "https://apps.apple.com/us/app/macro-app/id6743133649"
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": " ",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "https://example.com/a%2Fb?q=%25",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "link",
+                "version": 1,
+                "rel": null,
+                "target": null,
+                "title": "",
+                "url": "https://example.com/a%2Fb?q=%25"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "https://apps.apple.com/us/app/macro-app/id6743133649 https://example.com/a%2Fb?q=%25",
+    "nodeMapKeys": [
+      "root",
+      "26",
+      "27",
+      "28",
+      "29",
+      "31",
+      "32"
+    ]
+  }
+}

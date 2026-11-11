@@ -1,0 +1,1224 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/document-card-conversion.test.ts",
+    "test": [
+      "$convertMentionToCard",
+      "splits a list around a mention-only list item"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "paragraph",
+      "text",
+      "code",
+      "custom-code",
+      "database-query",
+      "heading",
+      "link",
+      "autolink",
+      "list",
+      "task-list",
+      "listitem",
+      "quote",
+      "linebreak",
+      "document-mention",
+      "document-card",
+      "paste",
+      "user-mention",
+      "contact-mention",
+      "date-mention",
+      "pr-mention",
+      "booking-link-mention",
+      "agent-session-mention",
+      "reply-target",
+      "group-mention",
+      "inline-search",
+      "unlinked-text",
+      "code-highlight",
+      "tab",
+      "image",
+      "video",
+      "table",
+      "tablecell",
+      "tablerow",
+      "completion",
+      "mark",
+      "comment-mark",
+      "search-match",
+      "equation",
+      "snapshot",
+      "horizontalrule",
+      "diff",
+      "diff-insert",
+      "diff-delete",
+      "diff-text",
+      "html-render",
+      "classed-block",
+      "watermark",
+      "theme-mention",
+      "tag-mention",
+      "connect-app",
+      "account-manager-request",
+      "unknown-mention",
+      "await",
+      "magic-chip",
+      "agent-activity",
+      "agent-context",
+      "system-notification"
+    ],
+    "nodeClasses": {
+      "paragraph": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.0"
+      },
+      "text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+      },
+      "code": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.2"
+      },
+      "custom-code": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+      },
+      "database-query": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.4"
+      },
+      "heading": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.5"
+      },
+      "link": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.6"
+      },
+      "autolink": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+      },
+      "list": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.8"
+      },
+      "task-list": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+      },
+      "listitem": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.10"
+      },
+      "quote": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.11"
+      },
+      "linebreak": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.12"
+      },
+      "document-mention": {
+        "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+      },
+      "document-card": {
+        "$fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.DocumentCardNode"
+      },
+      "paste": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.15"
+      },
+      "user-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.16"
+      },
+      "contact-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.17"
+      },
+      "date-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.18"
+      },
+      "pr-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.19"
+      },
+      "booking-link-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.20"
+      },
+      "agent-session-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.21"
+      },
+      "reply-target": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.22"
+      },
+      "group-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.23"
+      },
+      "inline-search": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+      },
+      "unlinked-text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.25"
+      },
+      "code-highlight": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+      },
+      "tab": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+      },
+      "image": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.28"
+      },
+      "video": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.29"
+      },
+      "table": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.30"
+      },
+      "tablecell": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.31"
+      },
+      "tablerow": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.32"
+      },
+      "completion": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+      },
+      "mark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.34"
+      },
+      "comment-mark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+      },
+      "search-match": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.36"
+      },
+      "equation": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.37"
+      },
+      "snapshot": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.38"
+      },
+      "horizontalrule": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.39"
+      },
+      "diff": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+      },
+      "diff-insert": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+      },
+      "diff-delete": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+      },
+      "diff-text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+      },
+      "html-render": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.44"
+      },
+      "classed-block": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.45"
+      },
+      "watermark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.46"
+      },
+      "theme-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.47"
+      },
+      "tag-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.48"
+      },
+      "connect-app": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.49"
+      },
+      "account-manager-request": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.50"
+      },
+      "unknown-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.51"
+      },
+      "await": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.52"
+      },
+      "magic-chip": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.53"
+      },
+      "agent-activity": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.54"
+      },
+      "agent-context": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.55"
+      },
+      "system-notification": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.56"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": false,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.2"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.3"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.4"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.5"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.6"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.8"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.10"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.11"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.12"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.DocumentCardNode"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.15"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.16"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.17"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.18"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.19"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.20"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.21"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.22"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.23"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.25"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.28"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.29"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.30"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.31"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.32"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.34"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.36"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.37"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.38"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.39"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.44"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.45"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.46"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.47"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.48"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.49"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.50"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.51"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.52"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.53"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.54"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.55"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.56"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": false,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListNode",
+          "args": [
+            "bullet"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "list",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "4",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.$createDocumentMentionNode",
+          "args": [
+            {
+              "documentId": "doc-1",
+              "documentName": "Doc",
+              "blockName": "md"
+            }
+          ],
+          "ret": {
+            "$h": 6,
+            "key": "5",
+            "type": "document-mention",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 7,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "before"
+          ],
+          "ret": {
+            "$h": 8,
+            "key": "6",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "after"
+          ],
+          "ret": {
+            "$h": 9,
+            "key": "7",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 9
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.append",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 4
+            },
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.$convertMentionToCard",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "ret": {
+            "$h": 10,
+            "key": "8",
+            "type": "document-card",
+            "ver": 1
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "onUpdate": {
+          "$tape": 0
+        }
+      }
+    },
+    {
+      "op": "clock",
+      "src": "date",
+      "t": 1730900000000
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "before",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              },
+              {
+                "type": "document-card",
+                "version": 1,
+                "documentId": "doc-1",
+                "documentName": "Doc",
+                "blockName": "md",
+                "blockParams": {},
+                "previewBox": [
+                  "100%",
+                  "400px"
+                ]
+              },
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "after",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "before\n\nDocafter",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "4",
+          "6",
+          "7",
+          "8",
+          "10"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            8,
+            9,
+            10
+          ],
+          "elements": [
+            [
+              2,
+              true
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              "10",
+              true
+            ],
+            [
+              7,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "onUpdate"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 11
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 7
+          },
+          "ret": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12,
+              "key": "10",
+              "type": "list",
+              "ver": 1
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:2",
+          "this": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$isListNode",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:1",
+          "this": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 10
+            },
+            {
+              "$h": 12
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 10
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@macro-inc/lexical-core/nodes/DocumentCardNode.$isDocumentCardNode",
+          "args": [
+            {
+              "$h": 10
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$isListNode",
+          "args": [
+            {
+              "$h": 12
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$isListNode",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$isListNode",
+          "args": [
+            {
+              "$h": 12
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": [
+            {
+              "$h": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": "before"
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.getChildren",
+          "args": [],
+          "this": {
+            "$h": 12
+          },
+          "ret": [
+            {
+              "$h": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": "after"
+        }
+      ],
+      "state": {
+        "$state": 11
+      }
+    }
+  ],
+  "tapes": [
+    {
+      "invocations": [
+        {
+          "args": [],
+          "calls": [],
+          "ret": {
+            "$undef": true
+          }
+        }
+      ]
+    }
+  ],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "before",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          },
+          {
+            "type": "document-card",
+            "version": 1,
+            "documentId": "doc-1",
+            "documentName": "Doc",
+            "blockName": "md",
+            "blockParams": {},
+            "previewBox": [
+              "100%",
+              "400px"
+            ]
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "after",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "before\n\nDocafter",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "4",
+      "6",
+      "7",
+      "8",
+      "10"
+    ]
+  }
+}

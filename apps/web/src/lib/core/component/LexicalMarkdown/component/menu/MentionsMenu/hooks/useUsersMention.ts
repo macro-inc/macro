@@ -24,6 +24,7 @@ type UseUsersMentionOptions = {
 };
 
 type UseUsersMentionResult = {
+  error: Accessor<unknown>;
   users: Accessor<UserItem[]>;
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
@@ -166,6 +167,7 @@ export function useUsersMention(
   });
 
   return {
+    error: () => (usesDirectory() ? workspace.error() : undefined),
     users,
     currentUserDomain,
     groups,

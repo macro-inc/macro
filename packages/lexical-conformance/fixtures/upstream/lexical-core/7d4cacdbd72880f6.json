@@ -1,0 +1,305 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/channel-mentions.test.ts",
+    "test": [
+      "extractChannelMentionsFromMarkdown",
+      "maps block names to entity types"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"md\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "document",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"pdf\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "document",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"channel\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "channel",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.05054362863302231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3695183543022722
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"project\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "project",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7747629624791443
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.556188570568338
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"chat\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "chat",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.0164932357147336
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.6392460397910327
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"email\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "thread",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.2504511415027082
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.4223777682054788
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"call\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "call",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5906901974231005
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.8369336591567844
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"calendar\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "calendar_event",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23507591942325234
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.980845961952582
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"automation\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "automation",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.8608870944008231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.32687550294212997
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"routine\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "automation",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.6826027217321098
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5314591128844768
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"company\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "crm_company",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.21594200655817986
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.1045342271681875
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"id-1\",\"blockName\":\"contact\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "crm_contact",
+          "entityId": "id-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.07054510014131665
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.31888069794513285
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

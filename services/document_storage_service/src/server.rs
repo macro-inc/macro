@@ -359,10 +359,14 @@ async fn run_server() -> anyhow::Result<()> {
         SyncServiceUrl::new()?.to_string(),
     ));
 
-    let lexical_client = Arc::new(LexicalClient::new(
-        config.internal_api_key.to_string(),
-        LexicalServiceUrl::new()?.to_string(),
-    ));
+    let lexical_client = Arc::new(
+        LexicalClient::new(
+            config.internal_api_key.to_string(),
+            LexicalServiceUrl::new()?.to_string(),
+        )
+        .with_route_modes(config.lexical_route_modes.clone())
+        .with_document_source(sync_service_client.clone()),
+    );
 
     let jwt_validation_args =
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
@@ -1503,6 +1507,7 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
             ),
         )),
+        lexical_client.as_ref().clone(),
     )
     .await
     .context("failed to build Macro agent tool context")?;

@@ -78,6 +78,7 @@
 			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
+			"packages/lexical-wasm-view",
 			"services/ai-editing-worker",
 			"services/mcp-chatgpt-worker",
 			"services/bots/anthropic-status-bot",
@@ -86,10 +87,11 @@
 			"services/lexical-service",
 			"packages/spreadsheet",
 			"vendor/ironcalc/pkg",
-			"packages/sdk-docs"
+			"packages/sdk-docs",
+			"tooling/sync-sim"
 		],
 		"catalog": {
-			"loro-crdt": "1.16.3"
+			"loro-crdt": "1.17.1"
 		}
 	},
 	"devDependencies": {

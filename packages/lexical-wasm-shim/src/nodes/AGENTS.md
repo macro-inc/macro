@@ -1,0 +1,73 @@
+# Built-in compatibility nodes
+
+## Scope
+
+Port the public and DOM methods of the pinned Lexical v0.45.0 built-in classes.
+Keep construction, cloning, bindings and model context in `runtime.ts`.
+
+`base.ts`, `element.ts`, `text.ts`, `tab.ts` and `builtins.ts` implement the
+classes; `index.ts` exports them and hydrates built-ins. Within that built-in graph,
+import superclass values from their defining module to preserve evaluation order.
+`dom-import.ts` and `text-dom.ts` implement the node DOM methods.
+`artificial.ts` carries the pinned generic Element-based internal ArtificialNode;
+its constructor still requires the real runtime's class registration and authority.
+This separate entry imports ElementNode through the initialized core barrel so
+cold evaluation does not enter the Element/editor dependency cycle midway.
+`config.ts` and `dom-types.ts` carry the actual core's recursive types.
+`state/` contains JavaScript StateConfig/record algorithms and typed runtime
+injection; its own guide separates pure algorithms from hosted state acceptance.
+`editor-config.ts` carries the full public render configuration with actual core
+node and editor types. Public node methods use it rather than the view's minimal
+internal configuration; resolve configured DOM hooks through the actual editor.
+HTMLConfig uses actual registered classes and JS import/export callbacks. Keep
+editable notifications outside dollar scopes while queuing ordinary listener
+updates; noneditable editors still permit programmatic updates.
+Preserve the upstream public config-record alias and its constraints; the
+central exception's internal return shape uses the actual core config types.
+`runtime-primitives.ts` resolves nodes, writable captures and native-backed field
+writes through `runtime.ts`. `../compatibility-exceptions.ts` centralizes the
+nine approved upstream assertions, including numeric ordering and tag-map widening, and the
+separate public extension wildcard type entry. Keep their sites in the type-contract
+manifest. The production backend must supply acknowledged local reads and batched
+writes; the legacy conformance backend still makes diagnostic native calls.
+
+## Boundaries
+
+- Read captured own fields through `nodeField`; resolve current values through the active graph before reading.
+- Serve public graph and scalar reads from the local mirror without WASM calls.
+- Keep base dirty checks on acknowledged leaves and Element overrides on acknowledged elements; Root reads its captured cache and falls back to active traversal according to the actual read scope and dirty type.
+- Reject missing root-cache and dirty metadata capabilities rather than substituting empty sets or cached text.
+- Send writes through the runtime buffer and preserve upstream native-super dispatch.
+- Reuse `lexical-wasm-view/compat` DOM slots and the actual core classes in method signatures.
+- Preserve upstream generic constraints and self returns; use the centralized runtime adapter only for upstream caller-asserted generic APIs.
+- Preserve upstream field reads and getter evaluation counts; formatting flags read latest raw fields and Element JSON samples each text-format/style getter once.
+- Refresh both paragraph legacy JSON text fields together when either Element JSON field is absent.
+- Route TextNode spellcheck and HTML export format decisions through its public hasFormat predicate while keeping tag structure on captured format bits.
+- Route static builtin imports and paragraph/parent creation through the pinned registered replacement factories; leave clone, hydration and default configured constructors under their distinct authority.
+- Route DOM-created builtin nodes through actual registered replacement dispatch; test import callbacks inside a real editor update, not a bare node runtime.
+- Preserve paragraph DOM import order: CSS format, indentation, current-format check, legacy align fallback, then direction.
+- Keep upstream MIT notices on ported implementation code.
+
+## Checks
+
+Run the package's strict TypeScript check and real WASM tests, the pinned node oracle,
+and node identity and crossing-count regressions. Report source-model oracle runs
+separately from actual native acceptance.
+Keep base TextNode slot proofs separate from mounted Element/TaskList acceptance;
+Element slots require the real active view editor and block-cursor binding.
+
+Run `tests/run-oracle.ts` with `LEXICAL_NODES_UPSTREAM_ROOT` pointing to the
+unaltered v0.45.0 source and `LEXICAL_NODES_NATIVE_CONFIG` pointing to the native
+facade unit-test configuration. The runner checks original suite hashes before
+and after execution and requires all 275 assertions to pass without skips or
+incomplete results. Keep the report candidate-only with `nativeAcceptance:false`
+until external engine identity proof is bound.
+
+Keep buildImportMap as the pinned tag-specific identity API. Its sole runtime
+association calls central widenTagConversionMap (LexicalNode.ts:365–368); keep
+the public map callbacks typed to actual nodes and do not wrap their getters.
+
+Use predicates.ts for pinned actual-class guards. Preserve the generic Decorator
+predicate's exact instanceof body. Extract only canonical symbol keys for inline
+and shadow-root phantoms, mapping their values over actual classes; keep non-never
+key identity controls so a collapsed union cannot pass vacuously.

@@ -1,0 +1,500 @@
+import { decodeHostPacket } from '../../../lexical-conformance/diff/host-packet';
+import type {
+  HostCloneNode,
+  HostNodeMutation,
+} from '../../../lexical-conformance/diff/host-packet.generated';
+import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
+import { prepareEditorRegisteredNodes } from '../configuration/registered-nodes';
+import { foreignHooks } from '../hooks.generated';
+import {
+  LineBreakNode,
+  ParagraphNode,
+  RootNode,
+  TabNode,
+  TextNode,
+} from '../nodes';
+import { ArtificialNode__DO_NOT_USE } from '../nodes/artificial';
+import type { NodeClass } from '../nodes/replacement/types';
+import { bindBackendFactory } from './factory';
+import type { NodeLifetime, ShimBackend, UpdateMetadata } from './index';
+import { isHostUpdateMetadata } from './update-metadata';
+
+let initialized = false;
+let api: ReadonlyMap<string, number>;
+let hookNames: readonly string[];
+const commands = new WeakMap<object, string>();
+let nextCommand = 0;
+type Callback = (argument: unknown) => unknown;
+const collectionListeners = new Set<() => void>();
+const versionListeners = new Set<(version: string) => void>();
+const active: ConformanceBackend[] = [];
+const editors = new FinalizationRegistry<wasm.EditorHandle>((handle) => {
+  handle.free();
+  for (const listener of [...collectionListeners]) listener();
+});
+
+// Rust retains this bridge, so it must not strongly retain the JS callback
+// that can close over the editor. The backend owns registered callbacks in JS.
+function weakCallback(callback: Callback): Callback {
+  const reference = new WeakRef(callback);
+  return (argument) => {
+    const target = reference.deref();
+    if (target === undefined)
+      throw new Error('registered callback was collected');
+    return target(argument);
+  };
+}
+
+function commandIdentity(command: object): string {
+  let id = commands.get(command);
+  if (id === undefined) {
+    id = `command:${++nextCommand}`;
+    commands.set(command, id);
+  }
+  return id;
+}
+
+/** Tests load the pinned optimized artifact synchronously before importing the facade. */
+export function initializeConformance(
+  module: WebAssembly.Module,
+  expectedVersion: string
+): void {
+  wasm.initSync({ module });
+  if (wasm.upstream_version() !== expectedVersion)
+    throw new Error('conformance upstream version mismatch');
+  api = new Map(wasm.EditorHandle.api_index().map((name, id) => [name, id]));
+  const modelHooks = wasm.foreign_hook_index();
+  if (
+    JSON.stringify(modelHooks) !==
+    JSON.stringify(foreignHooks.map((hook) => hook.name))
+  )
+    throw new Error(
+      'conformance foreign hooks differ from the upstream inventory'
+    );
+  hookNames = Object.freeze(modelHooks);
+  initialized = true;
+  bindBackendFactory(
+    (_config, normalized, prepared, nativePlugins) => {
+      if (nativePlugins.length !== 0)
+        throw new Error(
+          'Native plugin ownership requires the production session'
+        );
+      const builtins = new Set<NodeClass>([
+        RootNode,
+        TextNode,
+        LineBreakNode,
+        TabNode,
+        ParagraphNode,
+        ArtificialNode__DO_NOT_USE,
+      ]);
+      if (
+        [...prepared.registeredNodes.values()].some(
+          (row) => !builtins.has(row.klass) || row.replace !== null
+        )
+      )
+        throw new Error(
+          'JS node class registration requires the production compatibility host'
+        );
+      return new ConformanceBackend({
+        namespace: normalized.namespace,
+        nodes: [],
+      });
+    },
+    modelHooks,
+    prepareEditorRegisteredNodes
+  );
+}
+
+/** The override mask uses this Rust-derived order, never a second JS hook list. */
+export function foreignHookIndex(): readonly string[] {
+  if (!initialized) throw new Error('conformance WASM is not initialized');
+  return hookNames;
+}
+
+export const diagnostics = {
+  liveEditors: () => wasm.debug_live_editors(),
+  crossings: () => wasm.debug_crossings(),
+  bytes: () => wasm.debug_boundary_bytes(),
+  resetCounters: () => wasm.debug_reset_counters(),
+  resetKeys: () => wasm.reset_key_counter(),
+  onVersionReleased(listener: (version: string) => void): () => void {
+    versionListeners.add(listener);
+    return () => {
+      versionListeners.delete(listener);
+    };
+  },
+  onCollected(listener: () => void): () => void {
+    collectionListeners.add(listener);
+    return () => {
+      collectionListeners.delete(listener);
+    };
+  },
+};
+
+/** Clone construction has owned inputs and cannot masquerade as an installed handle. */
+export function isCloneNode(
+  value: unknown
+): value is HostCloneNode<Record<string, unknown>> {
+  if (value === null || typeof value !== 'object' || !('$clone' in value))
+    return false;
+  const stage = value.$clone;
+  return (
+    stage !== null &&
+    typeof stage === 'object' &&
+    'key' in stage &&
+    typeof stage.key === 'string' &&
+    'type' in stage &&
+    typeof stage.type === 'string' &&
+    'fields' in stage &&
+    stage.fields !== null &&
+    typeof stage.fields === 'object' &&
+    !Array.isArray(stage.fields)
+  );
+}
+
+function isNodeMutation(
+  value: unknown
+): value is HostNodeMutation<unknown, unknown> {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'hook' in value &&
+    typeof value.hook === 'number' &&
+    Number.isInteger(value.hook) &&
+    value.hook >= 0 &&
+    value.hook < foreignHooks.length &&
+    'node' in value &&
+    ((value.node === null && foreignHooks[value.hook]?.name === 'importJSON') ||
+      (value.node !== null &&
+        typeof value.node === 'object' &&
+        (('$h' in value.node && typeof value.node.$h === 'number') ||
+          (foreignHooks[value.hook]?.name === 'afterCloneFrom' &&
+            isCloneNode(value.node))))) &&
+    'args' in value &&
+    Array.isArray(value.args)
+  );
+}
+
+/** The shim has one model backend, with no production-session fallback. */
+export class ConformanceBackend implements ShimBackend {
+  // The development ABI retains raw records through their captured graph.
+  // Production uses its separate exact-record lease capability instead.
+  nodeLifetime(_handle: number, _node: object): NodeLifetime {
+    return { kind: 'version' };
+  }
+  readonly initialVersion = 0;
+  private metadataObserved = false;
+  private updateMetadata = {
+    dirtyLeaves: new Set<string>(),
+    dirtyElements: new Map<string, boolean>(),
+    dirtyType: 0,
+  };
+  getUpdateMetadata(): UpdateMetadata {
+    this.metadataObserved = true;
+    if (!this.pending) return this.updateMetadata;
+    const facts: unknown = this.enter((handle) => handle.update_metadata());
+    if (!isHostUpdateMetadata(facts))
+      throw new Error('Invalid native update metadata');
+    this.updateMetadata.dirtyLeaves.clear();
+    this.updateMetadata.dirtyElements.clear();
+    for (const key of facts.dirty_leaves)
+      this.updateMetadata.dirtyLeaves.add(key);
+    for (const [key, intentional] of facts.dirty_elements)
+      this.updateMetadata.dirtyElements.set(key, intentional);
+    this.updateMetadata.dirtyType = facts.dirty_type;
+    return this.updateMetadata;
+  }
+  private readonly handle: wasm.EditorHandle;
+  private readonly callbacks = new Map<number, Callback>();
+  private readonly foreignCallbacks = new Map<string, Callback>();
+  private readonly bridges = new WeakMap<Callback, Callback>();
+  private disposed = false;
+  private pending = false;
+  private nodeHandles?: object;
+  private readonly collections = new Map<
+    string,
+    {
+      unowned: () => boolean;
+      released: () => void;
+    }
+  >();
+  private readonly stateSnapshots = new Map<string, unknown>();
+
+  constructor(config: unknown) {
+    if (!initialized) throw new Error('conformance WASM is not initialized');
+    this.handle = new wasm.EditorHandle(config);
+    try {
+      this.capturePublishedState('0');
+    } catch (error) {
+      this.handle.free();
+      throw error;
+    }
+    editors.register(this, this.handle, this);
+  }
+  private capturePublishedState(version: string): void {
+    const id = api.get('LexicalEditor.getEditorState');
+    if (id === undefined) throw new Error('Missing native state API');
+    this.readState(version, () => {
+      const snapshot = this.enter((handle) => handle.call(id, { args: [] }));
+      this.stateSnapshots.set(version, snapshot);
+    });
+  }
+  private bridge(callback: Callback): Callback {
+    let bridge = this.bridges.get(callback);
+    if (bridge === undefined) {
+      bridge = weakCallback(callback);
+      this.bridges.set(callback, bridge);
+    }
+    return bridge;
+  }
+  private enter<T>(body: (handle: wasm.EditorHandle) => T): T {
+    // The JS owner must survive synchronous GC in a callback, even if a caller
+    // no longer uses its backend reference after entering the native operation.
+    active.push(this);
+    try {
+      return body(this.handle);
+    } finally {
+      active.pop();
+    }
+  }
+  private execute<T>(body: (handle: wasm.EditorHandle) => T): T {
+    try {
+      return this.enter(body);
+    } finally {
+      this.refreshObservedMetadata();
+    }
+  }
+  private refreshObservedMetadata(): void {
+    if (this.pending && this.metadataObserved) this.getUpdateMetadata();
+  }
+  installForeign(
+    type: string,
+    dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown
+  ): void {
+    const callback: Callback = (message) => {
+      if (!isNodeMutation(message))
+        throw new Error('invalid native node mutation');
+      return dispatch(message);
+    };
+    this.enter((handle) => handle.install_foreign(type, this.bridge(callback)));
+    this.foreignCallbacks.set(type, callback);
+  }
+  setForeignMask(type: string, mask: bigint): void {
+    this.enter((handle) => handle.set_foreign_mask(type, mask.toString()));
+  }
+  beginUpdate(tags: readonly string[], discrete: boolean): void {
+    this.enter((handle) => handle.begin_update(tags, discrete));
+    this.pending = true;
+  }
+  call(name: string, args: readonly unknown[], receiver?: unknown): unknown {
+    const id = api.get(name);
+    if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
+    return this.execute((handle) =>
+      handle.call(
+        id,
+        receiver === undefined ? { args } : { args, this: receiver }
+      )
+    );
+  }
+  /** Nearest native ancestor only; an older prototype cannot be selected yet. */
+  callNative(
+    name: string,
+    args: readonly unknown[],
+    receiver: unknown
+  ): unknown {
+    const id = api.get(name);
+    if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
+    return this.execute((handle) =>
+      handle.call_native(id, { args, this: receiver })
+    );
+  }
+  readState(version: string, body: () => unknown): unknown {
+    return this.enter((handle) => handle.read_state(version, body));
+  }
+  getNodeMap<Node>(
+    version: string,
+    resolve: (raw: unknown) => Node
+  ): Map<string, Node> {
+    let result: Map<string, Node> | undefined;
+    this.readState(version, () => {
+      const snapshot = this.stateSnapshots.get(version);
+      if (snapshot === undefined)
+        throw new Error('Unknown or released native state map');
+      const raw = this.call('get:_nodeMap', [], snapshot);
+      if (
+        raw === null ||
+        typeof raw !== 'object' ||
+        !('$map' in raw) ||
+        !Array.isArray(raw.$map)
+      )
+        throw new Error('Invalid native node map');
+      const entries = new Map<string, Node>();
+      for (const pair of raw.$map) {
+        if (!Array.isArray(pair) || pair.length !== 2)
+          throw new Error('Invalid native node map entry');
+        let key: unknown = pair[0];
+        if (
+          key !== null &&
+          typeof key === 'object' &&
+          '$key' in key &&
+          'raw' in key
+        )
+          key = key.raw;
+        if (typeof key !== 'string')
+          throw new Error('Invalid native node map key');
+        entries.set(key === '0' ? 'root' : key, resolve(pair[1]));
+      }
+      result = entries;
+    });
+    if (result === undefined) throw new Error('Native state read did not run');
+    return result;
+  }
+  flush(): void {
+    this.execute((handle) => handle.flush());
+  }
+  finishNoop(): boolean {
+    const finished = this.enter((handle) => handle.finish_noop());
+    if (finished) {
+      this.pending = false;
+      this.resetUpdateMetadata();
+      this.collect();
+    }
+    return finished;
+  }
+  commit() {
+    // A rejected nested commit has not closed the leased native update.
+    if (active.includes(this))
+      throw new Error('editor is executing a model operation');
+    try {
+      const packet = decodeHostPacket(this.enter((handle) => handle.commit()));
+      const metadata: unknown = JSON.parse(packet.metadata_json);
+      if (
+        metadata === null ||
+        typeof metadata !== 'object' ||
+        !('version' in metadata) ||
+        typeof metadata.version !== 'number' ||
+        !Number.isSafeInteger(metadata.version) ||
+        metadata.version < 0
+      )
+        throw new Error('Invalid committed native version');
+      const version = String(metadata.version);
+      this.capturePublishedState(version);
+      return packet;
+    } finally {
+      this.pending = false;
+      this.resetUpdateMetadata();
+      this.collect();
+    }
+  }
+  discard(): void {
+    this.enter((handle) => handle.discard_update());
+    this.pending = false;
+    this.resetUpdateMetadata();
+    this.collect();
+  }
+  private resetUpdateMetadata(): void {
+    this.metadataObserved = false;
+    this.updateMetadata = {
+      dirtyLeaves: new Set(),
+      dirtyElements: new Map(),
+      dirtyType: 0,
+    };
+  }
+  readField(handle: number, field: string): unknown {
+    return this.enter((editor) => editor.read_field(handle, field));
+  }
+  ownNodeHandles(cache: object): void {
+    if (this.disposed) throw new Error('editor is disposed');
+    if (this.nodeHandles !== undefined)
+      throw new Error('editor already owns its node handle cache');
+    this.nodeHandles = cache;
+  }
+  releaseVersion(version: string): void {
+    if (this.disposed) return;
+    this.enter((handle) => handle.release_version(version));
+    this.stateSnapshots.delete(version);
+    this.notifyVersionReleased(version);
+  }
+  private notifyVersionReleased(version: string): void {
+    // Diagnostics observe completed cleanup and cannot interrupt publication.
+    for (const listener of [...versionListeners])
+      queueMicrotask(() => listener(version));
+  }
+  collectVersion(
+    version: string,
+    unowned: () => boolean,
+    released: () => void
+  ): void {
+    if (this.disposed) {
+      if (unowned()) released();
+      return;
+    }
+    this.collections.set(version, { unowned, released });
+    this.collect();
+  }
+  private collect(): void {
+    if (this.pending || this.disposed) return;
+    for (const [version, collection] of this.collections) {
+      if (collection.unowned()) {
+        this.enter((handle) => handle.release_version(version));
+        this.stateSnapshots.delete(version);
+        this.collections.delete(version);
+        collection.released();
+        this.notifyVersionReleased(version);
+      } else {
+        this.collections.delete(version);
+      }
+    }
+  }
+  registerTransform(
+    type: string,
+    dispatch: (node: unknown) => unknown
+  ): number {
+    const id = this.execute((handle) =>
+      handle.register_transform(type, this.bridge(dispatch))
+    );
+    this.callbacks.set(id, dispatch);
+    return id;
+  }
+  registerListener(
+    command: object,
+    priority: number,
+    dispatch: (payload: unknown) => unknown
+  ): number {
+    if (!Number.isInteger(priority) || priority < 0 || priority > 4)
+      throw new Error('invalid command priority');
+    const id = this.enter((handle) =>
+      handle.register_listener(
+        commandIdentity(command),
+        priority,
+        this.bridge(dispatch)
+      )
+    );
+    this.callbacks.set(id, dispatch);
+    return id;
+  }
+  dispatchCommand(command: object, payload: unknown): boolean {
+    return this.execute((handle) =>
+      handle.dispatch_command(commandIdentity(command), payload)
+    );
+  }
+  unregister(id: number): void {
+    this.enter((handle) => handle.unregister(id));
+    const callback = this.callbacks.get(id);
+    // A synchronous model listener snapshot can still invoke an unregistered
+    // callback later in this job. Keep its JS owner through that callback phase.
+    queueMicrotask(() => {
+      if (this.callbacks.get(id) === callback) this.callbacks.delete(id);
+    });
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.enter((handle) => handle.free());
+    this.disposed = true;
+    editors.unregister(this);
+    this.callbacks.clear();
+    this.foreignCallbacks.clear();
+    this.collections.clear();
+    this.nodeHandles = undefined;
+  }
+}

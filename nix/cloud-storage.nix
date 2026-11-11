@@ -132,7 +132,7 @@
       # Workspace-root files that crates read across crate boundaries: the
       # .sqlx offline cache (sqlx macros resolve it from the workspace root),
       # shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates), and the [patch.crates-io] crates under vendor/, which
+      # crates), and vendored path dependencies (including [patch.crates-io]), which
       # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
@@ -153,8 +153,13 @@
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
           || (rel == "vendor")
-          || (rel == "vendor/utoipa-swagger-ui")
-          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
+          || (pkgs.lib.any (directory: rel == directory || pkgs.lib.hasPrefix "${directory}/" rel) [
+            "vendor/utoipa-swagger-ui"
+            "vendor/regress"
+            "vendor/loro-editor"
+            "vendor/loro-server"
+            "vendor/loro-test-utils"
+          ])
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -1136,8 +1141,14 @@
         # Deploy builds compile [patch.crates-io] crates from the pruned
         # source, so their real code (not mkDummySrc's stubs) must be there.
         pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
-          grep -q "fn write_embed_code" \
-            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
+          pruned_src=${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}
+          grep -q "fn write_embed_code" "$pruned_src/vendor/utoipa-swagger-ui/build.rs"
+          grep -q "pub struct Regex" "$pruned_src/vendor/regress/src/api.rs"
+          grep -q "pub mod oplog" "$pruned_src/vendor/loro-editor/loro-internal/src/lib.rs"
+          grep -q "fn update_many" "$pruned_src/vendor/loro-editor/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
+          grep -q "fn update_many" "$pruned_src/vendor/loro-server/loro-internal/src/container/richtext/tracker/id_to_cursor.rs"
+          grep -q "pub struct LoroDoc" "$pruned_src/vendor/loro-server/loro/src/lib.rs"
+          test -f "$pruned_src/vendor/loro-test-utils/Cargo.toml"
           touch $out
         '';
         fmt = craneLib.cargoFmt {

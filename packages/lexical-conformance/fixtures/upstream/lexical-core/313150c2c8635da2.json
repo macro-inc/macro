@@ -1,0 +1,331 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-session-mention.test.ts",
+    "test": [
+      "AgentSessionMentionNode",
+      "preserves expansion and session-reference semantics through Markdown"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/AgentSessionMentionNode.buildAgentSessionMentionMarkdown",
+      "args": [
+        {
+          "id": "session-1",
+          "label": "Fix the menu",
+          "expanded": true
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "id": "session-1",
+              "label": "Fix the menu",
+              "mentionUuid": {
+                "$undef": true
+              },
+              "expanded": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "id": "session-1",
+              "label": "Fix the menu",
+              "mentionUuid": {
+                "$undef": true
+              },
+              "expanded": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "id": "session-1",
+            "label": "Fix the menu",
+            "mentionUuid": {
+              "$undef": true
+            },
+            "expanded": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "id": "session-1",
+            "label": "Fix the menu",
+            "mentionUuid": {
+              "$undef": true
+            },
+            "expanded": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "id": "session-1",
+          "label": "Fix the menu",
+          "mentionUuid": {
+            "$undef": true
+          },
+          "expanded": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "id": "session-1",
+          "label": "Fix the menu",
+          "mentionUuid": {
+            "$undef": true
+          },
+          "expanded": true
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "id": "session-1",
+        "label": "Fix the menu",
+        "mentionUuid": {
+          "$undef": true
+        },
+        "expanded": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.serializedEditorStateToMarkdown",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "XVzrpx_u"
+                },
+                "id": "session-1",
+                "label": "Fix the menu",
+                "mentionUuid": {
+                  "$undef": true
+                },
+                "expanded": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1,
+            "$": {
+              "id": "Dn8oR1js"
+            }
+          }
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.6826027217321098
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5314591128844768
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "agent_session",
+          "entityId": "session-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.21594200655817986
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.1045342271681875
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+      ],
+      "ret": "Fix the menu"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToEmbeddingText",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"session-1\",\"label\":\"Fix the menu\",\"expanded\":true}</m-agent-session-mention>"
+      ],
+      "ret": "[Fix the menu](agent_session:session-1)"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

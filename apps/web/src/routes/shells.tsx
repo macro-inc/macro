@@ -2,7 +2,7 @@ import { CreateContextProvider } from '@app/features/command/context/create-cont
 import { SplitRouter } from '@app/lib/split-router';
 import { AppProviders } from '@components/app/AppProviders';
 import { dismissBootShell } from '@components/app/boot-shell';
-import { AppChrome, PageContent } from '@components/app/Layout';
+import { AppChrome, EditorContent, PageContent } from '@components/app/Layout';
 import {
   SplitLayout,
   SplitLayoutProvider,
@@ -39,7 +39,7 @@ function FocusedPage(props: ParentProps) {
   return (
     <div class="min-h-0 flex-1 overflow-y-auto bg-page text-ink">
       <ImperativeDialogHost />
-      {props.children}
+      <EditorContent>{props.children}</EditorContent>
     </div>
   );
 }
@@ -50,7 +50,9 @@ export function FocusedShell(): JSX.Element {
   return (
     <PublicBookingShell>
       <ImperativeDialogHost />
-      <SplitRouter.Outlet />
+      <EditorContent>
+        <SplitRouter.Outlet />
+      </EditorContent>
     </PublicBookingShell>
   );
 }
@@ -91,7 +93,9 @@ export function withMeetingShell(Page: () => JSX.Element) {
     return (
       <PageContent>
         <ImperativeDialogHost />
-        <Page />
+        <EditorContent>
+          <Page />
+        </EditorContent>
       </PageContent>
     );
   };

@@ -89,6 +89,7 @@ export function useCrmContactMentionSource(
   });
   const activity = useDmActivityByUserId();
   return {
+    error: () => query.error,
     entities: aliases.rows,
     windowKey: aliases.windowKey,
     users: () =>

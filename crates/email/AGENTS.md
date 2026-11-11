@@ -249,3 +249,8 @@ tools — hexagonal, heavily feature-gated.
 - Rules: `.agents/rules/rust/architecture.md`
 
 - Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.
+The ignored `local_stack_email_list_body` probe exercises the real email body
+renderer against isolated lexical-service and exports a local Tempo trace.

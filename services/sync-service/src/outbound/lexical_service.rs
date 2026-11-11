@@ -1,10 +1,10 @@
 use serde::Deserialize;
+use sync_server_core::domain::state::RootChange;
 use worker::{Env, Fetch, Method, Request, RequestInit};
 
 use crate::{
     constants::header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY,
     error::ResultExt,
-    state::RootChange,
     timeout::{DEFAULT_TIMEOUT_MS, timeout},
 };
 
@@ -41,10 +41,15 @@ impl<'a> LexicalServiceClient<'a> {
 
     /// Whether `change` adds, removes or alters only comment marks.
     pub async fn is_comment_only_change(&self, change: &RootChange) -> worker::Result<bool> {
+        let result = async {
         let body = serde_json::json!({
             "before": { "root": change.before },
             "after": { "root": change.after },
         });
+        #[cfg(feature = "transcript")]
+        crate::transcript::event(
+            serde_json::json!({"port": "comment_gate", "url": format!("{}/comment-only-change", self.url()?), "body": body}),
+        );
         let mut request = Request::new_with_init(
             &format!("{}/comment-only-change", self.url()?),
             RequestInit::new()
@@ -58,6 +63,9 @@ impl<'a> LexicalServiceClient<'a> {
         request
             .headers_mut()?
             .set("Content-Type", "application/json")?;
+        if let Some(traceparent) = worker_rs_otel::traceparent_for_span(&tracing::Span::current()) {
+            request.headers_mut()?.set("traceparent", &traceparent)?;
+        }
         let mut response = timeout(Fetch::Request(request).send(), DEFAULT_TIMEOUT_MS)
             .await
             .into_result()??;
@@ -72,5 +80,13 @@ impl<'a> LexicalServiceClient<'a> {
             .await
             .context("failed to parse comment-only-change response")?;
         Ok(parsed.comment_only)
+        }.await;
+        #[cfg(feature = "transcript")]
+        crate::transcript::event(serde_json::json!({
+            "out": "comment_gate",
+            "verdict": result.as_ref().ok(),
+            "error": result.as_ref().err().map(ToString::to_string),
+        }));
+        result
     }
 }

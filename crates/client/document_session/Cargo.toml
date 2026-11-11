@@ -1,0 +1,47 @@
+[package]
+name = "document_session"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+macro_document_model = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+doc_sync_core.workspace = true
+lexical_model.workspace = true
+lexical_html.workspace = true
+lexical_markdown.workspace = true
+lexical_rich_nodes.workspace = true
+lexical_loro.workspace = true
+loro.workspace = true
+loro-internal.workspace = true
+imbl.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rootcause.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.5.1", default-features = false, features = ["cargo_bench_support"] }
+lexical_markdown.workspace = true
+macro_document_model.workspace = true
+uuid_value.workspace = true
+sync_protocol.workspace = true
+bebop.workspace = true
+serde.workspace = true
+proptest.workspace = true
+
+[features]
+application = ["dep:macro_document_model", "macro_document_model/html", "dep:rand_chacha"]
+compatibility = ["lexical_model/foreign-nodes"]
+conformance = []
+# Simulation-only malformed projection producer; never ship enabled.
+test-faults = []
+
+[[example]]
+name = "collab"
+required-features = ["conformance"]
+
+[[bench]]
+name = "bulk"
+harness = false

@@ -1,0 +1,21 @@
+[package]
+name = "sync_server_sim"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+base64.workspace = true
+bebop.workspace = true
+flate2.workspace = true
+loro_server.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
+sync_server_core.workspace = true
+thiserror.workspace = true
+uuid-types.workspace = true
+
+futures.workspace = true
+macro_sync_service_jwt.workspace = true

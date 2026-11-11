@@ -4,6 +4,24 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/macro_document_composers",
+  "crates/client/mention_date",
+  "crates/client/lexical/macro_document_model",
+  "crates/client/document_session",
+  "crates/client/document_session_wasm",
+  "crates/client/document_session_ffi",
+  "crates/client/lexical/lexical_loro",
+  "crates/client/lexical/lexical_model",
+  "crates/client/lexical/lexical_html",
+  "crates/client/lexical/lexical_markdown",
+  "crates/client/lexical/lexical_conformance",
+  "crates/client/lexical/lexical_rich_nodes",
+  "crates/client/lexical/lexical_conformance_wasm",
+  "crates/client/lexical/lexical_workspace_tests",
+  "crates/sync_doc_id",
+  "crates/client/doc_sync_core",
+  "crates/lexical_node_id",
+  "crates/document_id",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -203,7 +221,10 @@ members = [
   "services/static_file_service",
   "crates/sync_router",
   "services/sync-service",
-  "services/sync-service/bebop-schema",
+  "crates/sync_protocol",
+  "crates/sync_server_core",
+  "crates/sync_server_sim",
+  "crates/sync_sim",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -218,8 +239,51 @@ members = [
   "tooling/xtask/crates/*",
 ]
 
+# WP-00 reserves these dependencies for the following Lexical work packages.
+# Remove each exception when its first consumer lands (model, replay, XML, HTML).
+[workspace.metadata.cargo-shear]
+ignored = ["quick-xml", "rand_chacha"]
+
 [workspace.dependencies]
+uniffi = { version = "=0.32.2", default-features = false }
+lexical_html = { path = "crates/client/lexical/lexical_html" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
+lexical_loro = { path = "crates/client/lexical/lexical_loro" }
+macro_document_composers = { path = "crates/macro_document_composers" }
+trigger_context = { path = "crates/trigger_context" }
+mention_date = { path = "crates/client/mention_date" }
+macro_config = { path = "crates/macro_config" }
+macro_tower_layers = { path = "crates/macro_tower_layers" }
+macro_service_urls = { path = "crates/macro_service_urls" }
+sync_service_client = { path = "crates/sync_service_client" }
+macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
+document_session = { path = "crates/client/document_session", default-features = false }
+phf = { version = "0.13.1", features = ["macros"] }
+lexical_conformance = { path = "crates/client/lexical/lexical_conformance" }
+lexical_model = { path = "crates/client/lexical/lexical_model", default-features = false }
+lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
+# Shared dependencies for the portable Lexical model and its conformance suites.
+imbl = { version = "=7.0.2", default-features = false }
+rustc-hash = { version = "2.1.2", default-features = false }
+smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
+bitflags = { version = "2.11.1", default-features = false }
+regress = { version = "=0.12.0", default-features = false, features = ["std", "backend-pikevm", "utf16"] }
+quick-xml = { version = "0.41.0", default-features = false }
+insta = { version = "1.48.0", default-features = false }
+libtest-mimic = { version = "0.8.2", default-features = false }
+rand_chacha = { version = "0.9.0", default-features = false }
+ryu-js = { version = "1.0.2", default-features = false }
 macro_user_id = { path = "crates/macro_user_id" }
+sync_doc_id = { path = "crates/sync_doc_id" }
+lexical_node_id = { path = "crates/lexical_node_id" }
+document_id = { path = "crates/document_id" }
+# Parsing-only UUIDs for wasm-safe value crates; no random generation.
+uuid_value = { package = "uuid", version = "1.15.1", default-features = false }
+macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
+sync_server_core = { path = "crates/sync_server_core" }
+sync_protocol = { path = "crates/sync_protocol", default-features = false }
+doc_sync_core = { path = "crates/client/doc_sync_core" }
+sync_server_sim = { path = "crates/sync_server_sim" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -348,7 +412,10 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
+# Preserve the existing server encoder while editor/session clients use1.17.1.
+loro_server = { package = "loro", path = "vendor/loro-server/loro" }
+loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 mimalloc = { version = "0.1", default-features = false }
@@ -385,7 +452,9 @@ prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
 quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 rand = "0.9.0"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
@@ -493,6 +562,8 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# Pure domains receive UUID values from their adapters; no ambient RNG backend.
+uuid-types = { package = "uuid", version = "1.15.1", default-features = false, features = ["std", "serde"] }
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -500,6 +571,8 @@ zune-core = "0.5"
 zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
+wasm-encoder = { version = "0.244", features = ["wasmparser"] }
+wasmparser = "0.244"
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
@@ -520,6 +593,7 @@ bytes = "1.11.1"
 doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
+scoped-tls-hkt = "0.1.5"
 scraper = "0.18"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
@@ -540,6 +614,10 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Same editor release, equivalent dense range updates; see vendor/loro-editor/README.md.
+loro-internal = { path = "vendor/loro-editor/loro-internal" }
+# Legacy ECMAScript case folding; see vendor/regress/README-MACRO.md.
+regress = { path = "vendor/regress" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
@@ -591,3 +669,69 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+# S8 T0 retains exact frame bytes and canonical port evidence across hundreds
+# of worlds. Optimize the simulation and JSON tree traversal in tests only;
+# production profiles and assertion coverage stay unchanged.
+[profile.test.package.sync_sim]
+opt-level = 2
+
+[profile.test.package.serde_json]
+opt-level = 2
+
+[profile.test.package.sync_server_sim]
+opt-level = 2
+
+[profile.test.package.sync_server_core]
+opt-level = 2
+
+[profile.test.package.doc_sync_core]
+opt-level = 2
+
+# Native replay repeatedly validates large snapshot checksums and hashes exact
+# trace bytes. Keep the measured byte-hashing hot path optimized in tests while
+# preserving debug/overflow checks and every production profile.
+[profile.test.package.xxhash-rust]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+# Both encoder releases execute measured native rich-text tracking in tests.
+# Keep debug assertions and overflow checks enabled.
+[profile.test.package."loro-internal@1.16.2"]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+[profile.test.package."loro-internal@1.17.1"]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
+# The complete session includes native Loro; keep its single browser artifact small.
+[profile.document-session-wasm]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
+
+# Paired native-paste browser diagnostics favor speed on these callers.
+[profile.document-session-wasm.package.lexical_model]
+opt-level = 3
+
+[profile.document-session-wasm.package.lexical_loro]
+opt-level = 3
+
+[profile.document-session-wasm.package.lexical_rich_nodes]
+opt-level = 3
+
+[profile.document-session-wasm.package.macro_document_model]
+opt-level = 3
+
+[profile.document-session-wasm.package.document_session]
+opt-level = 3
+
+[profile.document-session-wasm.package.document_session_wasm]
+opt-level = 3

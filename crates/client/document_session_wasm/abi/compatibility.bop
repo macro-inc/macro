@@ -1,0 +1,347 @@
+// Production compatibility calls use typed native references and UTF-16 values.
+// This envelope does not alter the flat model Diff or session transport ABI.
+const uint32 COMPATIBILITY_PROTOCOL_MAJOR = 1;
+struct CompatBegin { string[] tags; }
+struct CompatConfig {
+  uint32 editorId; ForeignClassRegistration[] classes;
+  CompatNativePluginConfig[] nativePlugins;
+}
+// Bind the actual JS object to this exact owned capture without graph writes.
+// Zero identifiers are not hydrated instances; native code validates ownership.
+struct CompatInstanceBind {
+  ForeignRecordRef record;
+  uint32 instanceOwnerId; uint32 classId; uint32 instanceId;
+}
+enum CompatOperation : uint16 {
+  Unknown = 0;
+  GetRoot = 1; GetNodeByKey = 2;
+  CreateText = 3; CreateParagraph = 4; CreateHeading = 5;
+  CreateLineBreak = 6; CreateTab = 7;
+  GetLatest = 8; GetWritable = 9;
+  Append = 10; GetChildren = 11; GetChildrenSize = 12;
+  GetTextContent = 13; GetTextContentSize = 14; SetTextContent = 15;
+  GetFirstChild = 16; GetLastChild = 17; GetParent = 18;
+  GetPreviousSibling = 19; GetNextSibling = 20;
+  GetIndent = 21; SetIndent = 22; IsAttached = 23; IsInline = 24;
+  GetSelection = 25; GetPreviousSelection = 26;
+  GetCompositionKey = 27; AddUpdateTag = 28;
+  GetNodeField = 29; SetNativeField = 30;
+  ExportNodeJson = 31; ExportStateJson = 32;
+  CreateRangeSelection = 33; CreateNodeSelection = 34; SetSelection = 35;
+  SelectionClone = 36; SelectionGetNodes = 37; SelectionGetTextContent = 38;
+  SelectionInsertText = 39; SelectionInsertNodes = 40;
+  SelectionFormatText = 41; SelectionDeleteCharacter = 42;
+  SelectionDeleteWord = 43; SelectionDeleteLine = 44;
+  SelectionInsertParagraph = 45; SelectionInsertLineBreak = 46;
+  SelectionExtract = 47; SelectionIsCollapsed = 48; SelectionIsBackward = 49;
+  NodeSelectionAdd = 50; NodeSelectionDelete = 51; NodeSelectionClear = 52;
+  NodeSelectionHas = 53; SelectionHasFormat = 54;
+  SetCompositionKey = 55; CreateTableSelection = 56;
+  CreateRegisteredNode = 57;
+  Splice = 58;
+  // NoNode receiver; one installed CompatNativePlugin ID argument. The staged
+  // policy returns a Boolean handled value without admitting the outer update.
+  RunNativePluginEnter = 59;
+}
+struct CompatRequest {
+  CompatOperation operation;
+  bool historical;
+  uint64 stateVersion;
+  bool hasReceiver;
+  ForeignRecordRef receiver;
+  ForeignCallbackValue[] args;
+}
+struct CompatReply { ForeignCallbackValue value; ForeignRenderRecord[] records; CompatSelectionData[] selections; }
+struct CompatDirtyElement { ForeignKey key; bool intentional; }
+struct CompatSnapshot {
+  uint64 version;
+  ForeignRenderBatch batch;
+  CompatSelectionData selection;
+}
+struct CompatCommit {
+  uint32 flags;
+  uint64 version;
+  bool changed;
+  ForeignKey[] dirtyLeaves;
+  CompatDirtyElement[] dirtyElements;
+  string[] tags;
+  ForeignRenderBatch batch;
+  CompatSelectionData selection;
+  CompatPublicationHold publicationHold;
+}
+
+// External native publications retain the actual commit metadata until delivery.
+struct CompatPublications { CompatCommit[] commits; }
+
+// Ordinary JS selections retain their objects; these are typed native snapshots
+// and explicit writes, never a JSON encoding of arbitrary own properties.
+enum CompatPointKind : byte { Unknown = 0; Text = 1; Element = 2; }
+struct CompatPoint { ForeignKey key; uint32 offset; CompatPointKind kind; }
+union CompatSelectionData {
+  1 -> struct CompatNoSelection { }
+  2 -> struct CompatRangeSelection {
+    ForeignSelectionRef reference; CompatPoint anchor; CompatPoint focus;
+    uint32 format; uint16[] style; bool dirty;
+    bool hasCachedBackward; bool cachedBackward;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+  3 -> struct CompatNodeSelection {
+    ForeignSelectionRef reference; ForeignKey[] keys; bool dirty;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+  4 -> struct CompatTableSelection {
+    ForeignSelectionRef reference; ForeignKey tableKey;
+    CompatPoint anchor; CompatPoint focus; bool dirty;
+    bool hasCachedNodes; ForeignNodeRef[] cachedNodes;
+  }
+}
+struct CompatSelectionPatch {
+  bool historical; uint64 stateVersion;
+  bool activate; CompatSelectionData selection;
+}
+
+// Cold audit only: no capture allocation, GC, or pending-update graph ambiguity.
+struct CompatAuditSnapshot {
+  uint64 version; uint64 retirementEpoch;
+  uint64 retainedCaptures; uint64 liveNodes;
+}
+
+// Compact transaction construction uses only keys issued by the native allocator.
+// Reservations are scoped to the editor/update, single use, and burned on discard.
+struct CompatKeyReservation {
+  uint32 editorId; uint64 reservationId; ForeignKey[] keys;
+}
+struct CompatClassMaskPatch { uint32 ownerId; uint32 classId; uint64 hooks; }
+struct CompatBeginRequest {
+  string[] tags; uint32 reserveKeys; CompatClassMaskPatch[] classMaskPatches;
+}
+struct CompatBeginReply {
+  uint64 version; uint32 updateId; uint64 mutationEpoch;
+  ForeignOptionalKey composition; CompatKeyReservation reservation;
+}
+union CompatNodeOperand {
+  1 -> struct CompatNoNode { }
+  2 -> struct CompatCapturedNode { ForeignRecordRef record; }
+  3 -> struct CompatReservedNode { uint64 reservationId; ForeignKey key; }
+}
+// Apply retains before releases atomically; only issued capture IDs are valid.
+// Frozen records remain live while leased, independently of the active graph.
+struct CompatCaptureLeases {
+  uint32 editorId; uint64[] retain; uint64[] release;
+}
+// Incremental replies never materialize the root's whole-document text cache.
+// An explicit initial snapshot may carry it; later changes invalidate the cache.
+struct CompatRecordDelta {
+  ForeignRenderRecord[] records; ForeignKey[] removedKeys;
+  bool invalidateRootText;
+}
+
+// A creation seed names the JS instance whose constructor already ran once.
+// A COW clone uses the separate native clone-stage acknowledgement instead.
+// Reject seeds for noncreation/COW, reused IDs, or mismatched owner/class/kind;
+// validate reservations and capture leases before invoking any host callbacks.
+union CompatInstanceSeed {
+  1 -> struct CompatNoInstanceSeed { }
+  2 -> struct CompatCreatedInstance {
+    uint32 instanceOwnerId; uint32 classId; uint32 instanceId;
+    ForeignBasePatch base; ForeignNativeProjection nativeProjection;
+    ForeignOpaqueValue ownFields;
+  }
+}
+// Client value IDs correlate actual JS objects; they are never native authority.
+// A frozen captured value uses ForeignSelectionArgument instead of a patch intent.
+union CompatSelectionValue {
+  1 -> struct CompatReferencedSelectionValue { ForeignSelectionRef reference; }
+  2 -> struct CompatNewSelectionValue { uint32 clientValueId; }
+}
+struct CompatSelectionPointIntent {
+  CompatNodeOperand node; uint32 offset; CompatPointKind kind;
+}
+union CompatSelectionIntent {
+  1 -> struct CompatNoSelectionIntent { }
+  2 -> struct CompatRangeSelectionIntent {
+    CompatSelectionValue value;
+    CompatSelectionPointIntent anchor; CompatSelectionPointIntent focus;
+    uint32 format; uint16[] style; bool dirty;
+    bool hasCachedBackward; bool cachedBackward;
+    bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+  3 -> struct CompatNodeSelectionIntent {
+    CompatSelectionValue value; CompatNodeOperand[] nodes; bool dirty;
+    bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+  4 -> struct CompatTableSelectionIntent {
+    CompatSelectionValue value; CompatNodeOperand table;
+    CompatSelectionPointIntent anchor; CompatSelectionPointIntent focus;
+    bool dirty; bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+}
+struct CompatSelectionBinding {
+  uint32 clientValueId; ForeignSelectionRef reference;
+}
+union CompatBatchArgument {
+  1 -> struct CompatValueArgument { ForeignCallbackValue value; }
+  2 -> struct CompatNodeArgument { CompatNodeOperand value; }
+  3 -> struct CompatNodeArrayArgument { CompatNodeOperand[] values; }
+  4 -> struct CompatSelectionIntentArgument { CompatSelectionIntent intent; }
+}
+struct CompatBatchOperation {
+  CompatOperation operation; CompatNodeOperand receiver;
+  CompatBatchArgument[] args; CompatInstanceSeed initialInstance;
+}
+// Lazy begin is folded into the first real barrier. A scoped callback always
+// continues its existing authority and never normalizes or admits recursively.
+union CompatBatchScope {
+  1 -> struct CompatBatchBegin { uint64 expectedVersion; CompatBeginRequest begin; }
+  2 -> struct CompatBatchContinue { uint32 updateId; uint64 expectedEpoch; }
+}
+// Semantic barriers preserve the caller's command/update phase. Only the public
+// update boundary normalizes; only admission may reconcile and publish.
+enum CompatBatchPhase : byte {
+  Unknown = 0; Operations = 1; UpdateFlush = 2; Admission = 3;
+}
+struct CompatBatchRequest {
+  CompatBatchScope scope; CompatCaptureLeases leases;
+  CompatBatchOperation[] operations; CompatBatchPhase phase;
+  float64 now; float64 wall;
+}
+struct CompatBatchResult { ForeignCallbackValue value; CompatRecordDelta delta; }
+union CompatFailureLocation {
+  1 -> struct CompatOperationFailure { uint32 index; }
+  2 -> struct CompatFinalizeFailure { }
+}
+union CompatBatchOutcome {
+  1 -> struct CompatBatchSuccess { }
+  2 -> struct CompatBatchNativeFailure {
+    CompatFailureLocation location; uint16[] errorText;
+  }
+  3 -> struct CompatBatchHostFailure {
+    CompatFailureLocation location; uint32 hostSlot; ForeignOpaqueValue error;
+  }
+}
+// Operation failure index equals the successful prefix results.length; finalize
+// failure follows all operation results. Operation failure prevents admission.
+// A finalization failure may follow a real publication: acknowledge its exact
+// receipt before surfacing the error, never claim rollback or retry admission.
+// No-op retirement returns the actual committed version, including zero.
+// The final delta includes partial failing-operation effects
+// needed by captures/selection (or explicit discard), not just successful results.
+// Changed detached selections also survive a failing operation with no result.
+// Noop and composition are part of this single final crossing.
+struct CompatBatchReply {
+  uint32 updateId; CompatKeyReservation[] reservations;
+  uint32 flags; bool published; bool changed; bool noop;
+  uint64 version; uint64 mutationEpoch; ForeignOptionalKey composition;
+  // Bind original JS values before decoding active/detached snapshots, including failures.
+  CompatSelectionBinding[] selectionBindings;
+  CompatSelectionData selection; CompatSelectionData[] selections; string[] tags;
+  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements; byte dirtyType;
+  CompatRecordDelta delta; CompatBatchResult[] results;
+  CompatBatchOutcome outcome;
+  // A retirement receipt carries actual deferred authority, never an inferred
+  // ticket. Open updates carry None without claiming that they were retired.
+  CompatPublicationHold publicationHold;
+}
+
+// Constructor tokens identify exact JS functions across editor-local class IDs.
+// Abstract native prototypes are metadata, never fake serializable node classes.
+struct CompatHostedClass {
+  uint32 classId; uint64 constructorToken; CompatNativePrototype nativePrototype;
+}
+struct CompatHostedConfig { CompatConfig registration; CompatHostedClass[] classes; }
+
+// Native code retains a numeric weak-host slot, not a JS editor or callback owner.
+// Scope IDs are nonzero, monotonic, and valid only during this synchronous call.
+enum CompatHostAccess : byte {
+  Unknown = 0; Mutable = 1; SourceRead = 2; Clone = 3; Creation = 4;
+}
+struct CompatHostContext {
+  uint32 hostSlot; uint64 scopeId; uint32 editorId; uint32 updateId;
+  uint64 version; uint64 mutationEpoch; CompatHostAccess access;
+}
+// Creation precedes the native continuation. The original constructor runs once
+// on this exact allocated record; configured replacement may return another node.
+// Creation acknowledgements and scoped binds require CreatedInstance, never NoInstanceSeed.
+// COW never reuses this event: it uses a validated clone stage instead.
+struct CompatCreationStage {
+  uint32 stageId; uint32 classId; uint64 constructorToken;
+  ForeignRenderRecord record; ForeignCallbackValue[] args;
+}
+union CompatHostCall {
+  1 -> struct CompatHostHook { ForeignHookCall call; }
+  2 -> struct CompatHostClone {
+    ForeignCloneStage stage; ForeignRenderRecord sourceRecord;
+  }
+  3 -> struct CompatHostState { uint32 callId; ForeignStateCall call; }
+  4 -> struct CompatHostPublicExport { ForeignHookCall call; }
+  5 -> struct CompatHostSerializedExport { ForeignHookCall call; }
+  6 -> struct CompatHostCreation { CompatCreationStage stage; }
+  7 -> struct CompatHostReconcile { CompatReconcileStage stage; }
+}
+// Apply the sparse acknowledged delta before reading nodes or dispatching JS.
+struct CompatHostRequest {
+  CompatHostContext context; CompatRecordDelta delta;
+  // Pinned dirtyType: 0=no dirty nodes, 1=has dirty nodes, 2=full reconcile.
+  // Intentional flags and composition are native facts, not inferred from delta.
+  ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
+  byte dirtyType; ForeignOptionalKey composition;
+  // A callback can precede the outer batch reply which first allocates the value.
+  CompatSelectionBinding[] selectionBindings;
+  // Active identity and changed detached values precede JS callback execution.
+  CompatSelectionData selection; CompatSelectionData[] selections;
+  CompatHostCall call;
+}
+struct CompatHookAck {
+  uint32 callId; ForeignHookResult result;
+  ForeignRecordPatch[] recordPatches; ForeignOpaqueValuePatch[] valuePatches;
+}
+struct CompatStateAck {
+  uint32 callId; uint32 configId; ForeignStateOperation operation;
+  ForeignHookResult result; ForeignOpaqueValuePatch[] valuePatches;
+}
+struct CompatCreationAck {
+  uint32 stageId; ForeignRecordRef original;
+  CompatInstanceSeed initialInstance; CompatNodeOperand result;
+  ForeignRecordPatch[] recordPatches; ForeignOpaqueValuePatch[] valuePatches;
+}
+union CompatHostResult {
+  1 -> struct CompatHostHookAck { CompatHookAck ack; }
+  2 -> struct CompatHostCloneAck { ForeignCloneAck ack; }
+  3 -> struct CompatHostStateAck { CompatStateAck ack; }
+  4 -> struct CompatHostPublicExportAck { ForeignPublicExportAck ack; }
+  5 -> struct CompatHostSerializedExportAck { ForeignSerializedExportAck ack; }
+  6 -> struct CompatHostCreationAck { CompatCreationAck ack; }
+  7 -> struct CompatHostThrown { ForeignOpaqueValue error; }
+  8 -> struct CompatHostReconcileAck { CompatReconcileAck ack; }
+}
+// Reconcile the real pending JS state before native admission/freeze. A native
+// committed receipt is too late to authorize derived cache writes.
+struct CompatReconcileStage {
+  uint32 stageId; uint64 previousVersion; uint64 nextVersion;
+}
+// Root strings remain JS-instance-owned opaque data; never encode them as UTF-16
+// in per-key acknowledgements. Native operations carry bounded derived fields.
+struct CompatReconcileAck {
+  uint32 stageId; CompatCaptureLeases leases; CompatBatchOperation[] operations;
+  ForeignOpaqueValuePatch[] valuePatches;
+}
+struct CompatHostReply { uint32 hostSlot; uint64 scopeId; CompatHostResult result; }
+
+// Callback operations use a scoped static export, never a recursively borrowed
+// EditorSession receiver. SourceRead forbids graph mutation; Clone admits only
+// destination stage patches. Nested virtual calls retain their normal dispatch.
+union CompatCallbackRequest {
+  1 -> struct CompatCallbackBatch { CompatBatchRequest request; }
+  2 -> struct CompatCallbackNativeSuper {
+    CompatNativePrototype targetPrototype; CompatBatchRequest request;
+  }
+  3 -> struct CompatCallbackReserveKeys { uint32 count; }
+  4 -> struct CompatCallbackBindCreation {
+    uint32 stageId; ForeignRecordRef original; CompatInstanceSeed instance;
+  }
+}
+union CompatCallbackReply {
+  1 -> struct CompatCallbackBatchReply { CompatBatchReply reply; }
+  2 -> struct CompatCallbackReservation { CompatKeyReservation reservation; }
+  3 -> struct CompatCallbackCreationBound { ForeignRenderRecord record; }
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Native editing overlay fixture</title>
+    <style>
+      body { margin: 0; padding: 24px; font-size: 16px; }
+      #body { min-height: 120px; padding: 24px; border: 1px solid #777; }
+      button { min-height: 44px; margin: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="body" role="textbox" aria-label="Body" aria-multiline="true" class="md"></div>
+    <button id="readonly">Read only</button>
+    <button id="editable">Editable</button>
+    <button id="revoke">Revoke writes</button>
+    <button id="dispose">Dispose overlays</button>
+    <button id="remount">Remount overlays</button>
+    <button id="save">Save state</button>
+    <button id="reopen">Reopen saved state</button>
+    <button id="queue-focus">Queue focus</button>
+    <button id="queue-dispose">Queue focus then dispose</button>
+    <button id="queue-readonly">Queue focus then readonly</button>
+    <button id="load-gap">Load block gap</button>
+    <button id="load-table">Load touch table</button>
+    <button id="queue-gap">Queue gap</button>
+    <button id="queue-gap-dispose">Queue gap then dispose</button>
+    <button id="queue-gap-readonly">Queue gap then readonly</button>
+    <div id="exterior"></div>
+    <output id="live-state" hidden></output>
+    <output id="selection" hidden></output>
+    <output id="saved" hidden></output>
+    <output id="errors" hidden></output>
+    <output id="queued" hidden></output>
+    <script type="module" src="./fixture.tsx"></script>
+  </body>
+</html>

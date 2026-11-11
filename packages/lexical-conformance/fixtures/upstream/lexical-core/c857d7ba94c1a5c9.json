@@ -1,0 +1,37 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/mentions.test.ts",
+    "test": [
+      "markdownToPlainText",
+      "converts mixed content to plain text"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "Hello <m-user-mention>{\"email\":\"john@example.com\"}</m-user-mention>, please review <m-document-mention>{\"documentName\":\"Report\"}</m-document-mention> by <m-date-mention>{\"displayFormat\":\"Friday\"}</m-date-mention>."
+      ],
+      "ret": "Hello john, please review Report by Friday."
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

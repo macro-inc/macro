@@ -1,0 +1,758 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "$convertSelectionToMarkdownString",
+      "list partial selection only includes selected items"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "link"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+      },
+      "list": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+      },
+      "listitem": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+      },
+      "quote": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+      },
+      "code": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+      },
+      "link": {
+        "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "link"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.0.dependencies.0"
+          },
+          "list": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.0"
+          },
+          "listitem": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.2.dependencies.1"
+          },
+          "quote": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.1.dependencies.0"
+          },
+          "code": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.4.dependencies.0"
+          },
+          "link": {
+            "$fn": "@lexical/markdown/MarkdownTransformers.TRANSFORMERS.14.dependencies.0"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListNode",
+          "args": [
+            "bullet"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "1",
+            "type": "list",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Item 1"
+          ],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "4",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Item 2"
+          ],
+          "ret": {
+            "$h": 6,
+            "key": "5",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 7,
+            "key": "6",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "Item 3"
+          ],
+          "ret": {
+            "$h": 8,
+            "key": "7",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 7
+          },
+          "ret": {
+            "$h": 7
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListNode.append",
+          "args": [
+            {
+              "$h": 3
+            },
+            {
+              "$h": 5
+            },
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 2
+            }
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 9,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getTextPointCaret",
+          "args": [
+            {
+              "$h": 6
+            },
+            "next",
+            0
+          ],
+          "ret": {
+            "$caret": 10,
+            "type": "text",
+            "origin": {
+              "$h": 6
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getTextPointCaret",
+          "args": [
+            {
+              "$h": 8
+            },
+            "next",
+            2
+          ],
+          "ret": {
+            "$caret": 11,
+            "type": "text",
+            "origin": {
+              "$h": 8
+            },
+            "direction": "next"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getCaretRange",
+          "args": [
+            {
+              "$caret": 10
+            },
+            {
+              "$caret": 11
+            }
+          ],
+          "ret": {
+            "$sel": 12,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$setSelectionFromCaretRange",
+          "args": [
+            {
+              "$sel": 12
+            }
+          ],
+          "ret": {
+            "$sel": 13,
+            "kind": "range"
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Item 1",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Item 2",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 2
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "Item 3",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 3
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": {
+          "type": "range",
+          "anchor": {
+            "key": {
+              "$key": 6,
+              "raw": "5"
+            },
+            "path": [
+              0,
+              1,
+              0
+            ],
+            "offset": 0,
+            "type": "text"
+          },
+          "focus": {
+            "key": {
+              "$key": 8,
+              "raw": "7"
+            },
+            "path": [
+              0,
+              2,
+              0
+            ],
+            "offset": 2,
+            "type": "text"
+          },
+          "format": 0,
+          "style": "",
+          "isBackward": false
+        },
+        "text": "Item 1\n\nItem 2\n\nItem 3",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            4,
+            6,
+            8
+          ],
+          "elements": [
+            [
+              2,
+              false
+            ],
+            [
+              3,
+              true
+            ],
+            [
+              5,
+              true
+            ],
+            [
+              7,
+              true
+            ],
+            [
+              9,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 14
+      }
+    },
+    {
+      "op": "read",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getSelection",
+          "args": [],
+          "ret": {
+            "$sel": 13
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/markdown.$convertSelectionToMarkdownString",
+          "args": [
+            [
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.HEADING"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.QUOTE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.UNORDERED_LIST"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ORDERED_LIST"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.CODE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.INLINE_CODE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_ITALIC_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.BOLD_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.HIGHLIGHT"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_STAR"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.ITALIC_UNDERSCORE"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.STRIKETHROUGH"
+              },
+              {
+                "$transformer": "@lexical/markdown/MarkdownTransformers.LINK"
+              }
+            ],
+            {
+              "$sel": 13
+            }
+          ],
+          "ret": "- Item 2\n- It"
+        }
+      ],
+      "state": {
+        "$state": 14
+      },
+      "opts": {
+        "editor": {
+          "$ed": 0
+        }
+      }
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Item 1",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Item 2",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "Item 3",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 3
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": {
+      "type": "range",
+      "anchor": {
+        "key": {
+          "$key": 6,
+          "raw": "5"
+        },
+        "path": [
+          0,
+          1,
+          0
+        ],
+        "offset": 0,
+        "type": "text"
+      },
+      "focus": {
+        "key": {
+          "$key": 8,
+          "raw": "7"
+        },
+        "path": [
+          0,
+          2,
+          0
+        ],
+        "offset": 2,
+        "type": "text"
+      },
+      "format": 0,
+      "style": "",
+      "isBackward": false
+    },
+    "text": "Item 1\n\nItem 2\n\nItem 3",
+    "nodeMapKeys": [
+      "root",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7"
+    ]
+  }
+}

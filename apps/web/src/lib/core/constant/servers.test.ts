@@ -123,3 +123,65 @@ it.each([
     expect(usesLocalStackProxy()).toBe(expected);
   }
 );
+
+it.each([
+  {
+    name: 'explicit scorecard proxy',
+    localOnly: 'true',
+    origin: 'same-origin',
+    override: '',
+    auth: 'https://localhost:3003/auth',
+    worker: 'https://localhost:3003/sync',
+    signer: 'https://localhost:3003/dss',
+  },
+  {
+    name: 'leaked local settings',
+    localOnly: undefined,
+    origin: 'same-origin',
+    override: '',
+    auth: 'https://gateway.macro.com/auth',
+    worker: 'https://sync-service-prod2.macroverse.workers.dev',
+    signer: 'https://gateway.macro.com/dss',
+  },
+  {
+    name: 'explicit local-only with a different origin',
+    localOnly: 'true',
+    origin: 'https://localhost:3003',
+    override: '',
+    auth: 'https://gateway.macro.com/auth',
+    worker: 'https://sync-service-prod2.macroverse.workers.dev',
+    signer: 'https://gateway.macro.com/dss',
+  },
+  {
+    name: 'explicit proxy with a hosted sync override',
+    localOnly: 'true',
+    origin: 'same-origin',
+    override: 'sync.example.test',
+    auth: 'https://localhost:3003/auth',
+    worker: 'https://sync.example.test',
+    signer: 'https://gateway.macro.com/dss',
+  },
+])(
+  'selects production routing for $name',
+  async ({ localOnly, origin, override, auth, worker, signer }) => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_LOCAL_SERVERS', 'ALL');
+    vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', origin);
+    vi.stubEnv('VITE_LOCAL_STACK', 'true');
+    vi.stubEnv('VITE_LOCAL_ONLY', localOnly);
+    vi.stubEnv('VITE_SYNC_SERVICE_HOST', override);
+    vi.stubGlobal('location', new URL('https://localhost:3003'));
+    vi.resetModules();
+    const { SERVER_HOSTS, SYNC_SERVICE_HOSTS, SYNC_PERMISSION_TOKEN_DSS_HOST } =
+      await import('./servers');
+
+    expect(import.meta.env.DEV).toBe(false);
+    expect(SERVER_HOSTS['auth-service']).toBe(auth);
+    expect(SYNC_SERVICE_HOSTS).toEqual({
+      worker,
+      ws: worker.replace(/^http/, 'ws'),
+    });
+    expect(SYNC_PERMISSION_TOKEN_DSS_HOST).toBe(signer);
+  }
+);

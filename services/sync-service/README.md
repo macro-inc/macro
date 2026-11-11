@@ -4,8 +4,10 @@ Service responsible for syncing collaborative documents between multiple users.
 ## Project Structure
 ```bash
 .
-├── bebop/ # bebop schema and ts generator for tests & qa
-├── build.rs # build script for worker, to generate bebop rust bindings
+├── ../../crates/sync_protocol/ # shared schema and wire codecs
+├── ../../crates/sync_server_core/ # pure policy and persisted domain types
+├── ../../crates/sync_server_sim/ # native runtime fakes and golden transcripts
+├── build.rs # build metadata for the worker
 ├── justfile # justfile for running commands
 ├── src/ # rust worker-rs worker
 ├── tests/ # e2e tests using miniflare and vitest
@@ -45,10 +47,33 @@ connects require an exact, kind-discriminated surface JWT. WebSocket query token
 are validated against the requested session before accepting the upgrade.
 
 `src/inbound/` owns routing, credential decoding and Cloudflare callbacks;
-`src/domain/` owns permission/write policy and atomic document-update logic;
+`../../crates/sync_server_core/src/domain/` owns room memory, permissions,
+connection/frame callbacks, reads/atomic updates, alarms, deletion and
+surface/migration policy; `src/domain.rs` forwards shared domain types;
 `src/outbound/` owns persistence, secrets and external clients. The Cloudflare
-callback adapter shares one isolate-local session through `Rc`, preserving the
-mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
+callback adapter owns one `Room<WorkerPorts>` behind an async mutex. The same
+owned guard covers the request gate and Axum dispatch. WebSocket messages, alarms
+and closes take that room lock; the error callback only logs. Background tasks
+receive owned snapshots and editor batches before the guard is released.
+`HttpHandlers` borrows Room only to parse requests and serialize responses; it
+has no session state or mutable-memory escape hatch. `RoomMemoryView` supplies
+read-only diagnostics. Worker clocks, sockets, storage, D1, alarms, comment
+validation and publication scheduling implement the core ports in
+`src/outbound/room_ports.rs`. `COMMENT_GATE_MODE` selects `http` (the checked-in
+default), `in_process` or `shadow`. Shadow compares both verdicts and returns the
+HTTP verdict. The `lexical.comment_only_change` span records `gate.comment_only`,
+mode, sizes, timing and sanitized error kind; `lexical.shadow` records equality.
+
+For native simulation, run from the repository root:
+
+```sh
+TMPDIR=/home/wolf/tmp cargo test -p sync_server_core -p sync_server_sim -p sync_protocol
+```
+
+`sync_server_sim` drives the real Room with in-memory ports, explicit clocks and
+fault plans. Its checked-in Worker transcripts compare ordered effects and final
+storage. See `../../crates/sync_server_sim/AGENTS.md` for the recording and coverage
+recipes. Same-session reads retain operation IDs and applied keys. Compaction retains unresolved updates until their dependencies arrive.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot
@@ -90,13 +115,12 @@ validate comment-only writes after provisioning or rotating a key. Rejected
 validation spans include `document.id` and `op.id` for correlation with clients.
 
 ## Bebop
-The bebop schema is defined in `./bebop/schema.bop`.
+The Bebop schema is defined in `../../crates/sync_protocol/bebop/schema.bop`.
 
 #### Generating typescript bindings locally
 The typescript bindings are primarily used for testing and QA environemnt.
 ```bash
-\cd bebop
-../../../node_modules/.bin/bebopc build
+node ../../crates/sync_protocol/bebop/generate.mjs
 ```
 
 Use the repository-pinned generator. Copy `schema.bop` to
@@ -106,11 +130,9 @@ the web bindings from the same schema. The package's `generate-sync-schema`
 command fetches the deployed schema and is unsuitable for an unreleased change.
 
 #### Generating rust bindings locally
-Rust bindings get automatically generated when building the worker.
-The behavior for this is defined in `./build.rs`.
-```bash
-worker-build --profile sync-service-release
-```
+The same command regenerates the checked-in Rust bindings in `sync_protocol`.
+It maps the pinned generator's owned-code feature guard to the crate's `owned`
+feature; it does not change serialization. `worker-build` consumes those bindings.
 
 #### Generating bindings elsewhere
 The sync_service exposes an endpoint `/schema` which returns the bebop schema.
@@ -118,10 +140,12 @@ A consuming client can fetch this schema during build time and generate the corr
 
 ## Features
 
-By default `bebop-owned-all`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
+By default `owned`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
 adds `create-default-state`; `alarm-keep-alive` is opt-in.
 
-- `bebop-owned-all`: Enables all bebop owned types
+- `transcript`: Test-only ordered callback, port, clock, and wire capture through
+  the `sync_transcript` tracing target. Never enable it in a deployed worker.
+- `owned`: Enables all bebop owned types
 - `create-default-state`: As of writing this there is no mechanism to initialize a document's state 
 from existing state on the client. If a client fetches a document for the first time the worker will create
 some default state for it. In the future, this feature should be disabled, and we should be inheriting default state
@@ -247,3 +271,183 @@ Active peer queries (`include_ai=false`) exclude both signed agent actors and
 reserved AI peer IDs. Canvas workers use independent full-width random
 Loro peer identities across worker isolates; signed actor claims still supply
 durable provenance. Cursor names remain untrusted ephemeral presentation.
+
+
+### Golden transcript checks
+
+`just record-transcripts` builds with the test-only `transcript` feature and runs
+Vitest with `SYNC_RECORD=1`. It writes raw JSONL fixtures beneath
+`../../crates/sync_server_sim/tests/transcripts` (pass an output directory to `just record-transcripts`
+for independent recordings). `just diff-transcripts` compares those recordings
+with the committed corpus at HEAD; optional arguments select two other corpus
+directories, or a `git:<revision>` baseline.
+
+The test adapter captures callbacks and host port calls while forwarding their
+original arguments and results. It records raw frame bytes, per-read clock
+values, accepted socket IDs, HTTP responses, outbound effects, and final DO KV,
+SQL, D1 and snapshot-KV state. A ping/pong fence and a stdout dump marker keep
+late callback output within the scenario. Shared runtimes include preceding
+inputs in each fixture so they can be replayed independently, including across
+persisted-runtime restarts. Explicit seed events retain test-side KV and D1 writes.
+The commit hook verifies transcript JWT signatures against the public `local`
+test key before accepting those synthetic-token findings; other secrets remain
+blocked.
+
+Recording seeds client document IDs, Loro peer IDs and input bytes, and delivers
+client HTTP/WebSocket inputs in invocation order. The explicit overlapping-fetch
+test bypasses that queue to exercise the mutation barrier. Each scenario closes
+its clients and drains scheduled alarms before its final dump, retaining complete
+room histories and global storage for independent replay.
+The long-lived document check waits for three actual alarm completions. Worker
+entropy and clocks remain real; the normalizer compares their recorded
+references, clock counts/kinds, and decoded awareness values while retaining
+other wire bytes. The raw fixtures keep the values needed by native replay.
+The local-only adapter enables `workerd:unsafe` to evict one object while keeping
+its native hibernatable sockets. No test routes or unsafe bindings enter the
+worker bundle. Local test controls also pin expiry during an accepted connection
+and missing identity after eviction; these controls are never bundled.
+`tests/hibernation.test.ts` exercises H1–H10.
+
+`tests/codec_fixtures.test.ts` and the Bebop crate's Rust tests compare every wire
+variant against the same checked-in bytes. Regenerate those bytes only after an
+intentional schema change with `SYNC_WRITE_CODEC_FIXTURES=1 npx vitest run
+ tests/codec_fixtures.test.ts`. Native ports and transcript loading live in
+`sync_server_sim`; C7 keeps its replay `ENABLED` list empty. Callback replay and
+its coverage floor start with the C8 extraction. The inventory map is in `../../crates/sync_server_sim/tests/transcripts/COVERAGE.md`.
+
+### Oversized operation storage and rollout
+
+WebSocket fragmentation is a transport boundary, not a persistence boundary. A
+single valid Loro update can be larger than a Durable Object SQLite row. Legacy
+`o/` and `a/` records serialize bytes as JavaScript number arrays, whose
+structured-clone representation is larger than the original update. Such writes
+can fail with `SQLITE_TOOBIG`; no receipt is sent. Do not split logical client WAL
+rows or arbitrary Loro byte streams to work around this storage limit.
+
+The reader accepts existing inline operations unchanged. With the default-off
+`chunked-operation-writes` Cargo feature enabled, operations over 512 KiB use
+256 KiB binary-buffer records under `operation-chunks/{logical-key}/...` and a
+versioned manifest at the existing logical key. The manifest records total length,
+chunk count and SHA-256. One storage transaction commits/replaces all chunks and
+the manifest; a failed transaction publishes nothing. Readers require every
+chunk, its exact size and the complete digest before exposing logical bytes.
+Pending-log pruning removes its manifest and chunks transactionally and counts
+logical operations. Archived chunks remain with archived history. Snapshotting,
+causal replay, operation IDs, attribution ordering and receipt timing retain their
+logical contracts. Activation also atomically writes reserved metadata at
+`o/!operation-chunks-v1`. The existing pending-prefix read validates and excludes
+this metadata from operation replay. It survives pending GC so cold rooms still
+clean up archived chunks when a repeated timestamp reuses an archived ID, even
+with the writer disabled. Legacy rooms without that metadata retain their exact
+direct small-write and delete calls.
+
+`SQLITE_ROW_LIMIT_BYTES` names the 2,200,000-byte encoded row ceiling measured
+on the pinned release and current workerd binaries. A single binary column plus
+its five-byte SQLite record header accepts 2,199,995 bytes and rejects
+2,199,996. The effective budget is the minimum of that measured limit and the conservative
+documented production limit of 2,000,000 bytes. Physical 256 KiB buffers leave
+over 85% headroom against both limits for keys and encoding;
+the exact 512 KiB legacy number-array threshold is tested with high byte values
+and valid Loro operations. Do not change the budget based solely on current
+platform documentation: exercise the actual pinned runtime when updating it.
+
+Archive completion receipts and dedup use the same default-off writer activation.
+The common path atomically appends pending bytes, archive and original signed
+attribution together. Inline pending tuples carry a four-byte receipt tag plus a Uint8Array payload;
+chunked pending values carry the receipt in manifest version2 without copying
+or re-exporting the Loro payload. Archive bytes remain unchanged. The inline
+append uses one `put(entries)` call, which the [SQLite storage API](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/) guarantees is
+atomic and isolated; chunk replacement retains an explicit transaction. No extra
+common-path status record or per-room migration sweep is required.
+
+If the atomic archive append fails, it publishes nothing. Core then separately
+persists pending bytes plus `o/!archive-status-v1/{operation-id}` Incomplete status,
+including the original signed attribution, before returning failure without ACK.
+Failure known to occur while staging pending chunks does not publish a fallback.
+Cold replay retains incomplete rows through compaction; a duplicate repairs their
+archive and original attribution, then records Complete until pending GC.
+The existing pending-prefix read loads all receipts without another read and
+excludes sidecars from Loro replay. Invalid receipt bytes fail the load.
+
+With the writer enabled, an import whose required operations were already covered
+before import stores no new pending or archive row. It first repairs retained
+archive debt. A modern completed duplicate performs no storage writes, including
+after restart. The receipt guarantees completion of every pending-origin archive.
+History already covered by a durable snapshot, including initialization/copy and
+history after pending GC, remains covered by that snapshot; duplicate exports do
+not invent per-update archive rows. A legacy unwrapped row without status gets one
+conservative idempotent archive repair, even if the archive already exists. An
+unchanged import containing novel operations waiting for causal dependencies is
+not a duplicate and remains durable. Logical updates, framing and ACK payloads
+are unchanged; no client-side update splitting is required.
+
+The rollback reader floor includes chunk manifests, embedded Complete receipts,
+archive-status sidecars and reserved `o/~fanout` notification debt. Earlier
+chunk-only readers are below this floor and
+would attempt to import receipt metadata as Loro. Reader-only rollback accepts
+legacy unwrapped rows, embedded receipts, Incomplete and Complete sidecars, and
+retains incomplete pending rows. It does not activate dedup or new receipts;
+subsequent legacy writes remain distinguishable because receipts are per row.
+Do not use an earlier chunk/archive reader as the first deployment for this activation.
+
+The same writer activation records typed fanout debt before persisting a parent
+that releases earlier causally pending operations. The existing pending-prefix
+read loads its base and required vectors without an extra storage read. A cold
+retry exports the applied durable history from that base; debt is cleared only
+after every notification is accepted and the required history is covered. The
+existing alarm retries retained applied history after a transient send failure,
+without requiring another edit or reconnect. An
+unavailable earlier parent cannot block an independent resolved suffix: successful
+partial fanout advances the retained base while preserving its remaining debt. Duplicate delta imports are no-ops. Socket
+and atomic HTTP ingress share this policy. The writer-OFF build still reads, advances and drains existing debt; only new
+debt creation requires activation. This fixes stale joined readers; it does not alter framing,
+ACK payloads or ordinary update bytes.
+
+The production release `v2026.11.6.1` and earlier readers do not understand this
+key: their `o/` scan treats its bytes as a Loro operation and fails replay. The
+rollback reader floor therefore includes fanout debt as well as chunks/receipts.
+Keep the writer OFF until every room runs this complete reader-capable release;
+a rollback below that floor is unsafe. No additional activation switch is used.
+
+Required deployment order (operator authorization is separate from this guide):
+
+1. Deploy this chunk/archive/fanout reader-capable release with `chunked-operation-writes` absent.
+   This configuration writes only the legacy format and can still be rolled back
+   to the preceding release. Wait for the Durable Object code-update deferral to
+   expire and verify that all rooms are on the reader-capable version.
+2. Deploy the same source with `chunked-operation-writes` enabled. This is the
+   format activation. Record that the namespace now requires the new reader.
+3. To disable activation, deploy a reader-capable build with the writer OFF.
+   Existing chunked operations still replay. A blind rollback to older binaries
+   is unsafe: they attempt to import the manifest as Loro and fail. Compaction
+   alone is insufficient to permit downgrade because archived operations remain.
+   Downgrading below reader support requires a separately reviewed history-
+   preserving migration and proof that no chunk manifests remain, including in
+   archives, and that the reserved activation marker, archive statuses and fanout debt have
+   been migrated too.
+   Legacy readers also attempt to import that marker as Loro. Do not delete
+   archive history or activation metadata as an ad hoc downgrade workaround.
+
+Run `SYNC_CHUNK_WRITER=1 npx vitest run tests/operation_chunks.test.ts` against a
+writer-enabled local build for transactional failure, retry, mixed legacy replay,
+cold restart and snapshot/GC controls. To prove reader-only compatibility, first
+run that command with `SYNC_CHUNK_READER_STORE=/absolute/temporary/directory`;
+this preserves its mixed pending/archive records before compaction. Rebuild with
+`chunked-operation-writes` absent, then run the same test file with only
+`SYNC_CHUNK_READER_STORE` set. The reader-only case imports the actual records
+written by the other build and compares full state/VV and archived bytes. Keep
+this temporary directory outside the repository. Neither test deploys a worker.
+
+An additional opt-in literal preserves the actual oversized failure witness
+without committing opaque source data: set `SYNC_CHUNK_WRITER=1` and
+`SYNC_RETAINED_UPDATE_DIR` to its retained binary directory, then run
+`npx vitest run tests/retained_large_update.test.ts` on the writer-enabled build.
+The test pins the exact update and initial-sync hashes, requires a real receipt,
+restarts workerd over the same durable storage and compares full JSON, VV and
+frontiers. This is a Node transport/core proof; actual browser editor hydration
+is a separate admission check.
+
+`SYNC_RETAINED_STORE=/absolute/temporary/directory` optionally retains the literal's
+owned test storage after validation for a separate browser host. Never point it
+at a live client profile. Source binaries are read-only inputs; normal runs use
+and remove only a fresh temporary directory.

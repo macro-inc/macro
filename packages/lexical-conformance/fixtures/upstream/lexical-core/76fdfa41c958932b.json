@@ -1,0 +1,96 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply with segments",
+      "reads as its passages alone in plain text"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "link": false,
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "activity",
+                "turn": 3,
+                "segment": 0,
+                "rows": [
+                  {
+                    "id": "t1",
+                    "label": "Ran",
+                    "detail": "cargo test",
+                    "status": "completed"
+                  },
+                  {
+                    "id": "t2",
+                    "label": "Reading",
+                    "status": "running"
+                  }
+                ],
+                "sealed": true
+              },
+              {
+                "kind": "prose",
+                "markdown": "All tests pass."
+              }
+            ]
+          }
+        }
+      ],
+      "ret": "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\nAll tests pass."
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/parsers.markdownToPlainText",
+      "args": [
+        "<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":3,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\nAll tests pass."
+      ],
+      "ret": "All tests pass."
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -33,7 +33,8 @@ export function isCommentOnlyChange(
   );
 }
 
-function contentWithoutComments(state: SerializedEditorState) {
+/** The normalized JSON compared by the permission gate and dev corpus oracle. */
+export function contentWithoutComments(state: SerializedEditorState) {
   const editor = createEditor();
   editor.setEditorState(
     editor.parseEditorState({

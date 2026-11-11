@@ -1,0 +1,1248 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/xml-serialize.test.ts",
+    "test": [
+      "xml serialization",
+      "bullet list"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "ighen",
+    "namespaceGenerated": true,
+    "nodes": [
+      "paragraph",
+      "text",
+      "code",
+      "custom-code",
+      "database-query",
+      "heading",
+      "link",
+      "autolink",
+      "list",
+      "task-list",
+      "listitem",
+      "quote",
+      "linebreak",
+      "document-mention",
+      "document-card",
+      "paste",
+      "user-mention",
+      "contact-mention",
+      "date-mention",
+      "pr-mention",
+      "booking-link-mention",
+      "agent-session-mention",
+      "reply-target",
+      "group-mention",
+      "inline-search",
+      "unlinked-text",
+      "code-highlight",
+      "tab",
+      "image",
+      "video",
+      "table",
+      "tablecell",
+      "tablerow",
+      "completion",
+      "mark",
+      "comment-mark",
+      "search-match",
+      "equation",
+      "snapshot",
+      "horizontalrule",
+      "diff",
+      "diff-insert",
+      "diff-delete",
+      "diff-text",
+      "html-render",
+      "classed-block",
+      "watermark",
+      "theme-mention",
+      "tag-mention",
+      "connect-app",
+      "account-manager-request",
+      "unknown-mention",
+      "await",
+      "magic-chip",
+      "agent-activity",
+      "agent-context",
+      "system-notification"
+    ],
+    "nodeClasses": {
+      "paragraph": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.0"
+      },
+      "text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+      },
+      "code": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.2"
+      },
+      "custom-code": {
+        "$fn": "@macro-inc/lexical-core/nodes/CustomCodeNode.CustomCodeNode"
+      },
+      "database-query": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.4"
+      },
+      "heading": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.5"
+      },
+      "link": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.6"
+      },
+      "autolink": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+      },
+      "list": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.8"
+      },
+      "task-list": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+      },
+      "listitem": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.10"
+      },
+      "quote": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.11"
+      },
+      "linebreak": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.12"
+      },
+      "document-mention": {
+        "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+      },
+      "document-card": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.14"
+      },
+      "paste": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.15"
+      },
+      "user-mention": {
+        "$fn": "@macro-inc/lexical-core/nodes/UserMentionNode.UserMentionNode"
+      },
+      "contact-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.17"
+      },
+      "date-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.18"
+      },
+      "pr-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.19"
+      },
+      "booking-link-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.20"
+      },
+      "agent-session-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.21"
+      },
+      "reply-target": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.22"
+      },
+      "group-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.23"
+      },
+      "inline-search": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+      },
+      "unlinked-text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.25"
+      },
+      "code-highlight": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+      },
+      "tab": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+      },
+      "image": {
+        "$fn": "@macro-inc/lexical-core/nodes/ImageNode.ImageNode"
+      },
+      "video": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.29"
+      },
+      "table": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.30"
+      },
+      "tablecell": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.31"
+      },
+      "tablerow": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.32"
+      },
+      "completion": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+      },
+      "mark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.34"
+      },
+      "comment-mark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+      },
+      "search-match": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.36"
+      },
+      "equation": {
+        "$fn": "@macro-inc/lexical-core/nodes/EquationNode.EquationNode"
+      },
+      "snapshot": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.38"
+      },
+      "horizontalrule": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.39"
+      },
+      "diff": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+      },
+      "diff-insert": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+      },
+      "diff-delete": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+      },
+      "diff-text": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+      },
+      "html-render": {
+        "$fn": "@macro-inc/lexical-core/nodes/HtmlRenderNode.HtmlRenderNode"
+      },
+      "classed-block": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.45"
+      },
+      "watermark": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.46"
+      },
+      "theme-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.47"
+      },
+      "tag-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.48"
+      },
+      "connect-app": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.49"
+      },
+      "account-manager-request": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.50"
+      },
+      "unknown-mention": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.51"
+      },
+      "await": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.52"
+      },
+      "magic-chip": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.53"
+      },
+      "agent-activity": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.54"
+      },
+      "agent-context": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.55"
+      },
+      "system-notification": {
+        "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.56"
+      }
+    },
+    "replacements": [
+      {
+        "replace": {
+          "$klass": "code"
+        },
+        "with": {
+          "$fn": "@macro-inc/lexical-core/node-list.NodeReplacements.0.with"
+        },
+        "withKlass": {
+          "$klass": "custom-code"
+        }
+      },
+      {
+        "replace": {
+          "$klass": "list"
+        },
+        "with": {
+          "$fn": "@macro-inc/lexical-core/node-list.NodeReplacements.1.with"
+        },
+        "withKlass": {
+          "$klass": "task-list"
+        }
+      }
+    ],
+    "plugins": [],
+    "theme": {},
+    "editable": true,
+    "headless": true,
+    "rootElement": false
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "ighen",
+        "namespaceGenerated": true,
+        "nodes": [
+          "paragraph",
+          "text",
+          "code",
+          "custom-code",
+          "database-query",
+          "heading",
+          "link",
+          "autolink",
+          "list",
+          "task-list",
+          "listitem",
+          "quote",
+          "linebreak",
+          "document-mention",
+          "document-card",
+          "paste",
+          "user-mention",
+          "contact-mention",
+          "date-mention",
+          "pr-mention",
+          "booking-link-mention",
+          "agent-session-mention",
+          "reply-target",
+          "group-mention",
+          "inline-search",
+          "unlinked-text",
+          "code-highlight",
+          "tab",
+          "image",
+          "video",
+          "table",
+          "tablecell",
+          "tablerow",
+          "completion",
+          "mark",
+          "comment-mark",
+          "search-match",
+          "equation",
+          "snapshot",
+          "horizontalrule",
+          "diff",
+          "diff-insert",
+          "diff-delete",
+          "diff-text",
+          "html-render",
+          "classed-block",
+          "watermark",
+          "theme-mention",
+          "tag-mention",
+          "connect-app",
+          "account-manager-request",
+          "unknown-mention",
+          "await",
+          "magic-chip",
+          "agent-activity",
+          "agent-context",
+          "system-notification"
+        ],
+        "nodeClasses": {
+          "paragraph": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.0"
+          },
+          "text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.plain-text.1"
+          },
+          "code": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.2"
+          },
+          "custom-code": {
+            "$fn": "@macro-inc/lexical-core/nodes/CustomCodeNode.CustomCodeNode"
+          },
+          "database-query": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.4"
+          },
+          "heading": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.5"
+          },
+          "link": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.6"
+          },
+          "autolink": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.7"
+          },
+          "list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.8"
+          },
+          "task-list": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.9"
+          },
+          "listitem": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.10"
+          },
+          "quote": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.11"
+          },
+          "linebreak": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.12"
+          },
+          "document-mention": {
+            "$fn": "@macro-inc/lexical-core/nodes/DocumentMentionNode.DocumentMentionNode"
+          },
+          "document-card": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.14"
+          },
+          "paste": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.15"
+          },
+          "user-mention": {
+            "$fn": "@macro-inc/lexical-core/nodes/UserMentionNode.UserMentionNode"
+          },
+          "contact-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.17"
+          },
+          "date-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.18"
+          },
+          "pr-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.19"
+          },
+          "booking-link-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.20"
+          },
+          "agent-session-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.21"
+          },
+          "reply-target": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.22"
+          },
+          "group-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.23"
+          },
+          "inline-search": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.24"
+          },
+          "unlinked-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.25"
+          },
+          "code-highlight": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.26"
+          },
+          "tab": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.27"
+          },
+          "image": {
+            "$fn": "@macro-inc/lexical-core/nodes/ImageNode.ImageNode"
+          },
+          "video": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.29"
+          },
+          "table": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.30"
+          },
+          "tablecell": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.31"
+          },
+          "tablerow": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.32"
+          },
+          "completion": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.33"
+          },
+          "mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.34"
+          },
+          "comment-mark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.35"
+          },
+          "search-match": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.36"
+          },
+          "equation": {
+            "$fn": "@macro-inc/lexical-core/nodes/EquationNode.EquationNode"
+          },
+          "snapshot": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.38"
+          },
+          "horizontalrule": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.39"
+          },
+          "diff": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.40"
+          },
+          "diff-insert": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.41"
+          },
+          "diff-delete": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.42"
+          },
+          "diff-text": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.43"
+          },
+          "html-render": {
+            "$fn": "@macro-inc/lexical-core/nodes/HtmlRenderNode.HtmlRenderNode"
+          },
+          "classed-block": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.45"
+          },
+          "watermark": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.46"
+          },
+          "theme-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.47"
+          },
+          "tag-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.48"
+          },
+          "connect-app": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.49"
+          },
+          "account-manager-request": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.50"
+          },
+          "unknown-mention": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.51"
+          },
+          "await": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.52"
+          },
+          "magic-chip": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.53"
+          },
+          "agent-activity": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.54"
+          },
+          "agent-context": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.55"
+          },
+          "system-notification": {
+            "$fn": "@macro-inc/lexical-core/node-list.RegisteredNodesByType.markdown.56"
+          }
+        },
+        "replacements": [
+          {
+            "replace": {
+              "$klass": "code"
+            },
+            "with": {
+              "$fn": "@macro-inc/lexical-core/node-list.NodeReplacements.0.with"
+            },
+            "withKlass": {
+              "$klass": "custom-code"
+            }
+          },
+          {
+            "replace": {
+              "$klass": "list"
+            },
+            "with": {
+              "$fn": "@macro-inc/lexical-core/node-list.NodeReplacements.1.with"
+            },
+            "withKlass": {
+              "$klass": "task-list"
+            }
+          }
+        ],
+        "plugins": [],
+        "theme": {},
+        "editable": true,
+        "headless": true,
+        "rootElement": false
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 1,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 2,
+            "key": "root",
+            "type": "root",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListNode",
+          "args": [
+            "bullet"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "2",
+            "type": "task-list",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "3",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "one"
+          ],
+          "ret": {
+            "$h": 5,
+            "key": "4",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 5
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TaskListNode.append",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "5",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "two"
+          ],
+          "ret": {
+            "$h": 7,
+            "key": "6",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 7
+            }
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TaskListNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "@lexical/list.$createListItemNode",
+          "args": [],
+          "ret": {
+            "$h": 8,
+            "key": "7",
+            "type": "listitem",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "three"
+          ],
+          "ret": {
+            "$h": 9,
+            "key": "8",
+            "type": "text",
+            "ver": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ListItemNode.append",
+          "args": [
+            {
+              "$h": 9
+            }
+          ],
+          "this": {
+            "$h": 8
+          },
+          "ret": {
+            "$h": 8
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TaskListNode.append",
+          "args": [
+            {
+              "$h": 8
+            }
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {
+        "discrete": true
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "one",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "two",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 2
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "three",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "value": 3
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "task-list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "one\n\ntwo\n\nthree",
+        "nodeMapKeys": [
+          "root",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            5,
+            7,
+            9
+          ],
+          "elements": [
+            [
+              3,
+              false
+            ],
+            [
+              4,
+              true
+            ],
+            [
+              6,
+              true
+            ],
+            [
+              8,
+              true
+            ],
+            [
+              2,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 10
+      }
+    },
+    {
+      "op": "call",
+      "fn": "EditorState.toJSON",
+      "args": [],
+      "this": {
+        "$state": 10
+      },
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "one",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "checked": {
+                    "$undef": true
+                  },
+                  "value": 1
+                },
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "two",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "checked": {
+                    "$undef": true
+                  },
+                  "value": 2
+                },
+                {
+                  "children": [
+                    {
+                      "detail": 0,
+                      "format": 0,
+                      "mode": "normal",
+                      "style": "",
+                      "text": "three",
+                      "type": "text",
+                      "version": 1
+                    }
+                  ],
+                  "direction": null,
+                  "format": "",
+                  "indent": 0,
+                  "type": "listitem",
+                  "version": 1,
+                  "checked": {
+                    "$undef": true
+                  },
+                  "value": 3
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "task-list",
+              "version": 1,
+              "listType": "bullet",
+              "start": 1,
+              "tag": "ul"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": {
+            "$key": 2,
+            "raw": "root"
+          },
+          "version": 1
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/transformers/xml.toXml",
+      "args": [
+        {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "one",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "checked": {
+                      "$undef": true
+                    },
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "two",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "checked": {
+                      "$undef": true
+                    },
+                    "value": 2
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "three",
+                        "type": "text",
+                        "version": 1
+                      }
+                    ],
+                    "direction": null,
+                    "format": "",
+                    "indent": 0,
+                    "type": "listitem",
+                    "version": 1,
+                    "checked": {
+                      "$undef": true
+                    },
+                    "value": 3
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "task-list",
+                "version": 1,
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": {
+              "$key": 2,
+              "raw": "root"
+            },
+            "version": 1
+          }
+        }
+      ],
+      "ret": "\n<doc>\n  <ul>\n    <li>\n      <t>one</t>\n    </li>\n    <li value=\"2\">\n      <t>two</t>\n    </li>\n    <li value=\"3\">\n      <t>three</t>\n    </li>\n  </ul>\n</doc>"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "one",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 1
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "two",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 2
+              },
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "three",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "listitem",
+                "version": 1,
+                "value": 3
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "task-list",
+            "version": 1,
+            "listType": "bullet",
+            "start": 1,
+            "tag": "ul"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "one\n\ntwo\n\nthree",
+    "nodeMapKeys": [
+      "root",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ]
+  }
+}

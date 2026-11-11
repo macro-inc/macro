@@ -34,6 +34,11 @@ jobs:
             - 'crates/client/cache-core/**'
             - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
+            - 'crates/client/document_session/**'
+            - 'crates/client/document_session_wasm/**'
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/lexical/**'
+            - 'crates/sync_protocol/**'
             - 'crates/client/turso-opfs/**'
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
@@ -61,6 +66,11 @@ jobs:
             - 'crates/client/cache-core/**'
             - 'crates/client/cache-turso/**'
             - 'crates/client/cache-wasm/**'
+            - 'crates/client/document_session/**'
+            - 'crates/client/document_session_wasm/**'
+            - 'crates/client/doc_sync_core/**'
+            - 'crates/client/lexical/**'
+            - 'crates/sync_protocol/**'
             - 'crates/client/turso-opfs/**'
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
@@ -324,9 +334,99 @@ jobs:
     - name: Skipped via label
       if: steps.labels.outputs.skip == 'true'
       run: echo "The skip-android-update label says this PR's Android native changes don't break the native/web contract — skipping the version bump and Play release gate."
+  editor-wasm:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Editor WASM artifacts
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: './.github/actions/setup-reqs-web'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build native editor WASM
+      run: just --justfile apps/web/justfile build-document-session-wasm
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+    - name: Build development conformance WASM
+      run: just build-lexical-conformance-wasm
+    - name: Pack editor artifacts
+      run: |
+        git diff --exit-code -- packages/collaboration/src/session/wasm.generated.d.ts
+        fixture=apps/web/src/lib/core/component/LexicalMarkdown/decorator-host/selection-browser-test/wasm
+        rm -rf "$fixture"
+        mkdir -p "$fixture"
+        cp -R apps/web/src/lib/core/document-session/wasm/. "$fixture/"
+        tar -cf target/ci-editor-wasm.tar apps/web/src/lib/core/document-session/wasm "$fixture" packages/lexical-conformance/pkg/node packages/lexical-conformance/pkg/web
+    - name: Upload editor-wasm artifact
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: editor-wasm
+        path: target/ci-editor-wasm.tar
+        if-no-files-found: error
+        retention-days: '30'
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
   typescript:
     needs:
     - path-check
+    - editor-wasm
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -348,6 +448,19 @@ jobs:
     - name: Install SDK Documentation Dependencies
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
+    - name: Install standalone Lexical facade dependencies
+      run: bun install --frozen-lockfile --ignore-scripts
+      working-directory: packages/lexical-wasm-shim
+    - name: Clear prior Lexical export evidence
+      run: rm -rf target/lexical-export-surface
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: target/ci-editor-wasm
+        merge-multiple: 'true'
+        name: editor-wasm
+    - name: Restore editor WASM artifacts
+      run: tar -xf target/ci-editor-wasm/ci-editor-wasm.tar
     - name: Run checks
       run: |
         set -uo pipefail
@@ -361,10 +474,12 @@ jobs:
           names+=("$name")
           pids+=("$!")
         }
+        check 'Check Lexical Export Surface' 'packages/lexical-wasm-shim' 'bunx tsc --noEmit -p tests/export-surface/tsconfig.json && bunx vitest run --config tests/export-surface/vitest.config.mts && LEXICAL_EXPORT_OUTPUT=../../target/lexical-export-surface bun run check:exports'
         check 'Check Types' 'apps/web' 'bun run type-check'
+        check 'Check Lexical Assertion Boundary' 'apps/web' 'bun run check:lexical-exceptions'
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
-        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check && bun scripts/generate-session-schema.ts --check'
         check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
         check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
@@ -385,6 +500,14 @@ jobs:
           fi
         done
         exit "$failed"
+    - name: Upload lexical-export-surface artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: lexical-export-surface
+        path: target/lexical-export-surface
+        if-no-files-found: error
+        retention-days: '30'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -602,6 +725,7 @@ jobs:
   test:
     needs:
     - path-check
+    - editor-wasm
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -681,6 +805,14 @@ jobs:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       timeout-minutes: 15
       working-directory: apps/web
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        path: target/ci-editor-wasm
+        merge-multiple: 'true'
+        name: editor-wasm
+    - name: Restore editor WASM artifacts
+      run: tar -xf target/ci-editor-wasm/ci-editor-wasm.tar
     - name: Test
       run: bun run test --shard=${{ matrix.shard }}/6
       env:
@@ -763,6 +895,9 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       working-directory: apps/web
+    - name: Check document session executor and storage
+      run: git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH -u BASH_ENV bunx playwright test --config src/session/browser-test/playwright.config.ts
+      working-directory: packages/collaboration
     - name: Functional Browser Tests
       run: bun run test:functional
       env:
@@ -957,6 +1092,8 @@ jobs:
         fi
     - name: Start sccache server
       run: sccache --start-server
+    - name: Clear previous bundle output
+      run: rm -rf apps/web/dist
     - name: Build
       run: just build-dev
       env:
@@ -970,6 +1107,8 @@ jobs:
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
+    - name: Exclude development oracle from production bundle
+      run: bun packages/lexical-conformance/coverage/boundaries.ts --bundle-only
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -1404,6 +1543,7 @@ jobs:
   status-check:
     needs:
     - path-check
+    - editor-wasm
     - android-native-check
     - typescript
     - generated-code
@@ -1421,6 +1561,7 @@ jobs:
     - name: Check job results
       run: |
         echo "path-check: ${{ needs.path-check.result }}"
+        echo "editor-wasm: ${{ needs.editor-wasm.result }}"
         echo "android-native-check: ${{ needs.android-native-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "generated-code: ${{ needs.generated-code.result }}"
@@ -1437,6 +1578,8 @@ jobs:
         # goes for generated code: a job that hits its timeout reports cancelled.
         if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.editor-wasm.result }}" == "failure" ]] || \
+           [[ "${{ needs.editor-wasm.result }}" == "cancelled" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \

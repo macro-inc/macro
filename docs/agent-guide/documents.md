@@ -1,5 +1,93 @@
 # Documents
 
+The experimental `rust-editor-model` flag selects the document body model in
+both block and Drive detail entry points. Set `VITE_ENABLE_RUST_EDITOR_MODEL`
+to `true` or `false` on an isolated local stack, then reopen the document after
+changing it. The app caches its engine choice at boot; later rollout refreshes
+take effect on the next page load.
+Off uses the existing LexicalMarkdown collaboration path and makes no native
+module request. On preloads the session WASM through the app-wide readiness
+resource while the shell paints, then connects EditorView to SessionPort.
+The shared gate also prepares paste matchers after paint at idle before exposing
+the module. Only editor-building subtrees wait at EditorEngineBoundary. A native load failure
+shows the content retry action while the shell stays mounted and overlay groups
+remain held. Retry initializes the shared engine without changing models. The isolated
+readiness checks are documented in `apps/web/src/lib/core/document-session/README.md`.
+Both engines use the same Notebook layout, title, document properties, discussion
+and body loading/placeholder chrome. Copy as markdown and downloads use the
+selected body engine. Verify engine parity before treating the flagged path as
+ready; native menus and anchored comments also require their view installers.
+
+The native body installs its checkbox pointer bridge through `installOverlays`.
+Click or tap a checklist marker, switch the view read-only, then unlock it and
+repeat; revoked Session write access must reject the toggle even if the local UI
+still appears editable. Closing/remounting overlays must retain exactly one
+listener. The isolated native browser check in
+`LexicalMarkdown/editing/browser-test` covers these gestures and raw save/reopen
+state. Click below the editor after leaving it: an empty terminal paragraph is
+reused, otherwise one paragraph is appended and its caret takes typing. A click
+while the editor retains a focused range leaves that range in place. Queued
+focus waits for native completion and rechecks disposal/editability before
+browser focus. These checks do not establish slash-menu or full document-app acceptance.
+
+When opening an older document without `documentMetadata`, verify that hydration
+preserves the model and sends no local document update or WAL append. The first
+real text edit adds version 10 in that edit’s normal update; read-only export
+must retain it without another write.
+
+Click the gap between two adjacent code blocks or tables: one paragraph appears
+between them, takes the caret, and accepts typing; Undo and Redo restore the exact
+loaded models. Read-only UI and a revoked live host permission must prevent the
+gap action. On a touch device, hold a table cell without scrolling for 400 ms,
+then move to another cell to extend selection. Moving before the hold completes
+must leave scrolling available. This gesture check does not establish the table
+action bar or its clipboard actions. Disposing overlays during a queued gap
+action must prevent delayed browser focus.
+
+For native document view performance, run the lexical-wasm-view
+`commit-work.browser.e2e.ts` fixture against a source-matched session artifact.
+Typing in one comment should measure that block's anchors, preserve table cell
+selection without repainting unrelated cells, and retain code ranges in untouched
+blocks. Resize an earlier block and check downstream comment positions before
+paint. The blank-document callback uses the mirror's maintained root-child count.
+This native-view check does not establish compat-core or application rollout
+readiness.
+
+The large-paste browser fixture also requires exact native/upstream DOM
+attributes, model and Markdown in all three engines. Native node keys are
+properties rather than serialized attributes; do not mask attributes in this
+comparison. This is behavior coverage, not a large-document latency gate.
+
+For native DOM selection changes, run the six-operation `selection-change.browser.e2e.ts`
+regression: the first interior-text event after an own range write preserves the
+model range; the next event admits the DOM range. Boundary, element and
+post-delete selections continue through normalization. Clearing selection or
+moving its anchor outside an editor must not consume the pending own-write mark.
+Compare plain-text paste with both engines while holding Shift: `**literal**`
+must remain literal, while ordinary paste converts its Markdown. Release Shift
+and repeat. Rich HTML and Lexical clipboard data retain their normal priority,
+and a key release during lazy HTML import must not change the captured intent.
+
+Type an inline code span, press ArrowRight, then type plain text. Verify one
+space separates the code and following text, including after save and reopen;
+an existing leading space must be reused. Repeat from a text or element caret
+boundary immediately after the span.
+
+Check decorator selection with both engines: click an image and verify its node
+selection clears browser ranges, click an equation once without selecting it as
+a node, then click text after a node selection and verify a range caret returns.
+Repeat the return to text with touch input; nested editor and decorator input
+selections must remain owned by their own controls.
+
+For local verification, open and type, disconnect/reconnect with pending edits,
+then close and reopen the document offline after its local snapshot is durable.
+Keep the app shell open for the offline navigation; the app has no asset-caching
+service worker. Confirm the same account retains its edits and logout/account
+switch cannot expose or synchronize another account's private rows. Use a private
+headless Chromium process and find `editor.engine.initialize` for preload and
+`state.load` and `view.reconcile` for document opening in local Tempo. Do not use the shared
+browser or enable a remote rollout as part of this check.
+
 For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
 production) and recreate document sessions after the client receives the updated
 flag. A reload can initially read PostHog's cached value; open sessions do not
@@ -56,6 +144,9 @@ a failed background refresh must not restore the revoked document. The denied
 view shows **Loading access requests…** until its own request-state read lands,
 never a request row or **Could not load access requests** left over from before
 the change, and a document deleted while it is open shows the not-found view.
+For the native text editor, verify cleanup also completes when access is revoked
+before or during startup. Cancelling startup before a view is attached must
+finish without mounting a document or leaving a pending close.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer
@@ -3159,6 +3250,18 @@ from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
 Loro's undo and the mirror read, and `editor.history.apply` lasts until the
 reconciled editor update commits.
 
+For a native session, type text and check Ctrl+Z with both Ctrl+Shift+Z and
+Ctrl+Y: content and caret must return together. KeyDown listeners retain
+precedence over the routed history command. Undo and redo a newly created code
+subtree: compare complete model JSON, including text leaf IDs, as well as the
+DOM text and selection. Also check the caret and document: enter a newline,
+undo, then redo. Redo must return to the committed paragraph and offset even
+when that paragraph is recreated. Repeat after a remote insertion before the
+caret, and with two separate edit groups that revisit the same text. An Android
+composition ending in a newline must behave the same way. The backend-free
+session keyboard regression runs from `packages/collaboration` with
+`bunx playwright test --config src/session/browser-test/playwright.config.ts`.
+
 ### Task mention status
 
 Task @mention pills and @mention menu rows display the same circular
@@ -3174,3 +3277,55 @@ Drive's existing New controls open a wide menu with icons and short descriptions
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
+
+Editor engine parity uses the paired browser harness in
+`apps/web/src/features/block-md/browser-test/parity/README.md`. Use synthetic
+documents and an independent browser profile; saved-state and compatibility
+evidence must be present before treating matching screenshots as acceptance.
+
+
+## Native preview installation checks
+
+Run the [six-step install check](../../apps/web/scripts/editor-live-check/README.md)
+for every native preview candidate and again after installation. Check sign-in,
+existing document, new document, typing, undo/redo and a normal-size document with
+heading, list, checklist, custom code, table, quote, link, mention, equation, image
+and comment anchor. Require the actual update ACK and committed WAL delivery (or
+its matching snapshot cover), then compare full JSON, durable IDs and DOM after
+warm reload and a new context without IndexedDB. Keep missing renderers, different
+IDs and failed durability as failures. Local recovery, rendered counts and fixed
+waits do not establish server persistence. Qualify mega-paste restoration separately.
+
+Copied content keeps its formatting when pasted into the same or another document. Undo removes the paste; redo restores the same pasted content and references.
+
+In a fresh collaborative document, create a table and immediately resize it.
+Within the application history interval, one undo can remove the whole table;
+redo restores the complete edit. Collaborative history uses Loro’s interval in
+addition to the editor’s group classifier, so standalone snapshot-history tests
+are not its oracle. Check the actual application’s typing, paste, formatting and
+node-insertion flows. In particular, reload a fresh document, type three
+backticks, Enter, then code: one Ctrl+Z must remove the code block and leave an
+empty paragraph; a second Ctrl+Z must leave the body empty.
+
+For native mention changes, use the editing browser suite's user-mentions fixture
+to type `@`, choose a supplied user by keyboard and pointer, verify the rendered
+mention, close a query with Escape, and close the installation with the picker
+open. This bounded USER stage does not verify other mention sources or backend
+tracking. Keep those gaps explicit when reporting editor acceptance.
+
+For Contact renderer changes, open a native document containing a Contact
+mention and verify its label, published selection styling and Normal-priority
+Enter handling. Close and reopen the document to check listener cleanup. A
+registered Contact renderer does not establish Contact picker insertion or
+successful navigation; verify those flows separately.
+
+In a native document containing an equation, click it, change its LaTeX and
+apply the edit. Reopen the menu to verify the saved expression. Check both
+inline and block equations, and confirm that closing the document releases
+the menu.
+
+
+Include the hosted factory controls when changing native overlay startup: open
+before first projection, verify one real query after hydration, inject an invalid
+optional-menu reply and confirm ordinary typing still works. Keep test transport
+same-origin and fail external request attempts rather than contacting production.

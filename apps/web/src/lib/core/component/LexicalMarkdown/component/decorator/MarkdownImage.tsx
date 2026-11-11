@@ -9,20 +9,10 @@ import { displayImageUrl, isImageProxyUrl } from '@core/util/imageProxy';
 import ImageIcon from '@icon/system/regular/image-broken.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import { mergeRegister } from '@lexical/utils';
-import {
-  $isImageNode,
-  type ImageDecoratorProps,
-} from '@macro-inc/lexical-core';
+import type { ImageDecoratorProps } from '@macro-inc/lexical-core';
 import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Layer } from '@ui';
-import {
-  $createNodeSelection,
-  $getNodeByKey,
-  $setSelection,
-  COMMAND_PRIORITY_LOW,
-} from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -31,20 +21,10 @@ import {
   onCleanup,
   onMount,
   Show,
-  useContext,
 } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
 import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
-import {
-  $upgradeDSSMediaUrl,
-  getMediaUrl,
-  ON_MEDIA_COMPONENT_MOUNT_COMMAND,
-  UPDATE_MEDIA_SIZE_COMMAND,
-  UPLOAD_MEDIA_FAILURE_COMMAND,
-  UPLOAD_MEDIA_START_COMMAND,
-  UPLOAD_MEDIA_SUCCESS_COMMAND,
-} from '../../plugins/media';
-import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
+import { getMediaUrl } from '../../plugins/media';
 import { MediaButtons } from './MediaButtons';
 import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
@@ -71,10 +51,8 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   let imageRef!: HTMLImageElement;
   let containerRef!: HTMLDivElement;
 
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const selection = () => lexicalWrapper?.selection;
-  const editor = () => lexicalWrapper?.editor;
-  const interactable = () => lexicalWrapper?.isInteractable() ?? false;
+  const host = useDecoratorHost();
+  const interactable = host.isInteractable;
 
   const [viewerOpen, setViewerOpen] = createSignal(false);
   const [imageHover, setImageHover] = createSignal(false);
@@ -137,41 +115,16 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         const url = maybeUrl.value;
         setImageUrl(url);
         if (props.srcType === 'dss') {
-          editor()?.update(
-            () => {
-              $upgradeDSSMediaUrl(props.key, url, 'image');
-            },
-            { discrete: true, tag: 'historic' }
-          );
+          host.image.upgradeUrl(props.key, url);
         }
       }),
       'markdown-media'
     );
   });
 
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
-
-  const clickImageHandler = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    if (!currentEditor.isEditable()) return;
-    if (isSelectedAsNode()) return;
-    currentEditor.update(() => {
-      const sel = $createNodeSelection();
-      sel.add(props.key);
-      $setSelection(sel);
-    });
-  };
-
-  const deleteImage = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    removeNodeAndRestoreSelection(currentEditor, props.key, $isImageNode);
-  };
+  const isSelectedAsNode = () => host.isSelected(props.key);
+  const clickImageHandler = () => host.image.select(props.key);
+  const deleteImage = () => host.image.remove(props.key);
 
   const viewFull = () => {
     if (state() === 'ok') {
@@ -182,14 +135,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   const loadImage = () => {
     setState('ok');
     setImageDims([imageRef.naturalWidth, imageRef.naturalHeight]);
-    editor()?.dispatchCommand(UPDATE_MEDIA_SIZE_COMMAND, [
-      props.key,
-      {
-        width: imageRef.naturalWidth,
-        height: imageRef.naturalHeight,
-      },
-      'image',
-    ]);
+    host.image.resize(props.key, imageRef.naturalWidth, imageRef.naturalHeight);
   };
 
   const onImageError = () => {
@@ -204,46 +150,15 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   onMount(() => {
     imageRef.addEventListener('load', loadImage);
     imageRef.addEventListener('error', onImageError);
-    const e = editor();
-    if (e) {
-      cleanupListners = mergeRegister(
-        e.registerCommand(
-          UPLOAD_MEDIA_START_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(true);
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        ),
-        e.registerCommand(
-          UPLOAD_MEDIA_SUCCESS_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(false);
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        ),
-        e.registerCommand(
-          UPLOAD_MEDIA_FAILURE_COMMAND,
-          ([key]) => {
-            if (key !== props.key) return false;
-            setUploading(false);
-            toast.failure('Failed to upload image');
-            return true;
-          },
-          COMMAND_PRIORITY_LOW
-        )
-      );
-
-      setTimeout(() => {
-        e.dispatchCommand(ON_MEDIA_COMPONENT_MOUNT_COMMAND, [
-          props.key,
-          'image',
-        ]);
-      }, 10);
-    }
+    cleanupListners = host.image.subscribeUploads(props.key, {
+      start: () => setUploading(true),
+      success: () => setUploading(false),
+      failure: () => {
+        setUploading(false);
+        toast.failure('Failed to upload image');
+      },
+    });
+    setTimeout(() => host.image.mounted(props.key), 10);
   });
 
   onCleanup(() => {
@@ -253,22 +168,13 @@ export function MarkdownImage(props: ImageDecoratorProps) {
   });
 
   const persistScale = debounce((value: number) => {
-    const currentEditor = editor();
-    if (!interactable() || !currentEditor?.isEditable()) return;
-    currentEditor.update(() => {
-      if (!currentEditor.isEditable()) return;
-      const node = $getNodeByKey(props.key);
-      if (node && $isImageNode(node)) node.setScale(value, false);
-    });
+    host.image.persistScale(props.key, value);
   }, 60);
   createEffect(on(scale, persistScale));
   createEffect(() => {
     if (!interactable()) {
       persistScale.clear();
-      const committedScale = editor()?.read(() => {
-        const node = $getNodeByKey(props.key);
-        return node && $isImageNode(node) ? node.getScale() : props.scale;
-      });
+      const committedScale = host.image.readScale(props.key, props.scale);
       setScale(committedScale ?? props.scale);
     }
   });
@@ -319,7 +225,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           <ResizeHandle
             scale={scale}
             setScale={(value) => {
-              if (interactable() && editor()?.isEditable()) setScale(value);
+              if (interactable() && host.isEditable()) setScale(value);
             }}
             side="left"
             imageDims={effectiveDims}
@@ -328,7 +234,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           <ResizeHandle
             scale={scale}
             setScale={(value) => {
-              if (interactable() && editor()?.isEditable()) setScale(value);
+              if (interactable() && host.isEditable()) setScale(value);
             }}
             side="right"
             imageDims={effectiveDims}
@@ -352,7 +258,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           onDragStart={(e) => {
             // Dropped in this editor the image moves; anywhere else it is
             // copied from its URL.
-            if (interactable() && editor()?.isEditable())
+            if (interactable() && host.isEditable())
               e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
           }}
           ref={imageRef}

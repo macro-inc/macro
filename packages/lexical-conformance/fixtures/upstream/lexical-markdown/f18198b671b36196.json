@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+    "test": [
+      "normalizeMarkdown - shouldMergeAdjacentLines = true",
+      "does not merge across HTML-like tags (opening, content, closing, after)"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@lexical/markdown/MarkdownTransformers.normalizeMarkdown",
+      "args": [
+        "<div>\ncontent\n</div>\nafter",
+        true
+      ],
+      "ret": "<div>\ncontent\n</div>\nafter"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

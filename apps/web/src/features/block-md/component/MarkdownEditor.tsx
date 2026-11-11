@@ -113,29 +113,13 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
-import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
+import { MarkdownEditorChrome } from './MarkdownEditorChrome';
 import { MarkdownPopup } from './MarkdownPopup';
-import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
 import { shouldAutofocusDocument } from './should-autofocus-document';
-
-false && fileFolderDrop;
 
 // Keep the bottom click target compact so document discussion stays visible.
 const EDITOR_CLICK_TARGET_HEIGHT = 80;
-
-function getBlankMarkdownPlaceholder(canEdit: boolean) {
-  if (!canEdit) return 'This document is blank...';
-
-  const hints = [
-    "'/' for commands",
-    "'@' to reference files",
-    "';' for snippets",
-  ];
-  if (ENABLE_MARKDOWN_AI_GENERATE) hints.push("'space' for AI writing");
-
-  return `Press ${hints.join(', ')}...`;
-}
 
 export function MarkdownEditor(props: {
   autoFocusOnMount?: boolean;
@@ -422,7 +406,6 @@ export function MarkdownEditor(props: {
     dragInsert: editing.dragInsert,
     source: editingSource,
   });
-  false && droppable;
 
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
@@ -682,77 +665,67 @@ export function MarkdownEditor(props: {
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      <Show when={editorError()}>
-        {(error) => (
-          <EditorSystemMessage variant="warning" class="mb-2">
-            {getErrorDescription(error())}
-          </EditorSystemMessage>
-        )}
-      </Show>
-      {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
-      <div
-        class="relative mt-1.5 text-base"
-        ref={editorContainerRef}
-        use:fileFolderDrop={{
-          onDrop: (fileEntries, folderEntries, e) => {
-            if (!e) return;
-            editing.dropFiles(fileEntries, folderEntries, e, 'md');
-          },
+      <MarkdownEditorChrome
+        ready={editorReady()}
+        empty={isBlankMarkdown()}
+        canEdit={canEdit() ?? false}
+        error={(() => {
+          const error = editorError();
+          return error ? getErrorDescription(error) : undefined;
+        })()}
+        connectContainer={(element) => {
+          editorContainerRef = element;
+          fileFolderDrop(element, () => ({
+            onDrop: (fileEntries, folderEntries, event) => {
+              if (event)
+                editing.dropFiles(fileEntries, folderEntries, event, 'md');
+            },
+          }));
+          droppable(element);
         }}
-        use:droppable
-      >
-        <div
-          ref={(el) => {
-            onElementConnect(el, () => {
-              onConnect(el);
-            });
-          }}
-          contentEditable={isContentEditable()}
-          role="textbox"
-          aria-multiline="true"
-          aria-readonly={!isContentEditable()}
-          aria-label="Document content"
-          class="ph-no-capture w-full max-w-full min-h-52"
-          classList={{
-            'select-auto': !canEdit(),
-            'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,
-          }}
-        />
+        body={
+          <>
+            <div
+              ref={(el) => {
+                onElementConnect(el, () => {
+                  onConnect(el);
+                });
+              }}
+              contentEditable={isContentEditable()}
+              role="textbox"
+              aria-multiline="true"
+              aria-readonly={!isContentEditable()}
+              aria-label="Document content"
+              class="ph-no-capture w-full max-w-full min-h-52"
+              classList={{
+                'select-auto': !canEdit(),
+                'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,
+              }}
+            />
 
-        <Show when={IS_SYNC()}>
-          <MarkdownCollabProvider
+            <Show when={IS_SYNC()}>
+              <MarkdownCollabProvider
+                editor={editor}
+                pluginManager={plugins}
+                editorContainerRef={editorContainerRef}
+                highlighLayerRef={highlightLayerRef() ?? editorContainerRef}
+                mappings={lexicalWrapper.mapping!}
+                editorFocus={editorFocus}
+                setEditorReady={setEditorReady}
+                setEditorError={setEditorError}
+                loroManager={props.loroManager}
+              />
+            </Show>
+          </>
+        }
+        focusTarget={
+          <FocusClickTarget
             editor={editor}
-            pluginManager={plugins}
-            editorContainerRef={editorContainerRef}
-            highlighLayerRef={highlightLayerRef() ?? editorContainerRef}
-            mappings={lexicalWrapper.mapping!}
             editorFocus={editorFocus}
-            setEditorReady={setEditorReady}
-            setEditorError={setEditorError}
-            loroManager={props.loroManager}
+            style={{ height: `${clickTargetHeight()}px` }}
           />
-        </Show>
-
-        <FocusClickTarget
-          editor={editor}
-          editorFocus={editorFocus}
-          style={{ height: `${clickTargetHeight()}px` }}
-        />
-        <Show when={isMarkdownEditorLoading(editorReady(), editorError())}>
-          <div
-            aria-hidden="true"
-            class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
-          >
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
-            <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
-            <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-skeleton" />
-          </div>
-        </Show>
-        <Show when={editorReady() && isBlankMarkdown()}>
-          <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            {getBlankMarkdownPlaceholder(canEdit())}
-          </div>
-        </Show>
+        }
+      >
         <Show when={isFeatureEnabled(enableGitBlame)}>
           <Suspense>
             <BlameTooltip state={blameTooltipStore} documentId={blockId} />
@@ -859,7 +832,7 @@ export function MarkdownEditor(props: {
             )}
           </Show>
         </Show>
-      </div>
+      </MarkdownEditorChrome>
     </LexicalWrapperContext.Provider>
   );
 }

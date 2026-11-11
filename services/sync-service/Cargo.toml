@@ -7,18 +7,25 @@ build = "build.rs"
 publish = false
 
 [features]
-default = ["bebop-owned-all", "do-sqlite-snapshot-storage", "search-service"]
+# Activate chunk writes, archive completion receipts and dedup only after the
+# always-on chunk AND archive-status reader has reached every room.
+# Default-off reader-only deployments remain safe to roll back to legacy code.
+chunked-operation-writes = []
+
+default = ["owned", "do-sqlite-snapshot-storage", "search-service"]
 no-network-deps = []
 # Test-only persistence fault injection; never enable in deployed workers.
 migration-test-hooks = []
+# Test-only ordered boundary capture; never enable in deployed workers.
+transcript = []
 do-sqlite-snapshot-storage = []
 kv-snapshot-storage = []
 r2-snapshot-storage = []
 search-service = []
-bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
+owned = ["sync_protocol/owned"]
 create-default-state = []
 alarm-keep-alive = []
-openapi = ["dep:utoipa"]
+openapi = ["dep:utoipa", "sync_server_core/openapi"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -36,6 +43,8 @@ release = false
 wasm-opt = true
 
 [dependencies]
+macro_document_model = { workspace = true, default-features = false }
+strum.workspace = true
 worker = { workspace = true, features = ['d1', 'http', 'axum'] }
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = [
@@ -45,20 +54,19 @@ tracing-web = "0.1"
 web-time.workspace = true
 time = { workspace = true, features = ['wasm-bindgen'] }
 bebop.workspace = true
-sync_service_bebop_schema = { path = "bebop-schema" }
+sync_protocol = { workspace = true }
+sync_server_core = { workspace = true, features = ["in-process-gate"] }
 serde_json.workspace = true
-sha2.workspace = true
 serde.workspace = true
+serde-wasm-bindgen.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
-loro.workspace = true
 macro_sync_service_jwt = { path = "../../crates/macro_sync_service_jwt" }
 worker-rs-otel = { path = "../../crates/worker-rs-otel" }
 subtle = { workspace = true }
 base64.workspace = true
 futures.workspace = true
-thiserror.workspace = true
 
 # Workers cannot enable the workspace's native Tokio/compression features.
 [target.'cfg(target_family = "wasm")'.dependencies]
@@ -73,6 +81,5 @@ utoipa = { version = "5.4.0", optional = true }
 workspace = true
 
 [package.metadata.cargo-shear]
-# Feature activation for wasm32, never named in code: getrandom's `wasm_js`
-# backend, and `time`'s `wasm-bindgen` clock for `OffsetDateTime::now_utc`.
-ignored = ["getrandom", "time"]
+# `time` activates the wasm-bindgen clock for OffsetDateTime::now_utc.
+ignored = ["time"]

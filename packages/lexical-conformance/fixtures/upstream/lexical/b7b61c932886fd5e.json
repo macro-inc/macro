@@ -1,0 +1,66 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/__tests__/unit/LexicalGenMap.test.ts",
+    "test": [
+      "cloneMap",
+      "plain Map below threshold returns a fresh plain Map"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalGenMap.cloneMap",
+      "args": [
+        {
+          "$map": [
+            [
+              "x",
+              1
+            ]
+          ]
+        },
+        1000
+      ],
+      "ret": {
+        "$map": [
+          [
+            "x",
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "op": "call",
+      "fn": "Map.get",
+      "args": [
+        "x"
+      ],
+      "this": {
+        "$map": [
+          [
+            "x",
+            1
+          ]
+        ]
+      },
+      "ret": 1
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

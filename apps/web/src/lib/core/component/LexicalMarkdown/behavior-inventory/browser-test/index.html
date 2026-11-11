@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Editor behavior regression fixture</title>
+    <style>
+      body { margin: 0; padding: 24px; box-sizing: border-box; }
+      main { height: calc(100dvh - 48px); overflow: auto; }
+      [role="textbox"] { border: 1px solid #777; min-height: 40px; padding: 12px; margin-block: 16px; }
+      button { min-height: 44px; margin: 4px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="title" role="textbox" aria-label="Title" aria-multiline="false"></div>
+      <div id="body" role="textbox" aria-label="Body" aria-multiline="true"></div>
+      <button id="readonly">Read only</button>
+      <button id="editable">Editable</button>
+      <button id="save">Save state</button>
+      <button id="reopen">Reopen saved state</button>
+      <button id="load-image">Load image</button>
+      <button id="load-code">Load code</button>
+      <button id="load-checklists">Load checklists</button>
+      <output id="live-state" hidden></output>
+      <output id="saved" aria-label="Saved state"></output>
+      <output id="pasted-files" aria-label="Pasted files"></output>
+      <output id="dropped-files" aria-label="Dropped files"></output>
+      <div id="menus"></div>
+    </main>
+    <script type="module" src="./fixture.tsx"></script>
+  </body>
+</html>

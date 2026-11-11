@@ -1,0 +1,52 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/channel-mentions.test.ts",
+    "test": [
+      "extractChannelMentionsFromMarkdown",
+      "never sends a pipeline mention as a channel reference"
+    ],
+    "recordedWith": "lexical-conformance@01e8ff0540c18afe8857a17c8d1d55a37f047923b7c74d4a8f99255cb2f0cd0d"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-mentions.extractChannelMentionsFromMarkdown",
+      "args": [
+        "<m-document-mention>{\"documentId\":\"pipeline-1\",\"blockName\":\"pipeline\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention> <m-document-mention>{\"documentId\":\"doc-1\",\"blockName\":\"md\",\"documentName\":\"Doc\",\"blockParams\":{}}</m-document-mention>"
+      ],
+      "ret": [
+        {
+          "entityType": "document",
+          "entityId": "doc-1"
+        }
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

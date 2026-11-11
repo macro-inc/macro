@@ -1,0 +1,20 @@
+[package]
+name = "doc_sync_core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+loro.workspace = true
+macro_user_id.workspace = true
+strum.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
+bebop.workspace = true
+sync_doc_id.workspace = true
+uuid_value = { workspace = true, features = ["serde"] }
+serde.workspace = true
+thiserror.workspace = true
+rootcause.workspace = true
+
+[dev-dependencies]
+postcard.workspace = true

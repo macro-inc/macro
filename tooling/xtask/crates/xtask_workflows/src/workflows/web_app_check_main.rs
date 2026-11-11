@@ -38,6 +38,7 @@ pub fn web_app_check_main() -> Workflow {
         .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("path-check", path_check())
         .add_job(android_native_check::JOB_ID, android_native_check())
+        .add_job("editor-wasm", editor_wasm())
         .add_job("typescript", typescript())
         .add_job("generated-code", generated_code())
         .add_job("biome-check", biome_check())
@@ -82,12 +83,48 @@ fn path_check() -> Job {
         .add_step(detect_schema_changes())
 }
 
+/// Build the real editor artifacts once before typechecking or test shards read them.
+fn editor_wasm() -> Job {
+    gated_web_job("Editor WASM artifacts")
+        .runs_on(mid_web_runner())
+        .add_step(checkout("Checkout Repo", false))
+        .add_step(steps::mount_web_build_check_cache_volume())
+        .add_step(steps::setup_nix_with_seed())
+        .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
+        .add_step(with_pr_wasm_env(
+            Step::new("Build native editor WASM")
+                .run("just --justfile apps/web/justfile build-document-session-wasm"),
+        ))
+        .add_step(Step::new("Build development conformance WASM").run("just build-lexical-conformance-wasm"))
+        .add_step(Step::new("Pack editor artifacts").run(indoc::indoc! {r#"
+            git diff --exit-code -- packages/collaboration/src/session/wasm.generated.d.ts
+            fixture=apps/web/src/lib/core/component/LexicalMarkdown/decorator-host/selection-browser-test/wasm
+            rm -rf "$fixture"
+            mkdir -p "$fixture"
+            cp -R apps/web/src/lib/core/document-session/wasm/. "$fixture/"
+            tar -cf target/ci-editor-wasm.tar apps/web/src/lib/core/document-session/wasm "$fixture" packages/lexical-conformance/pkg/node packages/lexical-conformance/pkg/web
+        "#}))
+        .add_step(steps::upload_artifact("editor-wasm", xtask_paths::runtime_path!("target/ci-editor-wasm.tar")))
+        .add_step(steps::teardown_nix())
+}
+
+fn restore_editor_wasm() -> Step<Use> {
+    steps::download_artifacts(xtask_paths::runtime_path!("target/ci-editor-wasm"))
+        .add_with(("name", "editor-wasm"))
+}
+
+fn unpack_editor_wasm() -> Step<Run> {
+    Step::new("Restore editor WASM artifacts")
+        .run("tar -xf target/ci-editor-wasm/ci-editor-wasm.tar")
+}
+
 /// TypeScript checks against the committed generated code. Whether that code
 /// is fresh is [`generated_code`]'s job, so a Rust-only change does not start
 /// this one.
 fn typescript() -> Job {
     Job::default()
-        .needs(vec!["path-check".to_string()])
+        .needs(vec!["path-check".to_string(), "editor-wasm".to_string()])
         .cond(Expression::new(
             "needs.path-check.outputs.should_run == 'true'",
         ))
@@ -102,17 +139,45 @@ fn typescript() -> Job {
                 .run("bun install --frozen-lockfile")
                 .working_directory(xtask_paths::repo_dir!("packages/sdk")),
         )
+        .add_step(
+            Step::new("Install standalone Lexical facade dependencies")
+                .run("bun install --frozen-lockfile --ignore-scripts")
+                .working_directory(xtask_paths::repo_dir!("packages/lexical-wasm-shim")),
+        )
+        .add_step(
+            Step::new("Clear prior Lexical export evidence")
+                .run("rm -rf target/lexical-export-surface"),
+        )
+        .add_step(restore_editor_wasm())
+        .add_step(unpack_editor_wasm())
         .add_step(typecheck_in_parallel())
+        .add_step(
+            steps::upload_artifact(
+                "lexical-export-surface",
+                xtask_paths::runtime_path!("target/lexical-export-surface"),
+            )
+            .if_condition(Expression::new("always()")),
+        )
         .add_step(steps::teardown_nix())
 }
 
 /// Typecheck's checks, each `(name, directory, command)`. They read the same
-/// installed tree and write nothing, so they run at once: in sequence they took
+/// installed tree and write only separate diagnostic outputs, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
+const TYPECHECKS: [(&str, &str, &str); 13] = [
+    (
+        "Check Lexical Export Surface",
+        "packages/lexical-wasm-shim",
+        "bunx tsc --noEmit -p tests/export-surface/tsconfig.json && bunx vitest run --config tests/export-surface/vitest.config.mts && LEXICAL_EXPORT_OUTPUT=../../target/lexical-export-surface bun run check:exports",
+    ),
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
+    (
+        "Check Lexical Assertion Boundary",
+        "apps/web",
+        "bun run check:lexical-exceptions",
+    ),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
     // error and needs type information to run at all.
     (
@@ -128,7 +193,7 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
     (
         "Check Collaboration Package Types",
         "packages/collaboration",
-        "bun run type-check",
+        "bun run type-check && bun scripts/generate-session-schema.ts --check",
     ),
     (
         "Check Lexical Service Types",
@@ -278,6 +343,7 @@ fn biome_check() -> Job {
 
 fn test() -> Job {
     gated_web_job("Test (${{ matrix.shard }}/6)")
+        .needs(vec!["path-check".to_string(), "editor-wasm".to_string()])
         .runs_on(mid_web_runner())
         .strategy(
             Strategy::default()
@@ -291,6 +357,8 @@ fn test() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
         .add_step(build_natural_time_for_tests())
+        .add_step(restore_editor_wasm())
+        .add_step(unpack_editor_wasm())
         .add_step(run_tests())
         .add_step(steps::teardown_nix())
 }
@@ -307,6 +375,7 @@ fn functional() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(build_wasm_for_functional_tests())
+        .add_step(run_session_tests())
         .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
@@ -360,7 +429,12 @@ fn build() -> Job {
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
+        .add_step(Step::new("Clear previous bundle output").run("rm -rf apps/web/dist"))
         .add_step(run_build())
+        .add_step(
+            Step::new("Exclude development oracle from production bundle")
+                .run("bun packages/lexical-conformance/coverage/boundaries.ts --bundle-only"),
+        )
         .add_step(steps::show_sccache_stats())
         .add_step(preview_credentials);
     preview_steps
@@ -379,6 +453,7 @@ fn status_check() -> Job {
         .cond(Expression::new("always()"))
         .needs(vec![
             "path-check".to_string(),
+            "editor-wasm".to_string(),
             android_native_check::JOB_ID.to_string(),
             "typescript".to_string(),
             "generated-code".to_string(),
@@ -597,6 +672,12 @@ fn check_platform_rules() -> Step<Run> {
     )
 }
 
+fn run_session_tests() -> Step<Run> {
+    Step::new("Check document session executor and storage")
+        .run("git diff --exit-code -- src/session/wasm.generated.d.ts && bun run test && bunx playwright install --with-deps chromium && env -u LD_LIBRARY_PATH -u BASH_ENV bunx playwright test --config src/session/browser-test/playwright.config.ts")
+        .working_directory(xtask_paths::repo_dir!("packages/collaboration"))
+}
+
 fn run_collaboration_biome() -> Step<Run> {
     Step::new("Run Collaboration Package Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
@@ -737,6 +818,7 @@ fn run_build() -> Step<Run> {
 fn check_job_results() -> Step<Run> {
     Step::new("Check job results").run(indoc::indoc! {r#"
         echo "path-check: ${{ needs.path-check.result }}"
+        echo "editor-wasm: ${{ needs.editor-wasm.result }}"
         echo "android-native-check: ${{ needs.android-native-check.result }}"
         echo "typescript: ${{ needs.typescript.result }}"
         echo "generated-code: ${{ needs.generated-code.result }}"
@@ -753,6 +835,8 @@ fn check_job_results() -> Step<Run> {
         # goes for generated code: a job that hits its timeout reports cancelled.
         if [[ "${{ needs.android-native-check.result }}" != "success" ]] || \
            [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.editor-wasm.result }}" == "failure" ]] || \
+           [[ "${{ needs.editor-wasm.result }}" == "cancelled" ]] || \
            [[ "${{ needs.typescript.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "failure" ]] || \
            [[ "${{ needs.generated-code.result }}" == "cancelled" ]] || \

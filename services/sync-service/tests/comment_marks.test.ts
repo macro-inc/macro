@@ -1,13 +1,19 @@
 import { createServer, type Server } from "node:http";
 import jwt from "jsonwebtoken";
-import { LoroDoc } from "loro-crdt";
+import {
+	LoroDoc,
+	LoroMap,
+	LoroMovableList,
+	LoroList,
+	LoroText,
+} from "loro-crdt";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import {
 	FromPeer,
 	FromRemote,
 	InitializeFromSnapshotRequest,
-} from "../bebop/generated/schema";
+} from "../../../crates/sync_protocol/bebop/generated/schema";
 import { createTestWebSocket, setupMiniflare } from "./utils";
 
 type Verdict = "comment_only" | "not_comment_only" | "fail";
@@ -60,11 +66,16 @@ afterAll(async () => {
 	);
 });
 
-async function seed(verdict: Verdict, instance = mf) {
+async function seed(
+	verdict: Verdict,
+	instance = mf,
+	initialize?: (doc: LoroDoc) => void,
+) {
 	const id = crypto.randomUUID();
 	verdicts.set(id, verdict);
 	const doc = new LoroDoc();
 	doc.getMap("root").set("title", id);
+	initialize?.(doc);
 	const response = await instance.dispatchFetch(
 		`http://localhost/document/${id}/initialize`,
 		{
@@ -288,3 +299,81 @@ test("missing lexical credentials leave commenter anchors local and editors writ
 		await missingKey.dispose();
 	}
 });
+
+test.each(["http", "in_process", "shadow"] as const)(
+	"real comment roots are accepted and content edits refused in %s mode",
+	async (mode) => {
+		const address = server.address();
+		if (!address || typeof address === "string")
+			throw new Error("Missing stand-in address");
+		const instance = await setupMiniflare({
+			lexicalServiceUrl: `http://127.0.0.1:${address.port}`,
+			commentGateMode: mode,
+		});
+		try {
+			const id = await seed("comment_only", instance, (doc) => {
+				const root = doc.getMap("root");
+				root.set("type", "root");
+				root.set("version", 1);
+				const paragraphs = root.setContainer("children", new LoroMovableList());
+				const paragraph = paragraphs.insertContainer(0, new LoroMap());
+				paragraph.set("type", "paragraph");
+				paragraph.set("version", 1);
+				const children = paragraph.setContainer(
+					"children",
+					new LoroMovableList(),
+				);
+				const text = children.insertContainer(0, new LoroMap());
+				text.set("type", "text");
+				text.set("version", 1);
+				text.setContainer("text", new LoroText()).insert(0, "Hello");
+			});
+			const commenter = await connect(id, "comment", instance);
+			checks.length = 0;
+			expect(
+				await send(
+					commenter,
+					(doc) => {
+						const paragraphs = doc.getMap("root").get("children");
+						if (!(paragraphs instanceof LoroMovableList))
+							throw new Error("Missing paragraphs");
+						const paragraph = paragraphs.get(0);
+						if (!(paragraph instanceof LoroMap))
+							throw new Error("Missing paragraph");
+						const children = paragraph.get("children");
+						if (!(children instanceof LoroMovableList))
+							throw new Error("Missing children");
+						children.delete(0, 1);
+						const mark = children.insertContainer(0, new LoroMap());
+						mark.set("type", "comment-mark");
+						mark.set("version", 1);
+						mark.set("isDraft", false);
+						mark.setContainer("ids", new LoroList()).insert(0, "mark-one");
+						const marked = mark.setContainer("children", new LoroMovableList());
+						const text = marked.insertContainer(0, new LoroMap());
+						text.set("type", "text");
+						text.set("version", 1);
+						text.setContainer("text", new LoroText()).insert(0, "Hello");
+					},
+					true,
+				),
+			).toBe(true);
+			const accepted = await stored(id, instance);
+			expect(accepted.root.children[0].children[0].type).toBe("comment-mark");
+			verdicts.set(id, "not_comment_only");
+			expect(
+				await send(
+					commenter,
+					(doc) => {
+						doc.getMap("root").setContainer("children", new LoroMovableList());
+					},
+					true,
+				),
+			).toBe(false);
+			expect(await stored(id, instance)).toEqual(accepted);
+			expect(checks).toHaveLength(mode === "in_process" ? 0 : 2);
+		} finally {
+			await instance.dispose();
+		}
+	},
+);

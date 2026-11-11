@@ -80,6 +80,8 @@ fn parse_u64(name: &str, raw_value: Option<&str>, default: u64) -> anyhow::Resul
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Validated lexical execution modes, loaded once at startup.
+    pub lexical_route_modes: lexical_client::RouteModes,
     /// The connection URL for the Postgres database this application should use.
     pub database_url: DatabaseUrl,
 
