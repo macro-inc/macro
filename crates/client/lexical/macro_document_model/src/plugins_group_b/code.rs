@@ -199,3 +199,34 @@ fn select_all(tx: &mut Transaction<'_>) -> Result<Handled, Error> {
     tx.set_selection(Some(Selection::Range(range)))?;
     Ok(Handled::Yes)
 }
+
+/// Source highlighter default (Macro sets `PrismTokenizer.defaultLanguage`).
+pub const HIGHLIGHT_DEFAULT_LANGUAGE: &str = "plaintext";
+
+/// Source `$codeNodeTransform`: a code node whose language is unset receives the
+/// tokenizer default through `setLanguage`, including the custom-code preview reset.
+fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<(), Error> {
+    if tx
+        .view()
+        .get::<CodeNode>(code)
+        .is_none_or(|node| node.language().is_some())
+    {
+        return Ok(());
+    }
+    tx.get_mut::<CodeNode>(code)?
+        .set_language(Some(HIGHLIGHT_DEFAULT_LANGUAGE));
+    if tx
+        .view()
+        .get::<CustomCodeNode>(code.key())
+        .is_some_and(|node| node.preview_enabled)
+    {
+        tx.get_mut::<CustomCodeNode>(code.key())?.preview_enabled = false;
+    }
+    Ok(())
+}
+
+/// Install the Source code-highlighting model effects. Source registers them only
+/// where an editor installs code highlighting, so headless editors leave this out.
+pub(super) fn register_highlighting(builder: EditorBuilder) -> EditorBuilder {
+    builder.transform::<CodeNode>(default_highlight_language)
+}

@@ -8,6 +8,12 @@ pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuild
 
     // WP-58 Group B: structure, lists, tables, media, paste and links.
     let builder = crate::plugins_group_b::register(builder, ty);
+    // Source installs code highlighting only with a view (codePlugin).
+    let builder = if mode == EditorMode::ViewAttached {
+        crate::plugins_group_b::register_code_highlighting(builder, ty)
+    } else {
+        builder
+    };
     // Source installs checklist controls after code; its parser has no live controls.
     let builder = if ty == EditorType::MarkdownSync && mode == EditorMode::ViewAttached {
         crate::plugins_group_b::register_checklist_controls(builder)

@@ -373,3 +373,95 @@ fn code_transform_keeps_the_original_element_after_linebreak_and_valid_negative_
     }
     Ok(())
 }
+
+// Source: @lexical/code-prism $codeNodeTransform sets tokenizer.defaultLanguage on a
+// code node whose language is undefined; Macro sets PrismTokenizer.defaultLanguage to
+// 'plaintext'. Only editors that register code highlighting run it.
+fn code_language(editor: &Editor, key: NodeKey) -> Option<String> {
+    editor
+        .state()
+        .view()
+        .get::<lexical_rich_nodes::code::CodeNode>(key)
+        .and_then(|code| code.language().map(str::to_owned))
+}
+
+#[test]
+fn view_attached_body_defaults_an_unset_code_language_to_plaintext() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (unset, _) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    assert_eq!(code_language(&editor, unset).as_deref(), Some("plaintext"));
+    let (explicit, _) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, Some("rust"), None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    assert_eq!(code_language(&editor, explicit).as_deref(), Some("rust"));
+    let (imported, _) = editor.update(|tx| {
+        let json = serde_json::json!({
+            "type": "custom-code", "version": 1, "format": "", "indent": 0,
+            "direction": null, "children": [], "previewEnabled": false
+        });
+        let code = tx.import_node(json.as_object().expect("object"))?;
+        tx.append(NodeKey::ROOT, &[code])?;
+        Ok(code)
+    })?;
+    assert_eq!(
+        code_language(&editor, imported).as_deref(),
+        Some("plaintext")
+    );
+    Ok(())
+}
+
+#[test]
+fn headless_surfaces_leave_an_unset_code_language_unset() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::Headless)
+            .build()
+            .expect("surface");
+    let (code, _) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    assert_eq!(code_language(&editor, code), None);
+    Ok(())
+}
+
+// Source opens documents with setEditorState, which runs no transforms: a loaded code
+// node keeps its unset language until a local update dirties it (open.ts receipt).
+#[test]
+fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Result<(), Error> {
+    let state: SerializedEditorState = serde_json::from_value(serde_json::json!({"root": {
+        "type": "root", "version": 1, "format": "", "indent": 0, "direction": null,
+        "children": [{
+            "type": "custom-code", "version": 1, "format": "", "indent": 0,
+            "direction": null, "previewEnabled": false,
+            "children": [{"type": "text", "version": 1, "text": "plain block", "format": 0,
+                "detail": 0, "mode": "normal", "style": ""}]
+        }]
+    }}))?;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .initial_state(state)
+            .build()
+            .expect("surface");
+    let code = editor.state().view().children_keys(NodeKey::ROOT)?[0];
+    assert_eq!(code_language(&editor, code), None);
+    let text = editor.state().view().children_keys(code)?[0];
+    editor.update(|tx| {
+        tx.text(text)?.set_text_content("plain blocky")?;
+        Ok(())
+    })?;
+    assert_eq!(code_language(&editor, code).as_deref(), Some("plaintext"));
+    Ok(())
+}

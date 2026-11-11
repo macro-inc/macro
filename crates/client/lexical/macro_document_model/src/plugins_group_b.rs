@@ -87,6 +87,14 @@ pub(crate) fn register_checklist_controls(builder: EditorBuilder) -> EditorBuild
     checklist::register_controls(builder)
 }
 
+/// Source code-highlighting model effects for editors that attach a view.
+pub fn register_code_highlighting(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder {
+    if matches!(ty, crate::EditorType::Title | crate::EditorType::PlainText) {
+        return builder;
+    }
+    code::register_highlighting(builder)
+}
+
 /// Register Group B policy for a surface; registry-only editors stay unchanged.
 pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder {
     if ty == crate::EditorType::Title {

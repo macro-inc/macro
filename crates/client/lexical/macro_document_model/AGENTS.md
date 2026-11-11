@@ -148,6 +148,8 @@ Apply group-b.table selection-merge and selection-split through the shared table
 
 Use the opt-in Macro search-text sync policy only when the browser enables Markdown search text. The policy reads the typed durable ID and projects the derived field to Loro while keeping ordinary editor exports unchanged until a storage import.
 
+Default an unset code language to plaintext (Source Prism `$codeNodeTransform` with Macro's tokenizer default) only on view-attached rich surfaces, through `register_code_highlighting`; headless editors and initial-state builds leave it unset until a local update dirties the node.
+
 Construct inserted equations before invoking the shared current/previous/root-end selection insertion primitive; preserve the display flag and the inherited inline decorator policy.
 
 Keep GIF insertion on its explicit list-split/select-next path; preserve the lone empty paragraph caret and Source’s NodeSelection false-inserted/orphaned-upload behavior until both engines change together.
