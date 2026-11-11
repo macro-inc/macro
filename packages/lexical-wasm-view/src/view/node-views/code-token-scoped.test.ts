@@ -122,12 +122,12 @@ test('a scoped Enter dispatch reaches the fenced provider only after its scope c
       2
     )
   );
-  const key = QueryReplyMsg.decode(
-    own.query(QueryMsg.encode({ kind: 2, key: 0, text: 'let a', flags: 0 }))
-  ).points[0]?.key;
-  if (key === undefined) throw new Error('Actual native code text key missing');
-  // The code element precedes its only text child in key order.
-  const codeKey = key - 1;
+  const codeKey = QueryReplyMsg.decode(
+    own.query(
+      QueryMsg.encode({ kind: 4, key: 0, text: 'custom-code', flags: 0 })
+    )
+  ).keys[0];
+  if (codeKey === undefined) throw new Error('Actual native code key missing');
   const generation = 0;
   ownerId = dispatcher.owner(own);
   const remove = dispatcher.register(
@@ -135,8 +135,8 @@ test('a scoped Enter dispatch reaches the fenced provider only after its scope c
     ownerId,
     () => {
       armed = true;
-      // A scoped application command that intentionally dirties the code node (the text-edit
-      // path does not reach the transform natively; see the A text-transform gap).
+      // A scoped application command that dirties the code node. This qualifies transport only:
+      // an ordinary text edit does not reach the provider natively (A activation blocker, A2).
       inCallback = true;
       dispatcher.dispatchScoped(
         ownerId,

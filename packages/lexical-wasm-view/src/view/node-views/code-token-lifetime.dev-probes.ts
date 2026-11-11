@@ -99,7 +99,7 @@ test('sessions own separate registrations', () => {
   expect(native.debugCodeTokenProviders()).toBe(before);
 });
 
-test('a fenced provider that frees its session mid-edit leaves the session freeable and the registry at baseline', () => {
+test('a fenced provider that attempts free() mid-edit is rejected by the guard; the session then frees and the registry returns to baseline', () => {
   const before = native.debugCodeTokenProviders();
   const dispatcher = NativeEnterDispatcher.forModule(native);
   const holder: { session?: { free(): void } } = {};
