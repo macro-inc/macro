@@ -2,6 +2,7 @@ import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { toast } from '@core/component/Toast/Toast';
 import { optimisticContextOf } from '@graphql-cache/exchange/optimistic';
 import type { MutationSettlement } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type {
   DeleteEmailDraftMutation,
   SaveEmailDraftMutation,
@@ -44,7 +45,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   isFeatureEnabled: () => true,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
+  Telemetry: { error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   assertEmailDraftQueueAvailable: mocks.assertQueueAvailable,
@@ -610,4 +611,8 @@ it('queues nothing for a draft that is being discarded', async () => {
 
   expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
   expect(operations).toEqual([]);
+  expect(Telemetry.info).toHaveBeenCalledExactlyOnceWith(
+    'email_draft.save_yielded_to_discard',
+    { 'email_draft.draft_id': handle }
+  );
 });

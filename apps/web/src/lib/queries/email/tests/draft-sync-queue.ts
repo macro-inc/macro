@@ -158,9 +158,9 @@ export function createQueue(activity: () => void) {
     if (!saved?.draftId || !saved.draft) return;
     confirmed.set(saved.draftId, {
       record: { ...savedDraft(entry.args.data)?.draft, ...saved.draft },
-      // Later writes keep coalescing under the key the draft was created with.
-      mutationUuid:
-        confirmed.get(saved.draftId)?.mutationUuid ?? entry.args.uuid,
+      // As in the engine, the record carries the key of the write that
+      // committed last; a draft's writes all reuse the key it was created with.
+      mutationUuid: entry.args.uuid,
     });
     if (written !== saved.draftId) aliases.set(written, saved.draftId);
   };

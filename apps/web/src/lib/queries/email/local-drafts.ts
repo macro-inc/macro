@@ -548,7 +548,7 @@ export async function recordLocalAttachment(
  * queue. Only an edit withdraws a request, so until one does no save of this
  * copy may take the discard's place in the queue.
  */
-export function draftDiscardPending(local: LocalDraft): boolean {
+function draftDiscardPending(local: LocalDraft): boolean {
   return local.status === 'deleting' || local.deleteAttemptId !== undefined;
 }
 

@@ -369,7 +369,12 @@ export async function saveEmailDraftQueued(
     : undefined;
   // The draft is being discarded. A save that still arrives, such as a closed
   // composer's last flush, must not take the discard's place in the queue.
-  if (local && !attempt) return { kind: 'queued' };
+  if (local && !attempt) {
+    Telemetry.info('email_draft.save_yielded_to_discard', {
+      'email_draft.draft_id': local.key,
+    });
+    return { kind: 'queued' };
+  }
   const cached = await readCachedDraftAndThread(
     String(input.args.draftId),
     input.args.threadDbId
