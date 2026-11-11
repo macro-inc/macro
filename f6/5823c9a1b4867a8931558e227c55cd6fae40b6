@@ -1,0 +1,31 @@
+.github/workflows/desktop_qa_macos.yml
+  s_52c4561d9841c7::t_49af2e0f5be725 1-188
+apps/web/tests/macos/qa.mjs
+  s_52c4561d9841c7::t_cda3b8e229a82b 1-349
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_52c4561d9841c7::t_7961108e5692ad 49,181-185
+tooling/xtask/crates/xtask_workflows/src/workflows/desktop_qa_macos.rs
+  s_52c4561d9841c7::t_66a8b8ac1a2094 1-165
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/qa_build_macos_app.sh
+  s_52c4561d9841c7::t_c9949e2b9f9cc8 1-24
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/qa_cargo_test_macos.sh
+  s_52c4561d9841c7::t_01c3790a9e73d7 1-17
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/qa_run_macos.sh
+  s_52c4561d9841c7::t_6318e6a7172939 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f65823c9a1b4867a8931558e227c55cd6fae40b6",
+  "prompts": {},
+  "sessions": {
+    "s_52c4561d9841c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38d2bb22-d81d-4f68-8258-7475843cc20c",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
