@@ -175,6 +175,53 @@ vi.mock(
   })
 );
 vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-document-card-host',
+  () => ({
+    createNativeDocumentCardContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-document-card-views',
+  () => ({
+    createNativeDocumentCardViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-document-mention-host',
+  () => ({
+    createNativeDocumentMentionContext: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-document-mention-views',
+  () => ({
+    createNativeDocumentMentionViews: () => ({
+      dispose() {},
+      bindView() {},
+      host: {},
+      events: {},
+    }),
+  })
+);
+vi.mock(
   '@core/component/LexicalMarkdown/decorator-host/native-equation-host',
   () => ({
     createNativeEquationContext: () => ({
