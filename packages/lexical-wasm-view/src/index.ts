@@ -18,6 +18,10 @@ export {
   EditorView,
   type ViewOptions,
 } from './view/editor-view';
+export type {
+  LatestPublishedObserver,
+  LatestPublishedUnavailable,
+} from './view/latest-published';
 export type { NativeEnterModule, NativeEnterScope } from './view/native-enter';
 export type { NativeCallbackFailure } from './view/native-enter-output';
 export { createBuiltinRegistry } from './view/node-views/builtins';

@@ -139,3 +139,7 @@ Apply each native Diff Remove to its named record. The subtree-root flag describ
 Resolve root DOM boundaries in actual document selectionchange using the pinned Source descendant rule. Keep the browser root caret in place when it maps to a valid model point. Only a focused history awareness effect overrides the packet skip tag.
 
 Read view UI editability through isEditable and synchronous onEditableChange notifications; keep native session authorization separate, and require both real mirror type registration and an installed renderer before offering block-card conversion.
+
+Observe current published presentation with construction-time latestPublished observers only after inherited command cleanup and the outer FIFO unlock; require an attached, mounted, initialized view, retire on entry/apply/cleanup failure, and keep observer errors secondary. This is not a per-commit snapshot or an ownership receipt.
+
+Retire optional presentation resources through onTeardown on direct disposal or beginTeardown, including late registration; terminal callbacks must not enter native receivers. Verify recovery after a reported DOM apply failure never restores failed observation, and preserve opaque primary input failures through reentrant drains and cleanup.

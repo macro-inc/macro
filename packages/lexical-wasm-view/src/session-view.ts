@@ -1,12 +1,19 @@
 import {
+  type ExecutorDrain,
   type ExecutorFailure,
   type ExecutorOptions,
   type SessionAuthorization,
   SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
+import { Flag } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import { Telemetry } from '@macro-inc/observability';
 import { EditorView, type ViewOptions } from './view/editor-view';
+import {
+  type LatestPublishedObserver,
+  LatestPublishedObservers,
+  type LatestPublishedUnavailable,
+} from './view/latest-published';
 import {
   NativeEnterDispatcher,
   type NativeEnterModule,
@@ -27,7 +34,8 @@ export function mountSessionView(
   registry: NodeViewRegistry,
   options: ViewOptions,
   session: Omit<ExecutorOptions<EditorSession>, 'view'>,
-  nativeCommands?: NativeEnterModule
+  nativeCommands?: NativeEnterModule,
+  latestPublished?: readonly LatestPublishedObserver[]
 ) {
   const dispatcher = nativeCommands
     ? NativeEnterDispatcher.forModule(nativeCommands)
@@ -45,6 +53,18 @@ export function mountSessionView(
   let commands: NativeEnterBinding | undefined;
   let deferredAbort: ExecutorFailure | undefined;
   let applyingOutput = false;
+  const publications = latestPublished?.length
+    ? new LatestPublishedObservers(latestPublished, () =>
+        !disposed && attached ? view : undefined
+      )
+    : undefined;
+  let publicationFailure: LatestPublishedUnavailable | undefined;
+  let publicationDrainDepth = 0;
+  const rememberPublicationFailure = (reason: LatestPublishedUnavailable) => {
+    if (!publications) return;
+    if (!publicationFailure || publicationFailure.kind === 'native-error')
+      publicationFailure = reason;
+  };
   const finishTeardowns = (aborted?: ExecutorFailure) => {
     const previous = deferredAbort;
     deferredAbort ??= aborted;
@@ -61,6 +81,25 @@ export function mountSessionView(
       deferredAbort = previous;
     }
   };
+  const finishCommandDrain = (
+    failure?: ExecutorFailure,
+    drain?: ExecutorDrain
+  ) => {
+    if (!commands) {
+      session.afterDrain?.(failure, drain);
+      return;
+    }
+    const aborted = failure;
+    const inherited = deferredAbort;
+    finishTeardowns(failure);
+    try {
+      session.afterDrain?.(failure, drain);
+    } catch (error) {
+      commands.output.recordSecondary(error);
+    }
+    commands.output.afterDrain(inherited ?? aborted, drain);
+    if (!failure && aborted) throw aborted.error;
+  };
   const sink: ViewSink = {
     apply(words, strings, effects) {
       const filtered = commands ? commands.output.filter(effects) : effects;
@@ -70,6 +109,7 @@ export function mountSessionView(
       try {
         view.apply(words, strings, filtered);
       } catch (error) {
+        rememberPublicationFailure({ kind: 'apply', failure: { error } });
         if (!commands) throw error;
         commands.output.recordSecondary(error, true);
       } finally {
@@ -124,6 +164,8 @@ export function mountSessionView(
         }
       },
       beforeConsume(flags, completion) {
+        if (flags & Flag.Error)
+          rememberPublicationFailure({ kind: 'native-error' });
         commands?.output.beforeConsume(flags, completion);
         finishTeardowns();
         try {
@@ -134,21 +176,24 @@ export function mountSessionView(
         }
       },
       afterDrain(failure, drain) {
-        if (!commands) {
-          session.afterDrain?.(failure, drain);
-          return;
-        }
-        let aborted = failure;
-        const inherited = deferredAbort;
-        finishTeardowns(failure);
+        publicationDrainDepth++;
+        if (failure) rememberPublicationFailure({ kind: 'entry', failure });
+        if (deferredAbort)
+          rememberPublicationFailure({ kind: 'entry', failure: deferredAbort });
         try {
-          session.afterDrain?.(failure, drain);
+          finishCommandDrain(failure, drain);
         } catch (error) {
-          if (commands) commands.output.recordSecondary(error);
-          else if (!aborted) aborted = { error };
+          rememberPublicationFailure({ kind: 'cleanup', failure: { error } });
+          throw error;
+        } finally {
+          publicationDrainDepth--;
+          if (publicationDrainDepth === 0) {
+            const unavailable = publicationFailure;
+            publicationFailure = undefined;
+            if (unavailable) publications?.unavailable(unavailable);
+            else publications?.published();
+          }
         }
-        commands?.output.afterDrain(inherited ?? aborted, drain);
-        if (!failure && aborted) throw aborted.error;
       },
       onStatus(status) {
         try {
@@ -179,20 +224,26 @@ export function mountSessionView(
       root,
       port,
       registry,
-      commands
+      commands || publications
         ? {
             ...options,
             onError(error) {
+              if (applyingOutput)
+                rememberPublicationFailure({
+                  kind: 'apply',
+                  failure: { error },
+                });
               try {
                 options.onError(error);
               } catch (failure) {
-                if (!applyingOutput) throw failure;
-                commands?.output.recordSecondary(failure);
+                if (!applyingOutput || !commands) throw failure;
+                commands.output.recordSecondary(failure);
               }
             },
           }
         : options
     );
+    if (publications) view.onTeardown(() => publications.retired());
     unsubscribeAuthorization = session.auth.subscribe((...facts) => {
       const deliver = () => {
         if (!disposed) authorizationCallback?.(...facts);
@@ -290,6 +341,7 @@ export function mountSessionView(
     };
   } catch (error) {
     disposed = true;
+    publications?.retired();
     authorization.length = 0;
     const failed = view;
     view = undefined;

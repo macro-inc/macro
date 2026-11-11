@@ -121,6 +121,7 @@ export class EditorView implements ViewSink {
     }
   >();
   private readonly commits = new Set<(info: CommitInfo) => void>();
+  private readonly teardowns = new Set<() => void>();
   private readonly mutations = new Map<
     string,
     Set<(mutations: ReadonlyMap<NodeKey, MutationKind>) => void>
@@ -171,7 +172,33 @@ export class EditorView implements ViewSink {
   }
   /** Block host actions immediately; native callback teardown finishes after return. */
   beginTeardown(): void {
+    if (this.detaching) return;
     this.detaching = true;
+    const listeners = [...this.teardowns];
+    this.teardowns.clear();
+    for (const listener of listeners) this.notifyTeardown(listener);
+  }
+  /** Terminal UI cleanup only; listeners must not enter native receivers. */
+  onTeardown(listener: () => void): () => void {
+    if (!this.isMounted) {
+      this.notifyTeardown(listener);
+      return () => {};
+    }
+    this.teardowns.add(listener);
+    return () => {
+      this.teardowns.delete(listener);
+    };
+  }
+  private notifyTeardown(listener: () => void): void {
+    try {
+      listener();
+    } catch (error) {
+      try {
+        Telemetry.error(error, { surface: 'editor.teardown.secondary' });
+      } catch {
+        // Terminal observers cannot replace the actual disposal cause.
+      }
+    }
   }
   private readonly cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
   private constructor(
@@ -1085,6 +1112,7 @@ export class EditorView implements ViewSink {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.beginTeardown();
     let failure: { error: unknown } | undefined;
     const cleanup = (call: () => void) => {
       try {

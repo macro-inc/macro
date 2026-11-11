@@ -10,6 +10,7 @@ import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import { Telemetry } from '@macro-inc/observability';
 import { mountSessionView } from './session-view';
 import type { ViewOptions } from './view/editor-view';
+import type { LatestPublishedObserver } from './view/latest-published';
 import type { NativeEnterModule } from './view/native-enter';
 import type { NodeViewRegistry } from './view/registry';
 
@@ -19,6 +20,8 @@ export interface LocalSessionOptions {
   /** The host selects the native node/plugin preset after loading WASM. */
   create(config: Uint8Array, now: number, wall: number): EditorSession;
   nativeCommands?: NativeEnterModule;
+  /** Optional host presentation observers, installed before real Start/Seed. */
+  latestPublished?: readonly LatestPublishedObserver[];
 }
 
 /** Independent, non-durable native editor for composers and read-only views. */
@@ -81,7 +84,8 @@ export function mountLocalSessionView(
         },
         telemetry,
       },
-      options.nativeCommands
+      options.nativeCommands,
+      options.latestPublished
     );
     const runtime = mounted;
     // mountSessionView starts the session. A new local document also needs an
