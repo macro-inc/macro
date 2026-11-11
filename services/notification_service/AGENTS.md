@@ -15,6 +15,16 @@ worker that sends email/mobile-push/websocket notifications.
   `Kafka*RealtimePublisher`, `RedisRateLimitAdapter`) from `crates/notification`.
 - `src/api.rs` + `src/api/context.rs`: HTTP routes — `user_notification.rs`
   (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze), `health.rs`.
+- `src/manual.rs` + `src/api/manual_notification.rs`: manual notifications
+  (`POST /user_notifications/send`, the SDK's `notifications.send`). The
+  domain checks that sender and recipient can see the link and that the
+  recipient's inbox and Home would list it (`FeedVisibility`, adapter in
+  `src/manual/outbound/feed_visibility.rs` over each feed's
+  `admits_new_notification` and Soup on the primary pool, built in
+  `src/wiring.rs`), snapshots the sending agent, and enqueues through the
+  notification ingress; the route limits each sender and each recipient to 60
+  an hour. It lives here, not in
+  `crates/notification`, because `model_notifications` depends on that crate.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.
@@ -42,6 +52,15 @@ worker that sends email/mobile-push/websocket notifications.
   `crates/notification_db_client`).
 
 ## Gotchas
+
+- `src/manual/test/delivered.rs` sends a manual notification for every
+  linkable kind, to a teammate and to oneself, and reads it back through the
+  real inbox and Home services over Soup; a kind that becomes linkable needs
+  entities in `fixtures/manual_links.sql`, or the test fails.
+- The feed check must read the primary database: a send right after a share
+  or a create would otherwise be refused while a replica catches up.
+- Email-thread links follow the feed check; `EMAIL_THREAD_LINKS` in
+  `src/manual.rs` switches them to the access check alone.
 
 - PostgreSQL delete forwarding emits `notification.delete.publish` spans and
   logs publication failures. The retention Lambda is a separate binary/role;

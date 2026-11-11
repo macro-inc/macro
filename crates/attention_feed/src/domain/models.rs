@@ -201,6 +201,10 @@ pub struct CandidateRequest {
     pub after: Option<FeedPosition>,
     /// Restrict to these candidate keys, for recomputing known entries.
     pub only: Option<Vec<Entity<'static>>>,
+    /// Treat every `only` key as if a notification about it were pending
+    /// now, to ask whether a new notification would be listed. Requires
+    /// `only` and no own work.
+    pub assume_attention: bool,
 }
 
 /// One hydrated, authorized candidate.

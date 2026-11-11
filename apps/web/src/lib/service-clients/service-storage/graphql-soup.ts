@@ -1527,6 +1527,24 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'routine_run_finished'>
     )
     .with(
+      { __typename: 'GraphqlManualMetadata' },
+      (metadata) =>
+        ({
+          tag: 'manual',
+          content: {
+            title: metadata.manualTitle,
+            body: metadata.manualBody,
+            agent: metadata.manualAgentId
+              ? {
+                  id: metadata.manualAgentId,
+                  name: metadata.manualAgentName ?? '',
+                  avatarUrl: metadata.manualAgentAvatarUrl,
+                }
+              : undefined,
+          },
+        }) satisfies NotifEventMember<'manual'>
+    )
+    .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
       (metadata) =>
         ({

@@ -28,7 +28,8 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
 
 - Depends on: `attention_feed`, `item_filters`, `filter_ast`,
   `model_notifications`.
-- Used by: `graphql_notification_inbox`, `document_storage_service`
+- Used by: `graphql_notification_inbox`, `document_storage_service`,
+  `notification_service` (`admits_new_notification`, for manual notifications)
   (composition).
 
 ## Recipes

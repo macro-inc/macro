@@ -137,6 +137,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
       .with('routine_run_finished', () => 'ran')
+      .with('manual', () => 'notified you')
       .exhaustive(() => 'updated')
   );
 }
@@ -214,6 +215,7 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     .with('routine_run_finished', () =>
       count === 1 ? 'routine run' : 'routine runs'
     )
+    .with('manual', () => (count === 1 ? 'notification' : 'notifications'))
     .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }
 

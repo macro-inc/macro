@@ -895,3 +895,31 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
     };
     assert!(entry.rows.iter().all(|row| row.unseen));
 }
+
+#[tokio::test]
+async fn admitting_a_new_notification_probes_the_inbox_candidate_query() {
+    let listed = entity(EntityType::Document, 1);
+    let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
+
+    assert!(
+        admits_new_notification(&source, &viewer(), listed.clone())
+            .await
+            .unwrap()
+    );
+    assert!(
+        !admits_new_notification(&source, &viewer(), entity(EntityType::Document, 2))
+            .await
+            .unwrap()
+    );
+
+    let requests = source.requests.lock().unwrap();
+    assert_eq!(requests[0].only, Some(vec![listed]));
+    assert!(requests[0].assume_attention);
+    assert!(!requests[0].own_work);
+    assert_eq!(requests[0].keying, CandidateKeying::FiledEntity);
+    assert_eq!(requests[0].types, policy::CANDIDATE_TYPES.to_vec());
+    assert_eq!(
+        format!("{:?}", requests[0].filter),
+        format!("{:?}", policy::inbox_filter())
+    );
+}

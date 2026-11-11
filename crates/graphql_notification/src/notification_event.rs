@@ -32,10 +32,10 @@ use model_notifications::{
     GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
     GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
     GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
-    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent,
-    TaskAssignedMetadata,
+    InviteToTeamMetadata, ManualMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotifEvent, NotificationDocumentSubType, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -775,6 +775,41 @@ impl GraphqlRoutineRunFinishedMetadata {
     }
 }
 
+/// GraphQL wrapper for manual notification metadata.
+pub struct GraphqlManualMetadata(ManualMetadata);
+
+/// Metadata for a notification its sender wrote.
+#[Object]
+impl GraphqlManualMetadata {
+    /// The headline, as the sender wrote it.
+    async fn title(&self) -> &str {
+        &self.0.title
+    }
+
+    /// More detail, as the sender wrote it.
+    async fn body(&self) -> Option<&str> {
+        self.0.body.as_deref()
+    }
+
+    /// The agent whose code sent it, when one did.
+    async fn agent_id(&self) -> Option<ID> {
+        self.0.agent.as_ref().map(|agent| ID(agent.id.to_string()))
+    }
+
+    /// The sending agent's name when it was sent.
+    async fn agent_name(&self) -> Option<&str> {
+        self.0.agent.as_ref().map(|agent| agent.name.as_str())
+    }
+
+    /// The sending agent's avatar when it was sent.
+    async fn agent_avatar_url(&self) -> Option<&str> {
+        self.0
+            .agent
+            .as_ref()
+            .and_then(|agent| agent.avatar_url.as_deref())
+    }
+}
+
 /// GraphQL wrapper for removed runtime access metadata.
 pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
 
@@ -1378,6 +1413,8 @@ pub enum GraphqlNotifEvent {
     ChannelAccessRequested(GraphqlChannelAccessRequestedMetadata),
     /// Finished routine run metadata.
     RoutineRunFinished(GraphqlRoutineRunFinishedMetadata),
+    /// Manual notification metadata.
+    Manual(GraphqlManualMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1442,6 +1479,7 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::RoutineRunFinished(metadata) => {
                 Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
             }
+            NotifEvent::Manual(metadata) => Self::Manual(GraphqlManualMetadata(metadata)),
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
             }

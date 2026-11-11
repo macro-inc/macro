@@ -118,6 +118,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => {
     ...actual,
     Telemetry: {
       ...actual.Telemetry,
+      error: vi.fn(),
       span: <T>(name: string, operation: (span: ObservedSpan) => Promise<T>) =>
         runSpan(name, undefined, operation),
     },
@@ -323,3 +324,31 @@ it('does not open project notifications when the rollout is disabled', async () 
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: vi.fn(async () => {}),
 }));
+
+it('opens a manual notification linked to a document whose metadata fails to load', async () => {
+  vi.mocked(fetchDocumentMetadata)
+    .mockReset()
+    .mockRejectedValue(new Error('500 Internal Server Error'));
+  const activate = vi.fn();
+  const layout = { getSplitByContent: vi.fn(() => ({ activate })) };
+  const notification = {
+    id: 'notification',
+    entity_id: 'task-doc',
+    entity_type: 'document',
+    notification_event_type: 'manual',
+    notification_metadata: {
+      tag: 'manual',
+      content: { title: 'Deploy finished' },
+    },
+  } as UnifiedNotification;
+
+  const result = await openNotification(
+    notification,
+    layout as unknown as SplitManager
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(fetchDocumentMetadata).toHaveBeenCalledWith('task-doc');
+  expect(layout.getSplitByContent).toHaveBeenCalledWith(undefined, 'task-doc');
+  expect(activate).toHaveBeenCalledOnce();
+});

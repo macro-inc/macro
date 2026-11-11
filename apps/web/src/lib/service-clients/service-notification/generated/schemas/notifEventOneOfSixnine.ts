@@ -4,17 +4,16 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ManualMetadata } from './manualMetadata';
 import type { NotifEventOneOfSixnineTag } from './notifEventOneOfSixnineTag';
-import type { RuntimeAccessRemovedMetadata } from './runtimeAccessRemovedMetadata';
 
 /**
- * A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped.
+ * Someone, usually agent code through the SDK, sent the user a
+notification they wrote.
  */
 export type NotifEventOneOfSixnine = {
-  /** A runtime's owner removed the user's access to it, and agents of
-theirs living there stopped. */
-  content: RuntimeAccessRemovedMetadata;
+  /** Someone, usually agent code through the SDK, sent the user a
+notification they wrote. */
+  content: ManualMetadata;
   tag: NotifEventOneOfSixnineTag;
 };

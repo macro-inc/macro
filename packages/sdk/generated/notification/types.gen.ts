@@ -1066,6 +1066,61 @@ export type ItemSharedMetadata = {
 export type MacroUserIdStr = string;
 
 /**
+ * A notification written by its sender: a title, an optional body, and the
+ * entity it opens. The sender is the notification's `sender_id`, or nobody
+ * when people notify themselves.
+ */
+export type ManualMetadata = {
+    agent?: null | ManualNotificationAgent;
+    /**
+     * More detail, as the sender wrote it.
+     */
+    body?: string | null;
+    /**
+     * The headline, as the sender wrote it.
+     */
+    title: string;
+};
+
+/**
+ * The agent a manual notification reads as being from, as it was when sent.
+ */
+export type ManualNotificationAgent = {
+    /**
+     * The agent's avatar.
+     */
+    avatarUrl?: string | null;
+    /**
+     * A string on the wire: system bots have fixed ids that are not RFC 4122
+     * uuids.
+     */
+    id: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
+
+/**
+ * What a manual notification opens.
+ */
+export type ManualNotificationLink = {
+    /**
+     * The entity's id.
+     */
+    entityId: string;
+    /**
+     * One of document, chat, channel, project, email_thread or agent_session:
+     * the kinds the inbox and Home list. The recipient's inbox and Home must
+     * both list it: their access comes from a share the feeds read (not a
+     * link share or an attachment), it is not deleted, a session is listed,
+     * a document is not a snippet, and an email thread is the recipient's own
+     * Signal mail in the inbox.
+     */
+    entityType: EntityType;
+};
+
+/**
  * Notification sent when a user is mentioned in a document comment.
  */
 export type MentionedInDocumentCommentMetadata = {
@@ -1334,6 +1389,13 @@ export type NotifEvent = {
     tag: 'routine_run_finished';
 } | {
     /**
+     * Someone, usually agent code through the SDK, sent the user a
+     * notification they wrote.
+     */
+    content: ManualMetadata;
+    tag: 'manual';
+} | {
+    /**
      * A runtime's owner removed the user's access to it, and agents of
      * theirs living there stopped.
      */
@@ -1578,6 +1640,29 @@ export type RuntimeAccessRemovedMetadata = {
      * The runtime's name.
      */
     runtimeName: string;
+};
+
+/**
+ * A notification written by the caller.
+ */
+export type SendManualNotificationRequest = {
+    /**
+     * More detail, at most 1000 characters.
+     */
+    body?: string | null;
+    /**
+     * What the notification opens; the caller must be able to see it.
+     */
+    link: ManualNotificationLink;
+    /**
+     * Who gets it; the caller when omitted. Anyone else must already be able
+     * to see `link`.
+     */
+    recipientId?: string | null;
+    /**
+     * The headline, at most 120 characters.
+     */
+    title: string;
 };
 
 /**
@@ -2073,6 +2158,42 @@ export type EnableNotificationTypeError = EnableNotificationTypeErrors[keyof Ena
 export type EnableNotificationTypeResponses = {
     200: unknown;
 };
+
+export type SendManualNotificationData = {
+    body: SendManualNotificationRequest;
+    path?: never;
+    query?: never;
+    url: '/v1/user_notifications/send';
+};
+
+export type SendManualNotificationErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    /**
+     * The recipient cannot see the link
+     */
+    403: ErrorResponse;
+    /**
+     * The link does not exist or the caller cannot see it
+     */
+    404: ErrorResponse;
+    /**
+     * Too many manual notifications from this sender, or to this recipient
+     */
+    429: unknown;
+    500: ErrorResponse;
+};
+
+export type SendManualNotificationError = SendManualNotificationErrors[keyof SendManualNotificationErrors];
+
+export type SendManualNotificationResponses = {
+    /**
+     * Queued for delivery
+     */
+    204: void;
+};
+
+export type SendManualNotificationResponse = SendManualNotificationResponses[keyof SendManualNotificationResponses];
 
 export type DeleteUserNotificationV2Data = {
     body?: never;

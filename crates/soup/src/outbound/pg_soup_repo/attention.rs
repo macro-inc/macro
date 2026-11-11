@@ -175,10 +175,34 @@ fn thread_keyed(keying: AttentionKeying) -> &'static str {
     }
 }
 
+/// Where the attention stream reads candidates from: the viewer's pending
+/// notifications, plus, when probing, each `only` key as if a notification
+/// about it were pending now. Normal pages read `pending` alone, so their SQL
+/// is unchanged by the probe.
+fn attention_source(assume_attention: bool) -> &'static str {
+    if assume_attention {
+        r#"(
+                SELECT entity_type, entity_id, attention_at FROM pending
+                UNION ALL
+                SELECT k.entity_type, k.entity_id, now() AS attention_at
+                FROM only_keys k
+                WHERE k.entity_type = ANY($2)
+                AND NOT EXISTS (
+                    SELECT 1 FROM pending p
+                    WHERE p.entity_type = k.entity_type
+                    AND p.entity_id = k.entity_id
+                )
+            ) assumed"#
+    } else {
+        "pending"
+    }
+}
+
 fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
     let filter = req.filter;
     format!(
         include_str!("attention/query.sql"),
+        attention_source = attention_source(req.assume_attention),
         thread_keyed = thread_keyed(req.keying),
         own_work_ae = own_work("ae"),
         own_work_newer = own_work("newer"),

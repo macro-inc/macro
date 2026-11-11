@@ -1,6 +1,7 @@
 mod access_request;
 mod calendar_join_request;
 mod channel_push;
+mod manual;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
@@ -12,6 +13,7 @@ pub use invite_email::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
+pub use manual::{ManualMetadata, ManualNotificationAgent};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
