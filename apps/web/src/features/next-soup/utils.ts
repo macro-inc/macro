@@ -17,6 +17,7 @@ import { callsHostedContent } from '@app/features/calls-view/calls-hosted-conten
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
+import { requestRuntimeShare } from '@app/features/settings/runtimeSettingsState';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
   type EntityWithRawNotifications,
@@ -93,6 +94,7 @@ import {
   setDoneOverride,
   type UnifiedNotification,
 } from '@notifications';
+import { openRuntimesSettings } from '@notifications/notification-navigation';
 import { isTopLevelChannelNotification } from '@notifications/top-level-channel-notification';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { queryClient } from '@queries/client';
@@ -726,6 +728,16 @@ const openEntity = async (
     }
   }
 
+  // A runtime has no page of its own: Settings → Machines points it out.
+  if (entity.type === 'harness') {
+    requestRuntimeShare(entity.id, false);
+    openRuntimesSettings(splitManager, {
+      newSplit: openInNewSplit,
+      sourceHandle: splitHandle,
+    });
+    return;
+  }
+
   const content = getEntitySplitContent(entity);
 
   const channelTarget = getChannelEntityTarget(entity, {
@@ -1008,6 +1020,11 @@ function getEntitySplitContent(entity: EntityData) {
       // path branches before reaching here, so this only serves duplicate checks.
       .with({ type: 'calendar_event' }, () => {
         return { type: 'component' as const, id: CALENDAR_VIEW_ID };
+      })
+      // Runtimes open in Settings → Machines; the open path branches before
+      // reaching here, so this only serves duplicate checks.
+      .with({ type: 'harness' }, () => {
+        return { type: 'component' as const, id: 'settings' };
       })
       .otherwise((entity) => {
         return { type: entity.type, id: entity.id };

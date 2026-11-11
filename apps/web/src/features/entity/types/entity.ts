@@ -465,6 +465,14 @@ export type DatabaseEntity = EntityBase & {
   projectId?: string;
 };
 
+/**
+ * A paired runtime (a macrod machine). Only the notifications inbox lists it,
+ * for the access notifications filed under it; it opens in Settings → Machines.
+ */
+export type HarnessEntity = EntityBase & {
+  type: 'harness';
+};
+
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
 export type FormEntity = EntityBase & {
   type: 'form';
@@ -530,6 +538,7 @@ export type EntityData =
   | CrmContactEntity
   | DatabaseEntity
   | FormEntity
+  | HarnessEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -549,6 +558,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'database',
   'form',
+  'harness',
   'routine',
   'calendar_event',
   'foreign',

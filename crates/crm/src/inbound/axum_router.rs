@@ -303,6 +303,12 @@ impl IntoResponse for CrmError {
                     message: "crm is unavailable for this team".into(),
                 }),
             ),
+            CrmError::Contended => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    message: "crm records are busy; retry later".into(),
+                }),
+            ),
             CrmError::InvalidTeamId | CrmError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

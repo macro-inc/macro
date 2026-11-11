@@ -87,8 +87,39 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
-sessions whose Herdr agent still runs.
+attached, archived and managed sessions are skipped. A dial restores only sessions
+with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
+open when the session disconnected, from `agent_session.turn_interrupted`), a
+durable queue, or activity in the last hour (`modified_at`, or the listing's
+`updatedAt`); idle ones bind on their next prompt or delivery
+(`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
+permits, each held until the session's `session/load` or `session/resume`
+finishes; a harness dialing again stops its previous dial from starting more.
+Permanent errors are not retried; others are, with jittered backoff, while the
+runtime stays connected. A session whose load keeps failing stays disconnected
+with its turn unfinished, so every dial tries it again (three attempts, under a
+permit). The `agent.runtime.reattach` span counts eager, lazy,
+skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
+native sessions whose Herdr agent still runs, each with `updatedAt` from its
+transcript's last write, so a session worked on in its Herdr pane within the
+hour is restored at dial time.
+
+Each session's commands run one at a time on its command worker
+(`service/queue.rs`). A worker exits after `WORKER_IDLE_TIMEOUT` with nothing
+queued, and with the session it deletes, removing its map entry through
+`retire_worker`; commands are sent under the same entry lock, so one racing
+the exit either keeps the worker or starts a new one. Before an idle worker
+retires, `service/idle.rs` silently releases a quiet session (nothing admitted
+in `busy`, empty queue, no notification batch) whose runtime says the release
+is lossless (`ContainerManager::idle_release_is_lossless`: the in-process
+manager compares its live state with what the log rebuilds). An in-process
+session's actor attached here goes through
+`AgentSessionService::release_session`, never `close_session`: no
+`disconnected` frame, no `SessionStopped`, no lifecycle event or webhook, its
+claim given back under its own fence. Then `ContainerManager::release_idle`
+drops this process's runtime state, and the queue copy and `hydrated` mark are
+forgotten. The next command finds no actor and resumes from the log. Unclaimed
+warm sessions never get a worker, so they stay warm.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
@@ -105,6 +136,14 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+Each dial costs a replica a handshake, `session/list` and a reattach, so
+`inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,
+in-memory `DialBudget` (6 dials a minute, as a burst or one every 10 s) and
+refuses the rest before the upgrade with `429` and `Retry-After`. Refusals warn
+and set `agent.runtime.dial_outcome:rate_limited` on the `agent.runtime.dial`
+span. macrod treats a 429 as retryable on its own exponential backoff
+(1 s doubling to 30 s) and does not read `Retry-After`.
 
 Harness presence is per connection, because a runtime's redial can land on a
 different replica than the socket it replaced, and a stalled replica can notice

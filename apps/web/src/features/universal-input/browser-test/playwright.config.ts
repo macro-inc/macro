@@ -39,7 +39,11 @@ export default defineConfig({
     },
     {
       name: 'phone',
-      testMatch: 'mobile-input.browser.e2e.ts',
+      testMatch: [
+        'mobile-input.browser.e2e.ts',
+        'task-references.browser.e2e.ts',
+        'input-references.browser.e2e.ts',
+      ],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },

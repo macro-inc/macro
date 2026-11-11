@@ -84,7 +84,13 @@ Sales Tasks use the normal Tasks filters (status, priority, assignee, creator,
 and tags), sorting and grouping, with list/board/Gantt layouts when enabled. Touch
 uses the normal list and filter drawer. The default is open tasks grouped by date.
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
-Notes has creator/tag filters and Sales Calls has audience/tag filters. All three support
+Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
+uses bounded contact pages in the desktop submenu and mobile drawer; Me and
+persisted/unknown selections are independent of the suggestion window. Next
+options replaces the page, and Only affects creators without clearing other
+facets or the fixed CRM association. Company owner/team selectors are unchanged.
+Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
+with stand-in data. Sales Email, Sales Notes and Sales Calls support
 last-updated/created/viewed sorting, newest/oldest direction, and date/none grouping.
 Sales Email defaults to last-update date groups; Sales Notes and Sales Calls start ungrouped. Date
 headings use the selected sort field and viewer-local time. Filter controls share one
@@ -111,6 +117,11 @@ on, or hide Owner or Revenue, under **Display options**. Its single-row desktop
 header matches Tasks: title, filter group, view-options group (sort, group,
 display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
+The header Owner menu remains team-scoped. An active Owner chip can search paged
+personal contacts on desktop or phone, with No owner and unavailable saved IDs
+preserved across window changes. Next options replaces its page; Only changes
+Owner without clearing Stage. Closed chips resolve only their selected labels,
+not the full personal directory.
 
 People lists contacts across every team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses

@@ -23,6 +23,7 @@ mod list_contacts_for_company;
 mod list_contacts_for_soup;
 mod personal_emails;
 mod populate_contact;
+mod population_locks;
 mod resolve_association;
 mod search_contacts_for_team;
 mod set_company_hidden;

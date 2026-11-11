@@ -531,7 +531,9 @@ impl Adapter {
     /// first, in `cwd` when given. Read-only: the client's following
     /// `session/load` attaches them. A closed agent is not live, so it is
     /// never reopened; other lookup failures are retried before a session is
-    /// left out.
+    /// left out. Each carries `updatedAt`, its transcript's last write, when
+    /// it has one: the client restores recently active sessions at once, so
+    /// work typed into the agent's pane keeps reaching Macro.
     async fn list_sessions(&self, cwd: Option<&Path>) -> ListSessionsResponse {
         use futures::StreamExt as _;
         let Some(herdr) = &self.herdr else {
@@ -563,7 +565,10 @@ impl Adapter {
         ListSessionsResponse::new(
             records
                 .into_iter()
-                .map(|record| SessionInfo::new(SessionId::new(record.id), record.cwd))
+                .map(|record| {
+                    let updated_at = record.transcript.as_deref().and_then(last_written);
+                    SessionInfo::new(SessionId::new(record.id), record.cwd).updated_at(updated_at)
+                })
                 .collect(),
         )
     }
@@ -1341,6 +1346,16 @@ async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
     }
     span.record("stopped", false);
     Ok(false)
+}
+
+/// When `transcript` was last written, as RFC 3339, or `None` when it cannot
+/// be read.
+fn last_written(transcript: &Path) -> Option<String> {
+    let modified = std::fs::metadata(transcript).ok()?.modified().ok()?;
+    Some(
+        chrono::DateTime::<chrono::Utc>::from(modified)
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+    )
 }
 
 pub(crate) fn agent_name(session: &str) -> String {

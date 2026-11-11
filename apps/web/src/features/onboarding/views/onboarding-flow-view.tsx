@@ -53,7 +53,10 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
-  const teamDirectory = context.createTeamDirectory();
+  const teamDirectory = context.createTeamDirectory({
+    domain: () => undefined,
+    ownEmail: () => undefined,
+  });
   // The work step offers Outlook beside Google; Read more then covers both.
   const outlookAvailable = context.createOutlookAvailability();
 
