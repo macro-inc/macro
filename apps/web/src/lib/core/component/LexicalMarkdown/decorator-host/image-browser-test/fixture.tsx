@@ -8,7 +8,10 @@ import { UserContextProvider } from '@core/context/user';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { CodeNode } from '@lexical/code-core';
 import { $dfs } from '@lexical/utils';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  EditorInputMsg,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   $createImageNode,
   $createVideoNode,
@@ -22,11 +25,13 @@ import {
   registerMacroDecoratorViews,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
+import { selectionMessage } from '@macro-inc/lexical-wasm-view/view/session-port';
+import type { Point } from '@macro-inc/lexical-wasm-view/view/types';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { $createParagraphNode, $getRoot } from 'lexical';
+import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
 import { getOwner, onCleanup, onMount } from 'solid-js';
 import { render } from 'solid-js/web';
 import { DecoratorRenderer } from '../../component/core/DecoratorRenderer';
@@ -41,7 +46,11 @@ import {
 } from '../../plugins/document-metadata/documentMetadataPlugin';
 import { filePastePlugin } from '../../plugins/file-paste';
 import { dispatchApplicationCommandSettled } from '../../plugins/group-b/command';
-import { addMediaFromFile, mediaPlugin } from '../../plugins/media';
+import {
+  addMediaFromFile,
+  mediaPlugin,
+  TRY_INSERT_MEDIA_UPLOAD_COMMAND,
+} from '../../plugins/media';
 import { createNativeImageUploadController } from '../../plugins/media/native-image-upload';
 import { createNativeMediaUploadEvents } from '../../plugins/media/native-upload-events';
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
@@ -81,6 +90,10 @@ declare global {
     imageProofFixture?: {
       snapshot(): Capture;
       keyAdmissions(): readonly KeyAdmission[];
+      openDialog(kind?: 'image' | 'video' | 'all'): boolean;
+      footer(): Promise<void>;
+      editable(value: boolean): void;
+      retireUploads?: () => void;
       paste?: (clipboard: DataTransfer) => Promise<boolean>;
       setUrl(url: string, rerender: boolean): Promise<void>;
       close(): Promise<void>;
@@ -92,6 +105,7 @@ function Fixture() {
   const engine = params.get('engine');
   const uploadMode = params.has('upload');
   const videoMode = params.has('video');
+  const pickerMode = params.has('picker');
   const kind = videoMode ? 'video' : 'image';
   const namespace = videoMode ? 'video-fixture' : 'image-fixture';
   if (uploadMode && CodeNode.getType() !== 'code')
@@ -132,11 +146,11 @@ function Fixture() {
       : undefined;
   const uploads = controller?.events ?? createNativeMediaUploadEvents();
   const nativeContext =
-    engine === 'native' && !videoMode
+    engine === 'native' && (!videoMode || pickerMode)
       ? createNativeImageContext(theme, () => true, uploads)
       : undefined;
   const videoContext =
-    engine === 'native' && videoMode
+    engine === 'native' && (videoMode || pickerMode)
       ? createNativeVideoContext(theme, () => true, uploads)
       : undefined;
   let root: HTMLDivElement | undefined;
@@ -161,6 +175,9 @@ function Fixture() {
     const element = root;
     const keyAdmissions: KeyAdmission[] = [];
     let model: () => string;
+    let footer: () => Promise<void>;
+    let editable: (value: boolean) => void;
+    let openDialog: (kind?: 'image' | 'video' | 'all') => boolean;
     let paste: ((clipboard: DataTransfer) => Promise<boolean>) | undefined;
     let setUrl: (url: string, rerender: boolean) => Promise<void>;
     if (engine === 'native') {
@@ -169,19 +186,18 @@ function Fixture() {
       await initialize();
       if (closing) return;
       const registry = registerMacroElementViews(createBuiltinRegistry());
-      if (videoContext) {
+      if (videoContext)
         registerMacroDecoratorViews(
           registry,
           createNativeVideoDecoratorViews(videoContext)
         );
-      } else if (nativeContext) {
+      if (nativeContext)
         registerMacroDecoratorViews(
           registry,
           createNativeImageDecoratorViews(nativeContext)
         );
-      } else {
+      if (!videoContext && !nativeContext)
         throw new Error('Missing actual media context');
-      }
       const surface = mountLocalSessionView(
         element,
         registry,
@@ -222,6 +238,33 @@ function Fixture() {
       if (element.querySelector('[data-lexical-decorator]'))
         throw new Error('Observed native decorator before import');
       controller?.bindView(surface.view);
+      openDialog = (kind) => controller?.openFileDialog(kind) ?? false;
+      editable = (value) => surface.view.setEditable(value);
+      footer = async () => {
+        const node = [...surface.view.mirror.values()].find(
+          (node) => node.kind === 'text' && node.text === 'Footer'
+        );
+        if (!node) throw new Error('Missing actual native Footer');
+        const point: Point = {
+          key: node.key,
+          offset: node.text.length,
+          type: 'text',
+        };
+        const result = await surface.port.inputSettled(
+          EditorInputMsg.fromEditorSelection({
+            selection: selectionMessage({
+              kind: 'range',
+              anchor: point,
+              focus: point,
+            }),
+            change: {},
+          })
+        );
+        if (result.status !== 'success')
+          throw result.status === 'error'
+            ? result.error
+            : new Error('Selection cancelled');
+      };
       paste = (clipboard) => surface.view.clipboard.paste(clipboard);
       surface.port.setState(window.imageProofInput);
       const keyDown = surface.port.keyDown.bind(surface.port);
@@ -259,6 +302,16 @@ function Fixture() {
       };
     } else {
       if (!wrapper) throw new Error('Missing actual Source wrapper');
+      openDialog = (kind = 'all') =>
+        wrapper.editor.dispatchCommand(TRY_INSERT_MEDIA_UPLOAD_COMMAND, kind);
+      editable = (value) => wrapper.editor.setEditable(value);
+      footer = async () =>
+        wrapper.editor.update(
+          () => {
+            $getRoot().getLastChildOrThrow().selectEnd();
+          },
+          { discrete: true }
+        );
       close = async () => {
         wrapper.editor.setRootElement(null);
         wrapper.cleanup();
@@ -295,6 +348,10 @@ function Fixture() {
                 })
               );
             node.append($createParagraphNode());
+            if (pickerMode)
+              node.append(
+                $createParagraphNode().append($createTextNode('Footer'))
+              );
             for (const [index, { node: child }] of $dfs().slice(1).entries())
               $setId(child, `image-proof-${index}`);
           },
@@ -329,6 +386,10 @@ function Fixture() {
       keyAdmissions: () => keyAdmissions,
       paste,
       setUrl,
+      openDialog,
+      footer,
+      editable,
+      ...(controller ? { retireUploads: () => controller.dispose() } : {}),
       snapshot() {
         return {
           model: model(),
@@ -371,6 +432,20 @@ function Fixture() {
               result?.catch((error: unknown) => console.error(error));
             }}
           />
+          {pickerMode && (
+            <button
+              type="button"
+              onClick={() =>
+                queueMicrotask(() => {
+                  if (!window.imageProofFixture)
+                    throw new Error('Missing actual media surface');
+                  window.imageProofFixture.openDialog();
+                })
+              }
+            >
+              Choose media
+            </button>
+          )}
           <ToastRegion />
         </>
       )}

@@ -37,3 +37,10 @@ clipboard parity. Chromium and WebKit also passed the separate paired
 constructed-ClipboardEvent trace. Firefox's Source trace handled that
 constructed event without delivering its file, and that failed trace is
 retained separately.
+
+The media picker case opens the real Source command and native upload-controller
+file dialogs, selects both file kinds, and moves the model selection while the
+chooser is open. It checks actual provider PUT bytes, completion and preview
+retention in each arm. Separate lifecycle controls cancel the picker, change local
+editability before selection, and dispose its owner. These tests use browser
+filechooser automation; they do not exercise an operating-system picker UI.

@@ -1,15 +1,18 @@
 import { readFileSync } from 'node:fs';
-import { createServer, type ServerResponse } from 'node:http';
-import { type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { watchCompiledSourceDeps } from '../contact-browser-test/compiled-source-deps';
 import type {} from './fixture';
+import {
+  receiveUpload,
+  routeFixtures,
+  svg,
+  url,
+} from './media-browser-fixtures';
 
 const path =
   '/src/lib/core/component/LexicalMarkdown/decorator-host/image-browser-test/fixture.html';
-const url = 'https://static.klipy.com/fixture/image.svg';
+
 const sourceOnly = process.env.IMAGE_SOURCE_ONLY === '1';
-const svg =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="128"><rect width="256" height="128" fill="#456789"/></svg>';
 
 async function capture(page: Page) {
   return page.evaluate(() => {
@@ -17,24 +20,6 @@ async function capture(page: Page) {
       throw new Error('Missing actual image surface');
     return window.imageProofFixture.snapshot();
   });
-}
-
-async function routeFixtures(context: BrowserContext) {
-  await context.route('**/__macro_dev/gateway/**', (route) =>
-    new URL(route.request().url()).pathname.endsWith('/email/links')
-      ? route.fulfill({ json: { links: [] } })
-      : route.fulfill({
-          status: 403,
-          json: { message: 'Fixture access denied' },
-        })
-  );
-  await context.route('https://static.klipy.com/fixture/image.svg*', (route) =>
-    route.fulfill({
-      contentType: 'image/svg+xml',
-      headers: { 'access-control-allow-origin': '*' },
-      body: svg,
-    })
-  );
 }
 
 test.beforeAll(async ({ browser, baseURL }) => {
@@ -251,66 +236,6 @@ for (const key of ['Backspace', 'Delete']) {
     }
     expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
   });
-}
-
-// Capture the actual browser PUT bytes over HTTP, including WebKit Blob bodies.
-async function receiveUpload(status: number) {
-  const body = Promise.withResolvers<Buffer>();
-  const cors = {
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'PUT, OPTIONS',
-    'access-control-allow-headers': 'Content-Type',
-  };
-  let response: ServerResponse | undefined;
-  let released = false;
-  let count = 0;
-  const finish = () => {
-    if (!released || !response) return;
-    response.writeHead(status, cors).end();
-    response = undefined;
-  };
-  const server = createServer((request, reply) => {
-    if (request.method === 'OPTIONS') {
-      reply.writeHead(204, cors).end();
-      return;
-    }
-    if (request.method !== 'PUT') {
-      reply.writeHead(405, cors).end();
-      return;
-    }
-    count++;
-    const chunks: Buffer[] = [];
-    request.on('data', (chunk: Buffer) => chunks.push(chunk));
-    request.on('end', () => {
-      response = reply;
-      body.resolve(Buffer.concat(chunks));
-      finish();
-    });
-  });
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    server.close();
-    throw new Error('Missing upload receiver port');
-  }
-  return {
-    body: body.promise,
-    url: `http://127.0.0.1:${address.port}/fixture-upload`,
-    requests: () => count,
-    release() {
-      released = true;
-      finish();
-    },
-    close() {
-      server.closeAllConnections();
-      return new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve()))
-      );
-    },
-  };
 }
 
 const videoFile = new URL(

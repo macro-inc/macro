@@ -48,6 +48,10 @@ export function createNativeImageUploadController() {
   let mounted: EditorView | undefined;
   const listeners = createNativeListenerScope();
   let disposed = false;
+  const dialogs = new Set<() => void>();
+  listeners.add(() => {
+    for (const close of dialogs) close();
+  });
 
   const current = (view: EditorView, generation: number) =>
     !disposed &&
@@ -172,9 +176,75 @@ export function createNativeImageUploadController() {
     return true;
   }
 
+  function openFileDialog(kind: MediaType | 'all' = 'all'): boolean {
+    const view = mounted;
+    const generation = view?.mirror.keyGeneration;
+    if (
+      !view ||
+      generation == null ||
+      !current(view, generation) ||
+      !editable(view) ||
+      view.root.contentEditable !== 'true'
+    )
+      return false;
+    const input = view.root.ownerDocument.createElement('input');
+    input.type = 'file';
+    input.accept =
+      kind === 'all'
+        ? 'image/*,video/*'
+        : kind === 'video'
+          ? 'video/*'
+          : 'image/*';
+    input.multiple = true;
+    input.style.display = 'none';
+    let active = true;
+    const close = () => {
+      if (!active) return;
+      active = false;
+      input.removeEventListener('change', changed);
+      input.removeEventListener('cancel', close);
+      dialogs.delete(close);
+      input.remove();
+    };
+    const changed = () => {
+      if (
+        !current(view, generation) ||
+        !editable(view) ||
+        view.root.contentEditable !== 'true'
+      ) {
+        close();
+        return;
+      }
+      const files = input.files;
+      if (!files?.length) return;
+      for (const file of Array.from(files)) {
+        const type = file.type.startsWith('image/')
+          ? 'image'
+          : file.type.startsWith('video/')
+            ? 'video'
+            : undefined;
+        if (type && (kind === 'all' || kind === type))
+          fireAndForget(insertFile(file, type), 'native-media-picker');
+      }
+      close();
+    };
+    input.addEventListener('change', changed);
+    input.addEventListener('cancel', close);
+    dialogs.add(close);
+    try {
+      view.root.ownerDocument.body.appendChild(input);
+      input.click();
+    } catch (error) {
+      close();
+      throw error;
+    }
+    return true;
+  }
+
   return {
     events,
     insertFile,
+    openFileDialog,
     bindView(view: EditorView) {
       if (disposed || mounted)
         throw new Error('Image uploads require one live view');
