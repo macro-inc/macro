@@ -22,6 +22,7 @@
   "devDependencies": {
     "@playwright/test": "1.62.0",
     "@types/node": "^24.8.0",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.1",

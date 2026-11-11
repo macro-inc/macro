@@ -58,7 +58,7 @@ and loading span. Documents and collaborative surfaces use the same sync socket
 route; their authorization adapters supply tokens from the appropriate endpoint.
 Server-backed sessions always retain their actual access level.
 Construction is synchronous after preload. Closing and failed-construction
-cleanup drain terminal I/O asynchronously.
+cleanup drain terminal I/O asynchronously. A directly disposed view no longer receives Diff, input acknowledgements or asynchronous I/O errors. Its native observation retires at the next post-receiver output fence; the owning runtime still must close to drain I/O and release its session.
 
 Document hosts may supply `loadCachedSnapshot` to race the same cached S3
 bytes as the Source document path against native local-storage and socket

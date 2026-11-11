@@ -28,7 +28,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Project Await's local class from node state: only boolean false disables it; missing, null and nonboolean values use the Source local default.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - Assemble wholly created subtrees off DOM in the existing slot-walk order; keep reused-node moves and trees with DOM-slot hooks on the ordinary path and resolve dynamic slot boundaries when attaching, before selection and commit notifications.
-- Attach one synchronous view before subscribing to authorization; apply each native output immediately, never buffer pre-mount packets, and retire view observation once before disposal and terminal close.
+- Attach one synchronous view before subscribing to authorization; never buffer pre-mount packets. Stop presentation delivery when its actual view retires, retain native I/O draining, and retire observation once before the next output transfer or terminal close; a teardown inside a native callback only schedules retirement until that receiver returns.
 - Admit renderer-derived normalization through inputIfSessionEdit so current native access is checked inside the queued turn; local editability and initial configuration never grant authority. Guard this ordinary entry before queue admission, including ports without an Enter binding.
 - Capture comment anchors with `SessionPort.commentSelection` (query kind 8 cursors plus exact model text) and publish or remove marks only through `SessionPort.comment`; never derive the expected text from the DOM.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit

@@ -383,6 +383,7 @@
         "@playwright/test": "1.62.0",
         "@types/node": "^24.8.0",
         "@types/prismjs": "^1.26.5",
+        "fake-indexeddb": "^6.2.5",
         "jsdom": "^26.1.0",
         "lexical": "0.45.0",
         "loro-crdt": "1.17.1",

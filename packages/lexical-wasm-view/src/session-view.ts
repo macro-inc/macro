@@ -42,6 +42,7 @@ export function mountSessionView(
     : undefined;
   let view: EditorView | undefined;
   let disposed = false;
+  let retireBeforeOutput = false;
   let closing: Promise<void> | undefined;
   let authorizationReady = false;
   const authorization: (() => void)[] = [];
@@ -105,6 +106,7 @@ export function mountSessionView(
       const filtered = commands ? commands.output.filter(effects) : effects;
       if (disposed) return;
       if (!view) throw new Error('Native output before view mount');
+      if (!view.isMounted) return;
       applyingOutput = true;
       try {
         view.apply(words, strings, filtered);
@@ -118,10 +120,12 @@ export function mountSessionView(
     },
     acknowledgeText(input) {
       if (!view) throw new Error('Text input before view mount');
+      if (!view.isMounted) return;
       view.acknowledgeText(input);
     },
     acknowledgeSelection(selection) {
       if (!view) throw new Error('Selection input before view mount');
+      if (!view.isMounted) return;
       view.acknowledgeSelection(selection);
     },
     text(key) {
@@ -164,6 +168,10 @@ export function mountSessionView(
         }
       },
       beforeConsume(flags, completion) {
+        if (retireBeforeOutput) {
+          retireBeforeOutput = false;
+          retire();
+        }
         if (flags & Flag.Error)
           rememberPublicationFailure({ kind: 'native-error' });
         commands?.output.beforeConsume(flags, completion);
@@ -243,6 +251,11 @@ export function mountSessionView(
           }
         : options
     );
+    view.onTeardown(() => {
+      // Disposal can run inside a native command callback. Retire only after
+      // that receiver returns, before its next output can be transferred.
+      retireBeforeOutput = true;
+    });
     if (publications)
       view.onTeardown(() => {
         commands?.output.beginTeardown();
