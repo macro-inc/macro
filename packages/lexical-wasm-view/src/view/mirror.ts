@@ -271,6 +271,7 @@ export class Mirror {
         })
       );
     }
+    let removedParentChildren: Set<NodeKey> | undefined;
     for (let i = 0; i < count; i++) {
       const op = r.word(),
         key = r.word();
@@ -278,18 +279,14 @@ export class Mirror {
         if (key === 0) throw new Error('Cannot remove the mirror root');
         const subtreeRoot = r.word();
         if (subtreeRoot > 1) throw new Error('Invalid subtree-root flag');
-        if (!this.records.has(key)) {
-          if (mutations.get(key)?.kind === 'destroyed') continue;
-          throw new Error('Removing missing key: ' + key);
+        const node = this.records.get(key);
+        if (!node) throw new Error('Removing missing key: ' + key);
+        // Each Remove names one record. The subtree flag describes DOM detach.
+        if (node.children.length) {
+          removedParentChildren ??= new Set();
+          for (const child of node.children) removedParentChildren.add(child);
         }
-        const pending = [key];
-        while (pending.length) {
-          const current = pending.pop();
-          if (current === undefined) break;
-          const node = get(current);
-          pending.push(...node.children);
-          change(current, undefined);
-        }
+        change(key, undefined);
       } else if (
         op >= DiffOpcode.CreateElement &&
         op <= DiffOpcode.CreateLineBreak
@@ -407,6 +404,13 @@ export class Mirror {
     if (r.at !== words.length) throw new Error('Trailing Diff words');
     if (this.records.get(0)?.parent !== null)
       throw new Error('Cyclic or reparented mirror root');
+    if (removedParentChildren) {
+      for (const child of removedParentChildren) {
+        const node = this.records.get(child);
+        if (node && node.parent !== null && !this.records.has(node.parent))
+          throw new Error('Child references missing parent: ' + node.parent);
+      }
+    }
     for (const key of children) {
       const node = this.records.get(key);
       if (!node) continue;
