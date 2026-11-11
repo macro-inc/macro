@@ -1421,6 +1421,54 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let user_picture_brokers = config.kafka_brokers.as_ref().to_string();
+    let user_picture_fanout = Arc::new(
+        contacts::domain::service::picture_fanout::UserPictureFanout::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            contacts::outbound::picture_gateway::ConnectionGatewayPictureNotifier::new(
+                conn_gateway_client.clone(),
+            ),
+        ),
+    );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting user picture fan-out consumer");
+                let result = contacts::inbound::user_picture_consumer::run_user_picture_consumer(
+                    &user_picture_brokers,
+                    user_picture_fanout.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("user picture fan-out consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "user picture fan-out consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // Wire Macro AI to react to mentions with the classic in-channel chat
     // reply. The router posts replies through the channel service we just
     // built and runs the agent loop in-process with the channel-bot toolset:
