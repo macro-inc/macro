@@ -31,11 +31,6 @@ import TextT from '@icon/system/regular/text-t.svg';
 import TextUnderline from '@icon/system/regular/text-underline.svg';
 import { Button, Dropdown, SingleSelectCheck, Toolbar } from '@ui';
 import {
-  COMMAND_PRIORITY_HIGH,
-  FORMAT_TEXT_COMMAND,
-  KEY_ESCAPE_COMMAND,
-} from 'lexical';
-import {
   type Component,
   createSignal,
   For,
@@ -51,17 +46,9 @@ import {
 } from '../../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  autoRegister,
-  type EnhancedSelection,
-  NODE_TRANSFORM,
-  type NodeTransformType,
-  popupPlugin,
-  registerRootEventListener,
-  type SelectionData,
-  TRY_INSERT_LINK_COMMAND,
-  UNLINK_COMMAND,
-} from '../../plugins';
+import type { FormatMenuHost } from '../../editing/overlay-hosts/format';
+import { createLexicalFormatMenuHost } from '../../editing/overlay-hosts/lexical-format';
+import type { NodeTransformType } from '../../plugins/node-transform/nodeTransformPlugin';
 
 false && floatWithSelection;
 
@@ -150,7 +137,7 @@ const BlockOptions: ElementOption[] = [
   { format: 'quote', icon: Quote, label: 'Quote' },
 ];
 
-export function FloatingFormatMenu(props: {
+export interface FloatingFormatMenuOptions {
   portalScope?: PortalScope;
   /**
    * The link button dispatches commands handled by the links plugin, which is
@@ -163,7 +150,9 @@ export function FloatingFormatMenu(props: {
    * represented in Markdown, so leave off for Markdown-backed editors.
    */
   extendedInlineFormats?: boolean;
-}) {
+}
+
+export function FloatingFormatMenu(props: FloatingFormatMenuOptions) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   if (!lexicalWrapper) {
     console.error('FloatingFormatMenu requires LexicalWrapperContext!');
@@ -173,22 +162,33 @@ export function FloatingFormatMenu(props: {
   // On mobile the native selection toolbar takes this menu's place.
   if (isMobile()) return '';
 
-  const { editor, plugins } = lexicalWrapper;
-  const selection = (): SelectionData | undefined => lexicalWrapper.selection;
+  return (
+    <HostedFloatingFormatMenu
+      host={createLexicalFormatMenuHost(lexicalWrapper)}
+      options={props}
+    />
+  );
+}
+
+export function HostedFloatingFormatMenu(props: {
+  host: FormatMenuHost;
+  options?: FloatingFormatMenuOptions;
+}) {
+  if (isMobile()) return '';
+  const host = props.host;
+  const options = props.options ?? {};
+  const selection = host.selection;
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     MENU_ID,
     MenuPriority.Normal
   );
-  const [selectionInfo, setSelectionInfo] =
-    createSignal<EnhancedSelection | null>(null, { equals: () => false });
-
-  plugins.use(
-    popupPlugin({
-      setIsPopupVisible: setMenuOpen,
-      setSelection: setSelectionInfo,
-    })
+  const [domSelection, setDOMSelection] = createSignal<Selection | undefined>(
+    undefined,
+    { equals: false }
   );
+
+  host.registerPopup({ visible: setMenuOpen, selection: setDOMSelection });
 
   // Lag the open state so the menu doesn't flash while a selection is being
   // dragged out (same delay as the markdown block popup).
@@ -196,48 +196,40 @@ export function FloatingFormatMenu(props: {
 
   const [menuRef, setMenuRef] = createSignal<HTMLDivElement>();
 
-  autoRegister(
-    registerRootEventListener(editor, 'focusout', ({ relatedTarget }) => {
+  host.registerListeners({
+    focusOut(relatedTarget) {
       if (relatedTarget instanceof Node && menuRef()?.contains(relatedTarget)) {
         return;
       }
       setMenuOpen(false);
-    }),
-    editor.registerCommand(
-      NODE_TRANSFORM,
-      () => {
-        setMenuOpen(false);
-        return false;
-      },
-      COMMAND_PRIORITY_HIGH
-    ),
-    editor.registerCommand(
-      KEY_ESCAPE_COMMAND,
-      () => {
-        if (!menuOpen()) return false;
-        setMenuOpen(false);
-        return true;
-      },
-      COMMAND_PRIORITY_HIGH
-    )
-  );
+    },
+    transform() {
+      setMenuOpen(false);
+      return false;
+    },
+    escape() {
+      if (!menuOpen()) return false;
+      setMenuOpen(false);
+      return true;
+    },
+  });
 
   onCleanup(() => {
     setMenuOpen(false);
   });
 
   const refocusEditor = () => {
-    editor.focus();
+    host.focus();
   };
 
   const inlineFormat = (format: InlineFormat) => {
-    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+    host.formatText(format);
   };
 
   const nodeFormat = (transform: NodeTransformType) => {
     const isActive = selection()?.elementsInRange?.has(transform);
     // If the node type is already active, transform back to paragraph.
-    editor.dispatchCommand(NODE_TRANSFORM, isActive ? 'paragraph' : transform);
+    host.formatBlock(isActive ? 'paragraph' : transform);
   };
 
   const handleLink = (e?: MouseEvent | KeyboardEvent) => {
@@ -245,22 +237,17 @@ export function FloatingFormatMenu(props: {
     e?.stopPropagation();
 
     if (selection()?.hasLinks) {
-      editor.dispatchCommand(UNLINK_COMMAND, undefined);
+      host.unlink();
       setTimeout(() => {
-        editor.focus();
+        host.focus();
       });
       return;
     }
-    editor.dispatchCommand(TRY_INSERT_LINK_COMMAND, undefined);
-  };
-
-  const domSelection = () => {
-    const info = selectionInfo();
-    return info?.type === 'range' ? info.domSelection : undefined;
+    host.requestLink();
   };
 
   const moreInlineOptions = () =>
-    props.extendedInlineFormats
+    options.extendedInlineFormats
       ? [...MoreInlineOptions, ...ExtendedInlineOptions]
       : MoreInlineOptions;
 
@@ -362,16 +349,14 @@ export function FloatingFormatMenu(props: {
   };
 
   return (
-    <Show
-      when={showMenu() && lexicalWrapper.isInteractable() && domSelection()}
-    >
-      <ScopedPortal scope={props.portalScope}>
+    <Show when={showMenu() && host.isInteractable() && domSelection()}>
+      <ScopedPortal scope={options.portalScope}>
         <div
           ref={setMenuRef}
           class="fixed top-0 left-0 z-action-menu w-fit"
           use:floatWithSelection={{
             selection: domSelection(),
-            reactiveOnContainer: editor.getRootElement(),
+            reactiveOnContainer: host.root(),
             useBlockBoundary: true,
             moveWithSelection: true,
             clipToVisible: true,
@@ -381,7 +366,7 @@ export function FloatingFormatMenu(props: {
             <For each={PrimaryInlineOptions}>
               {(item) => <InlineButton item={item} />}
             </For>
-            <Show when={props.showLinkButton ?? true}>
+            <Show when={options.showLinkButton ?? true}>
               <Button
                 variant="ghost"
                 size="icon-sm"
