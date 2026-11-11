@@ -40,6 +40,43 @@ export interface ViewApplier {
 export interface ExecutorFailure {
   readonly error: unknown;
 }
+/** Terminal observation of this entry, not durability or native quiescence. */
+export type ExecutorSettlement =
+  | { readonly status: 'success'; readonly flags: number }
+  | { readonly status: 'error'; readonly error: unknown }
+  | { readonly status: 'cancelled'; readonly reason: 'closed' | 'closing' };
+
+/** Consumer-owned deferred errors may be associated only with this real entry. */
+export interface ExecutorCompletion {
+  readonly running: boolean;
+  fail(error: unknown): void;
+}
+export interface ExecutorDrain {
+  /** The thrown drain error belongs to an observed input, not the whole fence. */
+  attributeFailure(): void;
+}
+export interface SettledRunOptions {
+  readonly synchronous?: boolean;
+  readonly after?: (flags: number) => void;
+}
+interface SettledEntry {
+  started: boolean;
+  running: boolean;
+  delivered: boolean;
+  flags?: number;
+  exception?: ExecutorFailure;
+  reported?: ExecutorFailure;
+  native?: ExecutorFailure;
+  readonly completion: ExecutorCompletion;
+  readonly notify: (result: ExecutorSettlement) => void;
+}
+/** Native failure data is distinct from an original opaque JavaScript exception. */
+export class SessionInputError extends Error {
+  constructor(readonly effects: readonly IViewEffectMsg[]) {
+    super('Native session input failed');
+    this.name = 'SessionInputError';
+  }
+}
 export interface ExecutorOptions<S extends NativeSession> {
   doc: string;
   owner: string;
@@ -48,9 +85,9 @@ export interface ExecutorOptions<S extends NativeSession> {
   /** Release typed host ownership before native free if executor construction fails. */
   onConstructionFailure?: (session: S) => void;
   /** Inspect issued callback metadata after a native call and before output transfer. */
-  beforeConsume?: (flags: number) => void;
+  beforeConsume?: (flags: number, completion?: ExecutorCompletion) => void;
   /** Complete invocation cleanup after the outer FIFO exits and synchronous admission unlocks. */
-  afterDrain?: (failure?: ExecutorFailure) => void;
+  afterDrain?: (failure?: ExecutorFailure, drain?: ExecutorDrain) => void;
   view: ViewApplier;
   auth: SessionAuthorization;
   /** Supplied by the application's servers.ts; the package never invents hosts. */
@@ -77,6 +114,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private storageQueue: Promise<void>;
   private busy = false;
   private queue: (() => void)[] = [];
+  private readonly settlements = new Map<() => void, SettledEntry>();
   private closed = false;
   private started = false;
   private closing?: Promise<void>;
@@ -222,38 +260,145 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   now = () => this.clock.mono() - this.t0;
   /** All synchronous admission, including view inputs, is serialized here. */
   run(call: () => number, after?: (flags: number) => void): void {
+    this.enqueue(call, after);
+  }
+  /** Observe actual execution; legacy outer errors still propagate synchronously. */
+  runSettled(
+    call: () => number,
+    notify: (result: ExecutorSettlement) => void,
+    options: SettledRunOptions = {}
+  ): void {
+    if (options.synchronous && (this.busy || this.queue.length))
+      throw new Error('Session executor is busy');
+    if (this.closed || this.closing) {
+      this.notifySettlement(notify, {
+        status: 'cancelled',
+        reason: this.closed ? 'closed' : 'closing',
+      });
+      return;
+    }
+    const entry: SettledEntry = {
+      started: false,
+      running: false,
+      delivered: false,
+      notify,
+      completion: {
+        get running() {
+          return entry.running;
+        },
+        fail(error) {
+          if (entry.delivered)
+            throw new Error('Executor settlement already delivered');
+          entry.reported ??= { error };
+        },
+      },
+    };
+    this.enqueue(call, options.after, entry);
+  }
+  private notifySettlement(
+    notify: (result: ExecutorSettlement) => void,
+    result: ExecutorSettlement
+  ): void {
+    try {
+      notify(result);
+    } catch (error) {
+      try {
+        Telemetry.error(error, { surface: 'session.settlement.notification' });
+      } catch {
+        /* A notifier cannot replace an admission or drain error. */
+      }
+    }
+  }
+  private enqueue(
+    call: () => number,
+    after?: (flags: number) => void,
+    entry?: SettledEntry
+  ): void {
     if (this.closed) return;
-    this.queue.push(() => {
+    const execute = () => {
       const flags = call();
-      this.options.beforeConsume?.(flags);
-      this.consume(flags);
+      if (entry) entry.flags = flags;
+      if (entry) this.options.beforeConsume?.(flags, entry.completion);
+      else this.options.beforeConsume?.(flags);
+      this.consume(flags, entry);
       after?.(flags);
-    });
+    };
+    const queued = entry
+      ? () => {
+          entry.running = true;
+          try {
+            execute();
+          } catch (error) {
+            entry.exception ??= { error };
+            throw error;
+          } finally {
+            entry.running = false;
+          }
+        }
+      : execute;
+    if (entry) this.settlements.set(queued, entry);
+    this.queue.push(queued);
     if (this.busy) return;
     this.busy = true;
+    let completed: SettledEntry[] | undefined;
     let failure: ExecutorFailure | undefined;
     try {
       while (this.queue.length) {
-        const call = this.queue.shift();
-        if (!call) break;
-        call();
+        const next = this.queue.shift();
+        if (!next) break;
+        const settlement = this.settlements.get(next);
+        if (settlement) {
+          this.settlements.delete(next);
+          settlement.started = true;
+          completed ??= [];
+          completed.push(settlement);
+        }
+        next();
       }
     } catch (error) {
       failure = { error };
     } finally {
       this.busy = false;
     }
+    let drainFailure: ExecutorFailure | undefined;
+    let attributed = false;
     try {
-      this.options.afterDrain?.(failure);
+      if (completed)
+        this.options.afterDrain?.(failure, {
+          attributeFailure() {
+            attributed = true;
+          },
+        });
+      else this.options.afterDrain?.(failure);
     } catch (error) {
-      if (!failure) throw error;
-      try {
-        Telemetry.error(error, { surface: 'session.drain.cleanup' });
-      } catch {
-        // Preserve the original admission failure, including throw undefined.
+      if (!failure) drainFailure = { error };
+      else {
+        try {
+          Telemetry.error(error, { surface: 'session.drain.cleanup' });
+        } catch {
+          /* Preserve the original admission failure, including throw undefined. */
+        }
       }
     }
+    for (const settlement of completed ?? []) {
+      const own =
+        settlement.exception ??
+        settlement.reported ??
+        settlement.native ??
+        (!attributed ? drainFailure : undefined);
+      settlement.delivered = true;
+      const result: ExecutorSettlement = own
+        ? { status: 'error', error: own.error }
+        : settlement.flags === undefined
+          ? {
+              status: 'error',
+              error: new Error('Native input completed without flags'),
+            }
+          : { status: 'success', flags: settlement.flags };
+      this.notifySettlement(settlement.notify, result);
+    }
     if (failure) throw failure.error;
+    if (drainFailure) throw drainFailure.error;
   }
   /** Admit a synchronous transaction without queueing rejected reentrant work. */
   runSync(call: () => number, after?: (flags: number) => void): void {
@@ -285,13 +430,21 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         )
       );
   }
-  private consume(flags: number): void {
+  private consume(flags: number, entry?: SettledEntry): void {
     if (flags & Flag.WakeChanged) {
       this.scheduleWake();
     }
     if (!(flags & (Flag.View | Flag.Io | Flag.NeedPeerIds | Flag.Error)))
       return;
     const out = decodeOutput(this.session.takeOutput());
+    if (entry && flags & Flag.Error)
+      entry.native = {
+        error: new SessionInputError(
+          out.viewEffects.filter(
+            (effect) => effect.kind === 2 || effect.kind === 6
+          )
+        ),
+      };
     this.options.view.apply(out.view, out.strings, out.viewEffects);
     for (const effect of out.viewEffects) {
       if (effect.kind === 3) this.options.onStatus?.(effect);
@@ -648,6 +801,17 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       // Required durability completions have settled; do not admit new work
       // while asynchronous lock release hands ownership to another session.
       this.closed = true;
+      this.queue = this.queue.filter((call) => {
+        const entry = this.settlements.get(call);
+        if (!entry || entry.started) return true;
+        this.settlements.delete(call);
+        entry.delivered = true;
+        this.notifySettlement(entry.notify, {
+          status: 'cancelled',
+          reason: 'closed',
+        });
+        return false;
+      });
       try {
         await this.lease.release();
       } catch (error) {

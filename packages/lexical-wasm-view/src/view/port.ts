@@ -48,6 +48,11 @@ export interface ViewSink {
   acknowledgeSelection(selection: ViewSelection): void;
   text(key: NodeKey): string | null;
 }
+/** Actual input completion, distinct from completed-but-unhandled and cancellation. */
+export type InputSettlement =
+  | { readonly status: 'success'; readonly handled: boolean }
+  | { readonly status: 'error'; readonly error: unknown }
+  | { readonly status: 'cancelled'; readonly reason: 'closed' | 'closing' };
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
   readonly nativeEnter?: NativeEnterPort;
@@ -84,6 +89,10 @@ export interface EditorPort {
     after?: (handled: boolean) => void,
     event?: KeyboardEvent
   ): void;
+  inputSettled?(
+    input: EditorInputMsg,
+    event?: KeyboardEvent
+  ): Promise<InputSettlement>;
   setState(json: string): void;
   initialize(): void;
   clipboard(kind: number): IClipboardMsg;

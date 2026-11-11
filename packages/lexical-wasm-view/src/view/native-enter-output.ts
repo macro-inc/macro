@@ -1,5 +1,9 @@
 import type { IViewEffectMsg } from '@macro-inc/collaboration/session/abi.generated';
-import type { ExecutorFailure } from '@macro-inc/collaboration/session/executor';
+import type {
+  ExecutorCompletion,
+  ExecutorDrain,
+  ExecutorFailure,
+} from '@macro-inc/collaboration/session/executor';
 import { Flag } from '@macro-inc/collaboration/session/output';
 import type {
   EditorSession,
@@ -27,8 +31,19 @@ export class NativeEnterOutput {
     readonly lease: ViewCommandFailure;
     readonly valid: boolean;
   }[] = [];
-  private reported: ReportedFailure[] = [];
-  private secondary: ExecutorFailure[] = [];
+  private reported: (ReportedFailure & {
+    readonly completion?: ExecutorCompletion;
+  })[] = [];
+  private currentCompletion: ExecutorCompletion | undefined;
+  private readonly completionFailures = new Map<
+    ExecutorCompletion,
+    {
+      original?: ExecutorFailure;
+      fault?: ExecutorFailure;
+      secondary?: ExecutorFailure;
+    }
+  >();
+  private secondary: (ExecutorFailure & { readonly input?: boolean })[] = [];
   private readonly additional: NativeCallbackFailure[] = [];
   private fault: ExecutorFailure | undefined;
   private detached = false;
@@ -52,8 +67,28 @@ export class NativeEnterOutput {
     if (this.detached) throw new Error('Native editor view is closing');
   }
 
-  recordSecondary(error: unknown): void {
-    this.secondary.push({ error });
+  recordSecondary(error: unknown, input = false): void {
+    this.secondary.push({ error, input });
+    const completion =
+      input && this.currentCompletion?.running
+        ? this.currentCompletion
+        : undefined;
+    if (completion) this.failuresFor(completion).secondary ??= { error };
+  }
+  private failuresFor(completion: ExecutorCompletion) {
+    let failures = this.completionFailures.get(completion);
+    if (!failures) {
+      failures = {};
+      this.completionFailures.set(completion, failures);
+    }
+    return failures;
+  }
+  private rememberFault(
+    error: unknown,
+    completion = this.currentCompletion
+  ): void {
+    this.fault ??= { error };
+    if (completion?.running) this.failuresFor(completion).fault ??= { error };
   }
 
   takeFailure(): NativeCallbackFailure | undefined {
@@ -61,7 +96,8 @@ export class NativeEnterOutput {
     return this.additional.shift();
   }
 
-  beforeConsume(flags: number): void {
+  beforeConsume(flags: number, completion?: ExecutorCompletion): void {
+    this.currentCompletion = completion;
     if (!this.dispatcher.hasFailures(this.owner)) return;
     try {
       for (;;) {
@@ -74,11 +110,9 @@ export class NativeEnterOutput {
         );
         this.pending.push({ lease, valid });
         if (!valid) {
-          this.fault ??= {
-            error: new Error(
-              'Native callback failure has no matching issued cause'
-            ),
-          };
+          this.rememberFault(
+            new Error('Native callback failure has no matching issued cause')
+          );
           continue;
         }
         if (
@@ -91,6 +125,7 @@ export class NativeEnterOutput {
           this.reported.push({
             invocation: lease.invocation,
             scope: lease.scope,
+            completion,
           });
       }
       if (!(flags & (Flag.View | Flag.Io | Flag.Error | Flag.NeedPeerIds))) {
@@ -99,7 +134,7 @@ export class NativeEnterOutput {
         this.releasePacket();
       }
     } catch (error) {
-      this.fault ??= { error };
+      this.rememberFault(error);
     }
   }
 
@@ -129,7 +164,7 @@ export class NativeEnterOutput {
       }
       return effects.filter((_, ordinal) => !deferred.has(ordinal));
     } catch (error) {
-      this.fault ??= { error };
+      this.rememberFault(error);
       return effects;
     } finally {
       this.releasePacket();
@@ -143,12 +178,13 @@ export class NativeEnterOutput {
       try {
         lease.free();
       } catch (error) {
-        this.fault ??= { error };
+        this.rememberFault(error);
       }
     }
   }
 
-  afterDrain(aborted?: ExecutorFailure): void {
+  afterDrain(aborted?: ExecutorFailure, drain?: ExecutorDrain): void {
+    this.currentCompletion = undefined;
     if (aborted && this.dispatcher.hasFailures(this.owner))
       this.fault ??= aborted;
     this.releasePacket();
@@ -160,13 +196,28 @@ export class NativeEnterOutput {
           report.invocation,
           report.scope
         );
-        if (cause) causes.push({ ...report, error: cause.error });
-        else
-          this.fault ??= {
-            error: new Error('Native callback cause disappeared before drain'),
-          };
+        if (cause) {
+          causes.push({
+            invocation: report.invocation,
+            scope: report.scope,
+            error: cause.error,
+          });
+          if (report.completion)
+            this.failuresFor(report.completion).original ??= {
+              error: cause.error,
+            };
+        } else {
+          const error = new Error(
+            'Native callback cause disappeared before drain'
+          );
+          this.fault ??= { error };
+          if (report.completion)
+            this.failuresFor(report.completion).fault ??= { error };
+        }
       } catch (error) {
-        this.fault ??= { error };
+        this.rememberFault(error);
+        if (report.completion)
+          this.failuresFor(report.completion).fault ??= { error };
       }
     }
     this.reported = [];
@@ -188,10 +239,21 @@ export class NativeEnterOutput {
         if (error !== original.error) secondary.push({ error });
       }
     }
-    const primary = aborted ?? original ?? this.fault ?? secondary.shift();
+    for (const [completion, failures] of this.completionFailures) {
+      const failure = failures.original ?? failures.fault ?? failures.secondary;
+      if (failure) completion.fail(failure.error);
+    }
+    this.completionFailures.clear();
+    const secondaryPrimary =
+      !aborted && !original && !this.fault ? secondary.shift() : undefined;
+    const primary = aborted ?? original ?? this.fault ?? secondaryPrimary;
     for (const failure of [...causes, ...secondary]) this.report(failure.error);
     if (aborted && original) this.report(original.error);
-    if (!aborted && primary) throw primary.error;
+    if (!aborted && primary) {
+      if (original || this.fault || secondaryPrimary?.input)
+        drain?.attributeFailure();
+      throw primary.error;
+    }
   }
 
   private report(error: unknown): void {

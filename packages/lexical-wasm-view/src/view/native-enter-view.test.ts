@@ -14,6 +14,7 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import {
   type ExecutorOptions,
+  type ExecutorSettlement,
   SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
@@ -818,6 +819,144 @@ test('an actual held storage barrier cannot allow registrations to reactivate a 
     await closing;
     drain.mockRestore();
     registration.mockRestore();
+    runtime.root.remove();
+  }
+});
+
+for (const cause of [undefined, null, { reason: 'settled callback' }]) {
+  test(`settled native callback owns its opaque ${String(cause)} error while later input succeeds`, async () => {
+    const runtime = mount();
+    const results: ExecutorSettlement[] = [];
+    let caught: { error: unknown } | undefined;
+    runtime.view.registerViewCommand(
+      enter,
+      () => {
+        expect(() =>
+          runtime.port.inputSettled(
+            EditorInputMsg.fromEditorSetState({ json: initial('forbidden') })
+          )
+        ).toThrow('scoped callback');
+        throw cause;
+      },
+      4
+    );
+    try {
+      try {
+        runtime.executor.run(() => {
+          runtime.executor.runSettled(
+            () =>
+              runtime.executor.session.viewCommandEnter(
+                runtime.executor.now(),
+                Date.now()
+              ),
+            (result) => {
+              results.push(result);
+            }
+          );
+          runtime.executor.runSettled(
+            () =>
+              runtime.executor.session.tick(runtime.executor.now(), Date.now()),
+            (result) => results.push(result)
+          );
+          return runtime.executor.session.input(
+            SessionInputMsg.encode({
+              ...emptyInput(2),
+              editor: EditorInputMsg.fromEditorSetState({
+                json: initial('accepted'),
+              }),
+            }),
+            runtime.executor.now(),
+            Date.now()
+          );
+        });
+      } catch (error) {
+        caught = { error };
+      }
+      expect(caught).toBeDefined();
+      expect(caught?.error).toBe(cause);
+      expect(runtime.root.textContent).toBe('accepted');
+      expect(results).toHaveLength(2);
+      expect(results[0]).toEqual({ status: 'error', error: cause });
+      expect(results[1].status).toBe('success');
+    } finally {
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}
+
+test('actual inputSettled observes queued view application and cancellation without invented handled flags', async () => {
+  const runtime = mount();
+  let pending: ReturnType<typeof runtime.port.inputSettled> | undefined;
+  try {
+    runtime.executor.run(() => {
+      pending = runtime.port.inputSettled(
+        EditorInputMsg.fromEditorSetState({ json: initial('settled') })
+      );
+      expect(runtime.root.textContent).toBe('draft');
+      return runtime.executor.session.tick(runtime.executor.now(), Date.now());
+    });
+    expect(pending).toBeDefined();
+    const result = await pending;
+    expect(result?.status).toBe('success');
+    expect(runtime.root.textContent).toBe('settled');
+    const unhandled = await runtime.port.inputSettled(
+      EditorInputMsg.fromEditorSelection({
+        selection: {
+          kind: 0,
+          anchor: { key: 0, offset: 0, type: 0 },
+          focus: { key: 0, offset: 0, type: 0 },
+          nodes: [],
+          table: 0,
+          dirty: false,
+        },
+        change: {},
+      })
+    );
+    expect(unhandled).toEqual({ status: 'success', handled: false });
+    const generation = runtime.view.mirror.keyGeneration;
+    if (generation === null) throw new Error('Missing acknowledged generation');
+    let rejected: ReturnType<typeof runtime.port.inputSettled> | undefined;
+    let original: { error: unknown } | undefined;
+    try {
+      runtime.executor.run(() => {
+        rejected = runtime.port.inputSettled(
+          EditorInputMsg.fromEditorApplication({
+            name: 'fixture.unknown-command',
+            json: '{}',
+            generation,
+            selection: {
+              kind: 0,
+              anchor: { key: 0, offset: 0, type: 0 },
+              focus: { key: 0, offset: 0, type: 0 },
+              nodes: [],
+              table: 0,
+              dirty: false,
+            },
+            keyboard: false,
+            key: '',
+            mods: 0,
+            code: 0,
+          })
+        );
+        return runtime.executor.session.tick(
+          runtime.executor.now(),
+          Date.now()
+        );
+      });
+    } catch (error) {
+      original = { error };
+    }
+    expect(original).toBeDefined();
+    expect(await rejected).toEqual({ status: 'error', error: original?.error });
+    await runtime.close();
+    expect(() =>
+      runtime.port.inputSettled(
+        EditorInputMsg.fromEditorSetState({ json: initial('closed') })
+      )
+    ).toThrow('closing');
+  } finally {
+    await runtime.close();
     runtime.root.remove();
   }
 });
