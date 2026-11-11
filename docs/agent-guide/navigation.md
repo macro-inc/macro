@@ -26,17 +26,24 @@ opened. Closing the active tab runs its unsaved-changes guards. A tab holding mo
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
 Home; the `X` or a middle click closes one (the last tab cannot close;
 `Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
-`Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text).
+`Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text);
+`Cmd+1`–`Cmd+8` jump to that tab and `Cmd+9` to the last. The AI and PSD editors
+keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
-a background tab; adding Shift also switches to it. Tabs are not draggable.
+a background tab; adding Shift also switches to it. Every menu that offers
+**Open in new split** (sidebar and favorite rows, list row actions, Chat rail,
+project rows, Reviews) also offers **Open in new tab**, which opens the item in
+a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
+selected item. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
-An inline preview in a background tab stays open there, so selecting its entity
-from another tab switches to that tab with the entity showing. A tab that opens
-onto an entity another tab already holds shows its list instead, without moving
-you or showing a toast.
+The same entity can be open in several tabs. Selecting or opening something a
+background tab shows opens it in the current tab, with no toast and no switch,
+and each tab keeps its own instance, scroll, and history. Within one tab an
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -75,6 +82,18 @@ prevented click does nothing. Browser-only URLs such as `about:blank`, `data:`,
 `blob:` and `javascript:` must not launch an external handler. Web browser anchor
 behavior is unchanged. iOS/Android retain their existing JS opener fallback because
 Tauri's native popup callback is desktop-only.
+
+## Macro links in agent replies
+
+A plain click on a Macro `/app` link in an agent's reply, in its session
+transcript or in a channel message the agent posted, opens the item in the app
+the way the reply's mention chips do: a new split on desktop, in place on touch,
+and reusing a split that already shows it. On the web this replaces the new
+browser tab; the desktop app takes the same path. Links to other sites, links no
+app route matches, and Cmd/Ctrl/Shift/Alt or middle clicks keep opening a
+browser tab, and links in people's messages and prompts are unchanged. To
+check, ask an agent for a link to a document (`https://<host>/app/md/<id>`) and
+to `/app/tasks`, click each, and confirm a split opens with no new tab.
 
 ## Returning from another page
 
@@ -1064,8 +1083,9 @@ view is in the foreground. Leaving the call view restores the current page's
 action, even if the call continues in the background.
 Active phone calls hide the bottom dock but retain the channel header island.
 Their Back button returns to the app while the call continues; tablets keep app
-chrome. Phone media controls sit below the video and hide when idle without
-resizing it; the header islands remain visible.
+chrome. Phone media controls sit below the video and remain visible while idle.
+Away from the Call tab, the call island sits above the dock. Desktop uses the
+rail's call popover and a draggable mini player; see [Calls](calls.md).
 After closing mobile search with the keyboard open or leaving a focused editor,
 verify that the current view’s New action returns once the keyboard closes.
 Removing the focused editor must not leave the action hidden on subsequent views.
@@ -1324,6 +1344,15 @@ of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
 pass before the run is queued. Steps that act on the triggering item can't run
 on GitHub triggers, which have no Macro item.
 
+Presets and **Any GitHub event** only receive events selected on the installed
+GitHub App. Account linking alone does not enable delivery. The
+[registration guide](../../crates/github/README.md) lists the reviewed
+subscriptions and manual permission approval steps; changing its checked-in
+specification does not change the live app. After adding subscriptions, verify
+a controlled repository's delivery and matching routine history. Wildcard
+routines can run more often, and manually redelivering a webhook from GitHub
+can run a routine again.
+
 When `enable-routine-conditions` is on, every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
@@ -1541,8 +1570,9 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order; mixed menu scoring never reorders that window or drops
-reverse-word matches. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
+recent-first window order among equally good name matches; mixed menu scoring never
+drops reverse-word matches. In menus, further pages of people are listed below the
+earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.
@@ -1760,8 +1790,10 @@ including when the detail closes.
 Resetting a split clears its previous history and starts at the default view;
 after opening another item, Back returns to that default view.
 
-Entity content can be open in only one split or inline preview/detail view at a
-time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+Within one tab (or the whole layout when desktop tabs are off), entity content
+can be open in only one split or inline preview/detail view at a time. Desktop
+tabs each hold their own instance. Shell components may have duplicate splits
+when `allowDuplicate` is enabled.
 An Agents conversation route counts as the same entity as its agent or chat block.
 Following a mention or notification reuses the existing split or inline detail,
 activates its workspace, and navigates to any specified location without a toast.

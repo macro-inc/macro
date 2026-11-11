@@ -931,8 +931,13 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
+    EntityAccessService,
+    PgWebhookRepo,
+    crate::outbound::stream_contacts::ContactsStreamChecker<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =
@@ -964,6 +969,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
+    pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
