@@ -11,33 +11,27 @@ import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { Idea } from '../core/idea';
 
-type Look = { icon: Component<{ class?: string }>; color: string };
+type Look = { icon: Component<{ class?: string }> };
 
 function ideaLook(idea: Idea): Look {
   return match(idea)
     .with({ kind: 'prompt', runMode: 'composer' }, () => ({
       icon: SparkleIcon,
-      color: 'text-accent',
     }))
     .with({ kind: 'prompt', runMode: 'background' }, (prompt) => ({
       icon: prompt.sends ? PaperPlaneIcon : SparkleIcon,
-      color: prompt.sends ? 'text-warning' : 'text-accent',
     }))
     .with({ kind: 'entity', action: 'reply' }, () => ({
       icon: EnvelopeIcon,
-      color: 'text-email',
     }))
     .with({ kind: 'entity', action: 'review' }, () => ({
       icon: FileTextIcon,
-      color: 'text-success',
     }))
     .with({ kind: 'entity', action: 'follow_up' }, () => ({
       icon: ArrowBendUpLeftIcon,
-      color: 'text-task',
     }))
     .with({ kind: 'routine' }, () => ({
       icon: ClockIcon,
-      color: 'text-warning',
     }))
     .exhaustive();
 }
@@ -51,11 +45,8 @@ export function IdeaTile(props: { idea: Idea; finished?: boolean }) {
 
   return (
     <Item.Media class="size-7 self-start" aria-hidden="true">
-      <Show
-        when={!props.finished}
-        fallback={<CheckIcon class="size-4 text-success" />}
-      >
-        <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
+      <Show when={!props.finished} fallback={<CheckIcon class="size-4" />}>
+        <Dynamic component={look().icon} class="size-4" />
       </Show>
     </Item.Media>
   );

@@ -4,7 +4,6 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
-import PlayIcon from '@icon/system/regular/play.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Badge, Button, Card, Item, Spinner } from '@ui';
@@ -112,6 +111,7 @@ function IdeaSurface(props: {
       aria-labelledby={`idea-title-${props.idea.id}`}
       data-idea={props.idea.id}
       data-idea-status={props.status}
+      class="group/idea"
     >
       {props.children}
     </Card>
@@ -245,10 +245,7 @@ function IdeaFacts(props: IdeaCardProps) {
         <Match when={background()} keyed>
           {(run) => (
             <span class="flex min-w-0 items-center gap-1.5">
-              <PaperPlaneIcon
-                class="size-3.5 shrink-0"
-                classList={{ 'text-warning': !!run.sends }}
-              />
+              <PaperPlaneIcon class="size-3.5 shrink-0" />
               <span class="truncate" data-idea-sends>
                 {run.sends ?? t('ideas.sendsNothing')}
               </span>
@@ -258,7 +255,7 @@ function IdeaFacts(props: IdeaCardProps) {
         <Match when={props.idea.kind === 'routine' && props.routine} keyed>
           {(text) => (
             <span class="flex min-w-0 items-center gap-1.5">
-              <LightningIcon class="size-3.5 shrink-0 text-violet-ink" />
+              <LightningIcon class="size-3.5 shrink-0" />
               <span class="truncate">{text.when}</span>
             </span>
           )}
@@ -312,7 +309,7 @@ function CardActions(props: IdeaCardProps): JSX.Element {
       <Show
         when={props.status !== 'running'}
         fallback={
-          <Button variant="secondary" size="sm" onClick={props.onOpen}>
+          <Button variant="ghost" size="sm" onClick={props.onOpen}>
             {t('ideas.viewProgress')}
           </Button>
         }
@@ -328,15 +325,12 @@ function CardActions(props: IdeaCardProps): JSX.Element {
           </Button>
         </Show>
         <Button
-          variant="primary"
+          variant="secondary"
           size="sm"
           loading={props.busy}
           onClick={props.onAccept}
           data-idea-accept
         >
-          <Show when={background()}>
-            <PlayIcon class="size-3.5" />
-          </Show>
           {acceptLabel()}
         </Button>
       </Show>
@@ -375,7 +369,7 @@ export function IdeaCard(props: IdeaCardProps) {
             </div>
             <IdeaSentence {...props} />
           </Item.Content>
-          <Item.Actions>
+          <Item.Actions class="opacity-0 transition-opacity group-focus-within/idea:opacity-100 not-touch:group-hover/idea:opacity-100">
             <Button
               variant="ghost"
               size="icon-sm"

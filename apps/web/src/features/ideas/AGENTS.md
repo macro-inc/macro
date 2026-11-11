@@ -71,6 +71,11 @@ only, behind `enable-ideas`.
   composer does), a running one no prompt, and every finished idea is one
   row. The parts that read the app's items (`IdeaItemParts`: source link,
   draft text, waiting time) are supplied by `idea-items.tsx`.
+- Nothing on a card is loud: the main action is the app's `secondary`
+  button and the other a `ghost` one (no `primary`: several white buttons on
+  one page read as shouting), tile and line icons take the muted ink, and
+  dismiss shows on hover or keyboard focus. Colour is left to the state
+  badges and the values AI picked.
 - User-visible text says "suggestion", not "idea"; the code keeps `idea`
   until the backend's rename lands.
 - The API has no due or waiting times. A reply idea's "waiting 2 days" and
