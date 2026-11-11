@@ -20,8 +20,16 @@ export function createNativeDateMentionContext(
       registerUpdateListener(listener) {
         const mounted = base.current();
         if (!mounted) throw new Error('Date mention requires a bound view');
-        const release = mounted.onCommit(() => {
-          if (base.current() === mounted) listener();
+        // Source update listeners skip updates with no dirty nodes or selection.
+        const release = mounted.onCommit((info) => {
+          if (
+            base.current() === mounted &&
+            (info.fullReconcile ||
+              info.selectionChanged ||
+              info.keys.length > 0 ||
+              info.mutations.size > 0)
+          )
+            listener();
         });
         releases.add(release);
         return () => {
