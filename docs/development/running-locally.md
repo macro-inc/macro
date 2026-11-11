@@ -531,6 +531,10 @@ document storage, app and egress URLs) that the harness resolves through
 `macro_service_urls` when it issues the enrollment; xtask sets the harness's
 `OVERRIDE_*` values to the addresses the fleet's guests reach.
 
+`COMPUTER_RETENTION_DAYS` (`14`) and `COMPUTER_PAST_DUE_GRACE_DAYS` (`7`)
+are mandatory for both authentication_service and agent_harness_service,
+fleet or not; local orchestration sets them.
+
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
 `COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`.

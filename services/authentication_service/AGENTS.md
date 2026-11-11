@@ -68,18 +68,29 @@ authentication has no fleet selector or startup availability latch. Pure catalog
 access, webhook reconciliation and billing workers remain independent of attachment.
 
 - `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
-  `hosted_runtimes` `Billing` port on the team subscription (one item per
-  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
-  subscription's interval). Prices are `ComputerPrices`
-  (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
-  receipts before applying changes. Purchase snapshots the quoted price id;
-  retries and removal use that saved id rather than resolving current prices.
+  `hosted_runtimes` `Billing` port on the team subscription. Each computer
+  bills ONE item at a price of its own, copied from
+  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` (chosen by
+  the subscription's interval) and tagged with `computer_id` metadata; the
+  purchase's Stripe idempotency key is `computer-add:{reservation id}`.
+  Prices are `ComputerPrices` (`src/domain/computer_billing.rs`), not seat
+  plans. Replay durable item-change receipts before applying changes;
+  `settle_computer_add` ends an unknown outcome for good. Removing an item
+  already gone succeeds.
 - With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
-- Every team subscription webhook re-reads the complete subscription and reports
-  item quantities by price id to `ComputerBillingObserver` (`ComputerService`).
-  Reconcile against each row's saved price id, including prices no longer in
-  configuration; cancel newest excess computers per price. Ignore partial
-  subscription snapshots. Observer failures are logged, never fail the webhook.
+- Every team subscription webhook re-reads the complete subscription (all item
+  pages) and only reports a `SubscriptionObserved` (status, items with their
+  `computer_id`, period end, read time) to `ComputerBillingObserver`
+  (`ComputerService::observe_subscription`), which decides per computer by
+  computer id, never by price or count. Observer failures are logged, never
+  fail the webhook.
+- Computer billing work (effects and purchase confirmation) runs on its own
+  `TaskTracker` (`computer_billing`), drained at shutdown.
+- Team deletion releases the team's computers first through
+  `TeamOwnedEntityCleanupAdapter::release_computers`, backed by
+  `hosted_runtimes`' `TeamComputerRelease` (needs only the repository).
+- `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` are mandatory
+  (`Config::computer_billing_policy`); agent_harness_service reads the same.
 
 ## Subscription billing status
 

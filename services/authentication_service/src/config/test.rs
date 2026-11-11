@@ -35,7 +35,34 @@ fn config_values() -> serde_json::Value {
     values["AI_USAGE_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(2_000);
     values["AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS"] = serde_json::json!(10_000);
     values["AI_USAGE_OVERAGE_MARKUP_PERCENT"] = serde_json::json!(5);
+    values["COMPUTER_RETENTION_DAYS"] = serde_json::json!(14);
+    values["COMPUTER_PAST_DUE_GRACE_DAYS"] = serde_json::json!(7);
     values
+}
+
+#[test]
+fn computer_retention_and_past_due_grace_are_mandatory_and_positive() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.computer_billing_policy().unwrap(),
+        hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(14, 7).unwrap()
+    );
+    for key in ["COMPUTER_RETENTION_DAYS", "COMPUTER_PAST_DUE_GRACE_DAYS"] {
+        let mut missing = config_values();
+        missing.as_object_mut().unwrap().remove(key);
+        assert!(serde_json::from_value::<Config>(missing).is_err(), "{key}");
+        let mut zero = config_values();
+        zero[key] = serde_json::json!(0);
+        let config: Config = serde_json::from_value(zero).unwrap();
+        assert!(
+            config
+                .computer_billing_policy()
+                .unwrap_err()
+                .to_string()
+                .contains(key),
+            "{key}"
+        );
+    }
 }
 
 #[test]
