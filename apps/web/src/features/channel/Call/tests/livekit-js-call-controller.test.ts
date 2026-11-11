@@ -11,14 +11,33 @@ vi.mock('livekit-client', () => ({
     constructor(options: RoomOptions) {
       roomOptions(options);
     }
+    localParticipant = {
+      identity: 'local',
+      isAgent: false,
+      getTrackPublication: () => undefined,
+    };
     remoteParticipants = new Map();
     on() {}
     removeAllListeners() {}
     connect = connectRoom;
     disconnect = vi.fn(async () => undefined);
   },
-  RoomEvent: {},
-  Track: { Source: { ScreenShare: 'screen_share' } },
+  RoomEvent: Object.fromEntries(
+    [
+      'ParticipantConnected',
+      'ParticipantDisconnected',
+      'TrackPublished',
+      'TrackUnpublished',
+      'TrackSubscribed',
+      'TrackUnsubscribed',
+      'TrackMuted',
+      'TrackUnmuted',
+      'LocalTrackPublished',
+      'LocalTrackUnpublished',
+      'ActiveSpeakersChanged',
+    ].map((event) => [event, event.charAt(0).toLowerCase() + event.slice(1)])
+  ),
+  Track: { Source: { ScreenShare: 'screen_share', Microphone: 'microphone' } },
 }));
 vi.mock('../call-audio-receiver-stats', () => ({
   startReceiverStatsSampling: () => () => undefined,
@@ -167,5 +186,367 @@ describe('livekit call controller prejoin tracks', () => {
     await controller.connect(token, { localTracks });
     expect(finishLocalMediaSetup).not.toHaveBeenCalled();
     expect(localTracks.camera.stop).toHaveBeenCalledOnce();
+  });
+});
+
+const { startCallSpeakerDetection } = await import(
+  '../primitives/call-speaker-detection'
+);
+
+describe('visual call speaker detection', () => {
+  let listeners: Map<string, Set<() => void>>;
+  let local: {
+    identity: string;
+    isAgent: boolean;
+    isSpeaking: boolean;
+    publication?: {
+      isMuted: boolean;
+      isEnabled: boolean;
+      audioTrack: { mediaStreamTrack: MediaStreamTrack };
+    };
+    getTrackPublication: () => unknown;
+  };
+  let remote: typeof local;
+  let remoteParticipants: Map<string, typeof local>;
+  let context: {
+    state: AudioContextState;
+    resume: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    addEventListener: ReturnType<typeof vi.fn>;
+    removeEventListener: ReturnType<typeof vi.fn>;
+    createAnalyser: ReturnType<typeof vi.fn>;
+    createMediaStreamSource: ReturnType<typeof vi.fn>;
+  };
+  let sources: Array<{
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  }>;
+  let analysers: Array<{
+    fftSize: number;
+    amplitude: number;
+    offset: number;
+    disconnect: ReturnType<typeof vi.fn>;
+    getFloatTimeDomainData: (samples: Float32Array) => void;
+  }>;
+  let room: Room;
+  let onChange: ReturnType<
+    typeof vi.fn<(identities: ReadonlySet<string>) => void>
+  >;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    listeners = new Map();
+    sources = [];
+    analysers = [];
+    context = {
+      state: 'running',
+      resume: vi.fn(async () => {
+        context.state = 'running';
+      }),
+      close: vi.fn(async () => {
+        context.state = 'closed';
+      }),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      createAnalyser: vi.fn(() => {
+        const analyser = {
+          fftSize: 0,
+          amplitude: 0,
+          offset: 0,
+          disconnect: vi.fn(),
+          getFloatTimeDomainData: (samples: Float32Array) => {
+            for (let i = 0; i < samples.length; i++) {
+              samples[i] =
+                analyser.offset +
+                analyser.amplitude * Math.SQRT2 * Math.sin((i * Math.PI) / 16);
+            }
+          },
+        };
+        analysers.push(analyser);
+        return analyser;
+      }),
+      createMediaStreamSource: vi.fn(() => {
+        const source = { connect: vi.fn(), disconnect: vi.fn() };
+        sources.push(source);
+        return source;
+      }),
+    };
+    vi.stubGlobal('AudioContext', function FakeAudioContext() {
+      return context;
+    });
+    vi.stubGlobal(
+      'MediaStream',
+      class {
+        constructor(public tracks: MediaStreamTrack[]) {}
+      }
+    );
+    const localTrack = Object.assign(new EventTarget(), {
+      enabled: true,
+      readyState: 'live',
+    }) as MediaStreamTrack;
+    const remoteTrack = Object.assign(new EventTarget(), {
+      enabled: true,
+      readyState: 'live',
+    }) as MediaStreamTrack;
+    local = {
+      identity: 'local',
+      isAgent: false,
+      isSpeaking: false,
+      publication: {
+        isMuted: false,
+        isEnabled: true,
+        audioTrack: { mediaStreamTrack: localTrack },
+      },
+      getTrackPublication() {
+        return this.publication;
+      },
+    };
+    remote = {
+      identity: 'remote',
+      isAgent: false,
+      isSpeaking: false,
+      publication: {
+        isMuted: false,
+        isEnabled: true,
+        audioTrack: { mediaStreamTrack: remoteTrack },
+      },
+      getTrackPublication() {
+        return this.publication;
+      },
+    };
+    remoteParticipants = new Map([['remote', remote]]);
+    room = {
+      localParticipant: local,
+      remoteParticipants,
+      on(event: string, listener: () => void) {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)?.add(listener);
+      },
+      off(event: string, listener: () => void) {
+        listeners.get(event)?.delete(listener);
+      },
+    } as unknown as Room;
+    onChange = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('detects quiet local and remote speech without routing audio to playback', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    analysers[0].amplitude = 0.006;
+    analysers[1].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local', 'remote']));
+    expect(sources).toHaveLength(2);
+    expect(sources[0].connect).toHaveBeenCalledWith(analysers[0]);
+    expect(analysers[0].disconnect).not.toHaveBeenCalled();
+    analysers[0].amplitude = 0;
+    analysers[1].amplitude = 0;
+    vi.advanceTimersByTime(200);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    stop();
+  });
+
+  it('ignores a constant microphone offset without losing quiet audio', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    analysers[0].offset = 0.01;
+    analysers[1].offset = -0.01;
+    vi.advanceTimersByTime(50);
+    expect(onChange).not.toHaveBeenCalled();
+
+    analysers[0].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+    stop();
+  });
+
+  it('clears muted, disabled, ended, and agent tracks immediately', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    analysers[1].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    remote.publication!.isMuted = true;
+    for (const listener of listeners.get('trackMuted') ?? []) listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    remote.publication!.isMuted = false;
+    remote.publication!.isEnabled = false;
+    for (const listener of listeners.get('trackUnmuted') ?? []) listener();
+    expect(sources[1].disconnect).toHaveBeenCalledOnce();
+    remote.publication!.isEnabled = true;
+    remote.publication!.audioTrack.mediaStreamTrack.enabled = false;
+    vi.advanceTimersByTime(50);
+    expect(sources).toHaveLength(2);
+    remote.publication!.audioTrack.mediaStreamTrack.enabled = true;
+    remote.isAgent = true;
+    vi.advanceTimersByTime(50);
+    expect(sources).toHaveLength(2);
+    remote.isAgent = false;
+    vi.advanceTimersByTime(50);
+    analysers[2].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    const track = remote.publication!.audioTrack.mediaStreamTrack;
+    Object.defineProperty(track, 'readyState', { value: 'ended' });
+    track.dispatchEvent(new Event('ended'));
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    stop();
+  });
+
+  it('resets the release hold on replacement and clears removed participants', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    analysers[1].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    const replacement = Object.assign(new EventTarget(), {
+      enabled: true,
+      readyState: 'live',
+    }) as MediaStreamTrack;
+    remote.publication!.audioTrack.mediaStreamTrack = replacement;
+    for (const listener of listeners.get('trackSubscribed') ?? []) listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    expect(sources[1].disconnect).toHaveBeenCalledOnce();
+    analysers[2].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    remoteParticipants.delete('remote');
+    for (const listener of listeners.get('participantDisconnected') ?? [])
+      listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    expect(sources[2].disconnect).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it('uses SDK speaking only when analysis is unavailable or suspended', async () => {
+    context.state = 'suspended';
+    local.isSpeaking = true;
+    const added = vi.spyOn(document, 'addEventListener');
+    const stop = startCallSpeakerDetection(room, onChange);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+    expect(context.resume).toHaveBeenCalledOnce();
+    context.resume.mockClear();
+    context.state = 'running';
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    context.state = 'suspended';
+    const interaction = added.mock.calls.find(
+      ([event]) => event === 'pointerdown'
+    )?.[1] as EventListener;
+    interaction({ isTrusted: false } as Event);
+    expect(context.resume).not.toHaveBeenCalled();
+    interaction({ isTrusted: true } as Event);
+    await Promise.resolve();
+    expect(context.resume).toHaveBeenCalledOnce();
+    added.mockRestore();
+    stop();
+    vi.stubGlobal('AudioContext', undefined);
+    local.isSpeaking = true;
+    const fallback = startCallSpeakerDetection(room, onChange);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+    local.publication!.isMuted = true;
+    for (const listener of listeners.get('trackMuted') ?? []) listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    fallback();
+  });
+
+  it('uses SDK speaking during remote unsubscribe without reviving muted microphones', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    const publication = { isMuted: false, isEnabled: true };
+    remote.getTrackPublication = () => publication;
+    remote.isSpeaking = true;
+    for (const listener of listeners.get('trackUnsubscribed') ?? []) listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['remote']));
+    expect(sources[1].disconnect).toHaveBeenCalledOnce();
+
+    remote.isSpeaking = false;
+    for (const listener of listeners.get('activeSpeakersChanged') ?? [])
+      listener();
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    remote.isSpeaking = true;
+    publication.isMuted = true;
+    for (const listener of listeners.get('trackMuted') ?? []) listener();
+    expect(onChange).toHaveBeenCalledTimes(2);
+    publication.isMuted = false;
+    publication.isEnabled = false;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    remote.getTrackPublication = () => remote.publication;
+    for (const listener of listeners.get('trackSubscribed') ?? []) listener();
+    expect(sources).toHaveLength(3);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('retries suspended analysis when the visible tab or microphone returns', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    const stop = startCallSpeakerDetection(room, onChange);
+    context.state = 'suspended';
+    hidden.mockReturnValue(true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(context.resume).not.toHaveBeenCalled();
+
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await Promise.resolve();
+    expect(context.resume).toHaveBeenCalledOnce();
+    expect(context.state).toBe('running');
+
+    context.state = 'suspended';
+    for (const listener of listeners.get('localTrackPublished') ?? [])
+      listener();
+    await Promise.resolve();
+    expect(context.resume).toHaveBeenCalledTimes(2);
+    stop();
+    context.state = 'suspended';
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(context.resume).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not restore held speech after analysis was suspended', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    analysers[0].amplitude = 0.006;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+
+    context.state = 'suspended';
+    analysers[0].amplitude = 0;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set());
+    context.state = 'running';
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it('uses SDK speaking for an input that Web Audio cannot connect', () => {
+    context.createMediaStreamSource.mockImplementationOnce(() => {
+      throw new Error('unavailable');
+    });
+    local.isSpeaking = true;
+    const stop = startCallSpeakerDetection(room, onChange);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+    remote.isSpeaking = true;
+    vi.advanceTimersByTime(50);
+    expect(onChange).toHaveBeenLastCalledWith(new Set(['local']));
+    stop();
+  });
+
+  it('disposes listeners, nodes, timers, and its context once', () => {
+    const stop = startCallSpeakerDetection(room, onChange);
+    stop();
+    stop();
+    expect(context.close).toHaveBeenCalledOnce();
+    expect(context.removeEventListener).toHaveBeenCalledOnce();
+    expect(
+      sources.every((source) => source.disconnect.mock.calls.length === 1)
+    ).toBe(true);
+    expect(
+      [...listeners.values()].every((callbacks) => callbacks.size === 0)
+    ).toBe(true);
+    vi.advanceTimersByTime(500);
+    expect(onChange).not.toHaveBeenCalled();
   });
 });

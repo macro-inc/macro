@@ -1,3 +1,4 @@
+import { AgentReplyLinks } from '@components/app/split-layout/split-router/agent-reply-links';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
@@ -100,6 +101,12 @@ export function Content(props: ContentProps) {
     </>
   );
 
+  const shownBody = () => (
+    <Show when={collapseLongContent} fallback={body()}>
+      <CollapsibleBody>{body()}</CollapsibleBody>
+    </Show>
+  );
+
   return (
     <Show when={content()}>
       <div
@@ -111,8 +118,9 @@ export function Content(props: ContentProps) {
           props.class
         )}
       >
-        <Show when={collapseLongContent} fallback={body()}>
-          <CollapsibleBody>{body()}</CollapsibleBody>
+        <Show when={fromAgent()} fallback={shownBody()}>
+          {/* An agent's links to Macro open in the app, as its mention chips do. */}
+          <AgentReplyLinks>{shownBody()}</AgentReplyLinks>
         </Show>
       </div>
     </Show>

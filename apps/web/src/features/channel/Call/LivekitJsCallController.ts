@@ -19,6 +19,7 @@ import {
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 import { traceCallMedia } from './call-media-telemetry';
 import { createCallSounds } from './primitives/call-sounds';
+import { startCallSpeakerDetection } from './primitives/call-speaker-detection';
 
 type LivekitJsCallControllerState = {
   activeChannelId: string | null;
@@ -58,6 +59,8 @@ export function createLivekitJsCallController(
   options: LivekitJsCallControllerOptions
 ) {
   let stopReceiverStatsSampling: (() => void) | null = null;
+  let stopSpeakerDetection: (() => void) | null = null;
+  let speakingParticipants: ReadonlySet<string> = new Set();
   let disposed = false;
   let connectGeneration = 0;
   const sounds = createCallSounds({
@@ -72,6 +75,14 @@ export function createLivekitJsCallController(
   function stopReceiverStats() {
     stopReceiverStatsSampling?.();
     stopReceiverStatsSampling = null;
+  }
+
+  function stopSpeakers() {
+    stopSpeakerDetection?.();
+    stopSpeakerDetection = null;
+    if (speakingParticipants.size === 0) return;
+    speakingParticipants = new Set();
+    options.bumpSpeakerVersion();
   }
 
   function syncParticipantMap(room: Room) {
@@ -121,10 +132,6 @@ export function createLivekitJsCallController(
     room.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
     room.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
 
-    room.on(RoomEvent.ActiveSpeakersChanged, () => {
-      if (isCurrentRoom(room)) options.bumpSpeakerVersion();
-    });
-
     room.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
       if (!isCurrentRoom(room)) return;
       if (pub.source === Track.Source.ScreenShare) {
@@ -146,6 +153,7 @@ export function createLivekitJsCallController(
         },
         Date.now()
       );
+      stopSpeakers();
       options.resetState();
     });
   }
@@ -156,6 +164,7 @@ export function createLivekitJsCallController(
 
     options.cancelPendingMediaSetup();
     stopReceiverStats();
+    stopSpeakers();
     options.destroyProcessors();
 
     options.setRoom(null);
@@ -272,6 +281,13 @@ export function createLivekitJsCallController(
       preferences?.recovery === true
     );
 
+    stopSpeakers();
+    stopSpeakerDetection = startCallSpeakerDetection(targetRoom, (speakers) => {
+      if (!isCurrentRoom(targetRoom)) return;
+      speakingParticipants = speakers;
+      options.bumpSpeakerVersion();
+    });
+
     // Sample receive-side decode stats for the life of the room; the sampler
     // flushes one summary analytics event when stopped at teardown.
     stopReceiverStats();
@@ -358,6 +374,7 @@ export function createLivekitJsCallController(
 
     options.cancelPendingMediaSetup();
     stopReceiverStats();
+    stopSpeakers();
     room
       .disconnect()
       .catch((error) => Telemetry.error(error, { surface: 'livekit-call' }));
@@ -367,6 +384,7 @@ export function createLivekitJsCallController(
     disposed = true;
     options.cancelPendingMediaSetup();
     stopReceiverStats();
+    stopSpeakers();
     const room = options.room();
     if (!room) return;
 
@@ -381,5 +399,6 @@ export function createLivekitJsCallController(
     disconnect,
     disconnectBeforeUnload,
     dispose,
+    isSpeaking: (identity: string) => speakingParticipants.has(identity),
   };
 }
