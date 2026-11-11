@@ -7,7 +7,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{frontend, gen_compose, identity, kickstart, proxy, stage::Stage};
+use super::{frontend, gen_compose, google_emulator, identity, kickstart, proxy, stage::Stage};
 
 /// The FusionAuth lambda sources, read from the tracked templates at
 /// generation time (anchored on [`xtask_paths::repo_root`], so any cwd works).
@@ -27,8 +27,9 @@ fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
 /// Generate `kickstart.json` into the instance's kickstart dir, which the
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
-/// demand. `google` (from the resolved run env) additionally configures the
-/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally,
+/// demand. `google` (a real client from the resolved run env, or the stack's
+/// Gmail emulator) configures the `google`/`google_gmail` OIDC IdPs so
+/// Google sign-in and the email connect flows work locally,
 /// and `github` the `github` IdP that `POST /link/github` resolves; the
 /// generated file is gitignored, and the init-snapshot key hashes it, so
 /// adding/removing either client re-inits the stack automatically.
@@ -118,6 +119,38 @@ pub fn apply_redirect_urls(stage: &Stage, instance: &Instance) -> Result<()> {
         curl_json(&url, "PUT", Some(&application))?;
         Ok(())
     })
+}
+
+/// Point the `google` and `google_gmail` identity providers' authorization
+/// endpoint at this instance's Gmail emulator. It is the one identity-provider
+/// URL a browser opens, so it carries the emulator's published port, which
+/// the init snapshot key leaves out like the redirect URLs above. Called
+/// after [`wait_ready`], on a stack where the emulator stands in for Google.
+pub fn apply_google_authorization_endpoint(stage: &Stage, instance: &Instance) -> Result<()> {
+    let wanted = serde_json::Value::from(kickstart::authorization_endpoint(
+        &google_emulator::authorization_endpoint(instance),
+    ));
+    stage.run_step(
+        "Pointing FusionAuth's Google sign-in at the Gmail emulator",
+        || {
+            for id in [identity::GOOGLE_IDP_ID, identity::GOOGLE_GMAIL_IDP_ID] {
+                let url = format!(
+                    "http://localhost:{}/api/identity-provider/{id}",
+                    instance.port(Port::FusionAuth),
+                );
+                let mut provider = curl_json(&url, "GET", None)?;
+                let current = provider
+                    .pointer_mut("/identityProvider/oauth2/authorization_endpoint")
+                    .context("FusionAuth identity provider has no oauth2.authorization_endpoint")?;
+                if *current == wanted {
+                    continue;
+                }
+                *current = wanted.clone();
+                curl_json(&url, "PUT", Some(&provider))?;
+            }
+            Ok(())
+        },
+    )
 }
 
 /// One FusionAuth API call with the kickstart API key, failing on any non-2xx.
