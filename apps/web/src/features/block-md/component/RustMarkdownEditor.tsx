@@ -16,7 +16,15 @@ import { createNativeHorizontalRuleViews } from '@core/component/LexicalMarkdown
 import { createNativeImageContext } from '@core/component/LexicalMarkdown/decorator-host/native-image-host';
 import { createNativeImageDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/native-image-views';
 import { createNativeMagicDecoratorContext } from '@core/component/LexicalMarkdown/decorator-host/native-magic-host';
+import {
+  createNativePullRequestMentionContext,
+  createNativePullRequestMentionViews,
+} from '@core/component/LexicalMarkdown/decorator-host/native-pr-mention-views';
 import { createNativeSelectionDecoratorContext } from '@core/component/LexicalMarkdown/decorator-host/native-selection-host';
+import {
+  createNativeSnapshotContext,
+  createNativeSnapshotViews,
+} from '@core/component/LexicalMarkdown/decorator-host/native-snapshot-views';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import {
@@ -84,6 +92,11 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
+  const pullRequestMentionContext =
+    createNativePullRequestMentionContext(theme);
+  overlayLifecycle.add(() => pullRequestMentionContext.dispose());
+  const snapshotContext = createNativeSnapshotContext(theme);
+  overlayLifecycle.add(() => snapshotContext.dispose());
   const equationContext = createNativeEquationContext(theme);
   overlayLifecycle.add(() => equationContext.dispose());
   const [equationMenuActive, setEquationMenuActive] = createSignal(true);
@@ -172,6 +185,10 @@ export default function RustMarkdownEditor(props: {
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
+                  ...createNativePullRequestMentionViews(
+                    pullRequestMentionContext
+                  ),
+                  ...createNativeSnapshotViews(snapshotContext),
                   ...createNativeEquationViews(equationContext),
                   ...createNativeImageDecoratorViews(imageContext),
                   ...createNativeVideoDecoratorViews(videoContext),
