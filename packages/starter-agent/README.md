@@ -133,3 +133,32 @@ the same messages.
       private/<owner>/             committed: people, their messages
       run/<owner>/                 never committed: queues, cursors, locks
       log/<owner>/                 never committed: logs and recordings
+
+## The runtime contract (with the computer's image)
+
+The image's launcher clones this repository into `AGENT_WORKSPACE`, places
+`@macro-inc/muppet`, `@macro-inc/sdk`, `@macro-inc/observability` and the
+packages `bun.lock` locks in `node_modules`, and runs `bun cli.ts run` as the
+agent's service.
+
+| Variable | Required | What it is |
+| --- | --- | --- |
+| `AGENT_WORKSPACE` | yes | This repository. |
+| `MUPPET_CREDENTIALS_FILE` | yes (hosted) | The enrollment's `agent.env`, a systemd credential: `KEY="value"` lines. |
+| `MUPPET_CREDENTIALS` | no | `sops` for a self-hosted agent, which keeps `secrets.enc.json` instead. |
+| `MUPPET_LAST_GOOD_FILE` | yes (`run`) | Written with HEAD after a healthy boot. |
+| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land; the image restarts the service. |
+| `MUPPET_MCP_SERVERS_JSON` | no | Stdio MCP servers for every wake (`{name: {command, args?, env?}}`). |
+| `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
+
+`agent.env` holds `MACRO_API_KEY`, `MACRO_GATEWAY`, the `OVERRIDE_*` service
+addresses, `MACRO_REPO_URL` and `MACRO_REPO_TOKEN`, and, in Macro-credits
+mode, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, which only Claude Code gets.
+Without them, Claude Code uses the computer's Claude login (harnessd).
+
+Exit codes of `run`: `0` stopped; `78` a setting or credential is missing or
+invalid (not the code's fault: the launcher retries and doesn't roll back);
+anything else, or a crash before the healthy-boot marker moves, is a failed
+boot, and three in a row roll the workspace back to the last good HEAD.
