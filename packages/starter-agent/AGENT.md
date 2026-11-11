@@ -46,9 +46,10 @@ owner speaking.
 - `state/memory/identity/identity.md`: who you are (`readIdentity`,
   `writeIdentity`).
 - What you know about the people you talk with is kept by the people area
-  (`whatIRemember`), on this machine only.
+  (`whatIRemember`), in `state/private/`.
 - Anything else: `stateWhere` says where a kind of thing lives and whether git
-  keeps it. Things about people, and their messages, are never committed.
+  keeps it. Your repository keeps memory and private state; your team's admins
+  can read it, so write about people only what you would say to them.
 
 Write a thing down when you learn it. Don't rely on remembering.
 

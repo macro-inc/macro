@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { misplaced } from '../state.ts';
 
-test('only memory is committed: anything tracked in another bucket, or in none, is misplaced', () => {
+test('memory and private are committed: anything tracked in another bucket, or in none, is misplaced', () => {
   expect(
     misplaced([
       'memory/shared/notes.md',
@@ -13,12 +13,11 @@ test('only memory is committed: anything tracked in another bucket, or in none, 
       'shots/screen.png',
     ])
   ).toEqual({
-    local: [
-      'private/chat/history/c.jsonl',
-      'run/heartbeat/tick.json',
-      'log/agent/wakes.jsonl',
-    ],
+    local: ['run/heartbeat/tick.json', 'log/agent/wakes.jsonl'],
     stray: ['notes.md', 'shots/screen.png'],
   });
-  expect(misplaced(['memory/x'])).toEqual({ local: [], stray: [] });
+  expect(misplaced(['memory/x', 'private/people/a.json'])).toEqual({
+    local: [],
+    stray: [],
+  });
 });

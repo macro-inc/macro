@@ -10,7 +10,7 @@ does; `ARCHITECTURE.md` is how the code is laid out and the rules it keeps;
   `state/memory/shared/notes.md`, with their words and the date, before
   anything is fixed.
 - Evidence, not impressions: ids, UTC times, the relevant log lines. Logs and
-  recordings stay on this machine (`state/log/`); cite paths.
+  recordings stay on this computer (`state/log/`, and your traces); cite paths.
 - A fix counts when a test that reproduces the report is in the suite and
   passes, and it has been seen working live, the way it will be used. A
   change that only makes the symptom go away leaves the problem open.
