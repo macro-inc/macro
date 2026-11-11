@@ -1,0 +1,19 @@
+nix/tauri-desktop.nix
+  s_25aa018ac3fad8::t_05ab711cb0c81b 426-427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9009828764e20726970ae960f6e2fb7c4ac88fc9",
+  "prompts": {},
+  "sessions": {
+    "s_25aa018ac3fad8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6d0a537e-0fb7-4bf0-bf32-cac9d8250387",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
