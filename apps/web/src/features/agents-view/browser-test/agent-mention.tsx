@@ -31,6 +31,7 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   isLoading: () => false,
   refresh: () => {},
   getById: () => undefined,
+  interactionForUser: () => undefined,
 };
 
 const ROSTER = buildAgentRoster({
