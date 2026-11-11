@@ -981,11 +981,11 @@ export const enableRoutineSuggestions = defineFlag({
   default: onInDev,
 });
 
-// Ideas: the For you feed of proactive suggestions. The backend gates every
-// Ideas route on the same PostHog flag.
-export const enableIdeas = defineFlag({
-  key: 'enable-ideas',
-  env: 'ENABLE_IDEAS',
+// Suggestions: the For you feed of proactive suggestions. The backend gates every
+// suggestions route on the same PostHog flag.
+export const enableSuggestions = defineFlag({
+  key: 'enable-suggestions',
+  env: 'ENABLE_SUGGESTIONS',
   default: onInDev,
 });
 

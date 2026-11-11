@@ -11,8 +11,8 @@ use super::*;
 use crate::domain::model::{Category, EntityAction, RunMode};
 use crate::outbound::pg_idea_repo::PgIdeaRepo;
 
-const OWNER: &str = "macro|ideas-owner@macro.com";
-const OTHER: &str = "macro|ideas-other@macro.com";
+const OWNER: &str = "macro|suggestions-owner@macro.com";
+const OTHER: &str = "macro|suggestions-other@macro.com";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
@@ -587,7 +587,7 @@ async fn a_generation_adds_at_most_its_limit_and_a_person_has_at_most_thirty_ope
                 let limit = if n == per_night && room > per_night {
                     "most for one night"
                 } else {
-                    "30 open ideas"
+                    "30 open suggestions"
                 };
                 assert!(
                     outcome.problems[0].contains(limit),
@@ -861,7 +861,7 @@ async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
         .unwrap();
     }
     sqlx::query!(
-        "UPDATE idea SET state_changed_at = now() - interval '25 hours' WHERE id = $1",
+        "UPDATE suggestion SET state_changed_at = now() - interval '25 hours' WHERE id = $1",
         ids[1]
     )
     .execute(&h.pool)

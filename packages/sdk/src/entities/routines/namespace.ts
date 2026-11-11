@@ -1,6 +1,6 @@
 import type {
   RoutineCheck,
-  RoutineIdea,
+  RoutineSuggestionCard,
   SuggestOutcome,
   Surface,
 } from '../../../generated/scheduled-action/types.gen';
@@ -173,8 +173,8 @@ export class RoutineNamespace {
    * whose sidebar shows it, best fit first; `reason` is one line, shown to
    * the user, naming no one's email address; `keepProbability` is the
    * chance, from 0 to 1, that the user keeps it on. A drafted `routine`
-   * also shows in the user's Ideas feed, as its `idea` says; a catalog
-   * routine takes no `idea`. Returns whether it was kept (`ok`) and, when
+   * also shows in the user's Suggestions feed, as its `card` says; a catalog
+   * routine takes no `card`. Returns whether it was kept (`ok`) and, when
    * not, the `problems` to fix before suggesting it again.
    *
    * @example
@@ -207,8 +207,8 @@ export class RoutineNamespace {
           reason: string;
           surfaces: Surface[];
           keepProbability: number;
-          /** How it shows in the user's Ideas feed: a short title, an importance from 0 to 100, and fitting categories. */
-          idea: RoutineIdea;
+          /** How it shows in the user's Suggestions feed: a short title, an importance from 0 to 100, and fitting categories. */
+          card: RoutineSuggestionCard;
         },
   ): Promise<SuggestOutcome> {
     const body =
@@ -227,7 +227,7 @@ export class RoutineNamespace {
             reason: suggestion.reason,
             surfaces: suggestion.surfaces,
             keepProbability: suggestion.keepProbability,
-            idea: suggestion.idea,
+            card: suggestion.card,
           };
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
   }

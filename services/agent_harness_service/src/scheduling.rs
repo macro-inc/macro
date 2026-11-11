@@ -522,7 +522,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
-    // recorded, never billed. Ideas sessions write through `macro.ideas.*`;
+    // recorded, never billed. Ideas sessions write through `macro.suggestions.*`;
     // routines sessions through `macro.routines.suggest`, reading the newest
     // mail through email_service, which reads it from the provider.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
@@ -622,7 +622,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         authorization_state: authorization_state.clone(),
     };
     // Ideas: written and managed by generation sessions through
-    // `macro.ideas.*`, read and acted on by the person. Served here, under
+    // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generations with.
     let idea_state = IdeaRouterState {

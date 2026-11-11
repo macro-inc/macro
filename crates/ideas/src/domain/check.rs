@@ -36,7 +36,7 @@ pub fn new_kind(request: &SuggestIdea, problems: &mut Vec<String>) -> Option<New
     match request.kind {
         KindName::Routine => {
             problems.push(
-                "ideas sessions can't add routine ideas; a routine idea comes from \
+                "suggestions sessions can't add routine suggestions; a routine suggestion comes from \
                  `macro.routines.suggest` in a routines session"
                     .to_owned(),
             );
@@ -44,16 +44,17 @@ pub fn new_kind(request: &SuggestIdea, problems: &mut Vec<String>) -> Option<New
         }
         KindName::Prompt => {
             if request.action.is_some() {
-                problems.push("`action` is only for entity ideas".to_owned());
+                problems.push("`action` is only for entity suggestions".to_owned());
             }
             if request.prompt.is_none() {
-                problems.push("a prompt idea needs a `prompt`".to_owned());
+                problems.push("a prompt suggestion needs a `prompt`".to_owned());
             }
             match request.run_mode {
                 Some(run_mode) => Some(NewKind::Prompt { run_mode }),
                 None => {
                     problems.push(
-                        "a prompt idea needs `runMode`: `composer` or `background`".to_owned(),
+                        "a prompt suggestion needs `runMode`: `composer` or `background`"
+                            .to_owned(),
                     );
                     None
                 }
@@ -61,16 +62,17 @@ pub fn new_kind(request: &SuggestIdea, problems: &mut Vec<String>) -> Option<New
         }
         KindName::Entity => {
             if request.prompt.is_some() || request.run_mode.is_some() {
-                problems.push("`prompt` and `runMode` are only for prompt ideas".to_owned());
+                problems.push("`prompt` and `runMode` are only for prompt suggestions".to_owned());
             }
             if request.about.is_empty() {
-                problems.push("an entity idea is about at least one item in `about`".to_owned());
+                problems
+                    .push("an entity suggestion is about at least one item in `about`".to_owned());
             }
             match request.action {
                 Some(action) => Some(NewKind::Entity { action }),
                 None => {
                     problems.push(
-                        "an entity idea needs `action`: `reply`, `review` or `follow_up`"
+                        "an entity suggestion needs `action`: `reply`, `review` or `follow_up`"
                             .to_owned(),
                     );
                     None
@@ -91,7 +93,7 @@ pub fn dedup_key(key: &str, problems: &mut Vec<String>) -> Option<String> {
     if !shaped {
         problems.push(format!(
             "`dedupKey` is at most {MAX_DEDUP_KEY_CHARS} lowercase letters, digits and -_:./, \
-             the same every night for the same idea"
+             the same every night for the same suggestion"
         ));
         return None;
     }
@@ -151,7 +153,7 @@ pub fn categories(categories: Vec<Category>) -> Vec<Category> {
 /// short plain ids. Whether the person can open them is checked apart.
 pub fn targets(targets: Vec<Target>, problems: &mut Vec<String>) -> Option<Vec<Target>> {
     if targets.len() > MAX_TARGETS {
-        problems.push(format!("an idea is about at most {MAX_TARGETS} items"));
+        problems.push(format!("a suggestion is about at most {MAX_TARGETS} items"));
         return None;
     }
     let mut seen = HashSet::new();
