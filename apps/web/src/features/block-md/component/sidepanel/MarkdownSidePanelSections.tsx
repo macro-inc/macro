@@ -50,7 +50,7 @@ import { createPinnedProperties } from '../../primitives/create-pinned-propertie
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
 
-/** Registers markdown header actions, panel sections, and shared metadata. */
+/** Registers markdown panel sections and shared metadata. */
 export function MarkdownSidePanelSections() {
   const { documentId, kind, permissions } = useMarkdownDocument();
   const canEdit = permissions.canEdit;

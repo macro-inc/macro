@@ -14,6 +14,7 @@ import { DispatchAgentButton } from '../component/DispatchAgentMenu';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { SkillBadge } from './markdown-header-parts';
 
 /**
  * The Markdown block's header on touch, where every document and task opens
@@ -72,11 +73,7 @@ export function MobileMarkdownHeader(props: {
           colorIcon
           label={name()}
         />
-        <Show when={kind() === 'skill'}>
-          <span class="ml-1.5 inline-flex shrink-0 items-center self-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">
-            Skill
-          </span>
-        </Show>
+        <SkillBadge />
         <MobileHeader.Island>
           <SplitPermissionsBadge />
         </MobileHeader.Island>
