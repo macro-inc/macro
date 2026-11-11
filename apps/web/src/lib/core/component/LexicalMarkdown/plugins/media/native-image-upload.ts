@@ -19,7 +19,7 @@ import { fileExtension } from '@service-storage/util/filename';
 import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { registerNativeFilePaste } from '../file-paste/native';
 import { dispatchApplicationCommandSettled } from '../group-b/command';
-import { processFile, validateMediaFile } from './io';
+import { type MediaType, processFile, validateMediaFile } from './io';
 import { createNativeMediaUploadEvents } from './native-upload-events';
 
 function isImageFileName(name: string): boolean {
@@ -33,10 +33,13 @@ function isImageFileName(name: string): boolean {
 
 // Like Source, copies and undo keep the preview URL and its page-owned upload.
 type UploadResult = { ok: true; id: string } | { ok: false; error: unknown };
-const uploadsByLocalUrl = new Map<string, Promise<UploadResult>>();
+const uploadsByLocalUrl = new Map<
+  string,
+  { kind: MediaType; result: Promise<UploadResult> }
+>();
 const pendingSourceId = '';
 
-/** Image IO for one native document surface. The renderer subscribes to its events. */
+/** Media IO for one native document surface. Renderers subscribe to its events. */
 export function createNativeImageUploadController() {
   const events = createNativeMediaUploadEvents();
   const uploadsByFile = new Map<string, Promise<string>>();
@@ -69,17 +72,22 @@ export function createNativeImageUploadController() {
     }
   }
 
-  function follow(view: EditorView, generation: number, localUrl: string) {
+  function follow(
+    view: EditorView,
+    kind: MediaType,
+    generation: number,
+    localUrl: string
+  ) {
     const upload = uploadsByLocalUrl.get(localUrl);
     if (
-      !upload ||
-      events.pending('image', generation, localUrl) ||
+      upload?.kind !== kind ||
+      events.pending(kind, generation, localUrl) ||
       !current(view, generation)
     )
       return;
     fireAndForget(
-      events.track('image', generation, localUrl, async () => {
-        const result = await upload;
+      events.track(kind, generation, localUrl, async () => {
+        const result = await upload.result;
         if (!current(view, generation) || !editable(view)) return;
         if (!result.ok) throw result.error;
         const { id } = result;
@@ -89,7 +97,7 @@ export function createNativeImageUploadController() {
           'group-b.media',
           {
             action: 'complete',
-            kind: 'image',
+            kind,
             source_id: pendingSourceId,
             local_url: localUrl,
             id,
@@ -100,22 +108,25 @@ export function createNativeImageUploadController() {
         if (settlement.status === 'success' && settlement.handled)
           return { id, url };
       }),
-      'native-image-upload'
+      `native-${kind}-upload`
     );
   }
 
   function followNode(view: EditorView, generation: number, node?: ViewNode) {
-    if (node?.type !== 'image') return;
+    if (node?.type !== 'image' && node?.type !== 'video') return;
     const { srcType, id, url } = node.props();
     if (
       srcType === 'local' &&
       id === pendingSourceId &&
       typeof url === 'string'
     )
-      follow(view, generation, url);
+      follow(view, node.type, generation, url);
   }
 
-  async function insertFile(file: File): Promise<boolean> {
+  async function insertFile(
+    file: File,
+    kind: MediaType = 'image'
+  ): Promise<boolean> {
     const view = mounted;
     const generation = view?.mirror.keyGeneration;
     if (
@@ -131,7 +142,7 @@ export function createNativeImageUploadController() {
       !current(view, generation) ||
       !editable(view) ||
       view.root.contentEditable !== 'true' ||
-      !validateMediaFile(processed, 'image')
+      !validateMediaFile(processed, kind)
     )
       return false;
 
@@ -141,21 +152,21 @@ export function createNativeImageUploadController() {
       'group-b.media',
       {
         action: 'insert',
-        kind: 'image',
+        kind,
         media: { srcType: 'local', url: localUrl },
       }
     );
     if (result.status === 'error') throw result.error;
     if (result.status !== 'success' || !result.handled) return false;
 
-    uploadsByLocalUrl.set(
-      localUrl,
-      upload(processed).then<UploadResult, UploadResult>(
+    uploadsByLocalUrl.set(localUrl, {
+      kind,
+      result: upload(processed).then<UploadResult, UploadResult>(
         (id) => ({ ok: true, id }),
         (error: unknown) => ({ ok: false, error })
-      )
-    );
-    follow(view, generation, localUrl);
+      ),
+    });
+    follow(view, kind, generation, localUrl);
     return true;
   }
 

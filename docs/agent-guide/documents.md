@@ -79,7 +79,8 @@ a node, then click text after a node selection and verify a range caret returns.
 Repeat the return to text with touch input; nested editor and decorator input
 selections must remain owned by their own controls. For a loaded video, click
 its frame to select it, verify playback controls remain available, then remove
-it from the decorator toolbar.
+it from the decorator toolbar. For a local video upload, check that the same
+preview stays mounted while saving and after success or failure.
 
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.

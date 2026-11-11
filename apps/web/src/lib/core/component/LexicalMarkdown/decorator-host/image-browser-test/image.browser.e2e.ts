@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createServer, type ServerResponse } from 'node:http';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { watchCompiledSourceDeps } from '../contact-browser-test/compiled-source-deps';
@@ -254,7 +255,7 @@ for (const key of ['Backspace', 'Delete']) {
 
 // Capture the actual browser PUT bytes over HTTP, including WebKit Blob bodies.
 async function receiveUpload(status: number) {
-  const body = Promise.withResolvers<string>();
+  const body = Promise.withResolvers<Buffer>();
   const cors = {
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'PUT, OPTIONS',
@@ -282,7 +283,7 @@ async function receiveUpload(status: number) {
     request.on('data', (chunk: Buffer) => chunks.push(chunk));
     request.on('end', () => {
       response = reply;
-      body.resolve(Buffer.concat(chunks).toString('utf8'));
+      body.resolve(Buffer.concat(chunks));
       finish();
     });
   });
@@ -312,11 +313,33 @@ async function receiveUpload(status: number) {
   };
 }
 
-for (const outcome of ['success', 'failure']) {
-  test(`Image upload ${outcome} uses the actual provider on Source and native`, async ({
+const videoFile = new URL(
+  '../../../../../../features/block-pptx/browser-test/fixtures/clip.webm',
+  import.meta.url
+);
+for (const [label, outcome] of [
+  ['Image', 'success'],
+  ['Image', 'failure'],
+  ['Video', 'success'],
+  ['Video', 'failure'],
+] as const) {
+  test(`${label} upload ${outcome} uses the actual provider on Source and native`, async ({
     browser,
     baseURL,
   }, info) => {
+    const video = label === 'Video';
+    const suffix = video ? '&video' : '';
+    const file = video
+      ? {
+          name: 'clip.webm',
+          mimeType: 'video/webm',
+          buffer: readFileSync(videoFile),
+        }
+      : {
+          name: 'fixture.svg',
+          mimeType: 'image/svg+xml',
+          buffer: Buffer.from(svg),
+        };
     const contexts = await Promise.all(
       ['factory', 'source', 'native'].map(() => browser.newContext({ baseURL }))
     );
@@ -335,7 +358,7 @@ for (const outcome of ['success', 'failure']) {
     for (const page of pages)
       page.on('pageerror', (error) => errors.push(error.message));
     try {
-      await factory.goto(`${path}?engine=factory&upload`);
+      await factory.goto(`${path}?engine=factory&upload${suffix}`);
       await expect
         .poll(() => factory.evaluate(() => !!window.imageProofFixture))
         .toBe(true);
@@ -369,33 +392,30 @@ for (const outcome of ['success', 'failure']) {
             window.imageProofInput = model;
           }, input);
           await page.bringToFront();
-          await page.goto(`${path}?engine=${engine}&upload`);
-          const root = page.getByRole('textbox', { name: 'Image proof' });
+          await page.goto(`${path}?engine=${engine}&upload${suffix}`);
+          const root = page.getByRole('textbox', { name: `${label} proof` });
           await expect
             .poll(() => page.evaluate(() => !!window.imageProofFixture))
             .toBe(true);
           await root.locator('p').first().click();
           await expect(root).toBeFocused();
-          await page.getByLabel('Image file').setInputFiles({
-            name: 'fixture.svg',
-            mimeType: 'image/svg+xml',
-            buffer: Buffer.from(svg),
-          });
-          await expect(root.getByText('Saving Image...')).toBeVisible();
-          expect(await receiver.body).toBe(svg);
-          const image = root.locator('img');
-          await expect(image).toBeVisible();
-          const original = await image.elementHandle();
-          const preview = await image.getAttribute('src');
+          await page.getByLabel(`${label} file`).setInputFiles(file);
+          await expect(root.getByText(`Saving ${label}...`)).toBeVisible();
+          expect((await receiver.body).equals(file.buffer)).toBe(true);
+          const media = root.locator(video ? 'video' : 'img');
+          await expect(media).toBeVisible();
+          if (video) await expect(media).toHaveAttribute('controls', '');
+          const original = await media.elementHandle();
+          const preview = await media.getAttribute('src');
           expect(preview).toMatch(/^blob:/);
           const pending = await capture(page);
           expect(pending.model).toContain('"srcType":"local"');
           receiver.release();
-          await expect(root.getByText('Saving Image...')).toHaveCount(0);
+          await expect(root.getByText(`Saving ${label}...`)).toHaveCount(0);
           expect(
             await original.evaluate((element) => element.isConnected)
           ).toBe(true);
-          await expect(image).toHaveAttribute('src', preview ?? '');
+          await expect(media).toHaveAttribute('src', preview ?? '');
           const settled = await capture(page);
           if (outcome === 'success') {
             expect(settled.model).toContain('"srcType":"sfs"');
@@ -404,7 +424,7 @@ for (const outcome of ['success', 'failure']) {
             expect(discarded).toBe(0);
           } else {
             await expect(
-              page.getByText('Failed to upload image')
+              page.getByText(`Failed to upload ${label.toLowerCase()}`)
             ).toBeVisible();
             expect(settled.model).toBe(pending.model);
             expect(discarded).toBe(1);
@@ -429,7 +449,7 @@ for (const outcome of ['success', 'failure']) {
         dependencyProofs = await Promise.allSettled(
           proofs.map((finish) => finish())
         );
-        await info.attach('image-upload-raw.json', {
+        await info.attach(`${label.toLowerCase()}-upload-raw.json`, {
           contentType: 'application/json',
           body: JSON.stringify({
             records,

@@ -268,7 +268,7 @@ function Fixture() {
           () => {
             const node = $getRoot();
             $setId(node, 'image-proof-root');
-            if (videoMode) {
+            if (videoMode && !uploadMode) {
               node.append(
                 $createVideoNode({
                   srcType: 'url',
@@ -356,14 +356,14 @@ function Fixture() {
         <>
           <input
             type="file"
-            aria-label="Image file"
-            accept="image/*"
+            aria-label={videoMode ? 'Video file' : 'Image file'}
+            accept={`${kind}/*`}
             onChange={(event) => {
               const file = event.currentTarget.files?.[0];
               if (!file) return;
               const result = controller
-                ? controller.insertFile(file)
-                : wrapper && addMediaFromFile(wrapper.editor, file, 'image');
+                ? controller.insertFile(file, kind)
+                : wrapper && addMediaFromFile(wrapper.editor, file, kind);
               result?.catch((error: unknown) => console.error(error));
             }}
           />
