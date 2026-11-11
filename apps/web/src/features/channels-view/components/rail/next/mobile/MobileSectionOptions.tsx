@@ -136,11 +136,7 @@ export function MobileSectionOptions(props: {
                     </Show>
                   </MobileDrawer.Section>
                 </Show>
-                <Accordion
-                  multiple
-                  collapsible
-                  defaultValue={['sort', 'display']}
-                >
+                <Accordion multiple collapsible defaultValue={['sort']}>
                   <div class="flex flex-col gap-3">
                     <Show when={props.canEdit && props.canChangeScope}>
                       <MobileFilterDrawer.Section
@@ -208,33 +204,18 @@ export function MobileSectionOptions(props: {
                         </For>
                       </div>
                     </MobileFilterDrawer.Section>
-                    <MobileFilterDrawer.Section
-                      value="display"
-                      label={t('channelSections.display')}
-                      activeCount={
-                        Number(Boolean(props.preferences.unreadOnly)) +
-                        Number(props.preferences.unreadWhenCollapsed === false)
-                      }
-                    >
-                      <ToggleSwitch
-                        class="min-h-11 w-full flex-row-reverse justify-between px-3"
-                        label={t('channelSections.unreadOnly')}
-                        checked={props.preferences.unreadOnly ?? false}
-                        onChange={(unreadOnly) =>
-                          props.onPreferences({ unreadOnly })
-                        }
-                      />
-                      <ToggleSwitch
-                        class="min-h-11 w-full flex-row-reverse justify-between px-3"
-                        label={t('channelSections.unreadWhenCollapsed')}
-                        checked={props.preferences.unreadWhenCollapsed ?? true}
-                        onChange={(unreadWhenCollapsed) =>
-                          props.onPreferences({ unreadWhenCollapsed })
-                        }
-                      />
-                    </MobileFilterDrawer.Section>
                   </div>
                 </Accordion>
+                <MobileDrawer.Section>
+                  <ToggleSwitch
+                    class="min-h-11 w-full flex-row-reverse justify-between px-3"
+                    label={t('channelSections.unreadOnly')}
+                    checked={props.preferences.unreadOnly ?? false}
+                    onChange={(unreadOnly) =>
+                      props.onPreferences({ unreadOnly })
+                    }
+                  />
+                </MobileDrawer.Section>
                 <MobileDrawer.Section>
                   <MobileDrawer.Item
                     disabled={

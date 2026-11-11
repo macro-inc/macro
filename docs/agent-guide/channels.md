@@ -1340,8 +1340,10 @@ top-level read marking, incoming-call actions, and pull-to-refresh.
 Long-press a custom section pill to open its settings without changing the selected
 section. A short tap selects it; scrolling cancels the hold. There is no separate
 more button. A keyboard or pointer context menu opens the same settings.
-Visible to, Sort, and Display use the shared mobile filter drawer's expandable
-groups and choices. Mute opens the shared presets with Back, not a nested submenu.
+Visible to and Sort use the shared mobile filter drawer's expandable groups and
+choices. **Unread only** is an always-visible toggle outside those groups. Phone
+sections do not collapse, so the drawer has no Display group or Unread when
+collapsed setting. Mute opens the shared presets with Back, not a nested submenu.
 Editing, notification actions, and deletion use separate drawer groups.
 Sharing uses the verified current team, including when no other shared sections
 exist. **Edit section** closes the options sheet and opens
