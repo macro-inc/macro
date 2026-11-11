@@ -4,8 +4,8 @@ use lexical_model::*;
 #[cfg(test)]
 mod booking_mention_actions_test;
 
-mod booking_mention_actions;
 mod agent_session_mention_actions;
+mod booking_mention_actions;
 mod checklist;
 mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
