@@ -804,6 +804,37 @@ impl<S: Surface> DocumentSession<S> {
     }
 }
 
+impl DocumentSession<EditorSurface> {
+    /// Install inert-by-default typed error metadata, retained across core resets.
+    pub fn observe_reported_model_errors(
+        &mut self,
+        observer: std::sync::Arc<dyn crate::ReportedModelErrorObserver>,
+    ) {
+        let capture = std::sync::Arc::new(crate::editor::reported_errors::Capture::default());
+        self.surface.core.observe_follow_up_errors(capture.clone());
+        self.surface.follow_up_errors = Some(capture);
+        self.surface.reported_errors = Some(observer);
+    }
+    /// Register an ordinary host callback in the current editor's command list.
+    pub fn register_command_listener(
+        &mut self,
+        registration: lexical_model::CommandRegistration,
+        callback: std::sync::Arc<dyn lexical_model::CommandListener>,
+    ) -> lexical_model::CommandListenerId {
+        self.surface
+            .core
+            .register_command_listener(registration, callback)
+    }
+    /// Remove the exact listener from the current core; repeated cleanup is harmless.
+    pub fn unregister_command_listener(&mut self, id: &lexical_model::CommandListenerId) {
+        self.surface.core.unregister_command_listener(id);
+    }
+    /// Observe actual core registration presence rather than a model-version guess.
+    pub fn has_command_listener(&self, id: &lexical_model::CommandListenerId) -> bool {
+        self.surface.core.has_command_listener(id)
+    }
+}
+
 #[cfg(test)]
 impl DocumentSession<EditorSurface> {
     pub(crate) fn test_snapshot(&self) -> Vec<u8> {

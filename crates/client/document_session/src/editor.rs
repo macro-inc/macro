@@ -7,6 +7,8 @@ use loro::LoroDoc;
 use loro_internal::undo::UndoManager;
 use std::sync::Arc;
 mod builder;
+pub(crate) mod reported_errors;
+pub use reported_errors::ReportedModelErrorObserver;
 mod history;
 pub use builder::{
     default_editor_builder, register_editor_commands, with_session_plugins,
@@ -57,6 +59,8 @@ impl Default for EditorConfig {
 /// EditorCore, indexed projection and Loro-owned collaborative history.
 pub struct EditorSurface {
     pub(crate) config: EditorConfig,
+    pub(crate) reported_errors: Option<Arc<dyn ReportedModelErrorObserver>>,
+    pub(crate) follow_up_errors: Option<Arc<reported_errors::Capture>>,
     pub(crate) core: EditorCore,
     pub(crate) projection: Option<LoroProjection>,
     undo: Option<UndoManager>,
@@ -87,6 +91,8 @@ impl EditorSurface {
         let editor = Self::builder(&config, config.mode, peer).build()?;
         Ok(Self {
             core: Self::core(editor),
+            reported_errors: None,
+            follow_up_errors: None,
             projection: None,
             undo: None,
             tracker: MergeTracker::new(config.delay_ms, HistoryTime(now.mono.0)),
@@ -201,6 +207,10 @@ impl EditorSurface {
                 .initial_state(state)
                 .build()?,
         );
+        if let Some(capture) = &self.follow_up_errors {
+            capture.clear();
+            self.core.observe_follow_up_errors(capture.clone());
+        }
         self.core.set_editable(access == Access::Edit);
         let initial = self.core.take_initial_output();
         let base = initial
@@ -452,6 +462,7 @@ impl EditorSurface {
             _ => None,
         };
         self.history_selection.prepare(self.selection_cursors());
+        if let Some(capture) = &self.follow_up_errors { capture.clear(); }
         let result = self.core.apply(input, HistoryTime(now.mono.0));
         // Run KeyDown and routed command listeners through the model first. Its
         // snapshot history is disabled here; only an unhandled successful route
@@ -526,7 +537,7 @@ impl EditorSurface {
         match result {
             Ok(output) => {
                 self.handled = output.handled;
-                Self::output(output, view);
+                Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
             }
             Err(error) => {
                 if let (Some(first), Some(last)) = (error.committed.first(), error.committed.last())
@@ -536,6 +547,7 @@ impl EditorSurface {
                     chain.full_reconcile = true;
                     view.push(ViewEffect::Diff(chain.diff(&DiffOptions::default())?));
                 }
+                if let Some(observer) = &self.reported_errors { observer.reported(&error.error, view.len()); }
                 view.push(ViewEffect::Error(SessionError::Model(error.error)));
             }
         }
@@ -650,7 +662,8 @@ impl EditorSurface {
                 .and_then(|selection| p.cursor(doc, self.core.state(), selection))
         });
     }
-    fn output(output: Output, view: &mut Vec<ViewEffect>) {
+    fn output(output: Output, view: &mut Vec<ViewEffect>, observer: Option<&dyn ReportedModelErrorObserver>, capture: Option<&reported_errors::Capture>) {
+        let failures = capture.map(reported_errors::Capture::take).unwrap_or_default();
         let mut tags = Vec::new();
         for tag in output.commits.iter().flat_map(|commit| commit.tags.iter()) {
             let tag = tag.to_string();
@@ -674,13 +687,15 @@ impl EditorSurface {
         if !output.diff.ops.is_empty() || !output.diff.decorator_renders.is_empty() {
             view.push(ViewEffect::Diff(output.diff));
         }
-        view.extend(
-            output
-                .effects
-                .into_iter()
-                .filter(|effect| !matches!(effect, Effect::RemoteNodesCreated(_)))
-                .map(ViewEffect::Editor),
-        );
+        let mut failures = failures.into_iter().peekable();
+        for (index, effect) in output.effects.into_iter().enumerate() {
+            if matches!(effect, Effect::RemoteNodesCreated(_)) { continue; }
+            if failures.peek().is_some_and(|(reported, _)| *reported == index)
+                && let Some((_, cause)) = failures.next()
+                && let Some(observer) = observer
+            { observer.reported(cause.as_ref(), view.len()); }
+            view.push(ViewEffect::Editor(effect));
+        }
     }
     pub(crate) fn remote_pending(
         &mut self,
@@ -717,6 +732,7 @@ impl EditorSurface {
         if !self.focused {
             tags.insert(UpdateTag::SkipDomSelection);
         }
+        if let Some(capture) = &self.follow_up_errors { capture.clear(); }
         let output = self
             .core
             .apply(
@@ -749,7 +765,7 @@ impl EditorSurface {
         } else {
             false
         };
-        Self::output(output, view);
+        Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
         if popped.as_ref().is_some_and(Vec::is_empty) {
             let input = if self.config.mode == EditorMode::Headless {
                 Input::Command {
@@ -765,11 +781,12 @@ impl EditorSurface {
                     change: None,
                 }
             };
+            if let Some(capture) = &self.follow_up_errors { capture.clear(); }
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
                 .map_err(|error| SessionError::Model(error.error))?;
-            Self::output(output, view);
+            Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
             if self.focused {
                 view.push(ViewEffect::Editor(Effect::SetViewSelection {
                     selection: ViewSelection::None,
@@ -812,11 +829,12 @@ impl EditorSurface {
                     change: None,
                 }
             };
+            if let Some(capture) = &self.follow_up_errors { capture.clear(); }
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
                 .map_err(|error| SessionError::Model(error.error))?;
-            Self::output(output, view);
+            Self::output(output, view, self.reported_errors.as_deref(), self.follow_up_errors.as_deref());
             // SelectionFromView says the host already installed its input. Here it
             // only restores the model, so explicitly deliver the final cursor to a focused view.
             if self.focused {

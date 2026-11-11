@@ -294,3 +294,5 @@ hooks in a round and retain accepted prefixes on isolated failures. Run
 allocation against an unchanged transaction, separately from production timing.
 
 Apply configured nested-state export order only after all known serializers, fresh foreign bindings and flat extraction; retain unlisted order and existing values. Never use export order to register or parse state keys, reorder callbacks or mutate stored state.
+
+Observe reported follow-up errors through EditorCore's optional metadata hook at actual effect emission; preserve the original Arc and exact effect index without extending Output, effects, or wire records.
