@@ -61,6 +61,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import {
+  ActiveCallHeader,
+  JoinableCallStatus,
+} from '../Call/views/ActiveCallHeader';
 import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
@@ -192,10 +196,27 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
 
   return (
     <div class="header-actions ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-      <DmWorkToggle />
+      <Show when={activeTab() !== 'call'}>
+        <DmWorkToggle />
+      </Show>
       <DebugSuspense name="ChannelDetail.live-indicators">
         <ChannelLiveIndicators channelId={props.channelId} />
       </DebugSuspense>
+      <Show when={call.isInThisChannel()}>
+        <DebugSuspense name="ChannelDetail.active-call">
+          <ActiveCallHeader
+            channelId={props.channelId}
+            link={activeTab() === 'call'}
+          />
+        </DebugSuspense>
+      </Show>
+      <Show
+        when={!call.isInThisChannel() && ENABLE_CALLS && !channel()?.agent_dm}
+      >
+        <DebugSuspense name="ChannelDetail.joinable-call">
+          <JoinableCallStatus channelId={props.channelId} />
+        </DebugSuspense>
+      </Show>
       <HeaderActionGroup label="Conversation actions">
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
@@ -204,7 +225,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
         </Show>
-        <Show when={askMacroEntity()}>
+        <Show when={activeTab() !== 'call' && askMacroEntity()}>
           {(entity) => (
             <DebugSuspense name="ChannelDetail.ask-macro">
               <ChatWithAgentButton
@@ -248,7 +269,10 @@ export function ChannelDetailTopBar(
   const collapse = createPriorityCollapseController();
 
   return (
-    <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+    <ViewShell.TopBar
+      ref={collapse.setRow}
+      class="@container/channel-header gap-3 py-0"
+    >
       {/* Reserve room for the tab outline inside the clipped, measured region. */}
       <PriorityCollapseOverflowSensor
         controller={collapse}

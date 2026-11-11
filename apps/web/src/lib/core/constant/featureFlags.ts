@@ -875,6 +875,16 @@ export const enableEntityActivitySection = defineFlag({
   default: onInDev,
 });
 
+// The agent session side panel's live list of what the agent did, read from
+// the activity log. Off means the section never mounts and no activity query
+// is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_AGENT_SESSION_ACTIVITY.
+export const enableAgentSessionActivity = defineFlag({
+  key: 'enable-agent-session-activity',
+  env: 'ENABLE_AGENT_SESSION_ACTIVITY',
+  default: onInDev,
+});
+
 // The Activity view: the user's own activity feed from the GraphQL activity
 // log, replacing the retired soup/notification-derived timeline. Gates the
 // view (the /activity route redirects to the inbox when off) and its

@@ -8,7 +8,7 @@ import { getDisplayName, isAgentAccount, tryMacroId } from '@core/user';
 import XIcon from '@icon/system/regular/x.svg';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { Button } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import { type Accessor, createSignal, For } from 'solid-js';
 import { WorkIdentity } from '../components/WorkIdentity';
 import { WorkList } from '../components/WorkList';
 import type { WorkItem } from '../core/work-item';
@@ -80,19 +80,20 @@ function CallWorkSection(props: {
             name={getDisplayName(tryMacroId(props.accountId))}
             isAgent={isAgentAccount(tryMacroId(props.accountId))}
             avatar={
-              <UserIcon
-                id={props.accountId}
-                size="md"
-                suppressClick
-                showTooltip={false}
-              />
-            }
-            note={
-              <Show when={props.isSpeaking}>
-                <span class="shrink-0 text-xs font-medium text-accent">
-                  {t('calls.speaking')}
-                </span>
-              </Show>
+              <span
+                class="rounded-full"
+                classList={{
+                  'outline-2 -outline-offset-2 outline-success':
+                    props.isSpeaking,
+                }}
+              >
+                <UserIcon
+                  id={props.accountId}
+                  size="md"
+                  suppressClick
+                  showTooltip={false}
+                />
+              </span>
             }
           />
           <CollapsibleSection.Indicator />
