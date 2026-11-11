@@ -241,8 +241,8 @@ fn redact(
     names: &HashMap<String, String>,
     senders: &HashMap<Uuid, String>,
 ) -> Message {
-    message.content = rewrite_quote_content(&message.content, call_id, senders, false)
-        .unwrap_or_default();
+    message.content =
+        rewrite_quote_content(&message.content, call_id, senders, false).unwrap_or_default();
     if message.sender_id.as_user().is_some() {
         let original = message.sender_id.as_ref().to_owned();
         message.imported_author = Some(ImportedAuthor {

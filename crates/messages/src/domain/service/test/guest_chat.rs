@@ -246,7 +246,10 @@ fn malformed_quotes_do_not_expose_account_ids_to_guests() {
         assert!(!redacted.contains("<m-reply-target>"));
     }
     let safe = "<m-reply-target>{\"senderId\":\"guest:123\"}</m-reply-target>";
-    assert_eq!(rewrite_quote_content(safe, call, &senders, false).unwrap(), safe);
+    assert_eq!(
+        rewrite_quote_content(safe, call, &senders, false).unwrap(),
+        safe
+    );
 }
 
 #[test]
@@ -274,13 +277,8 @@ fn guest_quotes_require_a_verified_target_and_sender() {
     };
 
     let opaque = format!("participant:{}", Uuid::new_v5(&call, account.as_bytes()));
-    let account_quote = rewrite_quote_content(
-        &quote(call, account_target, &opaque),
-        call,
-        &senders,
-        true,
-    )
-    .unwrap();
+    let account_quote =
+        rewrite_quote_content(&quote(call, account_target, &opaque), call, &senders, true).unwrap();
     assert!(account_quote.contains(&account));
     for (target, sender) in [(guest_target, guest.as_str()), (bot_target, bot.as_str())] {
         let content = quote(call, target, sender);
@@ -292,8 +290,16 @@ fn guest_quotes_require_a_verified_target_and_sender() {
         quote(Uuid::now_v7(), account_target, &opaque),
         quote(call, Uuid::now_v7(), &opaque),
         quote(call, account_target, &account),
-        quote(call, account_target, "participant:00000000-0000-5000-8000-000000000001"),
-        quote(call, guest_target, "guest|00000000-0000-7000-8000-000000000001"),
+        quote(
+            call,
+            account_target,
+            "participant:00000000-0000-5000-8000-000000000001",
+        ),
+        quote(
+            call,
+            guest_target,
+            "guest|00000000-0000-7000-8000-000000000001",
+        ),
         "<m-reply-target>broken</m-reply-target>\n\nreply".into(),
     ] {
         assert!(matches!(
@@ -360,12 +366,7 @@ async fn guest_edits_share_the_post_character_limit() {
     for content in [String::new(), " ".into(), "a".repeat(16_001)] {
         assert!(matches!(
             service
-                .patch_message(
-                    call,
-                    "active-session",
-                    call,
-                    GuestChatPatch { content }
-                )
+                .patch_message(call, "active-session", call, GuestChatPatch { content })
                 .await,
             Err(MessageError::Invalid(_))
         ));
@@ -384,7 +385,10 @@ async fn guest_edits_share_the_post_character_limit() {
         )
         .await
         .unwrap();
-    assert_eq!(repo.edits.lock().unwrap()[0].content.chars().count(), 16_000);
+    assert_eq!(
+        repo.edits.lock().unwrap()[0].content.chars().count(),
+        16_000
+    );
 }
 
 #[tokio::test]
@@ -535,7 +539,10 @@ async fn deleting_guest_root_preserves_member_replies_and_allows_new_posts() {
         .await
         .unwrap();
     assert_eq!(posted.content, "New reply");
-    assert_eq!(repo.creates.lock().unwrap()[0].canonical_root_id, Some(call));
+    assert_eq!(
+        repo.creates.lock().unwrap()[0].canonical_root_id,
+        Some(call)
+    );
 }
 
 #[tokio::test]
