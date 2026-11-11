@@ -132,9 +132,10 @@ async fn a_token_google_calls_expired_is_answered_by_a_full_sync() {
 #[tokio::test]
 async fn a_grant_without_calendar_access_a_spent_quota_and_a_revoked_grant_are_refused() {
     let emulator = emulator_with(vec![
+        // The calendar list alone: what a grant that predates events holds.
         SeedMailbox {
             scopes: Some(vec![
-                "https://www.googleapis.com/auth/gmail.modify".to_string(),
+                "https://www.googleapis.com/auth/calendar.calendarlist.readonly".to_string(),
             ]),
             ..SeedMailbox::new(ADA)
         },
@@ -148,7 +149,11 @@ async fn a_grant_without_calendar_access_a_spent_quota_and_a_revoked_grant_are_r
     let link = Uuid::now_v7();
 
     let ada = emulator.access_token(ADA).unwrap();
-    let unscoped = client.list_calendars(&ada, link).await.unwrap_err();
+    client.list_calendars(&ada, link).await.unwrap();
+    let unscoped = client
+        .sync_events(&ada, first_sync(&target(ADA)))
+        .await
+        .unwrap_err();
     assert_eq!(unscoped.kind(), CalendarProviderErrorKind::ReauthRequired);
 
     // Every Calendar request costs one unit of the user's minute.

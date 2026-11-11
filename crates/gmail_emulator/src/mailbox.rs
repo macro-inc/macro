@@ -31,7 +31,7 @@ const SYSTEM_LABELS: [&str; 14] = [
 /// Labels only Gmail sets.
 const IMMUTABLE_LABELS: [&str; 2] = ["SENT", "DRAFT"];
 /// The scopes Macro asks a Gmail link for.
-pub(crate) const DEFAULT_SCOPES: [&str; 8] = [
+pub(crate) const DEFAULT_SCOPES: [&str; 9] = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
@@ -39,7 +39,8 @@ pub(crate) const DEFAULT_SCOPES: [&str; 8] = [
     "https://www.googleapis.com/auth/gmail.settings.basic",
     "https://www.googleapis.com/auth/contacts.readonly",
     "https://www.googleapis.com/auth/contacts.other.readonly",
-    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
 ];
 const DEFAULT_HISTORY_ID: u64 = 1000;
 /// Gmail keeps history for about a week.

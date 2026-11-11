@@ -11,7 +11,8 @@ use serde_json::{Value, json};
 
 use crate::GmailEmulator;
 use crate::calendar::{
-    AccessRole, Actor, CALENDAR_SCOPE, Fields, ListQuery, Span, Window, WriteOptions, not_found,
+    AccessRole, Actor, CALENDAR_LIST_SCOPES, EVENT_SCOPES, Fields, ListQuery, Span, Window,
+    WriteOptions, not_found,
 };
 use crate::error::ApiError;
 use crate::fault::Route;
@@ -50,14 +51,12 @@ pub(crate) fn router() -> Router<GmailEmulator> {
     Router::new().nest(BASE_PATH, calendar)
 }
 
-/// Refuses a token whose grant holds no Calendar scope.
-fn authorize(state: &State, email: &str) -> Result<(), ApiError> {
-    let granted = state.mailboxes.get(email).is_some_and(|mailbox| {
-        mailbox
-            .scopes
-            .iter()
-            .any(|scope| scope.starts_with(CALENDAR_SCOPE))
-    });
+/// Refuses a token whose grant holds none of the scopes a method accepts.
+fn authorize(state: &State, email: &str, accepted: &[&str]) -> Result<(), ApiError> {
+    let granted = state
+        .mailboxes
+        .get(email)
+        .is_some_and(|mailbox| accepted.iter().any(|scope| mailbox.has_scope(scope)));
     match granted {
         true => Ok(()),
         false => Err(ApiError::calendar(
@@ -159,7 +158,7 @@ async fn list_calendars(
         None,
         Route::CalendarListList,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &CALENDAR_LIST_SCOPES)?;
             let least = match params.get("minAccessRole") {
                 None => AccessRole::FreeBusyReader,
                 Some(role) => role
@@ -206,7 +205,7 @@ async fn list_events(
         None,
         Route::EventsList,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let query = list_query(&params)?;
             state
                 .calendar(email, &calendar_id)?
@@ -230,7 +229,7 @@ async fn get_event(
         None,
         Route::EventsGet,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let fields = state.calendar(email, &calendar_id)?.event(&event_id)?;
             rendered(state, email, &calendar_id, fields, zone(&params)?)
         },
@@ -251,7 +250,7 @@ async fn list_instances(
         None,
         Route::EventsInstances,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let window = window(&params)?;
             let offset = params.offset()?;
             let size = params.page_size("maxResults", EVENTS_DEFAULT, EVENTS_MAX);
@@ -310,7 +309,7 @@ async fn insert_event(
         None,
         Route::EventsInsert,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let options = write_options(&params);
             let fields = state.insert_event(email, &calendar_id, event_body(body)?, options)?;
             rendered(state, email, &calendar_id, fields, None)
@@ -333,7 +332,7 @@ async fn import_event(
         None,
         Route::EventsImport,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let options = write_options(&params);
             let fields = state.import_event(email, &calendar_id, event_body(body)?, options)?;
             rendered(state, email, &calendar_id, fields, None)
@@ -356,7 +355,7 @@ async fn patch_event(
         None,
         Route::EventsPatch,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             let options = write_options(&params);
             let fields =
                 state.patch_event(email, &calendar_id, &event_id, event_body(body)?, options)?;
@@ -377,7 +376,7 @@ async fn delete_event(
         None,
         Route::EventsDelete,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             state.delete_event(email, &calendar_id, &event_id, Actor::Client)?;
             Ok(StatusCode::NO_CONTENT)
         },
@@ -401,7 +400,7 @@ async fn watch_events(
         None,
         Route::EventsWatch,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             state
                 .watch_events(email, &calendar_id, events_url, &body)
                 .map(Json)
@@ -421,7 +420,7 @@ async fn stop_channel(
         None,
         Route::ChannelsStop,
         |state, email| {
-            authorize(state, email)?;
+            authorize(state, email, &EVENT_SCOPES)?;
             state.stop_channel(email, &body)?;
             Ok(StatusCode::NO_CONTENT)
         },

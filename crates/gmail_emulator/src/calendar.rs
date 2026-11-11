@@ -24,8 +24,17 @@ pub(crate) use write::{Actor, WriteOptions};
 use crate::error::ApiError;
 use crate::seed::SeedCalendar;
 
-/// The scopes that allow calendar requests all start with this.
-pub(crate) const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar";
+/// The scopes that let a token read and write events.
+pub(crate) const EVENT_SCOPES: [&str; 2] = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.events",
+];
+/// The scopes that let a token read the user's calendar list.
+pub(crate) const CALENDAR_LIST_SCOPES: [&str; 3] = [
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/calendar.calendarlist",
+    "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+];
 const DEFAULT_COLOR: &str = "#9fe1e7";
 const CANCELLED: &str = "cancelled";
 
