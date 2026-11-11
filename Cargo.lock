@@ -375,6 +375,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bearer_token",
  "bot_id",
  "bytes",
  "chrono",
@@ -797,6 +798,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_select",
+ "mcp_tool_name",
  "mcp_toolset",
  "memory",
  "model_owner",
@@ -7198,6 +7200,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
+ "traceparent",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -7853,6 +7856,7 @@ dependencies = [
  "subtle",
  "thiserror 2.0.18",
  "tokio",
+ "traceparent",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -8164,6 +8168,7 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tower-http",
+ "traceparent",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -8694,7 +8699,6 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "nom 8.0.0",
- "opentelemetry",
  "permissions_types",
  "rootcause",
  "serde",
@@ -8705,8 +8709,8 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
+ "traceparent",
  "tracing",
- "tracing-opentelemetry",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -13743,10 +13747,10 @@ dependencies = [
  "macro_authorization",
  "macro_env_var",
  "macro_user_id",
+ "mcp_tool_name",
  "model_error_response",
  "oauth2",
  "redis",
- "regex",
  "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",
@@ -13779,6 +13783,7 @@ dependencies = [
  "futures",
  "macro_user_id",
  "mcp_client",
+ "mcp_tool_name",
  "pipedream_mcp",
  "rmcp",
  "serde_json",
@@ -13796,13 +13801,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp_tool_name"
+version = "0.1.0"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "mcp_toolset"
 version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
- "regex",
+ "mcp_tool_name",
  "rmcp",
  "schemars 1.2.1",
  "serde_json",
@@ -20343,14 +20355,13 @@ dependencies = [
  "chrono",
  "email_types",
  "futures",
- "opentelemetry",
  "s3_key",
  "serde",
  "serde_json",
  "shared_types",
  "strum 0.27.2",
+ "traceparent",
  "tracing",
- "tracing-opentelemetry",
  "uuid",
  "workspace-hack",
 ]
@@ -21759,6 +21770,17 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "traceparent"
+version = "0.1.0"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "tracing"
@@ -23280,6 +23302,7 @@ dependencies = [
  "strum 0.27.2",
  "tokio",
  "tower 0.5.3",
+ "traceparent",
  "tracing",
  "utoipa",
  "uuid",
@@ -23314,6 +23337,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "traceparent",
  "tracing",
  "tracing-subscriber",
  "uuid",

@@ -66,9 +66,5 @@ impl ChangeSignal {
     }
 }
 
-/// W3C trace context across the Postgres hops.
-#[cfg(feature = "outbound")]
-pub mod trace_context;
-
 #[cfg(test)]
 mod test;

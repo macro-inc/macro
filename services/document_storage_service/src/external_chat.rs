@@ -23,7 +23,7 @@ use external_chat::{
     },
     inbound::router::ExternalChatRouterState,
     outbound::pg::PgExternalChatRepository,
-    signals::{self, Change, ChangeSignal, trace_context},
+    signals::{self, Change, ChangeSignal},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
@@ -156,7 +156,7 @@ async fn publish(
             }
         };
         let span = tracing::info_span!("external_chat.drain");
-        trace_context::adopt(&span, traceparent.as_deref());
+        traceparent::adopt(&span, traceparent.as_deref());
         drain(&effects, &media, &whatsapp).instrument(span).await;
     }
 }
@@ -357,7 +357,7 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
                 continue;
             }
             let span = tracing::info_span!("external_chat.changed.receive");
-            trace_context::adopt(&span, signal.traceparent.as_deref());
+            traceparent::adopt(&span, signal.traceparent.as_deref());
             let _ = pusher.push(signal.change).instrument(span).await;
         }
     }

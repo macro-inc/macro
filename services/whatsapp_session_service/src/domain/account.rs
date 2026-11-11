@@ -832,7 +832,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             outcome = tracing::field::Empty,
         );
         // The dispatch joins the trace of the request that recorded the send.
-        external_chat::signals::trace_context::adopt(&span, send.traceparent.as_deref());
+        traceparent::adopt(&span, send.traceparent.as_deref());
         async {
             let uploaded = self.upload(send).await?;
             let message_id = self.session.new_message_id().await;

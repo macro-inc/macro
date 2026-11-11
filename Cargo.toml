@@ -183,6 +183,7 @@ members = [
   "crates/platform/service_urls/static_file_service_url",
   "crates/platform/service_urls/sync_service_url",
   "crates/platform/service_urls/unfurl_service_url",
+  "crates/platform/traceparent",
   "crates/platform/upstream_error",
   "crates/platform/user_events",
   "crates/platform/worker_rs_otel",
@@ -963,6 +964,7 @@ unfurl = { path = "crates/integrations/unfurl" }
 unfurl_service = { path = "services/unfurl_service" }
 unfurl_service_url = { path = "crates/platform/service_urls/unfurl_service_url" }
 universal_input = { path = "crates/ai/universal_input" }
+traceparent = { path = "crates/platform/traceparent" }
 upstream_error = { path = "crates/platform/upstream_error", default-features = false }
 user_api_key = { path = "crates/accounts/user_api_key" }
 user_events = { path = "crates/platform/user_events" }

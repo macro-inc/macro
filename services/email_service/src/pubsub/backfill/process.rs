@@ -20,7 +20,7 @@ pub async fn process_message(
     ctx: PubSubContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
-    sqs_client::email::trace_context::adopt(
+    traceparent::adopt(
         &tracing::Span::current(),
         message
             .message_attributes()

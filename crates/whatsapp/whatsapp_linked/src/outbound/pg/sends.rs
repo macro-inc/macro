@@ -199,7 +199,7 @@ impl SendRepository for PgWhatsAppRepository {
             payload,
             account.generation,
             sequence,
-            external_chat::signals::trace_context::current()
+            traceparent::current()
         )
         .execute(&mut *tx)
         .await

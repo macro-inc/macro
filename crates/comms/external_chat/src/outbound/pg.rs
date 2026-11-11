@@ -59,7 +59,7 @@ pub async fn notify(
 ) -> ExternalChatResult<()> {
     let payload = serde_json::to_string(&signals::Signal {
         id,
-        traceparent: signals::trace_context::current(),
+        traceparent: traceparent::current(),
     })
     .map_err(failure)?;
     sqlx::query!("SELECT pg_notify($1, $2)", channel, payload)
@@ -76,7 +76,7 @@ pub async fn notify_change(
 ) -> ExternalChatResult<()> {
     let payload = serde_json::to_string(&signals::ChangeSignal {
         change,
-        traceparent: signals::trace_context::current(),
+        traceparent: traceparent::current(),
     })
     .map_err(failure)?;
     sqlx::query!("SELECT pg_notify($1, $2)", signals::CHANGED, payload)

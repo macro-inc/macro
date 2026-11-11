@@ -317,7 +317,7 @@ async fn consent_trace_survives_outbox_queue_and_deferral_without_payload_fields
             .to_owned();
         assert_eq!(carried.split('-').nth(1), Some(trace_id));
         let delivery = tracing::info_span!(parent: None, "email.backfill.process");
-        trace_context::adopt(&delivery, Some(&carried));
+        traceparent::adopt(&delivery, Some(&carried));
         let message = queue.messages().remove(0);
         queue
             .sqs
@@ -381,10 +381,10 @@ async fn consent_trace_survives_outbox_queue_and_deferral_without_payload_fields
                 .is_err()
         );
         let invalid = tracing::info_span!(parent: None, "invalid.context");
-        let before = invalid.in_scope(trace_context::current);
-        trace_context::adopt(&invalid, Some("not-a-traceparent"));
-        trace_context::adopt(&invalid, None);
-        assert_eq!(invalid.in_scope(trace_context::current), before);
+        let before = invalid.in_scope(traceparent::current);
+        traceparent::adopt(&invalid, Some("not-a-traceparent"));
+        traceparent::adopt(&invalid, None);
+        assert_eq!(invalid.in_scope(traceparent::current), before);
         drop(invalid);
         // A later request outside tracing must not retain an obsolete parent.
         repo.change_email_privacy(

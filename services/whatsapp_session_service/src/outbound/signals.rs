@@ -14,7 +14,6 @@ use sqlx::postgres::{PgConnectOptions, PgListener, PgPoolOptions};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use external_chat::signals::trace_context;
 use whatsapp_linked::signals::{
     ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, HISTORY_REQUESTED, LOOKUP_REQUESTED,
     PAIRING_REQUESTED, SEND_REQUESTED,
@@ -77,7 +76,7 @@ impl SignalListener {
                                 channel = notification.channel(),
                                 signal = ?signal,
                             );
-                            trace_context::adopt(&span, traceparent.as_deref());
+                            traceparent::adopt(&span, traceparent.as_deref());
                             // Handed on: the supervisor and the account's
                             // runner do the signal's work inside it.
                             Traced { signal, span }

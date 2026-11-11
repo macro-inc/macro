@@ -11,9 +11,10 @@ crate that produces or consumes an SQS queue.
 - `src/queue.rs`: the `SQS` transport (`send_fifo_message`, `receive_messages`,
   delete/visibility) every feature module calls into.
 - `src/message_attribute.rs`: typed SQS message attributes shared across queues.
-- `src/email/trace_context.rs`: optional W3C context on backfill messages and
-  deferrals; consumers adopt it before dispatching work. Missing or malformed
-  context does not change job behavior.
+- `src/email/trace_context.rs`: the SQS attribute carrying the W3C
+  `traceparent` (`traceparent::current`) on backfill messages and deferrals;
+  consumers `traceparent::adopt` it before dispatching work. Missing or
+  malformed context does not change job behavior.
 - One module per feature (`chat`, `document`, `email`, `gmail`,
   `organization_retention`, `search`, `upload_extractor`): each defines its own
   enqueue function and message shape for one downstream consumer.

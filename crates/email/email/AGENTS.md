@@ -206,7 +206,7 @@ tools — hexagonal, heavily feature-gated.
   after the notification clears it; enumerate and reconcile spans record
   `outlook.notification_wait_ms` and `outlook.notification_lag_ms`. The first
   claim of a stream or row takes the traceparent (clearing it) and adopts the
-  webhook's trace (`crate::trace_context`), so webhook to import is one
+  webhook's trace (`traceparent::adopt`), so webhook to import is one
   trace, while retries get traces of their own and a long deferral can't grow
   it. Subscription upkeep and webhook deliveries open
   `outlook.subscription.maintain` and `outlook.subscription.notify`; each

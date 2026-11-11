@@ -20,6 +20,7 @@ outbound = [
   "dep:model_owner",
   "dep:share_permission_db_utils",
   "dep:sqlx",
+  "dep:traceparent",
   "external_chat/outbound",
   "ports",
 ]
@@ -52,6 +53,7 @@ sha2 = { workspace = true }
 share_permission_db_utils = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
+traceparent = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

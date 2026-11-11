@@ -133,7 +133,7 @@ impl MailboxWatchRepository for PgMailboxSync {
             .execute(&mut *tx).await.map_err(db_error)?;
         // The webhook's trace context rides with the wakeup, so the sync work
         // it makes due joins the webhook's trace.
-        sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder')",binding.link_id,binding.sync_generation,crate::trace_context::current())
+        sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder')",binding.link_id,binding.sync_generation,traceparent::current())
             .execute(&mut *tx).await.map_err(db_error)?;
         if matches!(hint, WatchHint::Removed | WatchHint::Reauthorize) {
             sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",binding.link_id)

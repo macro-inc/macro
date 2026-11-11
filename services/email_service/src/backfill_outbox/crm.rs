@@ -23,7 +23,7 @@ pub(super) async fn drain(db: &PgPool, sqs: &SQS) -> anyhow::Result<()> {
         };
         let publish_span =
             tracing::info_span!("crm.email_backfill.publish", team_id = %row.team_id);
-        sqs_client::email::trace_context::adopt(&publish_span, row.traceparent.as_deref());
+        traceparent::adopt(&publish_span, row.traceparent.as_deref());
         async {
         let enabled = sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM crm_email_consent c

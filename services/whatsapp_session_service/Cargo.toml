@@ -34,6 +34,7 @@ sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+traceparent = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 whatsapp_store_pg = { workspace = true }

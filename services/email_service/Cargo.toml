@@ -109,6 +109,7 @@ chrono = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway_client = { workspace = true }
 crm = { workspace = true, default-features = true }
+traceparent = { workspace = true }
 unfurl = { workspace = true, features = ["outbound"] }
 document_storage_service_client = { workspace = true }
 doppler-config = { workspace = true }

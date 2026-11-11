@@ -613,7 +613,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
 /// Work a notification made due continues the webhook request's trace.
 fn adopt_notification_trace(span: &Span, notification: Option<&Notification>) {
     let traceparent = notification.and_then(|notification| notification.traceparent.as_deref());
-    crate::trace_context::adopt(span, traceparent);
+    traceparent::adopt(span, traceparent);
 }
 
 /// Keep long catalogue scans and uploads fenced without imposing an arbitrary

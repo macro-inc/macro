@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "traceparent"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+opentelemetry = { workspace = true, features = ["trace"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+
+[dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-subscriber = { workspace = true }

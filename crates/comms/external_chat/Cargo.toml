@@ -22,9 +22,8 @@ outbound = [
   "dep:entity_access",
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
-  "dep:opentelemetry",
   "dep:sqlx",
-  "dep:tracing-opentelemetry",
+  "dep:traceparent",
   "entity_access/ports",
   "ports",
 ]
@@ -51,7 +50,6 @@ macro_user_id = { workspace = true, optional = true }
 entity_kind = { workspace = true }
 permissions_types = { workspace = true }
 nom = { workspace = true, optional = true }
-opentelemetry = { workspace = true, features = ["trace"], optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -61,7 +59,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true, optional = true }
+traceparent = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

@@ -201,6 +201,7 @@ macro_queues = { workspace = true }
 macro_sha_count_client = { workspace = true }
 macro_sync_service_jwt = { workspace = true }
 opentelemetry = { workspace = true }
+traceparent = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
