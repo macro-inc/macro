@@ -63,6 +63,7 @@ import {
   createBlameTooltipStore,
 } from '@core/component/LexicalMarkdown/plugins/blame-tooltip';
 import { registerNativeBlameTooltip } from '@core/component/LexicalMarkdown/plugins/blame-tooltip/native';
+import { createNativeChecklistPlanHost } from '@core/component/LexicalMarkdown/plugins/checklist-controls/native-plan-host';
 import {
   type PersistentLocation,
   parsePersistentLocation,
@@ -71,7 +72,6 @@ import {
   nativeGoToLocation,
   nativeGoToNodeId,
 } from '@core/component/LexicalMarkdown/plugins/location/native';
-import { createNativeChecklistPlanHost } from '@core/component/LexicalMarkdown/plugins/checklist-controls/native-plan-host';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
@@ -81,8 +81,8 @@ import {
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { IS_MAC } from '@core/constant/isMac';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';

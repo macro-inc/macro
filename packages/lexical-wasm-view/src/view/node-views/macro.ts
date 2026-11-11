@@ -5,8 +5,8 @@ import type {
   RenderContext,
 } from '../registry';
 import { themeClass } from '../registry';
-import { applyElementDirection } from './builtins';
 import type { ViewNode } from '../types';
+import { applyElementDirection } from './builtins';
 
 export const macroDecoratorTypes = [
   'account-manager-request',

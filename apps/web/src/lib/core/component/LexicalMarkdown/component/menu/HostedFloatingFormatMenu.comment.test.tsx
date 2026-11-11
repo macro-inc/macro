@@ -114,7 +114,7 @@ test('an editor keeps the formatting controls with Comment after them', async ()
   await harness.open();
   expect(button('Bold')).not.toBeNull();
   // One divider separates the formatting controls from Comment.
-  expect(
-    button('Comment')?.previousElementSibling?.getAttribute('role')
-  ).toBe('separator');
+  expect(button('Comment')?.previousElementSibling?.getAttribute('role')).toBe(
+    'separator'
+  );
 });
