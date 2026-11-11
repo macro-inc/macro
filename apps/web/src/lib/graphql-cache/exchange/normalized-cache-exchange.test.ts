@@ -5789,7 +5789,10 @@ describe('normalizedCacheExchange', () => {
       ops.next(makeMutationOp(1, optimistic));
       await tick();
 
-      expect(shouldRetryMutation).toHaveBeenCalledWith(error);
+      expect(shouldRetryMutation).toHaveBeenCalledWith(
+        error,
+        expect.objectContaining({ transactionId: '1', serverFailureCount: 0 })
+      );
       expect(host.defers).toEqual([
         { transactionId: '1', error: error.message },
       ]);
@@ -5849,7 +5852,8 @@ describe('normalizedCacheExchange', () => {
               : undefined;
           await vi.advanceTimersByTimeAsync(10);
           expect(shouldRetryMutation).toHaveBeenCalledExactlyOnceWith(
-            expect.objectContaining({ response, graphQLErrors: [] })
+            expect.objectContaining({ response, graphQLErrors: [] }),
+            expect.objectContaining({ serverFailureCount: failures })
           );
           expect(host.commits).toHaveLength(0);
           if (failures === 0) {
@@ -6099,37 +6103,45 @@ describe('normalizedCacheExchange', () => {
       expect(client.query).toHaveBeenCalledOnce();
     });
 
-    it('requires explicit retry after a draft application failure and preserves its handles', async () => {
-      vi.useFakeTimers();
-      try {
-        const variables = {
-          input: {
-            draftId: 'draft-handle',
-            threadDbId: 'thread-handle',
-            subject: 'Saved',
+    describe('a server fault on a draft save', () => {
+      const variables = {
+        input: {
+          draftId: 'draft-handle',
+          threadDbId: 'thread-handle',
+          subject: 'Saved',
+        },
+      };
+      const saved = {
+        saveEmailDraft: {
+          draftId: 'server-draft',
+          draft: {
+            __typename: 'GraphqlSoupEmailMessage',
+            id: 'server-draft',
           },
-        };
-        const saved = {
-          saveEmailDraft: {
-            draftId: 'server-draft',
-            draft: {
-              __typename: 'GraphqlSoupEmailMessage',
-              id: 'server-draft',
-            },
-            thread: {
-              __typename: 'GraphqlSoupEmailThread',
-              id: 'server-thread',
-            },
+          thread: {
+            __typename: 'GraphqlSoupEmailThread',
+            id: 'server-thread',
           },
-        };
-        const error = new CombinedError({
-          graphQLErrors: [
-            {
-              message: 'attachment loading failed after commit',
-              extensions: { code: 'INTERNAL', retryable: true },
-            },
-          ],
-        });
+        },
+      };
+      const error = new CombinedError({
+        graphQLErrors: [
+          {
+            message: 'attachment loading failed after commit',
+            extensions: { code: 'INTERNAL' },
+          },
+        ],
+      });
+      const save = () =>
+        makeOperation(
+          'mutation',
+          createRequest(SaveEmailDraftDocument, variables),
+          makeMutationOp(1, saved).context
+        );
+      beforeEach(() => vi.useFakeTimers());
+      afterEach(() => vi.useRealTimers());
+
+      it('is sent again under the same handles without failing the caller', async () => {
         let attempts = 0;
         const { ops, results, forwarded } = harness(
           host,
@@ -6141,50 +6153,67 @@ describe('normalizedCacheExchange', () => {
           },
           { shouldRetryMutation: shouldRetryGraphqlMutation }
         );
-        ops.next(
-          makeOperation(
-            'mutation',
-            createRequest(SaveEmailDraftDocument, variables),
-            makeMutationOp(1, saved).context
-          )
-        );
+        ops.next(save());
         await vi.advanceTimersByTimeAsync(0);
 
         expect(attempts).toBe(1);
-        expect(host.rollbacks).toEqual(['1']);
-        expect(host.defers).toHaveLength(0);
-        expect(results[0]?.error).toBe(error);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(host.defers).toEqual([
+          { transactionId: '1', error: error.message },
+        ]);
+        expect(results[0]?.error).toBeUndefined();
         expect(optimisticMutationDispositionOf(results[0])).toEqual({
-          kind: 'permanently-failed',
-          error,
+          kind: 'queued',
+          transactionId: '1',
         });
-        await vi.advanceTimersByTimeAsync(1_000);
-        expect(attempts).toBe(1);
-        ops.next(
-          makeOperation(
-            'mutation',
-            createRequest(SaveEmailDraftDocument, variables),
-            makeMutationOp(2, saved).context
-          )
-        );
-        await vi.advanceTimersByTimeAsync(0);
 
+        await vi.advanceTimersByTimeAsync(1_000);
         expect(attempts).toBe(2);
         expect(forwarded.map((op) => op.variables)).toEqual([
           variables,
           variables,
         ]);
-        expect(host.begins).toHaveLength(2);
+        expect(host.begins).toHaveLength(1);
         expect(host.commits).toEqual([
-          expect.objectContaining({
-            transactionId: '2',
-            data: saved,
-          }),
+          expect.objectContaining({ transactionId: '1', data: saved }),
         ]);
+      });
+
+      it('fails the write once the server has faulted three times', async () => {
+        let attempts = 0;
+        const onMutationAttemptResult = vi.fn(async () => {});
+        const { ops } = harness(
+          host,
+          () => {
+            attempts += 1;
+            return { error, data: undefined };
+          },
+          {
+            shouldRetryMutation: shouldRetryGraphqlMutation,
+            onMutationAttemptResult,
+          }
+        );
+        ops.next(save());
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(attempts).toBe(2);
+        expect(host.rollbacks).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(attempts).toBe(3);
         expect(host.rollbacks).toEqual(['1']);
-      } finally {
-        vi.useRealTimers();
-      }
+        expect(onMutationAttemptResult).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            transactionId: '1',
+            serverFailureCount: 2,
+          }),
+          expect.objectContaining({ error }),
+          false
+        );
+        // Nothing sends it a fourth time.
+        await vi.advanceTimersByTimeAsync(120_000);
+        expect(attempts).toBe(3);
+      });
     });
 
     it('accepts later local writes while a deferred offline head blocks the network', async () => {

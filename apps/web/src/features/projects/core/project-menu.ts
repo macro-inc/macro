@@ -3,6 +3,7 @@ import { canDeleteProject, canEditProject, type Project } from './project';
 /** Entries of a project row's context menu. */
 export type ProjectMenuItem =
   | 'open-in-split'
+  | 'open-in-tab'
   | 'rename'
   | 'change-icon'
   | 'status'
@@ -21,6 +22,7 @@ export function projectMenuGroups(
   projects: readonly Pick<Project, 'access'>[],
   surface: {
     splits: boolean;
+    tabs: boolean;
     share: boolean;
     status: boolean;
     priority: boolean;
@@ -31,7 +33,12 @@ export function projectMenuGroups(
   const single = projects.length === 1;
   const editable = projects.every(canEditProject);
   const groups: ProjectMenuItem[][] = [
-    single && surface.splits ? ['open-in-split'] : [],
+    single
+      ? [
+          ...(surface.splits ? (['open-in-split'] as const) : []),
+          ...(surface.tabs ? (['open-in-tab'] as const) : []),
+        ]
+      : [],
     editable
       ? [
           ...(single ? (['rename'] as const) : []),
