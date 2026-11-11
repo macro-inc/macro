@@ -303,6 +303,14 @@ impl NativeTools {
         Self::from_factory(|| tools_for(AiHost::AgentSession), false)
     }
 
+    fn tool_mode(&self) -> ToolMode {
+        if self.code_mode {
+            ToolMode::Code
+        } else {
+            ToolMode::Standard
+        }
+    }
+
     fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
         let tools = build();
         let base_tools = Arc::into_inner(tools.toolset)
@@ -382,7 +390,6 @@ impl TurnEngine for RigTurnEngine {
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
-                    selected,
                     skills,
                     tool_context,
                     gate,
@@ -540,7 +547,6 @@ fn standard_mode_reason(request: &TurnRequest) -> Option<StandardModeReason> {
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
-    tool_mode: ToolMode,
     skills: TurnRouting<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
@@ -763,7 +769,7 @@ async fn drive_turn(
         .with_genai_telemetry(false)
         .with_tool_origin(
             ToolCallOrigin::default()
-                .with_tool_mode(tool_mode)
+                .with_tool_mode(native_tools.tool_mode())
                 .with_turn_purpose(purpose.into()),
         )
         .with_streamed_tool_calls()

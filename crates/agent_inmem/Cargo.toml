@@ -50,6 +50,7 @@ serde_json = { workspace = true }
 skills = { path = "../skills" }
 sqlx = { workspace = true }
 sse-stream = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
@@ -57,7 +58,6 @@ tracing = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-strum = { workspace = true }
 
 [dev-dependencies]
 jev = { path = "../jev", features = ["outbound"] }
