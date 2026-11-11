@@ -1433,6 +1433,10 @@ test('the composer mentions group participants as WhatsApp mentions', async ({
   await expect(page.getByText('+14155550199')).toBeVisible();
   await expect(page.getByText('@here')).toHaveCount(0);
   await page.keyboard.press('Enter');
+  // Enter can wait for the debounced search; keep the query intact until picked.
+  await expect(
+    page.locator('[data-input-editor-shell] [data-user-mention]')
+  ).toHaveCount(1);
   await page.keyboard.type('!');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => state.outgoing.length).toBe(1);
