@@ -233,7 +233,8 @@ pub(crate) fn query(
             let data = envelope
                 .get("data")
                 .ok_or(BoundaryError::Invalid("application query data"))?;
-            let value = macro_document_model::surface::query(name, data, msg.flags, state)?
+            let value = surface
+                .application_query(name, data, msg.flags)?
                 .ok_or(BoundaryError::Invalid("application query"))?;
             reply.text = serde_json::to_string(&value)?;
         }

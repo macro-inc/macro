@@ -308,3 +308,11 @@ Its snapshots describe the pasted result, including intentional DOM loss;
 they do not assert that HTML preserves the original JSON. Clipboard and drag
 event constructors are host boundaries. This source cohort does not prove
 native import, mounted native rendering, physical clipboard behavior or ON parity.
+
+`search-callback-order.test.ts` pins five actual Source body-menu/peer sequences:
+authored, imported local, remote, empty and missing owners. It retains full JSON
+at initial import/creation, later text mutation, and a format-only mutation;
+callbacks preserve body listener order and repeated equal term payloads. Missing
+owners are not adopted by import/query but may be authored by a later dirty
+transform. Local status is a real created-node follow-up. This is unit-level
+Source policy evidence, not rendered menus, physical keyboard or native proof.

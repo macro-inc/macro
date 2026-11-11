@@ -2,6 +2,7 @@ mod click;
 mod decorator_actions;
 mod focus_end;
 mod paste_intent;
+mod search;
 mod session_bop;
 use super::*;
 use doc_sync_core::*;

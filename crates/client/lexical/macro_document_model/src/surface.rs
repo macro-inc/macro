@@ -52,6 +52,7 @@ pub fn event_payload(
         // WP-58 Group B host requests.
         crate::plugins_group_b::event_payload,
         crate::plugins_group_a::menu::event_payload,
+        crate::plugins_group_a::menu::search::event_payload,
     ];
     for encode in encoders {
         if let Some(payload) = encode(event)? {
@@ -86,8 +87,26 @@ pub fn query(
     Ok(None)
 }
 
+/// Read application controller caches without exposing mutable editor authority.
+pub fn query_editor(
+    name: &str,
+    data: &serde_json::Value,
+    generation: u32,
+    editor: &lexical_model::Editor,
+) -> crate::ModelResult<Option<serde_json::Value>> {
+    if let Some(reply) =
+        crate::plugins_group_a::menu::search::query(name, data, generation, editor)?
+    {
+        return Ok(Some(reply));
+    }
+    query(name, data, generation, editor.state())
+}
+
 /// Resolve browser-default policy through append-only migration group registration.
 pub fn key_prevents_default(name: &str) -> bool {
+    if name == "group-a.search-trigger" {
+        return false;
+    }
     let policies: &[fn(&str) -> Option<bool>] = &[crate::plugins_group_b::key_prevents_default];
     policies
         .iter()
