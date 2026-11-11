@@ -149,7 +149,3 @@ export function TutorialSidebarItem(props: {
     </Show>
   );
 }
-
-/** Whether a block shows a tutorial entry (for layouts that reserve space). */
-export const hasTutorial = (id: TutorialId) =>
-  availableTutorial(id) !== undefined;
