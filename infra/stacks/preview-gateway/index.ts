@@ -56,6 +56,8 @@ const validated = new aws.acm.CertificateValidation(`${name}-${stack}`, {
     records.map((record) => record.fqdn)
   ),
 });
+/** The harness's liveness port (`HEALTH_PORT`), served off its main runtime. */
+const HARNESS_HEALTH_CHECK_PORT = 8103;
 const albSg = new aws.ec2.SecurityGroup(`${name}-http-${stack}`, {
   vpcId: vpc.vpcId,
   tags,
@@ -77,7 +79,7 @@ const sshSg = new aws.ec2.SecurityGroup(`${name}-ssh-${stack}`, {
   ingress: [
     { protocol: 'tcp', fromPort: 22, toPort: 22, cidrBlocks: ['0.0.0.0/0'] },
   ],
-  egress: [2222, 8101].map((port) => ({
+  egress: [2222, 8101, HARNESS_HEALTH_CHECK_PORT].map((port) => ({
     protocol: 'tcp',
     fromPort: port,
     toPort: port,
@@ -93,6 +95,11 @@ for (const [index, rule] of [
   { fromPort: 2222, toPort: 2222, source: sshSg.id },
   { fromPort: 8101, toPort: 8101, source: sshSg.id },
   { fromPort: 8111, toPort: 8111, source: taskSg.id },
+  {
+    fromPort: HARNESS_HEALTH_CHECK_PORT,
+    toPort: HARNESS_HEALTH_CHECK_PORT,
+    source: sshSg.id,
+  },
 ].entries()) {
   new aws.vpc.SecurityGroupIngressRule(
     `${name}-task-ingress-${index}-${stack}`,
@@ -120,7 +127,7 @@ const control = new ServiceTargetGroup(`${name}-${stack}`, {
   containerPort: 8110,
   service: GatewayService.PREVIEW_GATEWAY,
   healthCheckPath: '/health',
-  healthCheck: { port: '8101' },
+  healthCheck: { port: String(HARNESS_HEALTH_CHECK_PORT) },
   pathPatterns: ['/preview', '/preview/*'],
   serviceSecurityGroupId: taskSg.id,
   albSecurityGroupId: gateway.albSecurityGroupId,
@@ -139,7 +146,11 @@ const httpTarget = new aws.lb.TargetGroup(`${shortName}-http-${stack}`, {
   targetType: 'ip',
   vpcId: vpc.vpcId,
   deregistrationDelay: 0,
-  healthCheck: { protocol: 'HTTP', port: '8101', path: '/health' },
+  healthCheck: {
+    protocol: 'HTTP',
+    port: String(HARNESS_HEALTH_CHECK_PORT),
+    path: '/health',
+  },
   tags,
 });
 new aws.lb.Listener(`${name}-https-${stack}`, {
@@ -164,7 +175,11 @@ const sshTarget = new aws.lb.TargetGroup(`${shortName}-ssh-${stack}`, {
   targetType: 'ip',
   vpcId: vpc.vpcId,
   deregistrationDelay: 0,
-  healthCheck: { protocol: 'HTTP', port: '8101', path: '/health' },
+  healthCheck: {
+    protocol: 'HTTP',
+    port: String(HARNESS_HEALTH_CHECK_PORT),
+    path: '/health',
+  },
   tags,
 });
 new aws.lb.Listener(`${name}-ssh-${stack}`, {
