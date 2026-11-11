@@ -178,6 +178,12 @@ function elementProps(
       dom.setAttribute('data-highlight-language', props.language);
   }
 }
+/** Source subclasses that inherit their base node's theme entry. */
+const themeKeys: Readonly<Record<string, string>> = {
+  tablerow: 'tableRow',
+  autolink: 'link',
+  'comment-mark': 'mark',
+};
 function elementClasses(node: ViewNode, ctx: RenderContext): string {
   const props = node.props();
   if (
@@ -251,8 +257,7 @@ function elementClasses(node: ViewNode, ctx: RenderContext): string {
     ]
       .filter(Boolean)
       .join(' ');
-  const name = node.type === 'tablerow' ? 'tableRow' : node.type;
-  return themeClass(ctx.theme, name);
+  return themeClass(ctx.theme, themeKeys[node.type] ?? node.type);
 }
 const element: NodeView = {
   createDOM(node, ctx) {

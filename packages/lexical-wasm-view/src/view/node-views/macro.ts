@@ -108,12 +108,6 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
   }
   if (node.type === 'equation') dom.classList.add('md-editor-equation');
 }
-/** Source CommentNode extends MarkNode, whose DOM carries theme.mark. */
-function addMarkTheme(dom: HTMLElement, ctx: RenderContext): void {
-  dom.classList.add(
-    ...themeClass(ctx.theme, 'mark').split(/\s+/).filter(Boolean)
-  );
-}
 /** Source `$getLocal(node) ?? true`: only an explicit false marks a remote peer's node. */
 function isLocal(node: ViewNode): boolean {
   const state: unknown = node.stateJSON ? JSON.parse(node.stateJSON) : null;
@@ -294,13 +288,11 @@ export function registerMacroElementViews(
   registry.replace('comment-mark', {
     createDOM(node, ctx) {
       const dom = mark.createDOM(node, ctx);
-      addMarkTheme(dom, ctx);
       elementProperties(node, dom);
       return dom;
     },
     updateDOM(previous, next, dom, ctx) {
       const replace = mark.updateDOM(previous, next, dom, ctx);
-      addMarkTheme(dom, ctx);
       elementProperties(next, dom);
       return replace;
     },
