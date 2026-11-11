@@ -387,7 +387,7 @@ impl IdeaRepo for PgIdeaRepo {
         // By generation first: its index bounds the scan to one generation.
         let count = sqlx::query_scalar!(
             r#"SELECT count(*) AS "count!" FROM suggestion_change
-               WHERE generation_id = $1 AND session_id = $2 AND subject = 'idea'"#,
+               WHERE generation_id = $1 AND session_id = $2 AND subject = 'suggestion'"#,
             generation,
             session,
         )

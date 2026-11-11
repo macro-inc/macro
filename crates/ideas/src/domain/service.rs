@@ -284,7 +284,9 @@ where
                 .audience
                 .seen(user, timezone.name(), Utc::now())
                 .await
-                .inspect_err(|error| tracing::warn!(?error, "could not record an ideas reader"));
+                .inspect_err(|error| {
+                    tracing::warn!(?error, "could not record a suggestions reader")
+                });
         }
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Idea> = self

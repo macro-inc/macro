@@ -6,7 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListIdeasParams = {
+export type ListSuggestionsParams = {
   /**
  * IANA time zone, e.g. `America/New_York`: nightly generations run in
 the reader's night.

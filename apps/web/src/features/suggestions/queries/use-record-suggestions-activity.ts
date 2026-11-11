@@ -1,5 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableIdeas } from '@core/constant/featureFlags';
+import { enableSuggestions } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserInfo } from '@core/context/user';
 import { fetchWithToken } from '@core/util/fetchWithToken';
@@ -10,17 +10,17 @@ import { createEffect } from 'solid-js';
 const SCHEDULED_ACTION_HOST: string = SERVER_HOSTS['scheduled-action'];
 
 /**
- * Each app load with Ideas on tells the backend the person is active, in
- * their time zone, so their nightly Ideas run comes in their night. Once per
+ * Each app load with Suggestions on tells the backend the person is active,
+ * in their time zone, so their nightly suggestions run comes in their night. Once per
  * signed-in person per load; the backend ignores it for free plans.
  */
-export function useRecordIdeasActivity(): void {
+export function useRecordSuggestionsActivity(): void {
   const userInfo = useUserInfo();
-  const ideas = useFeatureFlag(enableIdeas);
+  const suggestions = useFeatureFlag(enableSuggestions);
   let recordedFor: string | undefined;
   createEffect(() => {
     const user = userInfo();
-    if (!user?.authenticated || !ideas().enabled || recordedFor === user.id) {
+    if (!user?.authenticated || !suggestions().enabled || recordedFor === user.id) {
       return;
     }
     recordedFor = user.id;
@@ -30,7 +30,7 @@ export function useRecordIdeasActivity(): void {
         `${SCHEDULED_ACTION_HOST}${getRecordSuggestionsSeenUrl({ timezone })}`,
         { method: 'POST' }
       ),
-      'ideas.record_activity'
+      'suggestions.record_activity'
     );
   });
 }

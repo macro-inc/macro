@@ -124,9 +124,9 @@ pub struct FeedQuery {
 
 #[utoipa::path(
     get,
-    path = "/ideas",
-    tag = "ideas",
-    operation_id = "list_ideas",
+    path = "/suggestions",
+    tag = "suggestions",
+    operation_id = "list_suggestions",
     params(FeedQuery),
     responses(
         (status = 200, body = Ideas, description = "The caller's open suggestions they can open every item of, best first"),

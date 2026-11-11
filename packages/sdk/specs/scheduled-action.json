@@ -28,488 +28,6 @@
         }
       }
     },
-    "/ideas": {
-      "get": {
-        "tags": ["ideas"],
-        "summary": "The caller's feed.",
-        "operationId": "list_ideas",
-        "parameters": [
-          {
-            "name": "timezone",
-            "in": "query",
-            "description": "IANA time zone, e.g. `America/New_York`: nightly generations run in\nthe reader's night.",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The caller's open ideas they can open every item of, best first",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ideas"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Ideas are off for the caller",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": ["ideas"],
-        "summary": "Add an idea from an ideas generation session, or a new version of the\none with its dedup key.",
-        "operationId": "suggest_idea",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SuggestIdea"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Whether the idea was added or updated, and what to fix when it wasn't",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdeaWriteOutcome"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Only an ideas generation session may suggest",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Ideas are off for the user",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ideas/review": {
-      "get": {
-        "tags": ["ideas"],
-        "summary": "What an ideas generation session reads before managing ideas.",
-        "operationId": "review_ideas",
-        "responses": {
-          "200": {
-            "description": "Every idea of the user's, open first, and how many more this generation may add",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdeaReview"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Only an ideas generation session may review",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Ideas are off for the user",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ideas/{id}": {
-      "patch": {
-        "tags": ["ideas"],
-        "summary": "Change an open idea from an ideas generation session.",
-        "operationId": "rewrite_idea",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the idea",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RewriteIdea"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Whether the idea was rewritten, and what to fix when it wasn't",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdeaWriteOutcome"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Only an ideas generation session may rewrite",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such idea for the user, or ideas are off",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ideas/{id}/accept": {
-      "post": {
-        "tags": ["ideas"],
-        "summary": "The caller acts on an idea: a background prompt idea is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
-        "operationId": "accept_idea",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the idea",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No open or done idea with this id for the caller, or ideas are off",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ideas/{id}/dismiss": {
-      "post": {
-        "tags": ["ideas"],
-        "summary": "The caller isn't interested in an open idea.",
-        "operationId": "dismiss_idea",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the idea",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Dismissed; generation sessions see when"
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No open idea with this id for the caller, or ideas are off",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/ideas/{id}/retire": {
-      "post": {
-        "tags": ["ideas"],
-        "summary": "Retire an open idea from an ideas generation session.",
-        "operationId": "retire_idea",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "ID of the idea",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RetireIdea"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Whether the idea was retired, and why not when it wasn't",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IdeaWriteOutcome"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Only an ideas generation session may retire",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such idea for the user, or ideas are off",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/scheduled-actions": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1960,6 +1478,143 @@
         }
       }
     },
+    "/suggestions": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "The caller's feed.",
+        "operationId": "list_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`: nightly generations run in\nthe reader's night.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's open suggestions they can open every item of, best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionFeed"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Add a suggestion from a suggestions generation session, or a new version of the\none with its dedup key.",
+        "operationId": "add_suggestion",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was added or updated, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may suggest",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/suggestions/generate": {
       "post": {
         "tags": ["suggestions"],
@@ -1978,7 +1633,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The caller's onboarding generation started in the background: their ideas and routine suggestions, as each is on for them. Later calls start nothing",
+            "description": "The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing",
             "content": {
               "application/json": {
                 "schema": {
@@ -1998,7 +1653,66 @@
             }
           },
           "404": {
-            "description": "Neither ideas nor routine suggestions are on for the caller",
+            "description": "Neither suggestions nor routine suggestions are on for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/review": {
+      "get": {
+        "tags": ["suggestions"],
+        "summary": "What a suggestions generation session reads before managing suggestions.",
+        "operationId": "review_suggestions",
+        "responses": {
+          "200": {
+            "description": "Every suggestion of the user's, open first, and how many more this generation may add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionsReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may review",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Suggestions are off for the user",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2038,10 +1752,296 @@
         ],
         "responses": {
           "204": {
-            "description": "Recorded: with ideas on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"
+            "description": "Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}": {
+      "patch": {
+        "tags": ["suggestions"],
+        "summary": "Change an open suggestion from a suggestions generation session.",
+        "operationId": "rewrite_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewriteSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was rewritten, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may rewrite",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/accept": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller acts on a suggestion: a background prompt suggestion is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
+        "operationId": "accept_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Accepted: a background prompt suggestion is taken on, any other suggestion is done; accepting a done suggestion again changes nothing"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open or done suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/dismiss": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "The caller isn't interested in an open suggestion.",
+        "operationId": "dismiss_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed; generation sessions see when"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open suggestion with this id for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/{id}/retire": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Retire an open suggestion from a suggestions generation session.",
+        "operationId": "retire_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireSuggestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was retired, and why not when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a suggestions generation session may retire",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the user, or suggestions are off",
             "content": {
               "text/plain": {
                 "schema": {
@@ -3415,9 +3415,9 @@
         },
         "additionalProperties": false
       },
-      "RetireSuggestionRequest": {
+      "RetireSuggestion": {
         "type": "object",
-        "description": "Retiring an open suggestion that no longer matters.",
+        "description": "Retiring an open suggestion that no longer fits.",
         "required": ["reason"],
         "properties": {
           "reason": {
@@ -3427,9 +3427,9 @@
         },
         "additionalProperties": false
       },
-      "RetireSuggestion": {
+      "RetireSuggestionRequest": {
         "type": "object",
-        "description": "Retiring an open suggestion that no longer fits.",
+        "description": "Retiring an open suggestion that no longer matters.",
         "required": ["reason"],
         "properties": {
           "reason": {
@@ -3495,7 +3495,7 @@
         ],
         "description": "One suggestion AI made for the person, as a routines session reviews it."
       },
-      "RewriteIdea": {
+      "RewriteSuggestion": {
         "type": "object",
         "description": "Changes to an open suggestion; fields left out stay.",
         "required": ["reason"],
@@ -4624,6 +4624,72 @@
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
       },
+      "SuggestionKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A prompt for an agent: opened in the composer, or run in the\nbackground.",
+            "required": ["prompt", "runMode", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["prompt"]
+              },
+              "prompt": {
+                "type": "string",
+                "description": "What the agent is asked to do."
+              },
+              "runMode": {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "How it runs."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A note about specific items, with what to do about them.",
+            "required": ["action", "kind"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "What to do about the items."
+              },
+              "draft": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Target",
+                    "description": "The draft made for it, once made."
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["entity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine suggestion, shown among suggestions.",
+            "required": ["routineSuggestionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routineSuggestionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The suggestion it shows."
+              }
+            }
+          }
+        ],
+        "description": "What kind of suggestion it is, with that kind's data. A kind never changes."
+      },
       "SuggestionReview": {
         "type": "object",
         "description": "Every suggestion AI made for the person, for a routines session.",
@@ -4640,6 +4706,79 @@
             "items": {
               "$ref": "#/components/schemas/ReviewedSuggestion"
             }
+          }
+        }
+      },
+      "SuggestionState": {
+        "type": "string",
+        "description": "Where a suggestion is for the person.",
+        "enum": [
+          "proposed",
+          "accepted",
+          "done",
+          "dismissed",
+          "resolved",
+          "retired"
+        ]
+      },
+      "SuggestionWriteOutcome": {
+        "type": "object",
+        "description": "What became of a session's write.",
+        "required": ["ok", "problems"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it was applied."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why it wasn't, to fix and try again."
+          },
+          "suggestion": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Suggestion",
+                "description": "The suggestion as it now is."
+              }
+            ]
+          }
+        }
+      },
+      "SuggestionsReview": {
+        "type": "object",
+        "description": "What a generation session reads before managing the person's suggestions:\nevery suggestion they have, open or not, and how many more it may add.",
+        "required": ["suggestions", "open", "openLimit", "newLeft"],
+        "properties": {
+          "newLeft": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Suggestions this generation may still add or bring back.",
+            "minimum": 0
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Open suggestions the person has, and the most they may have.",
+            "minimum": 0
+          },
+          "openLimit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The most open suggestions a person may have.",
+            "minimum": 0
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Suggestion"
+            },
+            "description": "Open suggestions first, best first, then closed ones newest first. A\ndismissed suggestion's `stateChangedAt` is when the person dismissed it."
           }
         }
       },
@@ -4762,12 +4901,12 @@
       "description": "Scheduled action service"
     },
     {
-      "name": "ideas",
-      "description": "Each person's ideas, and the tools generation sessions manage them with"
+      "name": "suggestions",
+      "description": "Each person's suggestions, and the tools generation sessions manage them with"
     },
     {
       "name": "suggestions",
-      "description": "Generations of each person's ideas and routine suggestions"
+      "description": "Generations of each person's suggestions and routine suggestions"
     }
   ]
 }
