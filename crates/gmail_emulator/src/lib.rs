@@ -1,4 +1,5 @@
-//! A stateful fake of the Google APIs Macro's email code calls.
+//! A stateful fake of the Google APIs Macro's email, calendar and sign-in
+//! code call.
 //!
 //! [`GmailEmulator::start`] listens on a `127.0.0.1` port and serves, for any
 //! number of mailboxes:
@@ -6,6 +7,9 @@
 //! - the Gmail REST API under [`GmailEmulator::gmail_url`]: profile,
 //!   messages, threads, labels, drafts, send, attachments, filters, send-as,
 //!   history (a `startHistoryId` older than Gmail keeps answers 404) and watch;
+//! - the Google Calendar REST API under [`GmailEmulator::calendar_url`]:
+//!   the calendar list, events with their recurrences, exceptions, guests
+//!   and sync tokens (an expired one answers 410), and push channels;
 //! - the People API under [`GmailEmulator::people_url`];
 //! - "Sign in with Google": a page at
 //!   [`GmailEmulator::authorization_url`] where a person picks one of the
@@ -15,8 +19,9 @@
 //!   certificates that verify push and ID tokens
 //!   ([`GmailEmulator::certs_url`]);
 //! - a control API under `/_emulator/`, mirrored by the methods of
-//!   [`GmailEmulator`]: seed mailboxes, deliver mail, inject errors and rate
-//!   limits, advance the clock, and read what was received and pushed.
+//!   [`GmailEmulator`]: seed mailboxes and calendars, deliver mail, change
+//!   events, inject errors and rate limits, advance the clock, and read what
+//!   was received and pushed.
 //!
 //! What a client writes it reads back, and every change lands in the
 //! mailbox's history. After `users.watch`, a change posts a Pub/Sub-style
@@ -26,8 +31,9 @@
 //!
 //! The real `gmail_client::GmailClient` talks to it through
 //! `GmailClient::new_with_urls`, and a running service through the
-//! `OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_PEOPLE_API_URL` and
-//! `OVERRIDE_GOOGLE_OAUTH_CERTS_URL` service URL overrides. Nothing here
+//! `OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_PEOPLE_API_URL`,
+//! `OVERRIDE_GOOGLE_CALENDAR_API_URL` and `OVERRIDE_GOOGLE_OAUTH_CERTS_URL`
+//! service URL overrides. Nothing here
 //! talks to Google.
 
 #![deny(missing_docs)]

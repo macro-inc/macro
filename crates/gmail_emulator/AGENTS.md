@@ -2,11 +2,13 @@
 
 ## What it is
 
-Test support for the Email feature: a stateful fake of the Google APIs our
-email and sign-in code call. The real `gmail_client`, `email_api_client`,
-`email_service` and its workers, FusionAuth's Google identity providers and
-the authentication service's Gmail link run against it, in a `cargo test`, as
-a standalone process or as part of a local stack, without Google accounts.
+Test support for the Email and Calendar features: a stateful fake of the
+Google APIs our email, calendar and sign-in code call. The real
+`gmail_client`, `email_api_client`, `email_service` and its workers, the
+Google Calendar adapter of `calendar_events`, `calendar_service`,
+FusionAuth's Google identity providers and the authentication service's Gmail
+link run against it, in a `cargo test`, as a standalone process or as part of
+a local stack, without Google accounts.
 
 ## How it works
 
@@ -26,6 +28,19 @@ a standalone process or as part of a local stack, without Google accounts.
   one redirects back with an authorization code, which `/token` exchanges for
   an access token, a refresh token and an ID token signed by the same key.
   `/v1/userinfo` names the token's user.
+- Every mailbox is also a Google Calendar user, with a primary calendar and
+  any others its seed lists. A recurring event is expanded in the zone its
+  start names; changing or deleting one occurrence stores an exception under
+  Google's instance id (`<event id>_<start>`). A listing ends with a sync
+  token that later reports only what changed, deleted events as tombstones,
+  and answers 410 `fullSyncRequired` after `expire_sync_tokens`.
+- A meeting's guests who are users of the emulator hold their own copy on
+  their primary calendar, as at Google: an answer travels to the organizer's
+  copy and every other, and a guest changes only what the organizer's guest
+  switches allow.
+- After `events.watch`, a change posts Google's header-only notification to
+  the address the channel was opened with, first a `sync` one for the channel
+  itself.
 - A local stack with no real Google client runs it as the `gmail_emulator`
   sidecar (`xtask_local`'s `google_emulator.rs`), seeded from
   `seed.example.yaml`.
@@ -40,6 +55,10 @@ a standalone process or as part of a local stack, without Google accounts.
 - `src/mailbox.rs`: messages, labels, history, threading, watch, quota.
 - `src/state.rs`: tokens, faults, the clock, `send` and delivery between
   mailboxes.
+- `src/calendar.rs`: calendars, stored events, listings, sync tokens;
+  `calendar/time.rs` recurrence, `calendar/write.rs` writes and guest
+  copies, `calendar/channel.rs` push channels. `src/calendar_routes.rs`:
+  Calendar REST. `src/control/calendar.rs`: its control API.
 - `src/gate.rs`: what every request passes: token, faults, quota, request log.
 - `src/gmail_routes.rs`, `src/google_routes.rs`: Gmail REST; People, the
   OAuth token endpoint and certificates. `src/control.rs`: `/_emulator/`.
@@ -49,8 +68,8 @@ a standalone process or as part of a local stack, without Google accounts.
 
 ## Scope
 
-- Owns: the Google endpoints the email and sign-in code call. Add an endpoint when the
-  code starts calling it, not before.
+- Owns: the Google endpoints the email, calendar and sign-in code call. Add an
+  endpoint when the code starts calling it, not before.
 - Not here: Microsoft Graph; SQS, Postgres and the other Macro services a
   local `email_service` needs.
 
@@ -74,6 +93,22 @@ a standalone process or as part of a local stack, without Google accounts.
   give FusionAuth's `google` and `google_gmail` providers the same
   authorization and token endpoints and `<base>/v1/userinfo`. A local stack
   does all of this by itself.
+- Calendar in a test: `GoogleCalendarClient::new_with_url(client,
+  emulator.calendar_url())` with `emulator.access_token(..)`; seed events as
+  `SeedCalendar { events, .. }` or add them with `emulator.add_event`.
+- Point a local `calendar_service` at it:
+  `OVERRIDE_GOOGLE_CALENDAR_API_URL=<base>/calendar/v3`,
+  `OVERRIDE_AUTH_SERVICE_URL=<base>/_emulator/authentication-service`, and
+  for push `CALENDAR_WATCH_WEBHOOK_URL=http://<calendar_service>/notifications`
+  with any `CALENDAR_WATCH_TOKEN`. An inbox syncs once its Google grant is
+  recorded with the two calendar scopes (`apply_google_grant`).
+- Change a calendar as its owner would in Google Calendar:
+  `POST /_emulator/mailboxes/{email}/calendars/{calendar}/events` (an event
+  resource, as `events.insert` takes it), `PATCH` and `DELETE`
+  `…/events/{id}`, where an instance id addresses one occurrence. A guest's
+  answer: `POST …/events/{id}/responses`. An expired sync token:
+  `POST …/calendars/{calendar}/sync-tokens/expire`, or a `gone` fault on
+  `events.list`. What was pushed: `GET /_emulator/push/channel-deliveries`.
 - Sign in without a browser: `POST /o/oauth2/v2/auth` with the authorization
   request's parameters as a form, plus `user=<email>` and one `granted=<scope>`
   per scope to grant; the `Location` header carries the code.
@@ -84,7 +119,8 @@ a standalone process or as part of a local stack, without Google accounts.
 - Add a Gmail endpoint: a `Route` variant with its quota units in
   `src/fault.rs` → a handler through `gate::mailbox_request` in
   `src/gmail_routes.rs` → a test in `src/test/` that calls it with the real
-  client.
+  client. A Calendar endpoint goes the same way through
+  `src/calendar_routes.rs` and `src/test/calendar/`.
 
 ## Checks
 
@@ -120,6 +156,24 @@ a standalone process or as part of a local stack, without Google accounts.
 - Waiting is event driven (`wait_for_push_deliveries`); don't add sleep loops.
 - `q` understands only the operators listed in `src/query.rs`; `OR` and
   parentheses match as plain words.
+- An event is stored as Google's own JSON object and patched as Google
+  patches: `null` removes a field, an object merges, an array replaces. An
+  event id is base32hex (`0-9`, `a-v`, five characters or more); a seed that
+  names another is refused.
+- A calendar id in a seed is whatever the seed says. A `secondary: true`
+  calendar gets one shaped like Google's (`c_…@group.calendar.google.com`).
+- Calendar channels accept an `http` address, which Google refuses, because
+  a local webhook has no certificate. A notification is sent again only
+  after 500, 502, 503, 504 or no answer, as Google does.
+- Not emulated, because our code does not depend on it: invitation mail for
+  `sendUpdates`, ACLs and calendars shared between users (each user's list
+  holds its own calendars), free/busy, `updatedMin` and `q` on `events.list`,
+  `singleEvents` with a sync token, the `_R` ids of a split series, and the
+  seconds Google takes to carry a change to a guest's copy (it is immediate).
+- Three answers are the emulator's reading, not checked against Google:
+  patching a deleted event answers 400, `events.instances` of an event that
+  does not repeat answers the event itself, and a guest's forbidden change
+  answers 403 `forbiddenForNonOrganizer`.
 - The authentication-service stand-in is not a Google API. It exists so the
   service can run without FusionAuth, and answers like the real route: 404 for
   an unknown account, 403 for a revoked grant.
@@ -127,4 +181,5 @@ a standalone process or as part of a local stack, without Google accounts.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` ·
-  `crates/gmail_client/AGENTS.md`, `services/email_service/AGENTS.md` (running the service)
+  `crates/gmail_client/AGENTS.md`, `services/email_service/AGENTS.md` (running the service),
+  `crates/calendar_events/AGENTS.md`, `services/calendar_service/AGENTS.md`

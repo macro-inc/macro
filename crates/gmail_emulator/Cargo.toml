@@ -3,7 +3,7 @@ edition = "2024"
 name = "gmail_emulator"
 publish = false
 version = "0.1.0"
-description = "Test support: a stateful fake of the Google APIs Macro's email code calls (Gmail REST, People, OAuth token, signed Pub/Sub push), in process or as a standalone binary."
+description = "Test support: a stateful fake of the Google APIs Macro's email, calendar and sign-in code call (Gmail REST, Calendar REST with push channels, People, OAuth, signed Pub/Sub push), in process or as a standalone binary."
 
 [dependencies]
 askama = { workspace = true }
