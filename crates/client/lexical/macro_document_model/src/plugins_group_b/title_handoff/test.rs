@@ -115,67 +115,94 @@ fn prepend_paragraph_appends_into_an_empty_root() -> Result<(), Error> {
     Ok(())
 }
 
+fn remove(editor: &mut Editor, key: NodeKey) -> Result<Commit, Error> {
+    let command = surface::decode_command(
+        "group-b.remove-leading-empty-paragraph",
+        &serde_json::json!({ "key": key.parts().index }).to_string(),
+        key.parts().generation,
+        None,
+    )?
+    .expect("action");
+    let (handled, commit) = editor.dispatch(&command)?;
+    assert_eq!(handled, Handled::Yes);
+    Ok(commit)
+}
+
 #[test]
-fn remove_leading_empty_paragraph_removes_it_outside_history() -> Result<(), Error> {
+fn remove_captured_paragraph_removes_it_outside_history() -> Result<(), Error> {
     let mut editor = editor();
-    let (second, _) = editor.update(|tx| {
+    let ((empty, second), _) = editor.update(|tx| {
         let empty = tx.create(Paragraph::default())?;
         let second = tx.create(Paragraph::default())?;
         let leaf = tx.create_text("Second body line")?;
         tx.append(second, &[leaf.key()])?;
         tx.append(NodeKey::ROOT, &[empty.key(), second.key()])?;
-        Ok(second.key())
+        Ok((empty.key(), second.key()))
     })?;
-    let command = surface::decode_command("group-b.remove-leading-empty-paragraph", "{}", 0, None)?
-        .expect("action");
-    let (handled, commit) = editor.dispatch(&command)?;
-    assert_eq!(handled, Handled::Yes);
+    let commit = remove(&mut editor, empty)?;
     assert!(commit.tags.contains(&UpdateTag::Historic));
-    let view = commit.next.view();
-    assert_eq!(view.children_keys(NodeKey::ROOT)?, vec![second]);
+    assert_eq!(
+        commit.next.view().children_keys(NodeKey::ROOT)?,
+        vec![second]
+    );
+    Ok(())
+}
+
+/// Source captures the key at keydown and removes that node in a microtask
+/// without revalidating: a paragraph that gained text or moved still goes,
+/// and a newly leading paragraph stays.
+#[test]
+fn remove_captured_paragraph_targets_the_captured_key_after_a_race() -> Result<(), Error> {
+    let mut editor = editor();
+    let ((captured, other), _) = editor.update(|tx| {
+        let captured = tx.create(Paragraph::default())?;
+        let other = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[captured.key(), other.key()])?;
+        Ok((captured.key(), other.key()))
+    })?;
+    let (leader, _) = editor.update(|tx| {
+        let leaf = tx.create_text("typed meanwhile")?;
+        tx.append(captured, &[leaf.key()])?;
+        let leader = tx.create(Paragraph::default())?;
+        tx.insert_before(captured, leader, false)?;
+        Ok(leader.key())
+    })?;
+    let commit = remove(&mut editor, captured)?;
+    assert_eq!(
+        commit.next.view().children_keys(NodeKey::ROOT)?,
+        vec![leader, other]
+    );
     Ok(())
 }
 
 #[test]
-fn remove_leading_empty_paragraph_keeps_text_indent_and_a_sole_block() -> Result<(), Error> {
-    for (text, indent, blocks) in [("x", 0, 2), ("", 1, 2), ("", 0, 1)] {
-        let mut editor = editor();
-        editor.update(|tx| {
-            let first = tx.create(Paragraph::default())?;
-            if !text.is_empty() {
-                let leaf = tx.create_text(text)?;
-                tx.append(first, &[leaf.key()])?;
-            }
-            tx.set_indent(first, indent)?;
-            tx.append(NodeKey::ROOT, &[first.key()])?;
-            if blocks == 2 {
-                let second = tx.create(Paragraph::default())?;
-                tx.append(NodeKey::ROOT, &[second.key()])?;
-            }
-            Ok(())
-        })?;
-        let before = editor.state().to_json()?;
-        let command =
-            surface::decode_command("group-b.remove-leading-empty-paragraph", "{}", 0, None)?
-                .expect("action");
-        let (handled, commit) = editor.dispatch(&command)?;
-        assert_eq!(handled, Handled::Yes);
-        assert!(commit.is_noop(), "{text:?} {indent} {blocks}");
-        assert_eq!(editor.state().to_json()?, before);
-    }
+fn remove_captured_paragraph_ignores_a_node_that_is_gone() -> Result<(), Error> {
+    let mut editor = editor();
+    let ((captured, _), _) = editor.update(|tx| {
+        let captured = tx.create(Paragraph::default())?;
+        let other = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[captured.key(), other.key()])?;
+        Ok((captured.key(), other.key()))
+    })?;
+    editor.update(|tx| tx.remove(captured, false))?;
+    let before = editor.state().to_json()?;
+    let commit = remove(&mut editor, captured)?;
+    assert!(commit.is_noop());
+    assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
 
 #[test]
 fn title_handoff_rejects_unexpected_payloads() {
-    for name in [
-        "group-b.focus-start",
-        "group-b.prepend-paragraph",
-        "group-b.remove-leading-empty-paragraph",
-    ] {
-        assert!(decode(name, r#"{"key":1}"#).is_err());
-        assert!(decode(name, "null").is_err());
-        assert!(decode(name, "[]").is_err());
+    for name in ["group-b.focus-start", "group-b.prepend-paragraph"] {
+        assert!(decode(name, r#"{"key":1}"#, 0).is_err());
+        assert!(decode(name, "null", 0).is_err());
+        assert!(decode(name, "[]", 0).is_err());
     }
-    assert!(decode("other.action", "{}").expect("unknown").is_none());
+    let remove = "group-b.remove-leading-empty-paragraph";
+    assert!(decode(remove, "{}", 0).is_err());
+    assert!(decode(remove, "[1]", 0).is_err());
+    assert!(decode(remove, r#"{"key":"1"}"#, 0).is_err());
+    assert!(decode(remove, r#"{"key":1,"extra":0}"#, 0).is_err());
+    assert!(decode("other.action", "{}", 0).expect("unknown").is_none());
 }

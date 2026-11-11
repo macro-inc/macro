@@ -7,8 +7,14 @@ struct Input {}
 
 static FOCUS_START: CommandKey<()> = CommandKey::new("group-b.focus-start");
 static PREPEND_PARAGRAPH: CommandKey<()> = CommandKey::new("group-b.prepend-paragraph");
-static REMOVE_LEADING_EMPTY_PARAGRAPH: CommandKey<()> =
+static REMOVE_LEADING_EMPTY_PARAGRAPH: CommandKey<NodeKey> =
     CommandKey::new("group-b.remove-leading-empty-paragraph");
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RemoveInput {
+    key: u32,
+}
 
 /// Source `STOPPING_BLOCK_TYPES` in block-decorator navigation.
 const STOPPING_BLOCK_TYPES: [&str; 5] = [
@@ -19,13 +25,25 @@ const STOPPING_BLOCK_TYPES: [&str; 5] = [
     "document-card",
 ];
 
-pub(super) fn decode(name: &str, json: &str) -> Result<Option<Command>, Error> {
+pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    if name == REMOVE_LEADING_EMPTY_PARAGRAPH.name() {
+        let value: serde_json::Value = serde_json::from_str(json)?;
+        if !value.is_object() {
+            return Err(Error::Invariant("title handoff object payload"));
+        }
+        let input: RemoveInput = serde_json::from_value(value)?;
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &REMOVE_LEADING_EMPTY_PARAGRAPH,
+            NodeKey::from_parts(KeyParts {
+                index: input.key,
+                generation,
+            }),
+        ))));
+    }
     let key = if name == FOCUS_START.name() {
         &FOCUS_START
     } else if name == PREPEND_PARAGRAPH.name() {
         &PREPEND_PARAGRAPH
-    } else if name == REMOVE_LEADING_EMPTY_PARAGRAPH.name() {
-        &REMOVE_LEADING_EMPTY_PARAGRAPH
     } else {
         return Ok(None);
     };
@@ -81,8 +99,8 @@ impl Plugin for TitleHandoff {
             prepend_paragraph(tx)?;
             return Ok(Handled::Yes);
         }
-        if extension.payload(&REMOVE_LEADING_EMPTY_PARAGRAPH).is_some() {
-            remove_leading_empty_paragraph(tx)?;
+        if let Some(key) = extension.payload(&REMOVE_LEADING_EMPTY_PARAGRAPH) {
+            remove_captured_paragraph(tx, *key)?;
             return Ok(Handled::Yes);
         }
         Ok(Handled::No)
@@ -126,21 +144,14 @@ fn prepend_paragraph(tx: &mut Transaction<'_>) -> Result<(), Error> {
     tx.select_end(paragraph)
 }
 
-/// Source body Backspace into the title: an empty, unindented first paragraph
-/// goes when more blocks follow, outside undo history.
-fn remove_leading_empty_paragraph(tx: &mut Transaction<'_>) -> Result<(), Error> {
-    let Some(first) = tx.first_child(NodeKey::ROOT) else {
-        return Ok(());
-    };
-    let view = tx.view();
-    if view.type_name(first)? != Paragraph::TYPE
-        || view.indent(first) != 0
-        || !tx.text_content(first).is_empty()
-        || tx.view().children_size(NodeKey::ROOT) < 2
-    {
+/// Source body Backspace into the title: the host checks the empty, unindented
+/// first paragraph at keydown and captures its key; the queued removal then
+/// removes that node if it still exists, without revalidating, outside history.
+fn remove_captured_paragraph(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
+    if tx.view().node(key).is_none() || !tx.is_attached(key) {
         return Ok(());
     }
-    tx.remove(first, false)?;
+    tx.remove(key, false)?;
     tx.add_tag(UpdateTag::Historic);
     Ok(())
 }

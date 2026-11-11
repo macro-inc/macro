@@ -114,11 +114,12 @@ export function registerNativeTitleHandoffKeys(
       textContent(view, parent) === '' &&
       (view.node(ROOT)?.children.length ?? 0) > 1
     )
+      // Source captures the key now and removes that node in a microtask.
       queueMicrotask(() =>
         dispatchApplicationCommand(
           view,
           'group-b.remove-leading-empty-paragraph',
-          {}
+          { key: parent }
         )
       );
     selectTitle(title, 'end');

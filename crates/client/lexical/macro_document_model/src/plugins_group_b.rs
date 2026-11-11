@@ -219,7 +219,7 @@ pub fn decode_command(
     if let Some(command) = gif_insert::decode(name, json)? {
         return Ok(Some(command));
     }
-    if let Some(command) = title_handoff::decode(name, json)? {
+    if let Some(command) = title_handoff::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = pinned_properties::decode(name, json)? {
