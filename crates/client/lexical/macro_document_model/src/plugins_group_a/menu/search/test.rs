@@ -89,7 +89,7 @@ fn callbacks_preserve_registration_order_closed_terms_and_equal_payloads() -> Re
             .chain()
             .flat_map(|commit| commit.events_of(&CHANGE))
             .collect::<Vec<_>>();
-        assert_eq!(events.len(), 4);
+        assert_eq!(events.len(), KINDS.len());
         for (event, kind) in events.iter().zip(KINDS) {
             assert_eq!(event.snapshot.kind, kind);
             assert!(matches!(event.callback, Callback::Term));
@@ -113,7 +113,7 @@ fn callbacks_preserve_registration_order_closed_terms_and_equal_payloads() -> Re
         .chain()
         .flat_map(|commit| commit.events_of(&CHANGE))
         .collect::<Vec<_>>();
-    assert_eq!(events.len(), 4);
+    assert_eq!(events.len(), KINDS.len());
     assert!(
         events
             .iter()
@@ -215,7 +215,7 @@ fn imported_peer_ownership_is_not_adopted_and_global_close_preserves_remote_node
             .flat_map(|commit| commit.events_of(&CHANGE))
             .collect::<Vec<_>>();
         if owner == Some("local-peer") {
-            assert_eq!(events.len(), 5);
+            assert_eq!(events.len(), KINDS.len() + 1);
             assert_eq!(events[0].snapshot.kind, Kind::Actions);
             assert!(matches!(events[0].callback, Callback::Open));
             for (event, kind) in events[1..].iter().zip(KINDS) {
@@ -303,7 +303,7 @@ fn authored_trigger_uses_current_peer_without_registering_global_adoption() -> R
         assert_eq!(
             events.len(),
             if peer_id.is_some_and(|peer| !peer.is_empty()) {
-                5
+                KINDS.len() + 1
             } else {
                 1
             }
@@ -447,6 +447,13 @@ fn trigger_policy_does_not_strengthen_source_range_composition_or_mentions_suffi
         (Kind::Actions, "` ", 1, 1, false, false),
         (Kind::Actions, "\u{feff}", 1, 1, false, true),
         (Kind::Actions, "\u{85}", 1, 1, false, false),
+        (Kind::Tags, "(", 1, 1, false, true),
+        (Kind::Tags, "[)", 1, 1, false, true),
+        (Kind::Tags, "\"`", 1, 1, false, true),
+        (Kind::Tags, "`", 1, 1, false, false),
+        (Kind::Tags, "a", 1, 1, false, false),
+        (Kind::Tags, " a", 1, 1, false, false),
+        (Kind::Actions, "(", 1, 1, false, false),
     ] {
         let mut editor =
             surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
@@ -482,7 +489,7 @@ fn trigger_policy_does_not_strengthen_source_range_composition_or_mentions_suffi
 fn malformed_search_requests_fail_before_dispatch_and_unknown_routes_remain_unclaimed()
 -> Result<(), Error> {
     for (name, payload) in [
-        ("group-a.search-trigger", r#"{"kind":"tags"}"#),
+        ("group-a.search-trigger", r#"{"kind":"hashtags"}"#),
         ("group-a.search-trigger", r#"{"kind":"actions","key":1}"#),
         ("group-a.search-close", "null"),
         ("group-a.search-remove", r#"{"kind":"actions"}"#),
@@ -551,7 +558,7 @@ fn dirty_missing_peer_and_equal_format_only_callbacks_match_source_followups() -
         .flat_map(|commit| commit.events_of(&CHANGE))
         .map(serde_json::to_value)
         .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(callbacks.len(), 4);
+    assert_eq!(callbacks.len(), KINDS.len());
     let (_, format) = editor.update(|tx| {
         tx.text(key)?.set_format(TextFormat::BOLD)?;
         Ok(())

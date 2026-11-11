@@ -2,7 +2,7 @@
 use crate::{nodes::InlineSearchNode, peer};
 use lexical_model::*;
 
-/// The four body-editor search controllers, independent of commit-time menu answers.
+/// The five body-editor search controllers, independent of commit-time menu answers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum Kind {
@@ -10,6 +10,7 @@ enum Kind {
     Mentions,
     Emojis,
     Snippets,
+    Tags,
 }
 impl Kind {
     fn symbol(self) -> &'static str {
@@ -18,11 +19,31 @@ impl Kind {
             Self::Mentions => "@",
             Self::Emojis => ":",
             Self::Snippets => ";",
+            Self::Tags => "#",
+        }
+    }
+    /// Source `validTriggerPosition` regexes: `before` must be empty or end in
+    /// one of these characters (a trailing backtick always refuses); `after`,
+    /// when present, must be empty or start with one.
+    fn trigger_boundaries(self) -> (&'static [char], Option<&'static [char]>) {
+        const BRACKETS_QUOTES: &[char] = &['(', '[', '\'', '"'];
+        const CLOSERS_QUOTES: &[char] = &[')', ']', '\'', '"', '`'];
+        match self {
+            Self::Mentions => (&[], None),
+            Self::Tags => (BRACKETS_QUOTES, Some(CLOSERS_QUOTES)),
+            Self::Actions | Self::Emojis | Self::Snippets => (&[], Some(&[])),
         }
     }
 }
-// registerMarkdownEditing installs these mutation listeners in this order.
-const KINDS: [Kind; 4] = [Kind::Emojis, Kind::Mentions, Kind::Snippets, Kind::Actions];
+// registerMarkdownEditing installs these mutation listeners in this order;
+// MarkdownEditor's tags plugin occupies its afterMentions slot.
+const KINDS: [Kind; 5] = [
+    Kind::Emojis,
+    Kind::Mentions,
+    Kind::Tags,
+    Kind::Snippets,
+    Kind::Actions,
+];
 #[derive(Clone, Debug, serde::Serialize)]
 struct SearchRange {
     key: u32,
@@ -37,7 +58,7 @@ struct Snapshot {
     range: Option<SearchRange>,
 }
 #[derive(Clone)]
-struct Controllers([Snapshot; 4]);
+struct Controllers([Snapshot; 5]);
 impl Default for Controllers {
     fn default() -> Self {
         Self(KINDS.map(|kind| Snapshot {
@@ -192,12 +213,16 @@ fn eligible(state: &EditorState, kind: Kind) -> Result<bool, Error> {
         };
         (before, after)
     };
-    Ok(
-        (before.is_empty() || before.chars().last().is_some_and(is_js_whitespace))
-            && (kind == Kind::Mentions
-                || after.is_empty()
-                || after.chars().next().is_some_and(is_js_whitespace)),
-    )
+    let (before_extra, after_extra) = kind.trigger_boundaries();
+    let boundary = |extra: &[char], c: char| is_js_whitespace(c) || extra.contains(&c);
+    Ok((before.is_empty()
+        || before
+            .chars()
+            .last()
+            .is_some_and(|c| boundary(before_extra, c)))
+        && after_extra.is_none_or(|extra| {
+            after.is_empty() || after.chars().next().is_some_and(|c| boundary(extra, c))
+        }))
 }
 fn transform(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
     let text = tx.text_content(key).into_owned();

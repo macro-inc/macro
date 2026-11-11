@@ -8,6 +8,7 @@ pub(crate) mod action_dependencies;
 mod mention_user;
 pub(crate) mod search;
 mod source;
+mod tag_mention;
 
 /// Source menu choices retain authored node payloads rather than display labels.
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -156,6 +157,9 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
             },
         ))));
     }
+    if let Some(command) = tag_mention::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if name != SELECT.name() {
         return mention_user::decode(name, json, generation);
     }
@@ -171,7 +175,7 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     let builder = search::register(builder)
         .extension_state(source::ExtractionState::default())
         .plugin(Menu);
-    mention_user::register(builder)
+    tag_mention::register(mention_user::register(builder))
 }
 struct Menu;
 impl Plugin for Menu {

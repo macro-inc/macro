@@ -23,6 +23,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Decode group-b.format-text and group-b.format-element from canonical enum JSON strings into the existing core commands; preserve the application envelope's generation, selection and admission checks and all command priorities.
 
 - Insert typed user mentions separately after search removal and host I/O, using current selection/admission, Source constructor fallback, insert_nodes_at_selection and select_next(0, 0); do not reuse strict menu-select range admission.
+- Insert tag mentions through group-a.insert-tag-mention after search removal; an expanded range collapses forwards and prepends one space, as Source tagsPlugin does. The `#` search kind uses Source's tag trigger boundaries (open brackets/quotes before, closers/quotes after).
 
 - Read inline-search controller caches through surface::query_editor; preserve every ordered callback (including equal payloads), Source peer import versus dirty-transform timing, and UI-only host resets.
 
