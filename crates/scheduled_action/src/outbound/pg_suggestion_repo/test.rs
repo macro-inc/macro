@@ -322,9 +322,16 @@ async fn a_drafted_suggestion_without_its_idea_still_closes(pool: PgPool) {
         .await
         .unwrap();
     assert!(
-        repo.retire(&a, retired, session, generation, "No longer fits", Utc::now())
-            .await
-            .unwrap()
+        repo.retire(
+            &a,
+            retired,
+            session,
+            generation,
+            "No longer fits",
+            Utc::now()
+        )
+        .await
+        .unwrap()
     );
     assert!(repo.dismiss(&a, dismissed).await.unwrap());
 }
