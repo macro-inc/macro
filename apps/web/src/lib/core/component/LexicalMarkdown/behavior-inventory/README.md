@@ -1,7 +1,11 @@
 # Editor behavior regression ledger
 
 These tests exercise production Lexical APIs and Macro plugins through their
-normal imports. They cover title normalization, insertion and placeholders,
+normal imports. User-mention I/O controls retain the real editor, commands and
+shared tracking action while controlling transport and entropy. They pin
+synchronous dispatch, getter order, opaque rejection, later-caret insertion and
+close during pending tracking; they do not establish backend authorization or
+rendered native picker behavior. They cover title normalization, insertion and placeholders,
 list deletion, indentation, clipboard precedence and quoted paste, focus
 boundaries, equation/table picker commands, menu navigation, Android input
 triggers, emoji/tag lifecycle, checklist input, word counts, location restoration,
