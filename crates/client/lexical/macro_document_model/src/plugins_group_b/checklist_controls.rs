@@ -133,6 +133,28 @@ pub fn collect_checklist_metadata_for_list(
     }))
 }
 
+/// Read one attached ordinary checklist row, including rows in nested checklists.
+/// Wrapper ownership belongs to the root bulk collection; this returns no wrapper keys.
+/// Unsupported, detached and nested-list wrapper rows return None, never empty metadata.
+pub fn collect_checklist_item_metadata(
+    state: &impl Read,
+    key: NodeKey,
+) -> Result<Option<ChecklistItemMeta>, Error> {
+    let view = state.view();
+    if !view.is_attached(key) || !view.is::<ListItemNode>(key) {
+        return Ok(None);
+    }
+    let check_parent = view
+        .parent(key)
+        .and_then(|parent| view.get::<ListNode>(parent));
+    if !check_parent.is_some_and(|list| list.list_type() == ListType::Check)
+        || view.children(key).any(|child| view.is::<ListNode>(child))
+    {
+        return Ok(None);
+    }
+    collect_item(state, key).map(Some)
+}
+
 fn collect_item(state: &impl Read, key: NodeKey) -> Result<ChecklistItemMeta, Error> {
     let view = state.view();
     let item = view

@@ -345,3 +345,63 @@ fn per_list_collection_equals_bulk_union_and_preserves_unknown_settings() -> Res
     assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
+
+#[test]
+fn per_item_collection_covers_nested_rows_and_rejects_unsupported_coverage() -> Result<(), Error> {
+    let mut editor =
+        crate::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("registry");
+    let ((wrapper, plain, task, bullet_item, detached, paragraph), _) = editor.update(|tx| {
+        let check = tx.create(ListNode::new(ListType::Check, 1))?;
+        let wrapper = tx.create(ListItemNode::default())?;
+        let nested = tx.create(ListNode::new(ListType::Check, 1))?;
+        let plain = tx.create(ListItemNode::default())?;
+        let text = tx.create_text("nested ordinary")?;
+        tx.append(plain, &[text.key()])?;
+        let task = tx.create(ListItemNode::default())?;
+        let mention = tx.create(DocumentMentionNode {
+            block_name: Maybe::Value("task".into()),
+            document_id: Maybe::Value("task-fixture".into()),
+            ..Default::default()
+        })?;
+        tx.append(task, &[mention.key()])?;
+        tx.append(nested, &[plain.key(), task.key()])?;
+        tx.append(wrapper, &[nested.key()])?;
+        tx.append(check, &[wrapper.key()])?;
+        let bullet = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let bullet_item = tx.create(ListItemNode::default())?;
+        let bullet_text = tx.create_text("bullet")?;
+        tx.append(bullet_item, &[bullet_text.key()])?;
+        tx.append(bullet, &[bullet_item.key()])?;
+        let detached = tx.create(ListItemNode::default())?;
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[check.key(), bullet.key(), paragraph.key()])?;
+        Ok((
+            wrapper.key(),
+            plain.key(),
+            task.key(),
+            bullet_item.key(),
+            detached.key(),
+            paragraph.key(),
+        ))
+    })?;
+    let state = editor.state();
+    let before = state.view().export_json(NodeKey::ROOT)?;
+    let plain_meta = collect_checklist_item_metadata(state, plain)?.expect("nested row");
+    assert_eq!(plain_meta.key, plain);
+    assert_eq!(plain_meta.task_id, Maybe::Null);
+    assert_eq!(plain_meta.text, "nested ordinary");
+    assert!(plain_meta.leading_keys.is_empty() && plain_meta.attached_keys.is_empty());
+    assert_eq!(
+        collect_checklist_item_metadata(state, task)?
+            .expect("task row")
+            .task_id,
+        Maybe::Value("task-fixture".into())
+    );
+    for unsupported in [wrapper, bullet_item, detached, paragraph] {
+        assert!(collect_checklist_item_metadata(state, unsupported)?.is_none());
+    }
+    assert_eq!(before, state.view().export_json(NodeKey::ROOT)?);
+    Ok(())
+}

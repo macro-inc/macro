@@ -121,3 +121,5 @@ Read bulk table geometry through group-b.table-facts and the actual core table m
 Apply group-b.table selection-merge and selection-split to the admitted current selection through the shared table operations, then clear selection only after success; keep clipboard completion policy separate.
 
 Use the opt-in Macro search-text sync policy only when the browser enables Markdown search text. The policy reads the typed durable ID and projects the derived field to Loro while keeping ordinary editor exports unchanged until a storage import.
+
+Use collect_checklist_item_metadata for attached ordinary nested rows; None means unsupported coverage, and per-item reads do not supply root wrapper ownership or replace the bulk planning collector.
