@@ -67,6 +67,7 @@ fn slack_import_worker_uses_local_resources_and_starts_paused() {
     assert_eq!(env["INTERNAL_API_KEY"], env["INTERNAL_API_SECRET_KEY"]);
     assert_eq!(env["SLACK_IMPORT_ENABLED"], "false");
     assert_eq!(env["SLACK_IMPORT_CONCURRENCY"], "1");
+    assert_eq!(env["RUST_MIN_STACK"], "16777216");
 }
 
 #[test]
