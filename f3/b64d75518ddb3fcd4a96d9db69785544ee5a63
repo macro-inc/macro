@@ -1,0 +1,21 @@
+crates/messages/src/domain/service.rs
+  s_07064c3ce26b90::t_cbdf4490ee02be 902-904
+crates/messages/src/domain/service/test.rs
+  s_07064c3ce26b90::t_cbdf4490ee02be 756-773
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f3b64d75518ddb3fcd4a96d9db69785544ee5a63",
+  "prompts": {},
+  "sessions": {
+    "s_07064c3ce26b90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7ee-32b9-7350-8641-bc9f59b2da48",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
