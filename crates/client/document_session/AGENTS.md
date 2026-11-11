@@ -141,3 +141,5 @@ For browser MarkdownSync history, clear selection in the historic content update
 Preserve filtered importer state in the initial stored comparison while keeping ordinary Source import omissions; readonly initialization must not repair persisted slots merely to attach.
 
 Observe checklist candidates from actual accepted/error commit arrays and derive plans only at the sealed final-output epilogue; acknowledge exact receipts only after native host output transfer succeeds.
+
+Forward the default-off `dev-probes` feature only to `lexical_loro/dev-probes`; production native profiles must reject it.

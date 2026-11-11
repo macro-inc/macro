@@ -68,6 +68,9 @@ export function assertNativeEditorGraph(
     }
     packages.add(name);
     const features = new Set(fields[1].split(',').filter(Boolean));
+    if (features.has('dev-probes')) {
+      throw new Error(`Native editor graph enables development probes: ${line}`);
+    }
     if (
       ((name === 'document_session' || name === 'document_session_wasm') &&
         features.has('compatibility')) ||

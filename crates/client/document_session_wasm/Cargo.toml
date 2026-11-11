@@ -9,6 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["bebop-owned-all"]
+dev-probes = ["document_session/dev-probes"]
 # Only the explicit Lexical compatibility web artifact hosts JS classes.
 compat-web = ["bebop-owned-all", "compatibility"]
 bebop-owned-all = []

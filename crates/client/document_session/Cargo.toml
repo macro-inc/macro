@@ -33,6 +33,7 @@ proptest.workspace = true
 
 [features]
 application = ["dep:macro_document_model", "macro_document_model/html", "dep:rand_chacha"]
+dev-probes = ["lexical_loro/dev-probes"]
 compatibility = ["lexical_model/foreign-nodes"]
 conformance = []
 # Simulation-only malformed projection producer; never ship enabled.

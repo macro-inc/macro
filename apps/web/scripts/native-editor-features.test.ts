@@ -14,6 +14,30 @@ test('native graphs retain application support without foreign nodes', () => {
   ).not.toThrow();
 });
 
+test('production graphs reject development probes at every forwarded layer', () => {
+  for (const dependency of [
+    'document_session_wasm',
+    'document_session',
+    'lexical_loro',
+  ]) {
+    const graph = [
+      'document_session_wasm v0.1.0|bebop-owned-all',
+      'document_session v0.1.0|application',
+      'lexical_loro v0.1.0|',
+      'lexical_model v0.1.0|',
+    ]
+      .map((line) =>
+        line.startsWith(`${dependency} v`)
+          ? `${line}${line.endsWith('|') ? '' : ','}dev-probes`
+          : line
+      )
+      .join('\n');
+    expect(() =>
+      assertNativeEditorGraph(graph, 'document_session_wasm')
+    ).toThrow('enables development probes');
+  }
+});
+
 test('a transitive foreign-nodes route fails even without a session compatibility feature', () => {
   expect(() =>
     assertNativeEditorGraph(

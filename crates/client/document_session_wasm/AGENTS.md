@@ -299,3 +299,5 @@ The optional final `createMacroWithNamespace` argument enables root search-text 
 Replace checklist packet receipt metadata at successful direct-buffer encode before telemetry append; expose it infallibly after decorator exposure, and commit initialize reset drafts only after encoding and exposure succeed.
 
 Use a registered render-signature test decorator for observer failure controls so actual model mutations produce the observation under test.
+
+Keep the default-off `dev-probes` feature restricted to preview/test builds; forward it to `document_session/dev-probes` and reject it in production native feature graphs.
