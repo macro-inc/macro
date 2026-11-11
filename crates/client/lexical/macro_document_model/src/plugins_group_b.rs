@@ -5,6 +5,7 @@ use lexical_model::*;
 mod booking_mention_actions_test;
 
 mod booking_mention_actions;
+mod agent_session_mention_actions;
 mod checklist;
 mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
@@ -114,6 +115,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = pr_mention_actions::register(builder);
     let builder = booking_mention_actions::register(builder);
     let builder = date_mention_actions::register(builder);
+    let builder = agent_session_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
     let builder = gif_insert::register(builder);
     let builder = title_handoff::register(builder);
@@ -211,6 +213,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = date_mention_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = agent_session_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = equation_insert::decode(name, json)? {

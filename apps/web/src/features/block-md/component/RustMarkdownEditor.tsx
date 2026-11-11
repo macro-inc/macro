@@ -12,6 +12,8 @@ import { createNativeFastContactDecoratorViews } from '@core/component/LexicalMa
 import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-html-views';
 import { createNativeFastSelectionDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-selection-views';
 import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-static-views';
+import { createNativeAgentSessionMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-host';
+import { createNativeAgentSessionMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-agent-session-mention-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeDateMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-host';
 import { createNativeDateMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-views';
@@ -189,6 +191,11 @@ export default function RustMarkdownEditor(props: {
     isInteractable: canInteractWithMedia,
   });
   overlayLifecycle.add(() => documentCardContext.dispose());
+  const agentSessionMentionContext = createNativeAgentSessionMentionContext(
+    theme,
+    canInteractWithMedia
+  );
+  overlayLifecycle.add(() => agentSessionMentionContext.dispose());
   const imageContext = createNativeImageContext(
     theme,
     canInteractWithMedia,
@@ -344,6 +351,9 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeTagMentionViews(tagMentionContext),
                   ...createNativeDateMentionViews(dateMentionContext),
+                  ...createNativeAgentSessionMentionViews(
+                    agentSessionMentionContext
+                  ),
                   ...createNativePullRequestMentionViews(
                     pullRequestMentionContext
                   ),

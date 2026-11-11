@@ -21,17 +21,24 @@ import {
 } from 'lexical';
 import { createSignal, onMount, Show, Suspense, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { AgentSessionMentionHostProp } from '../../decorator-host/agent-session-mention-host';
 import { autoRegister } from '../../plugins';
 import { AgentSessionMentionLabel } from './AgentSessionMentionLabel';
 import { MagicChip } from './MagicChip';
 
-export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
+export function AgentSessionMention(
+  props: AgentSessionMentionDecoratorProps & AgentSessionMentionHostProp
+) {
   const wrapper = useContext(LexicalWrapperContext);
   const layout = useSplitLayout();
   // Older documents stored expanded references inside paragraphs. Parsing a
   // saved editor state skips transforms; normalize this node on first mount.
   onMount(() => {
     if (!props.expanded) return;
+    if (props.host) {
+      props.host.normalize(props.key);
+      return;
+    }
     wrapper?.editor.update(() => {
       const node = $getNodeByKey(props.key);
       if (!$isAgentSessionMentionNode(node)) return;
@@ -41,7 +48,8 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
   });
   const query = useAgentSessionMentionPreview(
     () => props.id,
-    () => !wrapper?.skipPreviewFetch
+    () =>
+      props.host ? props.host.previewFetchEnabled() : !wrapper?.skipPreviewFetch
   );
   // Guard resource reads: a pending chip must never suspend its editor.
   const preview = () => (query.isSuccess ? query.data : undefined);
@@ -62,8 +70,10 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
     return session()?.name || props.label || 'Agent session';
   };
   const selected = () =>
-    wrapper?.selection?.type === 'node' &&
-    wrapper.selection.nodeKeys.has(props.key);
+    props.host
+      ? props.host.isSelected(props.key)
+      : wrapper?.selection?.type === 'node' &&
+        wrapper.selection.nodeKeys.has(props.key);
   const [previewCardOpen, setPreviewCardOpen] = createSignal(false);
   const [previewSheetOpen, setPreviewSheetOpen] = createSignal(false);
   const open = (event: MouseEvent | KeyboardEvent | null) => {
@@ -83,15 +93,17 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       }
     );
   };
-  if (wrapper?.editor)
+  const onEnter = (event: KeyboardEvent | null) => {
+    if (!selected() || !(session() || isUnavailable())) return false;
+    open(event);
+    return true;
+  };
+  if (props.host) autoRegister(props.host.registerNormalEnter(onEnter));
+  else if (wrapper?.editor)
     autoRegister(
       wrapper.editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (event) => {
-          if (!selected() || !(session() || isUnavailable())) return false;
-          open(event);
-          return true;
-        },
+        onEnter,
         COMMAND_PRIORITY_NORMAL
       )
     );
@@ -101,9 +113,17 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       open(event);
     }
   );
-  const canExpand = () => Boolean(session() && wrapper?.isInteractable());
+  const canExpand = () =>
+    Boolean(
+      session() &&
+        (props.host ? props.host.isInteractable() : wrapper?.isInteractable())
+    );
   const setExpanded = (expanded: boolean) => {
     if (!canExpand()) return;
+    if (props.host) {
+      props.host.setExpanded(props.key, expanded);
+      return;
+    }
     wrapper?.editor.update(() => {
       const node = $getNodeByKey(props.key);
       if ($isAgentSessionMentionNode(node)) node.setExpanded(expanded);
@@ -171,6 +191,7 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
       <div class="block w-full" data-agent-session-expanded="true">
         <Suspense>
           <MagicChip
+            host={props.host?.magic}
             key={props.key}
             agentSessionId={props.id}
             promptedMessage={null}
