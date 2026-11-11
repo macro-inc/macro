@@ -79,3 +79,55 @@ it('resolves only the active alias window and discards old private-user/query re
   expect(client.getQueryCache().getAll()).toHaveLength(0);
   client.clear();
 });
+
+it('keeps its window key while rows arrive within the page and changes it for the next page', async () => {
+  vi.useFakeTimers();
+  resolve.mockResolvedValue({
+    users: [],
+    unresolved: [],
+    source: 'server',
+    offline: false,
+  });
+  const contact = (index: number) => ({
+    id: String(index),
+    email: `person${index}@example.com`,
+  });
+  const [rows, setRows] = createSignal([contact(0), contact(1)]);
+  const client = new QueryClient();
+  let source: ReturnType<
+    typeof createContactAliasWindow<ReturnType<typeof contact>>
+  >;
+  const mounted = render(() => {
+    function Harness() {
+      source = createContactAliasWindow({
+        rows,
+        email: (row) => row.email,
+        search: () => 'jacob',
+        enabled: () => true,
+        hasMore: () => false,
+        loadMore: async () => {},
+      });
+      return null;
+    }
+    return (
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>
+    );
+  });
+  await vi.runOnlyPendingTimersAsync();
+  const firstPage = source!.windowKey();
+  expect(firstPage).toBeDefined();
+
+  // The server answers after the cached rows, within the same page.
+  setRows(Array.from({ length: 120 }, (_, index) => contact(index + 5)));
+  await vi.runOnlyPendingTimersAsync();
+  expect(source!.windowKey()).toBe(firstPage);
+
+  await source!.loadMore();
+  await vi.runOnlyPendingTimersAsync();
+  expect(source!.windowKey()).not.toBe(firstPage);
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+});

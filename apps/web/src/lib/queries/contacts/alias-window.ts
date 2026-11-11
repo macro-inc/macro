@@ -71,7 +71,9 @@ export function createContactAliasWindow<T extends { id: string }>(options: {
     rows,
     windowKey: () =>
       options.enabled()
-        ? hashKey([options.search(), start(), rows().map((row) => row.id)])
+        ? // The page position only: rows arriving or refreshing within the
+          // page are not a new window.
+          hashKey([options.search(), start()])
         : undefined,
     users: () => resolution.data()?.users ?? [],
     loading: resolution.loading,

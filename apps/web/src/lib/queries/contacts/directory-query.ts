@@ -232,8 +232,9 @@ export function createContactDirectoryWindow(
       setSearch(value);
     },
     data,
-    windowKey: () =>
-      data() ? `${generation()}:${hashKey([request()])}` : undefined,
+    /** Names the page on screen (query, eligibility, continuation). A refresh
+     * of that page keeps its key, so callers reset focus only for a new page. */
+    windowKey: () => (data() ? hashKey([request()]) : undefined),
     loading: () => query.isFetching || search() !== debouncedSearch(),
     error: () => query.error,
     next: () => {

@@ -24,6 +24,7 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
+import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
@@ -57,6 +58,8 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
+import { commandSearchResultKey } from './contact-items';
+import { createSelectionAnchor } from './selection-anchor';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
 import { defaultCommandResultIndex } from './core/default-result-index';
@@ -507,8 +510,25 @@ function CommandSearchMenu(
     }
   });
 
+  const viewerId = useUserId();
+  const selectionScope = createMemo(() => `${categoryFilter()}\n${query()}`);
+  const anchor = createSelectionAnchor({
+    items: filteredItems,
+    key: (item) => commandSearchResultKey(item, viewerId()),
+    scope: selectionScope,
+    selectedIndex: CommandState.selectedIndex,
+    setSelectedIndex: (index) =>
+      listController.setSelectedIndex(index, { scrollIntoView: true }),
+  });
+  const selectFromPointer = (index: number) => {
+    listController.setSelectedIndexFromPointer(index);
+    anchor.hold();
+  };
+
+  // A new page replaces the people window. Start it from the top unless the
+  // row the user chose is still listed.
   let previousWindow: string | undefined;
-  let previousWindowQuery = '';
+  let previousWindowScope = '';
   createEffect(
     on(
       () => pagination?.windowKey?.(),
@@ -517,12 +537,14 @@ function CommandSearchMenu(
         if (
           previousWindow !== undefined &&
           previousWindow !== key &&
-          previousWindowQuery === query()
+          previousWindowScope === selectionScope() &&
+          !anchor.present()
         ) {
+          anchor.release();
           listController.setSelectedIndex(0, { scrollIntoView: true });
         }
         previousWindow = key;
-        previousWindowQuery = query();
+        previousWindowScope = selectionScope();
       }
     )
   );
@@ -544,7 +566,12 @@ function CommandSearchMenu(
     on(
       resultFollowsSearchRow,
       (hasResult, hadResult) => {
-        if (hasResult && !hadResult && CommandState.selectedIndex() === 0) {
+        if (
+          hasResult &&
+          !hadResult &&
+          CommandState.selectedIndex() === 0 &&
+          !anchor.holding()
+        ) {
           listController.setSelectedIndex(1);
         }
       },
@@ -691,7 +718,9 @@ function CommandSearchMenu(
           fireAndForget(pagination?.loadMore(), 'command-menu');
         return true;
       }
-      return listController.selectNext();
+      const moved = listController.selectNext();
+      anchor.hold();
+      return moved;
     },
     runWithInputFocused: true,
     hide: true,
@@ -704,7 +733,9 @@ function CommandSearchMenu(
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      return listController.selectPrevious();
+      const moved = listController.selectPrevious();
+      anchor.hold();
+      return moved;
     },
     runWithInputFocused: true,
     hide: true,
@@ -963,7 +994,7 @@ function CommandSearchMenu(
           items={filteredItems()}
           selectedIndex={CommandState.selectedIndex()}
           onSelect={handleItemAction}
-          onItemMouseMove={listController.setSelectedIndexFromPointer}
+          onItemMouseMove={selectFromPointer}
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           pagination={pagination}
           loading={isLoadingEntities()}
