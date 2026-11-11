@@ -172,6 +172,8 @@ test.each(['code-highlight', 'text'])(
       expect(counters.admissions).toBe(1);
       expect(root.firstElementChild?.tagName).toBe('P');
       expect(root.children).toHaveLength(3);
+      // The browser reports the caret the view wrote; Source re-resolves it.
+      document.dispatchEvent(new Event('selectionchange'));
       counters.admissions = 0;
       root.dispatchEvent(
         new KeyboardEvent('keydown', {

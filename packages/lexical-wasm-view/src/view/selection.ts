@@ -7,7 +7,7 @@ import { textLeaf } from './dom';
 import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
 import { markSelectionChangeFromDOMUpdate } from './selection-change';
-import type { Point, ViewSelection } from './types';
+import type { Point, ViewNode, ViewSelection } from './types';
 
 export function resolvePoint(
   view: EditorView,
@@ -91,6 +91,102 @@ function resolveRootBoundary(
   return { key: child.key, offset: 0, type: 'element' };
 }
 
+/** Element types whose upstream canBeEmpty() is false. */
+const CANNOT_BE_EMPTY = new Set([
+  'list',
+  'table',
+  'tablerow',
+  'tablecell',
+  'link',
+  'autolink',
+  'mark',
+  'comment-mark',
+]);
+
+function edgeDescendant(
+  view: EditorView,
+  node: ViewNode,
+  last: boolean
+): ViewNode | null {
+  let current: ViewNode | null = null;
+  let parent = node;
+  while (parent.kind === 'element' && parent.children.length > 0) {
+    const key = parent.children[last ? parent.children.length - 1 : 0];
+    const next = key === undefined ? null : view.node(key);
+    if (!next) return current;
+    current = next;
+    parent = next;
+  }
+  return current;
+}
+
+/**
+ * Pinned $internalResolveSelectionPoint for a non-root element DOM position:
+ * a TextNode at the DOM child index, or reached through an element child,
+ * owns the point; otherwise an end position steps past the child.
+ */
+function resolveElementDescent(
+  view: EditorView,
+  dom: Node,
+  offset: number,
+  point: Point,
+  previous: Point | undefined
+): Point {
+  if (dom === view.root || dom.nodeType !== 1 || point.type !== 'element')
+    return point;
+  let element = view.node(point.key);
+  if (element?.kind !== 'element' || view.keyFromDOM(dom) !== point.key)
+    return point;
+  const childNodes = dom.childNodes;
+  const toEnd = offset === childNodes.length && childNodes.length > 0;
+  const childDom = childNodes.item(toEnd ? childNodes.length - 1 : offset);
+  if (childDom) {
+    const key = view.keyFromDOM(childDom);
+    const text = key === null ? null : view.node(key);
+    if (text?.kind === 'text')
+      return {
+        key: text.key,
+        offset: toEnd ? text.text.length : 0,
+        type: 'text',
+      };
+  }
+  let index = point.offset;
+  if (toEnd && index >= element.children.length)
+    index = Math.max(0, element.children.length - 1);
+  const childKey = element.children[index];
+  let child = childKey === undefined ? null : view.node(childKey);
+  if (
+    child?.kind === 'element' &&
+    (previous === undefined ||
+      CANNOT_BE_EMPTY.has(element.type) ||
+      element.key !== previous.key)
+  ) {
+    const descendant = edgeDescendant(view, child, toEnd);
+    if (descendant === null) element = child;
+    else {
+      child = descendant;
+      const parent =
+        descendant.kind === 'element'
+          ? descendant
+          : descendant.parent === null
+            ? null
+            : view.node(descendant.parent);
+      if (!parent) return point;
+      element = parent;
+    }
+    index = 0;
+  }
+  if (child?.kind === 'text')
+    return {
+      key: child.key,
+      offset: toEnd ? child.text.length : 0,
+      type: 'text',
+    };
+  if (child && child.key !== element.key && toEnd)
+    index = Math.min(element.children.length, index + 1);
+  return { key: element.key, offset: index, type: 'element' };
+}
+
 function read(view: EditorView, rootBoundary: boolean): ViewSelection {
   const selection = view.root.ownerDocument.getSelection();
   if (!selection?.anchorNode || !selection.focusNode) return { kind: 'none' };
@@ -103,6 +199,21 @@ function read(view: EditorView, rootBoundary: boolean): ViewSelection {
   const dirty =
     (anchor.type === 'text' && selection.anchorNode.nodeType !== 3) ||
     (focus.type === 'text' && selection.focusNode.nodeType !== 3);
+  const published = view.selection().selection;
+  anchor = resolveElementDescent(
+    view,
+    selection.anchorNode,
+    selection.anchorOffset,
+    anchor,
+    published.kind === 'range' ? published.anchor : undefined
+  );
+  focus = resolveElementDescent(
+    view,
+    selection.focusNode,
+    selection.focusOffset,
+    focus,
+    published.kind === 'range' ? published.focus : undefined
+  );
   if (rootBoundary) {
     const previous = view.selection().selection;
     anchor = resolveRootBoundary(
