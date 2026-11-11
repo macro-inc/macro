@@ -4,6 +4,7 @@ import {
   type DocumentCardData,
   type DocumentCardDecoratorProps,
   DocumentCardNode,
+  type DocumentCardPreviewInput,
   type PreviewData,
 } from '../nodes/DocumentCardNode';
 import {
@@ -35,7 +36,7 @@ it('types admitted nullable render inputs separately from serialized authoring i
     string | null | undefined
   >();
   expectTypeOf<DocumentCardDecoratorProps['previewData']>().toEqualTypeOf<
-    PreviewData | null | undefined
+    DocumentCardPreviewInput | null | undefined
   >();
 });
 
@@ -117,3 +118,43 @@ it('retains nullable imported card fields in actual component props', () => {
     });
   });
 });
+
+for (const entry of [
+  { name: 'array', value: [1, 'opaque'] },
+  { name: 'extra object', value: { opaque: { second: 2, first: 1 } } },
+]) {
+  it(`retains imported card ${entry.name} preview data without a view member`, () => {
+    const editor = createEditor({
+      nodes: [DocumentCardNode, DocumentMentionNode],
+      onError(error) {
+        throw error;
+      },
+    });
+    editor.setEditorState(
+      editor.parseEditorState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'document-card',
+                version: 1,
+                documentId: 'fixture-document',
+                documentName: 'Document',
+                blockName: 'md',
+                previewData: entry.value,
+              },
+            ],
+          },
+        })
+      )
+    );
+    editor.read(() => {
+      const actual = $nodesOfType(DocumentCardNode)[0]?.exportComponentProps();
+      expect(JSON.stringify(actual?.previewData)).toBe(
+        JSON.stringify(entry.value)
+      );
+    });
+  });
+}
