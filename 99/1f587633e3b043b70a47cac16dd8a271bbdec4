@@ -1,0 +1,39 @@
+Cargo.lock
+  s_c6a08203850d89::t_e2ea6609c45052 1598,8018,10047,10049,10428,11255,14873,16078,16098,16265,16303,16305,17445,17458,17517,20254,22491
+apps/web/src/components/app/tab-layout/tests/tab-hotkeys.test.tsx
+  s_3a75afec80296b::t_b8b68eaf23add1 67-72
+crates/coding_agent_worker/src/tui/agent_catalog/npm_adapter.rs
+  s_3a75afec80296b::t_b8e7b0fb4673cd 132-137,141,154-205
+crates/coding_agent_worker/src/tui/agent_catalog/test.rs
+  s_3a75afec80296b::t_e408aca4bed2c2 217-257
+crates/coding_agent_worker/src/tui/quickstart/test.rs
+  s_3a75afec80296b::t_d815ab110a6968 229-269
+crates/coding_agent_worker/src/tui/ui/quickstart.rs
+  s_3a75afec80296b::t_f07aa23e50a4a1 5,13-15,34-46,91-94
+crates/scheduled_action/src/domain/event_runs/admission/test.rs
+  s_3a75afec80296b::t_d7a16cbf83554f 324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "991f587633e3b043b70a47cac16dd8a271bbdec4",
+  "prompts": {},
+  "sessions": {
+    "s_3a75afec80296b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e9f23ea-da48-4033-a8d4-e1177c19b6c6",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
