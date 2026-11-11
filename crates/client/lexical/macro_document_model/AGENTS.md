@@ -140,3 +140,5 @@ Use the opt-in Macro search-text sync policy only when the browser enables Markd
 Construct inserted equations before invoking the shared current/previous/root-end selection insertion primitive; preserve the display flag and the inherited inline decorator policy.
 
 Keep GIF insertion on its explicit list-split/select-next path; preserve the lone empty paragraph caret and Source’s NodeSelection false-inserted/orphaned-upload behavior until both engines change together.
+
+Apply Booking display-label updates to the current typed key only; reject stale generations and closed-object payload violations, and add Historic/selection/scroll tags only for truthy changed labels.

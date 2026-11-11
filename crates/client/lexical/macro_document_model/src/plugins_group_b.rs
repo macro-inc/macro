@@ -1,6 +1,10 @@
 //! Structure, list, table, media, clipboard and link model plugins.
 use lexical_model::*;
 
+#[cfg(test)]
+mod booking_mention_actions_test;
+
+mod booking_mention_actions;
 mod checklist;
 mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
@@ -105,6 +109,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = decorator_actions::register(builder);
     let builder = decorator_content_actions::register(builder);
     let builder = pr_mention_actions::register(builder);
+    let builder = booking_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
     gif_insert::register(builder)
 }
@@ -191,6 +196,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = pr_mention_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = booking_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = equation_insert::decode(name, json)? {
