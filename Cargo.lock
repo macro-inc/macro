@@ -21508,6 +21508,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "user_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "user_language"
 version = "0.1.0"
 dependencies = [
