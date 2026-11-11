@@ -1,0 +1,23 @@
+agent-teammates/muppet/packages/lib/utilities/macro/chat/index.ts
+  s_0030f7dd01decd::t_e75707d7ab0d3f 16,19-21,23,25,27-28,30,32,34-36,38-40,43-49,51-56,58-61,362-369,395,417,453
+agent-teammates/muppet/packages/lib/utilities/jobs/index.ts
+  s_0030f7dd01decd::t_e75707d7ab0d3f 22-34,36,38,40,42-44
+agent-teammates/muppet/packages/lib/utilities/schedules/schedules.ts
+  s_0030f7dd01decd::t_e75707d7ab0d3f 8,15-16,20-22,24,26-28,30,32,34-35,38-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d0cfca27725ce607f1652ef28e09d081bc5ad619",
+  "prompts": {},
+  "sessions": {
+    "s_0030f7dd01decd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "169c829c-493c-4436-9e16-7883862f5297",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
