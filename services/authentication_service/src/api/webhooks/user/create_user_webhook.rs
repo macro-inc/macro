@@ -39,8 +39,8 @@ use macro_user_id::{
 };
 use model::authentication::webhooks::{FusionAuthUserWebhook, User as FusionAuthWebhookUser};
 use model_entity::EntityType;
-use tracing::Instrument;
 use teams::domain::team_repo::TeamService;
+use tracing::Instrument;
 
 /// Macro team members added to every new user's support channel.
 const MACRO_SUPPORT_EMAILS: [&str; 15] = [
