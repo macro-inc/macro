@@ -1,0 +1,34 @@
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_c6a08203850d89::t_66aed69dc1d4ee 6,350-355
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ReplyTarget.tsx
+  s_c6a08203850d89::t_66aed69dc1d4ee 44
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_c6a08203850d89::t_e306a58ce7fe27 22,207
+  s_c6a08203850d89::t_66aed69dc1d4ee 20,206,209-210,212-224
+apps/web/src/lib/core/messages/message-transport.tsx
+  s_c6a08203850d89::t_66aed69dc1d4ee 70-72,75-77
+apps/web/src/features/channel/Call/chat/CallChat.test.tsx
+  s_c6a08203850d89::t_3df908e8bba783 6,13,70,78,81-87,130-185,187-188,190-192
+  s_c6a08203850d89::t_b246752ea556fc 186,189,193-196
+  s_c6a08203850d89::t_be96c76ff9b7fc 197-198
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ReplyTarget.test.tsx
+  s_c6a08203850d89::t_3df908e8bba783 3,49,53-58,68-82,84-87
+  s_c6a08203850d89::t_b246752ea556fc 83
+  s_c6a08203850d89::t_df0400e867095d 88-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cd6a45f575801f1bef96543d3d56bcab8abc71fc",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
