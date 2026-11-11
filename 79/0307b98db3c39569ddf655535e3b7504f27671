@@ -1,0 +1,941 @@
+.agents/agents/db-reviewer.md
+  s_f1f7d0d5be9ceb::t_458d62fca2d7ee 1-39
+.agents/rules/rust/db.md
+  s_f1f7d0d5be9ceb::t_c7ba99a008dcbc 17-20,46-49
+.agents/rules/sdk.md
+  s_f1f7d0d5be9ceb::t_caab76d91d914e 26-28
+.agents/rules/web/architecture.md
+  s_f1f7d0d5be9ceb::t_a5dc3d454c98c3 71
+.agents/rules/web/solid.md
+  s_f1f7d0d5be9ceb::t_d0261c627d2ded 25
+.agents/skills/add-sdk-endpoint/SKILL.md
+  s_f1f7d0d5be9ceb::t_5f4ee6c6b7c3b2 23-28
+.agents/skills/git/SKILL.md
+  s_f1f7d0d5be9ceb::t_96b496d5347418 106-117,142-149
+.agents/skills/migration-review/SKILL.md
+  s_f1f7d0d5be9ceb::t_01786b61149268 1-141
+.agents/skills/query-review/SKILL.md
+  s_f1f7d0d5be9ceb::t_c8f41df3b32d25 1-136
+.agents/skills/query-review/measuring-plans.md
+  s_f1f7d0d5be9ceb::t_38b2b0cbd14784 1-153
+.agents/skills/query-review/table-sizes.md
+  s_f1f7d0d5be9ceb::t_0555ea440c6633 1-39
+.agents/skills/query-writing/SKILL.md
+  s_f1f7d0d5be9ceb::t_e8328193eed252 1-200
+.agents/skills/review/SKILL.md
+  s_f1f7d0d5be9ceb::t_79b6f517738589 1-70
+.agents/skills/sqlx-migration/SKILL.md
+  s_f1f7d0d5be9ceb::t_ff8e51f47bab25 27-29
+.agents/skills/sqlx-query-validator/SKILL.md
+  s_f1f7d0d5be9ceb::t_2938b008314807 3,74,76-80,100-101
+.pi/agents/db-checker.md
+  s_f1f7d0d5be9ceb::t_1e122688d4c765 25-30,58-59
+.sqlx/query-20afc51d5a5844bae80efee2d742bf5b54dd344b31fa089c966ce13f3e937152.json
+  s_f1f7d0d5be9ceb::t_ef721127eb0b14 3,14
+.sqlx/query-28d5f8f62902ef9fa38cfecadf0a73c19bfc6852a788863f58b35a301fb61a29.json
+  s_f1f7d0d5be9ceb::t_61e697077c1679 3,16-17,22
+.sqlx/query-2adda9be3b6cfc58230c492316ac03d4b52ca0afb932c0256f6d525c111f73f1.json
+  s_f1f7d0d5be9ceb::t_e22029bf9babc9 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-2ddf2a39fd51595b7d4e3e2bc3e0f9fc119bded0a08168a147d960cb26719396.json
+  s_f1f7d0d5be9ceb::t_e7dc2272b952ea 1-80
+.sqlx/query-3500068c8149dd1ba745938e54e346485052cd538a0c440fb8ec88f3b049ed7a.json
+  s_f1f7d0d5be9ceb::t_c4cda5d6fd4bf3 3,11-12,17
+.sqlx/query-4ca71721be564657a8c0aa4e136bfc9c937596493228474c6ef4e8471485d66c.json
+  s_f1f7d0d5be9ceb::t_ce58351b8b9c84 3,18,23,28-32,37,42,47,52,66,76
+.sqlx/query-4e77d12e0fcb82ecd32ac01aab2fbaa5c79baa8882b92071ea4b2bfea883906c.json
+  s_f1f7d0d5be9ceb::t_4182a22d591f0a 3,18,23,28-32,37,42,47,52,59,62,69,79
+.sqlx/query-56ae3b60f3bf1d6e08012079cc7cebee77d606da4cf675c36d59685a582d68a3.json
+  s_f1f7d0d5be9ceb::t_ef98a8b9fa2c36 3,18,23,28-32,37,42,47,52,68,78
+.sqlx/query-8a8c624e6b80244fc08abc9c7db5110321fdf240f57481cb751b804a8f2958ca.json
+  s_f1f7d0d5be9ceb::t_ef62328881a3d7 3,18,23,28-32,37,42,47,52,57,82,86
+.sqlx/query-a7e23413a3e68e16f71238afb3970f6f6552884a177dde4e711edca3afee27aa.json
+  s_f1f7d0d5be9ceb::t_31f00625e79c7d 3,20-24,35,39
+.sqlx/query-ac245a2d200ce337934a54741a47909ace3c4072031574be100285b5cf860039.json
+  s_f1f7d0d5be9ceb::t_ae2055c4a2e91e 3,18,23,28-32,37,42,47,52,67,77
+.sqlx/query-c93d8d9bca4cfb5ed9749efa00c7061237e42f54390ef1c76b7c5ec099e054f3.json
+  s_f1f7d0d5be9ceb::t_29c9b0bb247886 1-79
+CLAUDE.md
+  s_f1f7d0d5be9ceb::t_7da3a441756cb6 41,58,117-118
+CODING.md
+  s_f1f7d0d5be9ceb::t_3707f6503bf330 30
+Cargo.lock
+  s_f1f7d0d5be9ceb::t_804f0803cb8ca0 359,375,394,2332,4857,4899,4921,12452,12455
+apps/web/AGENTS.md
+  s_f1f7d0d5be9ceb::t_b4cd389996ad62 293-294,296-309,847,916-918,922-924,1213,1350-1354
+apps/web/native-commands.json
+  s_f1f7d0d5be9ceb::t_e058f92d4a2062 80,88,94
+apps/web/src/components/app/Layout.tsx
+  s_f1f7d0d5be9ceb::t_bf9f6a7628eb58 258-262,368-370
+apps/web/src/components/app/mobile/float-regions/FloatRegionHost.tsx
+  s_f1f7d0d5be9ceb::t_6979590c9f040d 11
+apps/web/src/components/app/mobile/float-regions/float-region-state.ts
+  s_f1f7d0d5be9ceb::t_94a4c9113bcd3a 5
+apps/web/src/components/app/side-panel/SidePanel.test.tsx
+  s_f1f7d0d5be9ceb::t_eef0b0bc25a720 10,12-16,26-38,51,56,68-69,90-95,97-102,104-109,120-154
+apps/web/src/components/app/side-panel/SidePanel.tsx
+  s_f1f7d0d5be9ceb::t_6ebd2a66fd30e3 3,47,91-92,165-166,168-169,184,209-210,235-237,254,274,288-292,295-298,330,399,401,443,493-502,775
+apps/web/src/components/app/side-panel/context.ts
+  s_f1f7d0d5be9ceb::t_9ca57ec3e91714 32-35,41-42,48-49
+apps/web/src/components/app/side-panel/sizing.ts
+  s_f1f7d0d5be9ceb::t_603c5c8d758bd7 1-2
+apps/web/src/components/app/sidebar-next/return-to-call-button.tsx
+  s_f1f7d0d5be9ceb::t_082b4884649fe9 3,6,8-22,27,30-39,42-43,45,50-83,85-93,98
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.test.tsx
+  s_f1f7d0d5be9ceb::t_73c04b9ddf2fef 1-317
+apps/web/src/components/app/split-layout/split-router/agent-reply-links.tsx
+  s_f1f7d0d5be9ceb::t_10ee4d6ffe429e 1-101
+apps/web/src/components/icon/system/README.md
+  s_f1f7d0d5be9ceb::t_5399a8598e0387 5-9
+apps/web/src/components/icon/system/regular/picture-in-picture.svg
+  s_f1f7d0d5be9ceb::t_f43e6cd9b50790 1-4
+apps/web/src/components/icon/system/regular/speaker-slash.svg
+  s_f1f7d0d5be9ceb::t_78a46ed986aaef 1-24
+apps/web/src/components/icon/system/regular/users-slash.svg
+  s_f1f7d0d5be9ceb::t_6899946f25c879 1-3
+apps/web/src/components/icon/system/regular/waveform.svg
+  s_f1f7d0d5be9ceb::t_bcdccefeefd069 2-6
+apps/web/src/components/ui/components/ButtonGroup.tsx
+  s_f1f7d0d5be9ceb::t_17c40d378d45c7 9,79-80,116
+apps/web/src/components/ui/components/ProgressPill.docs.tsx
+  s_f1f7d0d5be9ceb::t_ad7f08cbf80522 4,41-51,56,64
+apps/web/src/components/ui/components/ProgressPill.tsx
+  s_f1f7d0d5be9ceb::t_04c7f33a4e49aa 12,29-31,40,48
+apps/web/src/components/ui/components/Slider.docs.tsx
+  s_f1f7d0d5be9ceb::t_53c3bfff0b5678 23-26,66
+apps/web/src/components/ui/components/Slider.tsx
+  s_f1f7d0d5be9ceb::t_56d576e9bf764d 8-10,52,58-59
+apps/web/src/components/ui/components/Tabs.docs.tsx
+  s_f1f7d0d5be9ceb::t_de70ccbaa1e799 18-22,169
+apps/web/src/components/ui/components/Tabs.test.tsx
+  s_f1f7d0d5be9ceb::t_add252aaad6c6a 24-28,38-42,144-148,168-172
+apps/web/src/components/ui/components/Tabs.tsx
+  s_f1f7d0d5be9ceb::t_54ae5b3c7bdecb 3-10,26-27,252,277-280,299-320,345-348,402-405,464-467,530-533
+apps/web/src/components/ui/components/ToggleSwitch.tsx
+  s_f1f7d0d5be9ceb::t_3d0bab880d4373 31-32,101
+apps/web/src/components/ui/components/Tooltip.test.tsx
+  s_f1f7d0d5be9ceb::t_bf1afa809e3492 170-204
+apps/web/src/components/ui/components/Tooltip.tsx
+  s_f1f7d0d5be9ceb::t_4fba1962903a72 15,123-147,188,218,226
+apps/web/src/components/ui/utils/control-sizes.ts
+  s_f1f7d0d5be9ceb::t_30ffc1bc0edd67 29-36,38-42
+apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx
+  s_f1f7d0d5be9ceb::t_1eae8528621494 1-100
+apps/web/src/features/agent-navigation/core/navigable-routes.ts
+  s_f1f7d0d5be9ceb::t_92fdbc6d9a0aa1 1-127
+apps/web/src/features/agent-session-activity/browser-test/activity.browser.e2e.ts
+  s_f1f7d0d5be9ceb::t_cabb84798c36d3 1-37
+apps/web/src/features/agent-session-activity/browser-test/index.html
+  s_f1f7d0d5be9ceb::t_29a3bf5ac268a6 1-5
+apps/web/src/features/agent-session-activity/browser-test/main.tsx
+  s_f1f7d0d5be9ceb::t_dee0e34f8d722e 1-111
+apps/web/src/features/agent-session-activity/browser-test/playwright.config.ts
+  s_f1f7d0d5be9ceb::t_265b3afb773f4b 1-32
+apps/web/src/features/agent-session-activity/browser-test/stubs.tsx
+  s_f1f7d0d5be9ceb::t_167c49d2df58d2 1-26
+apps/web/src/features/agent-session-activity/browser-test/vite.config.ts
+  s_f1f7d0d5be9ceb::t_9351e0b0955501 1-44
+apps/web/src/features/agent-session-activity/components/activity-row.tsx
+  s_f1f7d0d5be9ceb::t_b206b8605278ce 1-169
+apps/web/src/features/agent-session-activity/context/agent-activity-source.ts
+  s_f1f7d0d5be9ceb::t_ab70dba09b194c 1-29
+apps/web/src/features/agent-session-activity/core/fold-rows.test.ts
+  s_f1f7d0d5be9ceb::t_e195286c4df061 1-60
+apps/web/src/features/agent-session-activity/core/fold-rows.ts
+  s_f1f7d0d5be9ceb::t_f2def54cf5e2b8 1-66
+apps/web/src/features/agent-session-activity/core/step-label.test.ts
+  s_f1f7d0d5be9ceb::t_3782c62082192c 1-15
+apps/web/src/features/agent-session-activity/core/step-label.ts
+  s_f1f7d0d5be9ceb::t_b229de02908330 1-65
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.test.ts
+  s_f1f7d0d5be9ceb::t_0a495f73a42014 1-40
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.ts
+  s_f1f7d0d5be9ceb::t_5613e5d6ac64c6 1-119
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.test.tsx
+  s_f1f7d0d5be9ceb::t_9d7a076e56e85e 1-203
+apps/web/src/features/agent-session-activity/queries/create-agent-activity-source.ts
+  s_f1f7d0d5be9ceb::t_920ce8b8ae6b58 1-182
+apps/web/src/features/agent-session-activity/queries/keys.ts
+  s_f1f7d0d5be9ceb::t_4e8f677b795ba2 1-8
+apps/web/src/features/agent-session-activity/views/agent-activity-section.test.tsx
+  s_f1f7d0d5be9ceb::t_6e20375d9287e9 1-219
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_f1f7d0d5be9ceb::t_d93c1a85d20992 1-424
+apps/web/src/features/agent-work/views/call-work.tsx
+  s_f1f7d0d5be9ceb::t_0f7f2464bfafff 11,83-96
+apps/web/src/features/agents-view/agents-view.css
+  s_f1f7d0d5be9ceb::t_a06014a8a3d4ce 2157-2162
+apps/web/src/features/agents-view/components/AgentSessionPane.tsx
+  s_f1f7d0d5be9ceb::t_9ad460e44d5ba2 28-29,45,55,61-81,113-114,174-179,275-279,282,320-323,327,329-332,360
+apps/web/src/features/agents-view/components/AgentsSidebar.test.tsx
+  s_f1f7d0d5be9ceb::t_733d752e4090aa 368-371
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_f1f7d0d5be9ceb::t_0445b5746ca969 12,380-383,386-412,414-417,423-448
+apps/web/src/features/block-agent/component/Block.tsx
+  s_f1f7d0d5be9ceb::t_64ed21ffc9bec0 7,10,17,56-76,121-122,176,179-184,194-201,210-213,237
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_f1f7d0d5be9ceb::t_4815ff1aa3a042 42-45
+apps/web/src/features/block-agent/component/session-read-hosts.test.tsx
+  s_f1f7d0d5be9ceb::t_90d865edbb68c1 133,138-141
+apps/web/src/features/block-agent/component/sidepanel/AgentSidePanelSections.tsx
+  s_f1f7d0d5be9ceb::t_5cbdb0154ff576 13-15,17,22,48,59-61,195-206
+apps/web/src/features/block-agent/ui/ToolApprovalCard.test.tsx
+  s_f1f7d0d5be9ceb::t_b94438c82a5905 60-79
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_f1f7d0d5be9ceb::t_c792476a5674f7 15-16,36-37,54-56
+apps/web/src/features/block-call/AGENTS.md
+  s_f1f7d0d5be9ceb::t_c1f545f9e9a356 1-57
+apps/web/src/features/block-call/CLAUDE.md
+  s_f1f7d0d5be9ceb::t_652b0e1bba5bdf 1
+apps/web/src/features/block-call/component/CallBlockAdapter.test.tsx
+  s_f1f7d0d5be9ceb::t_9e13de5a1f7a58 4,39-44,71-80,83
+apps/web/src/features/block-call/component/CallBlockAdapter.tsx
+  s_f1f7d0d5be9ceb::t_09065bdadd507b 17,131,142,145
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.test.tsx
+  s_f1f7d0d5be9ceb::t_e90607ebad330e 7,15-16,31,33-35,41-51,56,58-59,65-75,78-87,106-118,122-123,126-129,155-188
+apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  s_f1f7d0d5be9ceb::t_39b1e0e1900b0f 1,3-4,7,9,13,15,19-20,22,25-31,34-37,39,45,47,53,55-60,62-104,107-110,117-137,140-184,186-194,196-213,215-411,413,415-416,418-420
+apps/web/src/features/block-call/component/CallRecording/CallRecordingChat.tsx
+  s_f1f7d0d5be9ceb::t_d4f9962d205709 1-129
+apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
+  s_f1f7d0d5be9ceb::t_827f4f1349987b 1-408
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobileActions.tsx
+  s_f1f7d0d5be9ceb::t_0815c89564585c 1-40
+apps/web/src/features/block-call/component/CallRecording/CallRecordingMobilePlayback.tsx
+  s_f1f7d0d5be9ceb::t_6dab481234a10d 1-45
+apps/web/src/features/block-call/component/CallRecording/CallRecordingParticipants.tsx
+  s_f1f7d0d5be9ceb::t_3a9e2d7c0d347b 1,7,33,61-63,66-68,77-117
+apps/web/src/features/block-call/component/CallRecording/CallRecordingPinnedPlayer.tsx
+  s_f1f7d0d5be9ceb::t_805598db93ee58 1-91
+apps/web/src/features/block-call/component/CallRecording/CallRecordingRoot.tsx
+  s_f1f7d0d5be9ceb::t_91a8e28d4cb92b 1-11
+apps/web/src/features/block-call/component/CallRecording/CallRecordingSummary.tsx
+  s_f1f7d0d5be9ceb::t_43f68dbb7df4d7 1,7,9,12-15,32-45,49-53,58
+apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
+  s_f1f7d0d5be9ceb::t_dbce8ffad0a158 1-78
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.test.tsx
+  s_f1f7d0d5be9ceb::t_566815b06f9f0b 5,16,88-89,142-195
+apps/web/src/features/block-call/component/CallRecording/CallRecordingVideo.tsx
+  s_f1f7d0d5be9ceb::t_82ef790b3d3d07 1-5,9-10,17-18,21-28,30-31,36-37,42,44-52,58-59,67
+apps/web/src/features/block-call/component/CallRecording/recording-layout.css
+  s_f1f7d0d5be9ceb::t_961a78619acacb 1-96
+apps/web/src/features/block-call/component/CallTranscript.tsx
+  s_f1f7d0d5be9ceb::t_a275a4172216a2 1,3,5,7,10-11,14-16,18-21,23-43,45,47-51,54-66,69-81,84,86-88,92-93,95-98,100-231,235-236,238-243,247-249,251-255,257-269,272,274-280,283-291,293,296-304
+apps/web/src/features/block-call/component/sidepanel/CallSidePanelSections.tsx
+  s_f1f7d0d5be9ceb::t_d2e9d696943015 3,13-15,17-18,26-27,40-45,49,75-80,83-86,89-90,96-100,106,111-114,116-125,130-135,177,180-191,201-209,213-227,229-242,263-268
+apps/web/src/features/block-call/core/recording-chat.ts
+  s_f1f7d0d5be9ceb::t_dc5dc4d060b57d 1-25
+apps/web/src/features/block-call/primitives/recording-controls.ts
+  s_f1f7d0d5be9ceb::t_57dbfe500ff080 1-44
+apps/web/src/features/block-call/primitives/recording-identity.ts
+  s_f1f7d0d5be9ceb::t_af59588e402d28 1-59
+apps/web/src/features/block-call/primitives/recording-layout.ts
+  s_f1f7d0d5be9ceb::t_6af283964516f1 1-200
+apps/web/src/features/block-call/primitives/recording-navigation.ts
+  s_f1f7d0d5be9ceb::t_afe511cd8ae150 1-68
+apps/web/src/features/block-call/primitives/recording-playback.ts
+  s_f1f7d0d5be9ceb::t_209e93305c15ac 1-162
+apps/web/src/features/block-call/primitives/recording-timeline.ts
+  s_f1f7d0d5be9ceb::t_9fbf12742ce08e 1-115
+apps/web/src/features/block-call/primitives/recording-video.ts
+  s_f1f7d0d5be9ceb::t_35125f515f295b 1-191
+apps/web/src/features/block-call/primitives/recording-volume.ts
+  s_f1f7d0d5be9ceb::t_33cb273d525c08 1-80
+apps/web/src/features/block-call/primitives/transcript-scroll.ts
+  s_f1f7d0d5be9ceb::t_25b08984fe4bf6 1-170
+apps/web/src/features/block-call/primitives/transcript-timeline.ts
+  s_f1f7d0d5be9ceb::t_932f2913ac6000 1-49
+apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
+  s_f1f7d0d5be9ceb::t_53d2f8b0b0e42b 1-108
+apps/web/src/features/block-call/views/CallDetailView.test.tsx
+  s_f1f7d0d5be9ceb::t_cc0c11d15d8d1a 33-35,40-51
+apps/web/src/features/block-call/views/CallDetailView.tsx
+  s_f1f7d0d5be9ceb::t_f6d0331148a7a0 2-6,8,10,12,15-18,20-21,23-24,37,49,52-53,55,57,62,67,73-153,186,188,198,208,214,223,235,244-245,251,254,260,262,270,281,284,296,324-326,334-376
+apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
+  s_f1f7d0d5be9ceb::t_434fe3b3510296 117,210-219,332,339-348
+apps/web/src/features/channel/Call/ActiveCallLink.tsx
+  s_f1f7d0d5be9ceb::t_302fbc34fcc0db 1-4,6,13-16,31-39,41-59,63-66,71-74
+apps/web/src/features/channel/Call/CallContext.tsx
+  s_f1f7d0d5be9ceb::t_fa22f8bb96e04a 47,66,73,426-428,515-518,1248-1270,1272,1277,1281,1499,1502-1504,1507,1531-1542,1548,1552,1556,1566-1568,1571,1593-1604,1622,1625,1883-1884,1888,1892-1894,1941-1945
+apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
+  s_f1f7d0d5be9ceb::t_fc3b71b62d8328 1,4,11-19,22-113,116-117,120-121,123,127-131,133-135,140-142,146-151,153-194,202-210,212-227,229-265,267-299,301-302,305-345
+apps/web/src/features/channel/Call/CallControls/CallControls.tsx
+  s_f1f7d0d5be9ceb::t_12ca405b0a855c 12,52
+apps/web/src/features/channel/Call/CallControls/CallControlsDefaultAndPanelRow.tsx
+  s_f1f7d0d5be9ceb::t_f92335f7f515c7 3,9,12-28,30-33,36-38,40-41
+apps/web/src/features/channel/Call/CallControls/CallMediaControls.tsx
+  s_f1f7d0d5be9ceb::t_dc89b6e55aac9c 1,3,5,8-25,28,38-47,49-55,66-106,108-114,116-154,161-167,174-257,259,268-284,287-295,297-302,304-308,310-320,322-380,383-474,510,519-539
+apps/web/src/features/channel/Call/CallControls/CallSettingsMenu.tsx
+  s_f1f7d0d5be9ceb::t_0813cb1cc7f06c 26-29
+apps/web/src/features/channel/Call/CallControls/CallSharingMenu.tsx
+  s_f1f7d0d5be9ceb::t_78dbdf6d06576e 1,3-4,8-15,19-24,55-58,63-86,99,105-107,109-113,115-122,127-131,153,155
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_f1f7d0d5be9ceb::t_883ea6bd0639c8 7,9,14,20-23,26-27,30,36,39,44-49,54-58,60-69,74,81-82,95-101,108-117,119-132,136-139,155-159,169-174,186,188,198,218,228,231,262,267-297,299-417,420,427,429-477,479-484,486-504,506-513,515-522,524-528,530-577,579-612,614-644,646-648,650-653,655-660,663-724,726,728-729,731-744,746-748,750-841,844-845,849-863,865-881,883-904,906
+apps/web/src/features/channel/Call/CallParticipantsList.tsx
+  s_f1f7d0d5be9ceb::t_7b0b201dec92d9 9,13-15,18-19,26,30,32,35-47,60-61,66-70,79-84,86-94,96-130,138,141,154,156,162,172,199,215
+apps/web/src/features/channel/Call/ChannelCallButton.tsx
+  s_f1f7d0d5be9ceb::t_3de3861e5b0da8 1,3,5-6,17,20-32,34-47
+apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  s_f1f7d0d5be9ceb::t_dfbdf8d8f2b4c1 7,24,173,178-182
+apps/web/src/features/channel/Call/LivekitJsCallController.ts
+  s_f1f7d0d5be9ceb::t_cdbbab144de3c9 21,60-61,74-81,150,161,272-278,363,373,388
+apps/web/src/features/channel/Call/MutedMicrophoneBadge.tsx
+  s_f1f7d0d5be9ceb::t_72229786c1f32d 1,3,8-10,18-20,22-39
+apps/web/src/features/channel/Call/TrackView.tsx
+  s_f1f7d0d5be9ceb::t_624e63780ee9a3 2,15-16,18-19,26-30,32,38-50,53-54,61-63
+apps/web/src/features/channel/Call/call-lifecycle.ts
+  s_f1f7d0d5be9ceb::t_ac7aaff198bd1b 544
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_f1f7d0d5be9ceb::t_578affd1ebf167 34,254
+apps/web/src/features/channel/Call/chat/CallChatHistory.test.tsx
+  s_f1f7d0d5be9ceb::t_a2f86a49c94d57 6,13-21,117-139
+apps/web/src/features/channel/Call/chat/CallChatHistory.tsx
+  s_f1f7d0d5be9ceb::t_6d4e7c7fbe3d39 7,9,14-20,26,31,52,59-67,117-118,120,124-125,129,139
+apps/web/src/features/channel/Call/chat/components/CallChatBody.tsx
+  s_f1f7d0d5be9ceb::t_d5e537b1c312ff 46-48
+apps/web/src/features/channel/Call/chat/components/CallChatEmptyState.tsx
+  s_f1f7d0d5be9ceb::t_cf0a3d25fc07c2 1-15
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.test.tsx
+  s_f1f7d0d5be9ceb::t_9c2e43babbe742 232,255,260
+apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  s_f1f7d0d5be9ceb::t_d77424c3cf9545 5,7-14,18,21,38,54-56,69-78,95-96,100-101,112,127,129-130,137,143-145,158-168
+apps/web/src/features/channel/Call/components/CallLiveChip.tsx
+  s_f1f7d0d5be9ceb::t_75dc58afdd9a18 1-37
+apps/web/src/features/channel/Call/components/CallMoreMenu.tsx
+  s_f1f7d0d5be9ceb::t_a9fefe24bcc7e5 1-388
+apps/web/src/features/channel/Call/components/CallReactionLayer.tsx
+  s_f1f7d0d5be9ceb::t_b9c7722e2dcd26 1-67
+apps/web/src/features/channel/Call/components/CallReactionMenu.tsx
+  s_f1f7d0d5be9ceb::t_22ede17f6b08c3 1-128
+apps/web/src/features/channel/Call/components/CallWaveform.tsx
+  s_f1f7d0d5be9ceb::t_aa8a0b59996234 1-23
+apps/web/src/features/channel/Call/components/MutedForYouBadge.tsx
+  s_f1f7d0d5be9ceb::t_3aec239c752bda 1-24
+apps/web/src/features/channel/Call/components/call-reactions.css
+  s_f1f7d0d5be9ceb::t_b76e83e6db6ab4 1-19
+apps/web/src/features/channel/Call/components/call-waveform.css
+  s_f1f7d0d5be9ceb::t_34f02fe8db38a7 1-53
+apps/web/src/features/channel/Call/context/call-volume.tsx
+  s_f1f7d0d5be9ceb::t_10c99e7b1f7d6b 1-16
+apps/web/src/features/channel/Call/core/call-layout.ts
+  s_f1f7d0d5be9ceb::t_10adfd835ef02e 1-87
+apps/web/src/features/channel/Call/core/call-mini-player.ts
+  s_f1f7d0d5be9ceb::t_80cb7f9b95d232 1-199
+apps/web/src/features/channel/Call/core/call-reactions.ts
+  s_f1f7d0d5be9ceb::t_f8c805bceda08e 1-24
+apps/web/src/features/channel/Call/discussion/CallRootLine.tsx
+  s_f1f7d0d5be9ceb::t_b6eff1f5a50d56 7,20-21,32-34,59,70,111,115-116,119
+apps/web/src/features/channel/Call/discussion/browser-test/baseline.d.ts
+  s_f1f7d0d5be9ceb::t_0fcb490b79b388 1-3
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay-state.tsx
+  s_f1f7d0d5be9ceb::t_3a74bcce8a0c80 1-282
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.html
+  s_f1f7d0d5be9ceb::t_7ba1cf6908258d 1-2
+apps/web/src/features/channel/Call/discussion/browser-test/call-overlay.tsx
+  s_f1f7d0d5be9ceb::t_c6336cde79aa73 1-214
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.browser.e2e.ts
+  s_f1f7d0d5be9ceb::t_9120aaeb94e40f 1,74-82,90-94,106-122,127-152,198-206,231,262-264,281-283,285-286,296,307,333-371,377-379,408-985
+apps/web/src/features/channel/Call/discussion/browser-test/call-thread.tsx
+  s_f1f7d0d5be9ceb::t_cdafdb8da2bb42 5,11,25-29,39,53-75,114-123,125-193
+apps/web/src/features/channel/Call/discussion/browser-test/overlay.vite.config.ts
+  s_f1f7d0d5be9ceb::t_ca9878809b4855 1-64
+apps/web/src/features/channel/Call/discussion/browser-test/playwright.config.ts
+  s_f1f7d0d5be9ceb::t_45056b284f78e9 5,9-11,28
+apps/web/src/features/channel/Call/livekit-loader.ts
+  s_f1f7d0d5be9ceb::t_6478a1c5404d45 83
+apps/web/src/features/channel/Call/primitives/call-fullscreen.ts
+  s_f1f7d0d5be9ceb::t_8044741b0a31ad 1-60
+apps/web/src/features/channel/Call/primitives/call-hotkeys.ts
+  s_f1f7d0d5be9ceb::t_dc66abf075c5e7 1-140
+apps/web/src/features/channel/Call/primitives/call-media-permissions.ts
+  s_f1f7d0d5be9ceb::t_f70683964adae9 1-156
+apps/web/src/features/channel/Call/primitives/call-mini-player-selection.ts
+  s_f1f7d0d5be9ceb::t_87d844d2d9137f 1-45
+apps/web/src/features/channel/Call/primitives/call-speaker-detection.ts
+  s_f1f7d0d5be9ceb::t_019082636e8f34 1-214
+apps/web/src/features/channel/Call/primitives/create-call-audio-output.ts
+  s_f1f7d0d5be9ceb::t_4c881f5c3a5bc7 1-156
+apps/web/src/features/channel/Call/primitives/create-call-media-permission-help.ts
+  s_f1f7d0d5be9ceb::t_14f14effa3ce4d 1-108
+apps/web/src/features/channel/Call/primitives/create-call-media-settings.ts
+  s_f1f7d0d5be9ceb::t_1b301fda4ddf0e 1-149
+apps/web/src/features/channel/Call/primitives/create-call-mini-player.ts
+  s_f1f7d0d5be9ceb::t_5aeef9ac63d31f 1-358
+apps/web/src/features/channel/Call/primitives/create-call-panel.ts
+  s_f1f7d0d5be9ceb::t_a64a3fea2cfba4 1-64
+apps/web/src/features/channel/Call/primitives/create-call-reactions.ts
+  s_f1f7d0d5be9ceb::t_21b50678e0d175 1-78
+apps/web/src/features/channel/Call/primitives/create-call-stage.ts
+  s_f1f7d0d5be9ceb::t_cb66b9770bec0a 1-205
+apps/web/src/features/channel/Call/primitives/create-call-volume.ts
+  s_f1f7d0d5be9ceb::t_9f6d82a8a9d49f 1-31
+apps/web/src/features/channel/Call/primitives/use-active-call-companion.ts
+  s_f1f7d0d5be9ceb::t_4ad92c452793ab 1-54
+apps/web/src/features/channel/Call/primitives/use-call-speaking.ts
+  s_f1f7d0d5be9ceb::t_658302b8c156ec 1-49
+apps/web/src/features/channel/Call/tests/call-controls.test.tsx
+  s_f1f7d0d5be9ceb::t_d74023ac8a1315 2,4-14,29-33,39,74-85,104-110,150-310
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_f1f7d0d5be9ceb::t_de38b48c225d07 84,90,98,143,162-163,174,192-194,198-199,204-205,214-220,227,241,262-271,273,277-284,289,291,326,344-348,477-479,487-491,520-522,538-549,561,564,578-615,618,620-665,667,669,671-677,684,686,688,690,693-696,698,700-703,705,707-712,714,716,718-725,727-739,741-742,744,747-752,754,756-759,762-779,782-815,944-1026
+apps/web/src/features/channel/Call/tests/livekit-js-call-controller.test.ts
+  s_f1f7d0d5be9ceb::t_6b07348f7ab549 14-18,25-40,182-543
+apps/web/src/features/channel/Call/tests/muted-microphone-badge.test.tsx
+  s_f1f7d0d5be9ceb::t_ad41093f6de880 28
+apps/web/src/features/channel/Call/use-start-channel-call.tsx
+  s_f1f7d0d5be9ceb::t_54da245f1fd8ec 115
+apps/web/src/features/channel/Call/views/ActiveCallHeader.tsx
+  s_f1f7d0d5be9ceb::t_60700570c59026 1-88
+apps/web/src/features/channel/Call/views/ActiveCallPopover.tsx
+  s_f1f7d0d5be9ceb::t_afa3a0e717299a 1-139
+apps/web/src/features/channel/Call/views/CallMediaPermissionHelp.tsx
+  s_f1f7d0d5be9ceb::t_6981e49071ab31 1-107
+apps/web/src/features/channel/Call/views/CallMiniPlayer.tsx
+  s_f1f7d0d5be9ceb::t_738b1aa9500d24 1-409
+apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  s_f1f7d0d5be9ceb::t_97a0ebaf8d5ff7 1-551
+apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  s_f1f7d0d5be9ceb::t_52d883c80df5e0 1-117
+apps/web/src/features/channel/Call/views/CallQuickControls.tsx
+  s_f1f7d0d5be9ceb::t_058404c7df4b8c 1-272
+apps/web/src/features/channel/Call/views/MobileCallIsland.tsx
+  s_f1f7d0d5be9ceb::t_845e5280d711e0 1-95
+apps/web/src/features/channel/Call/views/PhoneAudioOutput.tsx
+  s_f1f7d0d5be9ceb::t_80350b5d1b8ba8 1-60
+apps/web/src/features/channel/Call/views/call-fullscreen-host.tsx
+  s_f1f7d0d5be9ceb::t_56997c321d0fb6 1-95
+apps/web/src/features/channel/Channel/ActiveCallMessage.tsx
+  s_f1f7d0d5be9ceb::t_aaa2e49a874124 5-6,8-9,11-14,17-21,26-34,42,46-60,62-77
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_f1f7d0d5be9ceb::t_f3b8287178e45b 13,52,414-423,944,1026-1040,1050-1052,1177-1179,1242-1246,1248-1252,1306-1311,1313
+apps/web/src/features/channel/Channel/ChannelDetail.tsx
+  s_f1f7d0d5be9ceb::t_acdb4f8df2332d 64-67,199-201,205-219,228,272-275
+apps/web/src/features/channel/Channel/ThreadList.tsx
+  s_f1f7d0d5be9ceb::t_402dc772f30982 110-111,141,143-144,164-176,322-337,339-340,424-436,466-482,497-515,617,619,634,637,651,656
+apps/web/src/features/channel/Channel/UnifiedReplyInput.tsx
+  s_f1f7d0d5be9ceb::t_0ad46287b4a441 30-32,41-71,82-83
+apps/web/src/features/channel/Channel/channel-tab-icons.tsx
+  s_f1f7d0d5be9ceb::t_061e8771e54369 7,18,27-30
+apps/web/src/features/channel/Channel/tests/active-call-message.test.tsx
+  s_f1f7d0d5be9ceb::t_2d2cea5396fb41 16,23-28,32-33,39
+apps/web/src/features/channel/Channel/tests/channel-detail-top-bar.test.tsx
+  s_f1f7d0d5be9ceb::t_a763b74a697da1 57-60
+apps/web/src/features/channel/Channel/tests/thread-list-pagination.test.tsx
+  s_f1f7d0d5be9ceb::t_cb3138d5862ec7 8-9,26-27,36-41,55-61,86,95,360-392
+apps/web/src/features/channel/Channel/use-channel-tab-items.tsx
+  s_f1f7d0d5be9ceb::t_a2de7bcbb5698e 9,27,30,36,39,80-82,85
+apps/web/src/features/channel/Input/ChannelInputContainer.tsx
+  s_f1f7d0d5be9ceb::t_7f3b1e7f44f7c8 2,12,17-20
+apps/web/src/features/channel/Message/Content.tsx
+  s_f1f7d0d5be9ceb::t_db612cb7d47f96 1,104-109,121-123
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_f1f7d0d5be9ceb::t_57a4fd97e0dd04 51,54,127-140
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_f1f7d0d5be9ceb::t_8d32aa4254c2ad 19,75-82,98-101
+apps/web/src/features/channel/Thread/ChannelThread.tsx
+  s_f1f7d0d5be9ceb::t_fb6f431623de7a 439-441,462
+apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx
+  s_f1f7d0d5be9ceb::t_cdc80f30b182de 43-44,106,109
+apps/web/src/features/channel/Thread/ThreadReplyList.tsx
+  s_f1f7d0d5be9ceb::t_58ac375fdc8676 60-61,91-95,151
+apps/web/src/features/channel/Thread/types.ts
+  s_f1f7d0d5be9ceb::t_fa71a612853541 99-100
+apps/web/src/features/channels-view/components/ChannelsMobileView.test.tsx
+  s_f1f7d0d5be9ceb::t_50a7b0c297eaf3 79-85
+apps/web/src/features/channels-view/components/ChannelsMobileView.tsx
+  s_f1f7d0d5be9ceb::t_9b2ecdfc8cdd6d 15-16,43,47,64-66,167-179,341-351
+apps/web/src/features/channels-view/components/rail/ChannelLiveCallBadge.tsx
+  s_f1f7d0d5be9ceb::t_7318d4b198dc3b 1-54
+apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  s_f1f7d0d5be9ceb::t_5b8f5803cea0e7 16,192-195,223-227
+apps/web/src/features/channels-view/components/rail/ChannelRailItems.tsx
+  s_f1f7d0d5be9ceb::t_8a02ad28bdda87 4,19-20,24,105,123,166,187,200-202,208-217,332
+apps/web/src/features/command/CommandMenu.tsx
+  s_f1f7d0d5be9ceb::t_4186c940a55925 31,721-735,742,755
+apps/web/src/features/command/queries/entity-search.ts
+  s_f1f7d0d5be9ceb::t_5de1bde49e4f42 9,135-138,148-149
+apps/web/src/features/command/rank-command-search-items.test.ts
+  s_f1f7d0d5be9ceb::t_f624f937f59e0a 585-617
+apps/web/src/features/command/rank-command-search-items.ts
+  s_f1f7d0d5be9ceb::t_a9f7a85ecc4415 71-74,108-121,125,136-139
+apps/web/src/features/command/useCommandItems.contacts.test.ts
+  s_f1f7d0d5be9ceb::t_79fa75a4677f10 22-28
+apps/web/src/features/command/useCommandItems.test.ts
+  s_f1f7d0d5be9ceb::t_419d5d0241177b 22-28
+apps/web/src/features/command/useCommandItems.test.tsx
+  s_f1f7d0d5be9ceb::t_2973f59706b70e 35-41
+apps/web/src/features/meetings/components/meeting-copy-button.tsx
+  s_f1f7d0d5be9ceb::t_e584b421472505 4,12,40-43,50,57-62
+apps/web/src/features/meetings/context/meeting-session-owner.ts
+  s_f1f7d0d5be9ceb::t_76fb6200854bd2 7-10,12
+apps/web/src/features/meetings/meeting-route.tsx
+  s_f1f7d0d5be9ceb::t_dd9d6b71f3f30c 116
+apps/web/src/features/meetings/new-meeting-route.tsx
+  s_f1f7d0d5be9ceb::t_87953ca9241220 94
+apps/web/src/features/meetings/primitives/meeting-session-owner.ts
+  s_f1f7d0d5be9ceb::t_adbb136144baeb 117-131
+apps/web/src/features/meetings/views/meeting-media-setup.tsx
+  s_f1f7d0d5be9ceb::t_1c4652d18ab8f2 3,60-66
+apps/web/src/features/meetings/views/meeting-page.tsx
+  s_f1f7d0d5be9ceb::t_f171ff6a0fdc08 21-22,54,200-201
+apps/web/src/features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx
+  s_f1f7d0d5be9ceb::t_cc5e8688f4285b 536,568-580,639-645,723-735,739-755,757-759
+apps/web/src/index.css
+  s_f1f7d0d5be9ceb::t_e93aab06a3f981 662-665
+apps/web/src/lib/analytics/analytics.ts
+  s_f1f7d0d5be9ceb::t_b0470a7a6fb834 17,162
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/LinkWithPreview.tsx
+  s_f1f7d0d5be9ceb::t_fb82cbb2204753 10,27,40-42,45
+apps/web/src/lib/core/component/LexicalMarkdown/component/core/app-link-opener.ts
+  s_f1f7d0d5be9ceb::t_4f94bb3f9bd3d7 1-14
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_f1f7d0d5be9ceb::t_4e134e0a293d62 32,679-683,721-741
+apps/web/src/lib/core/component/UserGroup.tsx
+  s_f1f7d0d5be9ceb::t_ae0554f67ecedc 13-14,44-48
+apps/web/src/lib/core/component/media/background-camera-preview.tsx
+  s_f1f7d0d5be9ceb::t_b57ec41f4653f7 1-41
+apps/web/src/lib/core/component/media/media-background-picker.tsx
+  s_f1f7d0d5be9ceb::t_d5be6fb5407cfa 4-6,8-9,12,14,16-33,84-105,107-119,123-124,126-132
+apps/web/src/lib/core/component/media/recent-background-images.tsx
+  s_f1f7d0d5be9ceb::t_411b35666882c8 1-125
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_f1f7d0d5be9ceb::t_1b3c803fd80258 868-877
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_f1f7d0d5be9ceb::t_414bb24085be9a 64-66,697-706
+apps/web/src/lib/core/hotkey/types.ts
+  s_f1f7d0d5be9ceb::t_cde983f1bf59e8 96,420,429
+apps/web/src/lib/core/media/primitives/create-background-camera-preview.ts
+  s_f1f7d0d5be9ceb::t_51eea0cb70845a 1-107
+apps/web/src/lib/core/media/recent-background-images.ts
+  s_f1f7d0d5be9ceb::t_e5362ce79575c1 1-60
+apps/web/src/lib/core/media/recent-background-state.ts
+  s_f1f7d0d5be9ceb::t_918a4a465ac7dc 1-85
+apps/web/src/lib/core/util/run-when-current.test.ts
+  s_f1f7d0d5be9ceb::t_765cb7772cc537 1-47
+apps/web/src/lib/core/util/run-when-current.ts
+  s_f1f7d0d5be9ceb::t_4005d1e425acf8 1-26
+apps/web/src/lib/core/util/telemetryUrl.test.ts
+  s_f1f7d0d5be9ceb::t_80ca5e134f210c 5,68-100
+apps/web/src/lib/core/util/telemetryUrl.ts
+  s_f1f7d0d5be9ceb::t_41bb2535b1067b 4-5,7,27-38
+apps/web/src/lib/design/empty-state-call-chat.svg
+  s_f1f7d0d5be9ceb::t_280b5a2beb4a12 1
+apps/web/src/lib/i18n/locales/en/agent-work.ts
+  s_f1f7d0d5be9ceb::t_fb8bfb317a4311 8-69
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_f1f7d0d5be9ceb::t_8ab93af7832208 2-83,97,106,113-118,121-126,139-142,146-208
+apps/web/src/lib/i18n/locales/en/nav.ts
+  s_f1f7d0d5be9ceb::t_202ac9440171af 38-41
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_f1f7d0d5be9ceb::t_b26aa9f32b3093 58,77,4049-4108
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRow.ts
+  s_f1f7d0d5be9ceb::t_2970488682d844 8,24-25
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/activityWireRowAgentVerb.ts
+  s_f1f7d0d5be9ceb::t_6f73e17e448fff 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOf.ts
+  s_f1f7d0d5be9ceb::t_2c3d196ae3b1f0 8,13-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/controlRequestAllOfClientId.ts
+  s_f1f7d0d5be9ceb::t_e92a4bf2a3d0eb 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_f1f7d0d5be9ceb::t_b84bdc031648aa 11,183,325,475-483
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/openInApp.ts
+  s_f1f7d0d5be9ceb::t_2e572cc886ed97 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcome.ts
+  s_f1f7d0d5be9ceb::t_524923f8384dc0 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOf.ts
+  s_f1f7d0d5be9ceb::t_318ec2f1e58311 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFive.ts
+  s_f1f7d0d5be9ceb::t_52f32cd5f3b97d 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfFiveStatus.ts
+  s_f1f7d0d5be9ceb::t_23c7aee515461c 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfStatus.ts
+  s_f1f7d0d5be9ceb::t_03c63337e5c1c2 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThree.ts
+  s_f1f7d0d5be9ceb::t_0c3cbb13dda40f 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiCommandOutcomeOneOfThreeStatus.ts
+  s_f1f7d0d5be9ceb::t_045b52c3875271 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiDeclineReason.ts
+  s_f1f7d0d5be9ceb::t_b1698947746c9e 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/uiPlacement.ts
+  s_f1f7d0d5be9ceb::t_bbd315bf67e985 1-17
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_f1f7d0d5be9ceb::t_a0afd50a19d917 3520-3565,3909-3912,5737-5741,6967-6986,8313-8369
+apps/web/src/lib/service-clients/service-auth/client.ts
+  s_f1f7d0d5be9ceb::t_4b6657cec1d612 382-385
+apps/web/src/lib/service-clients/service-storage/graphql/agent-session-activity-appended.graphql
+  s_f1f7d0d5be9ceb::t_77ec44b52c8d03 1-11
+apps/web/src/lib/service-clients/service-storage/graphql/generated/graphql.ts
+  s_f1f7d0d5be9ceb::t_c21cc9539b77de 3599-3605,25917
+apps/web/src/lib/split-router/index.ts
+  s_f1f7d0d5be9ceb::t_37d216d992f4fe 58
+apps/web/src/routes/app-router-view.tsx
+  s_f1f7d0d5be9ceb::t_05bdec4ae3f5ba 38,230-234,240,500-528
+apps/web/src/routes/routes.ts
+  s_f1f7d0d5be9ceb::t_339cb5fa0e5bb7 50-55,242-286,288,310,326,342,358,371,380,423,434,445,457,471,479,519,556,563,571,579,588,597,611,622,640,654,661,675,686,702,709,716,730,738,748,761,774,782,794,805,817,837,910,923,931,942,1011-1013
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/AudioOutputSelection.kt
+  s_f1f7d0d5be9ceb::t_f1d91119334814 1-7
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/CallPlugin.kt
+  s_f1f7d0d5be9ceb::t_9011192e559407 35-36,49,75-96
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/Calls.kt
+  s_f1f7d0d5be9ceb::t_540a40deb9bd13 8,10,87-88,113-206,488-495,502,641-649
+apps/web/tauri/callkit_plugin/android/src/main/java/com/macro/call/TelecomService.kt
+  s_f1f7d0d5be9ceb::t_5c78fc5281cc96 40-41,50-61,63-71
+apps/web/tauri/callkit_plugin/build.rs
+  s_f1f7d0d5be9ceb::t_8736223b01cc2d 19-21
+apps/web/tauri/callkit_plugin/ios/Sources/CallAudioRouteController.swift
+  s_f1f7d0d5be9ceb::t_43be6c4883b35c 44,95-178,182,306-310
+apps/web/tauri/callkit_plugin/ios/Sources/CallKitPlugin.swift
+  s_f1f7d0d5be9ceb::t_9120d69ee53347 27-35,62,288-316,515-517
+apps/web/tauri/callkit_plugin/ios/Sources/NativeLiveKitCallSession.swift
+  s_f1f7d0d5be9ceb::t_ec216673470f8e 62-73,137
+apps/web/tauri/callkit_plugin/permissions/audio-output.toml
+  s_f1f7d0d5be9ceb::t_bdb7f38f3a3445 1-11
+apps/web/tauri/callkit_plugin/src/android.rs
+  s_f1f7d0d5be9ceb::t_d99dd71bd762d6 49,80,254-273
+apps/web/tauri/callkit_plugin/src/lib.rs
+  s_f1f7d0d5be9ceb::t_54442362d5723f 39-41
+apps/web/tauri/src-tauri/capabilities/mobile.json
+  s_f1f7d0d5be9ceb::t_7161df2d1c9c62 11
+crates/activity/AGENTS.md
+  s_f1f7d0d5be9ceb::t_594a7c114a79c4 66-69
+crates/activity/src/domain/announcements.rs
+  s_f1f7d0d5be9ceb::t_6052baaf5f5630 154-175
+crates/activity/src/domain/announcements/test.rs
+  s_f1f7d0d5be9ceb::t_59c3b2c0b4ea5b 274-299
+crates/activity/src/domain/events.rs
+  s_f1f7d0d5be9ceb::t_076ded356520e5 32-34,60,81-84,109-114,126,135-136,180
+crates/activity/src/domain/events/test.rs
+  s_f1f7d0d5be9ceb::t_43b1356e52f86f 48,60,74
+crates/activity/src/domain/models.rs
+  s_f1f7d0d5be9ceb::t_70dae9627370e4 423-424,500-501,522,524-526,619
+crates/activity/src/domain/realtime.rs
+  s_f1f7d0d5be9ceb::t_3beab52c6fb19d 20,141,147,152,156-161,205-213
+crates/activity/src/domain/realtime/test.rs
+  s_f1f7d0d5be9ceb::t_7fe9878248a5dd 36,55-76
+crates/activity/src/domain/service/test.rs
+  s_f1f7d0d5be9ceb::t_a4e42b0565b443 113
+crates/activity/src/inbound/kafka_consumer.rs
+  s_f1f7d0d5be9ceb::t_db47915ca5a68a 78-83
+crates/activity/src/inbound/toolset/test.rs
+  s_f1f7d0d5be9ceb::t_a916278eddcf56 128
+crates/activity/src/outbound/pg_activity_repo.rs
+  s_f1f7d0d5be9ceb::t_d47afb6234686e 49,61,75,78,90,126,176-179,211,228,290,427
+crates/activity/src/outbound/pg_activity_repo/agent_activity.rs
+  s_f1f7d0d5be9ceb::t_ac08e04d068392 2,22-23,26-34
+crates/activity/src/outbound/pg_activity_repo/entity_history.rs
+  s_f1f7d0d5be9ceb::t_1edef8595e2cf4 25,31
+crates/activity/src/outbound/pg_activity_repo/team_feed.rs
+  s_f1f7d0d5be9ceb::t_e9679d8f6e382e 42,62
+crates/activity/src/outbound/pg_activity_repo/team_feed.sql
+  s_f1f7d0d5be9ceb::t_972081b0333993 90,124,137
+crates/activity/src/outbound/pg_activity_repo/test.rs
+  s_f1f7d0d5be9ceb::t_9bba46ee42a6d5 12-51,1071,1085-1143
+crates/agent_code_mode/AGENTS.md
+  s_f1f7d0d5be9ceb::t_90aa50eb6daefb 57-73
+crates/agent_code_mode/Cargo.toml
+  s_f1f7d0d5be9ceb::t_c17731b68280ee 29,45
+crates/agent_code_mode/src/domain.rs
+  s_f1f7d0d5be9ceb::t_773b39d7bc6e8a 21-22
+crates/agent_code_mode/src/domain/reviews/test.rs
+  s_f1f7d0d5be9ceb::t_c5f1bd81e6ab37 986,1176
+crates/agent_code_mode/src/domain/ui_commands.rs
+  s_f1f7d0d5be9ceb::t_b40d23e6d73664 1-443
+crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json
+  s_f1f7d0d5be9ceb::t_8bc0b5bf2bd317 1-146
+crates/agent_code_mode/src/domain/ui_commands/routes.rs
+  s_f1f7d0d5be9ceb::t_b720b1b83da8c6 1-235
+crates/agent_code_mode/src/domain/ui_commands/test.rs
+  s_f1f7d0d5be9ceb::t_768fbc463cbf20 1-514
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_f1f7d0d5be9ceb::t_9c6f1dc9fdf707 3-6,35,46,54,67,101-104,225-246
+crates/agent_correlation/AGENTS.md
+  s_f1f7d0d5be9ceb::t_4c76d3a785dcb9 14-18,20,40-42
+crates/agent_correlation/Cargo.toml
+  s_f1f7d0d5be9ceb::t_ff5d3f109e3b75 20
+crates/agent_correlation/src/context.rs
+  s_f1f7d0d5be9ceb::t_f79600f3750fd8 3,13-15,33-37,46,48-62,66,74-77,86-87,121
+crates/agent_correlation/src/context/test.rs
+  s_f1f7d0d5be9ceb::t_cb2d36abed8ed3 1-24
+crates/agent_correlation/src/inbound.rs
+  s_f1f7d0d5be9ceb::t_fd0a2fd5dbb267 44-45,62-63,91-100,172
+crates/agent_correlation/src/inbound/test.rs
+  s_f1f7d0d5be9ceb::t_4dd54d723cf16e 60-61,66-70,83,88,90,97-110
+crates/agent_correlation/src/lib.rs
+  s_f1f7d0d5be9ceb::t_cf7cf0f6337f2f 11-12
+crates/agent_correlation/src/verb.rs
+  s_f1f7d0d5be9ceb::t_aae3f7205f94c5 1-102
+crates/agent_egress/src/domain/approval.rs
+  s_f1f7d0d5be9ceb::t_29d6ebe806b347 77-100,190-192
+crates/agent_egress/src/domain/approval/test.rs
+  s_f1f7d0d5be9ceb::t_9e2c8060f526b4 111,427,501-531,617,739
+crates/agent_egress/src/domain/model.rs
+  s_f1f7d0d5be9ceb::t_2fd5cf22d33883 262-276
+crates/agent_egress/src/domain/service.rs
+  s_f1f7d0d5be9ceb::t_a554ac9191b92b 383-389,408-411,422
+crates/agent_egress/src/domain/service/actor.rs
+  s_f1f7d0d5be9ceb::t_cbea594b7fead4 223-224,232,234,250-252
+crates/agent_egress/src/domain/service/test.rs
+  s_f1f7d0d5be9ceb::t_93bfaf55f51427 1304,1461-1511
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_f1f7d0d5be9ceb::t_872c73c6f99d3c 390-426
+crates/agent_harness/src/domain/model.rs
+  s_f1f7d0d5be9ceb::t_e09990df90aeba 562-564,698,715
+crates/agent_harness/src/domain/queue.rs
+  s_f1f7d0d5be9ceb::t_516fb78775f30b 31,65-66,209,222
+crates/agent_harness/src/domain/queue/test.rs
+  s_f1f7d0d5be9ceb::t_aece9cdd6ae43e 15,138
+crates/agent_harness/src/domain/service/deliver.rs
+  s_f1f7d0d5be9ceb::t_9cf8417efaede3 336,407
+crates/agent_harness/src/domain/service/open.rs
+  s_f1f7d0d5be9ceb::t_9bc1da8942e724 607
+crates/agent_harness/src/domain/service/queue.rs
+  s_f1f7d0d5be9ceb::t_1870210d1c8a2b 426,1086,1224,1267,1702,1736
+crates/agent_harness/src/domain/service/test.rs
+  s_f1f7d0d5be9ceb::t_4796142b668397 1979,2035,2083,2155,2191,2233,2261,2297,2350,2400,2440,2453,2503,2539,2558,2615,2740,2803,2866,2903,2940,2976,3007,3039,3414,4324,4413,5166
+crates/agent_harness/src/domain/service/test/chat_reply.rs
+  s_f1f7d0d5be9ceb::t_4a6c434d64be85 511
+crates/agent_harness/src/domain/service/test/external_mcp.rs
+  s_f1f7d0d5be9ceb::t_e0a308ba877a08 29,91
+crates/agent_harness/src/domain/service/test/external_replies.rs
+  s_f1f7d0d5be9ceb::t_67a1927a4e66d2 272,336,626
+crates/agent_harness/src/domain/service/test/followers.rs
+  s_f1f7d0d5be9ceb::t_e4fc42027ef380 40,60,69-104
+crates/agent_harness/src/domain/service/test/notifications.rs
+  s_f1f7d0d5be9ceb::t_9b037d6ec3b512 387
+crates/agent_harness/src/domain/service/test/permission_refresh.rs
+  s_f1f7d0d5be9ceb::t_92e5b82b2291f6 65
+crates/agent_harness/src/domain/service/test/quota.rs
+  s_f1f7d0d5be9ceb::t_96cf9945ef4697 87,735
+crates/agent_harness/src/domain/service/test/reattach.rs
+  s_f1f7d0d5be9ceb::t_3bb1d037749157 659
+crates/agent_harness/src/domain/service/warm.rs
+  s_f1f7d0d5be9ceb::t_32d0bc8b754dc2 227,405
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_f1f7d0d5be9ceb::t_7d79b75dcc97fb 82,204
+crates/agent_session/AGENTS.md
+  s_f1f7d0d5be9ceb::t_5401fa1cb919bf 96-99
+crates/agent_session/src/domain/control.rs
+  s_f1f7d0d5be9ceb::t_14fd481018fef9 9,16-18,23-27,36-39,44,52-55,57,60,66-68,79,85
+crates/agent_session/src/domain/control/test.rs
+  s_f1f7d0d5be9ceb::t_59b18a8b822e15 40-48,64,75,104,121,140,148-199
+crates/agent_session/src/domain/model.rs
+  s_f1f7d0d5be9ceb::t_b571a7d6a6b544 629-659,699-701
+crates/agent_session/src/domain/ports.rs
+  s_f1f7d0d5be9ceb::t_ac3fc72bec8307 1301-1303
+crates/agent_session/src/domain/routines/service.rs
+  s_f1f7d0d5be9ceb::t_383b680be16f8e 270,312
+crates/agent_session/src/inbound/axum_router.rs
+  s_f1f7d0d5be9ceb::t_3f386a4c338c3b 546-550,1039-1063,1117,1127,1137-1138
+crates/agent_session/src/inbound/axum_router/activity.rs
+  s_f1f7d0d5be9ceb::t_4a771e23593433 83-84,94
+crates/agent_session/src/inbound/axum_router/test.rs
+  s_f1f7d0d5be9ceb::t_e65f6378c79464 1464,1596-1639
+crates/agent_session/src/inbound/axum_router/test/tool_actions.rs
+  s_f1f7d0d5be9ceb::t_b9d40dd56c8f1c 393-395,402-403
+crates/agent_session/src/inbound/axum_router/tool_actions.rs
+  s_f1f7d0d5be9ceb::t_e434596923fabe 68
+crates/agent_session/src/outbound/notifications.rs
+  s_f1f7d0d5be9ceb::t_f2893ff0c14b83 128
+crates/agent_session/src/outbound/postgres.rs
+  s_f1f7d0d5be9ceb::t_ba985e3fe994d0 978,983-984,1011,1031-1033
+crates/agent_session/src/outbound/postgres/test.rs
+  s_f1f7d0d5be9ceb::t_124f471600a81c 3438-3478,3510
+crates/agent_session/src/outbound/postgres/test/queue.rs
+  s_f1f7d0d5be9ceb::t_e0dd393c3fa6a5 20
+crates/code_execution/AGENTS.md
+  s_f1f7d0d5be9ceb::t_ceb6d1bba6dcbb 28-29
+crates/code_execution/src/outbound/deno/bootstrap.mjs
+  s_f1f7d0d5be9ceb::t_933f84676f8f43 1,89
+crates/coding_agent_worker/src/outbound/agent_session.rs
+  s_f1f7d0d5be9ceb::t_889481d1fda858 154
+crates/complete_graph/AGENTS.md
+  s_f1f7d0d5be9ceb::t_fc52d8071ac901 119
+crates/complete_graph/Cargo.toml
+  s_f1f7d0d5be9ceb::t_f3109aeb7b67f5 8-9,62,76
+crates/complete_graph/src/lib.rs
+  s_f1f7d0d5be9ceb::t_5eeec9f4a07ca3 84-87
+crates/complete_graph/src/realtime.rs
+  s_f1f7d0d5be9ceb::t_432084c1108e69 4,7-8,11-16,39-96
+crates/complete_graph/src/schema.rs
+  s_f1f7d0d5be9ceb::t_2382ed6f3a0976 4,7,701-765
+crates/complete_graph/src/schema/test.rs
+  s_f1f7d0d5be9ceb::t_79f0f15fc6c0b0 25,1927-2102,2190,2793
+crates/complete_graph/src/schema/test/form_activity.rs
+  s_f1f7d0d5be9ceb::t_7acd8bdffa8bd6 14
+crates/complete_graph/src/schema/test/team_activity.rs
+  s_f1f7d0d5be9ceb::t_845a32d5dba744 9
+crates/graphql_activity/AGENTS.md
+  s_f1f7d0d5be9ceb::t_200e9d3c7b087d 25
+crates/graphql_activity/src/objects.rs
+  s_f1f7d0d5be9ceb::t_548964512462fb 23-26,33-34,41-44,49-50,54
+crates/graphql_activity/src/objects/test.rs
+  s_f1f7d0d5be9ceb::t_d43356a817d616 18
+crates/graphql_activity/src/subscriptions/test.rs
+  s_f1f7d0d5be9ceb::t_e55ce155710fda 68
+crates/initiative/src/inbound/axum_router/test.rs
+  s_f1f7d0d5be9ceb::t_b4c485a36d16b3 878
+crates/macro_cache_client/AGENTS.md
+  s_f1f7d0d5be9ceb::t_b2ab6788bb3750 17-18,24-27,43-44
+crates/macro_cache_client/Cargo.toml
+  s_f1f7d0d5be9ceb::t_2c378f25b75bee 30-33
+crates/macro_cache_client/src/auth.rs
+  s_f1f7d0d5be9ceb::t_68e0033c29f09b 1-5,20-62,94-96,102-141,145-149,152-174,212-214
+crates/macro_cache_client/src/auth/test.rs
+  s_f1f7d0d5be9ceb::t_51fd05edcc1279 1-208
+crates/macro_db_client/AGENTS.md
+  s_f1f7d0d5be9ceb::t_6417f3d4d6f606 24-25,136
+crates/macro_db_client/migrations/20261105234844_agent_activity_verb.sql
+  s_f1f7d0d5be9ceb::t_a1fcc545e88ffa 1-4
+crates/macro_db_client/migrations/20261109041008_agent_session_turn_prompter_client.sql
+  s_f1f7d0d5be9ceb::t_5d85c35b823eca 1-6
+crates/macro_db_client/migrations/20261110150953_add_activity_agent_session_id.sql
+  s_f1f7d0d5be9ceb::t_fbaeba232e6335 1-29
+crates/macro_db_client/migrations/20261110150954_backfill_activity_agent_session_id.sql
+  s_f1f7d0d5be9ceb::t_1583429dc53e25 1-38
+crates/macro_db_client/migrations/20261110150955_index_activity_agent_session.sql
+  s_f1f7d0d5be9ceb::t_6440c4d798df42 1-11
+crates/macro_event_broker/AGENTS.md
+  s_f1f7d0d5be9ceb::t_51a89be67087d7 55
+crates/macro_event_broker/src/domain/models.rs
+  s_f1f7d0d5be9ceb::t_bddc22faa07f78 42-45,76,236-242,246-253
+crates/macro_event_broker/src/domain/models/test.rs
+  s_f1f7d0d5be9ceb::t_351b90f98b09a8 296-301,305-309,315,317,322-327,336
+crates/macro_event_broker/src/domain/ports.rs
+  s_f1f7d0d5be9ceb::t_79b1da3ee46b2a 48-53
+crates/macro_event_broker/src/lib.rs
+  s_f1f7d0d5be9ceb::t_c3e173393cb993 20
+crates/macro_event_broker/src/outbound/kafka_event_consumer/test.rs
+  s_f1f7d0d5be9ceb::t_52930f5a7ffe1e 9-16
+crates/macro_tower_layers/src/lib.rs
+  s_f1f7d0d5be9ceb::t_5a1c017a369616 111-112,119,126,133-163
+crates/macro_tower_layers/src/test.rs
+  s_f1f7d0d5be9ceb::t_b229181757bcef 408-467
+crates/scheduled_action/AGENTS.md
+  s_f1f7d0d5be9ceb::t_b9d230a351b387 137-140
+crates/scheduled_action/src/domain/ports.rs
+  s_f1f7d0d5be9ceb::t_75b17745885ac4 13,140-145
+crates/scheduled_action/src/domain/service.rs
+  s_f1f7d0d5be9ceb::t_9e301813d88c4b 640-644
+crates/scheduled_action/src/domain/service/test.rs
+  s_f1f7d0d5be9ceb::t_89327ed132c855 709,721-724,726-729
+crates/scheduled_action/src/domain/templates.rs
+  s_f1f7d0d5be9ceb::t_8cc5d1d5d24530 12,195-198
+crates/scheduled_action/src/domain/templates/test.rs
+  s_f1f7d0d5be9ceb::t_3338131c27e799 5,314,328-333
+crates/scheduled_action/src/inbound/axum_router.rs
+  s_f1f7d0d5be9ceb::t_b6a22908a31884 405-408,415
+crates/scheduled_action/src/inbound/axum_router/test.rs
+  s_f1f7d0d5be9ceb::t_eea87303f8181c 538,550,913,917,1114-1165
+deny.toml
+  s_f1f7d0d5be9ceb::t_05ab0daaa420d0 227
+docs/agent-guide/ai-chat.md
+  s_f1f7d0d5be9ceb::t_5c11dbf73f4a63 3-31,1653-1657
+docs/agent-guide/calls.md
+  s_f1f7d0d5be9ceb::t_0e93834b2c41fb 39-146,167-220,228-251,257-258,408-413,423-429,432-442,447-454,456-468,473-476,479-483,487-493,505-557,560-562,564,576-596,602-606,608-611,614-617,645-665,728-730,741
+docs/agent-guide/channels.md
+  s_f1f7d0d5be9ceb::t_06c6115f571d42 1379-1381,1561-1574,1577-1579
+docs/agent-guide/login.md
+  s_f1f7d0d5be9ceb::t_ffa11d19472997 146-147
+docs/agent-guide/navigation.md
+  s_f1f7d0d5be9ceb::t_b822f9bc6e7f5e 81-92,1081-1083
+docs/architecture/agent-activity-correlation.md
+  s_f1f7d0d5be9ceb::t_37fa605fe87881 24-30,34-35,37-41
+docs/development/database.md
+  s_f1f7d0d5be9ceb::t_e788f38cdae97f 104-110,112-113,143-149,168-169
+packages/code-mode-sdk/AGENTS.md
+  s_f1f7d0d5be9ceb::t_692bb6d9c515b8 27-28
+packages/code-mode-sdk/scripts/catalog.ts
+  s_f1f7d0d5be9ceb::t_9f461ec3435120 30
+packages/code-mode-sdk/src/index.test.ts
+  s_f1f7d0d5be9ceb::t_a2dc1380715642 11-16
+packages/code-mode-sdk/src/index.ts
+  s_f1f7d0d5be9ceb::t_9687912251e3b1 8
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_f1f7d0d5be9ceb::t_d240c496cd0c5c 23
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_f1f7d0d5be9ceb::t_a9c9020ef37145 662
+packages/sdk/AGENTS.md
+  s_f1f7d0d5be9ceb::t_f4aa7c84d16e37 88-92,153-154
+packages/sdk/README.md
+  s_f1f7d0d5be9ceb::t_a09080a7d3df80 954-957
+packages/sdk/generated/agent-harness/index.ts
+  s_f1f7d0d5be9ceb::t_bd15d89dc018ed 4
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_f1f7d0d5be9ceb::t_36836f0c884882 5,727-742
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_f1f7d0d5be9ceb::t_ac5a008aa06129 33-36,1390-1395,2255-2274,3044-3072,4737-4756
+packages/sdk/justfile
+  s_f1f7d0d5be9ceb::t_3d687035769a8e 24-25
+packages/sdk/specs/agent-harness.json
+  s_f1f7d0d5be9ceb::t_af810ec6bf911a 3520-3565,3909-3912,5737-5741,6967-6986,8313-8369
+packages/sdk/src/coverage/check.ts
+  s_f1f7d0d5be9ceb::t_0459d249d369f7 4-5,11,15,52,74-75,90-100
+packages/sdk/src/entities/channels/message.ts
+  s_f1f7d0d5be9ceb::t_e35b6d22149cb7 83-98
+packages/sdk/src/entities/ui/app-link.ts
+  s_f1f7d0d5be9ceb::t_d383f6242fbc97 1-60
+packages/sdk/src/entities/ui/namespace.ts
+  s_f1f7d0d5be9ceb::t_4a660165835b38 1-102
+packages/sdk/src/macro.ts
+  s_f1f7d0d5be9ceb::t_455160944deb9e 40,112-118,199-201,289
+packages/sdk/src/utils/activity.test.ts
+  s_f1f7d0d5be9ceb::t_0a4828168ec57f 2-6,9-39
+packages/sdk/src/utils/activity.ts
+  s_f1f7d0d5be9ceb::t_a7298d91e0f31b 1-2,26-31,57-58,85-99
+packages/sdk/src/utils/verbs.ts
+  s_f1f7d0d5be9ceb::t_242ed34bf2f74e 1-361
+packages/sdk/tests/ui.test.ts
+  s_f1f7d0d5be9ceb::t_fbe7eee5fc6644 1-120
+services/agent_harness_service/AGENTS.md
+  s_f1f7d0d5be9ceb::t_ec350151048363 41-43
+services/agent_harness_service/src/api/swagger.rs
+  s_f1f7d0d5be9ceb::t_43a208810ae15d 78
+services/agent_harness_service/src/code_mode.rs
+  s_f1f7d0d5be9ceb::t_d8c8418b7ceca7 187
+services/agent_harness_service/src/code_mode/ui_commands.rs
+  s_f1f7d0d5be9ceb::t_e2e511d9fe0f49 1-150
+services/agent_harness_service/src/main.rs
+  s_f1f7d0d5be9ceb::t_8f64ccfc8c9350 845-868,1844
+services/authentication_service/AGENTS.md
+  s_f1f7d0d5be9ceb::t_8d1dfb1a9c9e6b 204-209
+services/authentication_service/Cargo.toml
+  s_f1f7d0d5be9ceb::t_343de539769990 213
+services/authentication_service/src/api.rs
+  s_f1f7d0d5be9ceb::t_8bc4e598c9d92c 53-54
+services/authentication_service/src/api/oauth/oauth_redirect.rs
+  s_f1f7d0d5be9ceb::t_925262dbf110db 254-255,258-273,347-351
+services/authentication_service/src/api/oauth/oauth_redirect/tests.rs
+  s_f1f7d0d5be9ceb::t_99dad761974d32 195-237
+services/authentication_service/src/api/oauth/passwordless_callback.rs
+  s_f1f7d0d5be9ceb::t_8d79e4647b87e7 41-43
+services/authentication_service/src/api/session/session_login.rs
+  s_f1f7d0d5be9ceb::t_5bd05d796aeba8 8,10,19-21,48-121,124,127,130,133-134,137,139-140,142-148,151,154-164
+services/authentication_service/src/api/session/session_login/test.rs
+  s_f1f7d0d5be9ceb::t_54a38d91535d55 1-146
+services/authentication_service/src/api/trace_capture.rs
+  s_f1f7d0d5be9ceb::t_3454ce7ddd4e8d 1-58
+services/document_storage_service/AGENTS.md
+  s_f1f7d0d5be9ceb::t_80d76201e273ac 129
+services/document_storage_service/src/api/context.rs
+  s_f1f7d0d5be9ceb::t_631bfb233c6384 972
+services/document_storage_service/src/api/graphql_soup.rs
+  s_f1f7d0d5be9ceb::t_ddbf391dbe6bde 230
+services/document_storage_service/src/server.rs
+  s_f1f7d0d5be9ceb::t_6c85324f870da8 2552,2557-2560
+static_assets/schema.graphql
+  s_f1f7d0d5be9ceb::t_cb8781887aa8bb 552-556,1699-1706,1719-1722
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "790307b98db3c39569ddf655535e3b7504f27671",
+  "prompts": {},
+  "sessions": {
+    "s_f1f7d0d5be9ceb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "400c2a02-faeb-49ee-bafa-b1f07c7830b4",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
