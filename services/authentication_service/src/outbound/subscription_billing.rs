@@ -100,6 +100,9 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
         let mut interval = None;
         let mut items = Vec::new();
         for item in provider_items {
+            // A computer's own price carries its id too (schedule phases drop item metadata).
+            let computer_id = teams::outbound::customer_repo::item_computer_id(&item)
+                .and_then(|id| ComputerId::parse_uuid_str(id).ok());
             let Some(price) = item.price else {
                 return Ok(None);
             };
@@ -117,18 +120,6 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
             interval = Some(fixed.interval);
             let unit_amount = fixed.unit_amount;
             let price_id = price.id.clone();
-            // A computer's own price carries its id too (schedule phases drop item metadata).
-            let computer_id = item
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("computer_id"))
-                .or_else(|| {
-                    price
-                        .metadata
-                        .as_ref()
-                        .and_then(|metadata| metadata.get("computer_id"))
-                })
-                .and_then(|id| ComputerId::parse_uuid_str(id).ok());
             let kind = RecurringItemKind::for_provider_price(
                 &self.seat_prices,
                 &computers,
