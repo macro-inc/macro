@@ -37,6 +37,18 @@ those crates' tools. Hosted by the harness's scheduling runtime.
   cancels runs in flight) counts as going only until `STALE_GENERATION`; then
   it reads as failed and holds no nightly cooldown, the same trigger restarts it
   in place, and the other records it failed.
+- Generation sessions are scoped where their code-mode credential is minted
+  (`agent_correlation::scope::SessionScope::Generation`, decided by the
+  harness's `SessionScopes`): every service refuses their requests other
+  than reads, their own tools and email drafts, and the native tool gate
+  their non-code tools. A new session tool route goes on the scope's list.
+- Traces: an onboarding generation is a child of the request that started
+  it; a nightly one is its own root span linked to the tick. Its trace id is
+  kept on `suggestion_generation.trace_id` and recorded as
+  `suggestion.generation.trace_id` on every session tool call (they reach
+  the API without the trace's context). `user.id` is the person's opaque
+  account id. The sweep deletes change-log entries older than
+  `CHANGES_KEPT` (90 days), a batch at a time.
 - `POST /scheduled-action/scheduled-actions/suggestions/generate` is the
   retired onboarding route, kept for old web and app bundles: it starts
   onboarding and answers with routine suggestions. It is not in the spec;
