@@ -145,7 +145,7 @@ test('comment requests settle with their own replies and reject after close', as
   ).rejects.toThrow();
 });
 
-test('a comment whose encoding or admission throws leaves nothing for close to reject', async () => {
+test('a request whose encoding or admission throws leaves nothing for close to reject', async () => {
   const runtime = mount();
   const unhandled: unknown[] = [];
   const record = (reason: unknown) => unhandled.push(reason);
@@ -177,6 +177,8 @@ test('a comment whose encoding or admission throws leaves nothing for close to r
     expect(() => runtime.port.comment('mark-b', { kind: 'remove' })).toThrow(
       'admission failed'
     );
+    // A flush shares the same request registration.
+    expect(() => runtime.port.flush()).toThrow('admission failed');
     input.mockRestore();
 
     await runtime.close();
