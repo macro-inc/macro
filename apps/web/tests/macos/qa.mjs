@@ -153,10 +153,31 @@ for w in info {
 }
 `,
 );
+// JXA first (quick, system osascript); a system swift with Nix's SDK variables
+// removed if that fails. Both print pid, layer, size and owner per window.
+const jxa = `ObjC.import("CoreGraphics");
+const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, $.kCGNullWindowID)));
+list.map((w) => [w.kCGWindowOwnerPID, w.kCGWindowLayer, Math.round(w.kCGWindowBounds.Width) + "x" + Math.round(w.kCGWindowBounds.Height), w.kCGWindowOwnerName].join("\\t")).join("\\n");`;
+const systemEnv = Object.fromEntries(
+	Object.entries(process.env).filter(
+		([k]) => !/^(SDKROOT|DEVELOPER_DIR|NIX_.*|CPATH|LIBRARY_PATH|CC|CXX|LD)$/.test(k),
+	),
+);
+const listWindows = () => {
+	const viaJxa = run("/usr/bin/osascript", ["-l", "JavaScript", "-e", jxa], { env: systemEnv });
+	if (viaJxa.code === 0 && viaJxa.stdout.trim() !== "") return { text: viaJxa.stdout };
+	const viaSwift = run("/usr/bin/swift", [windowScript], {
+		timeout: 180_000,
+		env: { ...systemEnv, PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
+	});
+	return viaSwift.code === 0
+		? { text: viaSwift.stdout }
+		: { error: `JXA: ${viaJxa.stderr.trim().slice(0, 200)}; swift: ${viaSwift.stderr.trim().slice(0, 200)}` };
+};
 const windowsOf = () => {
-	const r = run("swift", [windowScript], { timeout: 120_000 });
-	if (r.code !== 0) return { error: r.stderr.trim().slice(0, 300) };
-	const rows = r.stdout
+	const listed = listWindows();
+	if (listed.error) return { error: listed.error };
+	const rows = listed.text
 		.split("\n")
 		.filter(Boolean)
 		.map((line) => line.split("\t"));
