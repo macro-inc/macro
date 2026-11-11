@@ -173,10 +173,10 @@ fn the_generation_scope_matches_the_sdk_catalog() {
             .join("/")
     };
     let intended = [
-        "scheduled-action.suggestIdea",
-        "scheduled-action.rewriteIdea",
-        "scheduled-action.retireIdea",
-        "scheduled-action.attachIdeaDraft",
+        "scheduled-action.addSuggestion",
+        "scheduled-action.rewriteSuggestion",
+        "scheduled-action.retireSuggestion",
+        "scheduled-action.attachSuggestionDraft",
         "scheduled-action.suggestRoutine",
         "scheduled-action.retireRoutineSuggestion",
         "email.createDraft",

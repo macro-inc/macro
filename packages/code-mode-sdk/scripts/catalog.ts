@@ -12,7 +12,7 @@ export const entityDirectories: readonly string[] = [
   'initiatives',
   'meetings',
   'routines',
-  'ideas',
+  'suggestions',
   'search',
   'workspace',
   'chats',

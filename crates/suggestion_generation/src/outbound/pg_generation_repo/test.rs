@@ -490,7 +490,7 @@ async fn pruning_deletes_only_old_change_log_entries(pool: PgPool) {
         sqlx::query(
             "INSERT INTO suggestion_change
                  (id, user_id, generation_id, session_id, subject, subject_id, action, created_at)
-             VALUES ($1, $2, $3, $4, 'idea', $4, 'created', $5)",
+             VALUES ($1, $2, $3, $4, 'suggestion', $4, 'created', $5)",
         )
         .bind(written(at))
         .bind(OWNER)

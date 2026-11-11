@@ -7,7 +7,7 @@
  */
 
 /**
- * An idea's kind, without its data.
+ * A suggestion's kind, without its data.
  */
 export type KindName = (typeof KindName)[keyof typeof KindName];
 

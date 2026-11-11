@@ -7,7 +7,7 @@
  */
 
 /**
- * How a prompt idea runs.
+ * How a prompt suggestion runs.
  */
 export type RunMode = (typeof RunMode)[keyof typeof RunMode];
 

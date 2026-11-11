@@ -14,7 +14,7 @@ those crates' tools. Hosted by the harness's scheduling runtime.
   minutes in the harness) starts a generation: one `suggestion_generation` row,
   then one ideas session and routines sessions at once (at onboarding one per
   `SessionLayout` group, for speed; at night one for every surface, for cost),
-  each kind only when its flag is on (`enable-ideas`,
+  each kind only when its flag is on (`enable-suggestions`,
   `enable-routine-suggestions`).
 - Each session is hidden, the person's, non-billable, and may call its kind's
   tools while its `suggestion_generation_session` row is open. Its brief comes

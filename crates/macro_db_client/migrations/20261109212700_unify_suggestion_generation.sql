@@ -1,5 +1,5 @@
 -- Routine suggestions move onto the generation tables they now share with
--- ideas: one run of hidden sessions per trigger (onboarding, nightly), each
+-- suggestions: one run of hidden sessions per trigger (onboarding, nightly), each
 -- session recorded with what it writes. The routine-only tables are copied,
 -- not renamed, so a replica still on the previous release keeps working
 -- during the deploy; they are dropped once no deployed release reads them.

@@ -15,10 +15,10 @@ const TASK: &str = include_str!("prompt.md");
 /// (or, without one, read in a single documentation call). Each must name a
 /// code-mode SDK symbol.
 pub const SYMBOLS: &[&str] = &[
-    "IdeaNamespace.review",
-    "IdeaNamespace.suggest",
-    "Idea.rewrite",
-    "Idea.retire",
+    "SuggestionNamespace.review",
+    "SuggestionNamespace.suggest",
+    "Suggestion.rewrite",
+    "Suggestion.retire",
     "UserNamespace.me",
     "MemoryNamespace.read",
     "TeamNamespace.list",
@@ -114,7 +114,7 @@ fn docs(reference: &str) -> String {
         format!("Start with one ReadCodeDocs call for {}", symbols())
     } else {
         "The SDK reference at the end lists the methods and fields you need, and this brief \
-         spells out the ideas methods; fields that load from the server are functions to \
+         spells out the suggestions methods; fields that load from the server are functions to \
          await (`await message.body()`). Read a symbol with ReadCodeDocs only when you need a \
          type neither names, all such symbols in one call"
             .to_owned()

@@ -1,5 +1,5 @@
--- Ideas: each person's feed of proactive suggestions, written and managed by
--- hidden generation sessions through tools. An idea is one of three kinds,
+-- Suggestions: each person's feed of proactive suggestions, written and managed by
+-- hidden generation sessions through tools. An suggestion is one of three kinds,
 -- fixed for its life: a prompt to run, a note about specific items, or a
 -- pointer to a routine suggestion. The base row holds what the feed sorts,
 -- filters and shows; each kind keeps its own data in a child table.
@@ -9,7 +9,7 @@
 SET LOCAL lock_timeout = '5s';
 
 -- A run of hidden suggestion sessions for one person: at onboarding, or
--- nightly. Shared by ideas and routine suggestions.
+-- nightly. Shared by suggestions and routine suggestions.
 CREATE TABLE suggestion_generation (
     id uuid PRIMARY KEY,
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
@@ -27,7 +27,7 @@ CREATE UNIQUE INDEX suggestion_generation_onboarding_idx ON suggestion_generatio
 CREATE UNIQUE INDEX suggestion_generation_running_idx ON suggestion_generation (user_id)
     WHERE status = 'generating';
 
--- A hidden session of a generation, writing ideas or routine suggestions.
+-- A hidden session of a generation, writing suggestions or routine suggestions.
 -- Only a session with an open row may call that kind's tools; the row is
 -- closed when the session is stopped, and the sweep deletes the sessions of
 -- rows left open by a process that stopped.
@@ -37,7 +37,7 @@ CREATE TABLE suggestion_generation_session (
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
     agent_id text NOT NULL,
     kind text NOT NULL CHECK (kind IN ('ideas', 'routines')),
-    -- The surfaces a routines session suggests for; empty for ideas.
+    -- The surfaces a routines session suggests for; empty for suggestions.
     surfaces text[] NOT NULL DEFAULT '{}',
     opened_at timestamptz NOT NULL,
     closed_at timestamptz
@@ -52,11 +52,11 @@ CREATE INDEX suggestion_generation_session_open_idx ON suggestion_generation_ses
 CREATE INDEX suggestion_generation_session_user_idx
     ON suggestion_generation_session (user_id, opened_at DESC);
 
--- One idea. `dedup_key` names it across nights: a session proposing the same
+-- One suggestion. `dedup_key` names it across nights: a session proposing the same
 -- key again updates this row. `state` is the person's lifecycle; `retired`
--- is set by a session when the idea no longer matters, and a retired idea
+-- is set by a session when the suggestion no longer matters, and a retired suggestion
 -- proposed again comes back.
-CREATE TABLE idea (
+CREATE TABLE suggestion (
     id uuid PRIMARY KEY,
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
     kind text NOT NULL CHECK (kind IN ('prompt', 'entity', 'routine')),
@@ -79,52 +79,52 @@ CREATE TABLE idea (
     UNIQUE (user_id, dedup_key)
 );
 
-CREATE INDEX idea_feed_idx ON idea (user_id, state, importance DESC);
--- A person's ideas by when they last changed state: the ones done lately, and
+CREATE INDEX suggestion_feed_idx ON suggestion (user_id, state, importance DESC);
+-- A person's suggestions by when they last changed state: the ones done lately, and
 -- the latest closed ones a session reviews.
-CREATE INDEX idea_state_changed_idx ON idea (user_id, state_changed_at DESC);
+CREATE INDEX suggestion_state_changed_idx ON suggestion (user_id, state_changed_at DESC);
 
--- One child per kind. The (idea_id, kind) key lets a child attach only to a
+-- One child per kind. The (suggestion_id, kind) key lets a child attach only to a
 -- base row of its own kind.
-CREATE TABLE idea_prompt (
-    idea_id uuid PRIMARY KEY,
+CREATE TABLE suggestion_prompt (
+    suggestion_id uuid PRIMARY KEY,
     kind text NOT NULL DEFAULT 'prompt' CHECK (kind = 'prompt'),
     prompt text NOT NULL,
     run_mode text NOT NULL CHECK (run_mode IN ('composer', 'background')),
-    FOREIGN KEY (idea_id, kind) REFERENCES idea (id, kind) ON DELETE CASCADE
+    FOREIGN KEY (suggestion_id, kind) REFERENCES suggestion (id, kind) ON DELETE CASCADE
 );
 
-CREATE TABLE idea_entity (
-    idea_id uuid PRIMARY KEY,
+CREATE TABLE suggestion_entity (
+    suggestion_id uuid PRIMARY KEY,
     kind text NOT NULL DEFAULT 'entity' CHECK (kind = 'entity'),
     action text NOT NULL CHECK (action IN ('reply', 'review', 'follow_up')),
-    FOREIGN KEY (idea_id, kind) REFERENCES idea (id, kind) ON DELETE CASCADE
+    FOREIGN KEY (suggestion_id, kind) REFERENCES suggestion (id, kind) ON DELETE CASCADE
 );
 
--- Deleting the suggestion deletes its idea.
-CREATE TABLE idea_routine (
-    idea_id uuid PRIMARY KEY,
+-- Deleting the suggestion deletes its suggestion.
+CREATE TABLE suggestion_routine (
+    suggestion_id uuid PRIMARY KEY,
     kind text NOT NULL DEFAULT 'routine' CHECK (kind = 'routine'),
     routine_suggestion_id uuid NOT NULL UNIQUE REFERENCES routine_suggestion (id) ON DELETE CASCADE,
-    FOREIGN KEY (idea_id, kind) REFERENCES idea (id, kind) ON DELETE CASCADE
+    FOREIGN KEY (suggestion_id, kind) REFERENCES suggestion (id, kind) ON DELETE CASCADE
 );
 
--- The items an idea is about, what a run of it produced, and the draft it
--- made. Indexed by item, so an event about one finds its ideas.
-CREATE TABLE idea_target (
-    idea_id uuid NOT NULL REFERENCES idea (id) ON DELETE CASCADE,
+-- The items an suggestion is about, what a run of it produced, and the draft it
+-- made. Indexed by item, so an event about one finds its suggestions.
+CREATE TABLE suggestion_target (
+    suggestion_id uuid NOT NULL REFERENCES suggestion (id) ON DELETE CASCADE,
     role text NOT NULL CHECK (role IN ('about', 'produced', 'draft')),
     position smallint NOT NULL,
     entity_type text NOT NULL,
     entity_id text NOT NULL,
     -- A part of the item, such as one message in a thread.
     part_id text,
-    PRIMARY KEY (idea_id, role, position)
+    PRIMARY KEY (suggestion_id, role, position)
 );
 
-CREATE INDEX idea_target_entity_idx ON idea_target (entity_type, entity_id);
+CREATE INDEX suggestion_target_entity_idx ON suggestion_target (entity_type, entity_id);
 
--- Every change a generation session made to an idea or a routine suggestion,
+-- Every change a generation session made to an suggestion or a routine suggestion,
 -- for us, never shown to the person: what, how, the values before and after,
 -- and the session's reason.
 CREATE TABLE suggestion_change (
@@ -132,7 +132,7 @@ CREATE TABLE suggestion_change (
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
     generation_id uuid NOT NULL REFERENCES suggestion_generation (id) ON DELETE CASCADE,
     session_id uuid NOT NULL,
-    subject text NOT NULL CHECK (subject IN ('idea', 'routine_suggestion')),
+    subject text NOT NULL CHECK (subject IN ('suggestion', 'routine_suggestion')),
     subject_id uuid NOT NULL,
     action text NOT NULL CHECK (action IN ('created', 'rewritten', 'retired', 'restored')),
     old_value jsonb,

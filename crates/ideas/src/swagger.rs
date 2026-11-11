@@ -31,6 +31,6 @@ use utoipa::OpenApi;
         crate::domain::model::RetireIdea,
         crate::domain::model::IdeaWriteOutcome,
     )),
-    tags((name = "ideas", description = "Each person's ideas, and the tools generation sessions manage them with")),
+    tags((name = "suggestions", description = "Each person's suggestions, and the tools generation sessions manage them with")),
 )]
 pub struct IdeasApiDoc;
