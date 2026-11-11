@@ -161,7 +161,24 @@ fn a_colliding_draw_is_retried_with_a_fresh_one() -> TestResult {
 fn exhausted_draws_leave_new_nodes_without_ids_instead_of_a_duplicate() -> TestResult {
     let calls = Arc::new(AtomicUsize::new(0));
     let mut editor = editor_from(&config(), 77, Some(sequence(vec![0], calls.clone())))?;
-    let (paragraph, text) = append_paragraph(&mut editor, None)?;
+    let ((paragraph, text), commit) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let text = tx.create_text("new")?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok((paragraph.key(), text.key()))
+    })?;
+    // The reported follow-up failure is the bounded mint error, on this plugin.
+    let failure = commit.follow_up_error.expect("follow-up error");
+    assert_eq!(failure.plugin, "session-node-id");
+    assert!(
+        matches!(
+            &*failure.error,
+            Error::Invariant("node id generation exhausted")
+        ),
+        "{:?}",
+        failure.error
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 17);
     assert_eq!(id(&editor, paragraph)?, None);
     assert_eq!(id(&editor, text)?, None);
