@@ -10,7 +10,6 @@ import {
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   getDisplayName,
   tryMacroId,
@@ -21,14 +20,13 @@ import { getDestinationFromOptions } from '@core/util/destination';
 import InfoIcon from '@icon/system/regular/info.svg';
 import { useCreateChannelMutation } from '@queries/channel/channels';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
 
-  const { users: humanOptions } = useCombinedRecipients();
   const agentOptions = ENABLE_AGENT_DMS ? useAgentDmRecipients() : () => [];
-  const destinationOptions = () => [...humanOptions(), ...agentOptions()];
   const [selectedRecipients, setSelectedRecipients] = createSignal<
     WithCustomUserInput<'user' | 'contact' | 'agent'>[]
   >([]);
@@ -193,7 +191,8 @@ export function ChannelCompose() {
               }}
             />
             <RecipientSelector<'user' | 'contact' | 'agent'>
-              options={destinationOptions}
+              options={agentOptions}
+              createSource={useContactRecipientSource}
               selectedOptions={selectedRecipients()}
               setSelectedOptions={selectRecipients}
               placeholder={

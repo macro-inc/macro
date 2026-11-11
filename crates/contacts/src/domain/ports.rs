@@ -111,6 +111,17 @@ pub trait ContactsNotifier: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
+/// Port trait for telling a user's contacts that the user's picture changed.
+pub trait UserPictureNotifier: Send + Sync + 'static {
+    /// Notify `recipients` (one bounded page of contacts) that `user_id`'s
+    /// picture changed so they refetch it.
+    fn notify_picture_changed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        recipients: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
 /// Port trait for publishing a contacts message to the ingress queue.
 pub trait ContactsIngressQueue: Send + Sync + 'static {
     /// Publishes a complete-graph contacts message to the queue.

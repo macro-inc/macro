@@ -1,8 +1,11 @@
+import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox, useComboboxContext } from '@kobalte/core/combobox';
 import { makeEventListener } from '@solid-primitives/event-listener';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { MultiSelectItemContent } from '@ui/components/MultiSelectItemContent';
 import {
@@ -11,15 +14,19 @@ import {
 } from '@ui/utils/multiSelectSelection';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
+  on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { SearchableOptionSource } from './option-source';
 
-export type SearchableOption = {
-  id: string;
+export type SearchableOption<TId extends string = string> = {
+  id: TId;
   label: string;
   icon?: () => JSX.Element;
   /** Drawn in place of `label`, which still drives search. */
@@ -45,6 +52,7 @@ const ITEM_HEIGHT = 36;
 const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
 
 type SearchableMultiSelectProps = {
+  source?: SearchableOptionSource;
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
@@ -78,12 +86,16 @@ const keepComboboxFocus = (event: Event) => event.preventDefault();
 
 function PickerSearchInput(props: {
   placeholder?: string;
+  value?: string;
+  onInput?: JSX.EventHandler<HTMLInputElement, InputEvent>;
   onKeyDown?: (event: KeyboardEvent) => void;
   onReady?: (input: HTMLInputElement) => void;
 }) {
   return (
     <Combobox.Input
       ref={props.onReady}
+      value={props.value}
+      onInput={props.onInput}
       onKeyDown={props.onKeyDown}
       class="flex-1 min-w-0 text-sm bg-transparent outline-none caret-accent placeholder:text-ink-placeholder"
       placeholder={props.placeholder ?? 'Search...'}
@@ -225,26 +237,55 @@ const SearchableMultiSelectItem = (itemProps: {
 };
 
 const VirtualizedListbox = (props: {
+  resetScrollRef?: (reset: (() => void) | undefined) => void;
   class?: string;
   onOnly?: (id: string) => void;
   isSoleActive?: (id: string) => boolean;
   selectionIntent: ReturnType<typeof createMultiSelectIntent>;
 }) => {
   let handle: VirtualizerHandle | undefined;
+  let pendingFocus = false;
+  let active = true;
+  const combobox = useComboboxContext();
+  props.resetScrollRef?.(() => {
+    combobox.listState().selectionManager().setFocusedKey(undefined);
+    handle?.scrollToIndex(0, { align: 'start' });
+  });
+  onCleanup(() => {
+    active = false;
+    props.resetScrollRef?.(undefined);
+  });
   // Kobalte supplies the collection after applying the combobox search
   // filter. Use it for focus scrolling too — indexing the original options
   // array targets the wrong virtual row whenever the list is filtered.
   let visibleItems:
     | Accessor<Iterable<CollectionNode<SearchableOption>>>
     | undefined;
+  const scrollToItem = (key: string) => {
+    // Before initial measurement, "nearest" starts a corrective scroll against
+    // a zero-height viewport and can keep undoing subsequent user scrolling.
+    if (!handle?.viewportSize) {
+      pendingFocus = true;
+      return;
+    }
+    pendingFocus = false;
+    const idx = Array.from(visibleItems?.() ?? []).findIndex(
+      (item) => item.rawValue.id === key
+    );
+    if (idx !== -1) handle.scrollToIndex(idx, { align: 'nearest' });
+  };
+  const { observe } = makeResizeObserver(() => {
+    // Let the virtualizer's own observer publish its viewport measurement.
+    queueMicrotask(() => {
+      if (!active || !pendingFocus) return;
+      const key = combobox.listState().selectionManager().focusedKey();
+      if (key) scrollToItem(key);
+    });
+  });
   return (
     <Combobox.Listbox<SearchableOption>
-      scrollToItem={(key) => {
-        const idx = Array.from(visibleItems?.() ?? []).findIndex(
-          (item) => item.rawValue.id === key
-        );
-        if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
-      }}
+      ref={observe}
+      scrollToItem={scrollToItem}
       class={cn(LISTBOX_CLASS, props.class)}
     >
       {(items) => {
@@ -314,23 +355,53 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   const selectionIntent = createMultiSelectIntent();
   const [internalOpen, setInternalOpen] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
+  const options = () => props.source?.options() ?? props.options();
+  const visibleIds = createMemo(
+    () => new Set(props.source?.visibleIds() ?? [])
+  );
+  const sourceAction = () => props.source?.error() || props.source?.hasNext();
+  let resetScroll: (() => void) | undefined;
+  let previousWindow: string | undefined;
+  createEffect(
+    on(
+      () => props.source?.windowKey(),
+      (window) => {
+        if (window === undefined) return;
+        if (previousWindow !== undefined && previousWindow !== window)
+          resetScroll?.();
+        previousWindow = window;
+      }
+    )
+  );
+
   const isOpen = () => props.open?.() ?? internalOpen();
   const setIsOpen = (v: boolean) => {
     if (props.onOpenChange) props.onOpenChange(v);
     else setInternalOpen(v);
   };
 
-  const activeOptions = useActiveOptions(props.options, props.activeIds);
+  const activeOptions = useActiveOptions(options, props.activeIds);
   const selectedFirstOptions = useSelectedFirst({
-    items: props.options,
+    items: options,
     selectedIds: props.activeIds,
     searchQuery,
     getId: getOptionId,
     sortDeps: [isOpen],
   });
   const sortedOptions = () =>
-    props.preserveOrder ? props.options() : selectedFirstOptions();
+    props.source || props.preserveOrder ? options() : selectedFirstOptions();
   const displayOptions = createMemo(() => {
+    if (sourceAction())
+      return [
+        ...sortedOptions(),
+        {
+          id: ACTION_ID,
+          label: props.source?.error()
+            ? t('viewMenus.retryOptions')
+            : t('viewMenus.nextOptions'),
+          disabled: props.source?.loading(),
+        },
+      ];
     const action = props.action;
     if (!action) return sortedOptions();
     return [
@@ -342,15 +413,35 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       },
     ];
   });
-  const matches = useHasMatches(displayOptions, searchQuery);
-  const hasMatches = () => !!props.action || matches();
+  const localMatches = useHasMatches(displayOptions, searchQuery);
+  const hasMatches = () =>
+    props.source
+      ? visibleIds().size > 0 || sourceAction()
+      : !!props.action || localMatches();
+
+  const onSourceInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (
+    event
+  ) => {
+    if (!props.source) return;
+    setSearchQuery(event.currentTarget.value);
+    props.source.setSearch(event.currentTarget.value);
+  };
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (!open) setSearchQuery('');
+    if (!open) {
+      setSearchQuery('');
+      props.source?.setSearch('');
+    }
   };
 
   const handleChange = (selected: SearchableOption[]) => {
+    if (props.source && selected.some((o) => o.id === ACTION_ID)) {
+      if (props.source.error())
+        fireAndForget(props.source.retry(), 'filter-options');
+      else props.source.next();
+      return;
+    }
     const action = props.action;
     if (action && selected.some((o) => o.id === ACTION_ID)) {
       handleOpenChange(false);
@@ -394,14 +485,25 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
       closeOnSelection={false}
       open={isOpen()}
       options={displayOptions()}
+      defaultFilter={
+        props.source
+          ? (option) => option.id === ACTION_ID || visibleIds().has(option.id)
+          : props.action
+            ? filterWithAction
+            : undefined
+      }
       value={activeOptions()}
       onChange={handleChange}
-      onInputChange={setSearchQuery}
+      onInputChange={(value) => {
+        // Kobalte also clears its input when selected option objects refresh.
+        // Only native edits change a query-driven source; metadata/page
+        // replacement must not cancel the user's in-flight search.
+        if (!props.source) setSearchQuery(value);
+      }}
       onOpenChange={handleOpenChange}
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
-      defaultFilter={props.action ? filterWithAction : undefined}
       optionDisabled="disabled"
       allowsEmptyCollection
       virtualized
@@ -411,7 +513,12 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
     >
       <Combobox.Control class="flex items-center h-full">
         {props.children}
-        <Combobox.Input ref={selectionIntent.track} class="sr-only" />
+        <Combobox.Input
+          ref={selectionIntent.track}
+          value={props.source?.search() ?? searchQuery()}
+          onInput={onSourceInput}
+          class="sr-only"
+        />
       </Combobox.Control>
 
       <div class="hidden" ref={setPortalAnchor} />
@@ -433,21 +540,33 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
           >
             <div class="flex items-center gap-2 px-3 py-2 border-b border-edge-muted">
               <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
-              <PickerSearchInput placeholder={props.placeholder} />
+              <PickerSearchInput
+                value={props.source?.search() ?? searchQuery()}
+                onInput={onSourceInput}
+                placeholder={props.placeholder}
+              />
             </div>
             <div class="p-1">
+              <Show when={props.source}>
+                {(source) => <SearchableSourceStatus source={source()} />}
+              </Show>
               <Show
                 when={hasMatches()}
                 fallback={
                   <div class="py-3 px-2 text-center text-xs text-ink-muted">
-                    {searchQuery().trim()
-                      ? `No options match "${searchQuery()}"`
-                      : 'No options available'}
+                    <Show when={!props.source}>
+                      {searchQuery().trim()
+                        ? `No options match "${searchQuery()}"`
+                        : 'No options available'}
+                    </Show>
                   </div>
                 }
               >
                 <VirtualizedListbox
                   class={props.listboxClass}
+                  resetScrollRef={(reset) => {
+                    resetScroll = reset;
+                  }}
                   onOnly={handleOnly}
                   isSoleActive={isSoleActive}
                   selectionIntent={selectionIntent}
@@ -462,7 +581,45 @@ export const SearchableMultiSelect = (props: SearchableMultiSelectProps) => {
   );
 };
 
+/** Shared status for bounded menu and drawer windows; an empty page may continue. */
+export function SearchableSourceStatus(props: {
+  source: SearchableOptionSource;
+}) {
+  return (
+    <div class="px-2 text-xs text-ink-muted">
+      <Show when={props.source.loading()}>
+        <div role="status" class="py-2">
+          {t('common.loadingOptions')}
+        </div>
+      </Show>
+      <Show when={props.source.error()}>
+        <div role="status" class="py-2">
+          {t('common.optionsUnavailable')}
+        </div>
+      </Show>
+      <Show when={props.source.incomplete()}>
+        <div role="status" class="py-2">
+          {t('common.optionsIncomplete')}
+        </div>
+      </Show>
+      <Show
+        when={
+          !props.source.loading() &&
+          !props.source.error() &&
+          props.source.visibleIds().length === 0
+        }
+      >
+        <div role="status" class="py-2">
+          {t('common.noOptionsInWindow')}
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 type SearchableMultiSelectInlineProps = {
+  /** Already filtered/ranked by a bounded source; never substring-filter again. */
+  source?: SearchableOptionSource;
   options: Accessor<SearchableOption[]>;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
@@ -473,6 +630,8 @@ type SearchableMultiSelectInlineProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
   footer?: JSX.Element;
 };
 
@@ -487,9 +646,27 @@ export const SearchableMultiSelectInline = (
 ) => {
   const selectionIntent = createMultiSelectIntent();
   const [searchQuery, setSearchQuery] = createSignal('');
+  let resetScroll: (() => void) | undefined;
+  const committedWindow = createMemo(() => props.source?.windowKey());
+  let previousWindow: string | undefined;
+  createEffect(
+    on(committedWindow, (window) => {
+      if (window === undefined) return;
+      if (previousWindow !== undefined && previousWindow !== window)
+        resetScroll?.();
+      previousWindow = window;
+    })
+  );
+
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const matches = useHasMatches(props.options, searchQuery);
-  const hasMatches = matches;
+  const visibleIds = createMemo(
+    () => new Set(props.source?.visibleIds() ?? [])
+  );
+  const hasAction = () => props.source?.hasNext() || props.source?.error();
+  const onInputChange = (value: string) => {
+    setSearchQuery(value);
+    props.source?.setSearch(value);
+  };
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -500,10 +677,45 @@ export const SearchableMultiSelectInline = (
     getId: getOptionId,
   });
   const sortedOptions = () =>
-    props.preserveOrder ? props.options() : selectedFirstOptions();
-  const displayOptions = sortedOptions;
+    props.source || props.preserveOrder
+      ? props.options()
+      : selectedFirstOptions();
+  // Typed text that is a value but no option leads the list, ready for Enter.
+  const created = createMemo(() => {
+    const query = searchQuery().trim();
+    const option = query ? props.createOption?.(query) : undefined;
+    return option && !sortedOptions().some((other) => other.id === option.id)
+      ? option
+      : undefined;
+  });
+  const displayOptions = createMemo(() => {
+    const option = created();
+    const options = option ? [option, ...sortedOptions()] : sortedOptions();
+    return hasAction()
+      ? [
+          ...options,
+          {
+            id: ACTION_ID,
+            label: props.source?.error()
+              ? t('viewMenus.retryOptions')
+              : t('viewMenus.nextOptions'),
+            disabled: props.source?.loading(),
+          },
+        ]
+      : options;
+  });
+  let listbox: HTMLDivElement | undefined;
+  const localHasMatches = useHasMatches(displayOptions, searchQuery);
+  const hasMatches = () =>
+    props.source ? visibleIds().size > 0 || hasAction() : localHasMatches();
 
   const handleChange = (selected: SearchableOption[]) => {
+    if (props.source && selected.some((option) => option.id === ACTION_ID)) {
+      if (props.source.error())
+        fireAndForget(props.source.retry(), 'filter-options');
+      else props.source.next();
+      return;
+    }
     const id =
       selected.find((option) => !props.activeIds().includes(option.id))?.id ??
       activeOptions().find(
@@ -537,9 +749,19 @@ export const SearchableMultiSelectInline = (
       case 'Escape':
         // Let parent close
         return;
+      case 'Enter': {
+        e.stopPropagation();
+        // Enter adds typed text unless an arrow key picked a row, as chip
+        // fields do.
+        const option = created();
+        if (!option || listbox?.querySelector('[data-highlighted]')) return;
+        e.preventDefault();
+        props.onChange([...props.activeIds(), option.id]);
+        props.onSelectionComplete?.();
+        return;
+      }
       case 'ArrowDown':
       case 'ArrowUp':
-      case 'Enter':
       case 'Home':
       case 'End':
       case 'PageUp':
@@ -560,9 +782,14 @@ export const SearchableMultiSelectInline = (
       closeOnSelection={false}
       open
       options={displayOptions()}
+      defaultFilter={
+        props.source
+          ? (option) => option.id === ACTION_ID || visibleIds().has(option.id)
+          : undefined
+      }
       value={activeOptions()}
       onChange={handleChange}
-      onInputChange={setSearchQuery}
+      onInputChange={onInputChange}
       optionValue="id"
       optionTextValue="label"
       optionLabel="label"
@@ -584,16 +811,30 @@ export const SearchableMultiSelectInline = (
           placeholder={props.placeholder}
         />
       </div>
-      <div ref={selectionIntent.track} class="p-1">
+      <div
+        ref={(element) => {
+          listbox = element;
+          selectionIntent.track(element);
+        }}
+        class="p-1"
+      >
+        <Show when={props.source}>
+          {(source) => <SearchableSourceStatus source={source()} />}
+        </Show>
         <Show
           when={hasMatches()}
           fallback={
             <div class="py-3 px-2 text-center text-xs text-ink-muted">
-              No options match "{searchQuery()}"
+              <Show when={!props.source}>
+                No options match "{searchQuery()}"
+              </Show>
             </div>
           }
         >
           <VirtualizedListbox
+            resetScrollRef={(reset) => {
+              resetScroll = reset;
+            }}
             class={props.listboxClass}
             selectionIntent={selectionIntent}
             onOnly={(id) => props.onChange([id])}

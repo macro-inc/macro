@@ -28,8 +28,11 @@ export type TabOption<T extends string> = {
   icon?: Component<{ class?: string }>;
   /** Shown after the label in muted figures; strings retain caller formatting. */
   count?: number | string;
-  /** A small attention dot after the label. */
-  dot?: boolean;
+  /**
+   * A small attention dot after the label; `violet` where what is new was
+   * picked by AI, as the app's violet means.
+   */
+  dot?: boolean | 'violet';
   disabled?: boolean;
 };
 
@@ -229,7 +232,10 @@ function OptionContent<T extends string>(props: {
       <Show when={props.option.dot && !props.iconOnly}>
         <span
           aria-hidden="true"
-          class="size-1.5 shrink-0 rounded-full bg-accent"
+          class={cn(
+            'size-1.5 shrink-0 rounded-full',
+            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
+          )}
         />
       </Show>
     </>

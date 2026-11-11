@@ -70,6 +70,11 @@ interface ToastOptions {
   dismissStyle?: ToastDismissStyle;
   /** Inline multiple actions on notices without a description; single actions inline automatically. */
   actionLayout?: ToastActionLayout;
+  /**
+   * Runs once the toast closes, however it closes: expiry, its close
+   * control, Escape, a swipe, or `toast.dismiss`.
+   */
+  onDismiss?: () => void;
 }
 
 interface ToastActionOptions extends ToastOptions {
@@ -370,7 +375,6 @@ export function ToastContent(props: {
                               ? { color: props.custom.color }
                               : undefined
                           }
-                          data-icon-motion="none"
                         >
                           <Dynamic
                             component={Icon()}
@@ -549,6 +553,7 @@ function createToast(
     hideOnMobile,
     showCloseButton,
     dismissStyle,
+    onDismiss,
   } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
@@ -580,6 +585,7 @@ function createToast(
         dismissStyle={dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
+          onDismiss?.();
         }}
       />
     ),

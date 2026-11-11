@@ -40,7 +40,11 @@ export { PropertyDefinition, PropertyOption };
 export class PropertiesNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** List property definitions visible to the user, pre-hydrated with their records. */
+  /**
+   * List property definitions visible to the user, pre-hydrated with their records.
+   *
+   * @readonly
+   */
   async list(opts?: {
     scope?: PropertyScope;
     forEntityType?: PropertyEntityType;
@@ -64,7 +68,11 @@ export class PropertiesNamespace {
     });
   }
 
-  /** Create a new custom property definition. */
+  /**
+   * Create a new custom property definition.
+   *
+   * @write
+   */
   create(opts: {
     displayName: string;
     scope: CreatePropertyScope;
@@ -73,12 +81,20 @@ export class PropertiesNamespace {
     return PropertyDefinition.create(this.client, opts);
   }
 
-  /** A handle to an existing property definition by id. */
+  /**
+   * A handle to an existing property definition by id.
+   *
+   * @readonly
+   */
   definition(id: string): PropertyDefinition {
     return PropertyDefinition.byId(this.client, id);
   }
 
-  /** Get properties for multiple entities in a single request. */
+  /**
+   * Get properties for multiple entities in a single request.
+   *
+   * @readonly
+   */
   async bulkEntityProperties(
     request: BulkEntityPropertiesRequest,
   ): Promise<Record<string, EntityPropertiesResponse>> {
@@ -87,7 +103,13 @@ export class PropertiesNamespace {
     );
   }
 
-  /** Apply one multi-select option delta to several entity handles. */
+  /**
+   * Apply one multi-select option delta to several entity handles.
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async updateEntityPropertyOptions(
     entities: PropertiedEntity<unknown>[],
     change: PropertyOptionDelta,
@@ -109,7 +131,13 @@ export class PropertiesNamespace {
     return response.results;
   }
 
-  /** Add a select option to a multi-select property value on an entity. */
+  /**
+   * Add a select option to a multi-select property value on an entity.
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async addEntityPropertyOption(opts: {
     entity: PropertiedEntity<unknown>;
     property: PropertyDefinition;
@@ -126,7 +154,13 @@ export class PropertiesNamespace {
     );
   }
 
-  /** Remove a select option from a multi-select property value on an entity. */
+  /**
+   * Remove a select option from a multi-select property value on an entity.
+   *
+   * @write
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async removeEntityPropertyOption(opts: {
     entity: PropertiedEntity<unknown>;
     property: PropertyDefinition;
@@ -147,6 +181,8 @@ export class PropertiesNamespace {
    * The user's tag sets: their personal set, plus their team's when on a team.
    * A set without a `definition` has no tags yet; {@link createTag} creates it.
    * Edit or delete a tag through `definition(set.definition.id).options()`.
+   *
+   * @readonly
    */
   async tags(): Promise<TagSetResponse[]> {
     return unwrap(await this.client.properties.listTags({}));
@@ -157,6 +193,8 @@ export class PropertiesNamespace {
    * label, so check {@link tags} first and never duplicate one in the same set.
    * Apply it with `item.updatePropertyOptions([{ property, add: [tag] }])`,
    * where `property` is `definition(tag.definitionId)`.
+   *
+   * @write
    */
   async createTag(opts: {
     /** The label, e.g. "Urgent". */

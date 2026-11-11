@@ -27,6 +27,7 @@ mod pull_request_archive;
 mod routine_code;
 mod routine_sessions;
 mod runtime_commands;
+mod runtime_gauges;
 mod scheduling;
 mod trigger;
 
@@ -209,6 +210,14 @@ struct PendingHarnessWork {
     work: HarnessWork,
     description: &'static str,
 }
+
+/// glibc malloc spreads allocations over per-thread arenas and gives memory
+/// back to the system only from the top of each heap, and tokio frees a value
+/// on whichever worker held it last. Whole-log reads, folds and reattach
+/// bursts churn large buffers across workers, so freed memory stays resident
+/// as fragmentation. mimalloc returns freed blocks to the page they came from.
+#[global_allocator]
+static ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -984,8 +993,8 @@ async fn run() -> anyhow::Result<()> {
                 ai_billing::composition::pg_entitlement_source(pool.clone()),
             ),
         ));
-    let inmem = InMemRuntime {
-        manager: InMemAgentManager::new(
+    let inmem_manager = Arc::new(
+        InMemAgentManager::new(
             Arc::clone(&inmem_model_engine),
             frames,
             mcp_connector,
@@ -994,6 +1003,9 @@ async fn run() -> anyhow::Result<()> {
         .with_admission(admission.clone())
         .with_agent_keys(Arc::clone(&agent_keys))
         .with_dev_commands(enable_dev_commands),
+    );
+    let inmem = InMemRuntime {
+        manager: Arc::clone(&inmem_manager),
     };
     // The sandbox provider serves every bot but the in-memory one, which the
     // router pulls out by bot id before the provider ever sees it.
@@ -1382,6 +1394,7 @@ async fn run() -> anyhow::Result<()> {
         )
         .with_turns(conversation_turns.clone()),
     );
+    let session_actors = sessions.clone();
     let harness = Arc::new(
         AgentHarnessService::new(
             Some(conversations_service.clone()),
@@ -1423,6 +1436,7 @@ async fn run() -> anyhow::Result<()> {
             agent_session::outbound::notifications::PgNotificationStore(pool.clone()),
         ))
         .with_conversation_turns(conversation_turns)
+        .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
@@ -1997,6 +2011,21 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let runtime_gauge_cancel = tokio_util::sync::CancellationToken::new();
+    let runtime_gauge_tasks = tokio_util::task::TaskTracker::new();
+    let gauge_harness = harness.clone();
+    runtime_gauges::spawn(
+        &runtime_gauge_tasks,
+        runtime_gauge_cancel.clone(),
+        move || runtime_gauges::RuntimeReadings {
+            command_workers: gauge_harness.command_workers(),
+            hydrated_sessions: gauge_harness.hydrated_sessions(),
+            session_actors: session_actors.active_sessions(),
+            inmem_conversations: inmem_manager.conversations(),
+            inmem_live_agents: inmem_manager.live_agents(),
+        },
+    );
+
     let recovery_harness = harness.clone();
     let dm_recovery = tokio::spawn(async move {
         let mut ticker = tokio::time::interval(std::time::Duration::from_secs(10));
@@ -2353,6 +2382,9 @@ async fn run() -> anyhow::Result<()> {
     notification_cancel.cancel();
     notification_tasks.close();
     notification_tasks.wait().await;
+    runtime_gauge_cancel.cancel();
+    runtime_gauge_tasks.close();
+    runtime_gauge_tasks.wait().await;
     auto_archive_tasks.close();
     auto_archive_tasks.wait().await;
     work_registration_tasks.close();
