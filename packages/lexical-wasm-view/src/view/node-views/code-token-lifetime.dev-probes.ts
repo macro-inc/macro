@@ -5,10 +5,14 @@ import { resolve } from 'node:path';
 import {
   ABI_MAJOR,
   Access,
+  EditorInputMsg,
   SessionConfigMsg,
+  SessionInputMsg,
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
+import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { beforeAll, expect, test } from 'vitest';
+import { NativeEnterDispatcher } from '../native-enter';
 
 const directory = process.env.DEV_PROBES_WASM_DIR;
 if (!directory)
@@ -16,23 +20,10 @@ if (!directory)
     'DEV_PROBES_WASM_DIR must name a dev-probes document_session_wasm build'
   );
 
-type Module = {
-  initSync(options: { module: Buffer }): unknown;
-  debugCodeTokenProviders(): number;
-  EditorSession: {
-    createMacroWithNamespace(
-      abi: number,
-      config: Uint8Array,
-      now: number,
-      wall: number,
-      namespace: string,
-      hostname?: string,
-      writeRootSearchText?: boolean,
-      provider?: (language: string, text: string, profile: string) => unknown,
-      profile?: string
-    ): { free(): void };
+type Module =
+  typeof import('../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js') & {
+    debugCodeTokenProviders(): number;
   };
-};
 let native: Module;
 
 beforeAll(async () => {
@@ -105,5 +96,66 @@ test('sessions own separate registrations', () => {
   first.free();
   expect(native.debugCodeTokenProviders()).toBe(before + 1);
   second.free();
+  expect(native.debugCodeTokenProviders()).toBe(before);
+});
+
+test('a fenced provider that frees its session mid-edit leaves the session freeable and the registry at baseline', () => {
+  const before = native.debugCodeTokenProviders();
+  const dispatcher = NativeEnterDispatcher.forModule(native);
+  const holder: { session?: { free(): void } } = {};
+  const rejected: string[] = [];
+  const session = native.EditorSession.createMacroWithNamespace(
+    ABI_MAJOR,
+    config,
+    0,
+    0,
+    'code-token-lifetime',
+    undefined,
+    undefined,
+    dispatcher.fenceCodeTokenProvider(() => {
+      try {
+        holder.session?.free();
+      } catch (error) {
+        rejected.push(error instanceof Error ? error.message : String(error));
+        throw error;
+      }
+      return JSON.stringify({ kind: 'notLoaded' });
+    }),
+    'native-fixture'
+  );
+  holder.session = session;
+  expect(native.debugCodeTokenProviders()).toBe(before + 1);
+  for (const kind of [0, 1]) {
+    session.input(SessionInputMsg.encode(emptyInput(kind)), kind, kind);
+    session.takeOutput();
+  }
+  session.input(
+    SessionInputMsg.encode({
+      ...emptyInput(2),
+      editor: EditorInputMsg.fromEditorSetState({
+        json: JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'custom-code',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'let a' }],
+              },
+            ],
+          },
+        }),
+      }),
+    }),
+    2,
+    2
+  );
+  session.takeOutput();
+  expect(rejected).toEqual([
+    'Native session receiver call during scoped callback or cleanup',
+  ]);
+  holder.session = undefined;
+  session.free();
   expect(native.debugCodeTokenProviders()).toBe(before);
 });

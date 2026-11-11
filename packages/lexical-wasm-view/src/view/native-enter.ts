@@ -128,8 +128,12 @@ export class NativeEnterDispatcher {
   private readonly inputCommit: ReturnType<typeof captureNativeInputCommit>;
   readonly supportsBlockNavigation: boolean;
 
+  private providerDepth = 0;
+
   private readonly active = () =>
-    this.scopes.length !== 0 || this.pureObservationDepth !== 0;
+    this.scopes.length !== 0 ||
+    this.providerDepth !== 0 ||
+    this.pureObservationDepth !== 0;
   private readonly afterReturn = () => {
     for (const id of this.retiredCallbacks) this.callbacks.delete(id);
     this.retiredCallbacks.clear();
@@ -217,6 +221,25 @@ export class NativeEnterDispatcher {
       failedModules.set(native.EditorSession, { error });
       throw error;
     }
+  }
+
+  /**
+   * Fence a synchronous host code tokenizer: while it runs, every guarded receiver, accessor,
+   * static factory and free() of this module's sessions rejects before wasm-bindgen.
+   */
+  fenceCodeTokenProvider(
+    provider: (language: string, text: string, profile: string) => string
+  ): (language: string, text: string, profile: string) => string {
+    if (typeof provider !== 'function')
+      throw new Error('Invalid code token provider');
+    return (language, text, profile) => {
+      this.providerDepth++;
+      try {
+        return Reflect.apply(provider, undefined, [language, text, profile]);
+      } finally {
+        this.providerDepth--;
+      }
+    };
   }
 
   owner(session: Native.EditorSession): bigint {

@@ -26,6 +26,7 @@ import {
   type NodeViewRegistry,
   type ViewOptions,
 } from '@macro-inc/lexical-wasm-view';
+import { NativeEnterDispatcher } from '@macro-inc/lexical-wasm-view/view/native-enter';
 import type { Span } from '@macro-inc/observability';
 
 import { sessionSocketUrl } from './session-socket-url';
@@ -129,9 +130,22 @@ export function createRustEditorSession(
     installOverlays?: (view: EditorView) => NativeMarkdownOverlayInstallation;
     /** Construction-time observers of the latest published presentation. */
     latestPublished?: readonly LatestPublishedObserver[];
+    /** Dormant host code tokenizer; fenced by the module dispatcher before construction. */
+    codeTokens?: {
+      provider: (language: string, text: string, profile: string) => string;
+      profile: string;
+    };
   }
 ) {
   const loadCachedSnapshot = options.loadCachedSnapshot;
+  // Capture the pair once so fencing and construction see the same provider and profile.
+  const codeTokens = options.codeTokens;
+  const tokenProfile = codeTokens?.profile;
+  const tokenProvider = codeTokens
+    ? NativeEnterDispatcher.forModule(options.module).fenceCodeTokenProvider(
+        codeTokens.provider
+      )
+    : undefined;
   const configured = configureSession(
     options,
     (config, now, wall) =>
@@ -142,7 +156,9 @@ export function createRustEditorSession(
         wall,
         options.view.namespace,
         undefined,
-        ENABLE_MARKDOWN_SEARCH_TEXT
+        ENABLE_MARKDOWN_SEARCH_TEXT,
+        tokenProvider,
+        tokenProfile
       ),
     false
   );

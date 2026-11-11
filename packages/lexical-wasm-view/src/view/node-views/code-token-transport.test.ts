@@ -5,17 +5,29 @@ import {
   Access,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
-import { beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test } from 'vitest';
+import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { selectionMessage } from '../session-port';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
 } from '../test/native-surface';
 
-beforeAll(initializeNativeSurfaceTests);
+beforeAll(() => {
+  initializeNativeSurfaceTests();
+  otherSurface = nativeSurface(Access.Edit);
+});
+afterAll(() => otherSurface.close());
 
-type Provider = (language: string, text: string, profile: string) => unknown;
+type Provider = (language: string, text: string, profile: string) => string;
+type Session = nativeModule.EditorSession;
+
+// Captured after the fixture module's guard is installed (first fenced surface below).
+let cachedSerializedState: (this: Session) => string;
+let otherSurface: ReturnType<typeof nativeSurface>;
+const other = () => otherSurface;
 const SENTINEL = 'sentinel-content-must-not-leak';
+const HOST = 'host code tokenizer failed';
 
 const fixtureReply = (text: string) =>
   JSON.stringify({
@@ -64,6 +76,8 @@ function surfaceWith(provider: Provider) {
     (n) => n.type === 'custom-code'
   );
   if (!code) throw new Error('Missing native code block');
+  cachedSerializedState ??=
+    nativeModule.EditorSession.prototype.serializedState;
   armed = true;
   const setLanguage = (language: string) => {
     const generation = fixture.view.mirror.keyGeneration;
@@ -121,7 +135,12 @@ test('a throwing provider fails the edit with a content-free host error', () => 
       errors.push(error);
     }
     expect(childTypes()).toEqual(['text']);
-    expect(JSON.stringify(errors.map(String))).not.toContain(SENTINEL);
+    expect(fixture.errors).toEqual([HOST]);
+    expect(JSON.stringify([errors.map(String), fixture.errors])).not.toContain(
+      SENTINEL
+    );
+    // The fence depth is reset after the throw.
+    expect(typeof fixture.session.serializedState()).toBe('string');
   } finally {
     fixture.close();
   }
@@ -133,7 +152,7 @@ test.each([
   ['extra key', () => JSON.stringify({ kind: 'notLoaded', extra: 1 })],
 ])('a %s leaves the block untokenized', (_, provider) => {
   const { fixture, setLanguage, childTypes } = surfaceWith(
-    provider as Provider
+    provider as unknown as Provider
   );
   try {
     try {
@@ -147,52 +166,69 @@ test.each([
   }
 });
 
-test.each(['mutate', 'read'] as const)(
-  'reentering the session (%s) inside the provider fails the edit; usable, but the leaked borrow blocks free()',
-  (kind) => {
+const GUARD = 'Native session receiver call during scoped callback or cleanup';
+
+// Raw (unfenced) reentry corrupts wasm-bindgen state; recorded as RED evidence in
+// B-raw-reentry-RED.log, unsupported per the provider contract. These run through the fence.
+test.each([
+  ['an ordinary read', (own: Session) => own.serializedState()],
+  ['an ordinary mutation', (own: Session) => own.input(new Uint8Array(), 0, 0)],
+  ['free()', (own: Session) => own.free()],
+  [
+    'a cached receiver captured after installation',
+    (own: Session) => cachedSerializedState.call(own),
+  ],
+  [
+    'a static factory',
+    () =>
+      nativeModule.EditorSession.createMacroWithNamespace(
+        0,
+        new Uint8Array(),
+        0,
+        0,
+        'reentry'
+      ),
+  ],
+  ['another session', () => other().session.serializedState()],
+] as const)(
+  'reentering through %s inside the provider is rejected before wasm-bindgen; the session stays usable and freeable',
+  (_, reenter) => {
     const observed: string[] = [];
-    let reenter = true;
-    const outer: string[] = [];
-    const holder: { fixture?: ReturnType<typeof surfaceWith>['fixture'] } = {};
+    let armedReentry = true;
+    const holder: { session?: Session } = {};
     const { fixture, setLanguage, childTypes } = surfaceWith((_, text) => {
-      if (reenter && holder.fixture) {
-        reenter = false;
+      if (armedReentry && holder.session) {
+        armedReentry = false;
         try {
-          if (kind === 'mutate')
-            holder.fixture.session.input(new Uint8Array(), 0, 0);
-          else if (kind === 'read') holder.fixture.session.serializedState();
+          reenter(holder.session);
           observed.push('no error');
         } catch (error) {
-          observed.push(String(error));
-          throw error;
+          observed.push(error instanceof Error ? error.message : String(error));
+          throw new Error(SENTINEL);
         }
       }
       return fixtureReply(text);
     });
-    holder.fixture = fixture;
+    holder.session = fixture.session;
+    const outer: string[] = [];
     try {
-      try {
-        setLanguage('rust');
-      } catch (error) {
-        outer.push(String(error));
-      }
-      expect(observed).toHaveLength(1);
-      expect(observed[0]).not.toBe('no error');
-      expect(childTypes()).toEqual(['text']);
-      setLanguage('javascript');
-      expect(childTypes()).toEqual([
-        'code-highlight',
-        'code-highlight',
-        'code-highlight',
-      ]);
-      // Finding: wasm-bindgen rejects the reentrant call by throwing through Rust, which leaks the
-      // reentrant call's borrow; the session stays usable but can no longer be freed.
-      expect(() => fixture.close()).toThrow(
-        'attempted to take ownership of Rust value while it was borrowed'
-      );
-    } finally {
-      fixture.root.remove();
+      setLanguage('rust');
+    } catch (error) {
+      outer.push(String(error));
     }
+    expect(observed).toEqual([GUARD]);
+    expect(fixture.errors).toEqual([HOST]);
+    expect(JSON.stringify([outer, fixture.errors])).not.toContain(SENTINEL);
+    expect(childTypes()).toEqual(['text']);
+    // The fence depth is reset: an ordinary call and the next edit both succeed.
+    expect(typeof fixture.session.serializedState()).toBe('string');
+    setLanguage('javascript');
+    expect(childTypes()).toEqual([
+      'code-highlight',
+      'code-highlight',
+      'code-highlight',
+    ]);
+    fixture.close();
   }
 );
 
@@ -231,32 +267,6 @@ test('a provider without a profile is rejected at construction', () => {
       }
     )
   ).toThrow();
-});
-
-// Finding, not a guarantee: wasm-bindgen's JS free() zeroes the wrapper pointer before Rust rejects a
-// free of a borrowed session, so a provider that calls free() mid-edit poisons the JS wrapper. The
-// provider contract gives it no session reference; this pins the actual failure shape.
-test('free() inside the provider is rejected but poisons the JS wrapper (wasm-bindgen)', () => {
-  const observed: string[] = [];
-  const holder: { fixture?: ReturnType<typeof surfaceWith>['fixture'] } = {};
-  let reenter = true;
-  const { fixture, setLanguage } = surfaceWith((_, text) => {
-    if (reenter && holder.fixture) {
-      reenter = false;
-      try {
-        holder.fixture.session.free();
-      } catch (error) {
-        observed.push(String(error));
-      }
-    }
-    return fixtureReply(text);
-  });
-  holder.fixture = fixture;
-  expect(() => setLanguage('rust')).toThrow('null pointer passed to rust');
-  expect(observed).toEqual([
-    'Error: attempted to take ownership of Rust value while it was borrowed',
-  ]);
-  fixture.root.remove();
 });
 
 test('the production artifact ships no dev-probes registry export', async () => {

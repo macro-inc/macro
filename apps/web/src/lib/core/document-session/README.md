@@ -201,3 +201,5 @@ executes source callbacks. Picker, creation and media workflows need separate
 typed adapters, and InlineSearch lifecycle/application admission remain pending.
 
 The document host allocates its clipboard namespace through the same wrapper allocator as the source editor. Pass that exact value to both `view.namespace` and `EditorSession.createMacroWithNamespace`; cross-instance HTML fallback remains required when namespaces differ.
+
+A host code tokenizer reaches `createMacroWithNamespace` only through `createRustEditorSession({ codeTokens })`, which fences it with the module's `NativeEnterDispatcher.fenceCodeTokenProvider` before construction: while it runs, every session receiver, static factory and `free()` of that module rejects before wasm-bindgen. Passing a raw provider to the constructor, or calling receiver functions cached before the dispatcher installed its guard, is unsupported. The option is dormant; no caller passes it yet.

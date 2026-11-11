@@ -9,11 +9,9 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
-import {
-  EditorSession,
-  initSync,
-} from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
+import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { EditorView } from '../editor-view';
+import { NativeEnterDispatcher } from '../native-enter';
 import { createBuiltinRegistry } from '../node-views/builtins';
 import { registerMacroElementViews } from '../node-views/macro';
 import type { ViewSink } from '../port';
@@ -22,7 +20,7 @@ import { SessionPort } from '../session-port';
 
 /** Load the same production artifact used by session and browser integration tests. */
 export function initializeNativeSurfaceTests() {
-  initSync({
+  nativeModule.initSync({
     module: readFileSync(
       resolve(
         import.meta.dirname,
@@ -36,11 +34,18 @@ export function nativeSurface(
   access = Access.Edit,
   theme: EditorThemeClasses = {},
   codeTokens?: {
-    provider: (language: string, text: string, profile: string) => unknown;
+    provider: (language: string, text: string, profile: string) => string;
     profile: string;
   }
 ) {
-  const session = EditorSession.createMacroWithNamespace(
+  // The supported provider path: the module dispatcher (and its receiver guard) exists before
+  // construction and fences the provider.
+  const provider = codeTokens
+    ? NativeEnterDispatcher.forModule(nativeModule).fenceCodeTokenProvider(
+        codeTokens.provider
+      )
+    : undefined;
+  const session = nativeModule.EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
     SessionConfigMsg.encode({
       doc: 'group-b-view-fixture',
@@ -65,11 +70,13 @@ export function nativeSurface(
     'group-b-view',
     undefined,
     undefined,
-    codeTokens?.provider,
+    provider,
     codeTokens?.profile
   );
   let view: EditorView | undefined;
   const counters = { admissions: 0 };
+  /** Session failure texts reported to the view, in order. */
+  const errors: string[] = [];
   const sink: ViewSink = {
     apply: (words, strings, effects) => view?.apply(words, strings, effects),
     acknowledgeText: (input) => view?.acknowledgeText(input),
@@ -102,6 +109,7 @@ export function nativeSurface(
       editable: access === Access.Edit,
       preset: 'rich',
       onError(error) {
+        errors.push(error instanceof Error ? error.message : String(error));
         throw error;
       },
     }
@@ -119,6 +127,7 @@ export function nativeSurface(
     port,
     root,
     counters,
+    errors,
     close() {
       mounted.dispose();
       root.remove();
