@@ -232,6 +232,8 @@ export function createContactDirectoryWindow(
       setSearch(value);
     },
     data,
+    /** Whether the page on screen continues an earlier one. */
+    continued: () => request().cursor !== undefined,
     /** Names the page on screen (query, eligibility, continuation). A refresh
      * of that page keeps its key, so callers reset focus only for a new page. */
     windowKey: () => (data() ? hashKey([request()]) : undefined),

@@ -1113,6 +1113,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         };
       },
       activity: dmActivityByUserId,
+      // Property pickers page a replaceable window with explicit controls;
+      // menus list each further page below what is already shown.
+      append: () => options?.peopleMode !== 'property',
       excluded: (id) =>
         personExclusions.ids().has(id) || isConnectedSecondaryInbox(id),
       conversation: (id) => {

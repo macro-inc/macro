@@ -15,7 +15,7 @@ vi.mock('./lookup', async (original) => ({
 }));
 afterEach(() => vi.useRealTimers());
 
-it('resolves only the active alias window and discards old private-user/query results', async () => {
+it('resolves the listed alias pages up to one batch and discards old private-user/query results', async () => {
   vi.useFakeTimers();
   resolve.mockImplementation(async (_viewer, _host, lookup) => ({
     users: lookup.values.map((email) => ({
@@ -63,12 +63,15 @@ it('resolves only the active alias window and discards old private-user/query re
     await source?.loadMore();
     await vi.runOnlyPendingTimersAsync();
     await committed.promise;
-    expect(source?.rows()).toHaveLength(50);
-    expect(source?.users()).toHaveLength(50);
-    expect(source?.rows()[0].id).toBe(String(page * 50));
+    // Each further page is listed below the earlier ones.
+    expect(source?.rows()).toHaveLength((page + 1) * 50);
+    expect(source?.users()).toHaveLength((page + 1) * 50);
+    expect(source?.rows()[0].id).toBe('0');
     expect(client.getQueryCache().getAll()).toHaveLength(1);
   }
-  expect(resolve.mock.calls.every((call) => call[2].values.length === 50)).toBe(
+  // The list stops at one lookup batch.
+  expect(source?.hasMore()).toBe(false);
+  expect(resolve.mock.calls.every((call) => call[2].values.length <= 500)).toBe(
     true
   );
   setQuery('other');
@@ -80,7 +83,7 @@ it('resolves only the active alias window and discards old private-user/query re
   client.clear();
 });
 
-it('keeps its window key while rows arrive within the page and changes it for the next page', async () => {
+it('keeps its window key while rows arrive and while a further page is listed below', async () => {
   vi.useFakeTimers();
   resolve.mockResolvedValue({
     users: [],
@@ -124,9 +127,12 @@ it('keeps its window key while rows arrive within the page and changes it for th
   await vi.runOnlyPendingTimersAsync();
   expect(source!.windowKey()).toBe(firstPage);
 
+  expect(source!.rows()).toHaveLength(50);
   await source!.loadMore();
   await vi.runOnlyPendingTimersAsync();
-  expect(source!.windowKey()).not.toBe(firstPage);
+  expect(source!.rows()).toHaveLength(100);
+  expect(source!.rows()[0].id).toBe('5');
+  expect(source!.windowKey()).toBe(firstPage);
   mounted.unmount();
   await vi.runOnlyPendingTimersAsync();
   client.clear();

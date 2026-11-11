@@ -1,6 +1,8 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
+import type { CacheChangeListener } from '@graphql-cache/host/types';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
+import { parseCacheRevision } from '@graphql-cache/protocol';
 import { render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createEffect, createSignal } from 'solid-js';
@@ -126,7 +128,7 @@ it('keeps still-matching people listed while the next read is pending', async ()
   vi.useFakeTimers();
   const viewer = 'macro|viewer@example.com';
   const directory = ['Jacob Adams', 'Jacob Baker', 'Jane Cole'];
-  let changed: (() => void) | undefined;
+  let changed: CacheChangeListener | undefined;
   const search = vi
     .fn<PeopleCache['search']>()
     .mockImplementation(async (request) => ({
@@ -159,7 +161,7 @@ it('keeps still-matching people listed while the next read is pending', async ()
       kind: 'hit' as const,
       data: { user: { id: viewer } },
     }),
-    onCacheChanged: (callback: () => void) => {
+    onCacheChanged: (callback: CacheChangeListener) => {
       changed = callback;
       return () => {};
     },
@@ -209,7 +211,7 @@ it('keeps still-matching people listed while the next read is pending', async ()
   );
 
   // A contact change re-reads the page without emptying it.
-  changed?.();
+  changed?.(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
   await vi.advanceTimersByTimeAsync(0);
   expect(names()).toEqual(['Jacob Adams', 'Jacob Baker']);
   await vi.advanceTimersByTimeAsync(1000);
@@ -220,4 +222,90 @@ it('keeps still-matching people listed while the next read is pending', async ()
   await vi.runOnlyPendingTimersAsync();
   client.clear();
   vi.restoreAllMocks();
+});
+
+it('lists the next page below the first when pages are appended', async () => {
+  vi.useFakeTimers();
+  const viewer = 'macro|viewer@example.com';
+  const person = (id: string) => ({
+    recordKey: `GraphqlContact:${id}`,
+    userId: `macro|${id}@example.com`,
+    email: `${id}@example.com`,
+    name: id,
+    lastInteractionMs: 0,
+    matchRank: 2,
+    score: 1,
+    timestampMs: 0,
+  });
+  const search = vi
+    .fn<PeopleCache['search']>()
+    .mockImplementation(async (request) => ({
+      kind: 'page',
+      policyVersion: 5,
+      people: request.cursor
+        ? [person('first-b'), person('next-a'), person('next-b')]
+        : [person('first-a'), person('first-b')],
+      truncated: !request.cursor,
+      nextCursor: request.cursor ? null : 'rank-position',
+    }));
+  const host = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    currentStorageGeneration: async () =>
+      '00000000-0000-4000-8000-000000000001',
+    readQuery: async () => ({
+      kind: 'hit' as const,
+      data: { user: { id: viewer } },
+    }),
+    people: {
+      ...unsupportedContactSync,
+      readSql: vi
+        .fn<PeopleCache['readSql']>()
+        .mockResolvedValue({ kind: 'unsupported' }),
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
+      search,
+      context: vi.fn<PeopleCache['context']>(),
+      update: vi.fn<PeopleCache['update']>(),
+    },
+  };
+  const client = new QueryClient();
+  let list: ReturnType<typeof createPersonList> | undefined;
+  function Harness() {
+    list = createPersonList({
+      scope: () => ({ userId: viewer, host }),
+      search: () => '',
+      enabled: () => true,
+      policy: () => ({ mode: 'command', excluded: [] }),
+      activity: () => new Map(),
+      conversation: () => undefined,
+      excluded: () => false,
+      append: () => true,
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  const names = () => list?.items().map((item) => item.data.name);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(names()).toEqual(['first-a', 'first-b']);
+  const window = list?.windowKey?.();
+  expect(window).toBeDefined();
+  expect(list?.hasMore()).toBe(true);
+
+  const next = list?.loadMore();
+  // Nothing already listed leaves while the page loads.
+  expect(names()).toEqual(['first-a', 'first-b']);
+  await vi.advanceTimersByTimeAsync(500);
+  await next;
+  expect(names()).toEqual(['first-a', 'first-b', 'next-a', 'next-b']);
+  expect(list?.items().map((item) => item.personOrder)).toEqual([0, 1, 2, 3]);
+  expect(list?.windowKey?.()).toBe(window);
+  expect(list?.hasMore()).toBe(false);
+
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
 });

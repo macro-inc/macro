@@ -14,6 +14,7 @@ import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
@@ -24,7 +25,6 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
@@ -59,9 +59,9 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { commandSearchResultKey } from './contact-items';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
+import { commandSearchResultKey } from './contact-items';
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
 import { createCommandResultOpener } from './open-command-result';
