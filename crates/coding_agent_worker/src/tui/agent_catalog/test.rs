@@ -49,6 +49,38 @@ fn direct_agents_need_only_their_command() {
 }
 
 #[test]
+fn omp_uses_its_native_acp_subcommand_alongside_the_other_local_runtimes() {
+    let agents = discover(&Commands::new(&[
+        "claude", "codex", "npm", "opencode", "omp",
+    ]));
+
+    assert_eq!(
+        agents.iter().map(|agent| agent.kind).collect::<Vec<_>>(),
+        [
+            AgentKind::ClaudeCode,
+            AgentKind::Codex,
+            AgentKind::OpenCode,
+            AgentKind::Omp,
+        ]
+    );
+    let omp = agents.last().expect("OMP is registered");
+    assert_eq!(omp.kind.id(), "omp");
+    assert_eq!(omp.name, "OMP");
+    assert_eq!(omp.launch, LaunchSpec::new("omp", ["acp"]));
+    assert_eq!(omp.install, None);
+}
+
+#[test]
+fn an_unresolved_omp_binary_is_omitted_without_hiding_other_agents() {
+    let agents = discover(&Commands::new(&["claude", "codex", "npm", "opencode"]));
+
+    assert_eq!(
+        agents.iter().map(|agent| agent.kind).collect::<Vec<_>>(),
+        [AgentKind::ClaudeCode, AgentKind::Codex, AgentKind::OpenCode]
+    );
+}
+
+#[test]
 fn hermes_acp_launcher_is_used_as_a_fallback() {
     let agents = discover(&Commands::new(&["hermes-acp"]));
 
@@ -152,6 +184,7 @@ fn claude_code_gets_the_program_behind_an_npm_cmd_shim() {
 #[test]
 fn existing_launch_specs_are_recognized() {
     assert_eq!(name_for(&harness("hermes", &["acp"])), Some("Hermes Agent"));
+    assert_eq!(kind_for(&harness("omp", &["acp"])), Some(AgentKind::Omp));
     assert_eq!(name_for(&harness("my-agent", &[])), None);
     assert_eq!(kind_for(&harness("my-agent", &[])), None);
 }

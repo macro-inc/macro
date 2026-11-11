@@ -97,6 +97,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     let ClientRequest::NewSessionRequest(open) = &requests[1] else {
         panic!("expected session/new")
     };
+    assert_eq!(open.cwd, std::path::PathBuf::from("/home/operator/code"));
     assert_eq!(
         service.inner.egress.provisioned(),
         [(

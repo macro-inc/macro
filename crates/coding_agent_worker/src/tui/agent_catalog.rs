@@ -6,6 +6,7 @@ mod codex;
 mod herdr_tui;
 mod hermes;
 mod npm_adapter;
+mod omp;
 mod open_claw;
 mod open_code;
 
@@ -40,6 +41,7 @@ static PRESETS: &[&dyn AgentPreset] = &[
     &codex::Codex,
     &open_claw::OpenClaw,
     &open_code::OpenCode,
+    &omp::Omp,
 ];
 
 /// A command and arguments that start an ACP agent.
@@ -112,6 +114,7 @@ pub enum AgentKind {
     Codex,
     OpenClaw,
     OpenCode,
+    Omp,
     Custom,
 }
 
@@ -131,6 +134,7 @@ impl AgentKind {
             Self::Codex => "codex",
             Self::OpenClaw => "openclaw",
             Self::OpenCode => "opencode",
+            Self::Omp => "omp",
             Self::Custom => "custom",
         }
     }
@@ -171,6 +175,7 @@ impl PathCommands {
             "codex",
             "herdr",
             "npm",
+            "omp",
             "openclaw",
             "opencode",
         ] {
