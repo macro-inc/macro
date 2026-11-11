@@ -1,5 +1,34 @@
 # AI Chat (Agents)
 
+## Recently shared in an agent session
+
+With agent session activity enabled, the first side panel section lists items
+the agent changed in code mode, with a **Live** marker while it works. It
+appears only after the session has activity rows; older sessions without rows
+keep it hidden. Each row shows the item's icon, name, latest step (`Edited
+(xN)` for consecutive repeats) and time, with a dot until you have seen it.
+Clicking a row opens the item (Shift-click for a new split); hovering shows
+Copy link on desktop. Items with more than one step show a count and caret that
+open a chronological timeline on a rail under the icon.
+
+The list has a fixed 300px height, scrolls inside the side panel, and fades
+its edges where it has more. Moved rows slide to their new place and an updated
+row flashes as it lands. While the pointer or keyboard focus is inside the
+list, or it is scrolled away from the top, incoming activity waits behind an
+**N new** pill; a tap's leftover focus on touch does not hold it. Press the
+pill to catch up, or leave the list at the top. An updated item opens its
+timeline when it arrives; a new item stays closed and closes the open one. An
+entity without a resolvable name shows its type and cannot be opened. There is
+no show-in-conversation action because activity correlation does not identify a
+transcript position.
+
+Verify with a code-mode session that changes the same entity several times,
+then changes another. Keep the pointer in the list during the next change and
+confirm its rows and scroll position remain still until **N new** is pressed.
+Repeat with keyboard focus and a scroll position below the top. Check the
+300px section height, the slide and flash on update, row hit targets on touch,
+and the hidden section in an older session.
+
 Agent session split headers show other current viewers' avatars, excluding your
 own, with up to three avatars and a count for additional viewers. Presence uses
 the resolved session ID, including sessions opened from the create menu. Open
@@ -1645,6 +1674,11 @@ suggestions. There is only ever one Macro entry in the mention menu; which of th
 two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
+
+With `enableAgentSessionActivity`, an open floating details panel stays open
+when the transcript is clicked in panes at least 900px wide. The transcript and
+composer clear its width, and the panel's open state is remembered. In narrower
+panes, clicking outside the panel closes it.
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or

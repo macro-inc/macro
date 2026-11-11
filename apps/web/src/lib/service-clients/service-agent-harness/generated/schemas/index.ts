@@ -8,6 +8,7 @@
 export * from './accessLevel';
 export * from './activityWireRow';
 export * from './activityWireRowAgentCorrelationId';
+export * from './activityWireRowAgentVerb';
 export * from './agentAction';
 export * from './agentActionId';
 export * from './agentActionOneOf';
