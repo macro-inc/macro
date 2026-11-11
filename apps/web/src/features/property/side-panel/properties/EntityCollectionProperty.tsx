@@ -249,11 +249,7 @@ function EntityCollectionPropertyBody(props: {
       >
         <span class="min-w-0 truncate">{props.property.displayName}</span>
         <Show when={canDrop()}>
-          <DropIcon
-            class="size-3.5 shrink-0"
-            aria-hidden="true"
-            data-icon-motion="none"
-          />
+          <DropIcon class="size-3.5 shrink-0" aria-hidden="true" />
         </Show>
       </span>
       <div class="flex min-w-0 items-center">
@@ -337,11 +333,7 @@ function EntityCollectionPropertyBody(props: {
           >
             <div class="min-h-0 overflow-hidden">
               <div class="mt-1 flex h-12 items-center justify-center gap-2 rounded-lg border border-dashed border-accent bg-accent/10 text-xs text-accent">
-                <DropIcon
-                  class="size-4 shrink-0"
-                  aria-hidden="true"
-                  data-icon-motion="none"
-                />
+                <DropIcon class="size-4 shrink-0" aria-hidden="true" />
                 <span>{t('common.dropToAdd')}</span>
               </div>
             </div>

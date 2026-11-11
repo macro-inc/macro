@@ -9,6 +9,7 @@ import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
 import type { hydrateEmailEvent } from './hydrate/email';
 import type { hydrateMessageEvent } from './hydrate/message';
+import type { hydrateUserEvent } from './hydrate/user';
 
 /** The webhook event envelope, including internal event variants. */
 export type MacroEvent = WebhookEvent;
@@ -35,7 +36,8 @@ type HydratedEvent =
   | ReturnType<typeof hydrateCallEvent>
   | ReturnType<typeof hydrateDocumentEvent>
   | ReturnType<typeof hydrateEmailEvent>
-  | ReturnType<typeof hydrateMessageEvent>;
+  | ReturnType<typeof hydrateMessageEvent>
+  | ReturnType<typeof hydrateUserEvent>;
 
 /**
  * What a handler receives, per event: the raw `metadata` plus its entity handles.

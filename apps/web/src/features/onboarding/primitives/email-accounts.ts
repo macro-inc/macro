@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type {
   EmailAccountsSource,
+  InboxProvider,
   Loadable,
   OnboardingContext,
 } from '../context/onboarding-context';
@@ -14,7 +15,7 @@ const EMAIL_ACCOUNTS_POLL_MS = 5_000;
 export type InboxSlot = 'work' | 'personal';
 
 /**
- * Connecting Google inboxes. On web, connecting is a full-page OAuth redirect,
+ * Connecting Google and Outlook inboxes. On web, connecting is a full-page OAuth redirect,
  * so a landed link is detected against a baseline saved before leaving.
  */
 export function createEmailAccounts(
@@ -22,6 +23,8 @@ export function createEmailAccounts(
   source: EmailAccountsSource
 ) {
   const [connecting, setConnecting] = createSignal<InboxSlot>();
+  const [connectingProvider, setConnectingProvider] =
+    createSignal<InboxProvider>();
 
   // The links have a long stale time; a connect that just completed (this tab
   // or another) must show up the moment the user is back.
@@ -62,15 +65,18 @@ export function createEmailAccounts(
     if (count !== baseline) saveConnectBaseline(undefined);
   });
 
-  const connect = async (slot: InboxSlot) => {
+  /** Without a provider the app asks which one. */
+  const connect = async (slot: InboxSlot, provider?: InboxProvider) => {
     if (connecting() !== undefined) return;
     setConnecting(slot);
+    setConnectingProvider(provider);
     context.track('onboarding_v4_email_connect_clicked', { slot });
     saveConnectBaseline(list().length);
     try {
-      await context.connectInbox();
+      await context.connectInbox(provider);
     } finally {
       setConnecting(undefined);
+      setConnectingProvider(undefined);
     }
   };
 
@@ -79,6 +85,7 @@ export function createEmailAccounts(
     primary: () => list()[0],
     secondary: () => list()[1],
     connecting,
+    connectingProvider,
     connect,
     retry: () => fireAndForget(source.refresh(), 'onboarding'),
   };

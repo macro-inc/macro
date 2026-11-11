@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO saved_view_position (user_id, saved_view_id, position)\n             SELECT $1, v.id, (ordered.ord - 1)::int\n             FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(id, ord)\n             JOIN saved_view v ON v.id = ordered.id\n             ON CONFLICT (user_id, saved_view_id) DO UPDATE SET position = EXCLUDED.position",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91f50578efd22c45ce3e1d17055c768d7334cfcfa48be143048e0643cbfe4d68"
+}

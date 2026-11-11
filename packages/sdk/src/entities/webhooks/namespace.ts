@@ -22,6 +22,9 @@ export class WebhooksNamespace {
    * `email.*` events reach only the inbox owner's `'user'` scope webhooks, and
    * filters naming them need the owner's own token or API key: bot and harness
    * credentials get a 403, and cannot change a webhook that has such filters.
+   *
+   * @write
+   * @openworld
    */
   create(opts: {
     url: string;
@@ -42,6 +45,8 @@ export class WebhooksNamespace {
   /**
    * The caller's webhooks across their personal and team workspaces, newest
    * first. Each returned handle already holds its record.
+   *
+   * @readonly
    */
   async list(): Promise<Webhook[]> {
     const { webhooks } = unwrap(await this.client.storage.listWebhooks());

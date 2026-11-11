@@ -1,6 +1,12 @@
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import { preservePersonOrder } from '@core/util/ordered-window';
+import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
+
+// Command keyword eligibility is not a database-person lookup. Keep its existing
+// matcher for commands and ordinary entities; personal windows retain core order.
+const COMMAND_MATCHER = new uFuzzy({});
 
 /** The label a row shows; its search text can add emails, aliases, or command keywords. */
 function displayName(item: CommandMenuItem): string {
@@ -49,6 +55,10 @@ function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
   );
 }
 
+function isMacroPerson(item: CommandMenuItem) {
+  return item.bucket === 'dm' || item.bucket === 'person';
+}
+
 /** Rank cached and local candidates together using the command menu's rules. */
 export function rankCommandSearchItems<T extends CommandMenuItem>(
   items: T[],
@@ -79,19 +89,43 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     getTimestamp: (item) => item.timestamps,
   });
 
-  const ranked = search(items, query)
-    .sort(
-      (left, right) =>
-        right.nameMatchRank - left.nameMatchRank ||
-        right.combinedScore - left.combinedScore ||
-        compareRecency(left.item, right.item)
-    )
-    .map(({ item }) => item);
+  const commands = items.filter((item) => item.kind === 'command');
+  const commandMatches = new Set(
+    (
+      COMMAND_MATCHER.filter(
+        commands.map((item) => item.searchText),
+        query
+      ) ?? []
+    ).map((index) => commands[index].id)
+  );
+  const eligible = items.filter(
+    (item) => item.kind !== 'command' || commandMatches.has(item.id)
+  );
+  // Match quality decides first. Among equally good matches Macro users and
+  // DMs come before documents and channels.
+  const scored = search(eligible, query).sort(
+    (left, right) =>
+      right.nameMatchRank - left.nameMatchRank ||
+      Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
+      right.combinedScore - left.combinedScore ||
+      compareRecency(left.item, right.item)
+  );
+  const ranked = scored.map(({ item }) => item);
+  // People keep their window order only among equally good name matches, so
+  // a recent weak match cannot take the slot an exact name earned.
+  const nameRanks = new Map(
+    scored.map(({ item, nameMatchRank }) => [item.id, nameMatchRank])
+  );
+  const nameRank = (item: T) => nameRanks.get(item.id) ?? -Infinity;
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
-    return prioritizeInternalPeople(ranked);
+    return preservePersonOrder(
+      prioritizeInternalPeople(ranked),
+      items,
+      nameRank
+    );
 
   // Cache search accepts broader subsequences than the menu's fuzzy matcher.
   // Keep these additional matches reachable after the regular ranked results.
@@ -99,5 +133,9 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const additional = items
     .filter((item) => preserved(item) && !matchedIds.has(item.id))
     .sort(compareRecency);
-  return prioritizeInternalPeople([...ranked, ...additional]);
+  return preservePersonOrder(
+    prioritizeInternalPeople([...ranked, ...additional]),
+    items,
+    nameRank
+  );
 }

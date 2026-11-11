@@ -11,6 +11,7 @@ import { hydrateChannelEvent } from './hydrate/channel';
 import { hydrateDocumentEvent } from './hydrate/document';
 import { hydrateEmailEvent } from './hydrate/email';
 import { hydrateMessageEvent } from './hydrate/message';
+import { hydrateUserEvent } from './hydrate/user';
 import type {
   DeliveryHeaders,
   EventHandler,
@@ -74,6 +75,9 @@ function hydrate(
     .with({ event_type: P.string.startsWith('email.') }, (emailEvent) =>
       hydrateEmailEvent(client, emailEvent),
     )
+    .with({ event_type: P.string.startsWith('user.') }, (userEvent) =>
+      hydrateUserEvent(client, userEvent),
+    )
     .with(
       { event_type: P.string.startsWith('agent_session.') },
       (agentSessionEvent) =>
@@ -88,6 +92,8 @@ function hydrate(
  * {@link MacroEvents.webhook} at a persisted webhook URL.
  *
  * Obtain via `macro.events` — do not construct directly.
+ *
+ * @mcp-exclude Registers live event handlers and listeners; MCP calls carry JSON only.
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();

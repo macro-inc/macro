@@ -10,5 +10,7 @@ pub mod models;
 pub mod ports;
 /// Policy for the redirect URIs the broker will deliver codes to.
 pub mod redirect_uri;
+/// The MCP servers the broker issues tokens for.
+pub mod resource;
 /// Domain service for the MCP OAuth broker.
 pub mod service;

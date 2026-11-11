@@ -13,6 +13,7 @@ use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
 use messages::outbound::broker::MessageMacroEvent;
+use user_events::UserMacroEvent;
 
 macro_event_broker::declare_topics!(
     DeclaredMacroEvent: DocumentMacroEvent,
@@ -23,4 +24,5 @@ macro_event_broker::declare_topics!(
     WebhookMacroEvent,
     AgentSessionMacroEvent,
     AgentSessionLifecycleMacroEvent,
+    UserMacroEvent,
 );
