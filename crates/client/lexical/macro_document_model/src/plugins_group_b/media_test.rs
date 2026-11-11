@@ -217,7 +217,7 @@ fn stale_document_media_resolution_cannot_overwrite_a_changed_source() -> Result
         tx.append(NodeKey::ROOT, &[image.key()])?;
         Ok(image.key())
     })?;
-    let command = decode_command("group-b.media", &json!({"action":"url","key":image.index(),"source_id":"old-source","url":"blob:old-source"}).to_string(), image.generation(), None)?.expect("url");
+    let command = decode_command("group-b.media", &json!({"action":"url","key":image.index(),"source_id":"old-source","expected_url":"","url":"blob:old-source"}).to_string(), image.generation(), None)?.expect("url");
     let before = editor.state().to_json()?;
     assert_eq!(editor.dispatch(&command)?.0, Handled::No);
     assert_eq!(editor.state().to_json()?, before);

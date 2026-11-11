@@ -1,6 +1,6 @@
 //! Source media setters and late URL upgrades, independent of native upload freshness policy.
 use super::*;
-use crate::nodes::{ImageNode, Maybe, MediaNode, MediaProperty, MediaType, VideoNode};
+use crate::nodes::{ImageNode, Maybe, MediaData, MediaNode, MediaProperty, MediaType, VideoNode};
 
 /// Source mount notification; the platform supplies actual upload-inflight state.
 #[derive(Clone, Debug, PartialEq)]
@@ -50,9 +50,25 @@ fn rerender_by_default() -> bool {
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
+pub(super) struct DssUrlIdentity {
+    source_id: String,
+    expected_url: String,
+}
+
+impl DssUrlIdentity {
+    pub(super) fn matches(&self, media: &MediaData) -> bool {
+        media.src_type.as_deref() == Some("dss")
+            && media.id.as_deref() == Some(self.source_id.as_str())
+            && media.url.as_deref() == Some(self.expected_url.as_str())
+    }
+}
+
+#[derive(Clone, Debug, serde::Deserialize)]
 struct UrlUpgrade {
     key: u32,
     kind: MediaType,
+    #[serde(flatten)]
+    identity: DssUrlIdentity,
     url: String,
 }
 
@@ -71,6 +87,7 @@ struct MediaPropertyCommand {
     properties: Vec<MediaProperty>,
     rerender: bool,
     historic: bool,
+    url_identity: Option<DssUrlIdentity>,
 }
 
 static PROPERTIES: CommandKey<MediaPropertyCommand> = CommandKey::new("group-b.media-set-property");
@@ -91,6 +108,7 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
                 properties: vec![input.property],
                 rerender: input.rerender,
                 historic: false,
+                url_identity: None,
             },
         )
     } else if name == UPGRADE_URL.name() {
@@ -106,6 +124,7 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
                 properties: vec![MediaProperty::Url(input.url)],
                 rerender: false,
                 historic: true,
+                url_identity: Some(input.identity),
             },
         )
     } else if name == RESIZE.name() {
@@ -124,6 +143,7 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
                 ],
                 rerender: false,
                 historic: true,
+                url_identity: None,
             },
         )
     } else {
@@ -177,6 +197,15 @@ impl Plugin for MediaProperties {
         // The source caller installs Historic on its update, even if the target vanished.
         if update.historic {
             tx.add_tag(UpdateTag::Historic);
+        }
+        if let Some(identity) = &update.url_identity {
+            let media = match update.kind {
+                MediaType::Image => tx.get::<ImageNode>(update.key).map(|node| &node.media),
+                MediaType::Video => tx.get::<VideoNode>(update.key).map(|node| &node.media),
+            };
+            if !media.is_some_and(|media| identity.matches(media)) {
+                return Ok(Handled::No);
+            }
         }
         match update.kind {
             MediaType::Image if tx.is::<ImageNode>(update.key) => {

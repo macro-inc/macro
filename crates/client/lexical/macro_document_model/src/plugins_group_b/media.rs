@@ -1,5 +1,5 @@
 //! Media insertion, resize, durable upload adoption and deletion policy.
-use super::*;
+use super::{media_properties::DssUrlIdentity, *};
 use crate::nodes::{
     CreateMedia, ImageNode, JsNumber, Maybe, MediaData, VideoNode, create_image_node,
     create_video_node,
@@ -30,7 +30,8 @@ enum MediaAction {
     },
     Url {
         key: u32,
-        source_id: String,
+        #[serde(flatten)]
+        identity: DssUrlIdentity,
         url: String,
     },
     Delete {
@@ -227,17 +228,18 @@ fn apply(tx: &mut Transaction<'_>, command: &MediaCommand) -> Result<Handled, Er
         }
         MediaAction::Url {
             key: index,
-            source_id,
+            identity,
             url,
         } => {
             let key = key(*index);
             let Some(data) = media(tx, key).filter(|_| tx.is_attached(key)) else {
                 return Ok(Handled::No);
             };
-            if data.src_type.as_deref() != Some("dss") || data.id.as_deref() != Some(source_id) {
+            if !identity.matches(&data) {
                 return Ok(Handled::No);
             }
             update(tx, key, |data| data.url = Maybe::Value(url.clone()))?;
+            tx.add_tag(UpdateTag::Historic);
         }
         MediaAction::Delete { key: index } => {
             let key = key(*index);
