@@ -616,11 +616,11 @@ impl IdeaRepo for PgIdeaRepo {
             .await?;
         let rows = sqlx::query!(
             r#"SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS "action?"
-               FROM (SELECT idea_id, part_id, position FROM idea_target
+               FROM (SELECT suggestion_id, part_id, position FROM suggestion_target
                      WHERE entity_type = $1 AND entity_id = $2 AND role = $3
                      OFFSET 0) t
-               JOIN idea i ON i.id = t.idea_id
-               LEFT JOIN idea_entity e ON e.idea_id = i.id
+               JOIN suggestion i ON i.id = t.suggestion_id
+               LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id
                WHERE i.state = ANY($4)
                ORDER BY i.id, t.position"#,
             entity_type.as_ref(),
@@ -642,7 +642,7 @@ impl IdeaRepo for PgIdeaRepo {
                 Ok(OpenTarget {
                     idea: row.id,
                     user: MacroUserIdStr::try_from(row.user_id)
-                        .map_err(|_| PgIdeaRepoError::Decode("an idea's user".to_owned()))?,
+                        .map_err(|_| PgIdeaRepoError::Decode("a suggestion's user".to_owned()))?,
                     created_at: row.created_at,
                     reply: action == Some(EntityAction::Reply),
                     part_id: row.part_id,
@@ -651,7 +651,7 @@ impl IdeaRepo for PgIdeaRepo {
             // One broken row must not keep the item's other ideas open.
             target
                 .inspect_err(|error| {
-                    tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable idea row");
+                    tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable suggestion row");
                 })
                 .ok()
         });
@@ -666,7 +666,7 @@ impl IdeaRepo for PgIdeaRepo {
         now: DateTime<Utc>,
     ) -> Result<bool, Self::Err> {
         let moved = sqlx::query!(
-            r#"UPDATE idea
+            r#"UPDATE suggestion
                SET state = $4, state_reason = $5, updated_at = $6, state_changed_at = $6
                WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,
             user.as_ref(),

@@ -12,8 +12,8 @@ use crate::domain::model::{
 use crate::domain::ports::{Limits, Written};
 use crate::outbound::pg_idea_repo::PgIdeaRepo;
 
-const OWNER: &str = "macro|ideas-resolve-owner@macro.com";
-const OTHER: &str = "macro|ideas-resolve-other@macro.com";
+const OWNER: &str = "macro|suggestions-resolve-owner@macro.com";
+const OTHER: &str = "macro|suggestions-resolve-other@macro.com";
 const THREAD: &str = "01900000-0000-7000-8000-0000000000a1";
 const CHANNEL: &str = "01900000-0000-7000-8000-0000000000c1";
 const DOCUMENT: &str = "document-1";
@@ -116,10 +116,13 @@ impl Harness {
     }
 
     async fn state(&self, id: Uuid) -> (String, Option<String>) {
-        let row = sqlx::query!("SELECT state, state_reason FROM idea WHERE id = $1", id)
-            .fetch_one(&self.pool)
-            .await
-            .unwrap();
+        let row = sqlx::query!(
+            "SELECT state, state_reason FROM suggestion WHERE id = $1",
+            id
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap();
         (row.state, row.state_reason)
     }
 
@@ -436,7 +439,7 @@ async fn redelivery_is_a_no_op(pool: PgPool) {
         at: Utc::now(),
     };
     h.resolution.resolve(&event).await.unwrap();
-    let first = sqlx::query_scalar!("SELECT state_changed_at FROM idea WHERE id = $1", id)
+    let first = sqlx::query_scalar!("SELECT state_changed_at FROM suggestion WHERE id = $1", id)
         .fetch_one(&h.pool)
         .await
         .unwrap();
@@ -454,7 +457,7 @@ async fn redelivery_is_a_no_op(pool: PgPool) {
     assert_eq!(again, Resolved::default());
     assert_eq!(deleted, Resolved::default());
     assert_eq!(h.state(id).await, resolved("replied"));
-    let after = sqlx::query_scalar!("SELECT state_changed_at FROM idea WHERE id = $1", id)
+    let after = sqlx::query_scalar!("SELECT state_changed_at FROM suggestion WHERE id = $1", id)
         .fetch_one(&h.pool)
         .await
         .unwrap();

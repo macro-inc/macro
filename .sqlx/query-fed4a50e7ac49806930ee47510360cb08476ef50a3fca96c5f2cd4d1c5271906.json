@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS \"action?\"\n               FROM (SELECT idea_id, part_id, position FROM idea_target\n                     WHERE entity_type = $1 AND entity_id = $2 AND role = $3\n                     OFFSET 0) t\n               JOIN idea i ON i.id = t.idea_id\n               LEFT JOIN idea_entity e ON e.idea_id = i.id\n               WHERE i.state = ANY($4)\n               ORDER BY i.id, t.position",
+  "query": "SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS \"action?\"\n               FROM (SELECT suggestion_id, part_id, position FROM suggestion_target\n                     WHERE entity_type = $1 AND entity_id = $2 AND role = $3\n                     OFFSET 0) t\n               JOIN suggestion i ON i.id = t.suggestion_id\n               LEFT JOIN suggestion_entity e ON e.suggestion_id = i.id\n               WHERE i.state = ANY($4)\n               ORDER BY i.id, t.position",
   "describe": {
     "columns": [
       {
@@ -45,5 +45,5 @@
       false
     ]
   },
-  "hash": "493ee20c0b31c67a6181432a7a18120e3f7af71e2ebefb09638b6f92d6390b7b"
+  "hash": "fed4a50e7ac49806930ee47510360cb08476ef50a3fca96c5f2cd4d1c5271906"
 }

@@ -88,7 +88,7 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## Gotchas
 
-- Gate every entry point on `enable-ideas` (`IDEAS_FLAG`). Event resolution
+- Gate every entry point on `enable-suggestions` (`IDEAS_FLAG`). Event resolution
   isn't gated: it only closes ideas that already exist.
 - Deleting a kind's row (for instance a routine suggestion cascading into
   `idea_routine`) deletes its idea by trigger; reads skip and log a row that

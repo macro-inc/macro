@@ -269,7 +269,7 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
 async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
     let idea = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
                              categories, state, session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'entity', 'doc:review', 'Review the plan', 'It changed.', 50,
                    '{}', 'proposed', $3, now(), now(), now())"#,
@@ -281,14 +281,14 @@ async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid 
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO idea_entity (idea_id, action) VALUES ($1, 'review')",
+        "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, 'review')",
         idea
     )
     .execute(pool)
     .await
     .unwrap();
     sqlx::query!(
-        r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id)
+        r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
            VALUES ($1, 'about', 0, 'document', $2)"#,
         idea,
         document,
