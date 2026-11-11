@@ -88,14 +88,16 @@ export class NativeNodeCatalog {
     return this.types.get(type);
   }
 
-  nearest(klass: NodeClass): NativeEntry {
+  nearest(klass: NodeClass, capturedType?: string): NativeEntry {
     let current: NodeClass | null = klass;
     while (current !== null) {
       const entry = this.entries.get(current);
       if (entry !== undefined) return entry;
       current = parent(current);
     }
-    throw new TypeError(`node ${typeName(klass)} has no native ancestor`);
+    throw new TypeError(
+      `node ${capturedType ?? typeName(klass)} has no native ancestor`
+    );
   }
 }
 
@@ -287,6 +289,55 @@ export class ForeignClassRegistry {
   private readonly prototypes = new Map<object, object | null>();
   private cachedRows: readonly NodeRegistration[] = [];
   private cachedRevision = -1;
+
+  /** Use prepared names and configured ancestry; metadata grants no constructor authority. */
+  static fromConfigured(
+    catalog: NativeNodeCatalog,
+    classes: readonly { readonly klass: NodeClass; readonly type: string }[]
+  ): ForeignClassRegistry {
+    const registered = new Map<
+      NodeClass,
+      { readonly type: string; readonly baseline: NativeEntry }
+    >();
+    const types = new Set<string>();
+    for (const { klass, type } of classes) {
+      if (typeof type !== 'string' || type.length === 0)
+        throw new TypeError('configured node type must be a nonempty string');
+      if (registered.has(klass))
+        throw new TypeError('duplicate configured node class');
+      if (types.has(type))
+        throw new TypeError(`duplicate configured node type ${type}`);
+      const baseline = catalog.nearest(klass, type);
+      if (baseline.klass === klass && baseline.type === null)
+        throw new TypeError('abstract native bases cannot be registered');
+      registered.set(klass, { type, baseline });
+      types.add(type);
+    }
+    const registry = new ForeignClassRegistry(catalog, []);
+    for (const [klass, { type, baseline }] of registered) {
+      const ancestry: string[] = [];
+      let current = parent(klass);
+      while (current !== null) {
+        const ancestor = registered.get(current);
+        if (ancestor !== undefined) ancestry.push(ancestor.type);
+        current = parent(current);
+      }
+      registry.state.records.set(klass, {
+        klass,
+        type,
+        kind: baseline.kind,
+        ancestry: Object.freeze(ancestry),
+        extends: ancestry[0] ?? null,
+        native: baseline.klass,
+        baseline,
+        overrides: 0n,
+      });
+    }
+    registry.state.dirty = true;
+    registry.state.refresh();
+    registry.rebuildWatchlist();
+    return registry;
+  }
 
   constructor(catalog: NativeNodeCatalog, classes: readonly NodeClass[]) {
     const byType = new Map<string, NodeClass>();
