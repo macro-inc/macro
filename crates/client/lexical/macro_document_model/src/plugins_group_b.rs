@@ -33,6 +33,7 @@ mod media_properties;
 mod paste_actions;
 mod pinned_properties;
 mod pr_mention_actions;
+mod selection_snippet;
 mod tag_mention_actions;
 pub use media_properties::{MediaMountAction, media_mount_action};
 mod metadata;
@@ -294,7 +295,10 @@ pub fn query(
     if let Some(reply) = table::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }
-    pinned_properties::query(name, data, state)
+    if let Some(reply) = pinned_properties::query(name, data, state)? {
+        return Ok(Some(reply));
+    }
+    selection_snippet::query(name, data, generation, state)
 }
 
 /// Whether an application key route claims the browser default before dispatch.
