@@ -1,11 +1,11 @@
 import type {
   Category,
   EntityAction,
+  RunMode,
+  RunProgress,
   Suggestion as SuggestionRecord,
   SuggestionState,
   SuggestionWriteOutcome as SuggestionWriteRecord,
-  RunMode,
-  RunProgress,
   Target,
 } from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
@@ -62,7 +62,9 @@ export function outcome(
   return {
     ok: record.ok,
     problems: record.problems,
-    suggestion: record.suggestion ? Suggestion.from(client, record.suggestion) : undefined,
+    suggestion: record.suggestion
+      ? Suggestion.from(client, record.suggestion)
+      : undefined,
   };
 }
 

@@ -6,10 +6,10 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import {
+  outcome,
   Suggestion,
   type SuggestionItem,
   type SuggestionWriteOutcome,
-  outcome,
   targets,
 } from './suggestion';
 
@@ -78,9 +78,13 @@ export class SuggestionNamespace {
 
   /** Every suggestion of the user's, open or not, and how many more may be added. */
   async review(): Promise<SuggestionsReview> {
-    const review = unwrap(await this.client.scheduledAction.reviewSuggestions());
+    const review = unwrap(
+      await this.client.scheduledAction.reviewSuggestions(),
+    );
     return {
-      suggestions: review.suggestions.map((suggestion) => Suggestion.from(this.client, suggestion)),
+      suggestions: review.suggestions.map((suggestion) =>
+        Suggestion.from(this.client, suggestion),
+      ),
       open: review.open,
       openLimit: review.openLimit,
       newLeft: review.newLeft,
