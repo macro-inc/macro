@@ -1,79 +1,9 @@
-//! Harness capability and provider account login persistence.
+//! Provider account login persistence.
 
 use super::*;
 use crate::domain::account_logins::{ProviderAccount, ProviderAccountIdentity};
-use crate::domain::models::ClaudeAccount;
 
 impl PgHarnessRepo {
-    pub(super) async fn set_capabilities_inner(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> Result<bool, HarnessPersistenceError> {
-        // A report on the account of the active Claude login carries its
-        // current expiry, which moves as Claude refreshes the sign-in.
-        if let Some(ClaudeAccount::SignedIn {
-            account_id,
-            account,
-            organization,
-            plan,
-            expires_at,
-        }) = &capabilities.claude
-        {
-            sqlx::query!(
-                r#"
-                WITH active AS (
-                    SELECT login.id, login.provider_account_id
-                    FROM harness_account_logins login
-                    JOIN provider_accounts account ON account.id = login.provider_account_id
-                    WHERE login.harness_id = $1 AND login.provider = 'claude'
-                      AND login.signed_out_at IS NULL AND account.external_account_id = $2
-                ), seen AS (
-                    UPDATE provider_accounts
-                    SET display_email = $3, display_org = $4, plan = $5, last_seen_at = now()
-                    WHERE id IN (SELECT provider_account_id FROM active)
-                )
-                UPDATE harness_account_logins SET expires_at = $6
-                WHERE id IN (SELECT id FROM active)
-                "#,
-                harness_id.as_uuid(),
-                account_id,
-                account.as_deref(),
-                organization.as_deref(),
-                plan.as_deref(),
-                *expires_at,
-            )
-            .execute(&self.pool)
-            .await
-            .map_err(|error| {
-                HarnessPersistenceError::Internal(
-                    rootcause::Report::new(error)
-                        .context("failed to record the Claude login's expiry")
-                        .into_dynamic(),
-                )
-            })?;
-        }
-        let updated = sqlx::query!(
-            r#"
-            UPDATE harnesses
-            SET capabilities = $2, capabilities_reported_at = now(), updated_at = now()
-            WHERE id = $1 AND deleted_at IS NULL
-            "#,
-            harness_id.as_uuid(),
-            Json(capabilities) as _,
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(|error| {
-            HarnessPersistenceError::Internal(
-                rootcause::Report::new(error)
-                    .context("failed to set harness capabilities")
-                    .into_dynamic(),
-            )
-        })?;
-        Ok(updated.rows_affected() == 1)
-    }
-
     pub(super) async fn record_account_login_inner(
         &self,
         harness_id: HarnessId,
@@ -105,6 +35,44 @@ impl PgHarnessRepo {
             return Ok(false);
         }
         let provider = change.provider();
+        // A sign-in on the active login's own account is the machine
+        // reporting it again: only its expiry moves.
+        if let AccountLoginChange::SignedIn {
+            account,
+            expires_at,
+            ..
+        } = &change
+        {
+            let refreshed = sqlx::query!(
+                r#"
+                WITH active AS (
+                    SELECT login.id, login.provider_account_id
+                    FROM harness_account_logins login
+                    JOIN provider_accounts account ON account.id = login.provider_account_id
+                    WHERE login.harness_id = $1 AND login.provider = $2
+                      AND login.signed_out_at IS NULL AND account.external_account_id = $3
+                ), seen AS (
+                    UPDATE provider_accounts SET last_seen_at = now()
+                    WHERE id IN (SELECT provider_account_id FROM active)
+                )
+                UPDATE harness_account_logins SET expires_at = $4
+                WHERE id IN (SELECT id FROM active)
+                "#,
+                harness_id.as_uuid(),
+                provider as AgentProvider,
+                account.external_account_id,
+                *expires_at,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(internal("failed to refresh the active account login"))?;
+            if refreshed.rows_affected() == 1 {
+                tx.commit()
+                    .await
+                    .map_err(internal("failed to commit the account login refresh"))?;
+                return Ok(true);
+            }
+        }
         sqlx::query!(
             r#"
             UPDATE harness_account_logins SET signed_out_at = now()
@@ -119,27 +87,21 @@ impl PgHarnessRepo {
         if let AccountLoginChange::SignedIn {
             account,
             signed_in_by,
+            expires_at,
             ..
         } = &change
         {
             let account_id = sqlx::query_scalar!(
                 r#"
-                INSERT INTO provider_accounts
-                    (id, provider, external_account_id, display_email, display_org, plan)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO provider_accounts (id, provider, external_account_id)
+                VALUES ($1, $2, $3)
                 ON CONFLICT (provider, external_account_id) DO UPDATE
-                SET display_email = EXCLUDED.display_email,
-                    display_org = EXCLUDED.display_org,
-                    plan = EXCLUDED.plan,
-                    last_seen_at = now()
+                SET last_seen_at = now()
                 RETURNING id
                 "#,
                 Uuid::now_v7(),
                 provider as AgentProvider,
                 account.external_account_id,
-                account.display_email,
-                account.display_org,
-                account.plan,
             )
             .fetch_one(&mut *tx)
             .await
@@ -147,14 +109,15 @@ impl PgHarnessRepo {
             sqlx::query!(
                 r#"
                 INSERT INTO harness_account_logins
-                    (id, harness_id, provider_account_id, provider, signed_in_by)
-                VALUES ($1, $2, $3, $4, $5)
+                    (id, harness_id, provider_account_id, provider, signed_in_by, expires_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 "#,
                 Uuid::now_v7(),
                 harness_id.as_uuid(),
                 account_id,
                 provider as AgentProvider,
-                signed_in_by.as_ref(),
+                signed_in_by.as_ref().map(AsRef::<str>::as_ref),
+                *expires_at,
             )
             .execute(&mut *tx)
             .await
@@ -175,8 +138,7 @@ impl PgHarnessRepo {
             r#"
             SELECT login.id, login.signed_in_by, login.signed_in_at, login.expires_at,
                    login.signed_out_at, account.id AS account_id, account.provider AS "provider: AgentProvider",
-                   account.external_account_id, account.display_email, account.display_org,
-                   account.plan
+                   account.external_account_id
             FROM harness_account_logins login
             JOIN provider_accounts account ON account.id = login.provider_account_id
             WHERE login.harness_id = $1 AND login.provider = $2 AND login.signed_out_at IS NULL
@@ -209,9 +171,6 @@ impl PgHarnessRepo {
                 provider: row.provider,
                 identity: ProviderAccountIdentity {
                     external_account_id: row.external_account_id,
-                    display_email: row.display_email,
-                    display_org: row.display_org,
-                    plan: row.plan,
                 },
             },
             signed_in_by: row

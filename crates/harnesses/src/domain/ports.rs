@@ -14,7 +14,7 @@ use super::account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLog
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
     CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent,
-    HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
+    HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
     HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
     SetHarnessTeamAccessRequest,
 };
@@ -166,18 +166,12 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
-    /// Replace an active harness's reported capabilities. Returns `false`
-    /// when the harness is unknown or deleted.
-    fn set_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
-
-    /// Record a sign-in or sign-out at a provider on an active harness, in
-    /// one transaction: a sign-in upserts the provider account, signs out
-    /// the provider's active login and inserts a new one. Returns `false`
-    /// when the harness is unknown or deleted.
+    /// Record what the machine reported about its login at a provider, in
+    /// one transaction: a sign-in on the active login's account moves its
+    /// expiry; any other sign-in upserts the provider account, signs out the
+    /// provider's active login and inserts a new one; a sign-out signs the
+    /// active login out. Returns `false` when the harness is unknown or
+    /// deleted.
     fn record_account_login(
         &self,
         harness_id: HarnessId,
@@ -390,13 +384,6 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
-
-    /// Record what the authenticated harness's machine can do.
-    fn report_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 
     /// Register a Macro computer's team harness, already approved, and return
     /// the claim material its macrod enrolls with.

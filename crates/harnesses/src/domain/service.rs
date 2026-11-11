@@ -17,7 +17,7 @@ use super::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
-        HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
+        HarnessAgent, HarnessOwner, HarnessPermission, HarnessResident,
         HarnessSession, HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
         SetHarnessTeamAccessRequest,
     },
@@ -498,27 +498,6 @@ where
             .list_sessions(harness_id)
             .await
             .map_err(Into::into)?)
-    }
-
-    #[tracing::instrument(
-        skip(self, capabilities),
-        fields(screen = capabilities.screen),
-        err
-    )]
-    async fn report_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> Result<(), HarnessError> {
-        if !self
-            .repo
-            .set_capabilities(harness_id, capabilities)
-            .await
-            .map_err(Into::into)?
-        {
-            return Err(HarnessError::NotFound("unknown harness".to_owned()));
-        }
-        Ok(())
     }
 
     #[tracing::instrument(
