@@ -1,0 +1,37 @@
+services/authentication_service/AGENTS.md
+  s_7975104e101e88::t_5e0c045ae09d01 52-64
+Cargo.lock
+  s_7975104e101e88::t_e0ebf404bfad22 2331
+services/authentication_service/Cargo.toml
+  s_7975104e101e88::t_c77832dc54bfd9 160
+services/authentication_service/src/api/context.rs
+  s_7975104e101e88::t_6e3d399344fdca 266-267
+services/authentication_service/src/api/user.rs
+  s_7975104e101e88::t_02ad0294355ca3 25
+services/authentication_service/src/api/user/profile_picture_change.rs
+  s_7975104e101e88::t_15b650b356aa8e 1-108
+services/authentication_service/src/api/user/profile_picture_change/test.rs
+  s_7975104e101e88::t_94988bf0f29918 1-53
+services/authentication_service/src/api/user/put_profile_picture.rs
+  s_7975104e101e88::t_b17abef7b7ef43 8-10,32,37,43-47,59-62
+services/authentication_service/src/api/user/put_profile_picture_file.rs
+  s_7975104e101e88::t_93d2167f1163ef 12-14,226,232-236,246-251,291-299
+services/authentication_service/src/server.rs
+  s_7975104e101e88::t_38ccf2702f093f 799
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3ec6821df6c583fc512f71cdc7bb8385757de276",
+  "prompts": {},
+  "sessions": {
+    "s_7975104e101e88": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f2f067a5-17bd-489e-a31d-78774060faa0",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
