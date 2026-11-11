@@ -24,6 +24,7 @@ pub(super) const TEAM: Uuid = Uuid::from_u128(30);
 pub(super) struct State {
     pub calls: Vec<&'static str>,
     pub import: super::import_fakes::ImportState,
+    pub lifecycle: super::lifecycle_fakes::LifecycleState,
     pub faults: HashSet<&'static str>,
     pub job: Option<BackfillJob>,
     pub link: Option<Link>,
@@ -47,6 +48,7 @@ impl Default for State {
         Self {
             calls: vec![],
             import: Default::default(),
+            lifecycle: Default::default(),
             faults: HashSet::new(),
             job: Some(job()),
             link: Some(link()),
@@ -108,7 +110,7 @@ impl Fake {
         })
     }
 }
-pub(super) fn setup() -> (BackfillService<Fake, Fake, Fake, Fake, Fake, Fake>, Fake) {
+pub(super) fn setup() -> (BackfillService<Fake, Fake, Fake, Fake, Fake>, Fake) {
     let f = Fake::default();
     (
         BackfillService {
@@ -117,7 +119,7 @@ pub(super) fn setup() -> (BackfillService<Fake, Fake, Fake, Fake, Fake, Fake>, F
             queue: f.clone(),
             effects: f.clone(),
             crm: f.clone(),
-            legacy: f.clone(),
+            attachment_upload: true,
             contacts_sync: true,
         },
         f,
@@ -341,6 +343,28 @@ impl BackfillMetadataTransaction for Fake {
     }
 }
 impl BackfillGmail for Fake {
+    fn labels(
+        &self,
+        _: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>> {
+        Box::pin(async move {
+            self.call("provider_labels")
+                .map_err(|e| EmailApiError::Transient {
+                    message: e.to_string(),
+                })?;
+            Ok(self.0.lock().unwrap().lifecycle.labels.clone())
+        })
+    }
+    fn thread_count(&self, _: Uuid) -> BoxFuture<'_, Result<u64, EmailApiError>> {
+        Box::pin(async move {
+            self.call("thread_count")
+                .map_err(|e| EmailApiError::Transient {
+                    message: e.to_string(),
+                })?;
+            Ok(self.0.lock().unwrap().lifecycle.thread_count)
+        })
+    }
+
     fn list_threads<'a>(
         &'a self,
         _: Uuid,
@@ -417,7 +441,15 @@ impl BackfillGmail for Fake {
 impl BackfillQueue for Fake {
     type Err = Error;
     async fn enqueue(&self, data: BackfillPubsubMessage) -> Result<(), Error> {
-        self.call("enqueue")?;
+        let name = if matches!(
+            data.backfill_operation,
+            BackfillOperation::UpdateThreadMetadata(_)
+        ) {
+            "enqueue_metadata"
+        } else {
+            "enqueue"
+        };
+        self.call(name)?;
         self.0.lock().unwrap().sent.push((data, None));
         Ok(())
     }
@@ -552,73 +584,6 @@ impl BackfillCrm for Fake {
         self.crm_call("depopulate_link")
     }
 }
-impl LegacyBackfill for Fake {
-    async fn init(
-        &self,
-        _: &JobScopedPayload<InitPayload>,
-        _: &Link,
-        _: &BackfillJob,
-    ) -> Result<(), ProcessingError> {
-        self.call("init").unwrap();
-        Ok(())
-    }
-    async fn completed_job(&self, _: Uuid) -> Result<(), ProcessingError> {
-        self.call("completed_job").map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
-                source: e.into_original(),
-            })
-        })
-    }
-    async fn thread_attachments(&self, _: &Link, _: Uuid, _: Uuid) -> Result<(), ProcessingError> {
-        self.call("thread_attachments").map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
-                source: e.into_original(),
-            })
-        })
-    }
-    async fn enqueue_metadata(
-        &self,
-        _: &Link,
-        _: Uuid,
-        _: &str,
-        _: Uuid,
-    ) -> Result<(), ProcessingError> {
-        self.call("enqueue_metadata").map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::SqsEnqueueFailed,
-                source: e.into_original(),
-            })
-        })
-    }
-    async fn finalize(&self, _: Uuid, _: Uuid) -> Result<(), ProcessingError> {
-        self.call("finalize").unwrap();
-        Ok(())
-    }
-    async fn completed_thread(&self, _: &Link, _: Uuid) -> Result<(), ProcessingError> {
-        self.call("completed_thread").map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
-                source: e.into_original(),
-            })
-        })
-    }
-    async fn completed_message(
-        &self,
-        _: &Link,
-        _: Uuid,
-        _: &BackfillMessagePayload,
-    ) -> Result<(), ProcessingError> {
-        self.call("completed_message").map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
-                source: e.into_original(),
-            })
-        })
-    }
-}
-
 pub(super) fn provider_message(
     link_id: Uuid,
     thread_db_id: Uuid,

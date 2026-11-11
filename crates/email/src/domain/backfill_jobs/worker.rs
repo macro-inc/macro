@@ -1,6 +1,8 @@
 //! Admission, operation policy, and delivery outcomes for the Gmail backfill worker.
 
 mod attachment;
+mod completion;
+mod counters;
 mod crm;
 mod crm_contact;
 mod crm_contact_delete;
@@ -9,7 +11,11 @@ mod crm_user_delete;
 mod deferral;
 mod email_api_error;
 mod error_policy;
+mod followups;
 mod import_ports;
+mod init;
+mod initialization;
+mod lifecycle_ports;
 mod listing;
 mod message;
 mod metadata;
@@ -25,6 +31,7 @@ pub use deferral::rate_limit;
 pub use email_api_error::map_email_api_error;
 pub use error_policy::handle_retryable_error;
 pub use import_ports::*;
+pub use lifecycle_ports::*;
 pub use metadata::{is_unstorable_sqlstate, map_db_error};
 pub use ports::*;
 pub use write_slot::admit_write_slot;
@@ -56,8 +63,8 @@ pub enum BackfillDeferral {
     LeaveForRedelivery,
 }
 
-/// Backfill policy over storage, provider, queue, effects, and interim operation ports.
-pub struct BackfillService<R, G, Q, E, C, L> {
+/// Backfill policy over storage, provider, queue, effects and CRM capabilities.
+pub struct BackfillService<R, G, Q, E, C> {
     /// Stored facts and metadata transactions.
     pub repository: R,
     /// Existing provider reads, including admission and token lookup.
@@ -70,18 +77,17 @@ pub struct BackfillService<R, G, Q, E, C, L> {
     pub crm: C,
     /// Compile-time contact-seed switch captured at composition.
     pub contacts_sync: bool,
-    /// Initialization and completion accounting moved in the next stage.
-    pub legacy: L,
+    /// Import supported attachments, captured at composition.
+    pub attachment_upload: bool,
 }
 
-impl<R, G, Q, E, C, L> BackfillService<R, G, Q, E, C, L>
+impl<R, G, Q, E, C> BackfillService<R, G, Q, E, C>
 where
     R: BackfillRepository,
     G: BackfillGmail,
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     /// Classify a transport decoder's result without changing its error.
     pub fn decode(

@@ -8,6 +8,8 @@ mod events;
 mod fakes;
 mod import_fakes;
 mod imports;
+mod lifecycle;
+mod lifecycle_fakes;
 mod listing;
 mod seed_attachment;
 use fakes::*;
@@ -188,7 +190,11 @@ async fn metadata_failure_stops_at_the_failed_query_and_rolls_back() {
         failure(
             svc.process(&metadata()).await,
             true,
-            FailureReason::DatabaseQueryFailed,
+            if fault == "completed_thread" {
+                FailureReason::RedisQueryFailed
+            } else {
+                FailureReason::DatabaseQueryFailed
+            },
         );
         assert_eq!(f.calls(), expected);
     }
@@ -568,7 +574,7 @@ async fn terminal_finalization_republishes_while_side_seeds_skip_accounting() {
 }
 
 #[tokio::test]
-async fn initialization_and_finalization_still_use_legacy_accounting() {
+async fn initialization_and_finalization_respect_completed_lease_shortcuts() {
     let (svc, f) = setup();
     assert!(matches!(
         svc.process(&input(BackfillOperation::Init(scope(InitPayload {}))))
@@ -585,7 +591,7 @@ async fn initialization_and_finalization_still_use_legacy_accounting() {
         .await,
         BackfillDisposition::DoneDelete
     ));
-    assert_eq!(f.calls(), ["finalize"]);
+    assert_eq!(f.calls(), ["finalize", "completion_pending"]);
 }
 
 #[tokio::test]

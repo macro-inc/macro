@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tracing::{Instrument, instrument::WithSubscriber};
 
 #[derive(Clone, Default)]
-struct Output(Arc<Mutex<Vec<u8>>>);
+pub(super) struct Output(Arc<Mutex<Vec<u8>>>);
 impl Write for Output {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.0.lock().unwrap().extend_from_slice(bytes);
@@ -14,7 +14,7 @@ impl Write for Output {
         Ok(())
     }
 }
-fn subscriber(output: &Output) -> impl tracing::Subscriber + Send + Sync + 'static {
+pub(super) fn subscriber(output: &Output) -> impl tracing::Subscriber + Send + Sync + 'static {
     let output = output.clone();
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::TRACE)
@@ -24,7 +24,7 @@ fn subscriber(output: &Output) -> impl tracing::Subscriber + Send + Sync + 'stat
         .with_writer(move || output.clone())
         .finish()
 }
-fn lines(output: &Output) -> String {
+pub(super) fn lines(output: &Output) -> String {
     String::from_utf8(output.0.lock().unwrap().clone()).unwrap()
 }
 

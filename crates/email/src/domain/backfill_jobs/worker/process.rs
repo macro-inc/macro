@@ -9,8 +9,8 @@ use models_email::service::{
 use uuid::Uuid;
 
 #[tracing::instrument(skip_all)]
-pub(super) async fn inner_process_message<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn inner_process_message<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     data: &BackfillPubsubMessage,
 ) -> Result<(), ProcessingError>
 where
@@ -19,7 +19,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     match &data.backfill_operation {
         BackfillOperation::Init(scope) => {
@@ -28,7 +27,7 @@ where
             else {
                 return Ok(());
             };
-            ctx.legacy.init(scope, &link, &backfill_job).await
+            super::init::init_backfill(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::ListThreads(scope) => {
             let Some(JobContextNoToken { link, backfill_job }) =
@@ -81,7 +80,7 @@ where
             attachment::backfill_attachment(ctx, &link, &scope.payload).await
         }
         BackfillOperation::FinalizeBackfill(scope) => {
-            ctx.legacy.finalize(scope.link_id, scope.job_id).await
+            super::completion::finalize_backfill(ctx, scope.link_id, scope.job_id).await
         }
         BackfillOperation::SeedSentContact(scope) => {
             let Some(JobContextNoToken { link, .. }) =
@@ -127,8 +126,8 @@ struct JobContextNoToken {
 /// complete. Completion follow-up operations may opt into running after the
 /// terminal transition. Variant-specific cancellation cleanup (e.g.
 /// per-thread progress keys) belongs at the call site, not here.
-async fn fetch_job_context_no_token<R, G, Q, E, C, L, P>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn fetch_job_context_no_token<R, G, Q, E, C, P>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<P>,
     allow_complete: bool,
 ) -> Result<Option<JobContextNoToken>, ProcessingError>
@@ -138,7 +137,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let backfill_job = ctx
         .repository
@@ -174,8 +172,8 @@ where
 
 /// Looks up a link by id, mapping the absence into a NonRetryable error
 /// (the message names a link that doesn't exist; retrying won't help).
-async fn fetch_link<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn fetch_link<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link_id: Uuid,
 ) -> Result<link::Link, ProcessingError>
 where
@@ -184,7 +182,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     match ctx.repository.link(link_id).await {
         Ok(Some(link)) => Ok(link),
@@ -207,8 +204,8 @@ where
 ///
 /// Returns `None` once the link is deleted: link teardown already removed the
 /// link's CRM rows, so messages still queued for it have nothing left to do.
-async fn fetch_link_if_present<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn fetch_link_if_present<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link_id: Uuid,
 ) -> Result<Option<link::Link>, ProcessingError>
 where
@@ -217,7 +214,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let link = ctx.repository.link(link_id).await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {

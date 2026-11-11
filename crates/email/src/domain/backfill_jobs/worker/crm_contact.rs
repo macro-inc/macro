@@ -28,8 +28,8 @@ use models_email::service::{
 /// A refused slot, or a population that timed out waiting for a CRM lock,
 /// is deferred like a busy backfill write instead of spending a delivery.
 #[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
-pub(super) async fn populate_crm_contact<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn populate_crm_contact<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     p: &PopulateCrmContactPayload,
 ) -> Result<(), ProcessingError>
@@ -39,7 +39,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let macro_user_id = link.macro_id.to_string();
 

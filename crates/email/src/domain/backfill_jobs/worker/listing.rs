@@ -29,8 +29,8 @@ const SENT_CONTACT_SEED_LIMIT: u32 = 200;
 /// The very first ListThreads (enqueued by Init) is a `priority_pass`: it lists
 /// only the user's most important threads first, then hands off to this normal
 /// most-recent-to-least sweep.
-pub(super) async fn list_threads<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn list_threads<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
@@ -41,7 +41,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     if scope.payload.priority_pass {
         return list_priority_threads(ctx, scope, link, job).await;
@@ -136,7 +135,7 @@ where
         // the listing returned none, so no per-thread message was ever
         // enqueued and the per-thread completion path will never finalize the
         // job. Complete it here.
-        ctx.legacy.completed_job(scope.job_id).await?;
+        super::completion::handle_job_completed(ctx, scope.job_id, None).await?;
         let _ = ctx
             .effects
             .delete_listing_progress(scope.job_id)
@@ -154,8 +153,8 @@ where
 /// to the normal sweep. Unlike the normal pass it does not paginate and does
 /// not touch `threads_retrieved_count` (that counter drives the normal sweep's
 /// batch math and must stay equal to the real mailbox count).
-async fn list_priority_threads<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn list_priority_threads<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
@@ -166,7 +165,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     // Never request more than the job's overall thread budget (which already
     // accounts for any requested limit set at job creation).
@@ -275,8 +273,8 @@ where
 /// `total_threads`, so it must not propagate a retryable error (that would
 /// re-run the whole pass and double-bump). On any failure it logs and returns —
 /// `handle_contacts_sync` re-seeds the full contact set at job completion.
-async fn enqueue_sent_contact_seeds<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn enqueue_sent_contact_seeds<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
 ) where
@@ -285,7 +283,6 @@ async fn enqueue_sent_contact_seeds<R, G, Q, E, C, L>(
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     use models_email::email::service::backfill::SeedSentContactPayload;
 

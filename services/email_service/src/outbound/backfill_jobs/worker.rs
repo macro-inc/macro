@@ -3,7 +3,7 @@
 mod database_error;
 mod effects;
 mod imports;
-mod legacy;
+mod lifecycle;
 mod repository;
 mod transaction;
 
@@ -22,7 +22,6 @@ pub(crate) type Backfill = BackfillService<
     BackfillSqs,
     BackfillWorkerEffects,
     BackfillWorkerCrm,
-    LegacyBackfillOperations,
 >;
 
 pub(crate) struct PgBackfillWorker {
@@ -32,9 +31,18 @@ pub(crate) struct GmailBackfill(pub GmailApi);
 pub(crate) struct BackfillSqs(pub sqs_client::SQS);
 pub(crate) struct BackfillWorkerEffects(pub PubSubContext);
 pub(crate) struct BackfillWorkerCrm(pub crate::pubsub::context::CrmServiceType);
-pub(crate) struct LegacyBackfillOperations(pub PubSubContext);
 
 impl BackfillGmail for GmailBackfill {
+    fn labels(
+        &self,
+        link: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>> {
+        Box::pin(self.0.list_labels(link))
+    }
+    fn thread_count(&self, link: Uuid) -> BoxFuture<'_, Result<u64, EmailApiError>> {
+        Box::pin(self.0.get_thread_count(link))
+    }
+
     fn list_threads<'a>(
         &'a self,
         link: Uuid,

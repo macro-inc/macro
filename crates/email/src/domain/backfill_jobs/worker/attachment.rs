@@ -9,8 +9,8 @@ use models_email::service::{
 /// Macro document for the user. first checks the attachment doesn't already exist by querying
 /// document_email table before fetching and uploading the attachment data.
 #[tracing::instrument(skip(ctx))]
-pub(super) async fn backfill_attachment<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn backfill_attachment<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     p: &BackfillAttachmentPayload,
 ) -> Result<(), ProcessingError>
@@ -20,7 +20,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     // Check if a document for this attachment already exists before uploading.
     if ctx

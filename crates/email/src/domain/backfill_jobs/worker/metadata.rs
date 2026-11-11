@@ -13,8 +13,8 @@ use models_email::service::{
 /// notifies dependencies of a new thread being backfilled. If it's the last thread to be processed,
 /// it sets the backfill job status to complete.
 #[tracing::instrument(skip(ctx))]
-pub(super) async fn update_thread_metadata<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn update_thread_metadata<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<UpdateMetadataPayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError>
@@ -24,7 +24,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let p = &scope.payload;
     let mut tx = ctx.repository.begin_metadata().await.map_err(|e| {
@@ -47,7 +46,7 @@ where
     .await;
     tx.complete(result).await?;
 
-    ctx.legacy.completed_thread(link, scope.job_id).await?;
+    super::counters::incr_completed_threads(ctx, link, scope.job_id).await?;
 
     // Best-effort by design: publication failures are logged and dropped so a committed
     // backfill is not retried after its completed-thread counters have advanced.

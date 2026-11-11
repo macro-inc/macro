@@ -185,3 +185,85 @@ impl BackfillImportEffects for BackfillWorkerEffects {
             .map_err(anyhow::Error::new)
     }
 }
+
+impl BackfillLifecycleEffects for BackfillWorkerEffects {
+    async fn sync_contacts(&self, link: &Link) -> anyhow::Result<()> {
+        Box::pin(crate::util::sync_contacts::sync_contacts(
+            link,
+            &self.0.db,
+            &self.0.email_api,
+            &self.0.sqs_client,
+            &self.0.macro_event_broker,
+            &*self.0.contacts_ingress,
+        ))
+        .await
+    }
+    async fn colleague_dms(&self, link: &Link) {
+        crate::util::contact_dms::ensure_colleague_dms(&self.0.db, link).await;
+    }
+    async fn top_contact_dms(&self, link: &Link) {
+        crate::util::contact_dms::ensure_top_contact_dms(&self.0.db, link).await;
+    }
+    async fn init_progress(&self, job: Uuid, total: i32) -> anyhow::Result<()> {
+        self.0
+            .redis_client
+            .init_backfill_job_progress(job, total)
+            .await
+    }
+    async fn increment_threads(&self, job: Uuid) -> anyhow::Result<BackfillProgress> {
+        let progress = self.0.redis_client.incr_completed_threads(job).await?;
+        Ok(BackfillProgress {
+            completed_threads: progress.completed_threads,
+            total_threads: progress.total_threads,
+            job_complete: progress.job_complete,
+        })
+    }
+    async fn increment_messages(&self, job: Uuid, thread: &str) -> anyhow::Result<bool> {
+        self.0
+            .redis_client
+            .incr_completed_messages(job, thread)
+            .await
+    }
+    async fn refresh_progress(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+        progress: BackfillProgress,
+    ) {
+        crate::pubsub::util::cg_refresh_email(
+            &self.0.connection_gateway_client,
+            owner.as_ref(),
+            RefreshEmailEvent::BackfillProgress {
+                link_id,
+                status: if progress.job_complete {
+                    BackfillStatus::Complete
+                } else {
+                    BackfillStatus::Progress
+                },
+                completed_threads: progress.completed_threads,
+                total_threads: progress.total_threads,
+            },
+        )
+        .await;
+    }
+    async fn connect_contacts(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        contacts: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<(), rootcause::Report> {
+        self.0
+            .contacts_ingress
+            .enqueue_contact_connections(
+                contacts
+                    .into_iter()
+                    .map(|contact| {
+                        contacts::domain::models::messages::ContactConnection::new(
+                            owner.clone(),
+                            contact,
+                        )
+                    })
+                    .collect(),
+            )
+            .await
+    }
+}

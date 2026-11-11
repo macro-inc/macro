@@ -1,6 +1,9 @@
 //! Capabilities needed by backfill admission and operation policy.
 
-use super::BackfillImportRepository;
+use super::{
+    BackfillCompletionRepository, BackfillFollowupRepository, BackfillImportRepository,
+    BackfillInitRepository, BackfillLifecycleEffects,
+};
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
@@ -54,7 +57,15 @@ pub trait BackfillMetadataTransaction: Send {
 }
 
 /// Stored facts and writes; existing job access is reused through `jobs`.
-pub trait BackfillRepository: BackfillImportRepository + Send + Sync + 'static {
+pub trait BackfillRepository:
+    BackfillImportRepository
+    + BackfillInitRepository
+    + BackfillCompletionRepository
+    + BackfillFollowupRepository
+    + Send
+    + Sync
+    + 'static
+{
     /// Original persistence failures.
     type Err: ConnectionSourceError;
     /// Existing job repository.
@@ -101,6 +112,13 @@ pub trait BackfillRepository: BackfillImportRepository + Send + Sync + 'static {
 
 /// Provider reads used by listing, imports and the sent-contact seed.
 pub trait BackfillGmail: Send + Sync + 'static {
+    /// Fetch the provider label catalog during initialization.
+    fn labels(
+        &self,
+        link: Uuid,
+    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>>;
+    /// Fetch the provider's thread total during initialization.
+    fn thread_count(&self, link: Uuid) -> BoxFuture<'_, Result<u64, EmailApiError>>;
     /// List a provider page without altering its requested size or labels.
     fn list_threads<'a>(
         &'a self,
@@ -172,7 +190,7 @@ pub trait BackfillWritePermit: Send {
 
 /// Existing progress, upload and publication effects.
 pub trait BackfillEffects:
-    BackfillImportEffects + MacroEventBroker + Send + Sync + 'static
+    BackfillImportEffects + BackfillLifecycleEffects + MacroEventBroker + Send + Sync + 'static
 {
     /// CRM write admission lease.
     type Permit: BackfillWritePermit;
@@ -233,53 +251,6 @@ pub trait BackfillCrm: Send + Sync + 'static {
         team: &Uuid,
         link: &Uuid,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
-}
-
-/// Temporary boundary for the operations and completion accounting moved next.
-pub trait LegacyBackfill: Send + Sync + 'static {
-    /// Initialization.
-    fn init(
-        &self,
-        scope: &JobScopedPayload<InitPayload>,
-        link: &Link,
-        job: &BackfillJob,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Finalize an empty listing through the existing completion service.
-    fn completed_job(&self, job: Uuid) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Enqueue a written thread's attachment follow-ups.
-    fn thread_attachments(
-        &self,
-        link: &Link,
-        job: Uuid,
-        thread: Uuid,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Enqueue the written thread's final metadata operation.
-    fn enqueue_metadata(
-        &self,
-        link: &Link,
-        job: Uuid,
-        provider: &str,
-        thread: Uuid,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Completion-outbox delivery.
-    fn finalize(
-        &self,
-        link: Uuid,
-        job: Uuid,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Count one completed thread through the existing completion service.
-    fn completed_thread(
-        &self,
-        link: &Link,
-        job: Uuid,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Count one completed message through the existing completion service.
-    fn completed_message(
-        &self,
-        link: &Link,
-        job: Uuid,
-        payload: &BackfillMessagePayload,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
 }
 
 /// Import capabilities already used by the backfill preparation and lease paths.

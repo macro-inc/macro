@@ -20,8 +20,8 @@ use models_email::service::{
 /// Team-deletion does NOT go through this path; the
 /// `crm_companies.team_id` FK cascade handles it in macrodb.
 #[tracing::instrument(skip(ctx, payload), err, fields(team_id = %payload.team_id))]
-pub(super) async fn depopulate_crm_for_user<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn depopulate_crm_for_user<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     payload: &DepopulateCrmForUserPayload,
 ) -> Result<(), ProcessingError>
 where
@@ -30,7 +30,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let macro_id_str = payload.macro_id.0.as_ref();
     // Must resolve the same link `populate_crm_for_user` seeded from — the

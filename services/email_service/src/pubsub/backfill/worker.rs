@@ -81,7 +81,7 @@ pub(crate) fn context(
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
 ) -> BackfillContext {
-    let legacy = PubSubContext {
+    let leaves = PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -107,17 +107,17 @@ pub(crate) fn context(
     };
     use crate::outbound::backfill_jobs::worker::*;
     BackfillContext {
-        sqs_worker: legacy.sqs_worker.clone(),
+        sqs_worker: leaves.sqs_worker.clone(),
         service: Arc::new(email::domain::backfill_jobs::worker::BackfillService {
             repository: PgBackfillWorker {
-                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(legacy.db.clone()),
+                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(leaves.db.clone()),
             },
-            gmail: GmailBackfill(legacy.email_api.clone()),
-            queue: BackfillSqs(legacy.sqs_client.clone()),
-            effects: BackfillWorkerEffects(legacy.clone()),
-            crm: BackfillWorkerCrm(legacy.crm_service.clone()),
+            gmail: GmailBackfill(leaves.email_api.clone()),
+            queue: BackfillSqs(leaves.sqs_client.clone()),
+            effects: BackfillWorkerEffects(leaves.clone()),
+            crm: BackfillWorkerCrm(leaves.crm_service.clone()),
             contacts_sync: cfg!(feature = "contacts_sync"),
-            legacy: LegacyBackfillOperations(legacy),
+            attachment_upload: cfg!(feature = "attachment_upload"),
         }),
     }
 }

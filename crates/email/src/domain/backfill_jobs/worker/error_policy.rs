@@ -9,8 +9,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
-pub async fn handle_non_retryable_error<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub async fn handle_non_retryable_error<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     data: &BackfillPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()>
@@ -20,7 +20,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     tracing::error!(
         error = %e,
@@ -60,8 +59,8 @@ where
 }
 
 #[tracing::instrument(skip(ctx), err)]
-async fn mark_job_failed<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn mark_job_failed<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     job_id: Uuid,
 ) -> anyhow::Result<()>
 where
@@ -70,7 +69,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let transitioned = ctx
         .repository
@@ -88,14 +86,13 @@ where
 /// Resolves the failed job's link and signals the failure over the connection
 /// gateway so an active client stops waiting on the job.
 #[tracing::instrument(skip(ctx))]
-async fn notify_job_failed<R, G, Q, E, C, L>(ctx: &BackfillService<R, G, Q, E, C, L>, job_id: Uuid)
+async fn notify_job_failed<R, G, Q, E, C>(ctx: &BackfillService<R, G, Q, E, C>, job_id: Uuid)
 where
     R: BackfillRepository,
     G: BackfillGmail,
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let Ok(Some(job)) = ctx.repository.jobs().job(job_id).await else {
         return;
@@ -112,8 +109,8 @@ where
 /// Sends a rate-limited operation back to the queue after a growing delay
 /// (see [`deferral`]), keeping its delivery budget for real failures. If the
 /// send fails, the message is left for redelivery after its visibility timeout.
-pub async fn defer_rate_limited_operation<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub async fn defer_rate_limited_operation<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     data: &BackfillPubsubMessage,
     e: &DetailedError,
     deferrals: u32,
@@ -125,7 +122,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let delay_seconds = deferral::delay_seconds(deferrals, retry_after);
     if let Err(error) = ctx.queue.defer(data, delay_seconds, deferrals + 1).await {
@@ -234,8 +230,8 @@ pub async fn handle_retryable_error(
 }
 
 #[tracing::instrument(skip(ctx))]
-async fn handle_thread_failure<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn handle_thread_failure<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link_id: Uuid,
     job_id: Uuid,
 ) -> anyhow::Result<()>
@@ -245,7 +241,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let link = match ctx.repository.link(link_id).await {
         Ok(Some(link)) => link,
@@ -274,7 +269,7 @@ where
         }
     };
 
-    if let Err(err) = ctx.legacy.completed_thread(&link, job_id).await {
+    if let Err(err) = super::counters::incr_completed_threads(ctx, &link, job_id).await {
         tracing::error!(
             error = %err,
             job_id = job_id.to_string(),
@@ -285,8 +280,8 @@ where
 }
 
 #[tracing::instrument(skip(ctx))]
-pub async fn handle_message_failure<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub async fn handle_message_failure<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<BackfillMessagePayload>,
 ) -> anyhow::Result<()>
 where
@@ -295,7 +290,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let link = match ctx.repository.link(scope.link_id).await {
         Ok(Some(link)) => link,
@@ -323,10 +317,8 @@ where
         }
     };
 
-    if let Err(err) = ctx
-        .legacy
-        .completed_message(&link, scope.job_id, &scope.payload)
-        .await
+    if let Err(err) =
+        super::counters::incr_completed_messages(ctx, &link, scope.job_id, &scope.payload).await
     {
         tracing::error!(
             error = %err,

@@ -19,8 +19,8 @@ use models_email::service::{
 /// the database. If the message is the last message in the thread to be
 /// processed, it sends an UpdateThreadMetadata message for the thread.
 #[tracing::instrument(skip(ctx))]
-pub(super) async fn backfill_message<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn backfill_message<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<BackfillMessagePayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError>
@@ -30,7 +30,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let p = &scope.payload;
     // Sync may have stored the message since the backfill listed it; a
@@ -76,13 +75,13 @@ where
     enqueue_crm_contacts(ctx, link, &message).await?;
 
     // Handle all success-related operations
-    ctx.legacy.completed_message(link, scope.job_id, p).await
+    super::counters::incr_completed_messages(ctx, link, scope.job_id, p).await
 }
 
 /// Saves the calendar invitations a written backfill message carries. Best
 /// effort: a failure is logged, as invitation extraction always has been.
-pub(super) async fn save_invitations<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn save_invitations<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     message: &Message,
     calendar_parts: &[CalendarPart],
@@ -92,7 +91,6 @@ pub(super) async fn save_invitations<R, G, Q, E, C, L>(
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let provider_id = message.provider_id.as_deref().unwrap_or_default();
     if !message.is_draft && !calendar_parts.is_empty() {
@@ -116,8 +114,8 @@ pub(super) async fn save_invitations<R, G, Q, E, C, L>(
 
 /// Enqueues the CRM contact updates a backfill message implies. Needs no
 /// database row, so it can run before the message is written.
-pub(super) async fn enqueue_crm_contacts<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn enqueue_crm_contacts<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     message: &Message,
 ) -> Result<(), ProcessingError>
@@ -127,7 +125,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both

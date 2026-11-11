@@ -10,8 +10,8 @@ use models_email::service::{
 ///
 /// Stale requests after withdrawal, account switching, or team removal no-op.
 #[tracing::instrument(skip_all, err, fields(team_id, link_id))]
-pub(super) async fn populate_crm_for_user<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn populate_crm_for_user<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     payload: &PopulateCrmForUserPayload,
 ) -> Result<(), ProcessingError>
 where
@@ -20,7 +20,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let macro_id_str = payload.macro_id.0.as_ref();
     let team_id = ctx

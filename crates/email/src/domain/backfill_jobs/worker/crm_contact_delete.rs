@@ -29,8 +29,8 @@ use models_email::service::{
 /// cascade could see a transient deleted state; the populate path on
 /// that new message re-creates the rows on its next run.
 #[tracing::instrument(skip(ctx, link, p), err, fields(link_id = %link.id))]
-pub(super) async fn depopulate_crm_contact<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn depopulate_crm_contact<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     p: &DepopulateCrmContactPayload,
 ) -> Result<(), ProcessingError>
@@ -40,7 +40,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let macro_user_id = link.macro_id.to_string();
 

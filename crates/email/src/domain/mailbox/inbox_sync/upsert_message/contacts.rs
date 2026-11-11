@@ -56,7 +56,8 @@ where
     Ok(())
 }
 
-fn build_contact_connections<'a>(
+/// Parse contact identities, skipping malformed addresses without logging their values.
+pub fn build_contact_connections<'a>(
     _owner: &MacroUserIdStr<'static>,
     link_id: Uuid,
     emails: impl IntoIterator<Item = &'a str>,

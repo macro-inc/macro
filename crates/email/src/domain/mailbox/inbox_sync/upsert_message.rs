@@ -19,7 +19,7 @@ use std::collections::HashSet;
 use uuid::Uuid;
 mod attachments;
 pub(super) mod contacts;
-mod notifications;
+pub(super) mod notifications;
 mod persistence;
 #[cfg(test)]
 mod test;

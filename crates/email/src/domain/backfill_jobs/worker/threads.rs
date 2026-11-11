@@ -10,8 +10,8 @@ use models_email::service::{backfill::*, link, message::Message, pubsub::Process
 /// all of its messages in one transaction, holding one of the fleet's backfill
 /// write slots, then hands the thread to its attachment and metadata steps.
 #[tracing::instrument(skip(ctx), fields(message_count))]
-pub(super) async fn backfill_thread<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn backfill_thread<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<BackfillThreadPayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError>
@@ -21,7 +21,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let p = &scope.payload;
     let thread_provider_id = p.thread_provider_id.clone();
@@ -44,7 +43,7 @@ where
         if p.refresh_existing {
             return refresh_existing_thread(ctx, scope, link, *existing_thread_db_id).await;
         }
-        ctx.legacy.completed_thread(link, scope.job_id).await?;
+        super::counters::incr_completed_threads(ctx, link, scope.job_id).await?;
         return Ok(());
     }
 
@@ -67,7 +66,7 @@ where
         })
         .await?;
     let Some((thread_db_id, skipped)) = inserted else {
-        return ctx.legacy.completed_thread(link, scope.job_id).await;
+        return super::counters::incr_completed_threads(ctx, link, scope.job_id).await;
     };
 
     finish_written_thread(
@@ -89,8 +88,8 @@ where
 /// Job accounting matches the fresh-thread path: with nothing missing the
 /// thread completes immediately (like the skip path); otherwise its metadata
 /// step completes it.
-async fn refresh_existing_thread<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn refresh_existing_thread<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<BackfillThreadPayload>,
     link: &link::Link,
     thread_db_id: uuid::Uuid,
@@ -101,7 +100,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let p = &scope.payload;
     let fetched = fetch_thread(ctx, link, &p.thread_provider_id).await?;
@@ -135,7 +133,7 @@ where
         })
         .collect();
     if missing.is_empty() {
-        return ctx.legacy.completed_thread(link, scope.job_id).await;
+        return super::counters::incr_completed_threads(ctx, link, scope.job_id).await;
     }
 
     let (mut messages, calendar_parts) = prepare_messages(&ctx.effects, missing).await;
@@ -171,8 +169,8 @@ where
 }
 
 /// Reads every message of the provider thread, with its calendar parts.
-async fn fetch_thread<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn fetch_thread<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     thread_provider_id: &str,
 ) -> Result<Vec<MessageWithCalendarParts>, ProcessingError>
@@ -182,7 +180,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let fetched = ctx
         .gmail
@@ -217,8 +214,8 @@ async fn prepare_messages<E: InboxSyncPreparation>(
 /// after the commit a retry would skip the thread. It runs once a write slot is
 /// held, so an operation deferred for a busy slot doesn't repeat it each time.
 /// The rare duplicate from a retried write is harmless.
-async fn enqueue_threads_crm_contacts<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn enqueue_threads_crm_contacts<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
     messages: &[Message],
 ) -> Result<(), ProcessingError>
@@ -228,7 +225,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     for message in messages {
         enqueue_crm_contacts(ctx, link, message).await?;
@@ -243,8 +239,8 @@ where
 /// invitation and attachment fan-outs only log their failures; the metadata
 /// step goes last and is the only one that can fail the operation, as a
 /// non-retryable error that counts the thread once.
-async fn finish_written_thread<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+async fn finish_written_thread<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<BackfillThreadPayload>,
     link: &link::Link,
     thread_db_id: uuid::Uuid,
@@ -258,7 +254,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let thread_provider_id = &scope.payload.thread_provider_id;
     for SkippedBackfillMessage { index, error } in skipped {
@@ -274,14 +269,18 @@ where
             save_invitations(ctx, link, message, parts).await;
         }
     }
-    if let Err(error) = ctx
-        .legacy
-        .thread_attachments(link, scope.job_id, thread_db_id)
-        .await
+    if let Err(error) =
+        super::followups::handle_thread_attachment_upload(ctx, link, scope.job_id, thread_db_id)
+            .await
     {
         tracing::warn!(error = ?error, %thread_provider_id, "Skipped a backfilled thread's attachment uploads");
     }
-    ctx.legacy
-        .enqueue_metadata(link, scope.job_id, thread_provider_id, thread_db_id)
-        .await
+    super::followups::enqueue_thread_metadata_update(
+        ctx,
+        link,
+        scope.job_id,
+        thread_provider_id,
+        thread_db_id,
+    )
+    .await
 }

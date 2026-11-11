@@ -17,8 +17,8 @@ use std::collections::HashSet;
 /// than the whole recipient list, so the contacts service connects the sender
 /// to each recipient only — not the recipients to each other.
 #[tracing::instrument(skip(ctx))]
-pub(super) async fn seed_sent_contact<R, G, Q, E, C, L>(
-    ctx: &BackfillService<R, G, Q, E, C, L>,
+pub(super) async fn seed_sent_contact<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
     scope: &JobScopedPayload<SeedSentContactPayload>,
     link: &link::Link,
 ) -> Result<(), ProcessingError>
@@ -28,7 +28,6 @@ where
     Q: BackfillQueue,
     E: BackfillEffects,
     C: BackfillCrm,
-    L: LegacyBackfill,
 {
     let p = &scope.payload;
 
