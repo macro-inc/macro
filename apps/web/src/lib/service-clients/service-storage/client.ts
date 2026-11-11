@@ -28,6 +28,7 @@ import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
+import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
@@ -59,10 +60,6 @@ import type { ChannelAccessDecision } from './generated/schemas/channelAccessDec
 import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
 import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
-import type { ChannelLabel } from './generated/schemas/channelLabel';
-import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
-import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
-import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
 import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
 import type { ClaudeMode } from './generated/schemas/claudeMode';
@@ -73,7 +70,6 @@ import {
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
-import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -164,7 +160,6 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
-import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
@@ -172,7 +167,6 @@ import type { RequestAccountManagerBody } from './generated/schemas/requestAccou
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
-import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
@@ -183,7 +177,6 @@ import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionB
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
 import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
-import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { StageRequirement } from './generated/schemas/stageRequirement';
 import type { StorageRows } from './generated/schemas/storageRows';
@@ -2823,59 +2816,8 @@ export const storageServiceClient = {
     },
   },
 
-  channelLabels: {
-    async preview(
-      rule: ChannelLabelRule,
-      signal?: AbortSignal,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<SmartTagPreview>(
-        `/channel-labels/preview${scope ? `?scope=${scope}` : ''}`,
-        { method: 'POST', body: JSON.stringify(rule), signal }
-      );
-    },
-    /** Omitted scope selects the caller's team when available, otherwise personal labels. */
-    async list(scope?: ChannelLabelScopeSelection) {
-      return await dssFetch<ChannelLabelsList>(
-        `/channel-labels${scope ? `?scope=${scope}` : ''}`
-      );
-    },
-    async create(
-      params: CreateChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<ChannelLabel>(
-        `/channel-labels${scope ? `?scope=${scope}` : ''}`,
-        { method: 'POST', body: JSON.stringify(params) }
-      );
-    },
-    async rename(
-      labelId: string,
-      params: RenameChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<ChannelLabel>(
-        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'PATCH', body: JSON.stringify(params) }
-      );
-    },
-    async remove(labelId: string, scope?: ChannelLabelScopeSelection) {
-      return await dssFetch(
-        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'DELETE' }
-      );
-    },
-    async setChannelLabel(
-      channelId: string,
-      params: SetChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch(
-        `/channel-labels/channels/${encodeURIComponent(channelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'PUT', body: JSON.stringify(params) }
-      );
-    },
-  },
+  channelLabels: createChannelLabelsClient(dssFetch, '/channel-labels'),
+  channelSections: createChannelLabelsClient(dssFetch, '/channel-sections'),
   favorites: {
     async getFavorites(params?: ListFavoritesParams) {
       const query = new URLSearchParams();

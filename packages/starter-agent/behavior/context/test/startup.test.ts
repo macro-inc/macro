@@ -196,6 +196,7 @@ describe('addresses', () => {
     OVERRIDE_SCHEDULED_ACTION_SERVICE_URL: 'https://scheduled.internal',
     OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL: 'wss://connection.internal/cg',
     OVERRIDE_MCP_SERVICE_URL: 'https://mcp.internal',
+    OVERRIDE_AGENT_HARNESS_EGRESS_URL: 'https://egress.internal',
   };
 
   test("maps enrollment's service URLs onto the SDK's hosts, and the rest onto the gateway's routes", () => {
@@ -203,6 +204,7 @@ describe('addresses', () => {
       kind: 'configured',
       value: {
         presence: 'wss://connection.internal/cg',
+        egress: 'https://egress.internal',
         hosts: {
           storage: 'https://storage.internal/dss',
           properties: 'https://storage.internal/dss',
@@ -229,6 +231,7 @@ describe('addresses', () => {
       kind: 'configured',
       value: {
         presence: 'wss://gateway.macro.com/connection-gateway',
+        egress: 'https://gateway.macro.com/agent-harness-egress',
         hosts: {
           storage: 'https://gateway.macro.com/dss',
           connection: 'https://gateway.macro.com/connection-gateway',
