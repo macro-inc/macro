@@ -17,7 +17,8 @@ test('independent plugin groups add decorators without replacing existing group 
   registerMacroDecoratorViews(registry, { image });
   expect(registry.get('user-mention')).toBe(previous);
   expect(registry.get('image').decorator).toBe(image);
-  expect(registry.get('custom-code')).toBe(registry.get('code'));
+  // CustomCodeNode has its own Source createDOM/updateDOM (custom-code.test.ts).
+  expect(registry.get('custom-code')).not.toBe(registry.get('code'));
   expect(registry.has('video')).toBe(false);
   expect(() => registerMacroDecoratorViews(registry, { image })).toThrow(
     'Duplicate node view: image'

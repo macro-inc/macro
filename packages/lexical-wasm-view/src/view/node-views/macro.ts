@@ -1,10 +1,12 @@
 import type { Component } from 'solid-js';
 import type {
   DecoratorProps,
+  NodeView,
   NodeViewRegistry,
   RenderContext,
 } from '../registry';
 import { themeClass } from '../registry';
+import { applyElementDirection } from './builtins';
 import type { ViewNode } from '../types';
 import { applyElementDirection } from './builtins';
 
@@ -233,9 +235,64 @@ export function registerMacroDecoratorViews(
   return registry;
 }
 
+function stringProp(node: ViewNode, name: string): string | undefined {
+  const value = node.props()[name];
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+/**
+ * Source CodeNode.createDOM/updateDOM with CustomCodeNode's class reset and SVG
+ * preview mode. Syntax-highlight support is highlighter state, so the
+ * data-highlight-language attribute is left to the code highlighter.
+ */
+function customCodeView(svgPreview: boolean): NodeView {
+  const preview = (node: ViewNode) =>
+    svgPreview && node.props().previewEnabled === true;
+  return {
+    createDOM(node, ctx) {
+      const dom = ctx.document.createElement('code');
+      dom.className = themeClass(ctx.theme, 'code');
+      dom.setAttribute('spellcheck', 'false');
+      const language = stringProp(node, 'language');
+      if (language) dom.setAttribute('data-language', language);
+      const theme = stringProp(node, 'theme');
+      if (theme) dom.setAttribute('data-theme', theme);
+      if (node.elementProps?.style) dom.style.cssText = node.elementProps.style;
+      if (preview(node)) {
+        dom.classList.toggle('preview-mode', true);
+        // Source assigns contentEditable; the reflected attribute is the same.
+        dom.setAttribute('contenteditable', 'false');
+      }
+      applyElementDirection(node, dom, ctx);
+      return dom;
+    },
+    updateDOM(previous, next, dom, ctx) {
+      const language = stringProp(next, 'language');
+      const previousLanguage = stringProp(previous, 'language');
+      if (language) {
+        if (language !== previousLanguage)
+          dom.setAttribute('data-language', language);
+      } else if (previousLanguage) dom.removeAttribute('data-language');
+      const theme = stringProp(next, 'theme');
+      const previousTheme = stringProp(previous, 'theme');
+      if (theme) {
+        if (theme !== previousTheme) dom.setAttribute('data-theme', theme);
+      } else if (previousTheme) dom.removeAttribute('data-theme');
+      if (preview(previous) !== preview(next)) {
+        dom.classList.toggle('preview-mode', preview(next));
+        dom.setAttribute('contenteditable', preview(next) ? 'false' : 'true');
+      }
+      applyElementDirection(next, dom, ctx);
+      return false;
+    },
+  };
+}
+
 /** Install common element/text views once before application group decorators. */
 export function registerMacroElementViews(
-  registry: NodeViewRegistry
+  registry: NodeViewRegistry,
+  /** Source ENABLE_SVG_PREVIEW; its default is enabled. */
+  options: { svgPreview: boolean } = { svgPreview: true }
 ): NodeViewRegistry {
   for (const type of ['classed-block', 'completion', 'diff', 'diff-delete'])
     registry.register(type, {
@@ -309,7 +366,6 @@ export function registerMacroElementViews(
       return replace;
     },
   });
-  const code = registry.get('code');
-  registry.register('custom-code', code);
+  registry.register('custom-code', customCodeView(options.svgPreview));
   return registry;
 }

@@ -72,6 +72,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Resolve text leaves through dom.ts so nested semantic wrappers remain editable.
 - Keep native keys in the namespace-scoped DOM property and WeakMap; omit new empty class/style attributes while preserving upstream class/style clearing behavior.
+- Render custom-code through its own view porting Source CodeNode/CustomCodeNode createDOM/updateDOM (class reset, spellcheck, data-language, data-theme, style, SVG preview-mode with contenteditable, then dir); update in place without resetting className, and leave data-highlight-language and data-gutter to the code highlighter.
 - Resolve code aliases through theme.code so Macro custom-code retains the Source block layout and margins.
 - Match pinned link URL formatting and parsed-protocol filtering before painting href.
 - Handle session effect kind 9 before painting: end native composition and suppress

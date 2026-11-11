@@ -83,6 +83,7 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_MARKDOWN_COMMENTS,
+  ENABLE_SVG_PREVIEW,
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -370,10 +371,9 @@ export default function RustMarkdownEditor(props: {
               root: element,
               latestPublished: [formatting.observer, checklist.observer],
               registry: registerMacroDecoratorViews(
-                registerMacroElementViews(createBuiltinRegistry()).replace(
-                  'diff',
-                  createNativeDiffElementView(userId)
-                ),
+                registerMacroElementViews(createBuiltinRegistry(), {
+                  svgPreview: ENABLE_SVG_PREVIEW,
+                }).replace('diff', createNativeDiffElementView(userId)),
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
