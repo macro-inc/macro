@@ -13,7 +13,6 @@ axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-http = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 ideas = { path = "../ideas" }
