@@ -188,6 +188,7 @@ const service = new AgentHarnessService(
     configurationSecrets,
     egressContainerPort: 8102,
     healthCheckPath: '/health',
+    healthCheckPort: 8103,
     ecsClusterArn: cloudStorageClusterArn,
     cloudStorageClusterName,
     secretKeyArns: [

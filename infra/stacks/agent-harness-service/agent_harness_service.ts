@@ -48,6 +48,12 @@ type Args = {
   previewHttpTargetGroupArn: pulumi.Input<string>;
   previewSshTargetGroupArn: pulumi.Input<string>;
   healthCheckPath: string;
+  /**
+   * Port of the liveness check the service serves from its own thread
+   * (`HEALTH_PORT`), so a busy main runtime still answers it. Every target
+   * group checks this port, whatever port it forwards to.
+   */
+  healthCheckPort: number;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
@@ -92,6 +98,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       serviceContainerPort,
       egressContainerPort,
       healthCheckPath,
+      healthCheckPort,
       ecsClusterArn,
       cloudStorageClusterName,
       containerEnvVars,
@@ -261,6 +268,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         containerPort: serviceContainerPort,
         service: GatewayService.AGENT_HARNESS_SERVICE,
         healthCheckPath,
+        healthCheck: { port: String(healthCheckPort) },
         pathPatterns: ['/agent-harness', '/agent-harness/*'],
         serviceSecurityGroupId: serviceSg.id,
         albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
@@ -356,6 +364,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         vpcId: vpc.vpcId,
         containerPort: egressContainerPort,
         healthCheckPath,
+        healthCheck: { port: String(healthCheckPort) },
         pathPatterns: ['/agent-harness-egress', '/agent-harness-egress/*'],
         service: GatewayService.AGENT_HARNESS_EGRESS,
         serviceSecurityGroupId: serviceSg.id,
@@ -365,6 +374,35 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
     this.egressTargetGroup = egress.target_group;
+
+    // Each target group's own rule opens only the port it forwards to; the
+    // health checks all reach the separate liveness port.
+    new aws.vpc.SecurityGroupIngressRule(
+      `${BASE_NAME}-health-check-from-gateway-${stack}`,
+      {
+        securityGroupId: serviceSg.id,
+        description: 'Allow gateway health checks',
+        referencedSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+        fromPort: healthCheckPort,
+        toPort: healthCheckPort,
+        ipProtocol: 'tcp',
+        tags,
+      },
+      { parent: this }
+    );
+    new aws.vpc.SecurityGroupEgressRule(
+      `${BASE_NAME}-gateway-health-check-to-service-${stack}`,
+      {
+        securityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+        description: `Allow health checks to ${BASE_NAME}`,
+        referencedSecurityGroupId: serviceSg.id,
+        fromPort: healthCheckPort,
+        toPort: healthCheckPort,
+        ipProtocol: 'tcp',
+        tags,
+      },
+      { parent: this }
+    );
 
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
@@ -463,6 +501,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               },
               portMappings: [
                 { containerPort: 8111, hostPort: 8111, protocol: 'tcp' },
+                {
+                  containerPort: healthCheckPort,
+                  hostPort: healthCheckPort,
+                  protocol: 'tcp',
+                },
                 { containerPort: 2222, hostPort: 2222, protocol: 'tcp' },
                 {
                   appProtocol: 'http',
