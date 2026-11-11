@@ -13,6 +13,7 @@ mod equation_insert;
 mod focus;
 mod format_facts;
 mod formatting;
+mod gif_insert;
 mod horizontal_rule;
 #[cfg(test)]
 mod horizontal_rule_test;
@@ -104,7 +105,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = decorator_actions::register(builder);
     let builder = decorator_content_actions::register(builder);
     let builder = pr_mention_actions::register(builder);
-    equation_insert::register(builder)
+    let builder = equation_insert::register(builder);
+    gif_insert::register(builder)
 }
 
 #[cfg(test)]
@@ -192,6 +194,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = equation_insert::decode(name, json)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = gif_insert::decode(name, json)? {
         return Ok(Some(command));
     }
     if name == "group-b.select-all" {

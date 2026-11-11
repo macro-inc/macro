@@ -166,7 +166,7 @@ pub fn calculate_effective_dimensions(
         }
     }
 }
-fn js_round(value: f64) -> f64 {
+pub(crate) fn js_round(value: f64) -> f64 {
     if !value.is_finite() || value == 0.0 {
         return value;
     }

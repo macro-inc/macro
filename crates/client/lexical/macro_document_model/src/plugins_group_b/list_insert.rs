@@ -6,8 +6,25 @@ pub(super) fn insert_and_split_list(
     tx: &mut Transaction<'_>,
     nodes: &[NodeKey],
 ) -> Result<(), Error> {
+    if let Some(last) = insert_structure(tx, nodes)? {
+        tx.select_end(last)?;
+    }
+    Ok(())
+}
+
+pub(super) fn insert_and_split_list_select_next(
+    tx: &mut Transaction<'_>,
+    nodes: &[NodeKey],
+) -> Result<(), Error> {
+    if let Some(last) = insert_structure(tx, nodes)? {
+        tx.select_next(last, Some(Utf16Offset(0)), Some(Utf16Offset(0)))?;
+    }
+    Ok(())
+}
+
+fn insert_structure(tx: &mut Transaction<'_>, nodes: &[NodeKey]) -> Result<Option<NodeKey>, Error> {
     let Some(range) = tx.selection().and_then(Selection::as_range).cloned() else {
-        return Ok(());
+        return Ok(None);
     };
     if !range.is_collapsed() {
         tx.remove_text()?;
@@ -18,7 +35,7 @@ pub(super) fn insert_and_split_list(
         anchor.key()
     } else {
         let Some(parent) = tx.parent(anchor.key()) else {
-            return Ok(());
+            return Ok(None);
         };
         parent
     };
@@ -32,18 +49,17 @@ pub(super) fn insert_and_split_list(
             && tx.first_child(NodeKey::ROOT) == Some(top)
             && tx.last_child(NodeKey::ROOT) == Some(top)
         {
-            return tx.splice(NodeKey::ROOT, ChildIndex(0), 0, nodes);
+            tx.splice(NodeKey::ROOT, ChildIndex(0), 0, nodes)?;
+            return Ok(None);
         }
         tx.insert_nodes(nodes)?;
     } else {
         let (parent, offset) = split_list_to_root(tx, node, anchor.offset())?;
         tx.splice(parent, offset, 0, nodes)?;
     }
-    if let Some(last) = nodes.last() {
-        tx.select_end(*last)?;
-    }
-    Ok(())
+    Ok(nodes.last().copied())
 }
+
 fn new_list(tx: &mut Transaction<'_>, source: NodeKey) -> Result<NodeKey, Error> {
     let ty = tx
         .get::<ListNode>(source)
