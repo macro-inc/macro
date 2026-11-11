@@ -1,0 +1,45 @@
+packages/sdk/AGENTS.md
+  s_4ce8c9a0500c37::t_d66f89376df9fe 92-96
+packages/sdk/src/entities/users/user.ts
+  s_4ce8c9a0500c37::t_54e3f3d04c2e10 8,64-83
+  s_4ce8c9a0500c37::t_98b950e4001989 84-85
+packages/sdk/src/macro.ts
+  s_4ce8c9a0500c37::t_552a6c5de4d1b6 551-554
+packages/sdk/src/entities/me/namespace.ts
+  s_4ce8c9a0500c37::t_54e3f3d04c2e10 8,22-27,41-42,68-79,90-91,95-98,101
+  s_4ce8c9a0500c37::t_3abb9d8d5ec1fc 4-7
+packages/sdk/src/entities/users/namespace.ts
+  s_4ce8c9a0500c37::t_54e3f3d04c2e10 3,22-44
+  s_4ce8c9a0500c37::t_4fba91b503613d 45-46
+packages/sdk/src/entities/users/profile-picture.ts
+  s_4ce8c9a0500c37::t_54e3f3d04c2e10 1-44
+packages/sdk/src/entities/users/profile-picture.test.ts
+  s_4ce8c9a0500c37::t_d66f89376df9fe 1-99
+  s_07064c3ce26b90::t_68d6f595d9c2d2 100
+packages/sdk/README.md
+  s_4ce8c9a0500c37::t_d66f89376df9fe 72-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1f06fd8f2595007b0ddb8cb9f2c8d0faf24f0539",
+  "prompts": {},
+  "sessions": {
+    "s_07064c3ce26b90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7ee-32b9-7350-8641-bc9f59b2da48",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4ce8c9a0500c37": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d951e988-55a0-4b87-8e6c-f4b61d4ec72a",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
