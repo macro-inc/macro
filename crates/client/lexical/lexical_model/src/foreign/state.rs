@@ -126,6 +126,7 @@ impl ForeignBindings {
         values: &mut SerializedNode,
         layout: &StateLayout,
         json: &mut SerializedNode,
+        imported_raw: Option<&IndexMap<String, Arc<Value>>>,
     ) {
         let configs = self.configs();
         for (name, config) in configs {
@@ -138,7 +139,7 @@ impl ForeignBindings {
             if ForeignReadOperation::check().is_err() {
                 return;
             }
-            if is_default {
+            if is_default && !imported_raw.is_some_and(|raw| raw.contains_key(name)) {
                 values.shift_remove(name);
             }
             let flat = layout
@@ -276,6 +277,7 @@ impl Transaction<'_> {
             .get_or_insert_with(|| Arc::new(NodeState::default()));
         let state = Arc::make_mut(state);
         state.foreign.bind(name, config);
+        state.forget_stored_value(name);
         state
             .unknown
             .get_or_insert_with(IndexMap::default)

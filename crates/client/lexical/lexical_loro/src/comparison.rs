@@ -94,7 +94,7 @@ pub(crate) fn model_own(
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
-    let mut own = crate::policy::own(view, key, policy)?;
+    let mut own = crate::policy::stored_own(view, key, policy)?;
     if paragraph(&own, policy) {
         apply(&mut own, first_model_text(view, key, policy)?);
     }
@@ -136,7 +136,9 @@ fn tree(node: &mut SerializedNode, policy: &dyn SyncPolicy) {
     }
 }
 pub(crate) fn model(state: &EditorState, policy: &dyn SyncPolicy) -> Result<SerializedEditorState> {
-    let mut value = synced_json(state, policy)?;
+    let mut value = SerializedEditorState {
+        root: crate::policy::stored_node(state.view(), NodeKey::ROOT, policy)?,
+    };
     tree(&mut value.root, policy);
     Ok(value)
 }

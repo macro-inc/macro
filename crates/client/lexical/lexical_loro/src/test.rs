@@ -2,6 +2,7 @@ use super::*;
 use lexical_model::*;
 use loro::ExportMode;
 use serde_json::json;
+mod stored_state;
 static PLAIN: PlainPolicy = PlainPolicy;
 static ID: StateKey<String> = StateKey::new("id", |v| {
     v.and_then(serde_json::Value::as_str)

@@ -300,6 +300,13 @@ mod foreign {
     #[test]
     fn known_callback_binds_foreign_codecs_before_flattening_and_default_omission()
     -> Result<(), Error> {
+        assert_late_binding(false)
+    }
+    #[test]
+    fn stored_export_preserves_default_presence_with_fresh_late_binding() -> Result<(), Error> {
+        assert_late_binding(true)
+    }
+    fn assert_late_binding(stored: bool) -> Result<(), Error> {
         let mut editor = Editor::builder(EditorMode::Headless)
             .node::<Foreign>()
             .build()
@@ -337,14 +344,21 @@ mod foreign {
         EVENTS.with(|events| events.borrow_mut().clear());
         let mut buffer = JsonExportBuffer::default();
         for _ in 0..2 {
-            buffer = before.view().export_json_reusing(key, buffer)?;
+            let expected;
+            if stored {
+                buffer = before.view().export_stored_json_reusing(key, buffer)?;
+                expected = r#"{"type":"buffer-foreign","version":1,"late-flat":7,"$":{"late-default":7,"tail":true,"foreign-callback":1}}"#;
+            } else {
+                buffer = before.view().export_json_reusing(key, buffer)?;
+                expected = r#"{"type":"buffer-foreign","version":1,"late-flat":7,"$":{"tail":true,"foreign-callback":1}}"#;
+            }
             assert_eq!(
                 EVENTS.with(|events| events.replace(Vec::new())),
                 ["known", "reentered", "foreign-flat", "foreign-default"]
             );
             assert_eq!(
                 to_js_json_string(&Value::Object(buffer.json().clone())),
-                r#"{"type":"buffer-foreign","version":1,"late-flat":7,"$":{"tail":true,"foreign-callback":1}}"#
+                expected
             );
         }
         assert!(state.foreign.contains("late-flat"));

@@ -300,6 +300,8 @@ pub struct NodeState {
     pub(crate) known: KnownValues,
     read_memo: ReadMemo,
     pub(crate) unknown: Option<IndexMap<String, Arc<Value>>>,
+    // Imported storage survives read-only parsing and COW; explicit writes supersede a key.
+    imported_raw: Option<IndexMap<String, Arc<Value>>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign: crate::foreign::state::ForeignBindings,
 }
@@ -309,6 +311,7 @@ impl Clone for NodeState {
             known: self.known_entries().collect(),
             read_memo: self.read_memo.clone_configs(),
             unknown: self.unknown.clone(),
+            imported_raw: self.imported_raw.clone(),
             #[cfg(feature = "foreign-nodes")]
             foreign: self.foreign.clone(),
         }
@@ -465,15 +468,24 @@ impl NodeState {
         } else {
             self.known.push((key, Arc::new(value)));
         }
+        self.forget_stored_value(key.name());
         // updateFromKnown retains an existing unknown slot. Export overwrites
         // its value in place; a later JSON import prunes learned configs.
         Ok(())
+    }
+    pub(crate) fn forget_stored_value(&mut self, name: &str) {
+        if let Some(values) = &mut self.imported_raw {
+            values.shift_remove(name);
+        }
     }
     pub(crate) fn reset_copy(&mut self) {
         self.fold_read_memo();
         for (key, value) in &mut self.known {
             if key.reset() {
                 *value = key.default_any();
+                if let Some(raw) = &mut self.imported_raw {
+                    raw.shift_remove(key.name());
+                }
             }
         }
     }
@@ -507,6 +519,7 @@ impl NodeState {
                 unknown.insert(entry.key.name().to_owned(), Arc::new(v.clone()));
             }
         }
+        let imported_raw = (!unknown.is_empty()).then(|| unknown.clone());
         let previous_known: KnownValues =
             previous.into_iter().flat_map(Self::known_entries).collect();
         let mut known = vec![];
@@ -567,6 +580,7 @@ impl NodeState {
             known,
             read_memo: ReadMemo::default(),
             unknown: Some(unknown),
+            imported_raw,
             #[cfg(feature = "foreign-nodes")]
             foreign: previous
                 .map(|state| state.foreign.clone())
@@ -581,7 +595,24 @@ impl NodeState {
         &self,
         layout: &StateLayout,
         json: &mut crate::SerializedNode,
+        values: crate::SerializedNode,
+    ) -> crate::SerializedNode {
+        self.export_with_storage(layout, json, values, false)
+    }
+    pub(crate) fn export_stored_reusing(
+        &self,
+        layout: &StateLayout,
+        json: &mut crate::SerializedNode,
+        values: crate::SerializedNode,
+    ) -> crate::SerializedNode {
+        self.export_with_storage(layout, json, values, true)
+    }
+    fn export_with_storage(
+        &self,
+        layout: &StateLayout,
+        json: &mut crate::SerializedNode,
         mut values: crate::SerializedNode,
+        stored: bool,
     ) -> crate::SerializedNode {
         values.clear();
         values.extend(
@@ -597,8 +628,22 @@ impl NodeState {
                 values.insert(key.name().to_owned(), v);
             }
         }
+        if stored {
+            for (name, value) in self.imported_raw.iter().flat_map(|raw| raw.iter()) {
+                values.insert(name.clone(), value.as_ref().clone());
+            }
+        }
         #[cfg(feature = "foreign-nodes")]
-        self.foreign.export(&mut values, layout, json);
+        self.foreign.export(
+            &mut values,
+            layout,
+            json,
+            if stored {
+                self.imported_raw.as_ref()
+            } else {
+                None
+            },
+        );
         for entry in &layout.entries {
             if entry.flat
                 && let Some(value) = values.shift_remove(entry.key.name())

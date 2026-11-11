@@ -86,6 +86,15 @@ pub(crate) fn own(
     prepare_own(&mut json, policy);
     Ok(json)
 }
+pub(crate) fn stored_own(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    let mut json = view.export_stored_json(key)?;
+    prepare_own(&mut json, policy);
+    Ok(json)
+}
 fn prepare_own(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     json.remove("children");
     json.values_mut().for_each(schema::normalize_numbers);
@@ -105,7 +114,7 @@ pub(crate) fn storage_own(
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
-    let mut json = own(view, key, policy)?;
+    let mut json = stored_own(view, key, policy)?;
     storage_fields(&mut json, policy);
     Ok(json)
 }
@@ -116,7 +125,7 @@ pub(crate) fn storage_own_reusing(
     policy: &dyn SyncPolicy,
     buffer: lexical_model::JsonExportBuffer,
 ) -> Result<lexical_model::JsonExportBuffer> {
-    let mut buffer = view.export_json_reusing(key, buffer)?;
+    let mut buffer = view.export_stored_json_reusing(key, buffer)?;
     let json = buffer.json_mut();
     prepare_own(json, policy);
     storage_fields(json, policy);
@@ -155,25 +164,38 @@ pub(crate) fn synced_node(
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
-    node_json(view, key, policy, false)
+    node_json(view, key, policy, NodeExport::Parsed)
 }
 pub(crate) fn storage_node(
     view: StateRef<'_>,
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
-    node_json(view, key, policy, true)
+    node_json(view, key, policy, NodeExport::Storage)
+}
+pub(crate) fn stored_node(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    node_json(view, key, policy, NodeExport::Stored)
+}
+#[derive(Clone, Copy)]
+enum NodeExport {
+    Parsed,
+    Stored,
+    Storage,
 }
 fn node_json(
     view: StateRef<'_>,
     key: NodeKey,
     policy: &dyn SyncPolicy,
-    storage: bool,
+    mode: NodeExport,
 ) -> Result<SerializedNode> {
-    let mut json = if storage {
-        storage_own(view, key, policy)?
-    } else {
-        own(view, key, policy)?
+    let mut json = match mode {
+        NodeExport::Parsed => own(view, key, policy)?,
+        NodeExport::Stored => stored_own(view, key, policy)?,
+        NodeExport::Storage => storage_own(view, key, policy)?,
     };
     if view.is_element(key) {
         json.insert(
@@ -181,7 +203,7 @@ fn node_json(
             Value::Array(
                 synced_children(view, key, policy)
                     .into_iter()
-                    .map(|k| node_json(view, k, policy, storage).map(Value::Object))
+                    .map(|k| node_json(view, k, policy, mode).map(Value::Object))
                     .collect::<Result<_>>()?,
             ),
         );

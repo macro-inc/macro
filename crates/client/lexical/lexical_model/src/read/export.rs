@@ -32,6 +32,11 @@ impl JsonExportBuffer {
         self
     }
 }
+#[derive(Clone, Copy)]
+enum StateSerialization {
+    Parsed,
+    Stored,
+}
 impl StateRef<'_> {
     /// Export a node with fresh owned storage.
     pub fn export_json(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
@@ -46,13 +51,34 @@ impl StateRef<'_> {
         key: impl Into<NodeKey>,
         buffer: JsonExportBuffer,
     ) -> Result<JsonExportBuffer, Error> {
-        let key = key.into();
+        self.export_with_mode(key.into(), buffer, StateSerialization::Parsed)
+    }
+    /// Export imported NodeState slots as stored, retaining actual explicit writes.
+    /// Ordinary public export still uses the canonical parsed values.
+    pub fn export_stored_json(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
+        self.export_stored_json_reusing(key, JsonExportBuffer::default())
+            .map(JsonExportBuffer::into_json)
+    }
+    /// Reuse owned capacities without replacing imported storage by a read memo.
+    pub fn export_stored_json_reusing(
+        self,
+        key: impl Into<NodeKey>,
+        buffer: JsonExportBuffer,
+    ) -> Result<JsonExportBuffer, Error> {
+        self.export_with_mode(key.into(), buffer, StateSerialization::Stored)
+    }
+    fn export_with_mode(
+        self,
+        key: NodeKey,
+        buffer: JsonExportBuffer,
+        mode: StateSerialization,
+    ) -> Result<JsonExportBuffer, Error> {
         let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
         let v = self.state.registry.vtable(slot.type_index);
         let JsonExportBuffer {
             node: mut json,
             state,
-        } = self.export_framework_reusing(key, buffer)?;
+        } = self.export_framework_reusing(key, buffer, mode)?;
         if let Some(opaque) = crate::opaque::export(slot, &json) {
             json.clear();
             json.extend(opaque);
@@ -68,13 +94,14 @@ impl StateRef<'_> {
         Ok(JsonExportBuffer { node: json, state })
     }
     pub(crate) fn export_framework_json(self, key: NodeKey) -> Result<SerializedNode, Error> {
-        self.export_framework_reusing(key, JsonExportBuffer::default())
+        self.export_framework_reusing(key, JsonExportBuffer::default(), StateSerialization::Parsed)
             .map(JsonExportBuffer::into_json)
     }
     fn export_framework_reusing(
         self,
         key: NodeKey,
         buffer: JsonExportBuffer,
+        mode: StateSerialization,
     ) -> Result<JsonExportBuffer, Error> {
         let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
         let registration = self.state.registry.registered(slot.type_index);
@@ -111,21 +138,21 @@ impl StateRef<'_> {
         );
         if let Some(state) = &slot.state {
             #[cfg(feature = "foreign-nodes")]
-            {
-                values = state.export_reusing(
-                    &self
-                        .state
-                        .registry
-                        .foreign_states
-                        .layout(&registration.state_layout),
-                    &mut json,
-                    values,
-                );
-            }
+            let layout = self
+                .state
+                .registry
+                .foreign_states
+                .layout(&registration.state_layout);
+            #[cfg(feature = "foreign-nodes")]
+            let layout = layout.as_ref();
             #[cfg(not(feature = "foreign-nodes"))]
-            {
-                values = state.export_reusing(&registration.state_layout, &mut json, values);
-            }
+            let layout = &registration.state_layout;
+            values = match mode {
+                StateSerialization::Parsed => state.export_reusing(layout, &mut json, values),
+                StateSerialization::Stored => {
+                    state.export_stored_reusing(layout, &mut json, values)
+                }
+            };
         }
         if let BaseData::Element(data) = &slot.base
             && !self.is_root_or_shadow_root(key)
@@ -150,5 +177,7 @@ impl StateRef<'_> {
         })
     }
 }
+#[cfg(test)]
+mod stored_test;
 #[cfg(test)]
 mod test;

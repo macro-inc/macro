@@ -85,17 +85,27 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
         .view
         .iter()
         .any(|effect| matches!(effect, ViewEffect::Error(_))));
-    let before = serde_json::to_value(session.surface().state().to_json().expect("saved JSON"))
+    let mut before = serde_json::to_value(session.surface().state().to_json().expect("saved JSON"))
         .expect("JSON");
     assert_eq!(before["root"]["children"][0]["type"], "custom-code");
     assert!(before["root"]["children"][0]["$"]["id"]
         .as_str()
         .is_some_and(|id| !id.is_empty()));
+    // The OFF first-edit receipt pins bare metadata in actual storage:
+    // 17135650998faced89334561c0fed993b0f4c5113a3da1740b47bb6dfe511eec.
+    let bare = serde_json::json!({"version":10});
+    assert_eq!(before["root"]["$"]["documentMetadata"], bare);
     let persisted = lexical_loro::snapshot::raw_state_to_loro_snapshot(
         &before,
         Some(lexical_loro::golden::MARKDOWN_GOLDEN),
     )
     .expect("persisted Loro snapshot");
+    let seeded = lexical_loro::new_doc(77).expect("snapshot inspection peer");
+    seeded.import(&persisted).expect("generated Seed snapshot");
+    let reconstructed =
+        lexical_loro::reconstruct_state(&seeded, &macro_document_model::sync::MACRO_SYNC_POLICY)
+            .expect("actual persisted state");
+    assert_eq!(reconstructed.root["$"]["documentMetadata"], bare);
     drop(writer);
 
     config.session = "00000000-0000-0000-0000-000000000002".into();
@@ -145,5 +155,10 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
     );
     let after = serde_json::to_value(session.surface().state().to_json().expect("reloaded JSON"))
         .expect("JSON");
+    // Ordinary Source parse/reopen receipt:
+    // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2.
+    before["root"]["$"]["documentMetadata"] =
+        serde_json::json!({"version":10,"environmentTags":null});
     assert_eq!(after, before);
+    assert_eq!(session.version(), seeded.oplog_vv());
 }

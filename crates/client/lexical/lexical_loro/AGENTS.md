@@ -23,6 +23,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - Keep canonical editor aliases separate from source own-undefined storage encoding; compare canonical reads strictly and retain every underlying Loro value and operation.
 - Apply ComparisonKind only to model-versus-Loro comparisons after dropped/transparent projection; keep writer serialization unchanged, reread changed child fields during incremental checks, and preserve real incoming raw cache updates.
 - Apply source own-undefined storage fields through SyncPolicy before writing; retain strict attach equality and keep PlainPolicy unchanged.
+- Compare and write the model's stored NodeState representation; a read memo must not change attach, verification or persisted fields. Keep public synced JSON export canonical and own-undefined placeholders exclusive to writers.
 - Verify client Loro 1.17.1 separately from the server's preserved JavaScript 1.16.3 dependency in the pair test.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
