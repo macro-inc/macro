@@ -1,0 +1,22 @@
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.test.ts
+  s_8d646e45ac1b9c::t_39283fe4d0727e 5,347-351,353
+  s_8d646e45ac1b9c::t_acafa2b94e3b25 333,363,378,384-385,387,396
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.tsx
+  s_8d646e45ac1b9c::t_acafa2b94e3b25 88,101-102,106-108,111,198-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d9923cbebc04d62bc8d1dbe42ec9ee5f1d6ed539",
+  "prompts": {},
+  "sessions": {
+    "s_8d646e45ac1b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25e33e5f-9fbc-4dfa-b88b-7061d1d06650",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
