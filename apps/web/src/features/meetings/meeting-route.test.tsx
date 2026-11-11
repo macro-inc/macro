@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   authenticated: false,
   recordCallId: '',
   credentials: { token: 'guest-token', participantId: 'guest-1' },
+  showChat: false,
 }));
 
 vi.mock('@core/context/user', () => ({
@@ -84,6 +85,7 @@ vi.mock('./views/meeting-page', () => ({
 }));
 vi.mock('@channel/Call/CallOverlay', () => ({
   CallOverlay: (props: {
+    showChat?: boolean;
     discussion: {
       render: (panel: {
         open: boolean;
@@ -91,12 +93,14 @@ vi.mock('@channel/Call/CallOverlay', () => ({
         onClose: () => void;
       }) => JSX.Element;
     };
-  }) =>
-    props.discussion.render({
+  }) => {
+    state.showChat = props.showChat ?? false;
+    return props.discussion.render({
       open: true,
       focusOnOpen: false,
       onClose: () => undefined,
-    }),
+    });
+  },
 }));
 vi.mock('@channel/Call/discussion/CallDiscussionContent', () => ({
   CallDiscussionContent: (props: {
@@ -125,6 +129,7 @@ it('uses guest call chat without reading the private call record', () => {
   ));
 
   expect(state.recordCallId).toBe('');
+  expect(state.showChat).toBe(true);
   expect(screen.getByTestId('discussion').dataset).toMatchObject({
     kind: 'call_chat',
     access: 'guest',

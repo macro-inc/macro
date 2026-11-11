@@ -16,6 +16,7 @@ import { useMessage } from './context';
 type SenderIconProps = {
   class?: string;
   hidden?: boolean;
+  interactive?: boolean;
 };
 
 export function SenderIcon(props: SenderIconProps) {
@@ -70,7 +71,14 @@ export function SenderIcon(props: SenderIconProps) {
           ? { name: message().guest_name, avatar_url: null }
           : (externalAuthor() ?? botSender())
       }
-      fallback={<UserIcon id={message().sender_id} size="fill" />}
+      fallback={
+        <UserIcon
+          id={message().sender_id}
+          size="fill"
+          suppressClick={props.interactive === false}
+          showTooltip={props.interactive !== false}
+        />
+      }
     >
       {(bot) => (
         <BotIcon name={bot().name} avatarUrl={bot().avatar_url} size="fill" />
@@ -86,7 +94,10 @@ export function SenderIcon(props: SenderIconProps) {
       aria-hidden={props.hidden ? 'true' : undefined}
     >
       {!props.hidden && (
-        <Show when={agentCard()} fallback={avatar()}>
+        <Show
+          when={props.interactive !== false && agentCard()}
+          fallback={avatar()}
+        >
           {(user) => (
             <UserCardTrigger
               placement="left"

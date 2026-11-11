@@ -68,6 +68,10 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     /** Rows a server search already matched, kept even when the menu's
      * fuzzy matcher would not match them. */
     preservedIds?: ReadonlySet<string>;
+    /** Members of the viewer's team. Their people rows and one-to-one
+     * conversations lead other rows that match equally well. */
+    teammateIds?: ReadonlySet<string>;
+    viewerId?: string;
   }
 ): T[] {
   const search = createFreshSearch<T>({
@@ -101,11 +105,24 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const eligible = items.filter(
     (item) => item.kind !== 'command' || commandMatches.has(item.id)
   );
-  // Match quality decides first. Among equally good matches Macro users and
-  // DMs come before documents and channels.
+  const withTeammate = (item: CommandMenuItem) => {
+    const team = options.teammateIds;
+    if (!team?.size) return false;
+    if (item.kind === 'user') return team.has(item.id);
+    if (item.kind !== 'entity' || item.data.type !== 'channel') return false;
+    if (item.data.channelType !== 'direct_message') return false;
+    const others = (item.data.participantIds ?? []).filter(
+      (id) => id !== options.viewerId
+    );
+    return others.length === 1 && team.has(others[0]);
+  };
+  // Match quality decides first. Among equally good matches, teammates and
+  // conversations with them lead, then other Macro users and DMs, then
+  // documents and channels.
   const scored = search(eligible, query).sort(
     (left, right) =>
       right.nameMatchRank - left.nameMatchRank ||
+      Number(withTeammate(right.item)) - Number(withTeammate(left.item)) ||
       Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
       right.combinedScore - left.combinedScore ||
       compareRecency(left.item, right.item)
@@ -116,7 +133,10 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const nameRanks = new Map(
     scored.map(({ item, nameMatchRank }) => [item.id, nameMatchRank])
   );
-  const nameRank = (item: T) => nameRanks.get(item.id) ?? -Infinity;
+  // Window order holds among people who match equally well and are equally
+  // close to the viewer, so a teammate keeps the lead the sort gave them.
+  const nameRank = (item: T) =>
+    (nameRanks.get(item.id) ?? -Infinity) * 2 + Number(withTeammate(item));
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');

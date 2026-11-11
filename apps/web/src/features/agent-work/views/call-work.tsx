@@ -8,7 +8,7 @@ import { getDisplayName, isAgentAccount, tryMacroId } from '@core/user';
 import XIcon from '@icon/system/regular/x.svg';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { Button } from '@ui';
-import { type Accessor, createSignal, For, Show } from 'solid-js';
+import { type Accessor, createSignal, For } from 'solid-js';
 import { WorkIdentity } from '../components/WorkIdentity';
 import { WorkList } from '../components/WorkList';
 import type { WorkItem } from '../core/work-item';
@@ -25,6 +25,7 @@ type CallPanelTab = 'chat' | 'participants' | 'work';
 
 /** The Work state of a call: who has work, and what its panel should show. */
 export function createCallWork(options: {
+  enabled?: Accessor<boolean>;
   accountIds: Accessor<readonly (string | undefined)[]>;
   selectedTab: Accessor<CallPanelTab>;
   panelOpen: Accessor<boolean>;
@@ -34,7 +35,7 @@ export function createCallWork(options: {
   const work = createRegisteredWork({
     client: useWorkClient(),
     accountIds: () => callWorkAccounts(options.accountIds()),
-    enabled: () => flag().enabled,
+    enabled: () => flag().enabled && (options.enabled?.() ?? true),
     onReconnected: subscribeGraphqlSoupReconnected,
   });
   const hasWork = () => work.accountsWithWork().length > 0;
@@ -80,19 +81,20 @@ function CallWorkSection(props: {
             name={getDisplayName(tryMacroId(props.accountId))}
             isAgent={isAgentAccount(tryMacroId(props.accountId))}
             avatar={
-              <UserIcon
-                id={props.accountId}
-                size="md"
-                suppressClick
-                showTooltip={false}
-              />
-            }
-            note={
-              <Show when={props.isSpeaking}>
-                <span class="shrink-0 text-xs font-medium text-accent">
-                  {t('calls.speaking')}
-                </span>
-              </Show>
+              <span
+                class="rounded-full"
+                classList={{
+                  'outline-2 -outline-offset-2 outline-success':
+                    props.isSpeaking,
+                }}
+              >
+                <UserIcon
+                  id={props.accountId}
+                  size="md"
+                  suppressClick
+                  showTooltip={false}
+                />
+              </span>
             }
           />
           <CollapsibleSection.Indicator />

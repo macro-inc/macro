@@ -31,6 +31,7 @@ import {
 } from 'solid-js';
 import { buildCallMessageLink } from './build-call-message-link';
 import { CallChatBody } from './components/CallChatBody';
+import { CallChatEmptyState } from './components/CallChatEmptyState';
 import { useCallChat } from './queries/use-call-chat';
 import { useGuestCallThread } from './queries/use-guest-call-thread';
 
@@ -252,9 +253,7 @@ function CallChatView(props: ChatViewProps) {
               </p>
             </Show>
             <Show when={chat.empty()}>
-              <p class="px-1 text-sm text-ink-muted">
-                Start the conversation. Messages stay with this call.
-              </p>
+              <CallChatEmptyState />
             </Show>
             <Show when={chat.failed()}>
               <p role="alert" class="text-sm text-ink-muted">
