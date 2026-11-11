@@ -17,6 +17,7 @@ import { EditorView } from '../editor-view';
 import { createBuiltinRegistry } from '../node-views/builtins';
 import { registerMacroElementViews } from '../node-views/macro';
 import type { ViewSink } from '../port';
+import type { EditorThemeClasses } from '../registry';
 import { SessionPort } from '../session-port';
 
 /** Load the same production artifact used by session and browser integration tests. */
@@ -31,7 +32,10 @@ export function initializeNativeSurfaceTests() {
   });
 }
 /** A real Macro session with synchronous execution and a mounted Diff-driven view. */
-export function nativeSurface(access = Access.Edit) {
+export function nativeSurface(
+  access = Access.Edit,
+  theme: EditorThemeClasses = {}
+) {
   const session = EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
     SessionConfigMsg.encode({
@@ -86,7 +90,7 @@ export function nativeSurface(access = Access.Edit) {
     registerMacroElementViews(createBuiltinRegistry()),
     {
       namespace: 'group-b-view',
-      theme: {},
+      theme,
       editable: access === Access.Edit,
       preset: 'rich',
       onError(error) {
