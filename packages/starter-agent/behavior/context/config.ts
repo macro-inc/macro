@@ -31,8 +31,6 @@ export type Config = {
   readonly model: string;
   /** What one run, and one day of the owner's, may spend. */
   readonly budget: Caps;
-  /** Areas behind a flag, from agent.json. */
-  readonly features: { readonly calls: boolean };
   /** Who the agent is in Macro, and who its owner is. Only the owner's id gives orders. */
   readonly me: string;
   readonly owner: string;
@@ -83,7 +81,6 @@ export const config = ({
   home,
   model: settings.model,
   budget: capsOf(settings),
-  features: { calls: settings.calls ?? false },
   me: settings.me,
   owner: settings.owner,
   identity: { name: settings.name, email: settings.email },

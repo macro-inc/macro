@@ -21,7 +21,6 @@ import {
 import { agentClaude, capabilityServer } from './behavior/agent/claude.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { profile } from './behavior/agent/profile.ts';
-import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
 import { childEnvironment } from './behavior/context/children.ts';
 import { base as makeBase } from './behavior/context/index.ts';
 import { timedOut } from './behavior/context/shell.ts';
@@ -32,6 +31,7 @@ import {
   runFiles,
   startup,
 } from './behavior/context/startup.ts';
+import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
 import { assistant as makeAgent } from './behavior/index.ts';
 
 const wakesLog = 'wakes';
