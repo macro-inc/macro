@@ -993,6 +993,9 @@ mod routed_history_test;
 #[cfg(all(test, feature = "application"))]
 mod grouping_test;
 
+#[cfg(all(test, feature = "application"))]
+mod arrow_test;
+
 #[cfg(test)]
 mod identity_test;
 

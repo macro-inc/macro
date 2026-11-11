@@ -159,6 +159,8 @@ impl Plugin for RichCommands {
     fn commands(&self) -> &[CommandRegistration] {
         const KINDS: &[CommandKind] = &[
             CommandKind::Click,
+            CommandKind::Key(KeyCommand::ArrowLeft),
+            CommandKind::Key(KeyCommand::ArrowRight),
             CommandKind::InsertText,
             CommandKind::DeleteCharacter,
             CommandKind::DeleteWord,
@@ -213,6 +215,17 @@ impl Plugin for RichCommands {
             tx.insert_nodes_at(*selection, nodes)?;
             return Ok(Handled::Yes);
         }
+        if let Command::Key {
+            command: command @ (KeyCommand::ArrowLeft | KeyCommand::ArrowRight),
+            event,
+        } = command
+        {
+            return arrow_horizontal(
+                tx,
+                *command == KeyCommand::ArrowLeft,
+                event.as_ref().is_some_and(|event| event.shift),
+            );
+        }
         let handled = match command {
             Command::Click => {
                 rich_text::click(tx, &rich_text::EscapeFormatTriggerConfig::default())
@@ -248,6 +261,65 @@ impl Plugin for RichCommands {
         .map_err(|lexical_rich_nodes::Error::Model(error)| error)?;
         Ok(if handled { Handled::Yes } else { Handled::No })
     }
+}
+
+/// Upstream registerRichText KEY_ARROW_LEFT/RIGHT: model-owned NodeSelection and
+/// decorator movement; ordinary character movement stays with the browser.
+fn arrow_horizontal(tx: &mut Transaction<'_>, left: bool, shift: bool) -> Result<Handled, Error> {
+    let rtl = is_parent_element_rtl(tx);
+    let cfg = rich_text::EscapeFormatTriggerConfig::default();
+    let outcome = if left {
+        rich_text::arrow_left(tx, shift, rtl, &cfg)
+    } else {
+        rich_text::arrow_right(tx, shift, rtl, &cfg)
+    }
+    .map_err(|lexical_rich_nodes::Error::Model(error)| error)?;
+    match outcome {
+        rich_text::ArrowOutcome::NotHandled => Ok(Handled::No),
+        rich_text::ArrowOutcome::Handled => {
+            tx.prevent_default();
+            Ok(Handled::Yes)
+        }
+        rich_text::ArrowOutcome::MoveCharacter { backward } => {
+            // $moveCharacter: modify() handles decorator and block boundaries in
+            // the model; plain text movement is the browser's own caret step.
+            let direction = if backward != rtl {
+                EditDirection::Backward
+            } else {
+                EditDirection::Forward
+            };
+            let alter = if shift { Alter::Extend } else { Alter::Move };
+            match tx.modify_selection(
+                alter,
+                direction,
+                Granularity::Character,
+                ModifyTarget::RequireView,
+            ) {
+                Ok(()) => {
+                    tx.prevent_default();
+                    Ok(Handled::Yes)
+                }
+                Err(Error::LayoutRequired) => Ok(Handled::No),
+                Err(error) => Err(error),
+            }
+        }
+    }
+}
+
+/// Upstream $isParentElementRTL: the anchor's parent (or root) direction field.
+fn is_parent_element_rtl(tx: &Transaction<'_>) -> bool {
+    let Some(Selection::Range(range)) = tx.selection() else {
+        return false;
+    };
+    let anchor = range.anchor.key();
+    let parent = if anchor == NodeKey::ROOT {
+        Some(anchor)
+    } else {
+        tx.view().parent(anchor)
+    };
+    parent
+        .and_then(|key| tx.view().element(key))
+        .is_some_and(|element| element.direction == Some(TextDirection::Rtl))
 }
 
 // Remote cursor repair is a model operation; headless editors reject view inputs.
