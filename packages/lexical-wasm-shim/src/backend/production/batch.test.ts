@@ -126,6 +126,159 @@ test('semantic barriers have an explicit operations phase and unknown phases do 
   expect(batch.hasNativeScope).toBe(true);
 });
 
+test('unsent cancellation drops only JS intents without a native retirement receipt', () => {
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt();
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  expect(batch.cancelUnsent()).toBe(true);
+  expect(calls).toBe(0);
+  expect(batch.hasOperations).toBe(false);
+  batch.begin(6n, begin);
+  batch.send(CompatBatchPhase.Operations, leases);
+  expect(batch.cancelUnsent()).toBe(false);
+  expect(calls).toBe(1);
+  expect(batch.hasNativeScope).toBe(true);
+});
+
+test('unknown transport effects cannot be reclassified as an unsent update', () => {
+  const failure = new Error('Transport failed after entry');
+  const batch = new NativeBatch({
+    call() {
+      throw failure;
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, begin);
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    failure
+  );
+  expect(batch.hasNativeScope).toBe(false);
+  expect(() => batch.cancelUnsent()).toThrow('Native effects are unknown');
+});
+
+test('clock reentry cannot cancel or send the scope being prepared', () => {
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt();
+    },
+    now() {
+      expect(() => batch.cancelUnsent()).toThrow('during its call');
+      expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+        'scoped callback'
+      );
+      return 10;
+    },
+    wall: () => 20,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, begin);
+  batch.send(CompatBatchPhase.Operations, leases);
+  expect(calls).toBe(1);
+  expect(batch.hasNativeScope).toBe(true);
+  expect(batch.cancelUnsent()).toBe(false);
+});
+
+test('clock failure before transport preserves known-unsent cancellation', () => {
+  let calls = 0;
+  const failure = new Error('Clock unavailable');
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt();
+    },
+    now() {
+      throw failure;
+    },
+    wall: () => 0,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    failure
+  );
+  expect(calls).toBe(0);
+  expect(batch.hasOperations).toBe(true);
+  expect(batch.cancelUnsent()).toBe(true);
+});
+
+test('encoding rejects cancellation reentry and preserves its original pre-transport error', () => {
+  let calls = 0;
+  const failure = {};
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt();
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge: () => {},
+  });
+  const argumentsWithGetter = {
+    get editorId() {
+      expect(() => batch.cancelUnsent()).toThrow('during its call');
+      return 1;
+    },
+    get retain(): [] {
+      throw failure;
+    },
+    release: [],
+  };
+  batch.begin(6n, begin);
+  batch.enqueue(operation);
+  try {
+    batch.send(CompatBatchPhase.Operations, argumentsWithGetter);
+    expect.unreachable('Expected the encoding getter to throw');
+  } catch (error) {
+    expect(error).toBe(failure);
+  }
+  expect(calls).toBe(0);
+  expect(batch.hasOperations).toBe(true);
+  expect(batch.cancelUnsent()).toBe(true);
+});
+
+test('begin configuration getters cannot open or cancel an overlapping scope', () => {
+  let calls = 0;
+  const batch = new NativeBatch({
+    call() {
+      calls++;
+      return receipt();
+    },
+    now: () => 0,
+    wall: () => 0,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, {
+    get tags() {
+      expect(() => batch.begin(6n, begin)).toThrow(
+        'during request preparation'
+      );
+      expect(() => batch.cancelUnsent()).toThrow('during its call');
+      expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+        'scoped callback'
+      );
+      return ['typing'];
+    },
+    reserveKeys: 8,
+    classMaskPatches: [],
+  });
+  expect(calls).toBe(0);
+  expect(batch.cancelUnsent()).toBe(true);
+});
+
 test('typed partial failure acknowledges effects and never retries its skipped suffix', () => {
   let request: ReturnType<typeof CompatBatchRequest.decode> | undefined;
   let acknowledged = false;

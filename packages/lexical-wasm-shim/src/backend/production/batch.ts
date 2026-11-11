@@ -41,19 +41,30 @@ export class NativeBatch {
   /** Opening a public update alone makes no native call or key reservation. */
   begin(expectedVersion: bigint, begin: ICompatBeginRequest): void {
     this.checkRetirementAcknowledgement();
+    if (this.sending)
+      throw new Error(
+        'Cannot begin a native batch during request preparation or its call'
+      );
     if (this.pending !== undefined)
       throw new Error('A native batch scope is already pending');
     if (this.failedTransport)
       throw new Error('Discard the failed native batch scope first');
-    this.pending = {
-      expectedVersion,
-      begin: {
-        tags: [...begin.tags],
-        reserveKeys: begin.reserveKeys,
-        classMaskPatches: begin.classMaskPatches.map((patch) => ({ ...patch })),
-      },
-      operations: [],
-    };
+    this.sending = true;
+    try {
+      this.pending = {
+        expectedVersion,
+        begin: {
+          tags: [...begin.tags],
+          reserveKeys: begin.reserveKeys,
+          classMaskPatches: begin.classMaskPatches.map((patch) => ({
+            ...patch,
+          })),
+        },
+        operations: [],
+      };
+    } finally {
+      this.sending = false;
+    }
   }
 
   /** Transfer the intent and its argument arrays; the caller must not mutate them. */
@@ -68,6 +79,21 @@ export class NativeBatch {
 
   get hasOperations(): boolean {
     return this.pending !== undefined && this.pending.operations.length > 0;
+  }
+
+  /** Cancel JS intents only when this scope has never entered native transport. */
+  cancelUnsent(): boolean {
+    this.checkRetirementAcknowledgement();
+    if (this.sending)
+      throw new Error('Cannot cancel a native batch during its call');
+    if (this.failedTransport)
+      throw new Error(
+        'Native effects are unknown; unsent cancellation is unavailable'
+      );
+    if (this.pending === undefined || this.pending.acknowledged !== undefined)
+      return false;
+    this.pending = undefined;
+    return true;
   }
 
   /** A semantic barrier, synchronous normalization flush, or later admission. */
@@ -93,16 +119,18 @@ export class NativeBatch {
           begin: pending.begin,
         });
     const operations = [...pending.operations];
-    const request = CompatBatchRequest.encode({
-      scope,
-      leases,
-      operations,
-      phase,
-      now: this.transport.now(),
-      wall: this.transport.wall(),
-    }).slice();
     this.sending = true;
+    let enteredTransport = false;
     try {
+      const request = CompatBatchRequest.encode({
+        scope,
+        leases,
+        operations,
+        phase,
+        now: this.transport.now(),
+        wall: this.transport.wall(),
+      }).slice();
+      enteredTransport = true;
       const reply = CompatBatchReply.decode(this.transport.call(request));
       this.validate(
         reply,
@@ -129,9 +157,9 @@ export class NativeBatch {
         this.failedRetirementAcknowledgement = true;
         throw error;
       }
-      // An invalid/missing acknowledgement leaves effects unknown. Only the
-      // real native discard path may recover; retrying could duplicate writes.
-      this.failedTransport = true;
+      // Preparation failures have not crossed. Once transport is entered an
+      // invalid/missing reply leaves effects unknown; never replay its writes.
+      if (enteredTransport) this.failedTransport = true;
       throw error;
     } finally {
       this.sending = false;
