@@ -12,24 +12,14 @@ import { createEmailComposeContext } from '@app/features/email-compose/compose-a
 import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-html';
 import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
 import { parsePropertyDraft } from '@app/features/property/utils/parse-property-draft';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import type {
   ReferredFrom,
   SplitContent,
 } from '@components/app/split-layout/layoutManager';
 import type { PromptSubmitSurface } from '@core/agent-session/prompt-telemetry';
-import { useHasPaidAccess } from '@core/auth';
-import {
-  DEFAULT_MODEL,
-  FREE_DEFAULT_MODEL,
-  MODEL_PRETTYNAME,
-  Model,
-} from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
-import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
-import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -70,7 +60,6 @@ import type { InputFields, Intent, Submission } from './core/input';
 import { type Recipient, resolveRecipients } from './core/recipients';
 import { parseRecurrenceDraft } from './core/recurrence';
 import { resolveSearchFilters } from './core/search';
-import { createInputChat } from './queries/create-chat';
 import { useInputPeople } from './queries/input-people';
 import { createTaskFieldSource } from './queries/task-field-source';
 
@@ -91,8 +80,6 @@ export function createInputActions(
     host.referredFrom ?? 'kommand-menu'
   );
   const chat = useChatInputContext();
-  const agents = useFeatureFlag(enableChatV3Agents);
-  const paid = useHasPaidAccess();
   const roster = createAgentRosterSource();
   const selectedAgent = () =>
     roster.roster().find((agent) => agent.id === (fields().botId || 'macro'));
@@ -177,19 +164,7 @@ export function createInputActions(
       message ? people.destinations : person,
       !message
     );
-  const models = () =>
-    agents().enabled
-      ? catalog.models().map((m) => ({ id: m.id, label: m.name }))
-      : Object.values(Model)
-          .filter((m) => paid() || m === FREE_DEFAULT_MODEL)
-          .map((id) => ({ id, label: MODEL_PRETTYNAME[id] }));
-  const model = () =>
-    fields().model ||
-    (agents().enabled
-      ? (catalog.currentModel() ?? '')
-      : paid()
-        ? DEFAULT_MODEL
-        : FREE_DEFAULT_MODEL);
+  const model = () => fields().model || (catalog.currentModel() ?? '');
   const attachmentCount = () => chat.attachments.attached().length;
   const validateEmailDraft: InputCapabilities['validateEmailDraft'] = (
     input
@@ -258,11 +233,7 @@ export function createInputActions(
         return 'Choose a recipient';
     }
     if (input.intent === 'message') return validateMessage(input.fields);
-    if (
-      input.intent === 'ai' &&
-      agents().enabled &&
-      selectedAgent()?.unavailableReason
-    )
+    if (input.intent === 'ai' && selectedAgent()?.unavailableReason)
       return selectedAgent()?.unavailableReason;
   };
   const emailDrafts = new Map<
@@ -324,50 +295,32 @@ export function createInputActions(
     const f = input.fields;
     return await match(input.intent)
       .with('ai', async () => {
-        if (agents().enabled) {
-          const prompt = await buildAgentPrompt({
-            content: input.text,
-            attachments: chat.attachments.attached(),
-          });
-          assertQueryAccount(account);
-          const agent = selectedAgent();
-          const id = startPendingSession({
-            prompt,
-            botId: agent?.botId,
-            modelOverride: model() || undefined,
-            modelFallback: catalog.pending(),
-            userId: userId,
-            submitSurface: host.submitSurface ?? 'other',
-          });
-          chat.attachments.setAttached([]);
-          const content: Parameters<typeof host.navigate>[0] = {
-            type: 'component',
-            id: agentsRouteId({
-              mode: modeForKind(agent?.kind ?? 'agent'),
-              conversation: { type: 'agent_session', id },
-            }),
-          };
-          return {
-            message: 'Started conversation',
-            open: () => host.navigate(content),
-          };
-        } else {
-          const id = await createInputChat();
-          assertQueryAccount(account);
-          const selectedModel =
-            Object.values(Model).find((m) => m === model()) ??
-            FREE_DEFAULT_MODEL;
-          setPendingSendData({
-            content: input.text,
-            attachments: chat.attachments.attached(),
-            model: selectedModel,
-          });
-          chat.attachments.setAttached([]);
-          return {
-            message: 'Started conversation',
-            open: () => host.navigate({ type: 'chat', id }),
-          };
-        }
+        const prompt = await buildAgentPrompt({
+          content: input.text,
+          attachments: chat.attachments.attached(),
+        });
+        assertQueryAccount(account);
+        const agent = selectedAgent();
+        const id = startPendingSession({
+          prompt,
+          botId: agent?.botId,
+          modelOverride: model() || undefined,
+          modelFallback: catalog.pending(),
+          userId: userId,
+          submitSurface: host.submitSurface ?? 'other',
+        });
+        chat.attachments.setAttached([]);
+        const content: Parameters<typeof host.navigate>[0] = {
+          type: 'component',
+          id: agentsRouteId({
+            mode: modeForKind(agent?.kind ?? 'agent'),
+            conversation: { type: 'agent_session', id },
+          }),
+        };
+        return {
+          message: 'Started conversation',
+          open: () => host.navigate(content),
+        };
       })
       .with('search', async () => {
         const { state } = resolveSearchFilters(
@@ -552,9 +505,6 @@ export function createInputActions(
           agentPageRequest: crypto.randomUUID(),
         },
       }),
-    agentsEnabled: () => agents().enabled,
-    models,
-    model,
     attachmentCount,
     clearAttachments: () => chat.attachments.setAttached([]),
   };
