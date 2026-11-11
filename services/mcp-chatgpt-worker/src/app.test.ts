@@ -66,7 +66,7 @@ describe('createHandler', () => {
     );
 
     expect(documentsDelete.annotations).toEqual({
-      title: 'documents: delete, overwrite and send',
+      title: 'documents: delete and overwrite',
       readOnlyHint: false,
       destructiveHint: true,
       idempotentHint: false,

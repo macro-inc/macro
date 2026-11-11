@@ -249,7 +249,7 @@ export class EmailNamespace {
    * Send a new plain-text email; an agent's program is refused (403) and
    * sends through a review or {@link sendConfirmed} instead.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   send(opts: SendEmailOptions): Promise<EmailMessage | undefined> {
@@ -269,7 +269,7 @@ export class EmailNamespace {
    * is never retried; on an error, look for the message in the thread before
    * sending again.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   sendConfirmed(opts: ConfirmedEmailOptions): Promise<SentEmail> {

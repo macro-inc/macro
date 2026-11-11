@@ -43,7 +43,8 @@ const SUMMARY_LENGTH = 160;
 const HINT_TITLES: Record<HintClass, string> = {
   read: 'read',
   write: 'create and change',
-  delete: 'delete, overwrite and send',
+  send: 'send',
+  delete: 'delete and overwrite',
 };
 
 /**
@@ -197,7 +198,7 @@ function entityTool(
   };
 }
 
-const HINT_ORDER: readonly HintClass[] = ['read', 'write', 'delete'];
+const HINT_ORDER: readonly HintClass[] = ['read', 'write', 'send', 'delete'];
 
 /** The catalog's tools, in a stable order; fails on a tool name used twice. */
 export function buildTools(catalog: Catalog, grouping: ToolGrouping): Tool[] {
