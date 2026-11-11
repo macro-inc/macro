@@ -1,4 +1,4 @@
-# Production node payload components
+# Production node payload and class metadata components
 
 ## Scope
 
@@ -6,6 +6,12 @@ Keep node-payload.ts a pure raw-field projection into generated protocol types.
 Require a closed explicit native descriptor; never infer authorization from a
 node type name. Actual native class/token/prototype authorization is owned by
 the runtime before calling this helper.
+
+Consume prepared configured rows through registrations.ts without adding hidden
+native baselines to the public allowlist or rereading getType/Function.name.
+Select codecs by actual baseline function identity; preserve unsupported-codec
+errors and all advertised hook bits. Share constructor-identity.ts with the host;
+its weak function tokens grant no construction or graph authority.
 
 Capture complete Text/Element scalar fields from actual instances, preserving
 UTF-16 code units and raw mode values including 3. Validate HeadingNodeTag using
