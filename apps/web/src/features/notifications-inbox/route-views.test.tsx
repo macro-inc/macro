@@ -40,6 +40,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('./notifications-inbox', () => ({
   NotificationsInbox: () => <div>The inbox</div>,
 }));
+vi.mock('./views/notifications-calendar-pane', () => ({
+  NotificationsCalendarPane: () => null,
+}));
 
 const home = {
   next: { type: 'component', id: 'home', entryMetadata: { search: {} } },

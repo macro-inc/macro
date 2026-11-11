@@ -100,7 +100,7 @@ export const SearchRouteView = lazyNamed(
   'SearchRouteView'
 );
 export const ReviewsPrDetailRouteView = lazyNamed(
-  () => import('@app/features/reviews-view/route-views'),
+  () => import('@app/features/reviews-view/components/ReviewsPrDetail'),
   'ReviewsPrDetailRouteView'
 );
 export const ReviewsRouteView = lazyNamed(

@@ -16,16 +16,19 @@ import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { routineContent } from '../routines/routine-navigation';
 import { AgentsViewSkeleton } from './agents-view-skeleton';
 import { parseAgentsRoute } from './core/route';
+import { AgentsView } from './views/AgentsView';
 
+// The views below render only with the agents rollout off or on a sub-page,
+// so they stay out of the route's chunk.
+// ast-grep-ignore: tsx-route-views-static-view
 const SoupView = lazy(async () => ({
   default: (await import('../next-soup/soup-view/soup-view')).SoupView,
 }));
-const AgentsView = lazy(async () => ({
-  default: (await import('./views/AgentsView')).AgentsView,
-}));
+// ast-grep-ignore: tsx-route-views-static-view
 const RoutinesPage = lazy(async () => ({
   default: (await import('../routines/routines-page')).RoutinesPage,
 }));
+// ast-grep-ignore: tsx-route-views-static-view
 const IntegrationsPage = lazy(async () => ({
   default: (await import('../settings/IntegrationsPage')).IntegrationsPage,
 }));
