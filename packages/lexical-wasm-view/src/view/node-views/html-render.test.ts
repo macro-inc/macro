@@ -8,7 +8,7 @@ import { registerMacroDecoratorViews } from './macro';
 
 beforeAll(initializeNativeSurfaceTests);
 
-test('native HTML decorators retain the Source block mount and Chromium attribute order', () => {
+test('native HTML decorators retain the block mount and jsdom attribute order', () => {
   const fixture = nativeSurface();
   try {
     registerMacroDecoratorViews(fixture.view.registry, {
@@ -32,10 +32,11 @@ test('native HTML decorators retain the Source block mount and Chromium attribut
     expect(element.style.display).toBe('block');
     // jsdom does not reflect contentEditable into an HTML attribute.
     expect(element.contentEditable).toBe('false');
+    // jsdom inserts the style attribute when createDOM sets display.
     expect(element.getAttributeNames()).toEqual([
+      'style',
       'data-html-render',
       'data-lexical-decorator',
-      'style',
       'class',
     ]);
     expect(element.textContent).toBe('rendered HTML');
