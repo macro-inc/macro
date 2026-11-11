@@ -621,8 +621,8 @@ pub(crate) fn router() -> Router<OutlookEmulator> {
     Router::new().route(&format!("/{API_VERSION}/{{*path}}"), any(graph))
 }
 
-/// Records every request outside the control API, with the route and
-/// mailbox its handler reported.
+/// Records every provider request, with the route and mailbox its handler
+/// reported.
 pub(crate) async fn log_request(
     AxumState(emulator): AxumState<OutlookEmulator>,
     request: Request,
@@ -634,11 +634,13 @@ pub(crate) async fn log_request(
         .path_and_query()
         .map_or_else(|| request.uri().path().to_string(), ToString::to_string);
     let response = next.run(request).await;
-    if path.starts_with(CONTROL_PREFIX) {
+    let logged = response.extensions().get::<Logged>().cloned();
+    // The control API is not a provider request; the authentication-service
+    // stand-in under it is, and reports itself.
+    if path.starts_with(CONTROL_PREFIX) && logged.is_none() {
         return response;
     }
 
-    let logged = response.extensions().get::<Logged>().cloned();
     let status = response.status().as_u16();
     tracing::debug!(%method, %path, status, "outlook emulator request");
     emulator.with_state(|state| {

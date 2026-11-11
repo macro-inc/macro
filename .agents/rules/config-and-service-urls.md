@@ -51,6 +51,10 @@ startup loudly.
   consuming runtime (`apps/web/src/lib/core/constant/servers.ts`,
   `packages/sdk/src/config.ts`, and worker `[env.*.vars]`). Do not add unused
   public OAuth identities to API transport maps.
+- A third-party host with a test double is typed the same way, outside the
+  hand-copied table: `MicrosoftGraphUrl` is Microsoft's host in every
+  environment, and `OVERRIDE_MICROSOFT_GRAPH_URL` points the Outlook client
+  at `crates/outlook_emulator`.
 - Keep registered public OAuth identities separate from internal gateway API
   routes. Do not store stable URLs in Doppler; reserve it for secrets and
   infrastructure-generated addresses (such as preview DNS and SSH hosts).

@@ -125,6 +125,12 @@ async fn the_authentication_service_stand_in_answers_for_a_linked_mailbox() {
     emulator.revoke_grant(ADA).unwrap();
     let revoked = http.get(&url).query(&query(false)).send().await.unwrap();
     assert_eq!(revoked.status(), 401);
+    // Token requests are in the request log, like Graph's.
+    let logged = emulator.requests();
+    let tokens = logged
+        .iter()
+        .filter(|r| r.route == Some(crate::Route::OauthToken));
+    assert_eq!(tokens.count(), 5);
 }
 
 #[tokio::test]

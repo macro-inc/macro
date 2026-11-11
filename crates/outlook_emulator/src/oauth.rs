@@ -150,6 +150,71 @@ async fn link_token(
     logged(answered, Some(Route::OauthToken), mailbox)
 }
 
+#[derive(Deserialize)]
+struct GrantRequest {
+    attempt_id: String,
+    owner: String,
+}
+
+/// The id the stand-in gives a mailbox's grant.
+fn grant_id(email: &str) -> uuid::Uuid {
+    uuid::Uuid::new_v5(&uuid::Uuid::NAMESPACE_URL, email.as_bytes())
+}
+
+/// Stands in for the authentication service's `GET /internal/microsoft_grant`,
+/// which describes the grant a finished OAuth attempt produced. The attempt
+/// is one bound to a mailbox with `link_mailbox`; the owner is whoever asks.
+async fn completed_grant(
+    AxumState(emulator): AxumState<OutlookEmulator>,
+    Query(request): Query<GrantRequest>,
+) -> Response {
+    let (mailbox, answered) = emulator.with_state(|state| {
+        let email = state.links.get(&request.attempt_id.to_lowercase());
+        let Some(mailbox) = email.and_then(|email| state.mailboxes.get(email)) else {
+            return (None, StatusCode::NOT_FOUND.into_response());
+        };
+        let grant = json!({
+            "calendar_requested": false,
+            "grant_id": grant_id(&mailbox.email),
+            "generation": 1,
+            "owner": request.owner,
+            "email": mailbox.email,
+            "tenant_id": mailbox.tenant_id,
+            "mailbox_id": mailbox.user_id,
+            "scopes": SCOPES,
+        });
+        (Some(mailbox.email.clone()), Json(grant).into_response())
+    });
+    logged(answered, Some(Route::OauthToken), mailbox)
+}
+
+#[derive(Deserialize)]
+struct RevokeRequest {
+    grant_id: uuid::Uuid,
+}
+
+/// Stands in for `POST /internal/revoke_microsoft_grant`: the mailbox whose
+/// grant it names is revoked.
+async fn revoke_grant(
+    AxumState(emulator): AxumState<OutlookEmulator>,
+    Json(request): Json<RevokeRequest>,
+) -> Response {
+    let mailbox = emulator.with_state(|state| {
+        let email = state
+            .mailboxes
+            .keys()
+            .find(|email| grant_id(email) == request.grant_id)
+            .cloned()?;
+        state.revoke_grant(&email).ok()?;
+        Some(email)
+    });
+    logged(
+        StatusCode::NO_CONTENT.into_response(),
+        Some(Route::OauthToken),
+        mailbox,
+    )
+}
+
 pub(crate) fn router() -> Router<OutlookEmulator> {
     let authentication_service = "/_emulator/authentication-service/internal";
     Router::new()
@@ -161,5 +226,13 @@ pub(crate) fn router() -> Router<OutlookEmulator> {
         .route(
             &format!("{authentication_service}/microsoft_disconnect_token"),
             get(link_token),
+        )
+        .route(
+            &format!("{authentication_service}/microsoft_grant"),
+            get(completed_grant),
+        )
+        .route(
+            &format!("{authentication_service}/revoke_microsoft_grant"),
+            post(revoke_grant),
         )
 }

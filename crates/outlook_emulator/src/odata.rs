@@ -137,13 +137,16 @@ fn equals(input: &str) -> IResult<&str, ()> {
     value((), (multispace1, tag_no_case("eq"), multispace1)).parse(input)
 }
 
+/// A property path, such as `p/id`, and the literal it is compared with.
+type Comparison<'a> = (Vec<&'a str>, Literal);
+
 /// `name eq literal`, where the name may be a path such as `p/id`.
-fn comparison(input: &str) -> IResult<&str, (Vec<&str>, Literal)> {
+fn comparison(input: &str) -> IResult<&str, Comparison<'_>> {
     separated_pair(separated_list1(char('/'), identifier), equals, literal).parse(input)
 }
 
 /// `collection/any(variable: comparison and comparison …)`
-fn any(input: &str) -> IResult<&str, (&str, &str, Vec<(Vec<&str>, Literal)>)> {
+fn any(input: &str) -> IResult<&str, (&str, &str, Vec<Comparison<'_>>)> {
     let (rest, collection) = terminated(identifier, char('/')).parse(input)?;
     let (rest, _) = tag_no_case("any").parse(rest)?;
     let (rest, variable) =
