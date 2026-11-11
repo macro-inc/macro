@@ -105,11 +105,15 @@ transcript's last write, so a session worked on in its Herdr pane within the
 hour is restored at dial time.
 
 Each session's commands run one at a time on its command worker
-(`service/queue.rs`). A worker exits after `WORKER_IDLE_TIMEOUT` with nothing
-queued, and with the session it deletes, removing its map entry through
-`retire_worker`; commands are sent under the same entry lock, so one racing
-the exit either keeps the worker or starts a new one. Before an idle worker
-retires, `service/idle.rs` silently releases a quiet session (nothing admitted
+(`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
+worker tries to release its session (`service/idle.rs`) and exits only when
+nothing is left to free (`IdleRelease::holds_nothing`: released, or another
+runtime's session); a session still held keeps its worker, which tries again
+after twice, four times, then every sixteen times the timeout (`idle_wait`),
+because each try replays the whole log. A worker also exits with the session
+it deletes. Both remove its map entry through `retire_worker`; commands are
+sent under the same entry lock, so one racing the exit either keeps the worker
+or starts a new one. The release silently releases a quiet session (nothing admitted
 in `busy`, empty queue, no notification batch) whose runtime says the release
 is lossless (`ContainerManager::idle_release_is_lossless`: the in-process
 manager compares its live state with what the log rebuilds). An in-process
@@ -119,7 +123,11 @@ session's actor attached here goes through
 claim given back under its own fence. Then `ContainerManager::release_idle`
 drops this process's runtime state, and the queue copy and `hydrated` mark are
 forgotten. The next command finds no actor and resumes from the log. Unclaimed
-warm sessions never get a worker, so they stay warm.
+warm sessions never get a worker, so they stay warm until
+`reap_warm_sessions` expires and deletes them. The `agent.session.idle_release`
+span's `outcome` names where a release stopped; its fields start empty and are
+recorded once, because a field given a value up front and recorded again is
+exported twice and Datadog keeps the first.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session

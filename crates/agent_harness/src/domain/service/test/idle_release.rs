@@ -257,3 +257,84 @@ async fn a_session_another_replica_manages_is_left_alone() {
         Some(peer.replica)
     );
 }
+
+/// A session the worker could not release at its idle timeout used to lose
+/// its worker anyway, and with it every later try: it was held until its next
+/// command, which for most sessions never comes. The worker now stays and
+/// tries again, backing off, because each try reads and replays the log.
+#[tokio::test]
+async fn a_session_kept_at_its_idle_timeout_is_tried_again_until_it_releases() {
+    let ((service, repo, containers, _announcer, _runtimes), mut signals) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let (prompted, ()) = tokio::join!(
+        service.execute(id, HarnessCommand::Deliver(forward_message("first"))),
+        async {
+            complete_resume(&containers.wait_for_resumes(id, 1).await).await;
+        },
+    );
+    prompted.expect("the first prompt runs");
+    signals.settled(id).await;
+    containers.keep_on_release(id);
+    // What the runtime gauges read (`ahs.harness.workers`,
+    // `ahs.harness.hydrated`, `ahs.agent_session.active`).
+    assert_eq!(service.command_workers(), 1);
+    assert_eq!(service.hydrated_sessions(), 1);
+    assert_eq!(service.inner.sessions.active_sessions(), 1);
+
+    tokio::time::pause();
+    let idle_since = tokio::time::Instant::now();
+    let patience = WORKER_IDLE_TIMEOUT * 40;
+    for (tries, after) in [(1, 1), (2, 3), (3, 7), (4, 23)] {
+        tokio::time::timeout(patience, containers.wait_for_lossless_checks(id, tries))
+            .await
+            .expect("the worker tries again");
+        let waited = idle_since.elapsed();
+        assert!(
+            waited >= WORKER_IDLE_TIMEOUT * after
+                && waited < WORKER_IDLE_TIMEOUT * after + Duration::from_secs(60),
+            "try {tries} comes {after} idle timeouts in, not {waited:?}"
+        );
+        assert_eq!(
+            service.command_workers(),
+            1,
+            "the worker of a session still held stays to try again"
+        );
+        assert!(containers.released().is_empty());
+    }
+
+    containers.allow_release(id);
+    tokio::time::timeout(patience, containers.wait_for_release(id))
+        .await
+        .expect("the next try releases it");
+    let waited = idle_since.elapsed();
+    assert!(
+        waited >= WORKER_IDLE_TIMEOUT * 39
+            && waited < WORKER_IDLE_TIMEOUT * 39 + Duration::from_secs(60),
+        "tries settle at sixteen idle timeouts apart, not {waited:?}"
+    );
+    // On the paused clock this returns only once every task is idle, the
+    // worker included.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::resume();
+
+    assert_eq!(
+        service.command_workers(),
+        0,
+        "the worker retires once nothing is held"
+    );
+    assert_eq!(
+        service.hydrated_sessions(),
+        0,
+        "its queue copy is forgotten"
+    );
+    assert_eq!(
+        service.inner.sessions.active_sessions(),
+        0,
+        "its actor is gone"
+    );
+    assert!(
+        service.inner.sessions.attached_mcp_servers(id).is_none(),
+        "its actor is closed"
+    );
+}

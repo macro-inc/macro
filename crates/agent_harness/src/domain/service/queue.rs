@@ -179,6 +179,21 @@ where
     }
 }
 
+/// How long a worker waits for a command before it tries to release its
+/// session, after `attempts` tries that left the session held. A session that
+/// stays unreleasable (its log rebuilds differently) is checked again at
+/// `timeout`, twice it, four times it, then every sixteen times it: each check
+/// reads and replays the session's whole log.
+pub(super) fn idle_wait(timeout: std::time::Duration, attempts: u32) -> std::time::Duration {
+    let factor = match attempts {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        _ => 16,
+    };
+    timeout.saturating_mul(factor)
+}
+
 /// Remove the worker's own entry, if its channel is still the session's and
 /// holds nothing. Answers whether it did, in which case the worker exits.
 ///
@@ -1882,15 +1897,24 @@ pub(super) async fn run_session_worker<
     Notifier: AgentSessionNotifier,
 {
     let mut deleted = false;
+    // Releases tried since the session's last command that left something
+    // held here.
+    let mut attempts: u32 = 0;
     loop {
         let queued = tokio::select! {
             queued = receiver.recv() => queued,
-            () = tokio::time::sleep(inner.worker_idle_timeout) => {
+            () = tokio::time::sleep(idle_wait(inner.worker_idle_timeout, attempts)) => {
                 // Before retiring, while commands for the session still queue
                 // behind this worker rather than racing it on a new one.
-                inner.release_idle(session_id).await;
-                if retire_worker(&workers, session_id, &own, &receiver) {
-                    return;
+                let outcome = inner.release_idle(session_id, attempts).await;
+                // A session still held stays with its worker, or nothing
+                // would ever try again before its next command.
+                if outcome.holds_nothing() {
+                    if retire_worker(&workers, session_id, &own, &receiver) {
+                        return;
+                    }
+                } else {
+                    attempts = attempts.saturating_add(1);
                 }
                 continue;
             }
@@ -1899,6 +1923,7 @@ pub(super) async fn run_session_worker<
         let Some(queued) = queued else {
             return;
         };
+        attempts = 0;
         let QueuedCommand {
             command,
             completed,
