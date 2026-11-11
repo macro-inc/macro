@@ -7,6 +7,13 @@ export interface CalendarOccurrenceQueryRange {
   endDate: string;
 }
 
+/**
+ * Calendar reads stay in memory for the session, so a period reopens without
+ * a read. The native apps also persist them, and a persisted entry is dropped
+ * with its query; the default ten minutes would leave a cold start nothing.
+ */
+export const CALENDAR_GC_TIME = 24 * 60 * 60_000;
+
 /** Mutation key shared by the RSVP mutation and the websocket refresh
  * handler, which must not refetch occurrences over in-flight optimistic
  * RSVP state. */

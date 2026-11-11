@@ -16,7 +16,11 @@ import {
 import { readCalendarRange } from './graphql/range';
 import { calendarCacheAnswered } from './graphql/readiness';
 import { activeCalendarSyncController } from './graphql/sync-controller';
-import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
+import {
+  CALENDAR_GC_TIME,
+  type CalendarOccurrenceQueryRange,
+  calendarKeys,
+} from './keys';
 
 export type { CalendarOccurrenceQueryRange } from './keys';
 
@@ -145,6 +149,7 @@ function calendarOccurrencesQueryOptions(
       },
       enabled,
       staleTime,
+      gcTime: CALENDAR_GC_TIME,
       // Covered viewports never touch the network, so offline reads run.
       networkMode: 'offlineFirst' as const,
       refetchOnWindowFocus: false,
@@ -177,6 +182,7 @@ function calendarOccurrencesQueryOptions(
     },
     enabled,
     staleTime,
+    gcTime: CALENDAR_GC_TIME,
     refetchOnWindowFocus,
     refetchInterval: (query) =>
       pollWhileSyncing &&

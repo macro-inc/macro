@@ -17,7 +17,7 @@ import {
   calendarCacheAnswered,
   withinCacheHeadStart,
 } from './graphql/readiness';
-import { calendarKeys } from './keys';
+import { CALENDAR_GC_TIME, calendarKeys } from './keys';
 
 export type { VisibleCalendar };
 
@@ -68,6 +68,7 @@ function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
     queryKey: calendarKeys.visibleCalendars._ctx.graphql.queryKey,
     queryFn: () => readCalendarList(host),
     staleTime: Infinity,
+    gcTime: CALENDAR_GC_TIME,
     networkMode: 'offlineFirst' as const,
     enabled,
     placeholderData: keepPreviousData,
@@ -80,6 +81,7 @@ function visibleCalendarsQueryOptions(enabled: boolean) {
     queryKey: calendarKeys.visibleCalendars.queryKey,
     queryFn: listCalendars,
     staleTime: CALENDAR_LIST_STALE_TIME,
+    gcTime: CALENDAR_GC_TIME,
     refetchInterval: outlookCalendarRefetchInterval,
     enabled,
     placeholderData: keepPreviousData,
