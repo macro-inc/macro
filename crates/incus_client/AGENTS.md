@@ -84,7 +84,7 @@ and operation waiting.
 - `exec_attached` connects all four operation websockets (`control`, `0`, `1`,
   `2`) with the API's mTLS identity before Incus starts the program; the secret
   rides in the URL, so never log it. Stdin ends with a close frame; output ends
-  with a close frame (older servers send a text barrier). Dropping `exit`
-  unresolved sends `{"command":"signal","signal":9}` on the control socket.
+  with a close frame (older servers send a text barrier). Dropping the process
+  detaches it: its stdin ends and the control socket closes.
   `exit` waits on the operation as `run_operation` does, so a program outliving
   `operation_waits × operation_wait_secs` reports `OperationTimedOut`.

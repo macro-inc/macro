@@ -249,8 +249,8 @@ async fn attached_exec_bridges_stdin_and_stdout_and_waits_for_the_exit_code() {
 }
 
 #[tokio::test]
-async fn dropping_an_attached_exec_kills_the_program() {
-    let server = exec_operation(137).await;
+async fn dropping_an_attached_exec_ends_the_programs_stdin() {
+    let server = exec_operation(0).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let websocket_base = format!("http://{}", listener.local_addr().unwrap());
     let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new(), timeouts())
@@ -265,10 +265,6 @@ async fn dropping_an_attached_exec_kills_the_program() {
 
     drop(process.unwrap());
 
-    let mut control = sockets.remove("secret-control").unwrap();
-    let signal = control.next().await.unwrap().unwrap();
-    assert_eq!(
-        signal,
-        Message::text("{\"command\":\"signal\",\"signal\":9}")
-    );
+    let mut stdin = sockets.remove("secret-stdin").unwrap();
+    assert_eq!(read_until_close(&mut stdin).await, b"");
 }

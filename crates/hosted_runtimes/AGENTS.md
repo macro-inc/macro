@@ -49,8 +49,8 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   a TTY, as a `GuestProcess` (stdin, stdout, exit code). Stderr is never streamed:
   adapters keep a 4 KiB tail and log it at debug on a non-zero exit. Docker runs
   `docker exec -i -u 1000:1000`; Incus uses `IncusClient::exec_attached`. Dropping
-  the process kills it (Docker `kill_on_drop`, Incus SIGKILL over the control
-  socket). Tests script one with `fakes::scripted_process`.
+  the process kills it on Docker (`kill_on_drop`) and detaches it on Incus (its
+  stdin ends). Tests script one with `fakes::scripted_process`.
 
 ## Rollout
 

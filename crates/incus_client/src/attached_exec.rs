@@ -10,8 +10,7 @@ use std::pin::Pin;
 use futures::{SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, DuplexStream};
 use tokio::net::TcpStream;
-use tokio::sync::oneshot;
-use tokio::task::{AbortHandle, JoinHandle};
+use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
@@ -20,9 +19,6 @@ use crate::generated::types;
 
 /// How much each stdio pipe buffers before its writer waits.
 const PIPE_BYTES: usize = 64 * 1024;
-
-/// What Incus's control websocket takes to deliver SIGKILL.
-const KILL_MESSAGE: &str = r#"{"command":"signal","signal":9}"#;
 
 pub(crate) type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -42,8 +38,8 @@ pub struct ExecCommand {
 }
 
 /// A running guest program. Read `stdout` and `stderr` while awaiting `exit`:
-/// a full pipe holds the program back. Dropping `exit` before it resolves
-/// sends the program SIGKILL.
+/// a full pipe holds the program back. Dropping it detaches the program,
+/// whose stdin then ends.
 pub struct AttachedExec {
     /// The program's stdin; shutting it down closes the program's stdin.
     pub stdin: DuplexStream,
@@ -129,7 +125,8 @@ pub(crate) struct ExecSockets {
 }
 
 /// Pump the sockets to pipes; `exit` waits for the operation, then for
-/// stdout and stderr to reach their pipes.
+/// stdout and stderr to reach their pipes. The control socket stays open
+/// until `exit` resolves or is dropped.
 pub(crate) fn attach(
     sockets: ExecSockets,
     operation: impl Future<Output = Result<i64, IncusError>> + Send + 'static,
@@ -137,26 +134,17 @@ pub(crate) fn attach(
     let (stdin, stdin_source) = tokio::io::duplex(PIPE_BYTES);
     let (stdout_sink, stdout) = tokio::io::duplex(PIPE_BYTES);
     let (stderr_sink, stderr) = tokio::io::duplex(PIPE_BYTES);
-    let (kill, killed) = oneshot::channel();
 
-    let stdin_pump = tokio::spawn(pump_stdin(stdin_source, sockets.stdin));
+    tokio::spawn(pump_stdin(stdin_source, sockets.stdin));
     let stdout_pump = tokio::spawn(pump_output(sockets.stdout, stdout_sink));
     let stderr_pump = tokio::spawn(pump_output(sockets.stderr, stderr_sink));
-    tokio::spawn(hold_control(sockets.control, killed));
 
-    let mut guard = KillOnDrop {
-        kill: Some(kill),
-        pumps: [
-            stdin_pump.abort_handle(),
-            stdout_pump.abort_handle(),
-            stderr_pump.abort_handle(),
-        ],
-    };
+    let control = sockets.control;
     let exit = async move {
         let exit_code = operation.await?;
         drained(stdout_pump, "stdout").await?;
         drained(stderr_pump, "stderr").await?;
-        guard.disarm();
+        drop(control);
         Ok(exit_code)
     };
 
@@ -171,35 +159,6 @@ pub(crate) fn attach(
 async fn drained(pump: JoinHandle<()>, stream: &str) -> Result<(), IncusError> {
     pump.await
         .map_err(|error| IncusError::WebSocket(format!("{stream} pump stopped: {error}")))
-}
-
-/// Sends SIGKILL and stops the pumps unless the program's exit was observed.
-struct KillOnDrop {
-    kill: Option<oneshot::Sender<()>>,
-    pumps: [AbortHandle; 3],
-}
-
-impl KillOnDrop {
-    /// The program ended; dropping the sender closes the control socket.
-    fn disarm(&mut self) {
-        self.kill = None;
-    }
-}
-
-impl Drop for KillOnDrop {
-    fn drop(&mut self) {
-        let Some(kill) = self.kill.take() else {
-            return;
-        };
-
-        // The control task outlives the pumps to deliver the signal.
-        if kill.send(()).is_err() {
-            tracing::debug!("exec control socket closed before the kill");
-        }
-        for pump in &self.pumps {
-            pump.abort();
-        }
-    }
 }
 
 /// Binary frames for stdin; its end is a close frame, which Incus turns into
@@ -246,26 +205,5 @@ async fn pump_output(mut socket: Socket, mut output: DuplexStream) {
 
     if let Err(error) = output.shutdown().await {
         tracing::debug!(%error, "exec output pipe did not shut down");
-    }
-}
-
-/// Hold the control socket open while the program runs, and use it to kill
-/// the program when the caller gives up on it.
-async fn hold_control(socket: Socket, killed: oneshot::Receiver<()>) {
-    let (mut sink, mut stream) = socket.split();
-    let reading = async { while let Some(Ok(_)) = stream.next().await {} };
-
-    tokio::select! {
-        kill = killed => {
-            if kill.is_ok()
-                && let Err(error) = sink.send(Message::text(KILL_MESSAGE)).await
-            {
-                tracing::debug!(%error, "could not send the exec kill signal");
-            }
-            if let Err(error) = sink.close().await {
-                tracing::debug!(%error, "exec control websocket did not close cleanly");
-            }
-        }
-        () = reading => {}
     }
 }
