@@ -130,9 +130,10 @@ impl EditorSession {
         self.machine.input(msg, now, wall).map_err(js)
     }
     /// Copy pending output; no borrowed linear-memory view escapes.
+    /// Observation validation failure preserves queued output and returns an error.
     #[wasm_bindgen(js_name=takeOutput)]
-    pub fn take_output(&mut self) -> Vec<u8> {
-        self.machine.take_output()
+    pub fn take_output(&mut self) -> Result<Vec<u8>, JsError> {
+        self.machine.take_output().map_err(js)
     }
     /// Retire the detached synchronous view's component observation baseline.
     /// Queued output and durable session state remain owned by the executor.
