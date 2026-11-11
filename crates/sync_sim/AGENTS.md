@@ -324,3 +324,10 @@ and successful peer mapping. Prior rows and initialized snapshots may cover
 duplicates; current rows still require their own completion. Both ACK and gate
 queries reject missing, late, wrong-document/callback/generation physical proof
 even when logical ServerDurable remains. Preserve every strict negative control.
+
+Evaluate presence expiry against the receiver's actual Opened epoch at the source
+fault, including its document, profile and issued session. End that obligation on
+terminal Closed status, matching session Close, crash or a new Opened; Read,
+Offline and Disconnected remain live. Do not use final alive/document diagnostics
+to forgive earlier stale presence. After suspension, observe the actual thaw and
+exclude later epochs by event index even when timestamps are equal.

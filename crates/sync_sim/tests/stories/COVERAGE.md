@@ -233,3 +233,11 @@ activation modes. The core
 when actual server history arrives, including duplicate history and a failed
 ordinary reset in between. It checks throttling, no idle retry loop, unchanged
 private WAL bytes, ReadOnly parking and delivery after write regrant.
+
+Terminal receiver expiry: exact minimized seed0 and full seed17535402420735726510
+retain all invariant and deterministic replay checks in both writer activation
+modes. Mutation controls require
+expiry for live Read/Offline/Disconnected receivers, reject late/wrong receiver
+or wrong-session termination and future document changes, and distinguish the
+old thawed epoch from a same-millisecond reopen. Synthetic clearing controls do
+not claim a real thaw-tick execution.

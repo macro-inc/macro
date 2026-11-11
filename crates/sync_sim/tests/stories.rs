@@ -113,3 +113,9 @@ mod resolved_pending;
 
 #[path = "stories/private_history.rs"]
 mod private_history;
+
+#[path = "stories/terminal_presence.rs"]
+mod terminal_presence;
+
+#[path = "stories/terminal_presence_full.rs"]
+mod terminal_presence_full;

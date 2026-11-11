@@ -161,8 +161,8 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
                 })
                 .unwrap_or_else(|| peer.to_string())
         };
-        for (target, client) in &outcome.finals.clients {
-            if target == source || !client.alive || client.doc != doc {
+        for target in outcome.finals.clients.keys() {
+            if target == source {
                 continue;
             }
             // Expiry belongs to the receiver epoch that actually observed the
@@ -173,13 +173,40 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
             ) else {
                 continue;
             };
-            if outcome.events[receiver_open..index].iter().any(|event|
-                matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client, .. } if client == target)) { continue; }
-            // A network-only partition does not disconnect BroadcastChannel peers.
-            if matches!(event.fact, Fact::Partition { .. }) && client.profile == *source_profile {
+            let Fact::Opened {
+                session: receiver_session,
+                profile: receiver_profile,
+                doc: receiver_doc,
+                ..
+            } = &outcome.events[receiver_open].fact
+            else {
+                unreachable!("receiver_open points to Opened")
+            };
+            if *receiver_doc != doc
+                || outcome.events[receiver_open..index]
+                    .iter()
+                    .any(|event| receiver_stopped(&event.fact, target, *receiver_session))
+            {
                 continue;
             }
-            if outcome.events.iter().skip(index + 1).any(|event| event.at.0 <= deadline && matches!(&event.fact, Fact::Crashed { client } | Fact::Closed { client, .. } if client == target)) { continue }
+            // A network-only partition does not disconnect BroadcastChannel peers.
+            if partition && receiver_profile == source_profile {
+                continue;
+            }
+            let ends_epoch = |fact: &Fact| {
+                receiver_stopped(fact, target, *receiver_session)
+                    || matches!(fact, Fact::Opened { client, .. } if client == target)
+            };
+            // Eligibility belongs to this incarnation at its deadline, never
+            // the final diagnostic state after later crashes or document changes.
+            if outcome
+                .events
+                .iter()
+                .skip(index + 1)
+                .any(|event| event.at.0 <= deadline && ends_epoch(&event.fact))
+            {
+                continue;
+            }
             let before = outcome
                 .events
                 .iter()
@@ -199,6 +226,7 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
             let frozen = outcome
                 .events
                 .iter()
+                .skip(receiver_open)
                 .take_while(|event| event.at.0 <= deadline)
                 .filter_map(|event| match &event.fact {
                     Fact::Frozen { client } if client == target => Some(true),
@@ -209,18 +237,29 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
                 })
                 .last()
                 .unwrap_or(false);
-            let receiver_deadline = if frozen {
-                match outcome.events.iter().find(|event| event.at.0 > deadline && matches!(&event.fact,
-                    Fact::Thawed { client } | Fact::Opened { client, .. } | Fact::Crashed { client } | Fact::Closed { client, .. }
-                    if client == target)) {
+            let receiver_deadline =
+                if frozen {
+                    match outcome.events.iter().find(|event| {
+                    event.at.0 > deadline
+                        && (ends_epoch(&event.fact)
+                            || matches!(&event.fact, Fact::Thawed { client } if client == target))
+                }) {
                     Some(Event { at, fact: Fact::Thawed { .. } }) => at.0,
                     _ => continue,
                 }
-            } else {
-                deadline
-            };
-            let at_deadline = outcome
+                } else {
+                    deadline
+                };
+            // Event order matters when thaw and a later reopen share a clock
+            // value. A fresh incarnation's empty view cannot clear this debt.
+            let epoch_end = outcome
                 .events
+                .iter()
+                .enumerate()
+                .skip(index + 1)
+                .find_map(|(end, event)| ends_epoch(&event.fact).then_some(end))
+                .unwrap_or(outcome.events.len());
+            let at_deadline = outcome.events[receiver_open..epoch_end]
                 .iter()
                 .rev()
                 .find_map(|event| match &event.fact {
@@ -242,4 +281,24 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
         }
     }
     Ok(())
+}
+
+// Status does not carry a session id, so callers constrain it to the receiver's
+// Opened epoch. Explicit Close must additionally match the issued session.
+fn receiver_stopped(fact: &Fact, target: &ClientName, session: doc_sync_core::SessionId) -> bool {
+    match fact {
+        Fact::Crashed { client } => client == target,
+        Fact::Closed {
+            client,
+            session: closed,
+        } => client == target && *closed == session,
+        Fact::Status { client, status } => {
+            client == target
+                && matches!(
+                    status.connection,
+                    doc_sync_core::ConnectionStatus::Closed(_)
+                )
+        }
+        _ => false,
+    }
 }
