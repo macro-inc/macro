@@ -22,7 +22,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
+import { type ImageHost, useImageHost } from '../../decorator-host/image-host';
 import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
 import { getMediaUrl } from '../../plugins/media';
 import { MediaButtons } from './MediaButtons';
@@ -30,6 +30,15 @@ import { MediaLoadingPlaceholder } from './MediaLoadingPlaceholder';
 import { ResizeHandle } from './ResizeHandle';
 
 type ImageState = 'loading' | 'ok' | 'error';
+
+export type MarkdownImageProps = Omit<
+  ImageDecoratorProps,
+  'constrainedWidth' | 'constrainedHeight'
+> & {
+  constrainedWidth?: number | null;
+  constrainedHeight?: number | null;
+  host?: ImageHost;
+};
 
 const ImageErrors = {
   UNAUTHORIZED: 'You do not have access to this image.',
@@ -47,11 +56,11 @@ function Spinner() {
   );
 }
 
-export function MarkdownImage(props: ImageDecoratorProps) {
+export function MarkdownImage(props: MarkdownImageProps) {
   let imageRef!: HTMLImageElement;
   let containerRef!: HTMLDivElement;
 
-  const host = useDecoratorHost();
+  const host = useImageHost(props.host);
   const interactable = host.isInteractable;
 
   const [viewerOpen, setViewerOpen] = createSignal(false);

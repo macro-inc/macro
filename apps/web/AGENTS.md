@@ -109,6 +109,7 @@ adapter tests separately check file types, access failures, and split selection.
 Keep shared mention, image, equation and horizontal-rule components on
 `DecoratorHost`; preserve the source host's command order, transaction boundaries
 and cached media props.
+Bind image actions to the mounted node generation and decorator revision, and source upload notifications from the real upload owner.
 Equation decorators request selection and equation capabilities. Preserve retained menu callbacks after local editability changes and route updates through ordinary SessionEdit admission.
 Establish a real Source decorator host before StaticMarkdown builds its eager
 DOM tree; preserve its inherited Lexical wrapper instead of native host keys.

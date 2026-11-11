@@ -17,6 +17,8 @@ and backend document transformations.
 Keep runtime code independent of the web app and browser-only modules. The web
 composer imports the URL matcher from this package; do not duplicate it.
 
+Keep stored null image constraints intact at the UI boundary. The dimension helper treats them as absent.
+
 ## Checks
 
 - From `apps/web`: `bun run test --project lexical-core`.
