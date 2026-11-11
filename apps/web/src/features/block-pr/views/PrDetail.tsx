@@ -1,6 +1,7 @@
 import { ViewShell } from '@app/components/view-shell';
 import { ChangesSplit, ChangesToggle } from '@app/features/changes/changes';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
+import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
@@ -16,6 +17,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
 import IconShared from '@icon/share.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import IconLink from '@icon/system/regular/link.svg';
 import { NotificationReadMarker } from '@notifications';
 import {
@@ -351,14 +353,17 @@ function PrMetadata(props: {
         )}
       </Show>
       <Layer depth={2}>
-        <a
-          href={props.pullRequest?.url}
-          target="_blank"
-          rel="noreferrer"
-          class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
-        >
-          {prDisplayName(props.prRef)}
-        </a>
+        <Tooltip label={t('entityActions.openOnGitHub')}>
+          <a
+            href={props.pullRequest?.url}
+            target="_blank"
+            rel="noreferrer"
+            class={cn(PR_PILL_CLASS, 'text-ink-muted hover:bg-hover')}
+          >
+            {prDisplayName(props.prRef)}
+            <ArrowSquareOut aria-hidden="true" class="size-3.5 shrink-0" />
+          </a>
+        </Tooltip>
       </Layer>
       <Show
         when={
