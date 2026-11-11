@@ -1318,6 +1318,11 @@ Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
 `blockName: "routine"`; the `@` menu offers routines only to their owner in
 channel composers, where picking one shares it as a template.
+Macro `/app` links in agent replies (transcripts and agent channel messages)
+open in a new split like mention chips: `AgentReplyLinks` provides the opener
+that `LinkWithPreview` consults before `openExternalUrl`; keep other surfaces'
+links on `openExternalUrl`. Covered by
+`split-layout/split-router/agent-reply-links.test.tsx`.
 Direct local hosts use port 8101 with the existing feature prefixes; the
 instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
