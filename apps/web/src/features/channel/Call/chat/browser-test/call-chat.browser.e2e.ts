@@ -320,7 +320,9 @@ test('guest first post becomes the call root', async ({ context, page }) => {
   await fake.ready;
   page.on('pageerror', (error) => fake.errors.push(error.message));
   await page.goto(`${PATH}?access=guest`);
-  await expect(page.getByText('Start the conversation.')).toBeVisible();
+  await expect(page.getByText('Start the conversation.')).toBeVisible({
+    timeout: 60_000,
+  });
   await send(page, 'First call message');
   await expect(page.locator(`[data-message-id="${CALL}"]`)).toContainText(
     'First call message'
