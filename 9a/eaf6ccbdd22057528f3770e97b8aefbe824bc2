@@ -1,0 +1,30 @@
+apps/web/src/components/app/tab-layout/tests/tab-hotkeys.test.tsx
+  s_60bbe192a6a060::t_788303bfa113d1 67
+  s_60bbe192a6a060::t_d2286e12ea3a36 64-66,68-74
+Cargo.lock
+  s_60bbe192a6a060::t_5ffdf8c8f6824e 248,1598,1912,1982,2008,4590,4705,8018,8859,10047,10049,10428,11255,14873,15569,16078,16098,16265,16303,16305,17445,17450,17452,17458,17517,20253-20254,21096,21968,21980,22490,22987,23265,23347,23387
+crates/coding_agent_worker/src/tui/agent_catalog/npm_adapter.rs
+  s_60bbe192a6a060::t_1b91a3e81df8f8 132-137,141,154-205
+crates/coding_agent_worker/src/tui/agent_catalog/test.rs
+  s_60bbe192a6a060::t_c43046fa2c23c2 217-257
+crates/coding_agent_worker/src/tui/quickstart/test.rs
+  s_60bbe192a6a060::t_d52cee738cae63 229-269
+crates/coding_agent_worker/src/tui/ui/quickstart.rs
+  s_60bbe192a6a060::t_d576a5c1ce8eb4 5,13-15,34-46,91-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9aeaf6ccbdd22057528f3770e97b8aefbe824bc2",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
