@@ -148,12 +148,14 @@ fn prepend_paragraph(tx: &mut Transaction<'_>) -> Result<(), Error> {
 /// first paragraph at keydown and captures its key; the queued removal then
 /// removes that node if it still exists, without revalidating, outside history.
 fn remove_captured_paragraph(tx: &mut Transaction<'_>, key: NodeKey) -> Result<(), Error> {
+    // Source tags the deferred update historic before looking the node up.
+    tx.add_tag(UpdateTag::Historic);
+    // Detached records are collected between updates, as in Source, so a
+    // captured key that is no longer attached names no node.
     if tx.view().node(key).is_none() || !tx.is_attached(key) {
         return Ok(());
     }
-    tx.remove(key, false)?;
-    tx.add_tag(UpdateTag::Historic);
-    Ok(())
+    tx.remove(key, false)
 }
 
 #[cfg(test)]

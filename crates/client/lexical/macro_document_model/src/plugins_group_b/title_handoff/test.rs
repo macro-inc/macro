@@ -187,7 +187,8 @@ fn remove_captured_paragraph_ignores_a_node_that_is_gone() -> Result<(), Error> 
     editor.update(|tx| tx.remove(captured, false))?;
     let before = editor.state().to_json()?;
     let commit = remove(&mut editor, captured)?;
-    assert!(commit.is_noop());
+    assert!(commit.tags.contains(&UpdateTag::Historic));
+    assert!(commit.changes.mutations.is_empty());
     assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
