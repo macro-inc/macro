@@ -5,8 +5,19 @@ mod controls;
 pub mod input;
 mod keys;
 pub(super) use keys::decode as decode_key;
+mod facts;
 mod resize;
-pub(super) use resize::query;
+pub(super) fn query(
+    name: &str,
+    data: &serde_json::Value,
+    generation: u32,
+    state: &EditorState,
+) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(reply) = facts::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
+    resize::query(name, data, generation, state)
+}
 mod list_grid;
 pub(super) use actions::decode;
 pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {

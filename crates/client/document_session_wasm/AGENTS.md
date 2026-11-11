@@ -286,3 +286,5 @@ AddPeerIds, WAL and Stop remain live under that fault; do not recover by replayi
 a JS updater or initializing the broken session again.
 
 Use query kind 9 for initial/on-demand group-b.checklist-plan reads; retain the pre-decode current-generation fence and do not add per-list steady-edit queries.
+
+Expose group-b.table-facts through ordinary query kind 9 with its existing pre-decode generation fence; use the same shared bulk DTO as native FFI without manufacturing resize measurements or write authority.
