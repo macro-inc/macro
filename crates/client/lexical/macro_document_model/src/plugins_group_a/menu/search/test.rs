@@ -454,6 +454,12 @@ fn trigger_policy_does_not_strengthen_source_range_composition_or_mentions_suffi
         (Kind::Tags, "a", 1, 1, false, false),
         (Kind::Tags, " a", 1, 1, false, false),
         (Kind::Actions, "(", 1, 1, false, false),
+        (Kind::Mentions, "(", 1, 1, false, true),
+        (Kind::Mentions, "x [", 3, 3, false, true),
+        (Kind::Mentions, "'", 1, 1, false, true),
+        (Kind::Mentions, "\"", 1, 1, false, true),
+        (Kind::Mentions, "`", 1, 1, false, false),
+        (Kind::Mentions, ")", 1, 1, false, false),
     ] {
         let mut editor =
             surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)

@@ -29,7 +29,7 @@ impl Kind {
         const BRACKETS_QUOTES: &[char] = &['(', '[', '\'', '"'];
         const CLOSERS_QUOTES: &[char] = &[')', ']', '\'', '"', '`'];
         match self {
-            Self::Mentions => (&[], None),
+            Self::Mentions => (BRACKETS_QUOTES, None),
             Self::Tags => (BRACKETS_QUOTES, Some(CLOSERS_QUOTES)),
             Self::Actions | Self::Emojis | Self::Snippets => (&[], Some(&[])),
         }
