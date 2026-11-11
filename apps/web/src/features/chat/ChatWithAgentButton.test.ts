@@ -233,6 +233,20 @@ describe('Ask Agent with the agent composer', () => {
     expect(mocks.openWithSplit).not.toHaveBeenCalled();
   });
 
+  it('drafts "Continue this chat:" with the old chat mention, unsent', async () => {
+    await openChatWithAgent({ type: 'chat', id: 'chat-id', name: 'Old chat' });
+    expect(mocks.openAgentComposer).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      {
+        draft:
+          'Continue this chat: <m-document-mention>{"documentId":"chat-id","documentName":"Old chat","blockName":"chat","blockParams":{}}</m-document-mention> ',
+        handle: undefined,
+      }
+    );
+    expect(mocks.startPendingSession).not.toHaveBeenCalled();
+  });
+
   it('opens the composer for a channel-message draft', async () => {
     await openChatWithInput('A message reference\n\n');
     expect(mocks.openAgentComposer).toHaveBeenCalledWith(

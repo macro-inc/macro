@@ -26,6 +26,15 @@ const ACTIONS_CLASS =
 export function PendingRequestsSection() {
   const pending = usePendingRuntimeRequests();
   const count = () => pending().incoming.length + pending().outgoing.length;
+  // Every query tick rebuilds the pending objects, so rows are keyed by
+  // request id: a row keyed by object would remount on each refetch, refetch
+  // its own state on mount, and replace its buttons under the pointer.
+  const incomingIds = () => pending().incoming.map(({ request }) => request.id);
+  const outgoingIds = () => pending().outgoing.map(({ request }) => request.id);
+  const incoming = (id: string) =>
+    pending().incoming.find(({ request }) => request.id === id);
+  const outgoing = (id: string) =>
+    pending().outgoing.find(({ request }) => request.id === id);
   return (
     <Show when={count() > 0}>
       <div data-pending-runtime-requests>
@@ -33,11 +42,19 @@ export function PendingRequestsSection() {
           {t('runtimeSharing.pendingRequestsTitle')}
         </h2>
         <SettingsCard>
-          <For each={pending().incoming}>
-            {(pending) => <IncomingRequestRow pending={pending} />}
+          <For each={incomingIds()}>
+            {(id) => (
+              <Show when={incoming(id)}>
+                {(pending) => <IncomingRequestRow pending={pending()} />}
+              </Show>
+            )}
           </For>
-          <For each={pending().outgoing}>
-            {(pending) => <OutgoingRequestRow pending={pending} />}
+          <For each={outgoingIds()}>
+            {(id) => (
+              <Show when={outgoing(id)}>
+                {(pending) => <OutgoingRequestRow pending={pending()} />}
+              </Show>
+            )}
           </For>
         </SettingsCard>
       </div>
