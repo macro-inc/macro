@@ -24,7 +24,7 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by session owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
      * owner.
      */

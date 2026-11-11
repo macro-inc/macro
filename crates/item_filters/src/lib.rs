@@ -494,7 +494,7 @@ pub struct AgentSessionFilters {
     /// Agent session ids to filter by. Empty to include all accessible sessions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ids: Vec<String>,
-    /// Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+    /// Filter by session owner principal — a user ('macro|user@example.com'), a bot
     /// ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
     /// owner.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
