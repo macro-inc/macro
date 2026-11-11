@@ -1,0 +1,21 @@
+apps/web/src/features/channel/Call/discussion/browser-test/overlay.vite.config.ts
+  s_c6a08203850d89::t_b8c2e9bcb7c8b8 53
+  s_c6a08203850d89::t_6a84825cccbdb6 62
+  s_c6a08203850d89::t_eb479a66b10f33 15-20,36-39,54,60-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b87d83e5427fe7c6e5bea9ac3622e019f9bd5129",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
