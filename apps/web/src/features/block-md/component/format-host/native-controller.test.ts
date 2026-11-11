@@ -1,0 +1,395 @@
+/** @vitest-environment jsdom */
+import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
+import { createRoot } from 'solid-js';
+import { expect, test, vi } from 'vitest';
+import { createNativeDocumentFormattingHost } from './native';
+import { createNativeFormattingActions } from './native-actions';
+import { createNativeDocumentLinkMenuHost } from './native-link-host';
+import { createNativeDocumentFormattingObserver } from './native-observer';
+import { mount, select, state } from './native-test-fixture';
+
+test('native formatting UI reads only the latest published fact snapshot', async () => {
+  let controller:
+    | ReturnType<typeof createNativeDocumentFormattingHost>
+    | undefined;
+  let links: ReturnType<typeof createNativeDocumentLinkMenuHost> | undefined;
+  const runtime = mount([
+    {
+      published(view) {
+        controller?.observer.published(view);
+      },
+      unavailable(reason) {
+        controller?.observer.unavailable(reason);
+        links?.retire();
+      },
+      retired() {
+        controller?.observer.retired();
+        links?.retire();
+      },
+    },
+  ]);
+  let dispose = () => {};
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      links = createNativeDocumentLinkMenuHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+      });
+      controller = createNativeDocumentFormattingHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+        links,
+      });
+    });
+    runtime.port.setState(state('Published toolbar text'));
+    select(runtime, 'Published toolbar text');
+    expect(controller?.host.selection()?.bold).toBe(false);
+    const actions = createNativeFormattingActions(
+      runtime.view,
+      () => true,
+      () => true
+    );
+    expect(await actions.text('bold')).toEqual({
+      status: 'success',
+      handled: true,
+    });
+    expect(controller?.host.selection()?.bold).toBe(true);
+    expect([...(controller?.host.selection()?.elementsInRange ?? [])]).toEqual([
+      'paragraph',
+    ]);
+    expect(await actions.block('heading2')).toEqual({
+      status: 'success',
+      handled: true,
+    });
+    expect([...(controller?.host.selection()?.elementsInRange ?? [])]).toEqual([
+      'heading2',
+    ]);
+    runtime.view.dispose();
+    expect(controller?.host.interactable()).toBe(false);
+    expect(controller?.host.selection()).toBeUndefined();
+  } finally {
+    controller?.dispose();
+    links?.dispose();
+    dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('terminal formatting retirement during its real Escape slot leaves native cleanup to the owner fence', async () => {
+  let controller:
+    | ReturnType<typeof createNativeDocumentFormattingHost>
+    | undefined;
+  let links: ReturnType<typeof createNativeDocumentLinkMenuHost> | undefined;
+  const runtime = mount([
+    {
+      published(view) {
+        controller?.observer.published(view);
+      },
+      unavailable(reason) {
+        controller?.observer.unavailable(reason);
+        links?.retire();
+      },
+      retired() {
+        controller?.observer.retired();
+        links?.retire();
+      },
+    },
+  ]);
+  let dispose = () => {};
+  let closing: Promise<void> | undefined;
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      links = createNativeDocumentLinkMenuHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+      });
+      controller = createNativeDocumentFormattingHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+        links,
+      });
+    });
+    runtime.port.setState(state('Terminal toolbar text'));
+    controller?.menu.registerListeners({
+      focusOut() {},
+      transform: () => false,
+      escape() {
+        closing = runtime.close();
+        expect(controller?.host.interactable()).toBe(false);
+        return true;
+      },
+    });
+    expect(runtime.port.nativeEscape?.dispatch()).toBe(true);
+    if (!closing)
+      throw new Error('Actual native Escape did not close its owner');
+    await closing;
+    expect(controller?.host.selection()).toBeUndefined();
+    expect(() => runtime.executor.session.effectiveAccess()).toThrow();
+  } finally {
+    controller?.dispose();
+    links?.dispose();
+    dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+for (const end of ['component', 'view']) {
+  test(`formatting owner bridge waits for publication and retires both ports on ${end} disposal`, async () => {
+    let bridge:
+      | ReturnType<typeof createNativeDocumentFormattingObserver>
+      | undefined;
+    const runtime = mount([
+      {
+        published(view) {
+          bridge?.observer.published(view);
+        },
+        unavailable(reason) {
+          bridge?.observer.unavailable(reason);
+        },
+        retired() {
+          bridge?.observer.retired();
+        },
+      },
+    ]);
+    let dispose = () => {};
+    try {
+      createRoot((stop) => {
+        dispose = stop;
+        bridge = createNativeDocumentFormattingObserver({
+          canEdit: () => true,
+          alive: () => true,
+        });
+      });
+      expect(bridge?.controller()).toBeUndefined();
+      expect(bridge?.links()).toBeUndefined();
+      runtime.port.setState(state('Real bridge publication'));
+      select(runtime, 'Real bridge publication');
+      expect(bridge?.controller()?.host.selection()?.bold).toBe(false);
+      expect(bridge?.links()?.isEditable()).toBe(true);
+      if (end === 'component') dispose();
+      else runtime.view.dispose();
+      expect(bridge?.controller()).toBeUndefined();
+      expect(bridge?.links()).toBeUndefined();
+    } finally {
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}
+
+test('failed initial formatting query releases partial UI listeners without publishing a host', async () => {
+  let bridge:
+    | ReturnType<typeof createNativeDocumentFormattingObserver>
+    | undefined;
+  const runtime = mount([
+    {
+      published(view) {
+        bridge?.observer.published(view);
+      },
+      unavailable(reason) {
+        bridge?.observer.unavailable(reason);
+      },
+      retired() {
+        bridge?.observer.retired();
+      },
+    },
+  ]);
+  const remove = vi.spyOn(runtime.root, 'removeEventListener');
+  const cause = { kind: 'injected query transport failure' };
+  const query = vi.spyOn(runtime.port, 'query').mockImplementationOnce(() => {
+    throw cause;
+  });
+  let dispose = () => {};
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      bridge = createNativeDocumentFormattingObserver({
+        canEdit: () => true,
+        alive: () => true,
+      });
+    });
+    runtime.port.setState(state('Native publication remains valid'));
+    expect(runtime.root.textContent).toBe('Native publication remains valid');
+    expect(bridge?.controller()).toBeUndefined();
+    expect(bridge?.links()).toBeUndefined();
+    expect(
+      remove.mock.calls.filter(([name]) => name === 'focusin')
+    ).toHaveLength(1);
+    expect(
+      remove.mock.calls.filter(([name]) => name === 'focusout')
+    ).toHaveLength(1);
+  } finally {
+    query.mockRestore();
+    remove.mockRestore();
+    dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('ordinary formatting component disposal inside another owner callback removes the real slot and keeps its view live', async () => {
+  let controller:
+    | ReturnType<typeof createNativeDocumentFormattingHost>
+    | undefined;
+  let links: ReturnType<typeof createNativeDocumentLinkMenuHost> | undefined;
+  const first = mount([
+    {
+      published(view) {
+        controller?.observer.published(view);
+      },
+      unavailable(reason) {
+        controller?.observer.unavailable(reason);
+        links?.retire();
+      },
+      retired() {
+        controller?.observer.retired();
+        links?.retire();
+      },
+    },
+  ]);
+  const second = mount();
+  let dispose = () => {};
+  let callbacks = 0;
+  try {
+    createRoot((stop) => {
+      dispose = stop;
+      links = createNativeDocumentLinkMenuHost(first.view, {
+        canEdit: () => true,
+        alive: () => true,
+      });
+      controller = createNativeDocumentFormattingHost(first.view, {
+        canEdit: () => true,
+        alive: () => true,
+        links,
+      });
+    });
+    first.port.setState(state('Live component owner'));
+    controller?.menu.registerListeners({
+      focusOut() {},
+      transform: () => false,
+      escape() {
+        callbacks++;
+        return true;
+      },
+    });
+    const command = createViewCommand(
+      'Key(Escape)',
+      (value): value is KeyboardEvent | null =>
+        value === null || value instanceof KeyboardEvent
+    );
+    second.view.registerViewCommand(
+      command,
+      () => {
+        controller?.dispose();
+        links?.dispose();
+        return true;
+      },
+      3
+    );
+    expect(second.port.nativeEscape?.dispatch()).toBe(true);
+    expect(first.port.nativeEscape?.dispatch()).toBe(false);
+    expect(callbacks).toBe(0);
+    first.port.setState(state('Still live after UI disposal'));
+    expect(first.root.textContent).toBe('Still live after UI disposal');
+    expect(controller?.host.selection()).toBeUndefined();
+  } finally {
+    controller?.dispose();
+    links?.dispose();
+    dispose();
+    await second.close();
+    await first.close();
+    second.root.remove();
+    first.root.remove();
+  }
+});
+
+test('the actual no-command binding cannot advertise native link menu capability', async () => {
+  const runtime = mount(undefined, false);
+  try {
+    expect(() =>
+      createNativeDocumentLinkMenuHost(runtime.view, {
+        canEdit: () => true,
+        alive: () => true,
+      })
+    ).toThrow('Native link menus require ordered Enter and Escape ports');
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('real key registration failure preserves its opaque cause when cleanup also throws', async () => {
+  const runtime = mount();
+  const primary = undefined;
+  const secondary = { kind: 'injected Escape unregister failure' };
+  const register = vi
+    .spyOn(runtime.executor.session, 'registerViewEnter')
+    .mockImplementationOnce(() => {
+      throw primary;
+    });
+  const unregister = vi
+    .spyOn(runtime.executor.session, 'unregisterViewEscape')
+    .mockImplementationOnce(() => {
+      throw secondary;
+    });
+  const links = createNativeDocumentLinkMenuHost(runtime.view, {
+    canEdit: () => true,
+    alive: () => true,
+  });
+  try {
+    let thrown: { error: unknown } | undefined;
+    try {
+      links.registerKeys({ escape: () => false, enter: () => false });
+    } catch (error) {
+      thrown = { error };
+    }
+    expect(thrown).toEqual({ error: primary });
+    expect(unregister).toHaveBeenCalledTimes(1);
+  } finally {
+    register.mockRestore();
+    unregister.mockRestore();
+    links.dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('real key cleanup attempts both registrations after the first unregister fails', async () => {
+  const runtime = mount();
+  const cause = undefined;
+  const links = createNativeDocumentLinkMenuHost(runtime.view, {
+    canEdit: () => true,
+    alive: () => true,
+  });
+  const cleanup = links.registerKeys({
+    escape: () => false,
+    enter: () => false,
+  });
+  const first = vi
+    .spyOn(runtime.executor.session, 'unregisterViewEnter')
+    .mockImplementationOnce(() => {
+      throw cause;
+    });
+  const second = vi.spyOn(runtime.executor.session, 'unregisterViewEscape');
+  try {
+    let thrown: { error: unknown } | undefined;
+    try {
+      cleanup();
+    } catch (error) {
+      thrown = { error };
+    }
+    expect(thrown).toEqual({ error: cause });
+    expect(second).toHaveBeenCalledTimes(1);
+  } finally {
+    first.mockRestore();
+    second.mockRestore();
+    links.dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});

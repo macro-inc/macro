@@ -1,0 +1,34 @@
+import type { FormattingSelection } from '@core/component/LexicalMarkdown/editing/overlay-hosts/format';
+import type { NodeTransformType } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
+import type { TextFormatType } from 'lexical';
+import type { Accessor } from 'solid-js';
+
+export type { FormattingSelection } from '@core/component/LexicalMarkdown/editing/overlay-hosts/format';
+
+/** An installed capability, not inferred from the presence of table nodes. */
+export interface FormattingTableHost {
+  readonly canMerge: Accessor<boolean>;
+  readonly canSplit: Accessor<boolean>;
+  merge(): void;
+  split(): void;
+  insert(rows: number, columns: number): void;
+  readonly canConvertList: Accessor<boolean>;
+  convertList(after: (handled: boolean) => void): void;
+}
+
+/** The actual document body supplies these operations and owns their lifetime. */
+export interface DocumentFormattingHost {
+  readonly selection: Accessor<FormattingSelection | undefined>;
+  readonly focused: Accessor<boolean>;
+  readonly editable: Accessor<boolean>;
+  readonly interactable: Accessor<boolean>;
+  readonly root: Accessor<HTMLElement | null>;
+  readonly tables?: FormattingTableHost;
+  focus(): void;
+  formatText(format: TextFormatType): void;
+  formatBlock(format: NodeTransformType): void;
+  requestLink(): void;
+  unlink(): void;
+  insertEquation?(): void;
+  insertDivider?(): void;
+}

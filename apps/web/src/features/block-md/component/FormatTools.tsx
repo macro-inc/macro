@@ -2,7 +2,6 @@ import {
   INSERT_HORIZONTAL_RULE_COMMAND,
   NODE_TRANSFORM,
   type NodeTransformType,
-  type SelectionData,
   TRY_INSERT_EQUATION_COMMAND,
   TRY_INSERT_LINK_COMMAND,
   UNLINK_COMMAND,
@@ -83,6 +82,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { CommentButton } from './CommentButton';
+import type {
+  DocumentFormattingHost,
+  FormattingSelection,
+} from './format-host/types';
 import { MediaSelector } from './MediaSelector';
 import { TableInsert } from './TableInsert';
 
@@ -197,28 +200,28 @@ const InlineLabels: Record<InlineFormat, string> = {
 } as const;
 
 const isInlineFormatActive = (
-  selection: SelectionData | undefined,
+  selection: FormattingSelection | undefined,
   format: InlineFormat
 ) => !!selection?.[format];
 
 const hasActiveInlineFormat = (
-  selection: SelectionData | undefined,
+  selection: FormattingSelection | undefined,
   formats: InlineFormat[]
 ) => formats.some((format) => isInlineFormatActive(selection, format));
 
 const isElementFormatActive = (
-  selection: SelectionData | undefined,
+  selection: FormattingSelection | undefined,
   format: ElementName
 ) => !!selection?.elementsInRange?.has(format);
 
 const hasActiveElementFormat = (
-  selection: SelectionData | undefined,
+  selection: FormattingSelection | undefined,
   formats: ElementName[]
 ) => formats.some((format) => isElementFormatActive(selection, format));
 
 const InlineFormatButton = (props: {
   format: InlineFormat;
-  selection: () => SelectionData | undefined;
+  selection: () => FormattingSelection | undefined;
   onClick: (e: MouseEvent) => void;
   buttonIsDisabled: Accessor<boolean>;
   size?: ButtonSize;
@@ -246,7 +249,7 @@ const InlineFormatButton = (props: {
 
 const InlineFormatMenuItem = (props: {
   format: InlineFormat;
-  selection: () => SelectionData | undefined;
+  selection: () => FormattingSelection | undefined;
   onClick: () => void;
   buttonIsDisabled: Accessor<boolean>;
 }) => {
@@ -272,7 +275,7 @@ const InlineFormatMenuItem = (props: {
 
 export const ElementFormatButton = (props: {
   format: ElementName;
-  selection: () => SelectionData | undefined;
+  selection: () => FormattingSelection | undefined;
   onClick: (e: MouseEvent) => void;
   buttonIsDisabled: Accessor<boolean>;
   size?: ButtonSize;
@@ -301,7 +304,7 @@ export const ElementFormatButton = (props: {
 const ElementFormatMenuItem = (
   props: ParentProps<{
     format: ElementName;
-    selection: () => SelectionData | undefined;
+    selection: () => FormattingSelection | undefined;
     onClick: () => void;
     useIcon?: boolean;
     useStyle?: boolean;
@@ -344,17 +347,26 @@ const ElementFormatMenuItem = (
   );
 };
 
-export function FormatTools(props: {
-  withinPopup?: boolean;
+type FormatToolsProps = {
   size?: ButtonSize;
   onRequestLink?: () => void;
-}) {
+} & (
+  | { withinPopup?: boolean; formattingHost?: undefined }
+  | { withinPopup: true; formattingHost: DocumentFormattingHost }
+);
+
+export function FormatTools(props: FormatToolsProps) {
   const { permissions, state } = useMarkdownDocument();
   const { md: mdData, error: editorError } = state.editor;
   const buttonSize = () => props.size ?? 'icon-sm';
   const editor = () => mdData.editor;
   const titleEditor = () => mdData.titleEditor;
-  const selection = () => mdData.selection;
+  const host = () => props.formattingHost;
+  const selection = () => (host() ? host()?.selection() : mdData.selection);
+  const canMerge = () =>
+    host() ? host()?.tables?.canMerge() : mdData.selection?.onMergableCells;
+  const canSplit = () =>
+    host() ? host()?.tables?.canSplit() : mdData.selection?.onSplittableCells;
   const { isGenerating, generatedAndWaiting } = state.generation;
 
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);
@@ -367,6 +379,7 @@ export function FormatTools(props: {
 
   const editAccess = permissions.canEdit;
   const canEdit = () => editAccess();
+  const bodyEditable = () => host()?.editable() ?? true;
 
   const canComment = ENABLE_MARKDOWN_COMMENTS
     ? permissions.canComment
@@ -375,6 +388,7 @@ export function FormatTools(props: {
   const buttonIsDisabled = createMemo(() => {
     return !(
       canEdit() &&
+      bodyEditable() &&
       !isGenerating() &&
       !generatedAndWaiting() &&
       editorError() === null
@@ -394,6 +408,12 @@ export function FormatTools(props: {
     e?.preventDefault();
     e?.stopPropagation();
 
+    const formatting = host();
+    if (formatting) {
+      if (selection()?.hasLinks) formatting.unlink();
+      else formatting.requestLink();
+      return;
+    }
     const currentEditor = editor();
     if (currentEditor === undefined) return;
     if (selection()?.hasLinks) {
@@ -407,12 +427,16 @@ export function FormatTools(props: {
   }
 
   function handleInsertEquation() {
+    const formatting = host();
+    if (formatting) return formatting.insertEquation?.();
     const currentEditor = editor();
     if (currentEditor === undefined) return;
     currentEditor.dispatchCommand(TRY_INSERT_EQUATION_COMMAND, undefined);
   }
 
   function handleMergeCells() {
+    const formatting = host();
+    if (formatting) return formatting.tables?.merge();
     editor()?.update(() => {
       const lexicalSelection = $getSelection();
       if (!$isTableSelection(lexicalSelection)) return;
@@ -421,6 +445,8 @@ export function FormatTools(props: {
   }
 
   function handleSplitCell() {
+    const formatting = host();
+    if (formatting) return formatting.tables?.split();
     editor()?.update(() => $unmergeCell());
   }
 
@@ -460,6 +486,11 @@ export function FormatTools(props: {
   });
 
   function inlineFormat(format: TextFormatType): void {
+    const formatting = host();
+    if (formatting) {
+      formatting.formatText(format);
+      return;
+    }
     if (
       editorHasFocus() ||
       lastFocusedEditor() === editor() ||
@@ -470,6 +501,13 @@ export function FormatTools(props: {
   }
 
   function nodeFormat(transform: NodeTransformType): void {
+    const formatting = host();
+    if (formatting) {
+      formatting.formatBlock(
+        selection()?.elementsInRange.has(transform) ? 'paragraph' : transform
+      );
+      return;
+    }
     if (
       editorHasFocus() ||
       lastFocusedEditor() === editor() ||
@@ -900,7 +938,7 @@ export function FormatTools(props: {
           <MoreInlineDropdown />
           <Toolbar.Divider />
           <TextBlockDropdown />
-          <Show when={selection()?.onMergableCells}>
+          <Show when={canMerge()}>
             <Button
               variant="ghost"
               size={buttonSize()}
@@ -911,7 +949,7 @@ export function FormatTools(props: {
               <CornersIn class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
-          <Show when={selection()?.onSplittableCells}>
+          <Show when={canSplit()}>
             <Button
               variant="ghost"
               size={buttonSize()}
@@ -1052,8 +1090,10 @@ export function FormatTools(props: {
                 class="size-4"
               />
             </Button>
-            <MediaSelector buttonIsDisabled={buttonIsDisabled} />
-            <Show when={ENABLE_MARKDOWN_COMMENTS}>
+            <Show when={!host()}>
+              <MediaSelector buttonIsDisabled={buttonIsDisabled} />
+            </Show>
+            <Show when={ENABLE_MARKDOWN_COMMENTS && !host()}>
               <CommentButton
                 onClick={handleInsertComment}
                 disabled={commentButtonIsDisabled()}
@@ -1092,43 +1132,53 @@ export function FormatTools(props: {
                     </Dropdown.Item>
                   </Dropdown.Group>
                   <Dropdown.Group>
-                    <Dropdown.Item
-                      onSelect={() => {
-                        setMoreOptionsOpen(false);
-                        editor()?.dispatchCommand(
-                          INSERT_HORIZONTAL_RULE_COMMAND,
-                          undefined
-                        );
-                      }}
-                      disabled={buttonIsDisabled()}
-                    >
-                      <Minus class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Divider</span>
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      onSelect={() => {
-                        setMoreOptionsOpen(false);
-                        handleInsertEquation();
-                      }}
-                      disabled={buttonIsDisabled()}
-                    >
-                      <MathIcon class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Equation</span>
-                    </Dropdown.Item>
-                    <Dropdown.Sub>
-                      <Dropdown.SubTrigger disabled={buttonIsDisabled()}>
-                        <Grid class="size-4 shrink-0" />
-                        <span class="flex-1 truncate">Table</span>
-                        <CaretRight class="size-3.5" />
-                      </Dropdown.SubTrigger>
-                      <Dropdown.SubContent>
-                        <Dropdown.Group>
-                          <TableInsert
-                            onMenuClose={() => setMoreOptionsOpen(false)}
-                          />
-                        </Dropdown.Group>
-                      </Dropdown.SubContent>
-                    </Dropdown.Sub>
+                    <Show when={!host() || host()?.insertDivider}>
+                      <Dropdown.Item
+                        onSelect={() => {
+                          setMoreOptionsOpen(false);
+                          const formatting = host();
+                          if (formatting) formatting.insertDivider?.();
+                          else
+                            editor()?.dispatchCommand(
+                              INSERT_HORIZONTAL_RULE_COMMAND,
+                              undefined
+                            );
+                        }}
+                        disabled={buttonIsDisabled()}
+                      >
+                        <Minus class="size-4 shrink-0" />
+                        <span class="flex-1 truncate">Divider</span>
+                      </Dropdown.Item>
+                    </Show>
+                    <Show when={!host() || host()?.insertEquation}>
+                      <Dropdown.Item
+                        onSelect={() => {
+                          setMoreOptionsOpen(false);
+                          handleInsertEquation();
+                        }}
+                        disabled={buttonIsDisabled()}
+                      >
+                        <MathIcon class="size-4 shrink-0" />
+                        <span class="flex-1 truncate">Equation</span>
+                      </Dropdown.Item>
+                    </Show>
+                    <Show when={!host() || host()?.tables}>
+                      <Dropdown.Sub>
+                        <Dropdown.SubTrigger disabled={buttonIsDisabled()}>
+                          <Grid class="size-4 shrink-0" />
+                          <span class="flex-1 truncate">Table</span>
+                          <CaretRight class="size-3.5" />
+                        </Dropdown.SubTrigger>
+                        <Dropdown.SubContent>
+                          <Dropdown.Group>
+                            <TableInsert
+                              onMenuClose={() => setMoreOptionsOpen(false)}
+                              onInsert={host()?.tables?.insert}
+                            />
+                          </Dropdown.Group>
+                        </Dropdown.SubContent>
+                      </Dropdown.Sub>
+                    </Show>
                   </Dropdown.Group>
                 </Dropdown.Content>
               </Show>
