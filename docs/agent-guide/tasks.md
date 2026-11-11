@@ -1202,7 +1202,7 @@ its target again.
 ## Bulk delete
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
-then confirm **Delete**. The dialog opens with Delete focused, so Enter confirms
+then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms
 and Escape cancels. With GraphQL Soup enabled, selected rows disappear while
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
