@@ -53,7 +53,9 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment. The shown row and stacked
+notification's message, thread, or comment. A conversation's composer takes
+focus, and Esc returns to the row; see
+[composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.

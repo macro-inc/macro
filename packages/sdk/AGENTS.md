@@ -42,6 +42,9 @@ enforced by the ordinary backend APIs.
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
   route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `harnesses.directory()` lists teammates' hosts and `Harness.requestAccess()`
+  asks for one. Granting takes the owner's own session, so the server refuses
+  `Harness.access.grant` and `resolve` from any SDK credential.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
@@ -70,6 +73,9 @@ enforced by the ordinary backend APIs.
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
+- `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
+  `/saved_views/definitions` routes; `edit` and `remove` send the revision the
+  handle last saw, and keep the response's record so chained writes stay guarded.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
@@ -83,7 +89,12 @@ enforced by the ordinary backend APIs.
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
   picture; `macro.me.uploadProfilePicture()` stores the image through the auth
-  service, because static file storage does not accept API keys. `team.invite(emails, { agent: true })`
+  service, because static file storage does not accept API keys. `update` takes a
+  `StaticImage`; `macro.images.byId(savedId)` rebuilds one to switch back without
+  re-uploading. `me.profilePicture()`, `User.profilePicture()`
+  and `users.profilePictures()` read `POST /user/profile_pictures`, returning a
+  `StaticImage` for static file URLs (path `/file/<uuid>`, any public base) and an
+  `ExternalProfilePicture` (`{ url }`) for legacy ones (`users/profile-picture.ts`). `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
@@ -155,6 +166,12 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
+- Every public method carries one MCP hint tag (`@readonly`, `@write` or
+  `@destructive`, plus `@openworld`/`@idempotent` when true) or
+  `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
+  by them and fails on an untagged method. A new or changed public method
+  signature or hint tag updates that package's tool snapshots (`bunx vitest
+  run -u` there); doc text alone does not.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public

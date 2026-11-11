@@ -184,6 +184,7 @@ fn concurrent_steps_never_leave_a_half_written_record() {
         path: path.clone(),
         record: Mutex::new(JobRecord::new(JobKind::Up, None)),
         lock: Mutex::new(None),
+        telemetry: Mutex::new(None),
     });
     job.save();
 

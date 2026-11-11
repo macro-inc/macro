@@ -45,7 +45,12 @@ export interface InboxOptions {
  * - For a prompt from a channel or document thread, where no card is seen: write the whole email into your reply, ask whether to send it, and stop. Only once the user replies approving that email, send it with their reply quoted in `userConfirmation`: `sendConfirmed` for a new email or a reply, `EmailMessage.forwardConfirmed` for a forward, `EmailDraft.send` or `EmailDraft.schedule` for a saved draft. Being asked to send an email is a request to draft one, never the approval.
  */
 export class EmailNamespace {
-  /** Create a draft without sending it; the inbox defaults to the caller's primary. */
+  /**
+   * Create a draft without sending it; the inbox defaults to the caller's primary.
+   *
+   * @write
+   * @openworld
+   */
   async createDraft(options: DraftOptions, inbox?: Link): Promise<EmailDraft> {
     const result = unwrap(
       await this.client.email.createDraft({
@@ -58,12 +63,20 @@ export class EmailNamespace {
     return EmailDraft.byId(this.client, result.draft.db_id);
   }
 
-  /** Construct a lazy draft handle. */
+  /**
+   * Construct a lazy draft handle.
+   *
+   * @readonly
+   */
   draftById(id: string): EmailDraft {
     return EmailDraft.byId(this.client, id);
   }
 
-  /** Scheduled drafts, fetched lazily in bounded pages. */
+  /**
+   * Scheduled drafts, fetched lazily in bounded pages.
+   *
+   * @readonly
+   */
   async *scheduled(options?: {
     pageSize?: number;
     inbox?: Link;
@@ -87,7 +100,11 @@ export class EmailNamespace {
     }
   }
 
-  /** Importance filters. */
+  /**
+   * Importance filters.
+   *
+   * @readonly
+   */
   async filters(inbox?: Link): Promise<EmailFilter[]> {
     return unwrap(
       await this.client.email.listEmailFilters({
@@ -96,7 +113,12 @@ export class EmailNamespace {
     ).filters.map((f) => EmailFilter.from(this.client, f, inbox));
   }
 
-  /** Create or replace a filter matching an address or domain. */
+  /**
+   * Create or replace a filter matching an address or domain.
+   *
+   * @write
+   * @idempotent
+   */
   async upsertFilter(
     options: EmailFilterOptions,
     inbox?: Link,
@@ -117,12 +139,20 @@ export class EmailNamespace {
     );
   }
 
-  /** Address book contacts grouped by the service's interaction buckets. */
+  /**
+   * Address book contacts grouped by the service's interaction buckets.
+   *
+   * @readonly
+   */
   async contacts() {
     return unwrap(await this.client.email.listContacts()).contacts;
   }
 
-  /** Follow-up reminders with thread handles, automatically paginated. */
+  /**
+   * Follow-up reminders with thread handles, automatically paginated.
+   *
+   * @readonly
+   */
   reminders(
     options?: Omit<
       NonNullable<ListEmailRemindersData['query']>,
@@ -153,33 +183,58 @@ export class EmailNamespace {
     return EmailThread.byId(this.client, id);
   }
 
-  /** A handle to an email message by id. */
+  /**
+   * A handle to an email message by id.
+   *
+   * @readonly
+   */
   message(id: string): EmailMessage {
     return EmailMessage.byId(this.client, id);
   }
 
-  /** A handle to an email attachment by id. */
+  /**
+   * A handle to an email attachment by id.
+   *
+   * @readonly
+   */
   attachment(id: string): EmailAttachment {
     return EmailAttachment.byId(this.client, id);
   }
 
-  /** A handle to a connected inbox (email link) by id. */
+  /**
+   * A handle to a connected inbox (email link) by id.
+   *
+   * @readonly
+   */
   link(id: string): Link {
     return Link.byId(this.client, id);
   }
 
-  /** The caller's connected inboxes (email links). */
+  /**
+   * The caller's connected inboxes (email links).
+   *
+   * @readonly
+   */
   links(): Promise<Link[]> {
     return Link.list(this.client);
   }
 
-  /** Providers the server currently permits this caller to connect. */
+  /**
+   * Providers the server currently permits this caller to connect.
+   *
+   * @readonly
+   */
   async connectionProviders(): Promise<EmailConnectionProviders> {
     return unwrap(await this.client.auth.emailConnectionProviders());
   }
 
   /** Recover a draft move using its original operation UUID; never starts a new move.
-   * An empty committed result fences the old move so it cannot commit later. */
+   * An empty committed result fences the old move so it cannot commit later.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async recoverDraftTransfer(
     operationId: string,
   ): Promise<TransferRecoveryResponse> {
@@ -193,6 +248,9 @@ export class EmailNamespace {
   /**
    * Send a new plain-text email; an agent's program is refused (403) and
    * sends through a review or {@link sendConfirmed} instead.
+   *
+   * @destructive
+   * @openworld
    */
   send(opts: SendEmailOptions): Promise<EmailMessage | undefined> {
     return EmailMessage.send(this.client, opts);
@@ -210,6 +268,9 @@ export class EmailNamespace {
    * thread) and Macro documents to attach. The send takes effect at once and
    * is never retried; on an error, look for the message in the thread before
    * sending again.
+   *
+   * @destructive
+   * @openworld
    */
   sendConfirmed(opts: ConfirmedEmailOptions): Promise<SentEmail> {
     return EmailMessage.sendConfirmed(this.client, opts);
@@ -220,12 +281,18 @@ export class EmailNamespace {
    * search for their quoted email address, not their name: a name only
    * matches where that display name appears. Resolve the address first, for
    * example with `macro.users.search(name)`.
+   *
+   * @readonly
    */
   search(query: string, opts?: SearchOpts): AsyncGenerator<EmailThread> {
     return EmailThread.search(this.client, query, opts);
   }
 
-  /** The threads in the inbox, most recent first, auto-paginated. */
+  /**
+   * The threads in the inbox, most recent first, auto-paginated.
+   *
+   * @readonly
+   */
   inbox(opts?: InboxOptions): AsyncGenerator<EmailThread> {
     return paginate(async (cursor) => {
       const page = unwrap(
@@ -245,17 +312,30 @@ export class EmailNamespace {
     });
   }
 
-  /** A handle to a label by id. */
+  /**
+   * A handle to a label by id.
+   *
+   * @readonly
+   */
   label(id: string): Label {
     return Label.byId(this.client, id);
   }
 
-  /** All labels across the user's inboxes. */
+  /**
+   * All labels across the user's inboxes.
+   *
+   * @readonly
+   */
   labels(): Promise<Label[]> {
     return Label.list(this.client);
   }
 
-  /** Create a user label. Returns the created label. */
+  /**
+   * Create a user label. Returns the created label.
+   *
+   * @write
+   * @openworld
+   */
   createLabel(name: string): Promise<Label> {
     return Label.create(this.client, name);
   }
@@ -263,24 +343,46 @@ export class EmailNamespace {
   /**
    * Archive many threads (or unarchive with `false`). Resolves to the threads
    * whose state could not change.
+   *
+   * @write
+   * @openworld
+   * @idempotent
    */
   archive(threads: EmailThread[], archived = true): Promise<EmailThread[]> {
     return EmailThread.archiveMany(this.client, threads, archived);
   }
 
-  /** Delete a label. */
+  /**
+   * Delete a label.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async deleteLabel(label: Label): Promise<void> {
     unwrap(await this.client.email.deleteLabel({ path: { id: label.id } }));
   }
 
-  /** Block an email sender. */
+  /**
+   * Block an email sender.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async blockSender(email: string): Promise<void> {
     unwrap(
       await this.client.email.blockSender({ body: { email_address: email } }),
     );
   }
 
-  /** Unblock a previously blocked sender. */
+  /**
+   * Unblock a previously blocked sender.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async unblockSender(email: string): Promise<void> {
     unwrap(
       await this.client.email.unblockSender({
@@ -289,7 +391,11 @@ export class EmailNamespace {
     );
   }
 
-  /** The email addresses currently blocked. */
+  /**
+   * The email addresses currently blocked.
+   *
+   * @readonly
+   */
   async blockedSenders(): Promise<string[]> {
     return unwrap(await this.client.email.listBlockedSenders()).blocked_emails;
   }

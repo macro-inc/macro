@@ -52,6 +52,9 @@ export class EmailAttachment extends MacroEntity<EmailAttachmentData> {
    * server returns the existing document's id, or downloads the attachment
    * from the provider and uploads it as a new document first (deduplicated
    * behind a server-side lock).
+   *
+   * @write
+   * @idempotent
    */
   async toDocument(): Promise<Document> {
     const { document_id } = unwrap(

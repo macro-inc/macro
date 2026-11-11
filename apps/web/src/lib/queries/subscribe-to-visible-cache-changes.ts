@@ -11,7 +11,10 @@ import { createVisibleRefresh } from './visible-refresh';
 export function subscribeToVisibleCacheChanges(
   host: Pick<CacheHost, 'onCacheChanged'>,
   refresh: () => void | Promise<unknown>,
-  options?: { searchBuckets: Accessor<readonly string[]> }
+  options?: {
+    searchBuckets?: Accessor<readonly string[]>;
+    includeHydration?: boolean;
+  }
 ): () => void {
   const visibleRefresh = createVisibleRefresh(refresh);
   let disposed = false;
@@ -19,13 +22,13 @@ export function subscribeToVisibleCacheChanges(
     (_revision, changes) => {
       if (disposed) return;
       const changedBuckets = changes?.searchChangedBuckets;
-      if (options && changedBuckets !== undefined) {
+      if (options?.searchBuckets && changedBuckets !== undefined) {
         const watched = untrack(options.searchBuckets);
         if (!changedBuckets.some((bucket) => watched.includes(bucket))) return;
       }
       visibleRefresh.markDirty();
     },
-    { includeHydration: true }
+    { includeHydration: options?.includeHydration ?? true }
   );
 
   return () => {

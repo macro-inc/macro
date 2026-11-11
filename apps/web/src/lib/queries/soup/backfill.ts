@@ -24,6 +24,8 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { useContactBackfill } from '../contacts/backfill';
+import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
 
 // Bump when a default backfill input or completion guarantee changes so
@@ -730,6 +732,8 @@ export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   );
   const [cacheHost, setCacheHost] = createSignal<CacheHost>();
   const [cacheGeneration, setCacheGeneration] = createSignal(0);
+  useContactBackfill(userId, cacheHost, cacheGeneration);
+  useContactContextPublisher(cacheHost, cacheGeneration);
 
   createEffect(() => {
     if (!ENABLE_GRAPHQL_BACKFILL || !graphqlSoupFlag().enabled || !isLeader()) {

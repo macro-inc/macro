@@ -45,6 +45,8 @@ export class AgentNamespace {
    * settings. Built-in personas such as Cursor are not here; list those with
    * {@link AgentNamespace.coding}. Pass one as `agent` to
    * {@link AgentSessionNamespace.createManaged} to start a session as it.
+   *
+   * @readonly
    */
   async list(): Promise<Agent[]> {
     return unwrap(await this.client.storage.listAgents()).map((a) =>
@@ -62,6 +64,8 @@ export class AgentNamespace {
    * Empty when nothing is connected; tell the user to connect Cursor or
    * configure a coding agent. Macro's own default persona is not listed:
    * omit `agent` to use it.
+   *
+   * @readonly
    */
   async coding(): Promise<CodingAgent[]> {
     const { agents } = unwrap(
@@ -77,7 +81,11 @@ export class AgentNamespace {
     }));
   }
 
-  /** Create an agent. */
+  /**
+   * Create an agent.
+   *
+   * @write
+   */
   async create(options: AgentOptions): Promise<Agent> {
     return Agent.from(
       this.client,

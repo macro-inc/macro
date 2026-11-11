@@ -953,8 +953,13 @@ pub(crate) type DssWebhookState =
     MacroWebhookRouterState<DssWebhookService, DssWebhookRateLimiter, AuthorizationService>;
 
 /// Type alias for the service backing the webhook-event SSE endpoint.
-pub(crate) type DssSseStreamService =
-    WebhookEventStreamServiceImpl<EntityAccessService, PgWebhookRepo>;
+pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
+    EntityAccessService,
+    PgWebhookRepo,
+    crate::outbound::stream_contacts::ContactsStreamChecker<
+        contacts::outbound::repository::DbContactsRepository,
+    >,
+>;
 
 /// Type alias for the webhook-event SSE router state.
 pub(crate) type DssSseStreamState =
@@ -1005,6 +1010,7 @@ pub(crate) struct ApiContext {
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
     pub graphql_scheduled_action_context: graphql_scheduled_action::ScheduledActionGraphqlContext,
+    pub graphql_contacts_context: graphql_contacts::ContactsGraphqlContext,
     pub graphql_calendar_context: graphql_calendar::CalendarGraphqlContext,
     pub graphql_calendar_mutation_context: graphql_calendar::CalendarGraphqlMutationContext,
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
@@ -1029,6 +1035,9 @@ pub(crate) struct ApiContext {
     pub contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
+    /// The saved-view service behind GraphQL, the REST definitions routes and
+    /// the legacy `/saved_views` routes.
+    pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
     pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
@@ -1118,6 +1127,12 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
         }
+    }
+}
+
+impl FromRef<ApiContext> for crate::api::saved_views::definitions::SavedViewDefinitionsState {
+    fn from_ref(ctx: &ApiContext) -> Self {
+        Self(ctx.saved_views.clone())
     }
 }
 

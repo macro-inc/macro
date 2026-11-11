@@ -110,7 +110,7 @@ fn typescript() -> Job {
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 9] = [
+const TYPECHECKS: [(&str, &str, &str); 11] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -153,6 +153,16 @@ const TYPECHECKS: [(&str, &str, &str); 9] = [
     (
         "Check Code Mode SDK",
         "packages/code-mode-sdk",
+        "bun run type-check && bun run test",
+    ),
+    (
+        "Check SDK MCP Tools",
+        "packages/sdk-mcp",
+        "bun run type-check && bun run test",
+    ),
+    (
+        "Check MCP ChatGPT Worker",
+        "services/mcp-chatgpt-worker",
         "bun run type-check && bun run test",
     ),
 ];
@@ -280,6 +290,7 @@ fn test() -> Job {
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
+        .add_step(build_natural_time_for_tests())
         .add_step(run_tests())
         .add_step(steps::teardown_nix())
 }
@@ -489,7 +500,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -596,6 +607,14 @@ fn run_collaboration_biome() -> Step<Run> {
 fn build_agent_fold_for_tests() -> Step<Run> {
     Step::new("Build agent-fold WASM for tests")
         .run("just build-agent-fold-wasm")
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .timeout_minutes(15u32)
+}
+
+fn build_natural_time_for_tests() -> Step<Run> {
+    Step::new("Build natural-time WASM for tests")
+        .run("just build-natural-time-wasm")
         .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .timeout_minutes(15u32)

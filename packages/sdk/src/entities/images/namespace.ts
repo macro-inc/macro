@@ -5,7 +5,7 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Document } from '../documents/document';
-import { GeneratedImage, type StaticImage } from './image';
+import { GeneratedImage, StaticImage } from './image';
 
 export type { GenerateImageAspectRatio };
 
@@ -39,6 +39,14 @@ export class ImagesNamespace {
   constructor(private readonly client: MacroClient) {}
 
   /**
+   * A handle to an image already in static file storage, such as a profile
+   * picture uploaded earlier whose id you saved.
+   */
+  byId(id: string): StaticImage {
+    return StaticImage.byId(this.client, id);
+  }
+
+  /**
    * Generate or edit an image with Google's Nano Banana model and store it as
    * a static file. Takes several seconds. Post it with
    * `channel.send(text, { images: [image] })`; the returned width and height
@@ -50,6 +58,8 @@ export class ImagesNamespace {
    *   aspectRatio: 'widescreen',
    * });
    * await channel.send('Fresh off the press', { images: [image] });
+   *
+   * @write
    */
   async generate(options: GenerateImageOptions): Promise<GeneratedImage> {
     const image = unwrap(
