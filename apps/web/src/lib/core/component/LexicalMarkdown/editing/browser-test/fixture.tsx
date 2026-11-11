@@ -103,6 +103,8 @@ runtime.port.setState(
     },
   })
 );
+// Seed the fixture before the user-edit history begins, as document bootstrap does.
+runtime.port.command(CommandCode.ClearHistory);
 element('readonly').addEventListener('click', () => {
   setCanEdit(false);
   runtime.view.setEditable(false);

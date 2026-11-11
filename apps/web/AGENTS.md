@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Share checklist bar markup through TaskListBar; keep planning in the Source renderer or native producer and pass only raw Date observations across the native facts boundary.
+
 - Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope. Hide action rows until their native handler or document-owned request callback is installed, and check that capability before removing search text.
 - Share floating-format markup through FormatMenuHost; retain actual Source wrapper/plugin registrations and require a qualified published-state observation before native metadata drives the menu.
 
