@@ -1,0 +1,25 @@
+apps/web/src/lib/core/util/debounce.ts
+  s_c6a08203850d89::t_eae6e10e3517ee 18-21,26-31
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_c6a08203850d89::t_317a96e3512360 275-308
+docs/agent-guide/external.md
+  s_c6a08203850d89::t_f1ba19f8c6e9a9 140-142
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_c6a08203850d89::t_9a6bd78d82654e 721-727,745-746
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8bfebd9ccfc0d404aef2e3be5c238e2dffe59d2f",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
