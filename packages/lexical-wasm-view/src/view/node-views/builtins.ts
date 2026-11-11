@@ -118,11 +118,20 @@ function elementProps(
   if (node.type === 'listitem' || node.type === 'task-list-item') {
     if (typeof props.value === 'number')
       dom.setAttribute('value', String(props.value));
-    if (typeof props.checked === 'boolean') {
+    const firstKey = node.children[0];
+    const first = firstKey === undefined ? undefined : ctx.view.node(firstKey);
+    const isCheckList =
+      parent &&
+      (parent.type === 'list' || parent.type === 'task-list') &&
+      parent.props().listType === 'check';
+    const firstIsList = first?.type === 'list' || first?.type === 'task-list';
+    if (isCheckList && !firstIsList) {
       dom.setAttribute('role', 'checkbox');
-      dom.setAttribute('aria-checked', String(props.checked));
+      dom.setAttribute('tabIndex', '-1');
+      dom.setAttribute('aria-checked', props.checked ? 'true' : 'false');
     } else {
       dom.removeAttribute('role');
+      dom.removeAttribute('tabIndex');
       dom.removeAttribute('aria-checked');
     }
   }
@@ -178,19 +187,30 @@ function elementClasses(node: ViewNode, ctx: RenderContext): string {
       .filter(Boolean)
       .join(' ');
   }
-  if (node.type === 'listitem')
+  if (node.type === 'listitem' || node.type === 'task-list-item') {
+    const parent = node.parent === null ? null : ctx.view.node(node.parent);
+    const isCheckList =
+      parent &&
+      (parent.type === 'list' || parent.type === 'task-list') &&
+      parent.props().listType === 'check';
+    const isNested = node.children.some((key) => {
+      const child = ctx.view.node(key);
+      return child?.type === 'list' || child?.type === 'task-list';
+    });
     return [
       themeClass(ctx.theme, 'list', 'listitem'),
-      typeof props.checked === 'boolean'
+      isCheckList
         ? themeClass(
             ctx.theme,
             'list',
             props.checked ? 'listitemChecked' : 'listitemUnchecked'
           )
         : '',
+      isNested ? themeClass(ctx.theme, 'list', 'nested', 'listitem') : '',
     ]
       .filter(Boolean)
       .join(' ');
+  }
   if (node.type === 'tablecell')
     return [
       themeClass(ctx.theme, 'tableCell'),
