@@ -1325,13 +1325,18 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
-    let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
-        Arc::new(session_repo.clone()),
-        admission.clone(),
-        recorder.clone(),
-        anthropic_gateway::ANTHROPIC_API_URL,
-        &config.anthropic_api_key,
-    )?);
+    let anthropic_gateway = anthropic_gateway::router(
+        anthropic_gateway::GatewayState::new(
+            Arc::new(session_repo.clone()),
+            admission.clone(),
+            recorder.clone(),
+            anthropic_gateway::ANTHROPIC_API_URL,
+            &config.anthropic_api_key,
+        )?
+        .with_brains(Arc::new(
+            anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
+        )),
+    );
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(

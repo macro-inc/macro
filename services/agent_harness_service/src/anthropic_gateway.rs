@@ -28,6 +28,7 @@ use tracing::{Instrument, Span, field::Empty};
 
 use usage::{SseUsage, TokenUsage};
 
+pub(crate) mod brain;
 mod usage;
 
 #[cfg(test)]
@@ -114,6 +115,8 @@ pub(super) struct GatewayState<Sessions> {
     upstream_url: String,
     /// `None` when the service has no Anthropic key; every request is refused.
     api_key: Option<HeaderValue>,
+    /// Agent teammates' brains; `None` refuses every `/brain/anthropic` call.
+    brains: Option<Arc<dyn brain::BrainAuthenticator>>,
 }
 
 impl<Sessions> GatewayState<Sessions> {
@@ -141,9 +144,20 @@ impl<Sessions> GatewayState<Sessions> {
                 .build()?,
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
+            brains: None,
         })
     }
+
+    /// Serve agent teammates' brains under `/brain/anthropic`.
+    pub(super) fn with_brains(mut self, brains: Arc<dyn brain::BrainAuthenticator>) -> Self {
+        self.brains = Some(brains);
+        self
+    }
 }
+
+/// Marks a request that came in under `/brain/anthropic`.
+#[derive(Clone, Copy)]
+struct BrainRoute;
 
 /// The gateway's routes, mounted at the listener root.
 pub(super) fn router<Sessions: AgentSessionRepo>(state: GatewayState<Sessions>) -> Router {
@@ -154,6 +168,16 @@ pub(super) fn router<Sessions: AgentSessionRepo>(state: GatewayState<Sessions>) 
             post(count_tokens::<Sessions>),
         )
         .route("/anthropic/{*rest}", any(unsupported))
+        .merge(
+            Router::new()
+                .route("/brain/anthropic/v1/messages", post(messages::<Sessions>))
+                .route(
+                    "/brain/anthropic/v1/messages/count_tokens",
+                    post(count_tokens::<Sessions>),
+                )
+                .route("/brain/anthropic/{*rest}", any(unsupported))
+                .layer(axum::Extension(BrainRoute)),
+        )
         .with_state(Arc::new(state))
 }
 
@@ -268,10 +292,21 @@ async fn forward<Sessions: AgentSessionRepo>(
     span: &Span,
 ) -> Result<Response, Rejection> {
     let (parts, body) = request.into_parts();
-    let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
-    span.record("agent.session.id", tracing::field::display(session.id));
-    span.record("agent.bot.id", tracing::field::display(session.bot_id));
-    span.record("agent.harness", session.harness.as_str());
+    let caller = if parts.extensions.get::<BrainRoute>().is_some() {
+        let brain = authenticate_brain(state.brains.as_deref(), &parts.headers).await?;
+        span.record(
+            "agent.user.id",
+            macro_user_id::telemetry_id(brain.user_id.as_ref()),
+        );
+        span.record("agent.team.id", tracing::field::display(brain.team_id));
+        Caller::Brain(brain)
+    } else {
+        let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
+        span.record("agent.session.id", tracing::field::display(session.id));
+        span.record("agent.bot.id", tracing::field::display(session.bot_id));
+        span.record("agent.harness", session.harness.as_str());
+        Caller::Session(Box::new(session))
+    };
 
     let body = to_bytes(body, MAX_REQUEST_BYTES)
         .await
@@ -283,11 +318,18 @@ async fn forward<Sessions: AgentSessionRepo>(
     span.record("gen_ai.request.model", model.request_id());
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
-    let owner = session
-        .owner_user()
-        .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
-        .clone();
-    let entity = Some(session.id.as_uuid());
+    let (owner, entity) = match &caller {
+        Caller::Session(session) => (
+            session
+                .owner_user()
+                .map_err(|_| {
+                    Rejection::permission("this session's owner cannot spend Macro credits")
+                })?
+                .clone(),
+            Some(session.id.as_uuid()),
+        ),
+        Caller::Brain(brain) => (brain.user_id.clone(), None),
+    };
     if endpoint == Endpoint::Messages {
         state
             .admission
@@ -371,6 +413,30 @@ async fn forward<Sessions: AgentSessionRepo>(
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     Ok(response)
+}
+
+/// Who is calling: an agent session's runtime, or an agent teammate's brain.
+enum Caller {
+    Session(Box<AgentSession>),
+    Brain(brain::BrainCaller),
+}
+
+async fn authenticate_brain(
+    brains: Option<&dyn brain::BrainAuthenticator>,
+    headers: &HeaderMap,
+) -> Result<brain::BrainCaller, Rejection> {
+    let brains = brains.ok_or(Rejection::NOT_CONFIGURED)?;
+    let bearer = headers
+        .typed_get::<Authorization<Bearer>>()
+        .ok_or(Rejection::BRAIN_UNAUTHENTICATED)?;
+    brains
+        .authenticate(bearer.token())
+        .await
+        .map_err(|error| {
+            tracing::error!(error = ?error, "could not authenticate a brain");
+            Rejection::UPSTREAM_UNREACHABLE
+        })?
+        .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
 
 async fn authenticate<Sessions: AgentSessionRepo>(
@@ -478,6 +544,15 @@ struct Rejection {
 }
 
 impl Rejection {
+    const BRAIN_UNAUTHENTICATED: Self = Self {
+        status: StatusCode::UNAUTHORIZED,
+        kind: "authentication_error",
+        outcome: "unauthenticated",
+        message: std::borrow::Cow::Borrowed(
+            "send the agent teammate's Macro API key as `Authorization: Bearer`",
+        ),
+    };
+
     const UNAUTHENTICATED: Self = Self {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",

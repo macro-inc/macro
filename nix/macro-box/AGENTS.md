@@ -33,7 +33,7 @@ PID 1 (for the dev-only DockerFleet).
 - `_agent-brain.nix` (imported by `_guest.nix`, options `macro.box.brain.*`)
   runs the agent teammate's brain; `_brain.nix` builds it from
   `packages/brain` (Node 24, the SDK bundled once, hash-pinned npm
-  dependencies with LiveKit's native addons patched).
+  dependencies).
 - `files/` holds the enrollment probe script, the brain's `start-brain` and
   `git-credential-brain`, the VM test's git server and `/etc/claude-code/CLAUDE.md`;
   `skills/` is copied into `/etc/skel/.claude/skills` and macro's home.

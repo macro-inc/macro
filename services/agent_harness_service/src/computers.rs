@@ -33,6 +33,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::config::{ComputerFleetConfig, Config};
 
+pub(crate) mod agent_enrollment;
 pub(crate) mod claude;
 pub(crate) mod claude_expiry;
 pub(crate) mod control;
@@ -140,7 +141,12 @@ pub(crate) async fn operator(
         Arc::new(ServiceDeployment),
     )
     .await
-    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
+    .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?
+    // Every computer asks: one bought for an agent teammate must never
+    // enroll without its agent.
+    .with_agent_enrollment(Arc::new(agent_enrollment::AuthAgentEnrollment::new(
+        &config.internal_api_key,
+    )?));
     Ok(Some(Arc::new(operator)))
 }
 

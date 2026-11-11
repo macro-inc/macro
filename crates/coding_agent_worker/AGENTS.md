@@ -45,6 +45,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   pairing it was claimed from (`credentials.pairing_id`), so only a new
   pairing is claimed, and nothing else on the disk is touched. No enrollment
   in the source (removed after macrod connects) with a marker means enrolled.
+  An enrollment carrying `agent` (an agent teammate's computer) also writes
+  its environment to `/var/lib/macrod/agent.env` (0600, owned like the
+  config) for the guest's `macro-brain.service`; one without removes it.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a

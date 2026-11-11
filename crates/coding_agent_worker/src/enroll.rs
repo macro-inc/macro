@@ -183,6 +183,12 @@ async fn enroll(
     write_config(options, agent, &urls)?;
     ensure_credentials(&options.config, enrollment).await?;
     own_like_parent(&options.config, host)?;
+    write_agent_env(
+        &paths.at(AGENT_ENV_PATH),
+        enrollment.agent.as_ref(),
+        &options.config,
+        host,
+    )?;
 
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
@@ -377,6 +383,57 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
         }
         tokio::time::sleep(CLAIM_RETRY).await;
     }
+}
+
+/// The agent teammate a computer was bought for: its brain's environment,
+/// read by the guest's `macro-brain.service`. Absent on other computers.
+pub const AGENT_ENV_PATH: &str = "/var/lib/macrod/agent.env";
+
+/// Write the agent's environment as a systemd environment file (mode 0600,
+/// owned like macrod's config, since the brain runs as that user), or remove
+/// a stale one when this enrollment carries no agent.
+fn write_agent_env(
+    path: &Path,
+    agent: Option<&hosted_runtimes::domain::agent::AgentEnrollment>,
+    config: &Path,
+    host: &impl Host,
+) -> rootcause::Result<()> {
+    let Some(agent) = agent else {
+        return match std::fs::remove_file(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => {
+                result.context(format!("could not remove {}", path.display()))?;
+                Ok(())
+            }
+        };
+    };
+    let contents = agent_env_file(agent);
+    write_file(path, &contents, 0o600)?;
+    let parent = config
+        .parent()
+        .ok_or_else(|| rootcause::report!("{} has no directory", config.display()))?;
+    let metadata =
+        std::fs::metadata(parent).context(format!("could not stat {}", parent.display()))?;
+    host.chown(
+        path,
+        Ownership {
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+        },
+    )
+}
+
+/// `KEY="value"` lines, with `\` and `"` escaped as systemd expects. Names
+/// and single-line values are validated by [`AgentEnv`].
+///
+/// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
+fn agent_env_file(agent: &hosted_runtimes::domain::agent::AgentEnrollment) -> String {
+    let mut contents = String::new();
+    for (key, value) in agent.env.expose() {
+        let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+        contents.push_str(&format!("{}=\"{escaped}\"\n", key.as_str()));
+    }
+    contents
 }
 
 /// Give a file its directory's owner: enrollment runs as root, macrod as the

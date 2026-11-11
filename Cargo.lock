@@ -398,6 +398,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_credentials"
+version = "0.1.0"
+dependencies = [
+ "constant_time_eq 0.3.1",
+ "hex",
+ "lazy-regex",
+ "rand 0.9.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "user_api_key",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -474,6 +491,72 @@ dependencies = [
  "tracing",
  "utoipa",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "agent_git"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "axum",
+ "axum-extra",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "hex",
+ "httparse",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_tower_layers",
+ "macro_user_id",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "teams",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_git_service"
+version = "0.1.0"
+dependencies = [
+ "agent_git",
+ "aws-sdk-secretsmanager",
+ "axum",
+ "database_env_vars",
+ "doppler-config",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "rootcause",
+ "secretsmanager_client",
+ "serde_json",
+ "sqlx",
+ "teams",
+ "tokio",
+ "tokio-util",
+ "tower-http",
+ "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -737,6 +820,7 @@ dependencies = [
  "unfurl_service",
  "universal_input",
  "url",
+ "user_api_key",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -2216,6 +2300,7 @@ dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_git",
  "ai_billing",
  "ai_usage",
  "analytics_client",
@@ -2324,6 +2409,7 @@ dependencies = [
  "static_file_service_client",
  "strum 0.27.2",
  "system_status",
+ "team_agents",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -12766,6 +12852,7 @@ dependencies = [
  "doppleganger",
  "nom 8.0.0",
  "serde",
+ "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
@@ -20241,6 +20328,37 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "team_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_credentials",
+ "agent_git",
+ "axum",
+ "chrono",
+ "entity_access",
+ "feature_flags",
+ "hosted_runtimes",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_service_urls",
+ "macro_user_id",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "user_api_key",
  "utoipa",
  "uuid",
  "workspace-hack",
