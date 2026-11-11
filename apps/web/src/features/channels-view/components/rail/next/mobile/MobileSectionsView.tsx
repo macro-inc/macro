@@ -1,13 +1,10 @@
-import { ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { PillTabs } from '@components/app/mobile/PillTabs';
-import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { enableChannelTags } from '@core/constant/featureFlags';
 import type { ChannelEntity } from '@entity';
-import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
@@ -15,7 +12,6 @@ import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { useChannelsView } from '../../../../channels-view-context';
 import type { ChannelsDataSource, ChannelsSources } from '../../../../queries';
@@ -123,6 +119,16 @@ export function MobileSectionsView(props: {
     }
   };
   const [optionsFor, setOptionsFor] = createSignal<string>();
+  const openSectionOptions = (id: string) => {
+    const interaction = beginInteraction('channels.section.options', {
+      attributes: { 'channel.section.id': id },
+    });
+    try {
+      setOptionsFor(id);
+    } finally {
+      interaction.end();
+    }
+  };
   const [sectionEditorOpen, setSectionEditorOpen] = createSignal(false);
   const optionsLabel = () =>
     labels().find((label) => label.id === optionsFor());
@@ -163,10 +169,19 @@ export function MobileSectionsView(props: {
   });
   return (
     <div class="flex size-full min-h-0 flex-col">
-      <ViewShell.Header class="pb-3">
+      <ChannelsMobileView
+        source={source}
+        pinned={props.pinned}
+        searchQuery=""
+        onClearSearch={() => {}}
+        horizontalPins
+        scrollKey={selected()}
+        preferences={preferences()}
+        includePinnedInList={selected() !== 'all'}
+      >
         <nav
           aria-label={t('channelSections.sections')}
-          class="h-10 min-w-0 flex-1"
+          class="min-w-0 px-(--mobile-chrome-gutter) pb-3"
         >
           <PillTabs
             scrollable
@@ -176,6 +191,9 @@ export function MobileSectionsView(props: {
             onChange={choose}
             items={keys().map((key) => ({
               value: key,
+              onContextMenu: key.startsWith('label:')
+                ? () => openSectionOptions(key.slice('label:'.length))
+                : undefined,
               label: (
                 <span class="flex items-center gap-1.5">
                   {title(key)}
@@ -198,44 +216,9 @@ export function MobileSectionsView(props: {
                 </span>
               ),
             }))}
-            leading={
-              <Show when={selectedLabel()}>
-                {(label) => (
-                  <div class="sticky left-(--mobile-chrome-gutter) z-10 shrink-0">
-                    <HeaderIsland>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('channelSections.optionsFor', {
-                          name: label().name,
-                        })}
-                        onClick={() => setOptionsFor(label().id)}
-                      >
-                        <DotsThreeIcon class="size-5" />
-                      </Button>
-                    </HeaderIsland>
-                  </div>
-                )}
-              </Show>
-            }
           />
         </nav>
-      </ViewShell.Header>
-      <div
-        class="min-h-0 flex-1"
-        style={{ '--mobile-content-inset-top': '0px' }}
-      >
-        <ChannelsMobileView
-          source={source}
-          pinned={props.pinned}
-          searchQuery=""
-          onClearSearch={() => {}}
-          horizontalPins
-          scrollKey={selected()}
-          preferences={preferences()}
-          includePinnedInList={selected() !== 'all'}
-        />
-      </div>
+      </ChannelsMobileView>
       <Show when={optionsLabel()}>
         {(label) => (
           <MobileSectionOptions

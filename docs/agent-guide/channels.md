@@ -1329,17 +1329,22 @@ scrolling row. All is selected initially, followed by Direct messages and custom
 sections in personal display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
-control lives in the shared collection header, scrolls horizontally, and reveals the
-selected section. People and funnel icons match desktop.
+control sits below Favorites and above the conversation list, scrolls horizontally,
+and reveals the selected section. Favorites and pills scroll with the list. People
+and funnel icons match desktop.
 
 Search uses the existing dock Search; Chat has no separate search button or
 in-list search field. Opening conversations retains latest-message navigation,
 top-level read marking, incoming-call actions, and pull-to-refresh.
 
-Use the selected section's pinned options button beside the pills to open the shared
-mobile sheet. Visible to, Sort, Display, and mute drill into the sheet with Back,
-not nested touch submenus. Sharing uses the verified current team, including when
-no other shared sections exist. **Edit section** closes the options sheet and opens
+Long-press a custom section pill to open its settings without changing the selected
+section. A short tap selects it; scrolling cancels the hold. There is no separate
+more button. A keyboard or pointer context menu opens the same settings.
+Visible to, Sort, and Display use the shared mobile filter drawer's expandable
+groups and choices. Mute opens the shared presets with Back, not a nested submenu.
+Editing, notification actions, and deletion use separate drawer groups.
+Sharing uses the verified current team, including when no other shared sections
+exist. **Edit section** closes the options sheet and opens
 the shared creation/editing dialog with the same replacement warning. Rule matches
 appear directly in a bounded list on touch devices rather than requiring hover. Add channels
 opens the shared full-height picker above the options sheet with Cancel and Done;

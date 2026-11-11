@@ -31,6 +31,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -62,6 +63,8 @@ export function ChannelsMobileView(props: {
   preferences?: ChannelSectionPreferences;
   scrollKey?: string;
   includePinnedInList?: boolean;
+  /** Controls between the favorites and the list, included in its measured offset. */
+  children?: JSX.Element;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -407,6 +410,7 @@ export function ChannelsMobileView(props: {
               </For>
             </ChannelPinGrid>
           </Show>
+          {props.children}
         </div>
         {content}
         <div

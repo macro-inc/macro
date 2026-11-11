@@ -1,3 +1,4 @@
+import { MobileFilterDrawer } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { longPressActivated } from '@core/directive/touchHandler';
@@ -10,15 +11,14 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { Accordion } from '@kobalte/core/accordion';
 import { NotificationMuteOptions } from '@notifications/components/NotificationMuteMenu';
 import { queryReadyGate } from '@queries/gate';
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
-import { Button, Checkbox, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import { Button, ToggleSwitch } from '@ui';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { ChannelSectionPreferences } from '../../../../types';
-
-type OptionsPage = 'main' | 'visibility' | 'sort' | 'display' | 'mute';
 
 export function MobileSectionOptions(props: {
   label: ChannelLabel;
@@ -39,7 +39,7 @@ export function MobileSectionOptions(props: {
   onClose: () => void;
   editors?: JSX.Element;
 }) {
-  const [page, setPage] = createSignal<OptionsPage>('main');
+  const [muteOpen, setMuteOpen] = createSignal(false);
   const muted = useMutedEntitiesQuery();
   const allMuted = () =>
     queryReadyGate(muted) &&
@@ -67,191 +67,223 @@ export function MobileSectionOptions(props: {
         <MobileDrawer.Overlay />
         <MobileDrawer.Content>
           <MobileDrawer.Handle />
-          <div class="flex items-center gap-2 px-4 pb-3">
-            <Show when={page() !== 'main'}>
+          <div class="flex shrink-0 items-center gap-2 px-6 pb-3">
+            <Show when={muteOpen()}>
               <Button
                 variant="ghost"
                 size="icon-sm"
                 aria-label={t('common.back')}
-                onClick={() => setPage('main')}
+                onClick={() => setMuteOpen(false)}
               >
                 <ArrowLeftIcon class="size-4" />
               </Button>
             </Show>
-            <MobileDrawer.Title class="min-w-0 flex-1 truncate text-base font-medium">
-              {props.label.name}
+            <MobileDrawer.Title class="min-w-0 flex-1 truncate text-lg font-semibold">
+              {muteOpen()
+                ? t('channelSections.muteAllChannels')
+                : props.label.name}
             </MobileDrawer.Title>
-            <Show when={props.label.teamId}>
-              <UsersIcon class="size-4" />
-            </Show>
-            <Show when={props.label.rule}>
-              <FunnelIcon class="size-4" />
+            <Show when={!muteOpen()}>
+              <Show when={props.label.teamId}>
+                <UsersIcon class="size-4 shrink-0" />
+              </Show>
+              <Show when={props.label.rule}>
+                <FunnelIcon class="size-4 shrink-0" />
+              </Show>
             </Show>
           </div>
-          <MobileDrawer.ScrollBody class="px-3">
-            <Switch>
-              <Match when={page() === 'main'}>
-                <Show when={props.canEdit}>
-                  <MobileDrawer.Item
+          <MobileDrawer.ScrollBody>
+            <Show
+              when={!muteOpen()}
+              fallback={
+                <MobileDrawer.Section>
+                  <NotificationMuteOptions
                     disabled={props.disabled}
-                    onClick={() =>
-                      fireAndForget(props.onEdit(), 'channels-view')
+                    onMute={(muted) =>
+                      fireAndForget(props.onMute(muted), 'channels-view')
                     }
-                  >
-                    <PencilIcon class="size-5" />
-                    {t('channelSections.editSection')}
-                  </MobileDrawer.Item>
-                  <Show when={!props.label.rule}>
+                    onSnooze={(until) =>
+                      fireAndForget(props.onSnooze(until), 'channels-view')
+                    }
+                  />
+                </MobileDrawer.Section>
+              }
+            >
+              <div class="flex flex-col gap-3">
+                <Show when={props.canEdit}>
+                  <MobileDrawer.Section>
                     <MobileDrawer.Item
                       disabled={props.disabled}
-                      onPointerDown={(event) => event.preventDefault()}
-                      onMouseDown={(event) => event.preventDefault()}
                       onClick={() =>
-                        fireAndForget(props.onAdd(), 'channels-view')
+                        fireAndForget(props.onEdit(), 'channels-view')
                       }
                     >
-                      <PlusIcon class="size-5" />
-                      {t('channelSections.addChannels')}
+                      <PencilIcon class="size-5" />
+                      {t('channelSections.editSection')}
                     </MobileDrawer.Item>
-                  </Show>
-                  <Show when={props.canChangeScope}>
-                    <MobileDrawer.Item onClick={() => setPage('visibility')}>
-                      <UsersIcon class="size-5" />
-                      {t('channelSections.visibleTo')}
-                      <span class="ml-auto truncate text-sm text-ink-muted">
-                        {props.label.teamId
-                          ? props.teamName
-                          : t('channelSections.onlyMe')}
-                      </span>
-                      <CaretRightIcon class="size-4" />
-                    </MobileDrawer.Item>
-                  </Show>
+                    <Show when={!props.label.rule}>
+                      <MobileDrawer.Item
+                        disabled={props.disabled}
+                        onPointerDown={(event) => event.preventDefault()}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() =>
+                          fireAndForget(props.onAdd(), 'channels-view')
+                        }
+                      >
+                        <PlusIcon class="size-5" />
+                        {t('channelSections.addChannels')}
+                      </MobileDrawer.Item>
+                    </Show>
+                  </MobileDrawer.Section>
                 </Show>
-                <MobileDrawer.Item onClick={() => setPage('sort')}>
-                  {t('channelSections.sort')}
-                  <CaretRightIcon class="ml-auto size-4" />
-                </MobileDrawer.Item>
-                <MobileDrawer.Item onClick={() => setPage('display')}>
-                  {t('channelSections.display')}
-                  <CaretRightIcon class="ml-auto size-4" />
-                </MobileDrawer.Item>
-                <MobileDrawer.Item
-                  disabled={
-                    props.disabled || props.label.channelIds.length === 0
-                  }
-                  onClick={() =>
-                    fireAndForget(props.onMarkRead(), 'channels-view')
-                  }
+                <Accordion
+                  multiple
+                  collapsible
+                  defaultValue={['sort', 'display']}
                 >
-                  {t('channelLabels.markAllAsRead')}
-                </MobileDrawer.Item>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onClick={() => {
-                    if (allMuted())
-                      fireAndForget(props.onMute(false), 'channels-view');
-                    else setPage('mute');
-                  }}
-                >
-                  {t(
-                    allMuted()
-                      ? 'channelSections.unmuteAllChannels'
-                      : 'channelSections.muteAllChannels'
-                  )}
-                  <Show when={!allMuted()}>
-                    <CaretRightIcon class="ml-auto size-4" />
-                  </Show>
-                </MobileDrawer.Item>
-                <Show when={props.canEdit}>
+                  <div class="flex flex-col gap-3">
+                    <Show when={props.canEdit && props.canChangeScope}>
+                      <MobileFilterDrawer.Section
+                        value="visibility"
+                        label={t('channelSections.visibleTo')}
+                        activeCount={props.label.teamId ? 1 : 0}
+                      >
+                        <div
+                          role="group"
+                          aria-label={t('channelSections.visibleTo')}
+                        >
+                          <MobileFilterDrawer.Option
+                            checked={!props.label.teamId}
+                            disabled={props.disabled}
+                            onChange={(checked) => {
+                              if (checked)
+                                fireAndForget(
+                                  props.onScope(false),
+                                  'channels-view'
+                                );
+                            }}
+                          >
+                            {t('channelSections.onlyMe')}
+                          </MobileFilterDrawer.Option>
+                          <Show when={props.canShare}>
+                            <MobileFilterDrawer.Option
+                              checked={Boolean(props.label.teamId)}
+                              disabled={props.disabled}
+                              onChange={(checked) => {
+                                if (checked)
+                                  fireAndForget(
+                                    props.onScope(true),
+                                    'channels-view'
+                                  );
+                              }}
+                            >
+                              {props.teamName ??
+                                t('channelSections.team_channels')}
+                            </MobileFilterDrawer.Option>
+                          </Show>
+                        </div>
+                      </MobileFilterDrawer.Section>
+                    </Show>
+                    <MobileFilterDrawer.Section
+                      value="sort"
+                      label={t('channelSections.sort')}
+                      activeCount={props.preferences.sort !== 'name' ? 1 : 0}
+                    >
+                      <div
+                        role="radiogroup"
+                        aria-label={t('channelSections.sort')}
+                      >
+                        <For each={sorts()}>
+                          {(sort) => (
+                            <MobileFilterDrawer.Option
+                              selectionMode="single"
+                              checked={props.preferences.sort === sort.value}
+                              onChange={() =>
+                                props.onPreferences({ sort: sort.value })
+                              }
+                            >
+                              {sort.label}
+                            </MobileFilterDrawer.Option>
+                          )}
+                        </For>
+                      </div>
+                    </MobileFilterDrawer.Section>
+                    <MobileFilterDrawer.Section
+                      value="display"
+                      label={t('channelSections.display')}
+                      activeCount={
+                        Number(Boolean(props.preferences.unreadOnly)) +
+                        Number(props.preferences.unreadWhenCollapsed === false)
+                      }
+                    >
+                      <ToggleSwitch
+                        class="min-h-11 w-full flex-row-reverse justify-between px-3"
+                        label={t('channelSections.unreadOnly')}
+                        checked={props.preferences.unreadOnly ?? false}
+                        onChange={(unreadOnly) =>
+                          props.onPreferences({ unreadOnly })
+                        }
+                      />
+                      <ToggleSwitch
+                        class="min-h-11 w-full flex-row-reverse justify-between px-3"
+                        label={t('channelSections.unreadWhenCollapsed')}
+                        checked={props.preferences.unreadWhenCollapsed ?? true}
+                        onChange={(unreadWhenCollapsed) =>
+                          props.onPreferences({ unreadWhenCollapsed })
+                        }
+                      />
+                    </MobileFilterDrawer.Section>
+                  </div>
+                </Accordion>
+                <MobileDrawer.Section>
+                  <MobileDrawer.Item
+                    disabled={
+                      props.disabled || props.label.channelIds.length === 0
+                    }
+                    onClick={() =>
+                      fireAndForget(props.onMarkRead(), 'channels-view')
+                    }
+                  >
+                    {t('channelLabels.markAllAsRead')}
+                  </MobileDrawer.Item>
                   <MobileDrawer.Item
                     disabled={props.disabled}
-                    onClick={() =>
-                      fireAndForget(props.onDelete(), 'channels-view')
-                    }
-                    class="text-failure-ink"
-                  >
-                    <TrashIcon class="size-5" />
-                    {t(
-                      props.label.teamId
-                        ? 'channelSections.deleteForEveryone'
-                        : 'channelSections.deleteSection'
-                    )}
-                  </MobileDrawer.Item>
-                </Show>
-              </Match>
-              <Match when={page() === 'visibility'}>
-                <Checkbox
-                  checked={!props.label.teamId}
-                  onChange={(checked) => {
-                    if (checked)
-                      fireAndForget(props.onScope(false), 'channels-view');
-                  }}
-                  disabled={props.disabled}
-                  class="flex min-h-11 items-center gap-3 px-3"
-                >
-                  <Checkbox.Control />
-                  <Checkbox.Label>{t('channelSections.onlyMe')}</Checkbox.Label>
-                </Checkbox>
-                <Show when={props.canShare}>
-                  <Checkbox
-                    checked={Boolean(props.label.teamId)}
-                    onChange={(checked) => {
-                      if (checked)
-                        fireAndForget(props.onScope(true), 'channels-view');
+                    onClick={() => {
+                      if (allMuted())
+                        fireAndForget(props.onMute(false), 'channels-view');
+                      else setMuteOpen(true);
                     }}
-                    disabled={props.disabled}
-                    class="flex min-h-11 items-center gap-3 px-3"
                   >
-                    <Checkbox.Control />
-                    <Checkbox.Label>
-                      {props.teamName ?? t('channelSections.team_channels')}
-                    </Checkbox.Label>
-                  </Checkbox>
-                </Show>
-              </Match>
-              <Match when={page() === 'sort'}>
-                <For each={sorts()}>
-                  {(sort) => (
+                    {t(
+                      allMuted()
+                        ? 'channelSections.unmuteAllChannels'
+                        : 'channelSections.muteAllChannels'
+                    )}
+                    <Show when={!allMuted()}>
+                      <CaretRightIcon class="ml-auto size-4" />
+                    </Show>
+                  </MobileDrawer.Item>
+                </MobileDrawer.Section>
+                <Show when={props.canEdit}>
+                  <MobileDrawer.Section>
                     <MobileDrawer.Item
-                      aria-pressed={props.preferences.sort === sort.value}
-                      onClick={() => props.onPreferences({ sort: sort.value })}
+                      disabled={props.disabled}
+                      onClick={() =>
+                        fireAndForget(props.onDelete(), 'channels-view')
+                      }
+                      class="text-failure-ink"
                     >
-                      {sort.label}
-                      <SingleSelectCheck
-                        active={props.preferences.sort === sort.value}
-                      />
+                      <TrashIcon class="size-5" />
+                      {t(
+                        props.label.teamId
+                          ? 'channelSections.deleteForEveryone'
+                          : 'channelSections.deleteSection'
+                      )}
                     </MobileDrawer.Item>
-                  )}
-                </For>
-              </Match>
-              <Match when={page() === 'display'}>
-                <ToggleSwitch
-                  class="min-h-11 w-full flex-row-reverse justify-between px-3"
-                  label={t('channelSections.unreadOnly')}
-                  checked={props.preferences.unreadOnly ?? false}
-                  onChange={(unreadOnly) => props.onPreferences({ unreadOnly })}
-                />
-                <ToggleSwitch
-                  class="min-h-11 w-full flex-row-reverse justify-between px-3"
-                  label={t('channelSections.unreadWhenCollapsed')}
-                  checked={props.preferences.unreadWhenCollapsed ?? true}
-                  onChange={(unreadWhenCollapsed) =>
-                    props.onPreferences({ unreadWhenCollapsed })
-                  }
-                />
-              </Match>
-              <Match when={page() === 'mute'}>
-                <NotificationMuteOptions
-                  disabled={props.disabled}
-                  onMute={(muted) =>
-                    fireAndForget(props.onMute(muted), 'channels-view')
-                  }
-                  onSnooze={(until) =>
-                    fireAndForget(props.onSnooze(until), 'channels-view')
-                  }
-                />
-              </Match>
-            </Switch>
+                  </MobileDrawer.Section>
+                </Show>
+              </div>
+            </Show>
           </MobileDrawer.ScrollBody>
           {props.editors}
         </MobileDrawer.Content>
