@@ -1,0 +1,34 @@
+// A hold ticket is an actually issued, nonzero native session/generation authority.
+// None carries no authority and requires no additional release call.
+union CompatPublicationHold {
+  1 -> struct CompatPublicationHoldNone { }
+  2 -> struct CompatPublicationHoldDeferred { uint64 ticketId; }
+}
+
+// Native errors retain UTF-16 code units; host errors retain their original
+// namespace and opaque slot, including explicit undefined/null values.
+union CompatHoldFailure {
+  1 -> struct CompatHoldNativeFailure { uint16[] errorText; }
+  2 -> struct CompatHoldHostFailure { uint32 hostSlot; ForeignOpaqueValue error; }
+}
+union CompatHoldReleaseOutcome {
+  1 -> struct CompatHoldClosed { }
+  2 -> struct CompatHoldCompositionHeld { }
+  3 -> struct CompatHoldDeferredFailure { CompatHoldFailure failure; }
+}
+struct CompatHoldReleaseRequest {
+  uint64 ticketId; float64 now; float64 wall;
+}
+struct CompatHoldReleaseReply {
+  uint32 flags; CompatHoldReleaseOutcome outcome;
+}
+
+// NoPending never asserts rollback of an unknown or previously published update.
+// Reemit a real discarded receipt while its stage acknowledgement is outstanding.
+union CompatDiscardOutcome {
+  1 -> struct CompatDiscardNoPending { }
+  2 -> struct CompatDiscarded {
+    uint32 updateId; uint64 committedVersion; CompatPublicationHold publicationHold;
+  }
+}
+struct CompatDiscardReply { CompatDiscardOutcome outcome; }
