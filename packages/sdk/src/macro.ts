@@ -402,6 +402,11 @@ export type {
   ConnectorInspection,
 } from './entities/connected-apps/connector';
 export type { ConnectMcpServerResponse } from './entities/connected-apps/namespace';
+export type {
+  CompanyListing,
+  ListCompaniesOptions,
+  ListedCompany,
+} from './entities/crm/namespace';
 export {
   CrmPipeline,
   PipelineColumn,

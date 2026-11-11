@@ -73,6 +73,11 @@ enforced by the ordinary backend APIs.
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
+- `src/entities/crm/namespace.ts`: `crm.listCompanies()` reads
+  `GET /crm/companies/list` (most recent interaction first, the `ListCompanies`
+  tool's filters); `crm.pipelines.create()` takes stages and fields through
+  `POST /crm/pipelines/create` and keeps the plain `POST /crm/pipelines`
+  without them. Code mode hides `ListCompanies` and `CreatePipeline`.
 - `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
   `/saved_views/definitions` routes; `edit` and `remove` send the revision the
   handle last saw, and keep the response's record so chained writes stay guarded.
