@@ -52,6 +52,8 @@ tokio-util = { version = "0.7", features = ["io"] }
 # and the TauriMessage/ReplayEnvelope types in
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
 tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "bc6ec3b8e80eed80ef4969f4463a357d46adb3b1", features = [
+  # Without it the client never asks for compressed responses.
+  "gzip",
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
