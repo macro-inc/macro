@@ -92,6 +92,21 @@ fn email_and_document_storage_deploy_in_the_shared_matrix() {
         jobs["deploy-services"]["strategy"]["matrix"]["service"],
         "${{ fromJson(needs.setup.outputs.matrix) }}"
     );
+    assert!(
+        jobs["deploy-services"]["needs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("migrate-db"))
+    );
+    let condition = jobs["deploy-services"]["if"].as_str().unwrap();
+    for clause in [
+        "needs.migrate-db.result == 'success'",
+        "!cancelled()",
+        "!contains(needs.*.result, 'failure')",
+        "!contains(needs.*.result, 'cancelled')",
+    ] {
+        assert!(condition.contains(clause), "{condition}");
+    }
 }
 
 #[test]
