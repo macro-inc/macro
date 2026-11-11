@@ -87,7 +87,7 @@ pub struct ExecuteCode {
     /// Fresh UUID for this execution, recorded in the tool input so results can
     /// be recovered even if the session stops before the tool replies.
     #[schemars(
-        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
+        description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; if the ID is already taken otherwise, the code runs under a new ID that the receipt reports."
     )]
     pub execution_id: ExecutionId,
     /// Choose whose account authenticates every SDK operation in this execution.
