@@ -142,6 +142,18 @@ export default function RustMarkdownEditor(props: {
   const formatting = createNativeBodyFormattingOverlay({
     canEdit: canInteractWithMedia,
     alive: () => !abort.signal.aborted,
+    comment: {
+      // Source: <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>; the
+      // draft capability exists only while the native provider is mounted.
+      canComment: () =>
+        ready() &&
+        !abort.signal.aborted &&
+        ENABLE_MARKDOWN_COMMENTS &&
+        authenticated() === true &&
+        permissions.canComment() &&
+        state.editor.md.commentDraft !== undefined,
+      insert: () => state.editor.md.commentDraft?.create() ?? false,
+    },
   });
   overlayLifecycle.add(formatting.dispose);
   const documentMentionContext = createNativeDocumentMentionContext(theme, {

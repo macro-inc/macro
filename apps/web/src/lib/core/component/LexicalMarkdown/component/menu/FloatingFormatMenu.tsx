@@ -31,6 +31,7 @@ import TextT from '@icon/system/regular/text-t.svg';
 import TextUnderline from '@icon/system/regular/text-underline.svg';
 import { Button, Dropdown, SingleSelectCheck, Toolbar } from '@ui';
 import {
+  type Accessor,
   type Component,
   createSignal,
   For,
@@ -150,6 +151,15 @@ export interface FloatingFormatMenuOptions {
    * represented in Markdown, so leave off for Markdown-backed editors.
    */
   extendedInlineFormats?: boolean;
+  /**
+   * Optional Comment action after the formatting controls. It also renders
+   * for commenters (without formatting controls); `close` closes this popup.
+   * Formatting stays gated on the host's isInteractable.
+   */
+  commentAction?: {
+    readonly canComment: Accessor<boolean>;
+    readonly render: (close: () => void) => JSX.Element;
+  };
 }
 
 export function FloatingFormatMenu(props: FloatingFormatMenuOptions) {
@@ -348,8 +358,17 @@ export function HostedFloatingFormatMenu(props: {
     );
   };
 
+  const editControls = () => host.isInteractable();
+  // The live root keeps the owner check isInteractable applies to editing.
+  const commentControls = () =>
+    host.root() !== null && options.commentAction?.canComment() === true;
+
   return (
-    <Show when={showMenu() && host.isInteractable() && domSelection()}>
+    <Show
+      when={
+        showMenu() && (editControls() || commentControls()) && domSelection()
+      }
+    >
       <ScopedPortal scope={options.portalScope}>
         <div
           ref={setMenuRef}
@@ -363,26 +382,38 @@ export function HostedFloatingFormatMenu(props: {
           }}
         >
           <Toolbar>
-            <For each={PrimaryInlineOptions}>
-              {(item) => <InlineButton item={item} />}
-            </For>
-            <Show when={options.showLinkButton ?? true}>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onPointerDown={(e: PointerEvent) => e.preventDefault()}
-                onClick={handleLink}
-                tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
-              >
-                <Dynamic
-                  component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
-                  class="size-4"
-                />
-              </Button>
+            <Show when={editControls()}>
+              <For each={PrimaryInlineOptions}>
+                {(item) => <InlineButton item={item} />}
+              </For>
+              <Show when={options.showLinkButton ?? true}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onPointerDown={(e: PointerEvent) => e.preventDefault()}
+                  onClick={handleLink}
+                  tooltip={
+                    selection()?.hasLinks ? 'Remove Link' : 'Insert Link'
+                  }
+                >
+                  <Dynamic
+                    component={
+                      selection()?.hasLinks ? BrokenLinkIcon : LinkIcon
+                    }
+                    class="size-4"
+                  />
+                </Button>
+              </Show>
+              <MoreInlineDropdown />
+              <Toolbar.Divider />
+              <TextBlockDropdown />
             </Show>
-            <MoreInlineDropdown />
-            <Toolbar.Divider />
-            <TextBlockDropdown />
+            <Show when={editControls() && commentControls()}>
+              <Toolbar.Divider />
+            </Show>
+            <Show when={commentControls() && options.commentAction}>
+              {(action) => action().render(() => setMenuOpen(false))}
+            </Show>
           </Toolbar>
         </div>
       </ScopedPortal>
