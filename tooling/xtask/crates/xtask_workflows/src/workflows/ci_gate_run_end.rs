@@ -1,13 +1,13 @@
 //! `CI Gate Run End` — when a same-repo [`pr_ci`](crate::workflows::pr_ci) run
-//! ends, fails a `CI gate` request the run opened and never closed, so the
-//! status never says `Running on` with nothing running. Generated into
-//! `ci-gate-run-end.yml`.
+//! ends without a verdict, fails `CI gate` and says so, so the status never
+//! says `Running on` with nothing running. Generated into `ci-gate-run-end.yml`.
 //!
 //! The gate job replaces start's pending request with a result. GitHub can end
-//! a run without ever creating that job, and a run cancelled by hand skips it;
-//! either leaves the request pending. A run cancelled by a newer request is
-//! left alone: the newer run owns the status. `CI Gate for Forks` does the same
-//! for fork runs. `workflow_run` runs `main`'s copy of this file.
+//! a run, or a re-run of its failed jobs, without ever creating that job, and a
+//! run cancelled by hand skips it. That leaves the request pending, or an
+//! earlier attempt's result standing. A run cancelled by a newer request is
+//! left alone: the newer run owns the status. `CI Gate for Forks` closes fork
+//! requests the same way. `workflow_run` runs `main`'s copy of this file.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, Workflow, WorkflowRun, WorkflowRunType,

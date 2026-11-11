@@ -16,7 +16,7 @@ import {
   isOpenRequest,
   NO_VERDICT,
   noVerdict,
-  ownsRequest,
+  leftWithoutVerdict,
   PR_CI_PATH,
   runCommand,
   START_JOB,
@@ -173,26 +173,40 @@ describe('isOpenRequest', () => {
   });
 });
 
-describe('ownsRequest', () => {
-  const RUN = 42672631112;
-  const targetUrl = `https://github.com/macro-inc/macro/actions/runs/${RUN}`;
-  const request = { state: 'pending', description: 'Running on 0123456', targetUrl };
+describe('leftWithoutVerdict', () => {
+  const run = { id: 42672631112, run_started_at: '2026-11-09T18:16:43Z' };
+  const targetUrl = `https://github.com/macro-inc/macro/actions/runs/${run.id}`;
+  const during = '2026-11-09T18:17:18Z';
+  const status = (state: string, description: string) => ({
+    state,
+    description,
+    targetUrl,
+    createdAt: during,
+  });
+  const request = status('pending', 'Running on 0123456');
 
-  test('the open request start opened from this run', () => {
-    assert.equal(ownsRequest(request, RUN), true);
+  test("start's request is still open: GitHub never ran the gate job", () => {
+    assert.equal(leftWithoutVerdict(request, run), true);
   });
 
-  test('not a request another run opened, nor a result', () => {
-    assert.equal(ownsRequest(request, 2672631112), false);
-    assert.equal(
-      ownsRequest({ state: 'failure', description: 'Failed: web-app', targetUrl }, RUN),
-      false,
-    );
-    assert.equal(
-      ownsRequest({ state: 'pending', description: 'Not run on this commit. Run: ...', targetUrl }, RUN),
-      false,
-    );
-    assert.equal(ownsRequest(undefined, RUN), false);
+  test('the gate job set a result in this attempt', () => {
+    assert.equal(leftWithoutVerdict(status('failure', 'Failed: web-app'), run), false);
+  });
+
+  test('a result from an earlier attempt that a re-run never replaced', () => {
+    const stale = {
+      ...status('failure', 'Failed: node-modules-nix'),
+      createdAt: '2026-11-09T17:39:35Z',
+    };
+    assert.equal(leftWithoutVerdict(stale, run), true);
+  });
+
+  test("another run's request or result, or none, is not this run's to close", () => {
+    const other = `https://github.com/macro-inc/macro/actions/runs/2672631112`;
+    assert.equal(leftWithoutVerdict({ ...request, targetUrl: other }, run), false);
+    const notRun = status('pending', 'Not run on this commit. Run: ...');
+    assert.equal(leftWithoutVerdict({ ...notRun, targetUrl: other }, run), false);
+    assert.equal(leftWithoutVerdict(undefined, run), false);
   });
 });
 

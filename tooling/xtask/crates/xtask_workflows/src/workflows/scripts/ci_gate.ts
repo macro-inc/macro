@@ -9,8 +9,8 @@
 //   label   the label goes on a PR: fail when it can't start PR CI, because the
 //           PR targets another branch, conflicts with main, or its merge commit
 //           predates PR CI
-//   run-end a run ends: fail a request it opened and never closed, because
-//           GitHub ended the run without its gate job, or it was cancelled
+//   run-end a run ends: fail when its attempt left no verdict, because GitHub
+//           ended it without the gate job, or it was cancelled
 //   fork-request  the label goes on a fork PR: what start does with a write
 //                 token, from a trusted run of `main`'s workflow
 //   fork    after a fork PR's run, whose read-only token could not set the status
@@ -54,7 +54,12 @@ export type Needs = Record<string, { result: string }>;
 export type RunJob = { name: string; conclusion: string | null };
 type Verdict = { state: State; description: string };
 type Outcome = Verdict | null;
-export type GateStatus = { state: string; description: string; targetUrl: string };
+export type GateStatus = {
+  state: string;
+  description: string;
+  targetUrl: string;
+  createdAt: string;
+};
 /// The fields of a `workflow_run` the run-end and fork steps read.
 type FinishedRun = {
   id: number;
@@ -64,6 +69,8 @@ type FinishedRun = {
   html_url: string;
   path: string;
   run_attempt: number;
+  /// When the run's latest attempt started.
+  run_started_at: string;
   pull_requests?: { number: number }[];
 };
 /// Git tree SHA of each CI source at a commit; null where the path is missing.
@@ -252,6 +259,7 @@ async function gateStatus(sha: string): Promise<GateStatus | undefined> {
     state: string;
     description: string | null;
     target_url: string | null;
+    created_at: string;
   }[] = await github('GET', `/repos/${repo()}/commits/${sha}/statuses?per_page=100`);
   const status = statuses.find((each) => each.context === context());
   return (
@@ -259,20 +267,31 @@ async function gateStatus(sha: string): Promise<GateStatus | undefined> {
       state: status.state,
       description: status.description ?? '',
       targetUrl: status.target_url ?? '',
+      createdAt: status.created_at,
     }
   );
 }
 
 /// Whether a trusted step opened a request on this commit that no result has
 /// closed yet.
-export function isOpenRequest(status: Omit<GateStatus, 'targetUrl'> | undefined): boolean {
+export function isOpenRequest(
+  status: Pick<GateStatus, 'state' | 'description'> | undefined,
+): boolean {
   return status?.state === 'pending' && status.description.startsWith(RUNNING);
 }
 
-/// Whether the open request on a commit is this run's: start links it to the
-/// run it opened it from.
-export function ownsRequest(status: GateStatus | undefined, runId: number): boolean {
-  return isOpenRequest(status) && status!.targetUrl.endsWith(`/actions/runs/${runId}`);
+/// Whether a run's latest attempt ended without a verdict on the head: the
+/// newest status is this run's (start and the gate job link it to the run),
+/// and it is start's open request, or a result from an earlier attempt that
+/// a re-run of failed jobs never replaced.
+export function leftWithoutVerdict(
+  status: GateStatus | undefined,
+  run: Pick<FinishedRun, 'id' | 'run_started_at'>,
+): boolean {
+  if (!status?.targetUrl.endsWith(`/actions/runs/${run.id}`)) {
+    return false;
+  }
+  return isOpenRequest(status) || Date.parse(status.createdAt) < Date.parse(run.run_started_at);
 }
 
 /// The tree SHA at `path` in a commit, walking one directory at a time.
@@ -435,10 +454,9 @@ async function closeWithoutVerdict(run: FinishedRun, retry: string) {
 async function runEnd() {
   const run: FinishedRun = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
 
-  // The gate job replaces start's request with a result. A request this run
-  // still owns means the gate job never set one.
-  if (!ownsRequest(await gateStatus(run.head_sha), run.id)) {
-    console.log(`${run.head_sha.slice(0, 10)} has no open request from this run.`);
+  // The gate job replaces start's request with a result, on every attempt.
+  if (!leftWithoutVerdict(await gateStatus(run.head_sha), run)) {
+    console.log(`${run.head_sha.slice(0, 10)} has this attempt's verdict, or another run's status.`);
     return;
   }
 
