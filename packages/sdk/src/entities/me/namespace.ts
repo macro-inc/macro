@@ -1,7 +1,7 @@
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { StaticImage } from '../images/image';
-import { type ProfilePicture } from '../users/profile-picture';
+import type { ProfilePicture } from '../users/profile-picture';
 import { User } from '../users/user';
 
 /** How to store an uploaded profile picture. */
