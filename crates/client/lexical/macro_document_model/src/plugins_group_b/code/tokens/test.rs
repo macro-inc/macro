@@ -331,3 +331,67 @@ fn no_provider_open_and_headless_never_tokenize() -> Result<(), Error> {
     assert!(fixture.requests.lock().expect("requests").is_empty());
     Ok(())
 }
+
+#[test]
+fn typing_inside_code_retokenizes_through_the_leaf_transform() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let code = insert_code(&mut editor, "rust", "let a")?;
+    let before = tokens_of(&editor, code);
+    let last = before.last().map(|(_, _, key)| *key).expect("token");
+    editor.update(|tx| {
+        tx.text(last)?.set_text_content("ab")?;
+        Ok(())
+    })?;
+    let after = tokens_of(&editor, code);
+    let some = |kind: &str| Some(kind.to_owned());
+    assert_eq!(
+        shape(&after),
+        vec![
+            ("code-highlight:let".into(), some("keyword")),
+            ("code-highlight: ".into(), None),
+            ("code-highlight:ab".into(), some("word")),
+        ]
+    );
+    // Source getDiffRange keeps the unchanged prefix.
+    assert_eq!(after[0].2, before[0].2);
+    assert_eq!(after[1].2, before[1].2);
+    let requests = fixture.requests.lock().expect("requests").clone();
+    assert!(requests.contains(&("rust".into(), "let ab".into(), "native-fixture".into())));
+    Ok(())
+}
+
+fn orphan_highlight(editor: &mut Editor) -> Result<NodeKey, Error> {
+    let (paragraph, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let highlight = tx.create(CodeHighlightNode {
+            highlight_type: Some("keyword".into()),
+        })?;
+        tx.text(highlight)?.set_text_content("let")?;
+        tx.append(paragraph, &[highlight.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(paragraph.key())
+    })?;
+    Ok(paragraph)
+}
+
+#[test]
+fn an_orphan_code_highlight_becomes_plain_text_where_highlighting_is_installed()
+-> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let paragraph = orphan_highlight(&mut editor)?;
+    assert_eq!(
+        shape(&tokens_of(&editor, paragraph)),
+        vec![("text:let".into(), None)]
+    );
+    assert!(fixture.requests.lock().expect("requests").is_empty());
+
+    let mut headless = editor_with(&Arc::new(Fixture::default()), EditorMode::Headless);
+    let paragraph = orphan_highlight(&mut headless)?;
+    assert_eq!(
+        shape(&tokens_of(&headless, paragraph)),
+        vec![("code-highlight:let".into(), Some("keyword".into()))]
+    );
+    Ok(())
+}

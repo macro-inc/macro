@@ -5,7 +5,7 @@ mod navigation;
 mod normalize;
 pub(super) mod tokens;
 use crate::nodes::{CustomCodeNode, create_custom_code_node, set_custom_code};
-use lexical_rich_nodes::code::{CodeNode, indent::*};
+use lexical_rich_nodes::code::{CodeHighlightNode, CodeNode, indent::*};
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
@@ -266,8 +266,37 @@ fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> R
     Ok(())
 }
 
-/// Install the Source code-highlighting model effects. Source registers them only
-/// where an editor installs code highlighting, so headless editors leave this out.
+/// Source `$textNodeTransform`: a leaf inside a code node reruns the code transform on its
+/// parent (element transforms only run for intentionally dirtied elements, so typing reaches the
+/// tokenizer only through this); an orphaned code-highlight becomes plain text.
+fn code_leaf(tx: &mut Transaction<'_>, leaf: NodeKey) -> Result<(), Error> {
+    if let Some(code) = tx.parent(leaf).and_then(|parent| tx.view().cast::<CodeNode>(parent)) {
+        return default_highlight_language(tx, code);
+    }
+    if tx.is::<CodeHighlightNode>(leaf) {
+        let text = tx.text_content(leaf).into_owned();
+        let plain = tx.create_text(&text)?;
+        tx.replace(leaf, plain, false)?;
+    }
+    Ok(())
+}
+fn text_leaf(tx: &mut Transaction<'_>, leaf: Id<Text>) -> Result<(), Error> {
+    code_leaf(tx, leaf.key())
+}
+fn highlight_leaf(tx: &mut Transaction<'_>, leaf: Id<CodeHighlightNode>) -> Result<(), Error> {
+    code_leaf(tx, leaf.key())
+}
+
+/// Install the Source code-highlighting model effects (`registerCodeHighlighting`: CodeNode,
+/// TextNode and CodeHighlightNode transforms). Source registers them only where an editor
+/// installs code highlighting, so headless editors leave this out.
+///
+/// Known frontier: Source tokenizes each code node at most once per update
+/// (`nodesCurrentlyHighlighting`); here a rerun in the same update calls the provider again and
+/// its diff is empty, so stored results match while provider call counts may differ.
 pub(super) fn register_highlighting(builder: EditorBuilder) -> EditorBuilder {
-    builder.transform::<CodeNode>(default_highlight_language)
+    builder
+        .transform::<CodeNode>(default_highlight_language)
+        .transform::<Text>(text_leaf)
+        .transform::<CodeHighlightNode>(highlight_leaf)
 }

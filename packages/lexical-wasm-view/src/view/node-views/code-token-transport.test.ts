@@ -3,6 +3,7 @@
 // provider through the model transform. Not Prism parity; the provider here is a native fixture.
 import {
   Access,
+  CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -117,6 +118,39 @@ test('a local code edit stores host tokens through the transport', () => {
       'code-highlight',
       'code-highlight',
       'code-highlight',
+    ]);
+  } finally {
+    fixture.close();
+  }
+});
+
+test('typing inside a code block reaches the provider and retokenizes', () => {
+  const calls: [string, string, string][] = [];
+  const { fixture, code } = surfaceWith((language, text, profile) => {
+    calls.push([language, text, profile]);
+    return fixtureReply(text);
+  });
+  try {
+    const textKey = fixture.view.node(code.key)?.children[0];
+    if (textKey === undefined) throw new Error('Missing native code text');
+    fixture.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: textKey, type: 'text', offset: 5 },
+      focus: { key: textKey, type: 'text', offset: 5 },
+    });
+    fixture.port.command(CommandCode.InsertText, 0, 0, ' b');
+    expect(calls).toContainEqual(['plaintext', 'let a b', 'native-fixture']);
+    // Same shape as the Source oracle (code-leaf-source.test.ts) with the same split.
+    const shape = (fixture.view.node(code.key)?.children ?? []).map((key) => {
+      const node = fixture.view.node(key);
+      return [node?.type, node?.text, node?.props().highlightType ?? null];
+    });
+    expect(shape).toEqual([
+      ['code-highlight', 'let', 'word'],
+      ['code-highlight', ' ', null],
+      ['code-highlight', 'a', 'word'],
+      ['code-highlight', ' ', null],
+      ['code-highlight', 'b', 'word'],
     ]);
   } finally {
     fixture.close();

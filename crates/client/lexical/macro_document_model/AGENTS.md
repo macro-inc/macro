@@ -150,7 +150,7 @@ Use the opt-in Macro search-text sync policy only when the browser enables Markd
 
 Author code-highlight/LineBreak/Tab tokens only from the session's host `CodeTokenProvider` (installed once by `surface::preset_builder_with_mode_and_tokens`; none by default): validate descriptors before creating nodes, splice only the Source `getDiffRange` middle with the shared caret recipe, and never tokenize in Rust. Discarded-candidate construction is an unqualified frontier (tokens.rs).
 
-Default an unset code language to plaintext (Source Prism `$codeNodeTransform` with Macro's tokenizer default) only on view-attached rich surfaces, through `register_code_highlighting`; headless editors and initial-state builds leave it unset until a local update dirties the node.
+Default an unset code language to plaintext (Source Prism `$codeNodeTransform` with Macro's tokenizer default) only on view-attached rich surfaces, through `register_code_highlighting`; headless editors and initial-state builds leave it unset until a local update dirties the node. As in Source `registerCodeHighlighting`, the Text and CodeHighlightNode leaf transforms rerun the code transform on a code parent (element transforms only run for intentionally dirtied elements, so typing depends on them) and turn an orphaned code-highlight into plain text.
 
 Construct inserted equations before invoking the shared current/previous/root-end selection insertion primitive; preserve the display flag and the inherited inline decorator policy.
 
