@@ -166,7 +166,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(viewport.width);
         await page
           .locator('#email')
-          .getByRole('link', { name: 'Learn more about Email', exact: true })
+          .getByRole('link', { name: 'Learn about email', exact: true })
           .click();
         await expect(page).toHaveURL(`${origin}/email`);
         await page.goBack();
