@@ -465,3 +465,44 @@ fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Resu
     assert_eq!(code_language(&editor, code).as_deref(), Some("plaintext"));
     Ok(())
 }
+
+// Source $codeNodeTransform also calls setIsSyntaxHighlightSupported on every run;
+// the host learns each run through a typed event and checks its own grammar table.
+#[test]
+fn every_code_transform_run_reports_its_language_to_the_host() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (code, commit) = editor.update(|tx| {
+        let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
+            .map_err(|_| Error::Invariant("create code node"))?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(code.key())
+    })?;
+    // Setting the default re-dirties the node, so the transform (and report) repeats.
+    let reported: Vec<_> = commit.events_of(&code::CODE_HIGHLIGHT).cloned().collect();
+    assert!(!reported.is_empty());
+    for report in reported {
+        assert_eq!(
+            report,
+            code::CodeHighlight {
+                key: code.index(),
+                generation: code.generation(),
+                language: Some("plaintext".to_owned()),
+            }
+        );
+    }
+    let event = commit
+        .events
+        .iter()
+        .find_map(|event| event_payload(event).transpose())
+        .transpose()?;
+    assert_eq!(
+        event,
+        Some(serde_json::json!({
+            "key": code.index(), "generation": code.generation(), "language": "plaintext"
+        }))
+    );
+    Ok(())
+}

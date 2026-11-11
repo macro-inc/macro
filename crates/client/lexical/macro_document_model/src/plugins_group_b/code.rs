@@ -203,25 +203,58 @@ fn select_all(tx: &mut Transaction<'_>) -> Result<Handled, Error> {
 /// Source highlighter default (Macro sets `PrismTokenizer.defaultLanguage`).
 pub const HIGHLIGHT_DEFAULT_LANGUAGE: &str = "plaintext";
 
+/// One Source `$codeNodeTransform` run, which also sets syntax-highlight support
+/// from the host grammar table; the view host owns that table.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub(super) struct CodeHighlight {
+    pub(super) key: u32,
+    pub(super) generation: u32,
+    pub(super) language: Option<String>,
+}
+pub(super) static CODE_HIGHLIGHT: EventKey<CodeHighlight> = EventKey::new("group-b.code-highlight");
+
+pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    event
+        .payload(&CODE_HIGHLIGHT)
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(Error::from)
+}
+
 /// Source `$codeNodeTransform`: a code node whose language is unset receives the
-/// tokenizer default through `setLanguage`, including the custom-code preview reset.
+/// tokenizer default through `setLanguage`, including the custom-code preview reset;
+/// every run reports the resulting language to the host.
 fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<(), Error> {
-    if tx
+    let Some(language) = tx
         .view()
         .get::<CodeNode>(code)
-        .is_none_or(|node| node.language().is_some())
-    {
+        .map(|node| node.language().map(str::to_owned))
+    else {
         return Ok(());
-    }
-    tx.get_mut::<CodeNode>(code)?
-        .set_language(Some(HIGHLIGHT_DEFAULT_LANGUAGE));
-    if tx
-        .view()
-        .get::<CustomCodeNode>(code.key())
-        .is_some_and(|node| node.preview_enabled)
-    {
-        tx.get_mut::<CustomCodeNode>(code.key())?.preview_enabled = false;
-    }
+    };
+    let language = match language {
+        Some(language) => language,
+        None => {
+            tx.get_mut::<CodeNode>(code)?
+                .set_language(Some(HIGHLIGHT_DEFAULT_LANGUAGE));
+            if tx
+                .view()
+                .get::<CustomCodeNode>(code.key())
+                .is_some_and(|node| node.preview_enabled)
+            {
+                tx.get_mut::<CustomCodeNode>(code.key())?.preview_enabled = false;
+            }
+            HIGHLIGHT_DEFAULT_LANGUAGE.to_owned()
+        }
+    };
+    tx.emit(
+        &CODE_HIGHLIGHT,
+        CodeHighlight {
+            key: code.key().index(),
+            generation: code.key().generation(),
+            language: Some(language),
+        },
+    );
     Ok(())
 }
 

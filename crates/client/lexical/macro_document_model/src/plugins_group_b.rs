@@ -289,6 +289,9 @@ pub fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, E
     if let Some(payload) = text_paste::event_payload(event)? {
         return Ok(Some(payload));
     }
+    if let Some(payload) = code::event_payload(event)? {
+        return Ok(Some(payload));
+    }
     if let Some(payload) = table::event_payload(event)? {
         return Ok(Some(payload));
     }
