@@ -7,6 +7,8 @@ struct Input {}
 
 static FOCUS_START: CommandKey<()> = CommandKey::new("group-b.focus-start");
 static PREPEND_PARAGRAPH: CommandKey<()> = CommandKey::new("group-b.prepend-paragraph");
+static REMOVE_LEADING_EMPTY_PARAGRAPH: CommandKey<()> =
+    CommandKey::new("group-b.remove-leading-empty-paragraph");
 
 /// Source `STOPPING_BLOCK_TYPES` in block-decorator navigation.
 const STOPPING_BLOCK_TYPES: [&str; 5] = [
@@ -22,6 +24,8 @@ pub(super) fn decode(name: &str, json: &str) -> Result<Option<Command>, Error> {
         &FOCUS_START
     } else if name == PREPEND_PARAGRAPH.name() {
         &PREPEND_PARAGRAPH
+    } else if name == REMOVE_LEADING_EMPTY_PARAGRAPH.name() {
+        &REMOVE_LEADING_EMPTY_PARAGRAPH
     } else {
         return Ok(None);
     };
@@ -56,6 +60,11 @@ impl Plugin for TitleHandoff {
                 priority: CommandPriority::Editor,
                 placement: Placement::After,
             },
+            CommandRegistration {
+                command: CommandKind::Extension(&REMOVE_LEADING_EMPTY_PARAGRAPH),
+                priority: CommandPriority::Editor,
+                placement: Placement::After,
+            },
         ];
         COMMANDS
     }
@@ -70,6 +79,10 @@ impl Plugin for TitleHandoff {
         }
         if extension.payload(&PREPEND_PARAGRAPH).is_some() {
             prepend_paragraph(tx)?;
+            return Ok(Handled::Yes);
+        }
+        if extension.payload(&REMOVE_LEADING_EMPTY_PARAGRAPH).is_some() {
+            remove_leading_empty_paragraph(tx)?;
             return Ok(Handled::Yes);
         }
         Ok(Handled::No)
@@ -111,6 +124,25 @@ fn prepend_paragraph(tx: &mut Transaction<'_>) -> Result<(), Error> {
         None => tx.append(NodeKey::ROOT, &[paragraph.key()])?,
     }
     tx.select_end(paragraph)
+}
+
+/// Source body Backspace into the title: an empty, unindented first paragraph
+/// goes when more blocks follow, outside undo history.
+fn remove_leading_empty_paragraph(tx: &mut Transaction<'_>) -> Result<(), Error> {
+    let Some(first) = tx.first_child(NodeKey::ROOT) else {
+        return Ok(());
+    };
+    let view = tx.view();
+    if view.type_name(first)? != Paragraph::TYPE
+        || view.indent(first) != 0
+        || !tx.text_content(first).is_empty()
+        || tx.view().children_size(NodeKey::ROOT) < 2
+    {
+        return Ok(());
+    }
+    tx.remove(first, false)?;
+    tx.add_tag(UpdateTag::Historic);
+    Ok(())
 }
 
 #[cfg(test)]

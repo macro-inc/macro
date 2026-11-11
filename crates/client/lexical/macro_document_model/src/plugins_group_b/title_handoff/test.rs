@@ -116,8 +116,63 @@ fn prepend_paragraph_appends_into_an_empty_root() -> Result<(), Error> {
 }
 
 #[test]
+fn remove_leading_empty_paragraph_removes_it_outside_history() -> Result<(), Error> {
+    let mut editor = editor();
+    let (second, _) = editor.update(|tx| {
+        let empty = tx.create(Paragraph::default())?;
+        let second = tx.create(Paragraph::default())?;
+        let leaf = tx.create_text("Second body line")?;
+        tx.append(second, &[leaf.key()])?;
+        tx.append(NodeKey::ROOT, &[empty.key(), second.key()])?;
+        Ok(second.key())
+    })?;
+    let command = surface::decode_command("group-b.remove-leading-empty-paragraph", "{}", 0, None)?
+        .expect("action");
+    let (handled, commit) = editor.dispatch(&command)?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.tags.contains(&UpdateTag::Historic));
+    let view = commit.next.view();
+    assert_eq!(view.children_keys(NodeKey::ROOT)?, vec![second]);
+    Ok(())
+}
+
+#[test]
+fn remove_leading_empty_paragraph_keeps_text_indent_and_a_sole_block() -> Result<(), Error> {
+    for (text, indent, blocks) in [("x", 0, 2), ("", 1, 2), ("", 0, 1)] {
+        let mut editor = editor();
+        editor.update(|tx| {
+            let first = tx.create(Paragraph::default())?;
+            if !text.is_empty() {
+                let leaf = tx.create_text(text)?;
+                tx.append(first, &[leaf.key()])?;
+            }
+            tx.set_indent(first, indent)?;
+            tx.append(NodeKey::ROOT, &[first.key()])?;
+            if blocks == 2 {
+                let second = tx.create(Paragraph::default())?;
+                tx.append(NodeKey::ROOT, &[second.key()])?;
+            }
+            Ok(())
+        })?;
+        let before = editor.state().to_json()?;
+        let command =
+            surface::decode_command("group-b.remove-leading-empty-paragraph", "{}", 0, None)?
+                .expect("action");
+        let (handled, commit) = editor.dispatch(&command)?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(commit.is_noop(), "{text:?} {indent} {blocks}");
+        assert_eq!(editor.state().to_json()?, before);
+    }
+    Ok(())
+}
+
+#[test]
 fn title_handoff_rejects_unexpected_payloads() {
-    for name in ["group-b.focus-start", "group-b.prepend-paragraph"] {
+    for name in [
+        "group-b.focus-start",
+        "group-b.prepend-paragraph",
+        "group-b.remove-leading-empty-paragraph",
+    ] {
         assert!(decode(name, r#"{"key":1}"#).is_err());
         assert!(decode(name, "null").is_err());
         assert!(decode(name, "[]").is_err());
