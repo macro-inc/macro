@@ -12,6 +12,7 @@ use crate::{
 
 pub mod backends;
 pub mod op_log;
+mod operation_chunks;
 pub mod snapshot;
 
 pub struct SessionStorage {
@@ -128,6 +129,17 @@ impl SessionStorage {
         document_state: &DocumentState,
     ) -> Result<ImportedUpdate> {
         self.oplog.apply_op(document_state, operation).await
+    }
+
+    /// Resolved history is exported only after its required operations are durable.
+    pub(crate) fn resolved_pending(&self, document: &DocumentState) -> Result<Option<Vec<u8>>> {
+        self.oplog.resolved_pending(document)
+    }
+
+    pub(crate) async fn complete_fanout(&self, document: &DocumentState) -> Result<()> {
+        self.oplog
+            .complete_fanout(&document.loro_doc.oplog_vv())
+            .await
     }
 
     pub async fn clear_applied_ops(&self) -> Result<()> {

@@ -34,6 +34,8 @@ async function migrateDatabase(mf: Miniflare) {
 export async function setupMiniflare(
   options: {
     persistPath?: string;
+    workerScriptPath?: string;
+    holdAlarms?: boolean;
     migrate?: boolean;
     dssUrl?: string;
     lexicalServiceUrl?: string;
@@ -46,10 +48,11 @@ export async function setupMiniflare(
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
     },
-    scriptPath: "./build/worker/shim.mjs",
+    scriptPath: options.workerScriptPath ?? "./build/worker/shim.mjs",
+    ...(options.workerScriptPath ? { modulesRoot: "/" } : {}),
     modules: true,
     modulesRules: [
-      { type: "ESModule", include: ["**/build/index.js"] },
+      { type: "ESModule", include: ["**/build/index.js", "**/*.mjs", "**/src/transcript/*.js"] },
       { type: "CompiledWasm", include: ["**/*.wasm"], fallthrough: true },
     ],
     durableObjects: {
@@ -77,6 +80,7 @@ export async function setupMiniflare(
       SPS_API_SECRET_KEY: "local",
       SPS_URL: "http://localhost:8092",
       local:true,
+      ...(options.holdAlarms ? { SYNC_TEST_HOLD_ALARMS: true } : {}),
       ...(options.dssUrl ? { DSS_URL: options.dssUrl, DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       ...(options.lexicalServiceUrl
         ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, ...(options.lexicalServiceAuthKey === null ? {} : { LEXICAL_SERVICE_AUTH_KEY: options.lexicalServiceAuthKey ?? "lexical-key" }) }

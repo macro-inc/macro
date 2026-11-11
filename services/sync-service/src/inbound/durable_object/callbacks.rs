@@ -186,6 +186,9 @@ impl SyncSession {
             }
         };
 
+        let storage = self.session_storage().await?;
+        self.release_resolved_pending(&state, &storage).await?;
+
         if state.should_save() {
             let seshs = self
                 .session_storage()

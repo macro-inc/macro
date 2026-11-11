@@ -247,3 +247,59 @@ Active peer queries (`include_ai=false`) exclude both signed agent actors and
 reserved AI peer IDs. Canvas workers use independent full-width random
 Loro peer identities across worker isolates; signed actor claims still supply
 durable provenance. Cursor names remain untrusted ephemeral presentation.
+
+## Reader-first operation storage rollout
+
+The storage reader accepts legacy byte arrays, embedded inline completion
+receipts, v1/v2 operation chunk manifests, and legacy archive-status sidecars.
+Chunks are checked for exact geometry and SHA-256 before replay. Missing,
+corrupt, or unknown records fail restoration; a partial document is never a
+successful read. Pending rows with incomplete archives remain retained through
+snapshot GC, along with their original attribution. Archive reads use the same
+physical decoder. This reader-only change has no chunked-operation writer or
+writer activation feature: normal appends keep their existing storage format.
+It does not fix oversized writes until a separately reviewed writer is enabled.
+Reader compatibility is not writer-rollout admission: the measured large-text
+chunked cold-join regression remains a blocker for writer activation. Profile
+and fix that path before proposing a writer-enabled release; the pre-existing
+legacy large-text join latency is a separate performance item.
+
+Causally pending updates are durable even before their missing parents arrive.
+When a parent resolves them, the service sends the resolved delta to every
+joined reader, including the sender. Duplicate imports are harmless. The durable
+`SYNC_FANOUT_DEBT` record precedes the parent's pending write and is cleared only
+after all sends succeed. Both this outside-prefix key and the earlier
+`o/~fanout` form are read conservatively; invalid metadata fails closed. Cold
+pending restoration reads the outside-prefix key once; ordinary non-pending
+updates add no fanout storage I/O. Alarms retry durable notification debt.
+
+Release the reader-capable build first, using the ordinary production build
+without any writer feature. Wait at least the existing 300-second Durable
+Object code-update interval and verify the reader floor before a separate
+writer-enabled deployment. Enabling writers is a build/deploy change, not a
+runtime secret or editor flag. No deployment is part of local validation.
+After chunk/receipt writes begin, rollback must keep a reader-capable binary;
+returning to an older reader requires an independently reviewed migration.
+Before activation, the outside-prefix fanout marker remains rollback-readable:
+the old binary is document-safe with new outside-prefix debt, but its old
+notification bug returns. That claim applies to legacy operation rows, not to
+chunked rows, receipts, or the earlier pending-prefix marker.
+
+The `/state` REST size limit remains unchanged. Reader support does not raise
+REST limits or claim that all clients and downstream processors support large
+documents. WebSocket transport framing and all protocol variants are unchanged.
+
+Validate the service with `cargo test -p sync_service`, a local `worker-build
+--features create-default-state,bebop-owned-all --locked`, and `npx vitest run`.
+The physical reader/failure tests use `tests/reader-worker.mjs`, an isolated test
+adapter that is never part of the deployed Worker bundle.
+
+Optional `reader_compatibility.test.ts` controls take
+`SYNC_LEGACY_READER_ADAPTER` and `SYNC_FUTURE_WRITER_ADAPTER`: external test
+entrypoints importing immutable source-built Workers. The legacy control must
+bind tag `v2026.11.6.1` (commit `1feb36c68dd04f3b44092717467a6b1d2dd2d22a`);
+the future control must bind the reviewed activated-writer source and its actual
+build flags. Keep source/lockfile/toolchain/artifact hashes beside the results.
+A passing test with an arbitrary adapter is not version admission. These local
+controls retain separate stores and prove both the permitted legacy rollback
+and the forbidden old-reader rollback after chunk writes, without deployments.

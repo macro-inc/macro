@@ -18,6 +18,7 @@ updates over WebSocket.
   surfaces (spreadsheets, forms, etc.) hosted the same way.
 - `src/outbound/storage/` + `src/outbound/storage/backends/`: snapshot/op-log persistence,
   pluggable across D1/KV/R2/combined backends (see the Cargo feature flags).
+  `operation_chunks.rs` owns the always-on physical operation reader format.
 - `src/inbound/auth.rs` + `src/inbound/credentials.rs`: route-specific access
   extractors and JWT verification against tokens minted by
   `document_storage_service`.
@@ -28,6 +29,8 @@ updates over WebSocket.
   routing and worker proxy/copy orchestration.
 - `src/domain/permissions.rs` + `src/domain/document.rs`: session permission
   policy and content-agnostic atomic update use cases.
+- `src/domain/fanout.rs`: typed causal-notification debt and version-vector
+  validation, independent of the Worker storage/transport adapters.
 
 ## Scope
 
@@ -108,3 +111,21 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
 
 - Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.
+
+## Reader-first storage compatibility
+
+Keep chunk manifests/inline receipts/archive-status readers always enabled while
+normal appends retain legacy storage. This service-only reader change has no
+writer activation feature. Deploy readers first and preserve the 300-second
+code-update wait before any separately reviewed writer activation. After that
+activation, rollback only to a reader-capable build. Before activation, an old
+binary ignores `SYNC_FANOUT_DEBT` and keeps documents readable but restores the
+old causal-notification bug; this does not authorize rollback over chunked rows.
+
+Preserve incomplete pending archives and unresolved causal rows through snapshot
+GC. Decode archive and pending physical values identically, fail closed on
+corrupt metadata/chunks, and clear fanout debt only after every send succeeds.
+Use `tests/reader-worker.mjs` only in isolated tests; its storage controls must
+never enter the deployed bundle. The README documents the two-step release and
+rollback boundary. Keep REST limits and the editor flag independent of storage
+reader/writer policy.

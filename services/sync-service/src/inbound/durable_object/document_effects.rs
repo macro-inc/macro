@@ -50,6 +50,42 @@ pub(super) async fn report_interaction(session_key: &str, env: &Env, reason: Int
     }
 }
 
+impl SyncSession {
+    /// One wire-compatible delta reaches every joined reader, including the
+    /// sender that may already have these operations. Import is idempotent.
+    pub(crate) async fn release_resolved_pending(
+        &self,
+        document: &DocumentState,
+        storage: &crate::storage::SessionStorage,
+    ) -> worker::Result<()> {
+        let Some(update) = storage.resolved_pending(document)? else {
+            return Ok(());
+        };
+        let mut failure = None;
+        for socket in self.get_sockets() {
+            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
+                update: bebop::SliceWrapper::Raw(&update),
+            }) {
+                warn!(error = ?error, "failed to send resolved history; retaining debt");
+                if failure.is_none() {
+                    failure = Some(error);
+                }
+            }
+        }
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        storage.complete_fanout(document).await
+    }
+
+    /// A failed append may have imported operations before the storage await.
+    /// Discard both caches so retry/alarm cannot publish unpersisted history.
+    pub(crate) fn discard_failed_append(&self) {
+        *self.document_state.lock("failed append document cache") = None;
+        *self.session_storage.lock("failed append storage cache") = None;
+    }
+}
+
 pub(super) struct WorkerDocumentEffects<'a> {
     pub session: &'a SyncSession,
     pub document_state: &'a DocumentState,
