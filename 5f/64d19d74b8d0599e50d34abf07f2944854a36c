@@ -1,0 +1,37 @@
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_60bbe192a6a060::t_0dc5f87a552693 142-150
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_60bbe192a6a060::t_0b33bab0afac08 41,44-51
+tooling/fuzz/call-guest-chat/README.md
+  s_60bbe192a6a060::t_67c95b1ca81b76 1-5,68-141
+tooling/fuzz/call-guest-chat/compare-vitest.ts
+  s_60bbe192a6a060::t_2f07bfaf7d5b38 1-71
+tooling/fuzz/call-guest-chat/corpus.test.ts
+  s_60bbe192a6a060::t_3146883c59a2d0 1-42
+tooling/fuzz/call-guest-chat/corpus.ts
+  s_60bbe192a6a060::t_233eb8fc115143 1-170
+tooling/fuzz/call-guest-chat/export-local.ts
+  s_60bbe192a6a060::t_41e9666aaa8a61 1-177
+tooling/fuzz/call-guest-chat/fixture.html
+  s_60bbe192a6a060::t_e4af82051a2570 1-5
+tooling/fuzz/call-guest-chat/fixture.tsx
+  s_60bbe192a6a060::t_823aaa05cb03b2 1-140
+tooling/fuzz/call-guest-chat/run.ts
+  s_60bbe192a6a060::t_181423ded399b3 1-529
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5f64d19d74b8d0599e50d34abf07f2944854a36c",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
