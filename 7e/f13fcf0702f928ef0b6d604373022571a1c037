@@ -1,0 +1,23 @@
+packages/sdk/src/entities/users/profile-picture.ts
+  s_ac5ba988135993::t_6004f70139f763 31-38,46-47
+packages/sdk/src/entities/users/profile-picture.test.ts
+  s_ac5ba988135993::t_326482d17e3655 10-11,49,56,60-74,96,103,109,112
+packages/sdk/AGENTS.md
+  s_ac5ba988135993::t_0ee247e8829ef7 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7ef13fcf0702f928ef0b6d604373022571a1c037",
+  "prompts": {},
+  "sessions": {
+    "s_ac5ba988135993": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66a515c4-ca56-4c3e-b8a3-31cdb7a48bb6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
