@@ -77,6 +77,11 @@ pub enum BlockKind {
 /// Convert the active forward-normalized range without changing its direction.
 pub static NODE_TRANSFORM: CommandKey<BlockKind> = CommandKey::new("group-b.node-transform");
 
+/// Register the live synced body's controls without changing registry-only imports.
+pub(crate) fn register_checklist_controls(builder: EditorBuilder) -> EditorBuilder {
+    checklist::register_controls(builder)
+}
+
 /// Register Group B policy for a surface; registry-only editors stay unchanged.
 pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder {
     if ty == crate::EditorType::Title {
@@ -130,6 +135,8 @@ mod clipboard_test;
 mod code_test;
 #[cfg(test)]
 mod links_test;
+#[cfg(test)]
+mod list_identity_test;
 #[cfg(test)]
 mod media_test;
 #[cfg(test)]

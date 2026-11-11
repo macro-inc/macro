@@ -2,12 +2,18 @@
 use crate::EditorType;
 use lexical_model::{EditorBuilder, EditorMode};
 
-/// Build a live surface or its headless permission fork with the same policy.
+/// Build surface policy; imported-list controls belong to the attached synced body.
 pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuilder {
     let builder = crate::preset_builder_with_mode(ty, mode);
 
     // WP-58 Group B: structure, lists, tables, media, paste and links.
     let builder = crate::plugins_group_b::register(builder, ty);
+    // Source installs checklist controls after code; its parser has no live controls.
+    let builder = if ty == EditorType::MarkdownSync && mode == EditorMode::ViewAttached {
+        crate::plugins_group_b::register_checklist_controls(builder)
+    } else {
+        builder
+    };
 
     // WP-58 Group A: input shortcuts and native menu policy.
     crate::plugins_group_a::register(builder, ty)

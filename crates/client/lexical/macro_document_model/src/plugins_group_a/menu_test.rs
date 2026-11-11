@@ -475,16 +475,16 @@ fn native_source_snippet_extracts_internal_markdown_then_parses_the_native_targe
     assert_eq!(children[0]["children"][0]["format"], 1);
     assert_eq!(children[1]["type"], "custom-code");
     assert_eq!(children[1]["language"], "rust");
-    assert_eq!(children[2]["type"], "list");
-    // Current stored-list import policy preserves ListNode; authored creation
-    // is the separate replacement path pinned by tests/registries.rs.
+    assert_eq!(children[2]["type"], "task-list");
+    // Stored import remains exact; the attached body's controls transform
+    // upgrades the newly inserted list after the snippet update.
     assert_eq!(
         editor
             .state()
             .view()
             .nodes_of_type::<crate::nodes::TaskListNode>()
             .len(),
-        0
+        1
     );
     assert_eq!(
         editor
@@ -492,7 +492,7 @@ fn native_source_snippet_extracts_internal_markdown_then_parses_the_native_targe
             .view()
             .nodes_of_type::<lexical_rich_nodes::list::ListNode>()
             .len(),
-        1
+        0
     );
     assert_eq!(children[2]["start"], 4);
     assert!(!serde_json::to_string(&state)?.contains("source-text"));

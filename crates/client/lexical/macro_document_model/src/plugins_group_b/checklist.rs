@@ -6,6 +6,11 @@ use lexical_rich_nodes::list::{
     item::{get_checked, toggle_checked},
 };
 use std::sync::Arc;
+mod list_identity;
+
+pub(super) fn register_controls(builder: EditorBuilder) -> EditorBuilder {
+    list_identity::register(builder)
+}
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "action", rename_all = "kebab-case")]
