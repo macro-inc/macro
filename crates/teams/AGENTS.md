@@ -44,9 +44,13 @@ event contract (schema, sanitization, delivery semantics).
   `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
   idempotent by key (`subscription_item_change` durable requests/receipts plus
   an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
-  Replay the receipt before resolving current subscription/prices. Pending item
-  changes block subsequent subscription mutations until resolved; retries send
-  the stored endpoint and exact request, including scheduled updates. Retain
+  Replay the receipt before resolving current subscription/prices. A change
+  left pending is settled by the next holder of the subscription guard (applied
+  iff its provider marker landed, else `abandoned`), so it never wedges seat,
+  plan or computer changes; its own replay sends the stored endpoint and exact
+  request, including scheduled updates. Settling a key with no receipt writes
+  an `abandoned` one on the team's subscription, fencing a send still on its
+  way. Removing a computer's item archives its own price. Retain
   receipts after subscription/team deletion to prevent delayed duplicate charges.
   Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI

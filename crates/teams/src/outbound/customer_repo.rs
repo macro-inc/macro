@@ -21,9 +21,9 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, CustomerError, ItemChangeSettlement, ItemProration, ItemQuantityChange,
-        ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionItemView,
-        SubscriptionTerms,
+        BillingCadence, CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration,
+        ItemQuantityChange, ItemRemoval, PriceInfo, ScheduledSeatPlan, SeatPlan, SeatPrices,
+        SubscriptionItemView, SubscriptionTerms,
     },
 };
 
@@ -416,8 +416,17 @@ impl CustomerRepository for CustomerRepositoryImpl {
     async fn settle_item_change(
         &self,
         idempotency_key: &str,
+        fence: Option<&stripe::SubscriptionId>,
     ) -> Result<ItemChangeSettlement, CustomerError> {
-        CustomerRepositoryImpl::settle_item_change(self, idempotency_key).await
+        CustomerRepositoryImpl::settle_item_change(self, idempotency_key, fence).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ItemChangeStatus>, CustomerError> {
+        CustomerRepositoryImpl::item_change_status(self, idempotency_key).await
     }
 
     #[tracing::instrument(skip(self), err)]

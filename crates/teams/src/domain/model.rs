@@ -295,6 +295,17 @@ pub enum ItemChangeSettlement {
     NotApplied,
 }
 
+/// Where an item change stands, from its durable receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemChangeStatus {
+    /// Sent, outcome not known yet; the next guarded change settles it.
+    Pending,
+    /// The change reached the subscription.
+    Applied,
+    /// The change was refused or abandoned and is never sent again.
+    NotApplied,
+}
+
 /// How an item change bills the part of the period already paid for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemProration {

@@ -40,9 +40,7 @@ async fn receipts_survive_intervening_item_changes_and_replay_without_stripe(poo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_unknown_charge_blocks_other_mutations_and_replays_the_exact_request(
-    pool: sqlx::PgPool,
-) {
+async fn an_unknown_charge_replays_the_exact_request(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let sub = subscription();
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
@@ -73,21 +71,6 @@ async fn an_unknown_charge_blocks_other_mutations_and_replays_the_exact_request(
         .unwrap()
         .body
         .clone();
-    assert!(
-        repo.change_item_quantities(
-            &sub.id,
-            vec![computer(1)],
-            ItemProration::InvoiceNow,
-            "computer-add:other"
-        )
-        .await
-        .is_err()
-    );
-    assert!(
-        repo.increment_seat_count(&sub.id, SeatPlan::Max, 1)
-            .await
-            .is_err()
-    );
     server.reset().await;
     // The current quantity is irrelevant: the journal reuses the original request.
     let mut changed = sub.clone();
@@ -215,4 +198,96 @@ async fn a_schedule_charge_marks_the_same_atomic_request_and_recovers_without_re
             .unwrap()
     );
     assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
+/// A change left pending (its response lost, then never replayed) must not
+/// wedge the subscription: the next guarded mutation settles it by the
+/// provider's marker and goes ahead.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_next_mutation_settles_a_pending_change_instead_of_refusing(pool: sqlx::PgPool) {
+    for (landed, expected) in [(false, "abandoned"), (true, "succeeded")] {
+        sqlx::query!("DELETE FROM subscription_item_change")
+            .execute(&pool)
+            .await
+            .unwrap();
+        let server = MockServer::start().await;
+        let sub = subscription();
+        mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+        Mock::given(method("POST"))
+            .and(path("/v1/subscriptions/sub_team"))
+            .respond_with(
+                ResponseTemplate::new(500).set_body_json(
+                    json!({"error": {"type": "api_error", "message": "response lost"}}),
+                ),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let repo = repo(&server, pool.clone());
+        assert!(
+            repo.change_item_quantities(
+                &sub.id,
+                vec![computer(1)],
+                ItemProration::InvoiceNow,
+                "computer-restore:lost",
+            )
+            .await
+            .is_err()
+        );
+        server.reset().await;
+        let mut current = sub.clone();
+        if landed {
+            current.metadata.insert(
+                ITEM_CHANGE_KEY.to_owned(),
+                "computer-restore:lost".to_owned(),
+            );
+        }
+        // One read settles the pending change, one is the new change's own.
+        mount(&server, "GET", "/v1/subscriptions/sub_team", &current, 2).await;
+        mount(&server, "POST", "/v1/subscriptions/sub_team", &current, 1).await;
+        repo.change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-add:next",
+        )
+        .await
+        .unwrap();
+        let outcome = sqlx::query_scalar!(r#"SELECT outcome::text AS "outcome!" FROM subscription_item_change WHERE idempotency_key = 'computer-restore:lost'"#).fetch_one(&pool).await.unwrap();
+        assert_eq!(outcome, expected, "landed: {landed}");
+    }
+}
+
+/// Settling a change that was never sent fences it: a send still on its way
+/// (another replica, or a request that has not taken the guard yet) finds
+/// the abandoned receipt and never charges.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn settling_an_unsent_change_fences_a_later_send(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    let repo = repo(&server, pool.clone());
+    assert_eq!(
+        repo.settle_item_change("computer-add:expired", Some(&sub.id))
+            .await
+            .unwrap(),
+        ItemChangeSettlement::NotApplied
+    );
+    assert!(matches!(
+        repo.change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-add:expired",
+        )
+        .await,
+        Err(CustomerError::ItemChangeAbandoned)
+    ));
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.method.as_str() != "POST")
+    );
 }

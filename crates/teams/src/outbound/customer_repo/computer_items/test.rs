@@ -135,9 +135,25 @@ async fn a_computer_price_copies_the_catalog_price_with_the_computer_id(pool: sq
 async fn removing_a_computer_item_deletes_it_without_proration(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let mut sub = subscription();
-    sub.items.data.push(item("si_c1", "price_c1", 1));
+    let mut computer_item = item("si_c1", "price_c1", 1);
+    computer_item.metadata = Some(HashMap::from([(
+        COMPUTER_ID_KEY.to_owned(),
+        "computer-1".to_owned(),
+    )]));
+    sub.items.data.push(computer_item);
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(
+        &server,
+        "POST",
+        "/v1/prices/price_c1",
+        &stripe::Price {
+            id: "price_c1".parse().unwrap(),
+            ..Default::default()
+        },
+        1,
+    )
+    .await;
     mount(
         &server,
         "GET",
@@ -158,6 +174,12 @@ async fn removing_a_computer_item_deletes_it_without_proration(pool: sqlx::PgPoo
     assert_eq!(update["items[0][id]"], "si_c1");
     assert_eq!(update["items[0][deleted]"], "true");
     assert_eq!(update["proration_behavior"], "none");
+    // The computer's own price bills nothing any more: it is archived.
+    let archive = requests
+        .iter()
+        .find(|request| request.url.path() == "/v1/prices/price_c1")
+        .expect("the computer's price is archived");
+    assert_eq!(form(archive)["active"], "false");
 }
 
 /// Edge case (e): an item, or a whole subscription, that is already gone
@@ -281,13 +303,13 @@ async fn settling_an_unknown_change_abandons_it_unless_its_marker_landed(pool: s
         .await
         .unwrap();
         assert_eq!(
-            repo.settle_item_change(key).await.unwrap(),
+            repo.settle_item_change(key, None).await.unwrap(),
             expected,
             "{key}"
         );
     }
     assert_eq!(
-        repo.settle_item_change("computer-add:never-sent")
+        repo.settle_item_change("computer-add:never-sent", None)
             .await
             .unwrap(),
         ItemChangeSettlement::NotApplied

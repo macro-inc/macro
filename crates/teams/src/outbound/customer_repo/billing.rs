@@ -18,6 +18,11 @@ impl CustomerRepositoryImpl {
         Ok(guard)
     }
 
+    /// Serialize a mutation of subscription `id` with every other one. A
+    /// change an earlier holder left pending (its outcome never learned) is
+    /// settled first, by the provider's marker, so it can never wedge the
+    /// subscription: nothing of ours can still be sending it while we hold
+    /// the guard. `operation` is the caller's own change, which it replays.
     pub(super) async fn subscription_guard(
         &self,
         id: &stripe::SubscriptionId,
@@ -31,11 +36,14 @@ impl CustomerRepositoryImpl {
         let pending = sqlx::query_scalar!(
             "SELECT idempotency_key FROM subscription_item_change WHERE subscription_id = $1 AND outcome = 'pending'",
             id.as_str(),
-        ).fetch_optional(&self.pool).await.map_err(|error| CustomerError::StorageLayerError(error.into()))?;
-        if let Some(pending) = pending
-            && Some(pending.as_str()) != operation
-        {
-            return Err(SubscriptionDataError::UnresolvedItemChange.into());
+        ).fetch_all(&self.pool).await.map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+        for key in pending {
+            if Some(key.as_str()) == operation {
+                continue;
+            }
+            if let Some(change) = self.item_change(&key).await? {
+                self.settle_pending_locked(&key, change).await?;
+            }
         }
         Ok(guard)
     }
