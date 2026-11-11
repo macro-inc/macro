@@ -15,9 +15,10 @@ pub(super) fn decode(name: &str, json: &str) -> Result<Option<Command>, Error> {
     if name != INSERT.name() {
         return Ok(None);
     }
+    let fields: serde_json::Map<String, serde_json::Value> = serde_json::from_str(json)?;
+    let payload = serde_json::from_value(serde_json::Value::Object(fields))?;
     Ok(Some(Command::Extension(ExtensionCommand::new(
-        &INSERT,
-        serde_json::from_str::<EquationInsert>(json)?,
+        &INSERT, payload,
     ))))
 }
 

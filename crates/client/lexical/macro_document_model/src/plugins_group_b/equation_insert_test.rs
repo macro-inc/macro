@@ -98,6 +98,7 @@ fn equation_insert_without_selection_uses_the_root_end_and_keeps_empty_payload()
 fn equation_insert_rejects_missing_malformed_and_unknown_payload_fields() {
     for json in [
         r#"{}"#,
+        r#"["x",true]"#,
         r#"{"equation":"x"}"#,
         r#"{"equation":null,"inline":true}"#,
         r#"{"equation":"x","inline":true,"extra":1}"#,
