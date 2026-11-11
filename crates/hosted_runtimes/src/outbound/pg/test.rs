@@ -12,6 +12,7 @@ use super::*;
 use crate::domain::models::ComputerName;
 use crate::domain::size::{DiskGib, MemoryGib, Vcpus};
 
+mod agents;
 mod purchase;
 
 const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00aa);
@@ -65,6 +66,7 @@ fn standard(id: u128) -> NewComputer {
             .unwrap(),
         price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+        agent: None,
     }
 }
 

@@ -144,6 +144,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
                 price_id: None,
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
+                agent: None,
             },
             now(),
         )

@@ -163,6 +163,7 @@ async fn main() -> Result<(), rootcause::Report> {
             egress_url: "https://dev-gateway.macro.com/agent-harness-egress".parse()?,
         },
         traceparent: None,
+        agent: None,
     };
     let id = computer.id;
     println!("instance {}", instance_name(id));

@@ -248,6 +248,22 @@ impl<
         self.purchase(request).await
     }
 
+    /// [`Self::purchase_for_team`] for a computer that runs an agent teammate:
+    /// the same rollout, billing policy and per-computer charge, with the
+    /// computer linked to the agent's account. `request.created_by` is the
+    /// admin buying it.
+    #[tracing::instrument(skip(self, request, agent), fields(team_id = %request.team_id), err)]
+    pub async fn purchase_for_agent(
+        &self,
+        mut request: PurchaseRequest,
+        agent: MacroUserIdStr<'static>,
+    ) -> Result<ComputerId, ComputerError> {
+        self.require_rollout(&request.created_by).await?;
+        self.require_attached().await?;
+        request.billing = self.purchase_billing(request.team_id).await?;
+        self.purchase_linked(request, Some(agent)).await
+    }
+
     /// Quote using server-side team policy.
     #[tracing::instrument(skip(self, user_id), err)]
     pub async fn quote_for_team(
@@ -323,12 +339,21 @@ impl<
     /// Reserve units, confirm a comp or bill with `extra_items` in one
     /// subscription update, then start provisioning. Returns the
     /// computer id at once; [`Self::status`] reports setup progress.
+    pub async fn purchase(&self, request: PurchaseRequest) -> Result<ComputerId, ComputerError> {
+        self.purchase_linked(request, None).await
+    }
+
     #[tracing::instrument(
-        skip(self, request),
-        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, comped = matches!(&request.billing, PurchaseBilling::Comped { .. })),
+        name = "purchase",
+        skip(self, request, agent),
+        fields(team_id = %request.team_id, size = request.size.as_ref(), computer_id, billing_kind, comped = matches!(&request.billing, PurchaseBilling::Comped { .. }), for_agent = agent.is_some()),
         err
     )]
-    pub async fn purchase(&self, request: PurchaseRequest) -> Result<ComputerId, ComputerError> {
+    async fn purchase_linked(
+        &self,
+        request: PurchaseRequest,
+        agent: Option<MacroUserIdStr<'static>>,
+    ) -> Result<ComputerId, ComputerError> {
         self.require_attached().await?;
         tracing::Span::current().record(
             "billing_kind",
@@ -377,6 +402,7 @@ impl<
                     catalog_entry: entry.id.clone(),
                     price_id,
                     created_by: request.created_by,
+                    agent,
                 },
                 self.clock.now(),
             )

@@ -83,6 +83,7 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
             catalog_entry: crate::domain::size::current_catalog()[0].id.clone(),
             price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            agent: None,
         },
         now(),
     )
@@ -190,6 +191,7 @@ pub(crate) async fn detached_router_service(
             catalog_entry: entry.id,
             price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            agent: None,
         },
         now(),
     )

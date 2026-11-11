@@ -1,4 +1,5 @@
 use std::str::FromStr;
+mod agent;
 mod image_update;
 mod redeploy;
 
@@ -359,6 +360,7 @@ async fn paid_computer(
                 .unwrap(),
                 price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+                agent: None,
             },
             now(),
         )
@@ -392,6 +394,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 name: ComputerName::try_new("Ada").unwrap(),
                 deployment: crate::domain::fakes::deployment(),
                 traceparent: None,
+                agent: None,
             },
             true,
         )]

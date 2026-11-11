@@ -259,6 +259,8 @@ pub struct NewComputer {
     pub price_id: Option<stripe::PriceId>,
     /// Macro user who purchased the computer.
     pub created_by: MacroUserIdStr<'static>,
+    /// The agent teammate the computer was bought for, if any.
+    pub agent: Option<MacroUserIdStr<'static>>,
 }
 
 /// A buy request. For Stripe purchases, `extra_items` join the computer's

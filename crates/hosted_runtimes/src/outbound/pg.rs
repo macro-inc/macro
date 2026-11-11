@@ -20,6 +20,7 @@ use crate::domain::models::{
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
 
+mod agents;
 mod row;
 use row::ComputerRow;
 
@@ -480,8 +481,9 @@ impl ComputerRepo for PgComputerRepo {
             r#"
             INSERT INTO hosted_runtime
                 (id, team_id, name, size, host_id, awake, holds_units, state,
-                 created_by, created_at, updated_at, vcpus, memory_gib, disk_gib, catalog_entry, price_id)
-            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7, $8, $8, $9, $10, $11, $12, $13)
+                 created_by, created_at, updated_at, vcpus, memory_gib, disk_gib, catalog_entry, price_id,
+                 agent_user_id)
+            VALUES ($1, $2, $3, $4, $5, false, true, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14)
             "#,
             computer.id.as_uuid(),
             computer.team_id,
@@ -496,6 +498,7 @@ impl ComputerRepo for PgComputerRepo {
             i32::try_from(computer.resources.disk_gib.get()).map_err(|error| ReserveError::Storage(PgComputerError::from(error)))?,
             computer.catalog_entry.as_str(),
             computer.price_id.as_ref().map(|id| id.as_str()),
+            computer.agent.as_ref().map(|agent| agent.as_ref()),
         )
         .execute(&mut *tx)
         .await

@@ -909,6 +909,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                 price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
+                agent: None,
             },
             now(),
         )
