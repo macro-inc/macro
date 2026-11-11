@@ -1,0 +1,31 @@
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.test.ts
+  s_8d646e45ac1b9c::t_036a734d7bf9c9 3-7,9,45-47,317,320-357,362-372,382-385,388-392
+  s_8d646e45ac1b9c::t_6e30b2d73530ba 373-379
+  s_8d646e45ac1b9c::t_bc4908a2c4a1ae 380-381
+  s_8d646e45ac1b9c::t_bc558bcaa486cf 1,8,358-361
+  s_8d646e45ac1b9c::t_95043b30514b32 318-319,387
+  s_8d646e45ac1b9c::t_5a330a173821de 386
+  s_8d646e45ac1b9c::t_a1e4f6cdec956d 393-394
+apps/web/AGENTS.md
+  s_8d646e45ac1b9c::t_4736633358253b 969
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.tsx
+  s_8d646e45ac1b9c::t_22d9615ca9bf90 98-109
+  s_8d646e45ac1b9c::t_485b31434b897d 216
+  s_8d646e45ac1b9c::t_6715fc2ef0070a 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1929e0a0f65ad19d2bf589e64e7ff2148d581edd",
+  "prompts": {},
+  "sessions": {
+    "s_8d646e45ac1b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25e33e5f-9fbc-4dfa-b88b-7061d1d06650",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
