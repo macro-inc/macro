@@ -27,15 +27,14 @@ snippets, task projects (initiatives), forms, and databases.
 
 ## Recipes
 
-- Add an SVG to `apps/web/src/components/icon/entity/`, regenerate with `bun tooling/icons/generate-entity-icons.ts`, then add its name and noun to a section and regenerate again.
-- Deploy server support before or with the web app that offers new names; redraw under the same name, retire from sections, or map an old name in `tooling/icons/entity-icon-aliases.json`.
-- Never delete a permanent name without a data migration; `tooling/icons/entity-icon-names.json` is append-only after the initial catalog reset. See `docs/design/entity-appearance.md`.
-- Run `bun tooling/icons/generate-entity-icons.ts --check` to reject missing names, identical geometry, invalid sections, and stale generated output.
-- Regenerate all service and AI-tool contracts with `bun run gen-api` from `apps/web`; never hand-write appearance DTOs.
+- Follow `docs/design/entity-appearance.md#icon-catalog-maintenance` for source paths, adding an icon, generated outputs, deployment order, and required checks.
+- Read `tooling/icons/AGENTS.md` before changing the generator or catalog metadata.
+- When the appearance wire schema changes, regenerate service and AI-tool contracts with `bun run gen-api` from `apps/web`; never hand-write appearance DTOs.
 
 ## Checks
 
-- Run the focused editor, picker, appearance query, and imperative dialog tests.
+- Run `bun run check` and `bun run test src/features/entity-appearance` from `apps/web`.
+- For catalog changes, also run the generator and backend checks in the maintenance guide.
 
 ## Gotchas
 

@@ -52,8 +52,20 @@ icon nouns. Tooltips show those nouns; search matches nouns and stored names.
 and English labels. `tooling/icons/entity-icon-names.json` records permanent
 names and grows when new drawings or aliases are added.
 
-- Add an SVG to the entity folder, regenerate, add its name and noun to a section,
-  and regenerate again. Deploy server support before or with the web picker.
+### Add an icon
+
+1. Add the approved SVG to `apps/web/src/components/icon/entity/` under a durable
+   kebab-case name; do not use third-party artwork or duplicate an existing drawing.
+2. Add its name and display noun to the appropriate section in
+   `tooling/icons/entity-icon-sections.json`.
+3. From the repository root, run `bun tooling/icons/generate-entity-icons.ts`.
+   Commit the SVG, section metadata, permanent name manifest, generated Rust
+   allowlist, generated web catalog, and generated English labels together.
+4. Run the checks below; do not hand-edit generated outputs to make them pass.
+5. Deploy server support before or with the web picker that offers the new name.
+
+### Maintain existing icons
+
 - Redraw under the existing name; do not change identity to change artwork.
 - Retire a drawing by removing its section entry. It stays valid and renderable
   but never appears in the picker or Recent.
@@ -63,10 +75,26 @@ names and grows when new drawings or aliases are added.
 - Never delete a permanent name without an explicit data migration. Generation
   checks every committed name list, so trimming the manifest cannot bypass the
   guard. Missing names require aliases; shallow clones must fetch full history.
-- Run `bun tooling/icons/generate-entity-icons.ts --check` and
-  `bun test tooling/icons/generate-entity-icons.test.ts`. Generation rejects
-  identical geometry after removing icon metadata and normalizing whitespace,
-  rather than silently dropping a drawing.
+
+### Check a catalog change
+
+Run from the repository root, using the repository development environment for Rust:
+
+```sh
+bun tooling/icons/generate-entity-icons.ts --check
+bun test tooling/icons/generate-entity-icons.test.ts
+bun run --cwd apps/web check
+bun run --cwd apps/web test src/features/entity-appearance
+cargo test -p model-entity
+just check
+```
+
+Generation rejects identical geometry after removing icon metadata and normalizing
+whitespace, rather than silently dropping a drawing. `--check` also rejects missing
+permanent names, invalid aliases or sections, and stale generated output.
+For generator paths and configuration, see `tooling/icons/AGENTS.md`.
+Regenerate API/SDK contracts only when the appearance wire schema changes; adding
+an allowed icon name does not change that schema.
 
 ## Editing
 
