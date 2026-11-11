@@ -582,4 +582,37 @@ describe('command menu search ranking', () => {
       'prefix-person',
     ]);
   });
+  it('leads with teammates and conversations with them among equally good matches only', () => {
+    const windowed = (id: string, name: string, personOrder: number) => ({
+      ...person(id, name),
+      personOrder,
+    });
+    const teammateDm = {
+      ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm'),
+      data: {
+        ...channel('teammate-dm', 'Jacob Adams', NOW - 40 * DAY, 'dm').data,
+        participantIds: ['viewer', 'adams'],
+      },
+    } as EntityItem;
+    const items = [
+      // The window lists the outside contact first.
+      windowed('outside', 'Jacob', 0),
+      windowed('teammate', 'Jacob Baker', 1),
+      teammateDm,
+      windowed('weak-teammate', 'Major Jacobson', 2),
+      note('exact-note', 'Jacob', NOW),
+    ];
+    const order = rankCommandSearchItems(items, 'jacob', {
+      preserveAdditionalEntityMatches: true,
+      teammateIds: new Set(['teammate', 'adams', 'weak-teammate']),
+      viewerId: 'viewer',
+    }).map((item) => item.id);
+
+    expect(order.slice(0, 2).sort()).toEqual(['teammate', 'teammate-dm']);
+    expect(order.indexOf('outside')).toBe(2);
+    // A teammate who matches less well stays below better matches.
+    expect(order.indexOf('weak-teammate')).toBeGreaterThan(
+      order.indexOf('exact-note')
+    );
+  });
 });

@@ -436,7 +436,9 @@ export function ChannelThread(props: ThreadProps) {
                 <Thread.TerminalRail />
               </Show>
               <DebugSuspense name="ChannelThread.replies">
-                <Thread.RepliesContainer flat={props.monorail}>
+                <Thread.RepliesContainer
+                  flat={props.monorail || props.repliesAsRoots}
+                >
                   <DebugSuspense name="ChannelThread.ReplyList">
                     <Thread.ReplyList
                       parent={props.parent()}
@@ -457,6 +459,7 @@ export function ChannelThread(props: ThreadProps) {
                       isThreadFocused={isThreadFocused}
                       onSelectReply={selectReply}
                       monorail={props.monorail}
+                      asRoots={props.repliesAsRoots}
                       hideRail={props.hideRail}
                       railContinues={
                         hasInlineReplyInput() ||
