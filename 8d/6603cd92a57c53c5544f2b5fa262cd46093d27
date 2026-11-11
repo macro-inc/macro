@@ -1,0 +1,50 @@
+packages/sdk/src/events/receiver.ts
+  s_7679ed7d96d8ba::t_602656716e6637 13,63-64
+  s_7679ed7d96d8ba::t_5c2a45557c8676 65
+packages/sdk/tests/user-event.test.ts
+  s_7679ed7d96d8ba::t_aeecdc5c38c09f 1-49
+packages/sdk/src/events/types.ts
+  s_7679ed7d96d8ba::t_602656716e6637 12,38-39
+packages/sdk/generated/storage/types.gen.ts
+  s_7679ed7d96d8ba::t_602656716e6637 21913-21931,21939-21949,22349
+packages/sdk/specs/storage.json
+  s_7679ed7d96d8ba::t_602656716e6637 60116-60134,60148-60167,60807-60810
+packages/sdk/README.md
+  s_7679ed7d96d8ba::t_602656716e6637 816-817,823-826
+packages/sdk/src/events/hydrate/user.ts
+  s_7679ed7d96d8ba::t_aeecdc5c38c09f 1-24
+packages/sdk/generated/storage/index.ts
+  s_7679ed7d96d8ba::t_602656716e6637 4
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_7679ed7d96d8ba::t_6fb248191d8cc8 3204-3206,3208-3210
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadata.ts
+  s_7679ed7d96d8ba::t_e201fbfbfd8a0b 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadataFileId.ts
+  s_7679ed7d96d8ba::t_2955eba251fc09 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userPictureChangedMetadataUrl.ts
+  s_7679ed7d96d8ba::t_a8d80ea64d91ea 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEvent.ts
+  s_7679ed7d96d8ba::t_fe9ed94abec333 1-12
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEventOneOf.ts
+  s_7679ed7d96d8ba::t_62de14ccf8c9a7 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/userTopicEventOneOfEventType.ts
+  s_7679ed7d96d8ba::t_19cd799462e306 1-14
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_7679ed7d96d8ba::t_9c9f940947f8d8 60116-60134,60148-60167,60807-60810
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8d6603cd92a57c53c5544f2b5fa262cd46093d27",
+  "prompts": {},
+  "sessions": {
+    "s_7679ed7d96d8ba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4d4aa90-5c93-410b-a992-495c874ce315",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
