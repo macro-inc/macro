@@ -470,6 +470,11 @@ export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_require
  */
 export type CurrentSystemStatus = SystemStatus & {
     /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
+    /**
      * When it was set; absent when no status was ever set. Clients keep the
      * newest status they have seen, whether fetched or pushed.
      */
@@ -4768,6 +4773,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4828,6 +4837,10 @@ export type PutProfilePictureFileErrors = {
      * The caller has no such file
      */
     404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

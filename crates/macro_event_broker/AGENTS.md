@@ -52,4 +52,4 @@ Macro's event topics.
 
 - Rules: `.agents/rules/rust/architecture.md` (CS-51/CS-52 hexagonal layering)
 
-- Event constructors capture request-local agent correlation into the envelope; restore it before downstream mutations and capture it before spawning work.
+- Event constructors capture request-local agent correlation and display verb into the envelope; restore both before downstream mutations and capture both before spawning work.

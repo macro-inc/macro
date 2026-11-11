@@ -11,12 +11,20 @@ export class TaskTemplateNamespace {
     return TaskTemplate.byId(this.client, id);
   }
 
-  /** List personal templates and, when supplied, a current team's templates. */
+  /**
+   * List personal templates and, when supplied, a current team's templates.
+   *
+   * @readonly
+   */
   list(opts?: { team?: Team }): Promise<TaskTemplate[]> {
     return TaskTemplate.list(this.client, opts);
   }
 
-  /** Create a personal template or a template owned by a current team. */
+  /**
+   * Create a personal template or a template owned by a current team.
+   *
+   * @write
+   */
   create(opts: CreateTaskTemplateOptions): Promise<TaskTemplate> {
     return TaskTemplate.create(this.client, opts);
   }

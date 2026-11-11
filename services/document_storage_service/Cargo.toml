@@ -105,7 +105,7 @@ connection = { path = "../../crates/connection", default-features = false, featu
   "outbound",
 ] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-contacts = { path = "../../crates/contacts", features = ["directory-names"] }
+contacts = { path = "../../crates/contacts", features = ["directory-names", "picture-fanout"] }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",

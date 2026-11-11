@@ -160,7 +160,11 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
     (value) => value.descriptionMarkdown,
   );
 
-  /** Selected property handles and their optional defaults, including blank fields. */
+  /**
+   * Selected property handles and their optional defaults, including blank fields.
+   *
+   * @readonly
+   */
   async properties(): Promise<TaskTemplateProperty[]> {
     const { configuration: value } = await this.detail.get();
     const defaults = new Map(
@@ -172,7 +176,11 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
     }));
   }
 
-  /** Update a managed template; after a revision conflict, read a fresh handle before retrying. */
+  /**
+   * Update a managed template; after a revision conflict, read a fresh handle before retrying.
+   *
+   * @write
+   */
   async update(opts: UpdateTaskTemplateOptions): Promise<void> {
     const current = await this.detail.get();
     await this.mutate((client) =>
@@ -206,7 +214,11 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
     );
   }
 
-  /** Delete a managed template at its observed revision without deleting any created tasks. */
+  /**
+   * Delete a managed template at its observed revision without deleting any created tasks.
+   *
+   * @destructive
+   */
   async delete(): Promise<void> {
     const current = await this.detail.get();
     await this.mutate((client) =>

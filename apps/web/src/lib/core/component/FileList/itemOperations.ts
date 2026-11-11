@@ -3,8 +3,6 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { usePaywallState } from '@core/constant/PaywallState';
-import { isPaymentError } from '@core/util/handlePaymentError';
 import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
 import { duplicateDatabase } from '@queries/storage/databases';
@@ -413,8 +411,7 @@ export async function bulkMoveToFolder(
  * only through the GraphQL entity mutation, which has no REST counterpart.
  */
 export function canDuplicateItemType(itemType: ItemType): boolean {
-  if (itemType === 'document' || itemType === 'chat' || itemType === 'database')
-    return true;
+  if (itemType === 'document' || itemType === 'database') return true;
   return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
 }
 
@@ -424,7 +421,6 @@ export async function copyItem(args: {
   name: string;
 }): Promise<string | null> {
   const { itemType, id, name } = args;
-  const { showPaywall } = usePaywallState();
   const createCopyName = (originalName: string): string => {
     return `${originalName} copy`;
   };
@@ -438,16 +434,14 @@ export async function copyItem(args: {
     newId = result.value;
   } else if (
     isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
+    (itemType === 'document' || itemType === 'project')
   ) {
     const result = await catchToResult(() =>
       duplicateEntity(
         { type: ENTITY_TYPES[itemType], id },
-        // The REST chat endpoint also ignores the supplied name and names the copy itself.
-        itemType === 'chat' ? undefined : createCopyName(name)
+        createCopyName(name)
       )
     );
-    if (itemType === 'chat' && isPaymentError(result)) showPaywall();
     if (result.isErr()) return null;
     newId = result.value;
   } else
@@ -459,20 +453,6 @@ export async function copyItem(args: {
         });
         if (result.isErr()) return null;
         newId = result.value.documentId;
-        break;
-      }
-      case 'chat': {
-        const result = await cognitionApiServiceClient.copyChat({
-          chat_id: id,
-          name: createCopyName(name),
-        });
-        if (isPaymentError(result)) {
-          showPaywall();
-        }
-        if (result.isErr()) {
-          return null;
-        }
-        newId = result.value.id;
         break;
       }
       default:
