@@ -70,6 +70,8 @@ export class RoutineSuggestion {
    * Retire this open suggestion because it no longer fits the user's work,
    * with a one-line `reason`. Only a routines generation session may. A
    * retired catalog routine may be suggested again later.
+   *
+   * @mcp-exclude only a routines generation session may call it
    */
   async retire(reason: string): Promise<SuggestOutcome> {
     return unwrap(

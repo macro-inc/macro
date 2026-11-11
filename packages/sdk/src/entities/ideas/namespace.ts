@@ -70,6 +70,8 @@ export type IdeaSuggestion =
  * - Read every idea first with `macro.ideas.review()`. Then add with `suggest`, change with `idea.rewrite`, and retire with `idea.retire` what no longer matters.
  * - Each write answers `{ ok, problems }`: when `ok` is false, fix what `problems` says and try again.
  * - Name items in `about`, never in words: titles, summaries and prompts name no one's email address, phone number or street address.
+ *
+ * @mcp-exclude Ideas are written by hidden generation sessions and acted on in the app, not over MCP.
  */
 export class IdeaNamespace {
   constructor(private readonly client: MacroClient) {}

@@ -48,6 +48,9 @@ export class TeamInvite extends MacroEntity<TeamInviteDetails> {
   /**
    * Revoke this invite so it can no longer be accepted; only a team admin or
    * owner may revoke.
+   *
+   * @destructive
+   * @idempotent
    */
   async revoke(): Promise<void> {
     await this.mutate((client) =>

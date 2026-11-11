@@ -30,6 +30,9 @@ export class MeNamespace {
    * Upload an image to use as your profile picture. This only stores it; pass
    * the result to {@link MeNamespace.update} to start using it. Pictures can be
    * at most 16 MB, and each user can start 20 uploads an hour.
+   *
+   * @write
+   * @mcp-exclude Takes raw image bytes; MCP calls carry JSON only.
    */
   async uploadProfilePicture(
     data: Blob | Uint8Array<ArrayBuffer>,
@@ -65,6 +68,9 @@ export class MeNamespace {
    *   contentType: 'image/png',
    * });
    * await macro.me.update({ name: 'Research Agent', profilePicture: image });
+   *
+   * @write
+   * @idempotent
    */
   async update(options: UpdateMeOptions): Promise<void> {
     if (options.profilePicture) {
