@@ -260,7 +260,7 @@ fn connection_prompt(blocker: SessionBlocker) -> AgentConnectionPrompt {
         ),
         SessionBlocker::SandboxUnavailable => (
             "@coder",
-            "has no cloud sandbox to run in yet. Connect a runtime of your own in Runtimes settings, then mention me again.",
+            "has no cloud sandbox to run in yet. Connect a runtime of your own in Runtimes settings and mention its agent instead.",
             harness_id::MACROD_HARNESS_SLUG,
             "Runtimes",
         ),
