@@ -1,0 +1,19 @@
+docs/agent-guide/calls.md
+  s_f17810de71e8e2::t_9e7c580ed0d067 190-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1d54473588cf87c0c780bacbd9f67cf12c14a4a8",
+  "prompts": {},
+  "sessions": {
+    "s_f17810de71e8e2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35079398-e3be-49e4-944f-52f62315e070",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
