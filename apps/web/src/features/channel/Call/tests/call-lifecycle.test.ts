@@ -176,6 +176,82 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(call.callId);
   });
 
+  it('recovers a lost Start response through lookup without retrying creation', async () => {
+    const { lifecycle, ports } = setup({ currentCall: () => undefined });
+    const lostResponse = new Error('Connection lost');
+    ports.startCall.mockRejectedValueOnce(lostResponse);
+    await expect(
+      lifecycle.join(call.channelId, undefined, 'user', {
+        kind: 'start',
+      })
+    ).rejects.toBe(lostResponse);
+    ports.lookup.mockResolvedValueOnce(null);
+    await expect(lifecycle.join(call.channelId)).rejects.toThrow(
+      'The call has ended'
+    );
+    const retry = lifecycle.join(call.channelId);
+    await vi.advanceTimersByTimeAsync(300);
+    await retry;
+    expect(ports.startCall).toHaveBeenCalledOnce();
+    expect(ports.lookup).toHaveBeenCalledTimes(2);
+    expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(call.callId);
+  });
+
+  it.each([true, false])(
+    'never repeats a timed-out Start when its response arrives before retry: %s',
+    async (respondBeforeRetry) => {
+      const pending = deferred<CallTokenResponse>();
+      const { lifecycle, ports } = setup({ currentCall: () => undefined });
+      ports.startCall.mockReturnValueOnce(pending.promise);
+      const timedOut = expect(
+        lifecycle.join(call.channelId, undefined, 'user', {
+          kind: 'start',
+        })
+      ).rejects.toThrow('Connection timed out');
+      await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+      await timedOut;
+      ports.lookup.mockResolvedValue({ callId: 'replacement-call' });
+      ports.requestToken.mockRejectedValueOnce(
+        new ThrownResultError([
+          { code: 'GONE', message: 'Original call ended' },
+        ])
+      );
+      if (respondBeforeRetry) {
+        pending.resolve(token);
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      const retried = expect(lifecycle.join(call.channelId)).rejects.toThrow(
+        'Original call ended'
+      );
+      if (!respondBeforeRetry) {
+        await vi.advanceTimersByTimeAsync(300);
+        expect(ports.startCall).toHaveBeenCalledOnce();
+        pending.resolve(token);
+      }
+      await vi.advanceTimersByTimeAsync(300);
+      await retried;
+      expect(ports.startCall).toHaveBeenCalledOnce();
+      expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(call.callId);
+      expect(ports.lookup).not.toHaveBeenCalled();
+      expect(ports.connect).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not adopt the wrong native call when token acquisition is skipped', async () => {
+    const { lifecycle, ports } = setup({ shouldRequestToken: () => false });
+    await expect(
+      lifecycle.join(call.channelId, undefined, 'user', {
+        kind: 'join',
+        callId: 'selected-call',
+      })
+    ).rejects.toThrow('The call has ended');
+    expect(ports.requestToken).not.toHaveBeenCalled();
+    expect(ports.onJoined).not.toHaveBeenCalled();
+    expect(ports.disconnect).not.toHaveBeenCalled();
+    expect(ports.leave).not.toHaveBeenCalled();
+    expect(lifecycle.getState()).toEqual({ t: 'active', call });
+  });
+
   it('captures the live session before a permission prompt can outlast it', async () => {
     const preparation = deferred<() => Promise<void>>();
     const { lifecycle, ports } = setup({

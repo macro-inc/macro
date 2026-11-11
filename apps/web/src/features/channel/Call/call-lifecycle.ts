@@ -79,6 +79,8 @@ type Join = ReturnType<typeof deferred<void>> & {
   channelId: string;
   source: JoinSource;
   intent: CallJoinIntent;
+  /** A sent Start can still allocate a session after the client times out. */
+  pendingStart?: Promise<CallTokenResponse>;
   onJoin?: () => void;
   restoredCall?: CallIdentity;
 };
@@ -99,7 +101,13 @@ export type CallLifecycleState =
   | { t: 'retry-wait'; attempt: AutoRejoinAttempt }
   | { t: 'checking'; attempt: AutoRejoinAttempt }
   | { t: 'leaving'; request: Leave }
-  | { t: 'failed'; channelId: string; intent: CallJoinIntent; error: unknown };
+  | {
+      t: 'failed';
+      channelId: string;
+      intent: CallJoinIntent;
+      pendingStart?: Promise<CallTokenResponse>;
+      error: unknown;
+    };
 type Event =
   | { t: 'join'; request: Join }
   | { t: 'leave'; request: Leave }
@@ -121,6 +129,7 @@ const definition: MachineDef<CallLifecycleState, Event> = {
             t: 'failed',
             channelId: state.request.channelId,
             intent: state.request.intent,
+            pendingStart: state.request.pendingStart,
             error,
           } as const,
         }))
@@ -327,6 +336,30 @@ export function createCallLifecycle(options: {
               await Promise.allSettled(pendingServerLeaves);
               if (!active) return;
             }
+            // Retry a sent Start by its eventual identity, never by sending
+            // another creation-capable request while its outcome is unknown.
+            if (request.pendingStart) {
+              const pendingStart = request.pendingStart;
+              request.intent = { kind: 'join' };
+              let token: CallTokenResponse | undefined;
+              try {
+                token = await pendingStart;
+              } catch (error) {
+                // A lost response is not proof that Start did not allocate.
+                // Recover through the non-creating lookup below.
+                options.reportError(error);
+              }
+              request.pendingStart = undefined;
+              if (!active) return;
+              if (token) {
+                if (token.channelId !== request.channelId) {
+                  throw new Error(
+                    'Call token does not belong to the requested channel'
+                  );
+                }
+                request.intent = { kind: 'join', callId: token.callId };
+              }
+            }
             if (request.restoredCall) {
               let activeCall: ActiveCallLookup;
               try {
@@ -397,6 +430,7 @@ export function createCallLifecycle(options: {
                 tokenRequest = span.span('call.token', () =>
                   options.startCall(request.channelId)
                 );
+                request.pendingStart = tokenRequest;
               } else if (intent.callId) {
                 const callId = intent.callId;
                 tokenRequest = span.span('call.token', () =>
@@ -445,6 +479,27 @@ export function createCallLifecycle(options: {
               if (needsConnection) await span.run(() => options.connect(token));
               call = { channelId: token.channelId, callId: token.callId };
             } else {
+              if (
+                request.intent.kind === 'join' &&
+                !sameCall(call, {
+                  channelId: request.channelId,
+                  callId: request.intent.callId ?? null,
+                })
+              ) {
+                const error = new ThrownResultError([
+                  { code: 'GONE', message: 'The call has ended' },
+                ]);
+                if (!call) throw error;
+                // Keep the native session intact, but refuse to report it as
+                // a successful join to a different selected call.
+                settled = true;
+                request.reject(error);
+                options.rollbackJoin();
+                span.setAttr('call.join.outcome', 'wrong_session');
+                span.error(error);
+                dispatch({ t: 'connected', call });
+                return;
+              }
               // Let the joining scope finish mounting before dispatching its
               // completion, just as the token/connect path does.
               await Promise.resolve();
@@ -696,6 +751,7 @@ export function createCallLifecycle(options: {
       return Promise.reject(new Error('Call is still leaving'));
     if (state.t === 'active') {
       if (
+        state.call.channelId === channelId &&
         intent?.kind === 'join' &&
         intent.callId &&
         !sameCall(state.call, { channelId, callId: intent.callId })
@@ -731,6 +787,10 @@ export function createCallLifecycle(options: {
         (state.t === 'failed' && state.channelId === channelId
           ? state.intent
           : { kind: 'join' }),
+      pendingStart:
+        !intent && state.t === 'failed' && state.channelId === channelId
+          ? state.pendingStart
+          : undefined,
     };
     machine.dispatch({ t: 'join', request });
     return request.promise;
