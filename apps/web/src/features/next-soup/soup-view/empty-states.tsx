@@ -259,7 +259,7 @@ export function EmptyState(props: {
           primaryAction={{
             label: 'New agent',
             icon: PlusIcon,
-            onClick: () => runCreateAction('chat'),
+            onClick: () => runCreateAction('agent'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />

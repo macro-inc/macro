@@ -11,6 +11,7 @@ import {
 import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authKeys } from '../auth/keys';
 import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import {
@@ -37,9 +38,12 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId(),
+  useIsAuthenticated: () => () => true,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
+    getChannels: async (args: unknown) =>
+      ok({ items: await mocks.channels(args), next_cursor: null }),
     channelLabels: {
       list: mocks.list,
       preview: mocks.preview,
@@ -48,7 +52,6 @@ vi.mock('@service-storage/client', () => ({
     },
   },
 }));
-vi.mock('../channel/channels', () => ({ fetchAllChannels: mocks.channels }));
 vi.mock('../client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -80,6 +83,10 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValue(ok({ channels: [], totalCount: 0 }));
   client = queryClient;
+  client.setQueryData(authKeys.userInfo.queryKey, {
+    id: mocks.userId(),
+    authenticated: true,
+  });
   client.setDefaultOptions({
     queries: { retry: false },
     mutations: { retry: false },
@@ -115,6 +122,10 @@ describe('channel tag query rollout', () => {
       </QueryClientProvider>
     ));
     await waitFor(() => expect(mocks.channels).toHaveBeenCalledTimes(1));
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'new-viewer',
+      authenticated: true,
+    });
     setUserId('new-viewer');
     await waitFor(() => expect(query.isPending).toBe(false));
     expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
@@ -124,7 +135,7 @@ describe('channel tag query rollout', () => {
 
     mocks.channels.mockResolvedValueOnce([{ id: 'joined' }]);
     await client.invalidateQueries({
-      queryKey: channelKeys.listChannels.queryKey,
+      queryKey: channelKeys.listChannels._def,
     });
     expect(query.data?.map((channel) => channel.id)).toEqual(['joined']);
   });

@@ -415,7 +415,11 @@ fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentPropert
         }),
         // TODO: companies support
         companies: None,
-        sender: macro_user_id(p, &p.attachment_metadata.sender_email),
+        sender: p
+            .attachment_metadata
+            .sender_email
+            .as_deref()
+            .and_then(|email| macro_user_id(p, email)),
         recipients: Some(
             p.recipient_emails
                 .iter()

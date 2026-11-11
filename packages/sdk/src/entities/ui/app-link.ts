@@ -7,6 +7,8 @@ const MACRO_HOSTS = ['macro.com', 'dev.macro.com', 'staging.macro.com'];
 /**
  * A Macro app link, reduced to the app path it opens: a list view such as
  * Tasks or Mail, or an item. Made by `macro.ui.link(url)`; it keeps no origin.
+ *
+ * @mcp-exclude Only `macro.ui.open` takes it, which MCP leaves out.
  */
 export class AppLink {
   private constructor(

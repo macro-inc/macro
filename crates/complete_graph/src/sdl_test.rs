@@ -840,6 +840,69 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
 }
 
 #[test]
+fn contacts_reads_have_viewer_scoped_entity_keys() {
+    use apollo_compiler::schema::ExtendedType;
+    let sdl = crate::build_schema().sdl();
+    let schema = apollo_compiler::Schema::parse_and_validate(&sdl, "schema.graphql").unwrap();
+    let ExtendedType::Object(contact) = &schema.types["GraphqlContact"] else {
+        panic!("contact object")
+    };
+    assert_eq!(contact.fields["id"].ty.to_string(), "ID!");
+    assert_eq!(contact.fields["userId"].ty.to_string(), "ID!");
+    assert_eq!(contact.fields["name"].ty.to_string(), "String");
+    let ExtendedType::Object(viewer) = &schema.types["GraphqlUser"] else {
+        panic!("viewer object")
+    };
+    let field = &viewer.fields["contacts"];
+    assert_eq!(field.ty.to_string(), "GraphqlContactPage!");
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "matching"
+                && argument.ty.to_string() == "GraphqlContactMatching")
+    );
+    let ExtendedType::Enum(matching) = &schema.types["GraphqlContactMatching"] else {
+        panic!("matching enum")
+    };
+    for name in ["EXACT", "FIRST_NAME", "ANY_NAME"] {
+        assert!(matching.values.contains_key(name));
+    }
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "limit" && argument.ty.to_string() == "Int")
+    );
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "after" && argument.ty.to_string() == "String")
+    );
+    let ExtendedType::Object(root) = &schema.types["SoupQueryRoot"] else {
+        panic!("query root")
+    };
+    assert!(!root.fields.contains_key("contacts"));
+    assert!(!root.fields.contains_key("contactsByUserIds"));
+    assert!(!root.fields.contains_key("contactsByEmails"));
+    assert_eq!(
+        viewer.fields["contactsByUserIds"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    assert_eq!(
+        viewer.fields["contactsByEmails"].ty.to_string(),
+        "[GraphqlContact!]!"
+    );
+    assert!(
+        field
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "search" && argument.ty.to_string() == "String")
+    );
+}
+
+#[test]
 fn calendar_reads_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
@@ -937,6 +1000,7 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!",
         "updateSavedView(input: UpdateSavedViewInput!): GraphqlSavedView!",
         "deleteSavedView(input: DeleteSavedViewInput!): ID!",
+        "reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!",
         "expectedRevision: Int!",
         "sharing: SavedViewSharingInput",
         "sharedTeamId: ID",

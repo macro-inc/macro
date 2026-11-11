@@ -71,7 +71,11 @@ export class Message extends FavoritableEntity<MessageRecord> {
   /** When the message was last updated. */
   readonly updatedAt = this.field('updated_at');
 
-  /** The user who sent this message. */
+  /**
+   * The user who sent this message.
+   *
+   * @readonly
+   */
   async author(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).sender_id);
   }
@@ -79,6 +83,8 @@ export class Message extends FavoritableEntity<MessageRecord> {
   /**
    * The message's URL in the Macro web app: its channel, scrolled to it. Pass
    * the message to `macro.ui.open` to show it to the user.
+   *
+   * @readonly
    */
   webUrl(): string {
     const query = new URLSearchParams({ channel_message_id: this.id });
@@ -90,17 +96,30 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** The channel this message is in. */
+  /**
+   * The channel this message is in.
+   *
+   * @readonly
+   */
   channel(): Channel {
     return Channel.byId(this.client, this.channelId);
   }
 
-  /** The thread rooted at this message. */
+  /**
+   * The thread rooted at this message.
+   *
+   * @readonly
+   */
   thread(): Thread {
     return new Thread(this.client, this.channelId, this.id);
   }
 
-  /** Add an emoji reaction to this message. */
+  /**
+   * Add an emoji reaction to this message.
+   *
+   * @write
+   * @idempotent
+   */
   async react(emoji: string): Promise<this> {
     await this.mutate((c) =>
       c.storage.entityMessageReact({
@@ -111,7 +130,12 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return this;
   }
 
-  /** Remove one of your emoji reactions from this message. */
+  /**
+   * Remove one of your emoji reactions from this message.
+   *
+   * @write
+   * @idempotent
+   */
   async unreact(emoji: string): Promise<this> {
     await this.mutate((c) =>
       c.storage.entityMessageReact({
@@ -126,6 +150,9 @@ export class Message extends FavoritableEntity<MessageRecord> {
    * Replace this message's body.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @destructive
+   * @idempotent
    */
   async edit(body: string | RichMessage): Promise<this> {
     const { content, mentions } = toBody(body);
@@ -138,14 +165,23 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return this;
   }
 
-  /** Delete this message. */
+  /**
+   * Delete this message.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((c) =>
       c.storage.entityMessageDeleteMessage({ path: this.path }),
     );
   }
 
-  /** Post a reply in this message's thread. */
+  /**
+   * Post a reply in this message's thread.
+   *
+   * @write
+   */
   async reply(body: string | RichMessage): Promise<Message> {
     return this.thread().reply(body);
   }

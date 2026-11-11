@@ -53,6 +53,8 @@ export type UiOpenResult =
  *   return {data: {status: opened.status, url: opened.url}};
  * }
  * ```
+ *
+ * @mcp-exclude Acts in the app tab the prompt came from, for a code-mode execution; an MCP call has neither.
  */
 export class UiNamespace {
   constructor(private readonly client: MacroClient) {}

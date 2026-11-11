@@ -186,6 +186,7 @@ where
                         source: command.source,
                         visibility: command.visibility,
                         origin: command.origin,
+                        billing: command.billing,
                     })
                     .await
             }
