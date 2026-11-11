@@ -469,3 +469,21 @@ Source insertion returns void and adds no await; native insertion must await an
 actual settled input result. The shared root-trigger listener retains desktop
 keydown/beforeinput deduplication and Android composition/default handling while
 leaving eligibility to the model.
+
+
+### Native USER picker stage
+
+The native installer optionally publishes the shared mention component under the
+captured app owner. The initial search query hydrates controller state once;
+every subsequent ordered event updates only its callback-owned UI cache field,
+even when equal. Local keyboard resets remain UI-only. The native CRITICAL Enter
+listener returns the cached open boolean and performs no ordinary Session call.
+The shared document listener still owns choice navigation and Escape.
+
+User choices complete real settled REMOVE before shared notification/tracking,
+then insert through current Session admission and selection. An unhandled REMOVE
+is a completed operation. Disposal cancels late host insertion and unmounts UI
+before the user renderer context and runtime close. No captured selection is
+restored. The initial USER-only stage leaves all other Source catalog kinds open;
+it must expand to the complete Source configuration before catalog parity is
+claimed.

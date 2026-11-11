@@ -3302,3 +3302,10 @@ Create a table and immediately resize it with several pointer moves. One undo
 must restore the original dimensions while retaining the table; redo restores
 the complete gesture. Check typing bursts separately from paste, formatting and
 node insertion: a short delay alone must not combine those distinct edits.
+
+
+For native mention changes, use the editing browser suite's user-mentions fixture
+to type `@`, choose a supplied user by keyboard and pointer, verify the rendered
+mention, close a query with Escape, and close the installation with the picker
+open. This bounded USER stage does not verify other mention sources or backend
+tracking. Keep those gaps explicit when reporting editor acceptance.

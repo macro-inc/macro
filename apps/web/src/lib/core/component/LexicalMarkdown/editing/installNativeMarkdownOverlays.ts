@@ -1,19 +1,39 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
-import type { Accessor } from 'solid-js';
+import {
+  type Accessor,
+  type Component,
+  createComponent,
+  createSignal,
+} from 'solid-js';
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
 import { registerNativeTableTouchSelection } from '../plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../plugins/trailing-paragraph/native';
+import { createMenuOperations } from '../shared/inlineMenu';
+import {
+  type NativeUserMentionsOptions,
+  NativeUserMentionsOverlay,
+} from './NativeUserMentionsOverlay';
 import type { NativeMarkdownOverlayInstallation } from './nativeOverlayPorts';
 import { createNativeListenerScope } from './overlay-hosts/native-listeners';
+import { registerNativeMentionSearch } from './overlay-hosts/native-mention-search';
 
 /** Install only native body capabilities with an actual model action. */
 export function installNativeMarkdownOverlays(
   view: EditorView,
-  options: { readonly canEdit: Accessor<boolean> }
+  options: {
+    readonly canEdit: Accessor<boolean>;
+    readonly mentions?: NativeUserMentionsOptions;
+  }
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
+  const [renderActive, setRenderActive] = createSignal(true);
+  const alive = () => renderActive() && view.isMounted;
+  let Overlays: Component | undefined;
   const listeners = createNativeListenerScope();
+  listeners.add(() => {
+    setRenderActive(false);
+  });
   const dispose = () => {
     if (disposed) return;
     disposed = true;
@@ -23,6 +43,18 @@ export function installNativeMarkdownOverlays(
     listeners.add(registerNativeChecklist(view));
     listeners.add(registerNativeTrailingParagraph(view, options.canEdit));
     listeners.add(registerNativeTableTouchSelection(view, options.canEdit));
+    if (options.mentions) {
+      const menu = createMenuOperations();
+      const source = options.mentions;
+      listeners.add(registerNativeMentionSearch(view, menu));
+      Overlays = () =>
+        createComponent(NativeUserMentionsOverlay, {
+          view,
+          menu,
+          source,
+          alive,
+        });
+    }
   } catch (error) {
     disposed = true;
     listeners.fail(error);
@@ -33,6 +65,7 @@ export function installNativeMarkdownOverlays(
     options.canEdit() &&
     view.root.contentEditable === 'true';
   return {
+    ...(Overlays ? { Overlays } : {}),
     focusAtEnd() {
       if (!canFocus()) return;
       dispatchApplicationCommand(

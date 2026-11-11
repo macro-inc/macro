@@ -53,3 +53,14 @@ emit source maps so the exact compiled Source dependency bytes can be checked.
 The fixture seeds a checklist directly. It does not establish slash-menu
 creation, task-list filter/progress UI, real document transport/persistence or
 the complete document-app mount. Those acceptance checks remain separate.
+
+
+`user-mentions.html` exercises the first native USER mention stage with the
+actual shared HostedMentionsMenu, real user decorator and settled SessionPort
+input. The Source branch uses its real editor, plugins and public wrapper.
+Both receive the same supplied user records and geometry. Controls retain raw
+menu DOM and model snapshots, type `@`, filter, pick with keyboard/pointer/touch,
+close with the shared Escape controller, and dispose visible UI and listeners.
+These supplied-user checks do not establish service discovery, tracking delivery,
+other mention kinds or installed-app acceptance. The final native catalog must
+retain every Source section, condition and mobile ordering.
