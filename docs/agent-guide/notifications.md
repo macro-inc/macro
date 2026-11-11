@@ -245,17 +245,18 @@ both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
 
-A running iOS app is never covered. A tap on a banner over Macro, or one that
-resumes it from the background, keeps the current page on screen and navigates
-in place. Opening the app switcher, Control Center, or Notification Center over
-Macro keeps its content visible, including on its switcher card. For a warm
-resume, leave the app running past its startup timeout before
-backgrounding it. Tap an uncached notification without a direct channel target
-and fail its notification lookup: the existing page stays visible and
-shows **Failed to open notification.** A later tap must still open normally.
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app (from the
+background, the Lock Screen, or Notification Center) goes from the system's
+blank launch screen to the destination, never through the previous page.
 
-Only a launch or WebView reload that starts with a pending tap is covered, until
-the destination draws. Stall that navigation or its native acknowledgment: after eight seconds the
+For an iOS warm resume, leave the app running past its startup timeout before
+backgrounding it. Tap an uncached notification without a direct channel target
+and fail its notification lookup: the app must reveal the existing page and
+show **Failed to open notification.** A later tap must still open normally.
+Also stall navigation or its native acknowledgment: after eight seconds the
 frontend releases the cover without discarding the pending destination. Duplicate
 delivery must not restart that deadline; a newer tap must get its own deadline.
 `notification.cover_timeout` is recorded on the notification-open trace. This

@@ -864,9 +864,10 @@ ring-status requests, and keep caller names, tokens and URLs out of spans.
 Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep
 the native receipt pending until the destination route is applied; release the
-native cover for auth/retry UI without consuming the receipt. That cover hides
-only a page load that boots into a pending tap; a tap on a running app
-navigates in place, and backgrounding never covers the app. Use the existing
+native cover for auth/retry UI without consuming the receipt. That cover exists
+only while a tap is pending: on a tap that opens the app, or a page load that
+boots into one. A tap on an app already on screen navigates in place, and
+backgrounding never covers the app. Use the existing
 pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
 lookup. The local bridge and native release requirement are documented in
@@ -882,8 +883,7 @@ use normal account-checked navigation, never reset the mounted router's hash.
 `notification.launch` records whether startup continued ready, failed, or timed out.
 
 Bound the native cover to eight seconds for each received durable tap, including
-warm resumes and stalled route acknowledgments: native builds from before the
-cover was limited to booting page loads still cover those. Release without consuming the
+warm resumes and stalled route acknowledgments. Release without consuming the
 intent on timeout; duplicate delivery must not extend the deadline, and a newer
 tap gets its own deadline. Convert fallible notification lookups and navigation
 promises into error results so failure cleanup acknowledges the tap and shows

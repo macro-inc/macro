@@ -29,9 +29,9 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
     private var cover: UIView?
     private var frontendReady = false
     private var launchAware = false
-    /// Set once this page load has shown its frontend. Only a load that boots
-    /// into a pending tap is covered; a running app navigates in place.
-    private var revealed = false
+    /// The pending tap is not covered: the frontend released its cover, or the
+    /// tap landed on the app while it was on screen and navigates in place.
+    private var suppressPendingCover = false
     /// Held until the launch-time provisional request settles, so a permission
     /// check never reports the undecided status that request is replacing.
     private let launchAuthorization = DispatchGroup()
@@ -81,14 +81,14 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
             self.notificationChannel = nil
             self.launchAware = false
             self.frontendReady = false
+            self.suppressPendingCover = false
             self.reveal()
-            self.revealed = false
         }
         let app = UIApplication.shared
         originalDelegate = app.delegate
         app.delegate = self
-        // Leaving the foreground never covers the app: the app switcher and
-        // system overlays show its real content.
+        // Only a pending tap covers the app. Leaving the foreground never does:
+        // the app switcher and system overlays show its real content.
         for name in [UIApplication.didBecomeActiveNotification, UIScene.didActivateNotification] {
             lifecycleObservers.append(NotificationCenter.default.addObserver(
                 forName: name, object: nil, queue: .main
@@ -111,9 +111,11 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
         throw pendingStoreError ?? NSError(domain: "MacroPush", code: 1)
     }
 
-    /// Hides a booting page until the route of its pending tap has drawn.
+    /// Hides the page behind a pending tap until its destination has drawn.
+    /// iOS opens the app from a notification on its launch screen, which this
+    /// matches, so the previous page never shows in between.
     private func showCover() {
-        guard launchAware, !revealed, let webview = appWebview else { return }
+        guard launchAware, !suppressPendingCover, let webview = appWebview else { return }
         let surface = cover ?? UIView(frame: webview.bounds)
         surface.backgroundColor = .systemBackground
         surface.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -128,7 +130,6 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
     }
 
     private func reveal() {
-        revealed = true
         cover?.removeFromSuperview()
         cover = nil
     }
@@ -207,6 +208,7 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
 
     @objc public func releaseNotificationCover(_ invoke: Invoke) {
         DispatchQueue.main.async {
+            self.suppressPendingCover = true
             self.frontendReady = true
             self.reveal()
             invoke.resolve()
@@ -299,13 +301,18 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
             let payload = Self.stringPayload(notification.request.content.userInfo)
                 .filter { ["notificationId", "recipientId", "navigation"].contains($0.key) }
             guard let notificationId = payload["notificationId"], !notificationId.isEmpty else { return }
+            let active = UIApplication.shared.applicationState == .active
             let event = PendingPush(
-                type: UIApplication.shared.applicationState == .active ? "FOREGROUND_TAP" : "BACKGROUND_TAP",
+                type: active ? "FOREGROUND_TAP" : "BACKGROUND_TAP",
                 payload: payload, deliveryId: UUID().uuidString, receivedAtMs: Self.nowMs
             )
             let sourceId = "\(notification.request.identifier):\(notification.date.timeIntervalSince1970)"
             do {
                 guard let captured = try self.store().capture(sourceId: sourceId, event: event) else { return }
+                // A tap on an app the person is looking at navigates in place.
+                // Any other tap opens the app covered until its destination draws.
+                self.suppressPendingCover = active && self.cover == nil
+                self.showCover()
                 self.deliverTap(captured)
                 Logger.info("[notification-open] phase=capture delivery_id=\(captured.deliveryId) timestamp_ms=\(captured.receivedAtMs)")
             } catch {

@@ -163,10 +163,10 @@ an acknowledgment those bundles cannot send. This opt-in contract does not
 require raising the OTA native floor; the improved cold-launch handoff still
 requires shipping the new native binary.
 
-The native cover hides only a page load that boots into a pending tap. Earlier
-binaries also covered the app whenever it left the foreground and on every tap,
-which blanked it in the app switcher; they keep doing so until updated. The
-web contract is the same for both, so the change needs no floor raise.
+The native cover exists only while a tap is pending. Earlier binaries also
+covered the app whenever it left the foreground, which blanked it in the app
+switcher and under system overlays; they keep doing so until updated. The web
+contract is the same for both, so the change needs no floor raise.
 
 Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
 for persisted intent/acknowledgment regressions. A simulator build checks the
