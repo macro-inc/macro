@@ -12,10 +12,25 @@ use std::error::Error;
 use std::time::Duration;
 use url::Url;
 
-const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
 const REQUEST_TIMEOUT_SECONDS: u64 = 15;
 const CONNECT_TIMEOUT_SECONDS: u64 = 5;
 const MAX_REDIRECTS: usize = 5;
+
+/// Where [`rehost_html_images`] reads an image's bytes from.
+pub trait ImageSource: Sync {
+    /// Returns the image at `url`, or `None` when this source can't read it.
+    fn fetch(&self, url: &str) -> impl Future<Output = anyhow::Result<Option<Bytes>>> + Send;
+}
+
+/// Unauthenticated HTTP GETs: only what a recipient's mail client could load.
+pub struct PublicImages;
+
+impl ImageSource for PublicImages {
+    async fn fetch(&self, url: &str) -> anyhow::Result<Option<Bytes>> {
+        fetch_image(url).await
+    }
+}
 
 // concurrently calls store_messages_images for each message in each passed thread
 pub async fn store_threads_images(
@@ -82,7 +97,7 @@ pub async fn store_message_images(
 
     if !urls.is_empty() {
         // cache the images in SFS and return the new links
-        let sfs_map = cache_images(db, sfs_client, urls.clone())
+        let sfs_map = cache_images(db, sfs_client, urls.clone(), &PublicImages)
             .await
             .context("failed to cache images")?;
 
@@ -97,21 +112,24 @@ pub async fn store_message_images(
     Ok(())
 }
 
-/// Rehosts every publicly-fetchable `<img>` in an HTML fragment onto SFS and
-/// rewrites the markup to the stable URLs. Returns the rewritten HTML and the
-/// number of remote images that could NOT be fetched (e.g. auth-gated
-/// webmail-embedded URLs like Gmail's `disp=emb`) so the caller can warn the
-/// user to re-add them.
+/// Rehosts every `<img>` in an HTML fragment that `images` can read onto SFS
+/// and rewrites the markup to the stable URLs. Returns the rewritten HTML and
+/// the number of remote images that could NOT be read (e.g. auth-gated
+/// webmail-embedded URLs like Gmail's `disp=emb`, under [`PublicImages`]) so
+/// the caller can warn the user to re-add them.
 ///
-/// Provider-agnostic on purpose: it only does unauthenticated HTTP GETs, so
-/// anything requiring a provider session simply lands in the unresolved count
-/// instead of needing per-provider (Gmail/Outlook/…) resolution. Already-SFS
-/// images are skipped so re-saving a signature doesn't re-upload them.
-#[tracing::instrument(skip(db, sfs_client, html), err)]
+/// Already-SFS images are skipped so re-saving a signature doesn't re-upload
+/// them.
+#[tracing::instrument(
+    skip(db, sfs_client, html, images),
+    fields(image_count = tracing::field::Empty, unresolved_count = tracing::field::Empty),
+    err
+)]
 pub async fn rehost_html_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
     html: &str,
+    images: &impl ImageSource,
 ) -> anyhow::Result<(String, usize)> {
     if cfg!(not(feature = "sfs_map")) {
         return Ok((html.to_string(), 0));
@@ -132,7 +150,7 @@ pub async fn rehost_html_images(
         return Ok((html.to_string(), 0));
     }
 
-    let sfs_map = cache_images(db, sfs_client, urls.clone()).await?;
+    let sfs_map = cache_images(db, sfs_client, urls.clone(), images).await?;
 
     // Remote images we couldn't move to SFS stay as-is and are counted so the
     // caller can tell the user which ones won't render for recipients.
@@ -140,6 +158,9 @@ pub async fn rehost_html_images(
         .iter()
         .filter(|url| !sfs_map.contains_key(*url))
         .count();
+    let span = tracing::Span::current();
+    span.record("image_count", urls.len() as i64);
+    span.record("unresolved_count", unresolved as i64);
 
     let new_html = if sfs_map.is_empty() {
         html.to_string()
@@ -181,11 +202,12 @@ fn extract_all_image_urls(html_content: &str) -> anyhow::Result<HashSet<String>>
 }
 
 // wrapper function for fetching and caching images in parallel
-#[tracing::instrument(skip(db, sfs_client, source_urls), err)]
+#[tracing::instrument(skip(db, sfs_client, source_urls, images), err)]
 async fn cache_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
     source_urls: HashSet<String>,
+    images: &impl ImageSource,
 ) -> anyhow::Result<HashMap<String, String>> {
     // filter out values that already exist in db or are already sfs urls
     let mut url_map = email_db_client::sfs_mappings::fetch_sfs_mappings(db, &source_urls).await?;
@@ -203,15 +225,14 @@ async fn cache_images(
         // fetch and upload each image to sfs concurrently
         let mut futures = Vec::new();
         for source_url in new_urls {
-            let url_to_process = source_url.clone();
             let sfs_client = sfs_client.clone();
             futures.push(async move {
                 // In a real scenario, pass base_url and email_mime_parts here
-                match fetch_and_upload_to_sfs(sfs_client, &url_to_process).await {
-                    Ok(Some(sfs_url)) => Some(sfs_url),
-                    Ok(None) => None,
-                    Err(_) => None,
-                }
+                let image_data = images.fetch(&source_url).await.ok().flatten()?;
+                let sfs_url = upload_to_sfs(sfs_client, &source_url, image_data)
+                    .await
+                    .ok()?;
+                Some((source_url, sfs_url))
             });
         }
 
@@ -379,11 +400,15 @@ fn build_error_chain(err: &reqwest::Error) -> String {
     error_chain
 }
 
+/// `url_map` is keyed by decoded URLs, as `extract_all_image_urls` returns
+/// them, but lol_html hands attribute values over with their entities intact
+/// (`&amp;`), so each value is decoded before the lookup.
 #[tracing::instrument(skip(original_html, url_map), err)]
 fn rewrite_html_image_links(
     original_html: &str,
     url_map: &HashMap<String, String>,
 ) -> anyhow::Result<String> {
+    let lookup = |raw_url: &str| url_map.get(html_escape::decode_html_entities(raw_url).as_ref());
     let mut output = Vec::new();
     let mut rewriter = HtmlRewriter::new(
         Settings {
@@ -392,7 +417,7 @@ fn rewrite_html_image_links(
                 element!("img[src]", |el: &mut Element| {
                     if let Some(original_src) = el.get_attribute("src") {
                         let trimmed_original_src = original_src.trim();
-                        if let Some(new_src) = url_map.get(trimmed_original_src)
+                        if let Some(new_src) = lookup(trimmed_original_src)
                             && let Err(e) = el.set_attribute("src", new_src)
                         {
                             tracing::warn!("Failed to set src attribute: {}", e);
@@ -409,7 +434,7 @@ fn rewrite_html_image_links(
                             let mut components = trimmed_part.split_whitespace();
                             if let Some(url_candidate) = components.next() {
                                 let descriptor = components.collect::<Vec<&str>>().join(" ");
-                                if let Some(new_url) = url_map.get(url_candidate) {
+                                if let Some(new_url) = lookup(url_candidate) {
                                     new_srcset_parts.push(
                                         format!("{} {}", new_url, descriptor)
                                             .trim_end()
@@ -1051,6 +1076,28 @@ mod tests {
         ));
         assert!(result.contains("&amp; entity"));
         assert!(result.contains("&quot;quotes&quot;"));
+    }
+
+    #[test]
+    fn test_rewrite_html_image_links_matches_entity_encoded_query_urls() {
+        // `extract_all_image_urls` decodes attribute entities, while the
+        // rewriter sees them raw; sanitized HTML always writes `&` as `&amp;`.
+        let html = r#"<p>Hi</p><img src="https://example.com/logo.png?a=1&amp;b=2" srcset="https://example.com/logo.png?a=1&amp;b=2 2x">"#;
+        let urls = extract_all_image_urls(html).unwrap();
+        assert_eq!(
+            urls,
+            HashSet::from(["https://example.com/logo.png?a=1&b=2".to_string()])
+        );
+
+        let url_map = HashMap::from([(
+            "https://example.com/logo.png?a=1&b=2".to_string(),
+            "https://static-file-service.macro.com/file/logo".to_string(),
+        )]);
+        let result = rewrite_html_image_links(html, &url_map).unwrap();
+
+        assert!(result.contains(r#"src="https://static-file-service.macro.com/file/logo""#));
+        assert!(result.contains(r#"srcset="https://static-file-service.macro.com/file/logo 2x""#));
+        assert!(!result.contains("example.com"));
     }
 
     #[test]

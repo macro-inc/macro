@@ -7,12 +7,15 @@ use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use email_utils::sanitize_html_fragment;
+use gmail_images::GmailSignatureImages;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::{api, service};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
+
+mod gmail_images;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum ImportSignatureError {
@@ -105,9 +108,16 @@ pub async fn import_signature_handler(
 
     let mut sanitized_signature = sanitize_html_fragment(&signature);
 
-    // Move Gmail-hosted images onto SFS so they render for recipients, matching
-    // `patch_settings_handler`. A rehost *error* never blocks the import.
-    match sfs_map::rehost_html_images(&ctx.db, &ctx.sfs_client, &sanitized_signature).await {
+    // Move signature images onto SFS so they render for recipients, matching
+    // `patch_settings_handler`. Images pasted in from this mailbox's messages
+    // load only in its Gmail session, so those are read through the Gmail API.
+    // A rehost *error* never blocks the import.
+    let images = GmailSignatureImages {
+        email_api: &ctx.email_api,
+        link_id: link.id,
+    };
+    match sfs_map::rehost_html_images(&ctx.db, &ctx.sfs_client, &sanitized_signature, &images).await
+    {
         Ok((rehosted, unresolved)) => {
             if unresolved > 0 {
                 return Err(ImportSignatureError::UnresolvedSignatureImages(

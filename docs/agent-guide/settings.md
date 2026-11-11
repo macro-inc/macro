@@ -104,6 +104,11 @@ editing resumes without a conversion prompt.
 With Gmail and Outlook inboxes connected, confirm only Gmail offers import
 (including Gmail accounts on a custom domain), while both support HTML and Rich
 text editing. Empty Outlook signatures must not suggest Gmail import.
+Gmail keeps images pasted into its signature editor from a message as
+`mail.google.com` URLs only that mailbox's session can load; import reads them
+from the inbox's own mailbox through the Gmail API and rehosts them. Only an
+image the mailbox no longer has (or one from another account) still shows the
+image import error.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
