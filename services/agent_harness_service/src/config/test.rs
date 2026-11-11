@@ -89,3 +89,33 @@ async fn authentication_key_resolves_before_linked_github_client_is_built() {
     );
     config.linked_github_tokens().unwrap();
 }
+
+#[test]
+fn the_idle_timeout_defaults_to_fifteen_minutes_and_refuses_less_than_thirty_seconds() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert_eq!(
+        config.agent_session_idle_timeout().unwrap(),
+        std::time::Duration::from_secs(900)
+    );
+
+    let mut values = config_values();
+    values["AGENT_SESSION_IDLE_TIMEOUT_SECS"] = serde_json::json!(30);
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert_eq!(
+        config.agent_session_idle_timeout().unwrap(),
+        std::time::Duration::from_secs(30)
+    );
+
+    for too_short in [0, 29] {
+        let mut values = config_values();
+        values["AGENT_SESSION_IDLE_TIMEOUT_SECS"] = serde_json::json!(too_short);
+        let config: Config = serde_json::from_value(values).unwrap();
+        let error = config.agent_session_idle_timeout().unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("AGENT_SESSION_IDLE_TIMEOUT_SECS"),
+            "the error names the setting: {error}"
+        );
+    }
+}
