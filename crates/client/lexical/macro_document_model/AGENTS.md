@@ -120,6 +120,6 @@ Expose initial/on-demand checklist plans through group-b.checklist-plan using on
 
 Read bulk table geometry through group-b.table-facts and the actual core table map; preserve ragged slots, unique cell origins and column-width presence, and keep table-resize as the sole measured baseline/revert policy.
 
-Apply group-b.table selection-merge and selection-split to the admitted current selection through the shared table operations, then clear selection only after success; keep clipboard completion policy separate.
+Apply group-b.table selection-merge and selection-split through the shared table operations and clear selection after success for the touch bar. Use format-selection-merge and format-selection-split for desktop formatting so the operation retains its resulting selection. Keep clipboard completion policy separate.
 
 Use the opt-in Macro search-text sync policy only when the browser enables Markdown search text. The policy reads the typed durable ID and projects the derived field to Loro while keeping ordinary editor exports unchanged until a storage import.

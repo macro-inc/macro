@@ -33,6 +33,8 @@ enum TableAction {
     Picker,
     SelectionMerge,
     SelectionSplit,
+    FormatSelectionMerge,
+    FormatSelectionSplit,
     ConvertList {
         key: u32,
     },
@@ -151,22 +153,30 @@ impl Plugin for Actions {
                 tx.emit(&PICKER, ());
                 true
             }
-            TableAction::SelectionMerge => {
+            TableAction::SelectionMerge | TableAction::FormatSelectionMerge => {
                 let Some(selection) = tx.selection().and_then(Selection::as_table) else {
                     return Ok(Handled::No);
                 };
+                let clear_selection = matches!(command.action, TableAction::SelectionMerge);
+                if !clear_selection && !selection.is_valid(tx.view()) {
+                    return Ok(Handled::No);
+                }
                 let cells = selection
                     .get_nodes(tx.view())?
                     .into_iter()
                     .filter_map(|key| tx.view().cast::<TableCellNode>(key))
                     .collect::<Vec<_>>();
                 merge_cells(tx, &cells)?;
-                tx.set_selection(None)?;
+                if clear_selection {
+                    tx.set_selection(None)?;
+                }
                 true
             }
-            TableAction::SelectionSplit => {
+            TableAction::SelectionSplit | TableAction::FormatSelectionSplit => {
                 unmerge_cell(tx)?;
-                tx.set_selection(None)?;
+                if matches!(command.action, TableAction::SelectionSplit) {
+                    tx.set_selection(None)?;
+                }
                 true
             }
             TableAction::ConvertList { key: index } => super::list_grid::convert(tx, key(*index))?,
