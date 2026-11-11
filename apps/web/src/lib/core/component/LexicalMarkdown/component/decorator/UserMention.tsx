@@ -3,14 +3,24 @@ import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import type { UserMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { cn } from '@ui';
 import { createEffect, createMemo } from 'solid-js';
-import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
+import { useUserMentionHost } from '../../decorator-host/user-mention-host';
 
 function emailLocalPart(email: string): string {
   return email.split('@')[0] || email;
 }
 
-export function UserMention(props: UserMentionDecoratorProps) {
-  const host = useDecoratorHost();
+/** Legacy imports preserve absent/null identity fields until the view coerces them. */
+export type UserMentionProps = Omit<
+  UserMentionDecoratorProps,
+  'userId' | 'email' | 'mentionUuid'
+> & {
+  userId: string | null | undefined;
+  email: string | null | undefined;
+  mentionUuid?: string | null;
+};
+
+export function UserMention(props: UserMentionProps) {
+  const host = useUserMentionHost();
   const isSelectedAsNode = () => host.isSelected(props.key);
 
   // Convert String wrapper to primitive string
