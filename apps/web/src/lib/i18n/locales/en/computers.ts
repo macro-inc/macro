@@ -1,13 +1,15 @@
 export default {
   needsAttention: 'Needs attention — contact support',
   purchased: 'Computer purchased. Provisioning now.',
+  purchaseConfirming:
+    'Confirming your payment. Setup starts once it goes through.',
   purchaseFailed: "Couldn't buy the computer. Please try again.",
   notifyFailed: "Couldn't save your request.",
   powerOnFailed: "Couldn't turn the computer on.",
   powerOffFailed: "Couldn't turn it off.",
   cancelFailed: "Couldn't cancel the computer.",
   keepFailed: "Couldn't keep the computer.",
-  removeFailed: "Couldn't remove the computer. Try again.",
+  restoreFailed: "Couldn't restore the computer. Try again.",
   releaseFailed: "Couldn't release the computer. Try again.",
   title: 'Macro computers',
   agents: 'Agents',
@@ -22,12 +24,13 @@ export default {
   cancelOn: '{{name}} cancels on {{date}}.',
   cancelAtPeriodEnd: '{{name}} cancels at the end of this billing period.',
   keeping: 'Keeping {{name}}.',
-  removed: '{{name}} removed',
+  restored: '{{name}} restored',
   released: '{{name}} released',
   billingHint:
     'Computers are billed on your team subscription. Manage them in Settings → Machines.',
   cancels: 'Cancels {{date}}',
-  turnsOff: 'Turns off {{date}}',
+  keptUntil: 'Kept until {{date}}',
+  pastDue: 'Payment past due',
   claudeSignInConflict:
     'Another sign-in is in progress on this computer — try again shortly',
   claudeCancelFailed: 'Could not cancel Claude sign-in. Please try again.',
@@ -87,7 +90,6 @@ export default {
   stopped: 'Powered off',
   failed: 'Failed',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
-  paymentFailed: 'Payment failed',
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
@@ -112,6 +114,10 @@ export default {
   continueToSignIn: 'Continue',
   cancelAtEnd: 'Cancel at period end',
   undoCancel: 'Undo cancel',
+  restore: 'Restore',
+  restoreTitle: 'Restore {{name}}?',
+  restoreBody:
+    "It's billed again on your team subscription: you're charged a prorated amount now for the rest of this billing period. The computer and its disk are kept, powered off.",
   releaseNow: 'Release now',
   releaseDeletesAgents: {
     one: '{{count}} agent on this computer will be deleted',

@@ -24,8 +24,10 @@ function computerStatus(status: string | null | undefined): string {
   return match(status)
     .with('running', 'ready', () => t('settingsBilling.alive'))
     .with('starting', () => t('settingsBilling.starting'))
-    .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
-    .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
+    .with('provisioning', 'purchasing', 'setting_up', () =>
+      t('settingsBilling.settingUp')
+    )
+    .with('failed', () => t('settingsBilling.failed'))
     .with('unhealthy', () => t('settingsBilling.dead'))
     .with('stopping', () => t('settingsBilling.stopping'))
     .with('stopped', () => t('settingsBilling.stopped'))
@@ -102,11 +104,9 @@ export function TeamBillingBreakdown(props: {
             <span
               class="rounded-full bg-ink/6 px-2 py-1 text-xs"
               classList={{
-                'text-failure': [
-                  'failed',
-                  'unhealthy',
-                  'payment_failed',
-                ].includes(status(line) ?? ''),
+                'text-failure': ['failed', 'unhealthy'].includes(
+                  status(line) ?? ''
+                ),
                 'text-success': ['ready', 'running'].includes(
                   status(line) ?? ''
                 ),

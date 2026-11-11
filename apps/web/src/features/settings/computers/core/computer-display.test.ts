@@ -11,10 +11,11 @@ const waiting: ComputerStatus = {
   diskGib: 100,
   catalogEntry: 'standard@2026-11',
   status: 'waiting_for_capacity',
-  payment: 'paid',
+  billing: 'active',
   poweredOn: true,
   agentCount: 0,
-  canUndoCancel: true,
+  canUndoCancel: false,
+  canRestore: false,
   purchasedBy: 'viewer',
   createdAt: '2026-11-01T00:00:00Z',
 };

@@ -69,6 +69,9 @@ export function ComputerBuyFlow(props: {
   const purchase = usePurchaseComputerMutation();
   const notify = useNotifyComputerSizeMutation();
   const [error, setError] = createSignal<string>();
+  // One key per Buy dialog, sent again on every retry, so a retried Buy
+  // never charges twice. An error means nothing was charged.
+  const [purchaseKey, setPurchaseKey] = createSignal(crypto.randomUUID());
   const [boughtId, setBoughtId] = createSignal<string>();
   const [step, setStep] = createSignal<SetupStepId>('computer');
   const [name, setName] = createSignal<string>();
@@ -120,6 +123,7 @@ export function ComputerBuyFlow(props: {
     );
     setReopened(false);
     setError(undefined);
+    setPurchaseKey(crypto.randomUUID());
     const current = computer();
     props.onClose();
     if (current) props.onFinished?.(current);
@@ -150,12 +154,19 @@ export function ComputerBuyFlow(props: {
     setError(undefined);
     try {
       const result = await purchase.mutateAsync({
+        purchaseKey: purchaseKey(),
         size: offer.size,
         name: computerName,
       });
       setBoughtId(result.computerId);
       setStep('agent');
-      toast.success(t('computers.purchased'));
+      // Confirming is a success too: the computer shows as purchasing
+      // until its charge is confirmed.
+      toast.success(
+        result.state === 'confirming'
+          ? t('computers.purchaseConfirming')
+          : t('computers.purchased')
+      );
     } catch (failure) {
       setError(failureMessage(failure, t('computers.purchaseFailed')));
     }

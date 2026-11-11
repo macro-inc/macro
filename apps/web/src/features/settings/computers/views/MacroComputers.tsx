@@ -16,6 +16,7 @@ import {
   useCancelComputerMutation,
   useComputerOffersQuery,
   useReleaseComputerMutation,
+  useRestoreComputerMutation,
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
@@ -24,6 +25,7 @@ import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   MachineRow,
   RuntimeShareDialog,
@@ -116,6 +118,7 @@ function ManagedComputerRow(props: {
   const power = useSetComputerPowerMutation();
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
+  const restore = useRestoreComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
   // The active login names the account; macrod's report says whether Claude
@@ -145,7 +148,6 @@ function ManagedComputerRow(props: {
   };
 
   const primary = (): ComputerPrimaryAction | undefined => {
-    if (props.computer.status === 'payment_failed') return undefined;
     if (setupIncomplete()) {
       if (!props.canFinishSetup) return undefined;
       return {
@@ -228,14 +230,62 @@ function ManagedComputerRow(props: {
     }
   };
 
+  const restoreBilling = async () => {
+    const confirmed = await confirmDialog({
+      title: t('computers.restoreTitle', { name: props.computer.name }),
+      body: t('computers.restoreBody'),
+      confirmLabel: t('computers.restore'),
+    });
+    if (!confirmed) return;
+    try {
+      await restore.mutateAsync(props.computer.id);
+      toast.success(t('computers.restored', { name: props.computer.name }));
+    } catch (error) {
+      toast.failure(failureMessage(error, t('computers.restoreFailed')));
+    }
+  };
+
   const run = (work: Promise<void>) => fireAndForget(work, 'macro-computers');
-  const billingPending = () => cancel.isPending || undoCancel.isPending;
+  const billingPending = () =>
+    cancel.isPending || undoCancel.isPending || restore.isPending;
+
+  // Cancel, release and power wait until a purchase is confirmed.
+  const billingItem = (): ComputerMenuItem | undefined =>
+    match(props.computer.billing)
+      .returnType<ComputerMenuItem | undefined>()
+      .with('active', 'past_due', 'comped', () => ({
+        label: t('computers.cancelAtEnd'),
+        icon: 'cancel',
+        disabled: billingPending(),
+        onSelect: () => run(cancelAtPeriodEnd()),
+      }))
+      .with('ending', () =>
+        props.computer.canUndoCancel
+          ? {
+              label: t('computers.undoCancel'),
+              icon: 'undo',
+              disabled: billingPending(),
+              onSelect: () => run(keep()),
+            }
+          : undefined
+      )
+      .with('ended', () =>
+        props.computer.canRestore
+          ? {
+              label: t('computers.restore'),
+              icon: 'undo',
+              disabled: billingPending(),
+              onSelect: () => run(restoreBilling()),
+            }
+          : undefined
+      )
+      .with('purchasing', null, undefined, () => undefined)
+      .exhaustive(() => undefined);
 
   const menu = (): ComputerMenuItem[] => {
     const items: ComputerMenuItem[] = [];
     const computer = props.computer;
-    const paymentFailed = computer.status === 'payment_failed';
-    if (props.canManage && !paymentFailed && canTogglePower(computer)) {
+    if (props.canManage && canTogglePower(computer)) {
       items.push(
         computer.poweredOn
           ? {
@@ -252,7 +302,7 @@ function ManagedComputerRow(props: {
             }
       );
     }
-    if (props.canManageClaude && !paymentFailed && !setupIncomplete()) {
+    if (props.canManageClaude && !setupIncomplete()) {
       const state = claude();
       if (state.kind === 'account')
         items.push({
@@ -267,27 +317,11 @@ function ManagedComputerRow(props: {
           onSelect: () => run(switchToAccount()),
         });
     }
-    if (props.canManage && !paymentFailed && !computer.retainedUntil) {
-      if (!computer.cancelsAt) {
-        items.push({
-          label: t('computers.cancelAtEnd'),
-          icon: 'cancel',
-          disabled: billingPending(),
-          onSelect: () => run(cancelAtPeriodEnd()),
-        });
-      } else if (computer.canUndoCancel) {
-        // Billing stops an hour before period end; after that it is final.
-        items.push({
-          label: t('computers.undoCancel'),
-          icon: 'undo',
-          disabled: billingPending(),
-          onSelect: () => run(keep()),
-        });
-      }
-    }
-    if (props.canManage) {
+    const billing = billingItem();
+    if (props.canManage && billing) items.push(billing);
+    if (props.canManage && computer.status !== 'purchasing') {
       items.push({
-        label: paymentFailed ? 'Remove' : t('computers.releaseNow'),
+        label: t('computers.releaseNow'),
         icon: 'release',
         danger: true,
         onSelect: props.onRelease,
@@ -367,16 +401,8 @@ export function MacroComputers(props: {
         confirmName: computer.name,
       });
       setReleasing(undefined);
-      toast.success(
-        computer.status === 'payment_failed'
-          ? t('computers.removed', { name: computer.name })
-          : t('computers.released', { name: computer.name })
-      );
+      toast.success(t('computers.released', { name: computer.name }));
     } catch (error) {
-      if (computer.status === 'payment_failed') {
-        toast.failure(failureMessage(error, t('computers.removeFailed')));
-        return;
-      }
       setReleaseError(failureMessage(error, t('computers.releaseFailed')));
     }
   };
@@ -426,10 +452,6 @@ export function MacroComputers(props: {
                     props.onSharingChange(computer.harnessId ?? undefined)
                   }
                   onRelease={() => {
-                    if (computer.status === 'payment_failed') {
-                      fireAndForget(releaseNow(computer), 'macro-computers');
-                      return;
-                    }
                     setReleaseError(undefined);
                     setReleasing(computer);
                   }}

@@ -85,6 +85,8 @@ export function setupStepLabel(step: SetupStep): string | undefined {
 
 export type StatusTone = 'success' | 'progress' | 'muted' | 'failure';
 
+/** The status a row shows; a purchase still being confirmed shows as setup's
+ *  first step. */
 export function computerStatusLabel(computer: ComputerStatus): {
   label: string;
   detail?: string;
@@ -92,7 +94,7 @@ export function computerStatusLabel(computer: ComputerStatus): {
 } {
   return match(computer.status)
     .returnType<{ label: string; detail?: string; tone: StatusTone }>()
-    .with('setting_up', () => {
+    .with('setting_up', 'purchasing', () => {
       const setup = computer.setup;
       const step = setup && setupStepLabel(setup.step);
       // The same three phases guided setup shows; the server's final "ready"
@@ -135,10 +137,6 @@ export function computerStatusLabel(computer: ComputerStatus): {
       detail: t('computers.failedHint'),
       tone: 'failure',
     }))
-    .with('payment_failed', () => ({
-      label: t('computers.paymentFailed'),
-      tone: 'failure',
-    }))
     .with('released', () => ({
       label: t('computers.releasedStatus'),
       tone: 'muted',
@@ -160,6 +158,7 @@ export function computerDotState(
 /** Provisioning, before the computer first reports ready. */
 export function isProvisioning(computer: ComputerStatus): boolean {
   return (
+    computer.status === 'purchasing' ||
     computer.status === 'setting_up' ||
     computer.status === 'waiting_for_capacity'
   );
@@ -174,7 +173,7 @@ export function canTogglePower(computer: ComputerStatus): boolean {
       'starting',
       'stopping',
       'failed',
-      'payment_failed',
+      'purchasing',
       'needs_attention',
       'released',
       () => false

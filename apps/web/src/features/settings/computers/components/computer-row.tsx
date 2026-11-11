@@ -43,7 +43,8 @@ function claudeText(claude: ComputerClaudeState): string | undefined {
 /**
  * The one line under a computer's name: its specs, then the single state
  * that matters now (setup progress, powered off, a fault, or how Claude is
- * paid for), then a pending cancellation.
+ * paid for), then its billing: past due, a pending cancellation, or how
+ * long a released computer is kept.
  */
 function ComputerSubtitle(props: {
   computer: ComputerStatus;
@@ -56,18 +57,24 @@ function ComputerSubtitle(props: {
     if (status().tone !== 'success') return status().label;
     return claudeText(props.claude);
   };
-  // Once billing has stopped the cancellation is final: it just turns off.
-  const cancels = () => {
-    const at = props.computer.cancelsAt;
-    if (!at) return undefined;
-    const date = formatComputerDate(at);
-    return !props.computer.canUndoCancel
-      ? t('computers.turnsOff', { date })
-      : t('computers.cancels', { date });
+  // Past due, a pending cancellation, or how long a released computer's
+  // disk is kept.
+  const billing = () => {
+    const computer = props.computer;
+    if (computer.billing === 'past_due') return t('computers.pastDue');
+    if (computer.cancelsAt)
+      return t('computers.cancels', {
+        date: formatComputerDate(computer.cancelsAt),
+      });
+    if (computer.retainedUntil)
+      return t('computers.keptUntil', {
+        date: formatComputerDate(computer.retainedUntil),
+      });
+    return undefined;
   };
   return (
     <span>
-      {[computerSpecs(props.computer), state(), cancels()]
+      {[computerSpecs(props.computer), state(), billing()]
         .filter(Boolean)
         .join(' · ')}
       <Show when={!state() && props.claude.kind === 'loading'}>
