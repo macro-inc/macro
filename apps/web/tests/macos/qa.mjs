@@ -59,7 +59,6 @@ const shots = join(out, "screenshots");
 mkdirSync(shots, { recursive: true });
 const soakSeconds = Number(args.soak ?? (full ? 60 : 15));
 const windowTimeout = Number(args["window-timeout"]);
-const debugPort = 9333;
 const startedAt = Date.now();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -127,7 +126,7 @@ const appLog = join(out, "app.log");
 writeFileSync(appLog, "");
 const launchedAt = Date.now();
 
-const child = spawn(binary, [`--remote-debugging-port=${debugPort}`], {
+const child = spawn(binary, [], {
 	env: { ...process.env, HOME: home, CFFIXED_USER_HOME: home },
 	stdio: ["ignore", "pipe", "pipe"],
 });
@@ -138,33 +137,54 @@ child.on("exit", (code, signal) => {
 	exit = { code, signal, after: Date.now() - launchedAt };
 });
 
-const osascript = (script) => run("osascript", ["-e", script]);
+// Windows are found with CoreGraphics, which needs no permission. System
+// Events (AppleScript) makes macOS ask for Automation consent in a dialog
+// nobody can click on a CI runner, so it is used only when QA_AUTOMATION=1.
+const windowScript = join(out, "windows.swift");
+writeFileSync(
+	windowScript,
+	`import CoreGraphics
+import Foundation
+let info = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in info {
+	let pid = w[kCGWindowOwnerPID as String] as? Int ?? 0
+	let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
+	print("\\(pid)\\t\\(w[kCGWindowLayer as String] as? Int ?? -1)\\t\\(Int(b["Width"] ?? 0))x\\(Int(b["Height"] ?? 0))\\t\\(w[kCGWindowOwnerName as String] as? String ?? "")")
+}
+`,
+);
 const windowsOf = () => {
-	const r = osascript(
-		`tell application "System Events" to get name of every window of (every process whose unix id is ${child.pid})`,
-	);
-	return r.code === 0 ? r.stdout.trim() : undefined;
+	const r = run("swift", [windowScript], { timeout: 120_000 });
+	if (r.code !== 0) return { error: r.stderr.trim().slice(0, 300) };
+	const rows = r.stdout
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => line.split("\t"));
+	// The app's own on-screen, normal-layer, window-sized windows.
+	return {
+		windows: rows.filter(([pid, layer, size]) => {
+			const [w, h] = size.split("x").map(Number);
+			return Number(pid) === child.pid && layer === "0" && w >= 200 && h >= 200;
+		}),
+		all: rows.length,
+	};
 };
 
-let windowTitle;
 await check("window-appears", async () => {
 	const deadline = Date.now() + windowTimeout * 1000;
 	let last = "";
 	while (Date.now() < deadline) {
-		if (exit) return fail(`app exited (${JSON.stringify(exit)}) before showing a window`);
-		const w = windowsOf();
-		last = w ?? last;
-		// AppleScript prints "title" or "{...}" lists; any non-empty name counts.
-		if (w !== undefined && w.replace(/[{},\s]/g, "") !== "") {
-			windowTitle = w;
-			return pass(`window after ${((Date.now() - launchedAt) / 1000).toFixed(1)}s: ${w}`);
-		}
+		if (exit) return fail(`app exited (${JSON.stringify(exit)}) before showing a window; log: ${readFileSync(appLog, "utf8").trim().slice(0, 300)}`);
+		const found = windowsOf();
+		if (found.error) return fail(`could not list windows: ${found.error}`);
+		last = `${found.all} on-screen windows, none of the app's`;
+		if (found.windows.length > 0)
+			return pass(
+				`window ${found.windows[0][2]} after ${((Date.now() - launchedAt) / 1000).toFixed(1)}s (owner ${found.windows[0][3]})`,
+			);
 		await sleep(2000);
 	}
-	const gui = run("osascript", ["-e", 'tell application "System Events" to get name of every process whose background only is false']);
-	return fail(
-		`no window within ${windowTimeout}s (last: ${JSON.stringify(last)}); System Events: ${gui.code === 0 ? gui.stdout.trim().slice(0, 300) : gui.stderr.trim().slice(0, 300)}`,
-	);
+	return fail(`no window within ${windowTimeout}s (${last})`);
 });
 
 await check("screenshot", async () => {
@@ -182,55 +202,25 @@ await check("screenshot", async () => {
 });
 
 await check("menu-bar", async () => {
-	const r = osascript(
-		`tell application "System Events" to get name of every menu bar item of menu bar 1 of (first process whose unix id is ${child.pid})`,
-	);
+	if (process.env.QA_AUTOMATION !== "1")
+		return skip(
+			"System Events needs Automation consent, which a runner shows as an unanswerable dialog; set QA_AUTOMATION=1 on a Mac where it is granted",
+		);
+	const r = run("osascript", ["-e", `tell application "System Events" to get name of every menu bar item of menu bar 1 of (first process whose unix id is ${child.pid})`], { timeout: 15_000 });
 	if (r.code !== 0) return fail(`System Events: ${r.stderr.trim().slice(0, 300)}`);
-	const items = r.stdout.trim();
-	return items === "" ? fail("menu bar has no items") : pass(items);
+	return r.stdout.trim() === "" ? fail("menu bar has no items") : pass(r.stdout.trim());
 });
 
 if (full) {
 	await check("cdp", async () => {
-		let version;
-		for (let i = 0; i < 5 && !version; i++) {
-			try {
-				const r = await fetch(`http://127.0.0.1:${debugPort}/json/version`, {
-					signal: AbortSignal.timeout(3000),
-				});
-				version = await r.json();
-			} catch {
-				await sleep(2000);
-			}
-		}
-		if (!version)
-			return skip(
-				`the app does not serve DevTools on :${debugPort} with --remote-debugging-port: no UI automation route`,
-			);
-		const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json`)).json();
-		const page = targets.find((t) => t.type === "page");
-		if (!page) return fail(`DevTools up (${version.Browser}) but no page target`);
-		const state = await evaluate(page.webSocketDebuggerUrl, "document.readyState + '|' + document.title + '|' + location.href");
-		return pass(`${version.Browser}; page ${state}`);
+		// The app parses its own command line (clap) and refuses Chromium's
+		// switches, so it cannot be started with --remote-debugging-port;
+		// reaching the page needs a change in the app. Report that, not a pass.
+		return skip(
+			"the app's argument parser rejects --remote-debugging-port (exit 2), so DevTools cannot be enabled from outside",
+		);
 	});
 }
-
-// Evaluates one expression in a page over the DevTools websocket.
-const evaluate = (url, expression) =>
-	new Promise((resolve, reject) => {
-		const socket = new WebSocket(url);
-		const timer = setTimeout(() => reject(new Error("devtools evaluate timed out")), 10_000);
-		socket.onopen = () =>
-			socket.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: { expression, returnByValue: true } }));
-		socket.onmessage = (event) => {
-			const message = JSON.parse(String(event.data));
-			if (message.id !== 1) return;
-			clearTimeout(timer);
-			socket.close();
-			resolve(String(message.result?.result?.value ?? JSON.stringify(message)));
-		};
-		socket.onerror = () => reject(new Error("devtools websocket error"));
-	});
 
 await check("stays-up", async () => {
 	const until = Date.now() + soakSeconds * 1000;
