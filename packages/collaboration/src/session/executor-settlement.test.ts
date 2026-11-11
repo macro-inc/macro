@@ -301,6 +301,7 @@ test('close failure cancels only never-started accepted settlements at the final
   });
   const results: ExecutorSettlement[] = [];
   let called = false;
+  let admissionReads = 0;
   expect(() =>
     executor.run(() => {
       executor.run(() => {
@@ -314,7 +315,13 @@ test('close failure cancels only never-started accepted settlements at the final
           called = true;
           return executor.session.tick(executor.now(), Date.now());
         },
-        (result) => results.push(result)
+        (result) => results.push(result),
+        {
+          admit() {
+            admissionReads++;
+            return true;
+          },
+        }
       );
       return executor.session.tick(executor.now(), Date.now());
     })
@@ -322,5 +329,119 @@ test('close failure cancels only never-started accepted settlements at the final
   if (!closing) throw new Error('Missing actual close');
   await expect(closing).rejects.toBe(second);
   expect(called).toBe(false);
+  expect(admissionReads).toBe(0);
   expect(results).toEqual([{ status: 'cancelled', reason: 'closed' }]);
+});
+
+for (const canComment of [false, true]) {
+  test(`queued authority refusal cancels without materializing an application (${canComment})`, async () => {
+    const executor = setup();
+    const results: ExecutorSettlement[] = [];
+    let authorityReads = 0;
+    let applications = 0;
+    let after = 0;
+    try {
+      executor.run(() => {
+        executor.runSettled(
+          () => {
+            applications++;
+            return executor.session.input(
+              SessionInputMsg.encode({
+                ...emptyInput(2),
+                editor: EditorInputMsg.fromEditorApplication({
+                  name: 'group-b.equation',
+                  json: '{"key":0,"equation":"x"}',
+                  generation: 0,
+                  selection: {
+                    kind: 0,
+                    anchor: { key: 0, offset: 0, type: 0 },
+                    focus: { key: 0, offset: 0, type: 0 },
+                    nodes: [],
+                    table: 0,
+                    dirty: false,
+                  },
+                  keyboard: false,
+                  key: '',
+                  code: 0,
+                  mods: 0,
+                }),
+              }),
+              executor.now(),
+              Date.now()
+            );
+          },
+          (result) => results.push(result),
+          {
+            admit() {
+              authorityReads++;
+              return executor.session.effectiveAccess() === Access.Edit;
+            },
+            after() {
+              after++;
+            },
+          }
+        );
+        return executor.session.authorization(
+          true,
+          false,
+          canComment,
+          executor.now(),
+          Date.now()
+        );
+      });
+      expect(results).toEqual([
+        { status: 'cancelled', reason: 'session-access' },
+      ]);
+      expect(authorityReads).toBe(1);
+      expect(applications).toBe(0);
+      expect(after).toBe(0);
+    } finally {
+      await executor.close();
+    }
+  });
+}
+
+test('cancelled admission still drains unlocked cleanup and preserves its cancellation on cleanup failure', async () => {
+  const cause = { reason: 'cleanup after refusal' };
+  const seen: string[] = [];
+  let armed = false;
+  let executor: SessionExecutor<EditorSession>;
+  executor = setup({
+    view: { apply() {} },
+    afterDrain() {
+      if (!armed) return;
+      armed = false;
+      seen.push('drain');
+      executor.runSync(() => executor.session.tick(executor.now(), Date.now()));
+      throw cause;
+    },
+  });
+  const results: ExecutorSettlement[] = [];
+  try {
+    armed = true;
+    expect(() =>
+      executor.runSettled(
+        () => {
+          throw new Error('Refused call must not execute');
+        },
+        (result) => {
+          seen.push('settlement');
+          results.push(result);
+        },
+        {
+          admit: () => false,
+          after() {
+            throw new Error('Refused after must not execute');
+          },
+        }
+      )
+    ).toThrow(cause);
+    expect(seen).toEqual(['drain', 'settlement']);
+    expect(results).toEqual([
+      { status: 'cancelled', reason: 'session-access' },
+    ]);
+  } finally {
+    armed = false;
+    await executor.close();
+  }
 });

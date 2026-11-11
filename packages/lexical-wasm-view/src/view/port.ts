@@ -65,7 +65,10 @@ export interface ViewSink {
 export type InputSettlement =
   | { readonly status: 'success'; readonly handled: boolean }
   | { readonly status: 'error'; readonly error: unknown }
-  | { readonly status: 'cancelled'; readonly reason: 'closed' | 'closing' };
+  | {
+      readonly status: 'cancelled';
+      readonly reason: 'closed' | 'closing' | 'session-access';
+    };
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
   readonly nativeEnter?: NativeEnterPort;
@@ -110,6 +113,10 @@ export interface EditorPort {
   inputSettled?(
     input: EditorInputMsg,
     event?: KeyboardEvent
+  ): Promise<InputSettlement>;
+  /** Current native Edit authority is checked before the queued factory runs. */
+  inputSettledIfSessionEdit?(
+    factory: () => ProgrammaticApplicationInput
   ): Promise<InputSettlement>;
   setState(json: string): void;
   initialize(): void;

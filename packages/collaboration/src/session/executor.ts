@@ -46,7 +46,10 @@ export interface ExecutorFailure {
 export type ExecutorSettlement =
   | { readonly status: 'success'; readonly flags: number }
   | { readonly status: 'error'; readonly error: unknown }
-  | { readonly status: 'cancelled'; readonly reason: 'closed' | 'closing' };
+  | {
+      readonly status: 'cancelled';
+      readonly reason: 'closed' | 'closing' | 'session-access';
+    };
 
 /** Consumer-owned deferred errors may be associated only with this real entry. */
 export interface ExecutorCompletion {
@@ -60,6 +63,8 @@ export interface ExecutorDrain {
 export interface SettledRunOptions {
   readonly synchronous?: boolean;
   readonly after?: (flags: number) => void;
+  /** Check current session authority in this queue turn before materialization. */
+  readonly admit?: () => boolean;
 }
 interface SettledEntry {
   started: boolean;
@@ -69,6 +74,8 @@ interface SettledEntry {
   exception?: ExecutorFailure;
   reported?: ExecutorFailure;
   native?: ExecutorFailure;
+  cancelled?: boolean;
+  readonly admit?: () => boolean;
   readonly completion: ExecutorCompletion;
   readonly notify: (result: ExecutorSettlement) => void;
 }
@@ -313,6 +320,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       running: false,
       delivered: false,
       notify,
+      admit: options.admit,
       completion: {
         get running() {
           return entry.running;
@@ -360,6 +368,10 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       ? () => {
           entry.running = true;
           try {
+            if (entry.admit && !entry.admit()) {
+              entry.cancelled = true;
+              return;
+            }
             execute();
           } catch (error) {
             entry.exception ??= { error };
@@ -420,14 +432,16 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         settlement.native ??
         (!attributed ? drainFailure : undefined);
       settlement.delivered = true;
-      const result: ExecutorSettlement = own
-        ? { status: 'error', error: own.error }
-        : settlement.flags === undefined
-          ? {
-              status: 'error',
-              error: new Error('Native input completed without flags'),
-            }
-          : { status: 'success', flags: settlement.flags };
+      const result: ExecutorSettlement = settlement.cancelled
+        ? { status: 'cancelled', reason: 'session-access' }
+        : own
+          ? { status: 'error', error: own.error }
+          : settlement.flags === undefined
+            ? {
+                status: 'error',
+                error: new Error('Native input completed without flags'),
+              }
+            : { status: 'success', flags: settlement.flags };
       this.notifySettlement(settlement.notify, result);
     }
     if (failure) throw failure.error;

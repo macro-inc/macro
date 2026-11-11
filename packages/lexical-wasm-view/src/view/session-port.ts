@@ -422,9 +422,28 @@ export class SessionPort implements EditorPort {
     editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
     eventOrOptions?: KeyboardEvent | ProgrammaticApplicationOptions
   ): Promise<InputSettlement> {
+    return this.settleInput(editor, eventOrOptions);
+  }
+  /** Authority refusal is a settled cancellation, independent of UI editability. */
+  inputSettledIfSessionEdit(
+    factory: () => ProgrammaticApplicationInput
+  ): Promise<InputSettlement> {
+    return this.settleInput(
+      factory,
+      undefined,
+      () => this.effectiveAccess() === Access.Edit
+    );
+  }
+  private settleInput(
+    editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
+    eventOrOptions?: KeyboardEvent | ProgrammaticApplicationOptions,
+    admit?: () => boolean
+  ): Promise<InputSettlement> {
     this.assertRootAdmission();
     const run = this.executor.runSettled;
     if (!run) throw new Error('Per-input executor settlement is unavailable');
+    if (admit && typeof editor !== 'function')
+      throw new Error('Conditional application inputs require a factory');
     let after: ((handled: boolean) => void) | undefined;
     let event: KeyboardEvent | undefined;
     if (typeof editor === 'function') {
@@ -482,6 +501,7 @@ export class SessionPort implements EditorPort {
         );
       },
       {
+        admit,
         synchronous: operation.synchronous,
         after: after
           ? (flags) => after(Boolean(flags & FLAG_HANDLED))
