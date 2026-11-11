@@ -72,7 +72,6 @@ main.feature-page:has(.benefit-page)::before { display: none; }
 .benefit-rule { display: flex; justify-content: center; align-items: center; gap: 8px; color: #a8a8b2; font-size: 12px; margin: 25px auto 0; max-width: 100%; text-align: center; }
 .benefit-rule svg { width: 16px; height: 16px; color: var(--benefit-accent); }
 
-.benefit-reference-source { display: flex; justify-content: center; align-items: center; gap: 12px; color: #d9d9df; }
 .benefit-floating-tags { display: flex; justify-content: center; align-items: center; gap: 24px; margin-bottom: 22px; }
 .benefit-floating-tags .benefit-tag:first-child { transform: rotate(-7deg) translateY(12px); }
 .benefit-floating-tags .benefit-tag:last-child { transform: rotate(7deg) translateY(12px); }
@@ -131,22 +130,7 @@ main.feature-page:has(.benefit-page)::before { display: none; }
   .benefit-event-card strong { font-size: 14px; }
 }
 
-.benefit-linked-scene { display: grid; grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr); align-items: center; }
-.benefit-linked-source, .benefit-linked-target { padding: 24px; min-width: 0; }
-.benefit-linked-source > small { display: block; margin-top: 12px; }
-.benefit-linked-source .benefit-inline-mention { max-width: 100%; }
-.benefit-linked-target { margin-top: 80px; }
-.benefit-reference-caption { font-size: 12px; color: #9999a4; margin-top: 26px; }
-.benefit-linked-target .benefit-item { padding: 16px 0 0; }
-.benefit-two-way { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
-.benefit-two-way > span { font-size: 27px; color: #b7c7e9; }
-.benefit-two-way > small { width: 48px; font-size: 9px; }
 .benefit-agent-query { display: flex; align-items: center; gap: 14px; padding: 20px 24px; width: min(470px, 100%); margin: auto; color: #dedee3; }
 @media (max-width: 699px) {
-  .benefit-linked-scene { grid-template-columns: 1fr; }
-  .benefit-linked-target { margin-top: 0; margin-left: 22px; }
-  .benefit-two-way { padding: 12px 0; flex-direction: row; justify-content: center; }
-  .benefit-two-way > span { transform: rotate(90deg); }
-  .benefit-two-way > small { width: auto; font-size: 11px; }
   .benefit-event-context .benefit-inline-mention { font-size: 12px; text-align: center; }
 }

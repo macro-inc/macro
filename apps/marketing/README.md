@@ -1143,6 +1143,7 @@ translucent HTML illustrations. `benefit-pages.ts` owns the overview copy;
 Setup and reference guide, including its existing deep links. Explain concrete
 workflows using the founder's supplied language. Describe channel access as a
 channel grant, and label event-driven agent actions as configured routines.
+Vary Company graph visuals by what they explain: use the shared channel/PR demo, Rahul's annotated email Source-property art, the native document References panel, and a task notebook with navigable task mentions and incoming references. Avoid repeating generic paired cards and arrow diagrams across the page. Keep product controls recognizable and mobile labels legible.
 Use the depicted block's existing `TutorialWallpaper` palette for benefit-example icons, card gradients, and the surrounding glow. Mixed examples retain each block's own color; agent actions use the Agents palette, not the benefit page's accent. Keep tag colors independent of block colors.
 
 The Tasks page uses `TaskPaperGraphic` directly within its creation, workspace,

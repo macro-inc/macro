@@ -44,7 +44,10 @@ export function GithubPrHero() {
 }
 
 /** The same channel and PR, with independent local state for each scene. */
-export function GithubConversationDemo(props: { agent?: boolean }) {
+export function GithubConversationDemo(props: {
+  agent?: boolean;
+  previewChanges?: boolean;
+}) {
   const w = createGithubWorkspace(props.agent);
   const task = () => w.data.tasks.find((item) => item.id === GITHUB_TASK)!;
   const initialTask = {
@@ -118,7 +121,7 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
         reply();
       } else {
         setDetail('pr');
-        setChanges(true);
+        setChanges(props.previewChanges !== false);
       }
       setAutomatic(false);
     },
@@ -133,7 +136,7 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
         if (step === 2) setAutomatic(false);
       } else {
         if (step === 2) setDetail('pr');
-        if (step === 4) setChanges(true);
+        if (step === 4 && props.previewChanges !== false) setChanges(true);
         if (step === 5) setAutomatic(false);
       }
     },
@@ -165,7 +168,9 @@ export function GithubConversationDemo(props: { agent?: boolean }) {
       automatic() && !props.agent && phase() > 0 && phase() < 5
         ? phase() < 3
           ? '[data-pr-mention]'
-          : '[data-changes-toggle]'
+          : props.previewChanges === false
+            ? undefined
+            : '[data-changes-toggle]'
         : undefined,
   });
   return (

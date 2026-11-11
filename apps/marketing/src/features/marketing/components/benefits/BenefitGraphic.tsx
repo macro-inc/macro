@@ -13,6 +13,7 @@ import { Dynamic } from 'solid-js/web';
 import type { BenefitScene } from '../../core/benefit-pages';
 import { FeatureDemoBackdrop } from '../FeatureDemoBackdrop';
 import { wallpapers } from '../TutorialWallpaper';
+import type { CompanyGraphScene } from './CompanyGraphDemo';
 
 const icons = {
   email: Email,
@@ -42,13 +43,9 @@ function blockStyle(kind: keyof typeof blockPalettes) {
 }
 
 const sceneBlocks: Record<
-  Exclude<BenefitScene, 'parallel-search'>,
+  Exclude<BenefitScene, 'parallel-search' | CompanyGraphScene>,
   keyof typeof blockPalettes
 > = {
-  'pr-channel': 'chat',
-  'task-email': 'email',
-  references: 'doc',
-  'task-task': 'task',
   'auto-tags': 'email',
   'task-tags': 'task',
   'shared-tags': 'doc',
@@ -108,132 +105,6 @@ function Item(props: {
         </Show>
       </div>
       <Show when={props.tag}>{(tag) => <Tag label={tag()} />}</Show>
-    </div>
-  );
-}
-
-const linkedWork = {
-  'pr-channel': {
-    kind: 'chat',
-    title: 'Engineering',
-    detail: 'Julia · 10:24 AM',
-    message: 'The fix is ready for review.',
-    linkedKind: 'pr',
-    linkedTitle: 'Fix checkout timeout',
-    reference: 'Mentioned in Engineering',
-  },
-  'task-email': {
-    kind: 'email',
-    title: 'Checkout keeps timing out',
-    detail: 'Sam · Northwind',
-    message: 'Our customers can’t finish their orders in Safari.',
-    linkedKind: 'task',
-    linkedTitle: 'Fix checkout timeout',
-    reference: 'Source · Checkout keeps timing out',
-  },
-  'task-task': {
-    kind: 'task',
-    title: 'Prepare the customer launch',
-    detail: 'Priya · In progress',
-    message: 'Include the checkout fix in this release.',
-    linkedKind: 'task',
-    linkedTitle: 'Fix checkout timeout',
-    reference: 'Mentioned in Prepare the customer launch',
-  },
-} satisfies Record<
-  string,
-  {
-    kind: ItemKind;
-    title: string;
-    detail: string;
-    message: string;
-    linkedKind: ItemKind;
-    linkedTitle: string;
-    reference: string;
-  }
->;
-
-function LinkedWorkGraphic(props: { mode: keyof typeof linkedWork }) {
-  const work = () => linkedWork[props.mode];
-  return (
-    <div class="benefit-linked-scene">
-      <div
-        class="benefit-glass benefit-linked-source"
-        data-benefit-block={work().kind}
-        style={blockStyle(work().kind)}
-      >
-        <div class="benefit-card-label">
-          <Dynamic component={icons[work().kind]} />
-          {work().title}
-        </div>
-        <small>{work().detail}</small>
-        <p>{work().message}</p>
-        <span
-          class="benefit-inline-mention"
-          data-benefit-block={work().linkedKind}
-          style={blockStyle(work().linkedKind)}
-        >
-          <Dynamic component={icons[work().linkedKind]} />
-          {work().linkedTitle}
-        </span>
-      </div>
-      <div class="benefit-two-way">
-        <span>↔</span>
-        <small>Linked both ways</small>
-      </div>
-      <div
-        class="benefit-glass benefit-linked-target"
-        data-benefit-block={work().linkedKind}
-        style={blockStyle(work().linkedKind)}
-      >
-        <div class="benefit-card-label">
-          <Dynamic component={icons[work().linkedKind]} />
-          {work().linkedTitle}
-        </div>
-        <div class="benefit-reference-caption">References</div>
-        <Item
-          kind={work().kind}
-          title={work().title}
-          detail={work().reference}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ReferenceGraphic() {
-  return (
-    <div class="benefit-reference-scene">
-      <div
-        class="benefit-reference-source"
-        data-benefit-block="doc"
-        style={blockStyle('doc')}
-      >
-        <File />
-        <span>Launch notes</span>
-      </div>
-      <div class="benefit-connection" />
-      <div class="benefit-glass benefit-list">
-        <div class="benefit-card-label">
-          References <span>3</span>
-        </div>
-        <Item
-          kind="chat"
-          title="Product"
-          detail="Julia mentioned Launch notes"
-        />
-        <Item
-          kind="task"
-          title="Improve team invitations"
-          detail="Linked in the task description"
-        />
-        <Item
-          kind="doc"
-          title="Friday launch plan"
-          detail="Mentioned in the rollout checklist"
-        />
-      </div>
-      <Callout below>Every mention leads back here</Callout>
     </div>
   );
 }
@@ -541,7 +412,7 @@ function EventGraphic(props: { mode: keyof typeof eventExamples }) {
 
 /** Editorial illustrations using Paper's annotation and translucent surface language. */
 export function BenefitGraphic(props: {
-  scene: Exclude<BenefitScene, 'parallel-search'>;
+  scene: Exclude<BenefitScene, 'parallel-search' | CompanyGraphScene>;
   label: string;
 }) {
   return (
@@ -556,18 +427,6 @@ export function BenefitGraphic(props: {
       <FeatureDemoBackdrop />
       <div class="benefit-art" aria-hidden="true">
         <Switch>
-          <Match when={props.scene === 'pr-channel'}>
-            <LinkedWorkGraphic mode="pr-channel" />
-          </Match>
-          <Match when={props.scene === 'task-email'}>
-            <LinkedWorkGraphic mode="task-email" />
-          </Match>
-          <Match when={props.scene === 'task-task'}>
-            <LinkedWorkGraphic mode="task-task" />
-          </Match>
-          <Match when={props.scene === 'references'}>
-            <ReferenceGraphic />
-          </Match>
           <Match
             when={props.scene === 'auto-tags' || props.scene === 'task-tags'}
           >

@@ -8,12 +8,16 @@ import { DocumentSourceSurface } from './DocumentProjectDemo';
 import { PROJECT_INTRO, PROJECT_TAGS, PROJECT_TITLE } from './documentProject';
 
 /** The document's incoming reference opens the conversation that mentioned it. */
-export function DocumentReferencesDemo() {
+export function DocumentReferencesDemo(props: { mobileHeight?: number } = {}) {
   const [sourceOpen, setSourceOpen] = createSignal(false);
   let reference: HTMLButtonElement | undefined;
   return (
     <div class="doc-story doc-references-demo">
-      <ProductDemo label="Document references" height={490} mobileHeight={440}>
+      <ProductDemo
+        label="Document references"
+        height={490}
+        mobileHeight={sourceOpen() ? 440 : (props.mobileHeight ?? 440)}
+      >
         <DocumentSourceSurface
           source={sourceOpen() ? 'channel' : undefined}
           onClose={() => {

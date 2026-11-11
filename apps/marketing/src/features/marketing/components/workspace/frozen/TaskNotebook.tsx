@@ -32,6 +32,8 @@ export function TaskNotebook(props: {
   workspace: DummyWorkspace;
   task: WorkspaceTask;
   relatedContent?: JSX.Element;
+  /** Incoming mentions shown first in the details panel. */
+  referencesContent?: JSX.Element;
   /** Frozen rich task descriptions can include native inline mentions. */
   descriptionContent?: JSX.Element;
   navigation?: JSX.Element;
@@ -143,6 +145,11 @@ export function TaskNotebook(props: {
         open={panel()}
         panel={
           <>
+            <Show when={props.referencesContent}>
+              <PanelSection title="References" open>
+                {props.referencesContent}
+              </PanelSection>
+            </Show>
             <PanelSection title="Actions" open>
               <div class="flex gap-2">
                 <Button
@@ -203,17 +210,19 @@ export function TaskNotebook(props: {
                 </PanelRow>
               </PanelGrid>
             </PanelSection>
-            <PanelSection title="References">
-              <button
-                type="button"
-                onClick={() => {
-                  props.workspace.setChannel(props.task.channel);
-                  props.workspace.openItem('messages');
-                }}
-              >
-                #{props.task.channel}
-              </button>
-            </PanelSection>
+            <Show when={!props.referencesContent}>
+              <PanelSection title="References">
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.workspace.setChannel(props.task.channel);
+                    props.workspace.openItem('messages');
+                  }}
+                >
+                  #{props.task.channel}
+                </button>
+              </PanelSection>
+            </Show>
             <PanelSection title="History">
               <p class="text-xs">Changes in this demo stay in this session.</p>
             </PanelSection>

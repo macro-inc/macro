@@ -2,6 +2,10 @@ import { For, Match, Switch } from 'solid-js';
 import { FeatureGuide } from '../../documentation/components/FeatureGuide';
 import { AgentParallelSearchStory } from '../components/agents/AgentParallelSearchStory';
 import { BenefitGraphic } from '../components/benefits/BenefitGraphic';
+import {
+  CompanyGraphDemo,
+  isCompanyGraphScene,
+} from '../components/benefits/CompanyGraphDemo';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageSection } from '../components/FeaturePage';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
@@ -29,7 +33,13 @@ export function BenefitPage(props: { slug: string }) {
               demo={
                 section.scene === 'parallel-search'
                   ? { tone: 'agents' }
-                  : undefined
+                  : section.scene === 'pr-channel'
+                    ? { tone: 'chat' }
+                    : section.scene === 'references'
+                      ? { tone: 'documents' }
+                      : section.scene === 'task-task'
+                        ? { tone: 'tasks' }
+                        : undefined
               }
             >
               <Switch>
@@ -40,7 +50,16 @@ export function BenefitPage(props: { slug: string }) {
                   />
                 </Match>
                 <Match
-                  when={section.scene !== 'parallel-search' && section.scene}
+                  when={isCompanyGraphScene(section.scene) && section.scene}
+                >
+                  {(scene) => <CompanyGraphDemo scene={scene()} />}
+                </Match>
+                <Match
+                  when={
+                    section.scene !== 'parallel-search' &&
+                    !isCompanyGraphScene(section.scene) &&
+                    section.scene
+                  }
                 >
                   {(scene) => (
                     <BenefitGraphic
