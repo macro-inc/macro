@@ -19,9 +19,18 @@ instead of running it to completion.
 
 ## Boundaries
 
-- Used by: the request-serving services (DSS, email API, authentication,
-  calendar, connection gateway, agent harness, notification, contacts, convert).
-  Workers, consumers, Lambdas and `src/bin/*` tools keep unbounded pools.
+- Used by: the request pools of DSS (primary and readonly), the email API,
+  authentication, calendar, connection gateway, agent harness, notification,
+  contacts and convert.
+- Unbounded: separate worker binaries (email `pubsub_workers`,
+  `agent_trigger_service`, `search_processing_service`,
+  `whatsapp_session_service`), Lambdas, `src/bin/*` tools, migrations, and
+  contacts' worker pool.
+- In-process workers that share a request pool inherit its timeouts: DSS,
+  calendar, notification, connection gateway, agent harness and
+  authentication run background workers on their bounded request pool. Give a
+  worker its own pool without `with_request_timeouts` when its statements may
+  run longer, as `services/contacts_service` does.
 
 ## Checks
 
