@@ -1,0 +1,36 @@
+crates/native_app_service/src/domain/models.rs
+  s_f51161091c59dd::t_e63c8b5ff81f88 106-107
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models.rs
+  s_f51161091c59dd::t_e63c8b5ff81f88 151,177-180
+crates/native_app_service/src/tests.rs
+  s_f51161091c59dd::t_8e7fb0fad3b9b5 441-462
+  s_8d646e45ac1b9c::t_36360e0eb72470 439-440
+apps/web/tauri/macro_bundle_updater_plugin/src/domain/models/test.rs
+  s_f51161091c59dd::t_e63c8b5ff81f88 10,14-17
+apps/web/docs/ios-releases.md
+  s_f51161091c59dd::t_787bdd8ef9a951 123-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "60b96b58a18c0ba25acb7ab1c8dc21ad2502fab3",
+  "prompts": {},
+  "sessions": {
+    "s_8d646e45ac1b9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25e33e5f-9fbc-4dfa-b88b-7061d1d06650",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f51161091c59dd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e1457c02-26b5-43a8-a974-a215c9bbf667",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
