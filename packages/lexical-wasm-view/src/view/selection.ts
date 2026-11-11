@@ -130,6 +130,26 @@ export function readSelection(view: EditorView): ViewSelection {
 export function readSelectionFromChange(view: EditorView): ViewSelection {
   return read(view, true);
 }
+/** Resolve the focused editor's live collapsed caret after a history projection. */
+export function readFocusedHistorySelection(
+  view: EditorView
+): Extract<ViewSelection, { kind: 'range' }> | null {
+  const root = view.root;
+  const doc = root.ownerDocument;
+  const dom = doc.getSelection();
+  if (
+    doc.activeElement !== root ||
+    !dom?.isCollapsed ||
+    !isSelectionWithinEditor(view, dom.anchorNode, dom.focusNode)
+  )
+    return null;
+  const selection = readSelectionFromChange(view);
+  return selection.kind === 'range' &&
+    selection.anchor.key !== view.keyFromDOM(root)
+    ? selection
+    : null;
+}
+
 /** Resolve a collapsed browser caret at the focused editor root. */
 export function readFocusedRootSelection(
   view: EditorView

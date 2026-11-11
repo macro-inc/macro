@@ -49,6 +49,7 @@ import type {
   RenderContext,
 } from './registry';
 import {
+  readFocusedHistorySelection,
   readFocusedRootSelection,
   readSelection,
   sameSelection,
@@ -720,8 +721,8 @@ export class EditorView implements ViewSink {
         tags.includes('from-loro') &&
         this.selectionInfo.selection.kind === 'none'
       ) {
-        // Removing a selected subtree can collapse the browser caret at the
-        // root without a selectionchange. Read it after the executor unwinds.
+        // History can collapse the browser caret in a surviving block or at
+        // the root without selectionchange. Read it after the executor unwinds.
         const revision = this.revision;
         this.historySelectionRevision = revision;
         queueMicrotask(() => {
@@ -732,7 +733,7 @@ export class EditorView implements ViewSink {
               this.selectionInfo.selection.kind !== 'none'
             )
               return;
-            const selection = readFocusedRootSelection(this);
+            const selection = readFocusedHistorySelection(this);
             if (selection) this.port.selectionFromView(selection);
           } finally {
             if (this.historySelectionRevision === revision)

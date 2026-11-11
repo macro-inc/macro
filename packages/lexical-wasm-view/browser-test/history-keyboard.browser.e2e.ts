@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type {} from './heading-enter-fixture';
 
@@ -132,6 +133,87 @@ for (const redo of ['Control+Shift+z', 'Control+y']) {
     expect(errors).toEqual([]);
     await info.attach('code-subtree-history', {
       body: JSON.stringify({ typed, cycles }, null, 2),
+      contentType: 'application/json',
+    });
+  });
+}
+
+for (const engine of ['upstream', 'native'] as const) {
+  test(`${engine} first emoji undo keeps the empty paragraph caret`, async ({
+    page,
+    browserName,
+  }, info) => {
+    test.fixme(
+      engine === 'native' && browserName === 'firefox',
+      '876 Firefox does not admit surrogate typing before Undo; separate input gap.'
+    );
+    const pageErrors: string[] = [];
+    const externalAttempts: string[] = [];
+    const assets: { url: string; sha256: string }[] = [];
+    const assetReads: Promise<void>[] = [];
+    page.on('response', (response) => {
+      if (!/\.(?:js|wasm)$/.test(new URL(response.url()).pathname)) return;
+      const read = async () => {
+        const bytes = await response.body();
+        assets.push({
+          url: response.url(),
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+        });
+      };
+      assetReads.push(read());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.route('**/*', async (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== '127.0.0.1' && url.protocol !== 'data:') {
+        externalAttempts.push(url.origin);
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
+    await page.goto('/browser-test/heading-enter.html');
+    await page.waitForFunction(() => Boolean(window.inputParity));
+    await page.evaluate(() => window.inputParity.prepareHistory());
+    const root = page.locator(`#${engine}`);
+    await root.click();
+    await page.keyboard.type('😀');
+    await expect(root).toHaveText('😀');
+    // Match the fuzz step boundary: typing has reached the actual model before Undo.
+    await expect
+      .poll(async () => {
+        const typed = await page.evaluate(
+          (engine) => window.inputParity.snapshot(engine),
+          engine
+        );
+        return typed.json.root.children[0].children
+          .map((node: { text?: string }) => node.text ?? '')
+          .join('');
+      })
+      .toBe('😀');
+    await page.keyboard.press('Control+z');
+    await expect(root).toHaveText('');
+    const undone = await page.evaluate(
+      (engine) => window.inputParity.snapshot(engine),
+      engine
+    );
+    expect(undone.json.root.children).toHaveLength(1);
+    expect(undone.json.root.children[0].type).toBe('paragraph');
+    expect(undone.json.root.children[0].children).toEqual([]);
+    expect(undone.selection).toEqual({
+      anchor: { path: [0], offset: 0, type: 'element' },
+      focus: { path: [0], offset: 0, type: 'element' },
+    });
+    expect(undone.domSelection).toEqual({
+      anchor: { path: [0], offset: 0 },
+      focus: { path: [0], offset: 0 },
+    });
+    expect(pageErrors).toEqual([]);
+    expect(externalAttempts).toEqual([]);
+    expect(await page.evaluate(() => window.inputParity.errors)).toEqual([]);
+    await Promise.all(assetReads);
+    await info.attach('first-emoji-undo', {
+      body: JSON.stringify({ undone, assets }, null, 2),
       contentType: 'application/json',
     });
   });

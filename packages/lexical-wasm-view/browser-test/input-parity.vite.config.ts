@@ -5,6 +5,7 @@ import base from './vite.config';
 export default mergeConfig(base, {
   build: {
     target: 'esnext',
+    sourcemap: true,
     outDir: process.env.EDITOR_INPUT_PARITY_DIST ?? 'dist/input-parity',
     emptyOutDir: true,
     rollupOptions: {

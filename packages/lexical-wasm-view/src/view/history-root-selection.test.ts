@@ -1,7 +1,12 @@
 /** @vitest-environment jsdom */
 import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
+import { createEditor } from 'lexical';
 import { beforeAll, expect, test, vi } from 'vitest';
-import { readSelectionFromChange } from './selection';
+import { registerExternalEditorRoot } from './editor-roots';
+import {
+  readFocusedHistorySelection,
+  readSelectionFromChange,
+} from './selection';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
@@ -267,6 +272,129 @@ test.each(['no event', 'selectionchange', 'blur', 'new revision', 'dispose'])(
       expect(dom.anchorOffset).toBe(0);
     } finally {
       button.remove();
+      fixture.close();
+    }
+  }
+);
+
+test.each([
+  'no event',
+  'selectionchange',
+  'blur',
+  'foreign caret',
+  'external root',
+  'new revision',
+  'dispose',
+])(
+  'first emoji undo settles the surviving paragraph caret after %s',
+  async (feedback) => {
+    const fixture = nativeSurface();
+    const doc = fixture.root.ownerDocument;
+    const button = doc.createElement('button');
+    const source = createEditor({
+      onError: (error) => {
+        throw error;
+      },
+    });
+    let releaseExternal: (() => void) | undefined;
+    const unregisterRoot = source.registerRootListener((root) => {
+      releaseExternal?.();
+      releaseExternal = root
+        ? registerExternalEditorRoot(root, source)
+        : undefined;
+    });
+    fixture.root.after(button);
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [{ type: 'paragraph', version: 1, children: [] }],
+          },
+        })
+      );
+      fixture.port.command(CommandCode.ClearHistory);
+      const paragraph = fixture.view.node(0)?.children[0];
+      const element = fixture.root.firstChild;
+      const dom = doc.getSelection();
+      if (paragraph === undefined || !element || !dom)
+        throw new Error('Missing empty paragraph');
+      fixture.root.tabIndex = 0;
+      fixture.root.focus();
+      dom.setBaseAndExtent(element, 0, element, 0);
+      doc.dispatchEvent(new Event('selectionchange'));
+      fixture.port.command(CommandCode.InsertText, 0, 0, '😀');
+      expect(fixture.root.textContent).toBe('😀');
+      const admit = vi.spyOn(fixture.port, 'selectionFromView');
+      fixture.root.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'z',
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      expect(fixture.root.textContent).toBe('');
+      expect(dom.anchorNode).toBe(element);
+      expect(dom.anchorOffset).toBe(0);
+      if (feedback === 'selectionchange')
+        doc.dispatchEvent(new Event('selectionchange'));
+      if (feedback === 'blur') button.focus();
+      if (feedback === 'foreign caret')
+        dom.setBaseAndExtent(button, 0, button, 0);
+      if (feedback === 'external root') {
+        if (!(element instanceof HTMLElement))
+          throw new Error('Missing paragraph element');
+        source.setRootElement(element);
+        dom.setBaseAndExtent(element, 0, element, 0);
+        expect(readFocusedHistorySelection(fixture.view)).toBeNull();
+      }
+      if (feedback === 'new revision') {
+        const revision = fixture.view.revision;
+        fixture.port.setState(
+          JSON.stringify({
+            root: {
+              type: 'root',
+              version: 1,
+              children: [
+                {
+                  type: 'paragraph',
+                  version: 1,
+                  children: [{ type: 'text', version: 1, text: 'new' }],
+                },
+              ],
+            },
+          })
+        );
+        expect(fixture.view.revision).toBeGreaterThan(revision);
+      }
+      if (feedback === 'dispose') fixture.view.dispose();
+      await Promise.resolve();
+      if (
+        feedback === 'blur' ||
+        feedback === 'foreign caret' ||
+        feedback === 'external root' ||
+        feedback === 'new revision' ||
+        feedback === 'dispose'
+      ) {
+        expect(admit).not.toHaveBeenCalled();
+        return;
+      }
+      expect(admit).toHaveBeenCalledTimes(1);
+      const point = { key: paragraph, offset: 0, type: 'element' };
+      expect(fixture.view.selection().selection).toMatchObject({
+        kind: 'range',
+        anchor: point,
+        focus: point,
+      });
+      expect(dom.anchorNode).toBe(element);
+      expect(dom.anchorOffset).toBe(0);
+    } finally {
+      button.remove();
+      source.setRootElement(null);
+      unregisterRoot();
+      releaseExternal?.();
       fixture.close();
     }
   }
