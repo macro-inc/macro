@@ -285,7 +285,11 @@ function ManagedComputerRow(props: {
   const menu = (): ComputerMenuItem[] => {
     const items: ComputerMenuItem[] = [];
     const computer = props.computer;
-    if (props.canManage && canTogglePower(computer)) {
+    // Once billing has ended it only turns back on after a Restore.
+    const canPower =
+      canTogglePower(computer) &&
+      (computer.poweredOn || computer.billing !== 'ended');
+    if (props.canManage && canPower) {
       items.push(
         computer.poweredOn
           ? {

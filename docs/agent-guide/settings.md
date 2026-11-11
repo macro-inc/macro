@@ -848,8 +848,10 @@ until it is turned back on) or **Turn on**; **Switch to Macro credits** or
 period end**, **Undo cancel** while the cancellation is pending, or **Restore**
 once billing has ended and the disk is still retained (`canRestore`; confirm:
 it is billed again, prorated for the rest of the period, and stays powered
-off); and **Release now** last. A `purchasing` computer has none of power,
-billing or release (the server answers 409 until it is confirmed). Release asks for the computer's exact name and says how many agents
+off; **Turn on** is hidden until then, since the server refuses it); and
+**Release now** last. A `purchasing` computer has none of power, billing or
+release (the server answers 409 until it is confirmed). Release asks for the
+computer's exact name and says how many agents
 it deletes (`<N> agents on this computer will be deleted`, naming them when
 there are three or fewer). Team admins and owners get power, billing and
 release; whoever manages the runtime gets the Claude items.

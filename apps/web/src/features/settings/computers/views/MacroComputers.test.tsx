@@ -238,7 +238,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   });
 });
 
-it('offers Restore for a released computer still kept, and confirms before billing again', async () => {
+it('offers Restore instead of Turn on for a released computer still kept, and confirms before billing again', async () => {
   const kept: ComputerStatus = {
     id: 'computer-1',
     name: 'Build machine',
@@ -266,6 +266,7 @@ it('offers Restore for a released computer still kept, and confirms before billi
   expect(
     screen.queryByRole('menuitem', { name: 'Cancel at period end' })
   ).toBeNull();
+  expect(screen.queryByRole('menuitem', { name: 'Turn on' })).toBeNull();
   const restore = screen.getByRole('menuitem', { name: 'Restore' });
   fireEvent.click(restore);
   await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce());
