@@ -1,6 +1,7 @@
 import {
   SaveEmailDraftDocument,
   SetEmailThreadArchivedDocument,
+  SoupDocument,
   UpdateNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -32,6 +33,7 @@ import {
   subscribe,
 } from 'wonka';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
@@ -55,6 +57,7 @@ import {
   type WriteResult,
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
+import { recordExternalWrite } from './external-writes';
 import { liveQueryData } from './live-query';
 import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
@@ -602,6 +605,12 @@ function harness(
   const client = {
     reexecuteOperation: vi.fn(),
     query: vi.fn((_query, _variables, _context) => ({
+      toPromise: () => Promise.resolve({ data: {} }),
+    })),
+    createRequestOperation: vi.fn((kind, request, context) =>
+      makeOperation(kind, request, context)
+    ),
+    executeRequestOperation: vi.fn((_operation) => ({
       toPromise: () => Promise.resolve({ data: {} }),
     })),
     mutation: vi.fn((query, variables, context) => ({
@@ -3058,6 +3067,109 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
+    it.each([false, true])(
+      'fences CRM responses dispatched before a confirmed REST write (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[0], {
+            item: {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        const fresh = {
+          item: {
+            __typename: 'GraphqlSoupCrmContact',
+            id: 'contact-1',
+            hidden: true,
+          },
+        };
+        network.next(queryResult(forwarded[1], fresh));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(fresh);
+      }
+    );
+
+    it.each([false, true])(
+      'fences empty and CRM-free pages with declared membership dependencies (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        const operation = hydration
+          ? makeHydrationOp(1)
+          : makeOp(1, 'network-only');
+        ops.next(
+          makeOperation('query', operation, {
+            ...operation.context,
+            externalCacheWriteTypes: ['GraphqlSoupCrmContact'],
+          })
+        );
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(queryResult(forwarded[0], { items: [] }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[1], {
+            items: [{ __typename: 'GraphqlSoupDocument', id: 'document-1' }],
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(3);
+        const restored = {
+          items: [
+            {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          ],
+        };
+        network.next(queryResult(forwarded[2], restored));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(restored);
+      }
+    );
+
+    it('keeps unrelated in-flight responses after a REST CRM write', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      const operation = makeOp(1, 'network-only');
+      ops.next(
+        makeOperation('query', operation, {
+          ...operation.context,
+          externalCacheWriteTypes: [],
+        })
+      );
+      await tick();
+      recordExternalWrite(host, [
+        'GraphqlSoupCrmCompany',
+        'GraphqlSoupCrmContact',
+      ]);
+      const document = {
+        item: { __typename: 'GraphqlSoupDocument', id: 'document-1' },
+      };
+      network.next(queryResult(forwarded[0], document));
+      await tick();
+      expect(results.at(-1)?.data).toEqual(document);
+      expect(forwarded).toHaveLength(1);
+    });
+
     it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
       const { ops, network, forwarded } = controlledQueryHarness(host);
       ops.next(makeOp(1, 'network-only'));
@@ -3616,7 +3728,7 @@ describe('normalizedCacheExchange', () => {
       { failure: 'rejects', legacy: true },
       { failure: 'hangs', legacy: true },
     ])(
-      'releases a draft when admission $failure (legacy=$legacy)',
+      'releases a draft once admission keeps failing: $failure (legacy=$legacy)',
       async ({ failure, legacy }) => {
         vi.useFakeTimers();
         try {
@@ -3645,9 +3757,14 @@ describe('normalizedCacheExchange', () => {
             },
             onMutationAttemptResult,
           });
-          await vi.advanceTimersByTimeAsync(2_010);
+          // Three admissions (each bounded at two seconds when it hangs) with
+          // a one-second deferral between them.
+          await vi.advanceTimersByTimeAsync(8_010);
           expect(host.rollbacks).toEqual(['1']);
-          expect(host.defers).toHaveLength(0);
+          expect(host.defers).toMatchObject([
+            { transactionId: '1' },
+            { transactionId: '1' },
+          ]);
           expect(host.commits).toMatchObject([{ transactionId: '2' }]);
           expect(forwarded).toHaveLength(1);
           expect(onMutationAttemptResult).toHaveBeenCalledWith(
@@ -3665,24 +3782,78 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
-    it('returns a terminal recovery failure to a live caller without sending it', async () => {
-      const { ops, results, forwarded } = harness(host, undefined, {
-        beforeMutationAttempt: async () => {
-          throw new Error('Local storage unavailable');
-        },
-      });
-      ops.next(makeMutationOp(1, optimistic));
-      await vi.waitFor(() => expect(results).toHaveLength(1));
-      expect(forwarded).toHaveLength(0);
-      expect(host.defers).toHaveLength(0);
-      expect(host.rollbacks).toEqual(['1']);
-      expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
-        kind: 'permanently-failed',
-        error: results[0]?.error,
-      });
-      expect(results[0]?.error?.graphQLErrors[0]?.extensions.code).toBe(
-        'LOCAL_RECOVERY_FAILED'
-      );
+    it('sends a mutation whose admission fails once instead of rolling it back', async () => {
+      vi.useFakeTimers();
+      try {
+        const beforeMutationAttempt = vi
+          .fn<() => Promise<boolean>>()
+          .mockRejectedValueOnce(new Error('Local storage reopening'))
+          .mockResolvedValue(true);
+        const onMutationAttemptResult = vi.fn(async () => {});
+        const { ops, results, forwarded } = harness(host, undefined, {
+          beforeMutationAttempt,
+          onMutationAttemptResult,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(10);
+        // The caller is told its write is queued, not that it failed.
+        expect(results).toHaveLength(1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+          kind: 'queued',
+        });
+        expect(host.defers).toMatchObject([{ transactionId: '1' }]);
+        expect(forwarded).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(1_010);
+        expect(beforeMutationAttempt).toHaveBeenCalledTimes(2);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(host.commits).toMatchObject([{ transactionId: '1' }]);
+        expect(onMutationAttemptResult).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ transactionId: '1' }),
+          expect.objectContaining({ error: undefined }),
+          false
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reports a recovery failure through settlement once admission keeps failing', async () => {
+      vi.useFakeTimers();
+      try {
+        const onMutationAttemptResult = vi.fn(async () => {});
+        const { ops, results, forwarded } = harness(host, undefined, {
+          beforeMutationAttempt: async () => {
+            throw new Error('Local storage unavailable');
+          },
+          onMutationAttemptResult,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(2_010);
+        expect(forwarded).toHaveLength(0);
+        expect(host.defers).toHaveLength(2);
+        expect(host.rollbacks).toEqual(['1']);
+        expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+          kind: 'queued',
+        });
+        expect(onMutationAttemptResult).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ transactionId: '1' }),
+          expect.objectContaining({
+            error: expect.objectContaining({
+              graphQLErrors: [
+                expect.objectContaining({
+                  extensions: { code: 'LOCAL_RECOVERY_FAILED' },
+                }),
+              ],
+            }),
+          }),
+          false
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it.each([true, false])(
@@ -5237,6 +5408,119 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each(['initial', 'continuation'] as const)(
+      'fences a contextless %s fallback shared by a later CRM observer',
+      async (mode) => {
+        const variables = {
+          input:
+            mode === 'initial'
+              ? {
+                  initial: {
+                    filters: {
+                      crmContactFilter: { literal: { hidden: false } },
+                    },
+                  },
+                }
+              : { continuation: { cursor: 'durable-opaque-page' } },
+        };
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (...args) => ({
+          ...(await commit(...args)),
+          revalidations: [
+            {
+              query: stringifyDocument(SoupDocument),
+              operationName: 'Soup',
+              variablesJson: JSON.stringify(variables),
+            },
+          ],
+        });
+        const requests: Array<ReturnType<typeof deferred<Response>>> = [];
+        const client = createClient({
+          url: 'http://test/graphql',
+          preferGetMethod: false,
+          exchanges: [
+            normalizedCacheExchange(host, {
+              externalWriteTypes: resolveCrmExternalWriteTypes,
+            }),
+            fetchExchange,
+          ],
+          fetch: vi.fn(async (_input, init) => {
+            const body =
+              typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+            if (body.query?.includes('mutation'))
+              return new Response(JSON.stringify({ data: optimistic }), {
+                headers: { 'content-type': 'application/json' },
+              });
+            const response = deferred<Response>();
+            requests.push(response);
+            return response.promise;
+          }),
+        });
+        await executeOptimisticMutation(
+          client,
+          MUTATION,
+          { input: {} },
+          optimistic,
+          {
+            uuid: crypto.randomUUID(),
+          }
+        ).toPromise();
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
+        const results: OperationResult[] = [];
+        const subscription = client
+          .query(SoupDocument, variables, {
+            requestPolicy: 'network-only',
+            externalCacheWriteTypes: ['GraphqlSoupCrmContact'],
+          })
+          .subscribe((result) => results.push(result));
+        try {
+          await tick();
+          expect(requests).toHaveLength(1);
+          recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+          const old = {
+            user: { id: 'viewer', soup: { items: [], nextCursor: null } },
+          };
+          requests[0].resolve(
+            new Response(JSON.stringify({ data: old }), {
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+          await vi.waitFor(() => expect(requests).toHaveLength(2));
+          expect(results).toEqual([]);
+          expect(
+            host.writes.some(
+              (write) => JSON.stringify(write.data) === JSON.stringify(old)
+            )
+          ).toBe(false);
+          const restored = {
+            user: {
+              id: 'viewer',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupCrmContact',
+                    id: 'contact-1',
+                    hidden: false,
+                  },
+                ],
+                nextCursor: null,
+              },
+            },
+          };
+          requests[1].resolve(
+            new Response(JSON.stringify({ data: restored }), {
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+          await vi.waitFor(() =>
+            expect(results.at(-1)?.data).toEqual(restored)
+          );
+        } finally {
+          subscription.unsubscribe();
+        }
+      }
+    );
+
     it.each(['query', 'persistence'] as const)(
       'bounds conditional link recovery while %s is stalled without retrying a committed mutation',
       async (stage) => {
@@ -5260,13 +5544,19 @@ describe('normalizedCacheExchange', () => {
           const { ops, client, results, forwarded } = harness(host, undefined, {
             onCacheError,
           });
-          vi.mocked(client.query).mockReturnValue({
+          vi.mocked(client.executeRequestOperation).mockReturnValue({
             toPromise: () => read.promise,
           } as never);
           ops.next(makeMutationOp(1, optimistic));
           await vi.advanceTimersByTimeAsync(0);
           expect(host.commits).toHaveLength(1);
-          expect(client.query).toHaveBeenCalledOnce();
+          expect(client.query).not.toHaveBeenCalled();
+          expect(client.executeRequestOperation).toHaveBeenCalledOnce();
+          // urql drops a query whose key has a dispatch outstanding.
+          const [repair] = vi.mocked(client.executeRequestOperation).mock
+            .calls[0];
+          expect(repair.key).toBeLessThan(0);
+          expect(repair.key).not.toBe(createRequest(QUERY, {}).key);
           if (stage === 'persistence') {
             read.resolve({
               ...queryResult(makeOp(2, 'network-only')),

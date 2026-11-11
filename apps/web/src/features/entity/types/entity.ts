@@ -13,7 +13,10 @@ import type {
   CallStatus as StorageCallStatus,
 } from '@service-storage/generated/schemas';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
-import type { GraphqlEmailFocusCategory } from '@service-storage/graphql/generated/graphql';
+import type {
+  GraphqlEmailFocusCategory,
+  GraphqlEmailImportanceTrend,
+} from '@service-storage/graphql/generated/graphql';
 
 export type EntityBase = {
   id: string;
@@ -307,6 +310,9 @@ export type EmailFocus = {
   importance: number;
   needsReply: boolean;
   needsFollowUp: boolean;
+  importanceTrend: GraphqlEmailImportanceTrend;
+  /** The day the thread's mail says it is due, as a `YYYY-MM-DD` calendar date. */
+  dueOn?: string | null;
 };
 
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
@@ -456,6 +462,14 @@ export type DatabaseEntity = EntityBase & {
   projectId?: string;
 };
 
+/**
+ * A paired runtime (a macrod machine). Only the notifications inbox lists it,
+ * for the access notifications filed under it; it opens in Settings → Machines.
+ */
+export type HarnessEntity = EntityBase & {
+  type: 'harness';
+};
+
 /** A Macro Form. Like a database, not a Soup entity: `createdAt` is its only timestamp. */
 export type FormEntity = EntityBase & {
   type: 'form';
@@ -521,6 +535,7 @@ export type EntityData =
   | CrmContactEntity
   | DatabaseEntity
   | FormEntity
+  | HarnessEntity
   | RoutineEntity
   | CalendarEventEntity
   | ForeignEntity;
@@ -540,6 +555,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'crm_contact',
   'database',
   'form',
+  'harness',
   'routine',
   'calendar_event',
   'foreign',

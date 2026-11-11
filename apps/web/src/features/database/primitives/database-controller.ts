@@ -189,13 +189,9 @@ export function createDatabaseController(args: {
           refusal: null,
           message: 'This table is unavailable.',
         });
-      const to =
-        request.to.type === 'relation'
-          ? { ...request.to, database: table.databaseId }
-          : request.to;
       return change(
         column,
-        { kind: 'change_type', to },
+        { kind: 'change_type', to: request.to },
         request.baseVersion ?? table.version
       );
     },

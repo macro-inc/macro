@@ -42,6 +42,7 @@ export default defineConfig({
       ...[
         '@service-storage/client',
         '@service-storage/crm-contacts',
+        '@service-storage/crm-visibility',
         '@app/lib/analytics',
       ].map((find) => ({
         find,

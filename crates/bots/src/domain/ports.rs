@@ -20,7 +20,8 @@ pub trait BotRepo: Send + Sync + 'static {
     /// Repository error.
     type Err: Into<anyhow::Error> + Send;
 
-    /// Create an owned agent and its selected channel memberships atomically.
+    /// Create an owned agent and its selected channel memberships atomically,
+    /// with `has_agent` enabled.
     fn create_agent(
         &self,
         owner: BotOwner,
@@ -28,7 +29,8 @@ pub trait BotRepo: Send + Sync + 'static {
         req: CreateAgentRequest,
     ) -> impl Future<Output = Result<Agent, Self::Err>> + Send;
 
-    /// Replace an owned agent and its selected channel memberships atomically.
+    /// Replace an owned agent and its selected channel memberships atomically,
+    /// enabling `has_agent` even if it was previously disabled.
     /// The direct agent conversations it takes part in are not among them and
     /// are left as they are.
     fn update_agent(
@@ -113,7 +115,22 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get ownership and permission capabilities of an active registered harness.
+    /// Whether a team's every member may use a harness.
+    fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether a user may run agents on a harness: its owner, or a user through
+    /// a live grant. Readers may not.
+    fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the permission capabilities of an active registered harness.
     fn get_harness_facts(
         &self,
         harness_id: HarnessId,

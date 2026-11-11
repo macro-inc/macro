@@ -297,6 +297,7 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
               users={builderConfig.mentions?.users}
               agents={builderConfig.mentions?.agents}
               onAgentMention={builderConfig.mentions?.onAgentMention}
+              transformUsers={builderConfig.mentions?.transformUsers}
               onUserMention={builderConfig.mentions?.onUserMention}
               onDocumentMention={builderConfig.mentions?.onDocumentMention}
               onEmailMention={builderConfig.mentions?.onEmailMention}

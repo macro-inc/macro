@@ -65,7 +65,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
-import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -149,8 +149,8 @@ export type ChannelInputProps = InputCallbacks & {
   attachmentTracker?: InputAttachmentTracker;
   /**
    * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
-   * own people: a channel's participants, or the workspace contacts a
-   * document's composers offer.
+   * scope: channel participants, CRM teammates, or bounded personal suggestions
+   * on documents, projects and calls. An explicit empty list never widens.
    */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
@@ -304,7 +304,7 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
-  let pendingFocus = false;
+  let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
   let pendingCursor: RestoreSnapshotOptions['cursor'];
@@ -342,18 +342,22 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.focus();
   };
 
-  const focusEditor = () => {
+  const focusEditor = (when: () => boolean = () => true) => {
+    if (!when()) return;
     if (!isEditorConnected) {
-      pendingFocus = true;
+      pendingFocus = when;
       return;
     }
     focusEditorNow();
   };
 
   const flushPendingFocus = () => {
-    if (!pendingFocus) return;
-    pendingFocus = false;
-    queueMicrotask(() => focusEditorNow());
+    const when = pendingFocus;
+    pendingFocus = undefined;
+    if (!when) return;
+    queueMicrotask(() => {
+      if (when()) focusEditorNow();
+    });
   };
 
   const parentBots =
@@ -365,16 +369,21 @@ export function ChannelInput(props: ChannelInputProps) {
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and parent agents feed it here.
+  // useAgentMentionUserTransform; it decorates only the current directory
+  // window or the explicit participant roster.
   // The editor is configured once, at mount.
   const initialFeatures = features();
   const participantsOnly = initialFeatures.mentions === 'participants';
   const mentionUsers = participantsOnly
     ? () => props.participants?.() ?? []
-    : useAgentMentionUsers(() => [
-        ...(props.participants?.() ?? parentParticipants()),
-        ...(props.bots?.() ?? parentBots()),
-      ]);
+    : () => props.participants?.() ?? parentParticipants();
+  const withAgents = participantsOnly
+    ? undefined
+    : useAgentMentionUserTransform();
+  const transformUsers = withAgents
+    ? (users: readonly IUser[]) =>
+        withAgents([...users, ...(props.bots?.() ?? parentBots())])
+    : undefined;
 
   const groupMentions =
     !participantsOnly && (!props.parent || props.parent.type === 'channel');
@@ -392,6 +401,7 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(initialFeatures.gifs ? [] : ['gif']),
     ],
     users: mentionUsers,
+    transformUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
@@ -470,7 +480,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // Whichever Macro the `@macro` typeahead offers: the classic chat reply or
   // the agent-session bot, depending on rollout.
   const macroUser = () =>
-    mentionUsers().find(
+    (transformUsers ? transformUsers([]) : (mentionUsers() ?? [])).find(
       (user) => isMacroAgentId(user.id) || isMacroNewId(user.id)
     );
   const addMenuGroups = (): ComposerAddMenuGroup[] => {
@@ -725,11 +735,12 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
-    focus: () => {
+    focus: (options) => {
+      if (options?.when?.() === false) return;
       // A collapsed pill hides the editor; programmatic focus implies intent
       // to type, so expand first.
       collapsedInput.expand();
-      focusEditor();
+      focusEditor(options?.when);
     },
     send: commands.send,
     attachFiles: (files) => inputState.commands.attachFiles(files),
@@ -760,6 +771,9 @@ export function ChannelInput(props: ChannelInputProps) {
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
       if (!props.onEscape) return false;
+      // Lexical's blur, as its own Esc does: it also drops the DOM selection,
+      // which would otherwise pull focus back when the selection next syncs.
+      markdownEditor.lexical.blur();
       props.onEscape();
       return true;
     },

@@ -4,7 +4,7 @@
 //!
 //! The crate follows the hexagonal layout used elsewhere in this workspace:
 //! - [`domain`] holds the cost model, ports, and the service that computes
-//!   cost from a model id and token counts or audio duration.
+//!   cost from a model id and token counts, audio duration, or provider credits.
 //! - [`outbound`] holds the Postgres storage adapter.
 //! - [`inbound`] holds the axum router mounted in the document cognition
 //!   service (DCS).
@@ -19,6 +19,9 @@ pub mod config;
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
+
+#[cfg(test)]
+mod test;
 
 pub use domain::counting::{AiUsageEnforcement, NON_BILLABLE_AI_FEATURES, is_billable_feature};
 pub use domain::financial;
@@ -36,6 +39,7 @@ pub use domain::{
     UsageService, UsageSummary, normalize_model_id,
 };
 
+use macro_uuid::Uuid;
 use std::sync::Arc;
 
 /// Construct the owning-domain observational journal, without financial adapters.
@@ -69,6 +73,35 @@ impl UsageRecorder for TrackingRecorder {
 
     fn tracking(&self) -> Option<Arc<dyn UsageTracking>> {
         Some(self.tracking.clone())
+    }
+}
+
+/// Record every event as part of `agent_session_id` unless it already names a
+/// session. A host wraps the recorder it hands a session's tools in this, so
+/// what any tool records counts toward the session's spend.
+pub fn for_agent_session(
+    recorder: Arc<dyn UsageRecorder>,
+    agent_session_id: Uuid,
+) -> Arc<dyn UsageRecorder> {
+    Arc::new(AgentSessionRecorder {
+        recorder,
+        agent_session_id,
+    })
+}
+
+struct AgentSessionRecorder {
+    recorder: Arc<dyn UsageRecorder>,
+    agent_session_id: Uuid,
+}
+
+impl UsageRecorder for AgentSessionRecorder {
+    fn record(&self, mut event: UsageEvent) {
+        event.agent_session_id.get_or_insert(self.agent_session_id);
+        self.recorder.record(event);
+    }
+
+    fn tracking(&self) -> Option<Arc<dyn UsageTracking>> {
+        self.recorder.tracking()
     }
 }
 

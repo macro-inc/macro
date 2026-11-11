@@ -3,15 +3,10 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { usePaywallState } from '@core/constant/PaywallState';
-import { isPaymentError } from '@core/util/handlePaymentError';
 import { catchToResult } from '@core/util/result';
 import { removeHistoryItem } from '@queries/history/history';
 import { duplicateDatabase } from '@queries/storage/databases';
-import {
-  getDeletedTree,
-  optimisticallyRemoveDeletedItem,
-} from '@queries/storage/deleted';
+import { getDeletedTree } from '@queries/storage/deleted';
 import {
   duplicateEntity,
   moveEntity,
@@ -416,8 +411,7 @@ export async function bulkMoveToFolder(
  * only through the GraphQL entity mutation, which has no REST counterpart.
  */
 export function canDuplicateItemType(itemType: ItemType): boolean {
-  if (itemType === 'document' || itemType === 'chat' || itemType === 'database')
-    return true;
+  if (itemType === 'document' || itemType === 'database') return true;
   return itemType === 'project' && isFeatureEnabled(enableGraphqlSoup);
 }
 
@@ -427,7 +421,6 @@ export async function copyItem(args: {
   name: string;
 }): Promise<string | null> {
   const { itemType, id, name } = args;
-  const { showPaywall } = usePaywallState();
   const createCopyName = (originalName: string): string => {
     return `${originalName} copy`;
   };
@@ -441,16 +434,14 @@ export async function copyItem(args: {
     newId = result.value;
   } else if (
     isFeatureEnabled(enableGraphqlSoup) &&
-    (itemType === 'document' || itemType === 'chat' || itemType === 'project')
+    (itemType === 'document' || itemType === 'project')
   ) {
     const result = await catchToResult(() =>
       duplicateEntity(
         { type: ENTITY_TYPES[itemType], id },
-        // The REST chat endpoint also ignores the supplied name and names the copy itself.
-        itemType === 'chat' ? undefined : createCopyName(name)
+        createCopyName(name)
       )
     );
-    if (itemType === 'chat' && isPaymentError(result)) showPaywall();
     if (result.isErr()) return null;
     newId = result.value;
   } else
@@ -462,20 +453,6 @@ export async function copyItem(args: {
         });
         if (result.isErr()) return null;
         newId = result.value.documentId;
-        break;
-      }
-      case 'chat': {
-        const result = await cognitionApiServiceClient.copyChat({
-          chat_id: id,
-          name: createCopyName(name),
-        });
-        if (isPaymentError(result)) {
-          showPaywall();
-        }
-        if (result.isErr()) {
-          return null;
-        }
-        newId = result.value.id;
         break;
       }
       default:
@@ -586,7 +563,6 @@ export async function permanentlyDelete(args: {
   let result;
   switch (itemType) {
     case 'document': {
-      optimisticallyRemoveDeletedItem(id);
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'DOCUMENT', id })
@@ -597,25 +573,6 @@ export async function permanentlyDelete(args: {
       break;
     }
     case 'project': {
-      const deleteTree = getDeletedTree();
-      const findAllDescendants = (projectId: string): string[] => {
-        const descendantIds: string[] = [];
-        const node = deleteTree.itemMap[projectId];
-        if (node && node.children) {
-          node.children.forEach((child) => {
-            descendantIds.push(child.id);
-            descendantIds.push(...findAllDescendants(child.id));
-          });
-        }
-        return descendantIds;
-      };
-
-      const descendantIds = findAllDescendants(id);
-      descendantIds.forEach((descendantId) => {
-        optimisticallyRemoveDeletedItem(descendantId);
-      });
-      optimisticallyRemoveDeletedItem(id);
-
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'PROJECT', id })
@@ -624,7 +581,6 @@ export async function permanentlyDelete(args: {
       break;
     }
     case 'chat': {
-      optimisticallyRemoveDeletedItem(id);
       result = isFeatureEnabled(enableGraphqlSoup)
         ? await catchToResult(() =>
             permanentlyDeleteEntity({ type: 'CHAT', id })
@@ -682,11 +638,6 @@ export async function bulkPermanentlyDelete(
     }
 
     return true;
-  });
-
-  // Descendants need to be optimistically removed from history tree
-  descendants.forEach((item) => {
-    optimisticallyRemoveDeletedItem(item.id);
   });
 
   for (let i = 0; i < eldestItemsOnly.length; i += chunkSize) {

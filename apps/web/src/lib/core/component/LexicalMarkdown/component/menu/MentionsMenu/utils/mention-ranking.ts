@@ -4,6 +4,7 @@ import {
   type FreshSortConfig,
   NAME_MATCH_RANKING,
 } from '@core/util/freshSort';
+import { preservePersonOrder } from '@core/util/ordered-window';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 
 type MentionRankingProfile = {
@@ -93,8 +94,11 @@ export function rankMentions<T extends MentionItem>(
     getTimestamp: getMentionTimestamps,
   });
   const ranked = search(items, query.trim()).map(({ item }) => item);
-  if (!preserveMatches) return ranked;
+  if (!preserveMatches) return preservePersonOrder(ranked, items);
 
   const rankedIds = new Set(ranked.map((item) => item.id));
-  return [...ranked, ...items.filter((item) => !rankedIds.has(item.id))];
+  return preservePersonOrder(
+    [...ranked, ...items.filter((item) => !rankedIds.has(item.id))],
+    items
+  );
 }

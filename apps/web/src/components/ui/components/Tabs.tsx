@@ -17,8 +17,13 @@ export type TabOption<T extends string> = {
   /** Accessible name, and the tooltip when the group is icon-only. */
   label: string;
   icon?: Component<{ class?: string }>;
-  /** Shown after the label in muted figures. */
-  count?: number;
+  /** Shown after the label in muted figures; strings retain caller formatting. */
+  count?: number | string;
+  /**
+   * A small attention dot after the label; `violet` where what is new was
+   * picked by AI, as the app's violet means.
+   */
+  dot?: boolean | 'violet';
   disabled?: boolean;
 };
 
@@ -214,6 +219,15 @@ function OptionContent<T extends string>(props: {
         <span class="text-ink-extra-muted tabular-nums">
           {props.option.count}
         </span>
+      </Show>
+      <Show when={props.option.dot && !props.iconOnly}>
+        <span
+          aria-hidden="true"
+          class={cn(
+            'size-1.5 shrink-0 rounded-full',
+            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
+          )}
+        />
       </Show>
     </>
   );

@@ -186,6 +186,7 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
         let event = IncomingEvent {
             event_id: generate_uuid_v7(),
             schema_version: 1,
+            routine_id: None,
             payload,
         };
         assert_eq!(
@@ -218,6 +219,7 @@ fn github_delivery(conclusion: &str, sender_type: &str) -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: crate::domain::event_trigger::EventPayload::Github(
             github::broker::GithubWebhookTopicEvent::Received(delivery),
         ),
@@ -285,4 +287,70 @@ async fn github_deliveries_need_a_claim_to_the_installation() {
             .unwrap(),
         EventIngestionResult::Admitted { inserted: 0 }
     );
+}
+
+#[tokio::test]
+async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent() {
+    let registration: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../../github/app-webhooks.json")).unwrap();
+    for name in registration["default_events"].as_array().unwrap() {
+        let name = name.as_str().unwrap();
+        let repo = Arc::new(Repo::default());
+        repo.0.lock().unwrap().configurations = vec![EventActionConfiguration {
+            filters: serde_json::from_value(json!([{
+                "events": ["github"],
+                "github": { "events": [name], "repositories": ["example/repository"] },
+                "match": [{ "path": ["ref"], "equals": "refs/heads/main" }],
+            }]))
+            .unwrap(),
+            ..configuration()
+        }];
+        let access = Arc::new(Access::default());
+        let service =
+            EventAdmissionService::new(repo.clone(), access.clone(), 10.try_into().unwrap());
+        let delivery = github::domain::models::GithubWebhookReceived::from_delivery(
+            Some(format!("delivery-{name}")),
+            name.to_owned(),
+            &json!({
+                "installation": { "id": 77 },
+                "repository": { "id": 42, "full_name": "example/repository" },
+                "ref": "refs/heads/main",
+            }),
+        )
+        .unwrap();
+        let event = IncomingEvent {
+            event_id: generate_uuid_v7(),
+            schema_version: 1,
+            payload: crate::domain::event_trigger::EventPayload::Github(
+                github::broker::GithubWebhookTopicEvent::Received(delivery),
+            ),
+        };
+
+        *access.denied.lock().unwrap() = true;
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 0 },
+            "{name} must require an installation claim",
+        );
+        *access.denied.lock().unwrap() = false;
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 1 },
+            "{name} must reach its matching routine",
+        );
+        // Replaying the same Kafka record must not run the routine twice.
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted: 0 },
+        );
+        let pending = &repo.0.lock().unwrap().pending;
+        assert_eq!(pending.len(), 1);
+        assert!(matches!(
+            pending[0].event.source(),
+            EventSource::Github(delivery)
+                if delivery.installation_id == 77
+                    && delivery.event == name
+                    && delivery.payload.as_ref().unwrap()["ref"] == "refs/heads/main"
+        ));
+    }
 }

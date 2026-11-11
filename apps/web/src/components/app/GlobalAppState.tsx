@@ -28,6 +28,12 @@ export function useGlobalNotificationSource(): NotificationSource {
   return tryGetContext().notificationSource;
 }
 
+export function useOptionalGlobalNotificationSource():
+  | NotificationSource
+  | undefined {
+  return useContext(GlobalAppStateContext)?.notificationSource;
+}
+
 export function useGlobalBlockOrchestrator(): BlockOrchestrator {
   return tryGetContext().blockOrchestrator;
 }

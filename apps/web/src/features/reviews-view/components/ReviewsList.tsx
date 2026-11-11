@@ -4,6 +4,7 @@ import {
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
+import { TutorialRow } from '@app/features/video-tutorials';
 import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import {
   type OpenPrLink,
@@ -154,6 +155,9 @@ export function ReviewsList(props: ReviewsListProps) {
   const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
   const listSize = createElementSize(listElement);
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  // The tutorial row above the virtualized rows shifts their offsets.
+  const [listStart, setListStart] = createSignal<HTMLDivElement>();
+  const listStartSize = createElementSize(listStart);
   // Date headings sit among the rows like email's; focus and selection keep
   // counting pull requests, so their indexes map to rows for scrolling.
   const rows = createMemo(() =>
@@ -367,12 +371,17 @@ export function ReviewsList(props: ReviewsListProps) {
                   </Show>
                 }
               >
+                {/* Outside the virtualized rows, so list focus skips it. */}
+                <div ref={setListStart}>
+                  <TutorialRow tutorial="github" />
+                </div>
                 <ListLayoutProvider ref={listElement}>
                   <Virtualizer
                     as={ReviewListElement}
                     item="li"
                     data={rows()}
                     scrollRef={listElement()}
+                    startMargin={listStartSize.height ?? 0}
                     ref={setVirtualizer}
                     keepMounted={
                       list.focus.index() >= 0

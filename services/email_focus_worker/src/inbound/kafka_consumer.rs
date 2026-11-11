@@ -17,7 +17,8 @@ use chrono::Utc;
 use email::domain::{
     events::{EmailMacroEvent, EmailTopicEvent},
     focus::{
-        ClassifyOutcome, FocusClassifier, FocusNotifier, FocusService, FocusStore, ProfileSource,
+        ClassifyOutcome, DueDateExtractor, FocusClassifier, FocusNotifier, FocusService,
+        FocusStore, ProfileSource,
     },
 };
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
@@ -80,8 +81,8 @@ fn outcome_name(outcome: &ClassifyOutcome) -> &'static str {
     }
 }
 
-async fn classify<S, P, C, N>(
-    service: &FocusService<S, P, C, N>,
+async fn classify<S, P, C, N, D>(
+    service: &FocusService<S, P, C, N, D>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
 ) where
@@ -89,6 +90,7 @@ async fn classify<S, P, C, N>(
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
+    D: DueDateExtractor,
 {
     let span = tracing::info_span!(
         "email_focus.classify",
@@ -133,8 +135,8 @@ async fn classify<S, P, C, N>(
 
 /// The work for one event: waiting for a slot, then classifying, in the event's
 /// trace. Nothing happens until it runs.
-fn classification<S, P, C, N>(
-    service: Arc<FocusService<S, P, C, N>>,
+fn classification<S, P, C, N, D>(
+    service: Arc<FocusService<S, P, C, N, D>>,
     thread_id: Uuid,
     published_at_ms: Option<i64>,
     event_span: tracing::Span,
@@ -144,6 +146,7 @@ where
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
+    D: DueDateExtractor,
 {
     let queued = tracing::info_span!(
         parent: &event_span,
@@ -162,9 +165,9 @@ where
 /// drops the classifications in flight. Receive and commit failures are logged
 /// and skipped, as in the activity consumer: a restart would only re-run the
 /// startup sweep.
-pub async fn run_focus_consumer<S, P, C, N>(
+pub async fn run_focus_consumer<S, P, C, N, D>(
     brokers: &str,
-    service: Arc<FocusService<S, P, C, N>>,
+    service: Arc<FocusService<S, P, C, N, D>>,
     shutdown: CancellationToken,
 ) -> Result<(), Report>
 where
@@ -172,6 +175,7 @@ where
     P: ProfileSource,
     C: FocusClassifier,
     N: FocusNotifier,
+    D: DueDateExtractor,
 {
     let consumer = KafkaEventConsumer::<EmailFocusGroup>::from_env(brokers)?;
     let consumer =

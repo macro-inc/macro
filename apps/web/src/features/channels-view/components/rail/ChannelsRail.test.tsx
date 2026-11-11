@@ -23,6 +23,11 @@ const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   bulkPreferences: vi.fn(),
   favoriteId: undefined as string | undefined,
+  favorites: [] as Favorite[],
+  referencedChannels: [] as ChannelEntity[],
+  sectionsEnabled: true,
+  activityChannels: (): readonly ChannelEntity[] => [],
+  additionalActivityChannels: (): readonly ChannelEntity[] => [],
   fetchGroupIds:
     vi.fn<typeof import('../../queries')['fetchChannelGroupIds']>(),
   hydrate:
@@ -57,6 +62,13 @@ const mocks = vi.hoisted(() => ({
   focusedRow: undefined as ChannelRailRow | undefined,
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
+  onNavigate: (_event: { result?: { item: ChannelRailRow } }) => {},
+  focusRailRow: (_channelId: string): boolean => false,
+  shell: {
+    collapsed: false,
+    canCollapse: true,
+    expand: vi.fn(),
+  },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
 }));
@@ -113,8 +125,14 @@ vi.mock('@app/components/list', () => ({
     };
   },
   listOwnedSlotName: (name: string) => name,
-  useListInteractions: (options: { scrollHandle: () => ListScrollHandle }) => {
+  useListInteractions: (options: {
+    scrollHandle: () => ListScrollHandle;
+    navigation: {
+      onNavigate: (event: { result?: { item: ChannelRailRow } }) => void;
+    };
+  }) => {
     mocks.scroll = (index) => options.scrollHandle().scrollToIndex(index);
+    mocks.onNavigate = options.navigation.onNavigate;
   },
 }));
 vi.mock('@app/components/view-shell', () => ({
@@ -127,6 +145,13 @@ vi.mock('@app/components/view-shell', () => ({
   SearchBar: () => null,
   useViewControlHotkeys: vi.fn(),
   useViewTabHotkeys: vi.fn(),
+  useViewShell: () => ({
+    aside: {
+      isCollapsed: () => mocks.shell.collapsed,
+      canCollapse: () => mocks.shell.canCollapse,
+      expand: mocks.shell.expand,
+    },
+  }),
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   channelPreviewSelection: (
@@ -221,7 +246,7 @@ vi.mock('@queries/channel-labels/channel-labels', () => ({
   useSetChannelLabelMutation: () => ({}),
 }));
 vi.mock('@queries/favorites/favorites', () => ({
-  useFavoritesData: () => () => ({ favorites: [] }),
+  useFavoritesData: () => () => ({ favorites: mocks.favorites }),
   useReorderFavoritesMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@queries/soup/search', () => ({
@@ -251,10 +276,13 @@ vi.mock('../../channels-view-context', () => ({
       },
     },
     tab: () => mocks.tab,
-    sectionsEnabled: () => true,
+    sectionsEnabled: () => mocks.sectionsEnabled,
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
+    registerRailRowFocus: (focus: (channelId: string) => boolean) => {
+      mocks.focusRailRow = focus;
+    },
   }),
 }));
 vi.mock('../../queries', () => ({
@@ -265,13 +293,12 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  // What the real helper answers for the disabled lookup above.
-  resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
+  resolveReferencedChannels: () => mocks.referencedChannels,
 }));
 vi.mock('@queries/channel/by-ids', () => ({
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
   useCachedChannelsByIds: () => ({
-    channels: () => [],
+    channels: () => mocks.referencedChannels,
     pendingIds: () => new Set<string>(),
     failedIds: () => new Set<string>(),
     error: () => undefined,
@@ -287,7 +314,15 @@ vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
-  useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
+  useChannelRailActivity: (
+    channels: () => readonly ChannelEntity[],
+    _calls: unknown,
+    additionalChannels: () => readonly ChannelEntity[] = () => []
+  ) => {
+    mocks.activityChannels = channels;
+    mocks.additionalActivityChannels = additionalChannels;
+    return { unreadChannelIds: () => new Set<string>() };
+  },
 }));
 vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   const { ExpandedChannelsRail: RealRenderer } =
@@ -301,12 +336,14 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
       );
       return (
-        <button
-          onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
-          onClick={(event) => mocks.activate(event)}
-        >
-          Open conversation
-        </button>
+        <div ref={rail.registerRootRef} tabIndex={-1} data-testid="rail">
+          <button
+            onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
+            onClick={(event) => mocks.activate(event)}
+          >
+            Open conversation
+          </button>
+        </div>
       );
     },
   };
@@ -452,6 +489,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.realRenderer = false;
   mocks.focusedRow = undefined;
+  mocks.favorites = [];
+  mocks.referencedChannels = [];
+  mocks.sectionsEnabled = true;
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
   mocks.userId = 'viewer';
@@ -488,13 +528,41 @@ beforeEach(() => {
   mocks.selected = { type: 'channel', id: channel.id };
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
+  mocks.shell.collapsed = false;
+  mocks.shell.canCollapse = true;
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  delete document.documentElement.dataset.modality;
 });
+
+it.each([false, true])(
+  'tracks unread activity for favorites outside loaded channel pages with sections enabled: %s',
+  (enabled) => {
+    mocks.sectionsEnabled = enabled;
+    mocks.favorites = [
+      {
+        entityId: 'outside-page',
+        entityType: 'channel',
+        createdAt: '2026-01-01',
+        sortOrder: 0,
+      },
+    ];
+    mocks.referencedChannels = [{ ...channel, id: 'outside-page' }];
+
+    mount();
+
+    expect(mocks.additionalActivityChannels().map(({ id }) => id)).toContain(
+      'outside-page'
+    );
+    expect(
+      mocks.activityChannels().some(({ id }) => id === 'outside-page')
+    ).toBe(enabled);
+  }
+);
 
 it('delegates keyboard scrolling to the sectioned renderer instead of global indexes', () => {
   mount();
@@ -502,7 +570,103 @@ it('delegates keyboard scrolling to the sectioned renderer instead of global ind
   expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
 });
 
-it('keeps a pressed channel row attached through a live data refresh and activates once', async () => {
+it.each(['team_channels', 'channels'] as const)(
+  'keeps a pressed %s row attached through a live data refresh and activates once',
+  async (scope) => {
+    mocks.realRenderer = true;
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.parentElement;
+      }
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.hasAttribute('data-index') ? 34 : 200;
+      }
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+    const observers: Array<{
+      callback: ResizeObserverCallback;
+      targets: Element[];
+    }> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        targets: Element[] = [];
+        constructor(readonly callback: ResizeObserverCallback) {
+          observers.push(this);
+        }
+        observe(target: Element) {
+          this.targets.push(target);
+        }
+        unobserve(target: Element) {
+          this.targets = this.targets.filter((item) => item !== target);
+        }
+        disconnect() {
+          this.targets = [];
+        }
+      }
+    );
+    mocks.selected = undefined;
+    const [channels, setChannels] = createSignal([channel]);
+    const liveSources: ChannelsSources = {
+      ...sources,
+      team_channels: { ...source, items: () => [] },
+      channels: { ...source, items: () => [] },
+      [scope]: { ...source, items: channels },
+      direct_messages: { ...source, items: () => [] },
+    };
+    const { container } = render(() => (
+      <ChannelsRail
+        sources={liveSources}
+        searchQuery=""
+        onSearchQueryChange={() => {}}
+        searchOpen={false}
+        onSearchOpenChange={() => {}}
+      />
+    ));
+    for (let pass = 0; pass < 3; pass++) {
+      await Promise.resolve();
+      for (const observer of observers) {
+        if (observer.targets.length === 0) continue;
+        observer.callback(
+          observer.targets.map((target) => ({
+            target,
+            contentRect: new DOMRect(
+              0,
+              0,
+              300,
+              target.hasAttribute('data-index') ? 34 : 200
+            ),
+            borderBoxSize: [
+              {
+                inlineSize: 300,
+                blockSize: target.hasAttribute('data-index') ? 34 : 200,
+              },
+            ],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          })),
+          observer as unknown as ResizeObserver
+        );
+      }
+    }
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
+    setChannels([{ ...channel, name: 'One updated' }]);
+
+    expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
+    expect(container.contains(row)).toBe(true);
+    fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(row);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'one', target: undefined },
+      { focusComposer: true }
+    );
+  }
+);
+
+it('opens search over mounted section rows', async () => {
   mocks.realRenderer = true;
   vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
     function (this: HTMLElement) {
@@ -515,83 +679,41 @@ it('keeps a pressed channel row attached through a live data refresh and activat
     }
   );
   vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
-  const observers: Array<{
-    callback: ResizeObserverCallback;
-    targets: Element[];
-  }> = [];
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      targets: Element[] = [];
-      constructor(readonly callback: ResizeObserverCallback) {
-        observers.push(this);
-      }
-      observe(target: Element) {
-        this.targets.push(target);
-      }
-      unobserve(target: Element) {
-        this.targets = this.targets.filter((item) => item !== target);
-      }
-      disconnect() {
-        this.targets = [];
-      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
     }
   );
-  mocks.selected = undefined;
-  const [channels, setChannels] = createSignal([channel]);
-  const liveSources: ChannelsSources = {
-    ...sources,
-    team_channels: { ...source, items: channels },
-    direct_messages: { ...source, items: () => [] },
-  };
-  const { container } = render(() => (
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  render(() => (
     <ChannelsRail
-      sources={liveSources}
+      sources={{
+        ...sources,
+        team_channels: { ...source, items: () => [] },
+        direct_messages: { ...source, items: () => [] },
+        search: {
+          ...source,
+          items: () => [{ ...channel, id: 'found', name: 'Found' }],
+        },
+      }}
       searchQuery=""
       onSearchQueryChange={() => {}}
-      searchOpen={false}
-      onSearchOpenChange={() => {}}
+      searchOpen={searchOpen()}
+      onSearchOpenChange={setSearchOpen}
     />
   ));
-  for (let pass = 0; pass < 3; pass++) {
-    await Promise.resolve();
-    for (const observer of observers) {
-      if (observer.targets.length === 0) continue;
-      observer.callback(
-        observer.targets.map((target) => ({
-          target,
-          contentRect: new DOMRect(
-            0,
-            0,
-            300,
-            target.hasAttribute('data-index') ? 34 : 200
-          ),
-          borderBoxSize: [
-            {
-              inlineSize: 300,
-              blockSize: target.hasAttribute('data-index') ? 34 : 200,
-            },
-          ],
-          contentBoxSize: [],
-          devicePixelContentBoxSize: [],
-        })),
-        observer as unknown as ResizeObserver
-      );
-    }
-  }
-  const row = screen.getByRole('button', { name: 'One' });
-  fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
-  setChannels([{ ...channel, name: 'One updated' }]);
+  await Promise.resolve();
+  expect(screen.getByRole('button', { name: 'One' })).toBeTruthy();
 
-  expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
-  expect(container.contains(row)).toBe(true);
-  fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
-  fireEvent.click(row);
-  expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-    type: 'channel',
-    id: 'one',
-    target: undefined,
-  });
+  // Disposing the section rows must not rerun the sections being disposed.
+  expect(() => setSearchOpen(true)).not.toThrow();
+  await Promise.resolve();
+
+  expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
 });
 
 describe('section heading navigation', () => {
@@ -689,10 +811,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'), { shiftKey: true });
     mocks.favoriteId = 'another';
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'another',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'another' },
+      { focusComposer: true }
+    );
     resolve({ ...hydrated, id: 'uncached' });
     await Promise.resolve();
     expect(mocks.openSplit).not.toHaveBeenCalled();
@@ -720,10 +842,10 @@ describe('explicit channel activation read marking', () => {
     mocks.selected = { type: 'channel', id: 'previous' };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
     expect(mocks.markRead).not.toHaveBeenCalled();
   });
@@ -745,11 +867,14 @@ describe('explicit channel activation read marking', () => {
     };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-      target: { messageId: 'reply', threadId: 'thread' },
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      {
+        type: 'channel',
+        id: channel.id,
+        target: { messageId: 'reply', threadId: 'thread' },
+      },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
   });
 
@@ -764,10 +889,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'));
     mocks.row = { ...channel, id: 'two' };
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'two',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'two' },
+      { focusComposer: true }
+    );
     resolve(hydrated);
     await Promise.resolve();
     expect(mocks.select).toHaveBeenCalledOnce();
@@ -890,6 +1015,93 @@ describe('explicit channel activation read marking', () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe('composer focus on opening a conversation', () => {
+  beforeEach(() => {
+    mocks.selected = { type: 'channel', id: 'previous' };
+  });
+
+  it.each(['mouse', 'keyboard'])(
+    'asks a conversation opened by %s for its composer focus',
+    (modality) => {
+      document.documentElement.dataset.modality = modality;
+      mount();
+      fireEvent.click(screen.getByRole('button'));
+      expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+        { type: 'channel', id: channel.id },
+        { focusComposer: true }
+      );
+    }
+  );
+
+  it('asks the open conversation for its composer focus again', () => {
+    mocks.selected = { type: 'channel', id: channel.id };
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
+  });
+
+  it('leaves the on-screen keyboard down after a tap', () => {
+    document.documentElement.dataset.modality = 'touch';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: false }
+    );
+  });
+
+  it('previews a conversation reached by arrowing without asking for focus', () => {
+    vi.useFakeTimers();
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    mocks.onNavigate({
+      result: {
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel,
+        },
+      },
+    });
+    vi.advanceTimersByTime(150);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
+  });
+});
+
+describe('Esc back to the sidebar', () => {
+  it('focuses the open conversation on its row', () => {
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+    expect(mocks.focusSet).toHaveBeenCalledWith('channel:one', {
+      reason: 'keyboard',
+    });
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
+  });
+
+  it('opens a collapsed sidebar for the row', () => {
+    mocks.shell.collapsed = true;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(mocks.shell.expand).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+  });
+
+  it('leaves Esc to a narrow split that shows the conversation alone', () => {
+    mocks.shell.collapsed = true;
+    mocks.shell.canCollapse = false;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(false);
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
   });
 });
 

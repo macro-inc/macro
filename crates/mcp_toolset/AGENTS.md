@@ -10,7 +10,9 @@ names, and routes calls back to the right server.
 
 - `src/lib.rs`: `client_info()` and the `McpServer` session type.
 - `src/toolset.rs`: `RemoteMcpToolSet` — the `ToolSet` impl, `ConnectedServer`/`ListedServer`.
-- `src/mangle.rs`: the `mcp__<server>__<tool>` name encoding/decoding.
+- `src/mangle.rs`: the `mcp__<server>__<tool>` name encoding/decoding;
+  `unmangle` is the public split routing uses, also read by `agent_inmem`'s
+  log replay.
 - `src/call_tool_result.rs`: `CallToolResultExt` for converting MCP results.
 
 ## Scope

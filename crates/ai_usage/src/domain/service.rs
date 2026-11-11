@@ -106,6 +106,7 @@ where
             user: event.user,
             entity: event.entity,
             agent_api_key_id: event.agent_api_key_id,
+            agent_session_id: event.agent_session_id,
             cost,
         };
 

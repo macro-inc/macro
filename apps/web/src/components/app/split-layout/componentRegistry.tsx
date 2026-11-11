@@ -14,9 +14,7 @@ import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  enableChatV3Agents,
   enableProjects,
-  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -41,6 +39,10 @@ import {
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
+);
+const NotificationsRouteView = lazyNamed(
+  () => import('@app/features/notifications-inbox/route-views'),
+  'NotificationsRouteView'
 );
 const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
@@ -325,18 +327,16 @@ registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
-  'routines',
-  () => <AgentsRouteView />,
+  'notifications',
+  () => <NotificationsRouteView />,
   () => composableLayout()
 );
-registerComponent(
-  'agents',
-  () => <AgentsRouteView />,
-  () =>
-    isFeatureEnabled(enableChatV3Agents)
-      ? { splitPanelLayout: 'composable' }
-      : undefined
-);
+registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent(
   'mail',
   () => <MailRouteView />,
@@ -408,9 +408,9 @@ registerComponent('email-compose', (params) => {
 });
 registerComponent('routine-compose', (params) => (
   <RoutineCreator
-    onCreated={
-      typeof params.onCreated === 'function'
-        ? (params.onCreated as (id: string) => void)
+    onStart={
+      typeof params.onStart === 'function'
+        ? (params.onStart as () => void)
         : undefined
     }
   />
@@ -513,16 +513,8 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'chat-attachment',
-    lazy(() => import('@core/component/AI/component/debug/Attachment'))
-  );
-  registerComponent(
     'chat-tool',
     lazy(() => import('@core/component/AI/component/debug/Tool'))
-  );
-  registerComponent(
-    'http-stream',
-    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
     'static-markdown-stream',

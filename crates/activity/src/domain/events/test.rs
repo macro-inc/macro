@@ -44,6 +44,7 @@ fn unknown_action_tags_survive_the_wire() {
     // A row written by a newer deployment: the tag is preserved raw rather
     // than dropped, mirroring reads from storage.
     let row = ActivityWireRow {
+        agent_correlation_id: None,
         id: Uuid::from_u128(1),
         actor_id: "macro|teo@example.com".to_string(),
         subject_id: "macro|teo@example.com".to_string(),
@@ -67,6 +68,7 @@ fn unknown_action_tags_survive_the_wire() {
 #[test]
 fn corrupt_actor_rows_are_skipped() {
     let row = ActivityWireRow {
+        agent_correlation_id: None,
         id: Uuid::from_u128(2),
         actor_id: "not-a-principal".to_string(),
         subject_id: "macro|teo@example.com".to_string(),

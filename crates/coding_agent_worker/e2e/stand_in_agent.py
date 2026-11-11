@@ -1,6 +1,6 @@
 """ACP stand-in for the self-update end-to-end test.
 
-Streams a numbered `tick` notification every 20 ms, carrying its own pid,
+Streams a numbered `tick` notification every 2 ms, carrying its own pid,
 the pid of a background child it started, and the wall-clock time it was
 written, and answers every request.
 """
@@ -31,7 +31,10 @@ def tick():
             "params": {"n": n, "pid": os.getpid(), "child": child.pid, "t": time.time()},
         })
         n += 1
-        time.sleep(0.02)
+        # Well under the shortest update handoff, so `output-in-gap` always
+        # sees frames written while nothing was reading; at 20 ms a fast
+        # handoff could fall between two ticks and fail the test.
+        time.sleep(0.002)
 
 
 threading.Thread(target=tick, daemon=True).start()

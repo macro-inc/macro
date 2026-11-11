@@ -118,6 +118,7 @@ async fn anyone_reads_the_status_staff_set() {
         json!({
             "status": "major_outage",
             "message": "Macro is down",
+            "id": update["id"],
             "updatedAt": update["createdAt"],
         })
     );

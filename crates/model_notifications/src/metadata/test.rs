@@ -86,6 +86,40 @@ fn view_access_notifications_preserve_permission_and_format_copy() {
     );
 }
 
+#[test]
+fn runtime_access_removal_names_the_owner_the_runtime_and_the_stopped_agents() {
+    let stopped = |names: &[&str]| RuntimeAccessRemovedMetadata {
+        runtime_name: "Studio Mac".into(),
+        agents: names
+            .iter()
+            .map(|name| StoppedAgent {
+                bot_id: Uuid::nil(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
+    };
+    let owner = || Some(uid("macro|owner@macro.com"));
+
+    assert_eq!(
+        stopped(&["Scout"]).format_title(owner()).unwrap(),
+        "owner@macro.com removed your access to Studio Mac"
+    );
+    assert_eq!(
+        stopped(&["Scout"]).format_body(owner()).unwrap(),
+        "Scout has stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger"]).format_body(owner()).unwrap(),
+        "Scout and Ranger have stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger", "Pilot"])
+            .format_body(owner())
+            .unwrap(),
+        "Scout and 2 others have stopped."
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),
@@ -145,6 +179,30 @@ fn channel_reaction_round_trips_as_notif_event() {
     });
     let event: NotifEvent = serde_json::from_value(value).unwrap();
     assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
+}
+
+#[test]
+fn channel_access_request_round_trips_and_names_the_channel() {
+    let value = serde_json::json!({
+        "tag": "channel_access_requested",
+        "content": {
+            "requestId": "00000000-0000-0000-0000-000000000001",
+            "channelType": "private",
+            "channelName": "design",
+        },
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    let NotifEvent::ChannelAccessRequested(request) = &event else {
+        panic!("expected a channel access request, got {event:?}");
+    };
+    assert_eq!(request.request_id, Uuid::from_u128(1));
+    assert_eq!(
+        event
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join #design"
+    );
+    assert_eq!(event.format_body(None).unwrap(), "#design");
 }
 
 fn github_pr_common() -> GithubPrNotificationCommon {
@@ -1323,6 +1381,34 @@ fn agent_session_alerts_show_mentions_by_name() {
     assert_eq!(
         waiting.format_body(None).unwrap(),
         "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn alerts_show_nameless_mentions_as_their_kind() {
+    // Agents leave documentName empty or omit it; the app fills in live names.
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one is <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"","blockName":"channel","blockParams":{"channel_message_id":"0195c94f-3b0c-79f0-8558-e5e509ac9dd9"}}</m-document-mention>, about <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dda","blockName":"task","blockParams":{}}</m-document-mention>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one is <message>, about <task>."
+    );
+
+    let channel = ChannelMessageSendMetadata {
+        message_content: r#"I made <m-document-mention>{"documentId":"d1","documentName":"","blockName":"md","blockParams":{}}</m-document-mention> from <m-document-mention>{"documentId":"d2","documentName":"","blockName":"database","blockParams":{}}</m-document-mention>."#.to_string(),
+        ..bot_channel_message_send()
+    };
+    assert_eq!(
+        channel.format_body(None).unwrap(),
+        "I made <document> from <database>."
     );
 }
 

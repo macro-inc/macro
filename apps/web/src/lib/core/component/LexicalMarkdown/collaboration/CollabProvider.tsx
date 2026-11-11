@@ -97,7 +97,6 @@ export type CollabProviderProps = {
    */
   sourceReady: Accessor<boolean>;
   canEdit: Accessor<boolean | undefined>;
-  canComment: Accessor<boolean | undefined>;
   /** External error state; the engine stops when it becomes non-null. */
   editorError: Accessor<MarkdownEditorErrors | null>;
   /** Caller-owned load context; the provider never ends it. */
@@ -138,7 +137,11 @@ export function CollabProvider(props: CollabProviderProps) {
     }
   );
 
-  const readOnly = () => !(props.canEdit() || props.canComment());
+  // A session that cannot edit writes nothing to the shared document. The
+  // server refuses its updates, even state the editor derives on its own, and
+  // a refused update would hold the WAL, and every comment flushed behind it,
+  // forever. Comment marks are published from a separate peer instead.
+  const readOnly = () => !props.canEdit();
 
   const walSyncer = createWALSyncSource(syncSource()!);
   const syncEngine = createSyncEngine({
@@ -156,6 +159,9 @@ export function CollabProvider(props: CollabProviderProps) {
       syncSource()!.documentId
     ),
   });
+  const writeStateToLoro: typeof syncEngine.syncStateToLoro = async (state) => {
+    if (!readOnly()) await syncEngine.syncStateToLoro(state);
+  };
 
   onCleanup(
     props.editor.registerCommand(
@@ -168,7 +174,7 @@ export function CollabProvider(props: CollabProviderProps) {
               complete(false);
               return;
             }
-            await syncEngine.syncStateToLoro({ ...state });
+            await writeStateToLoro({ ...state });
             await walSyncer.flush();
             complete((await walSyncer.summary()).dirty === 0);
           } catch (error) {
@@ -392,7 +398,7 @@ export function CollabProvider(props: CollabProviderProps) {
           tag: CODE_HIGHLIGHT_IDS_TAG,
           onUpdate: async () => {
             const stateToSync = loroSyncState(props.editor.getEditorState());
-            await syncEngine.syncStateToLoro(stateToSync as any);
+            await writeStateToLoro(stateToSync as any);
             $afterSyncCursorUpdate(loroManager);
           },
         }
@@ -445,7 +451,7 @@ export function CollabProvider(props: CollabProviderProps) {
 
       // Clean the state to remove any state properties that should not be synced
       const stateToSync = loroSyncState(state);
-      await syncEngine.syncStateToLoro(stateToSync as any);
+      await writeStateToLoro(stateToSync as any);
     }
 
     $afterSyncCursorUpdate(loroManager);
@@ -469,7 +475,7 @@ export function CollabProvider(props: CollabProviderProps) {
         FORCE_SYNC_COMMAND,
         () => {
           const stateToSync = loroSyncState(props.editor.getEditorState());
-          syncEngine.syncStateToLoro(stateToSync as any).catch(reportSyncError);
+          writeStateToLoro(stateToSync as any).catch(reportSyncError);
           return true;
         },
         COMMAND_PRIORITY_NORMAL
@@ -578,7 +584,7 @@ export function CollabProvider(props: CollabProviderProps) {
           // Start the sync engine
           startSync();
           // Remove drafts that earlier sessions left in the shared document.
-          if (hasAbandonedDrafts && !readOnly()) {
+          if (hasAbandonedDrafts) {
             props.editor.dispatchCommand(FORCE_SYNC_COMMAND, undefined);
           }
           props.setEditorReady(true);

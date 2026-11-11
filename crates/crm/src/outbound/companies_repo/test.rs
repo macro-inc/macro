@@ -7,9 +7,11 @@
 pub(crate) mod helpers;
 
 mod blocked_domains;
+mod contact_update;
 mod create_company;
 mod create_contact;
 mod domain_directory;
+mod email_privacy;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
 mod get_contact_for_team;
@@ -20,6 +22,7 @@ mod list_contacts_for_company;
 mod list_contacts_for_soup;
 mod personal_emails;
 mod populate_contact;
+mod population_locks;
 mod resolve_association;
 mod search_contacts_for_team;
 mod set_company_hidden;
@@ -29,3 +32,10 @@ mod set_contact_name;
 mod set_email_sync;
 mod team_crm_enabled;
 mod team_settings;
+
+/// Coordinates teardown after the source mutation without timing assumptions.
+#[derive(Default)]
+pub(super) struct ContactWriteGate {
+    pub(super) entered: tokio::sync::Notify,
+    pub(super) resume: tokio::sync::Notify,
+}
