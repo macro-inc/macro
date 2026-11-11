@@ -57,19 +57,22 @@ it('defaults call sounds on for legacy storage without changing notification sou
   expect(soundForNotification('channel_mention', settings)).toBeNull();
 });
 
-it('synthesizes short rising and falling plucks', () => {
+it('synthesizes short rising and falling two-note chimes', () => {
   const join = notificationSound('call-join').tones;
   const leave = notificationSound('call-leave').tones;
+  const joinNotes = join.filter((tone) => tone.gain >= 0.8);
+  const leaveNotes = leave.filter((tone) => tone.gain >= 0.8);
 
-  expect(join.every((tone) => tone.wave === 'sine')).toBe(true);
-  expect(leave.every((tone) => tone.wave === 'sine')).toBe(true);
-  for (const tone of join) {
-    expect(tone.glideTo).toBeGreaterThan(tone.frequency);
-    expect(tone.start + tone.duration).toBeLessThan(0.25);
-  }
-  for (const tone of leave) {
-    expect(tone.glideTo).toBeLessThan(tone.frequency);
-    expect(tone.start + tone.duration).toBeLessThan(0.25);
+  expect(joinNotes).toHaveLength(2);
+  expect(leaveNotes).toHaveLength(2);
+  expect(joinNotes[1].start).toBeGreaterThan(joinNotes[0].start);
+  expect(joinNotes[1].frequency).toBeGreaterThan(joinNotes[0].frequency);
+  expect(leaveNotes[1].start).toBeGreaterThan(leaveNotes[0].start);
+  expect(leaveNotes[1].frequency).toBeLessThan(leaveNotes[0].frequency);
+  for (const tone of [...join, ...leave]) {
+    expect(tone.wave).toBe('sine');
+    expect(tone.glideTo).toBeUndefined();
+    expect(tone.start + tone.duration).toBeLessThan(0.5);
   }
 });
 

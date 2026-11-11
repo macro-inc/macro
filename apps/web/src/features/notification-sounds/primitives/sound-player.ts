@@ -97,17 +97,23 @@ export function createSoundPlayer(outputDeviceId?: () => string | null) {
         return;
       }
 
+      const sound = notificationSound(id);
       const start = current.currentTime + START_DELAY_S;
-      for (const tone of notificationSound(id).tones) {
+      for (const tone of sound.tones) {
         const toneStart = start + tone.start;
         const toneEnd = toneStart + tone.duration;
-        const peak = MAX_GAIN * volume * tone.gain;
+        const peak = (sound.gain ?? MAX_GAIN) * volume * tone.gain;
+        const endGain =
+          sound.decayRatio === undefined ? 0.0001 : peak * sound.decayRatio;
 
         const gain = current.createGain();
         gain.connect(destination);
         gain.gain.setValueAtTime(0, toneStart);
         gain.gain.linearRampToValueAtTime(peak, toneStart + ATTACK_S);
-        gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
+        if (tone.hold) {
+          gain.gain.setValueAtTime(peak, toneStart + ATTACK_S + tone.hold);
+        }
+        gain.gain.exponentialRampToValueAtTime(endGain, toneEnd);
 
         const oscillator = current.createOscillator();
         oscillator.type = tone.wave;

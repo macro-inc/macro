@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { notificationSound } from '../core/sounds';
 import { createSoundPlayer } from './sound-player';
 
 const PLAYERS: ReturnType<typeof createSoundPlayer>[] = [];
@@ -99,6 +100,42 @@ it('routes call cues through the selected speaker without rerouting notification
   expect(output.setSinkId).toHaveBeenCalledTimes(1);
 });
 
+it('keeps the chime attack and level without changing notification envelopes', async () => {
+  const player = createSoundPlayer();
+  PLAYERS.push(player);
+  await player.play('call-join', 0.7);
+  const callGain = context.createGain.mock.results[0].value.gain;
+  expect(callGain.linearRampToValueAtTime).toHaveBeenCalledWith(
+    expect.closeTo(0.2955159),
+    expect.closeTo(0.015)
+  );
+  expect(callGain.setValueAtTime).toHaveBeenNthCalledWith(
+    2,
+    expect.closeTo(0.2955159),
+    expect.closeTo(0.033)
+  );
+  expect(callGain.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+    expect.closeTo(0.0002955159, 9),
+    expect.closeTo(0.25)
+  );
+
+  context.createGain.mockClear();
+  await player.play('ding', 0.7);
+  const notificationGain = context.createGain.mock.results[0].value.gain;
+  expect(notificationGain.linearRampToValueAtTime).toHaveBeenCalledWith(
+    expect.closeTo(0.21),
+    expect.closeTo(0.015)
+  );
+  expect(notificationGain.setValueAtTime).toHaveBeenCalledExactlyOnceWith(
+    0,
+    0.01
+  );
+  expect(notificationGain.exponentialRampToValueAtTime).toHaveBeenCalledWith(
+    0.0001,
+    0.91
+  );
+});
+
 it('uses the browser default on platforms without speaker selection', async () => {
   vi.stubGlobal('HTMLMediaElement', { prototype: {} });
   const player = createSoundPlayer(() => 'headset');
@@ -134,7 +171,9 @@ it('finishes an in-flight speaker switch on the newest selection', async () => {
   firstSwitch.resolve();
   await playing;
   expect(output.sinkId).toBe('speakers');
-  expect(context.createOscillator).toHaveBeenCalledTimes(2);
+  expect(context.createOscillator).toHaveBeenCalledTimes(
+    notificationSound('call-join').tones.length
+  );
 });
 
 it('recovers interrupted audio before playing a fresh cue', async () => {
@@ -143,7 +182,9 @@ it('recovers interrupted audio before playing a fresh cue', async () => {
   PLAYERS.push(player);
   await player.play('call-leave', 0.7);
   expect(context.resume).toHaveBeenCalledOnce();
-  expect(context.createOscillator).toHaveBeenCalledTimes(2);
+  expect(context.createOscillator).toHaveBeenCalledTimes(
+    notificationSound('call-leave').tones.length
+  );
 });
 
 it('drops a suspended cue instead of replaying it after a later gesture', async () => {
@@ -162,7 +203,9 @@ it('drops a suspended cue instead of replaying it after a later gesture', async 
   await player.unlock();
   expect(context.createOscillator).not.toHaveBeenCalled();
   await player.play('call-leave', 0.7);
-  expect(context.createOscillator).toHaveBeenCalledTimes(2);
+  expect(context.createOscillator).toHaveBeenCalledTimes(
+    notificationSound('call-leave').tones.length
+  );
 });
 
 it('drops a cue while its speaker switch is blocked', async () => {

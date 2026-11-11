@@ -43,9 +43,10 @@ links still work. A failed load shows Retry.
 
 ### Join and leave sounds
 
-Browser calls play a short ascending cue when you or another participant joins,
-and a descending cue when someone deliberately leaves. Joining an occupied call
-plays only your own join cue. Reconnects and recovery rejoins stay silent.
+Browser calls play a clear two-note ascending chime when you or another
+participant joins, and a descending chime when someone deliberately leaves.
+Both last under half a second. Joining an occupied call plays only your own
+join chime. Reconnects and recovery rejoins stay silent.
 
 **Settings → Notifications → Sounds → Call sounds** is on by default, independent
 of the notification-sounds switch. Join and Leave preview buttons play the fixed

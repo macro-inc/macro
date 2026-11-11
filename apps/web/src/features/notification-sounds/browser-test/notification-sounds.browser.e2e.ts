@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { notificationSound } from '../core/sounds';
 
 declare global {
   interface Window {
@@ -31,6 +32,8 @@ async function toggle(page: Page, name: string) {
 test('call cues default on, preview independently, and persist their own switch', async ({
   page,
 }) => {
+  const joinTones = notificationSound('call-join').tones.length;
+  const leaveTones = notificationSound('call-leave').tones.length;
   await expect(
     page.getByRole('switch', { name: 'Call sounds', exact: true })
   ).toBeChecked();
@@ -39,11 +42,11 @@ test('call cues default on, preview independently, and persist their own switch'
   ).not.toBeChecked();
   await expect(page.getByRole('slider', { name: 'Volume' })).toBeVisible();
   await page.getByRole('button', { name: 'Preview join', exact: true }).click();
-  await expect.poll(() => tonesPlayed(page)).toBe(2);
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones);
   await page
     .getByRole('button', { name: 'Preview leave', exact: true })
     .click();
-  await expect.poll(() => tonesPlayed(page)).toBe(4);
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones + leaveTones);
   await toggle(page, 'Call sounds');
   await expect(page.getByRole('slider', { name: 'Volume' })).toHaveCount(0);
   await page.reload();
@@ -51,7 +54,7 @@ test('call cues default on, preview independently, and persist their own switch'
     page.getByRole('switch', { name: 'Call sounds', exact: true })
   ).not.toBeChecked();
   await page.getByRole('button', { name: 'Preview join', exact: true }).click();
-  await expect.poll(() => tonesPlayed(page)).toBe(2);
+  await expect.poll(() => tonesPlayed(page)).toBe(joinTones);
 });
 
 test('sounds stay off until turned on, then reveal per-type choices', async ({
