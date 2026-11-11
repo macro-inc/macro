@@ -533,10 +533,11 @@ pub async fn join_call_handler<
     request: Option<Json<JoinCallRequest>>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
     refuse_code_execution_token(&headers)?;
-    if !state
-        .service
-        .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
-        .await
+    if !user.authorization.user.is_human_session()
+        && !state
+            .service
+            .programmatic_calls_enabled(user.authorization.user.macro_user_id.clone())
+            .await
     {
         return Err(CallError::NotFound("call".to_string()));
     }
