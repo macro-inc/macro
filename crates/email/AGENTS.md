@@ -168,6 +168,7 @@ tools — hexagonal, heavily feature-gated.
   attempts to mark clean drafts as junk.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
+- `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim classification, sent-identity adoption and retained-deletion sequencing. `outbound/scheduled_delivery_pg.rs` supplies caller-owned and independent transaction capabilities using the unchanged statement-sized queries in `email_db_client`; keep relational guards in SQL. Scheduled page validation and expansion sequencing live in `domain/scheduled/drafts.rs`.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 

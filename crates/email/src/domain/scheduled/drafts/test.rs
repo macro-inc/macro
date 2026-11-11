@@ -91,3 +91,65 @@ async fn scheduled_retains_query_failures() {
         Err(ScheduledDraftError::Query(TestError))
     ));
 }
+
+#[derive(Default)]
+struct PageQueries {
+    calls: Mutex<Vec<&'static str>>,
+    fail: Option<&'static str>,
+}
+impl ScheduledDraftQueries for PageQueries {
+    type Stored = u32;
+    async fn scheduled_rows(
+        &self,
+        link: Uuid,
+        offset: u32,
+        limit: u32,
+    ) -> anyhow::Result<Vec<u32>> {
+        assert_eq!((link, offset, limit), (SHARED, 7, 1001));
+        self.calls.lock().unwrap().push("page");
+        anyhow::ensure!(self.fail != Some("page"), "page failed");
+        Ok(vec![3, 1, 2])
+    }
+    async fn expand_rows(&self, rows: Vec<u32>) -> anyhow::Result<Vec<Message>> {
+        assert_eq!(rows, [3, 1, 2]);
+        self.calls.lock().unwrap().push("expand");
+        anyhow::ensure!(self.fail != Some("expand"), "expand failed");
+        Ok(vec![])
+    }
+}
+#[tokio::test]
+async fn stored_page_rejects_zero_before_queries_and_preserves_the_unbounded_internal_limit() {
+    let queries = PageQueries::default();
+    assert_eq!(
+        get_scheduled_messages_by_link_id(&queries, SHARED, 7, 0)
+            .await
+            .unwrap_err()
+            .to_string(),
+        "limit must be positive"
+    );
+    assert!(queries.calls.lock().unwrap().is_empty());
+    assert!(
+        get_scheduled_messages_by_link_id(&queries, SHARED, 7, 1001)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(*queries.calls.lock().unwrap(), ["page", "expand"]);
+}
+#[tokio::test]
+async fn stored_page_preserves_read_and_expansion_errors() {
+    for fail in ["page", "expand"] {
+        let queries = PageQueries {
+            fail: Some(fail),
+            ..Default::default()
+        };
+        assert_eq!(
+            get_scheduled_messages_by_link_id(&queries, SHARED, 7, 1001)
+                .await
+                .unwrap_err()
+                .to_string(),
+            format!("{fail} failed")
+        );
+        assert_eq!(queries.calls.lock().unwrap().last(), Some(&fail));
+    }
+}

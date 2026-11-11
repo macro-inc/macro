@@ -55,8 +55,8 @@ impl InboxSyncDeleteTransaction for PgInboxSyncTransaction {
         &mut self,
         message: &service::message::SimpleMessage,
     ) -> Result<MessageDeletion, Self::Err> {
-        use email_db_client::messages::delete::MessageDeletion as StoredDeletion;
-        email_db_client::messages::delete::delete_message_with_tx(&mut self.0, message)
+        use email::domain::scheduled_delivery::deletion::MessageDeletion as StoredDeletion;
+        email::domain::scheduled_delivery::deletion::delete_message_with_tx(&mut *self.0, message)
             .await
             .map(|deletion| match deletion {
                 StoredDeletion::AlreadyDeleted => MessageDeletion::AlreadyDeleted,

@@ -6,8 +6,17 @@ use uuid::Uuid;
 
 /// Approved attachment identity checks shared by delivery adapters.
 pub mod attachments;
+/// Retained deletion resolution and message/thread cleanup sequencing.
+#[cfg(feature = "mailbox")]
+pub mod deletion;
+/// Adoption of provider identities after a confirmed send.
+#[cfg(feature = "mailbox")]
+pub mod identity;
 /// Recovery scanning and queue notification policy.
 pub mod recovery;
+/// Durable claim classification and fenced persistence decisions.
+#[cfg(feature = "mailbox")]
+pub mod state;
 
 /// A worker must renew ownership before crossing the provider boundary.
 pub const DELIVERY_LEASE_SECONDS: i32 = 300;
