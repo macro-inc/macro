@@ -187,6 +187,18 @@ function verifyServedBody(
 /** Bind one browser execution to both pristine compiled dependency responses. */
 export function watchCompiledSourceDeps(page: Page) {
   const before = verifyCompiledSourceDeps();
+  const nativeManifestPath = process.env.DOCUMENT_MENTION_NATIVE_MANIFEST;
+  const nativeManifest: unknown = nativeManifestPath
+    ? JSON.parse(readFileSync(nativeManifestPath, 'utf8'))
+    : undefined;
+  const nativeLoads: Promise<{
+    url: string;
+    file: string;
+    kind: 'wasm' | 'glue';
+    bytes: number;
+    sha256: string;
+    sourceSHA256?: string;
+  }>[] = [];
   const responses: Promise<{
     url: string;
     file: string;
@@ -197,6 +209,47 @@ export function watchCompiledSourceDeps(page: Page) {
     firstDifference?: { response: string; cache: string };
   }>[] = [];
   page.on('response', (response) => {
+    const nativeName = basename(new URL(response.url()).pathname);
+    if (
+      nativeName === 'document_session_wasm_bg.wasm' ||
+      nativeName === 'document_session_wasm.js'
+    ) {
+      nativeLoads.push(
+        response.body().then((body) => {
+          const file = servedFile(response.url());
+          const wasm = nativeName === 'document_session_wasm_bg.wasm';
+          const sourceSHA256 = wasm ? undefined : sha256(readFileSync(file));
+          if (nativeManifestPath) {
+            if (!record(nativeManifest) || !record(nativeManifest.files))
+              throw new Error('Invalid actual native manifest');
+            const expected = nativeManifest.files[nativeName];
+            if (
+              !record(expected) ||
+              typeof expected.sha256 !== 'string' ||
+              typeof expected.bytes !== 'number'
+            )
+              throw new Error('Missing actual native artifact fingerprint');
+            if (
+              wasm
+                ? sha256(body) !== expected.sha256 ||
+                  body.length !== expected.bytes
+                : sourceSHA256 !== expected.sha256
+            )
+              throw new Error(
+                'Actual loaded native artifact differs from sealed pair'
+              );
+          }
+          return {
+            url: response.url(),
+            file,
+            kind: wasm ? 'wasm' : 'glue',
+            bytes: body.length,
+            sha256: sha256(body),
+            sourceSHA256,
+          };
+        })
+      );
+    }
     if (response.request().resourceType() !== 'script') return;
     const url = response.url();
     const filename = new URL(url).pathname.split('/').at(-1);
@@ -231,6 +284,17 @@ export function watchCompiledSourceDeps(page: Page) {
   });
   return async () => {
     const loadedScripts = await Promise.all(responses);
+    const loadedNative = await Promise.all(nativeLoads);
+    if (new URL(page.url()).searchParams.get('engine') === 'native') {
+      if (
+        !nativeManifestPath ||
+        !loadedNative.some((load) => load.kind === 'wasm') ||
+        !loadedNative.some((load) => load.kind === 'glue')
+      )
+        throw new Error(
+          'Native execution lacks its sealed manifest and actual response witnesses'
+        );
+    }
     const after = verifyCompiledSourceDeps();
     for (const row of before.rows) {
       if (
@@ -244,6 +308,6 @@ export function watchCompiledSourceDeps(page: Page) {
         );
     }
     deepStrictEqual(after, before);
-    return { before, loadedScripts, after };
+    return { before, loadedScripts, after, nativeManifestPath, loadedNative };
   };
 }

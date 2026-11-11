@@ -15,6 +15,7 @@
   "include": [
     "*.ts",
     "*.tsx",
+    "../native-document-card-host.test.ts",
     "../../../../../../../src/**/*.d.ts",
     "../../../../../../../../../packages/lexical-core/tests/document-reference-render-props.test.ts",
     "../../component/core/StaticMarkdown.test.tsx"

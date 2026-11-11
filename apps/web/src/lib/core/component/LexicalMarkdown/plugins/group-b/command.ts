@@ -65,12 +65,13 @@ export function dispatchApplicationCommand(
 export function dispatchApplicationCommandIfSessionEdit(
   view: EditorView,
   name: string,
-  payload: JsonValue
+  payload: JsonValue,
+  after?: (handled: boolean) => void
 ): void {
   if (!(view.port instanceof SessionPort))
     throw new Error('Media normalization requires the native session port');
   const input = applicationInput(view, name, payload);
-  if (input) view.port.inputIfSessionEdit(input);
+  if (input) view.port.inputIfSessionEdit(input, after);
 }
 
 /** One immutable bulk read, rejecting a reply against a retired mirror generation. */

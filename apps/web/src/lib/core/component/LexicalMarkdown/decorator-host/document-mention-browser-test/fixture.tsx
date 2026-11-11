@@ -9,7 +9,7 @@ import {
   DocumentCardNode,
   DocumentMentionNode,
 } from '@macro-inc/lexical-core';
-import { $setId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { $setId, idState } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { previewKeys } from '@queries/preview/keys';
@@ -24,6 +24,7 @@ import {
   $isElementNode,
   $nodesOfType,
   $setSelection,
+  $setState,
   COMMAND_PRIORITY_NORMAL,
   KEY_ENTER_COMMAND,
 } from 'lexical';
@@ -36,10 +37,14 @@ import {
   LexicalWrapperContext,
 } from '../../context/LexicalWrapperContext';
 import { initializeLexical } from '../../init';
-import { documentMetadataPlugin } from '../../plugins/document-metadata/documentMetadataPlugin';
+import {
+  $getDocumentMetadata,
+  documentMetadataPlugin,
+} from '../../plugins/document-metadata/documentMetadataPlugin';
 import { mentionsPlugin } from '../../plugins/mentions/mentionsPlugin';
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
 import { theme } from '../../theme';
+import { NativeReferenceFixture } from './native-fixture';
 import { NavigationBoundary } from './navigation-boundary';
 import { StaticHostBoundary } from './static-host-boundary';
 
@@ -69,6 +74,13 @@ interface Capture {
 }
 declare global {
   interface Window {
+    documentReferenceInitial?: string;
+    documentReferencePhaseTrace?: { kind: string; stack: string }[];
+    documentReferenceRootIdentity?: () => {
+      initial: string;
+      created: string;
+      updated: string;
+    };
     documentMentionFixture?: {
       capture(): Capture;
       select(): void;
@@ -81,6 +93,12 @@ declare global {
 function Fixture() {
   const boundary = params.get('boundary');
   if (boundary) return <StaticHostBoundary native={boundary === 'native'} />;
+  if (params.get('engine') === 'native')
+    return (
+      <NativeReferenceFixture
+        shape={card ? 'document-card' : 'document-mention'}
+      />
+    );
   const wrapper = createLexicalWrapper({
     type: 'markdown-sync',
     namespace: 'document-mention-fixture',
@@ -108,36 +126,42 @@ function Fixture() {
   onMount(() => {
     if (!root) throw new Error('Missing Source root');
     wrapper.editor.setRootElement(root);
-    wrapper.editor.update(
-      () => {
-        const info = {
-          documentId: id,
-          documentName: 'Fixture Document',
-          blockName: kind,
-          mentionUuid: 'document-mention-fixture',
-        };
-        if (card) {
-          $getRoot()
-            .clear()
-            .append(
-              $createParagraphNode().append($createTextNode('Before ')),
-              $createDocumentCardNode(info),
-              $createParagraphNode().append($createTextNode(' after'))
+    if (window.documentReferenceInitial) {
+      wrapper.editor.read(() => $getDocumentMetadata());
+      wrapper.editor.setEditorState(
+        wrapper.editor.parseEditorState(window.documentReferenceInitial)
+      );
+    } else
+      wrapper.editor.update(
+        () => {
+          const info = {
+            documentId: id,
+            documentName: 'Fixture Document',
+            blockName: kind,
+            mentionUuid: 'document-mention-fixture',
+          };
+          if (card) {
+            $getRoot()
+              .clear()
+              .append(
+                $createParagraphNode().append($createTextNode('Before ')),
+                $createDocumentCardNode(info),
+                $createParagraphNode().append($createTextNode(' after'))
+              );
+          } else {
+            const paragraph = $createParagraphNode();
+            paragraph.append(
+              $createTextNode('Before '),
+              $createDocumentMentionNode({ ...info, createdAt: 1 }),
+              $createTextNode(' after')
             );
-        } else {
-          const paragraph = $createParagraphNode();
-          paragraph.append(
-            $createTextNode('Before '),
-            $createDocumentMentionNode({ ...info, createdAt: 1 }),
-            $createTextNode(' after')
-          );
-          $getRoot().clear().append(paragraph);
-        }
-        for (const [index, { node }] of $dfs().slice(1).entries())
-          $setId(node, `document-mention-${index}`);
-      },
-      { discrete: true }
-    );
+            $getRoot().clear().append(paragraph);
+          }
+          for (const [index, { node }] of $dfs().slice(1).entries())
+            $setId(node, `document-mention-${index}`);
+        },
+        { discrete: true }
+      );
     const admission = params.get('admission');
     if (admission) {
       const saved = wrapper.editor.getEditorState().toJSON();
@@ -175,6 +199,33 @@ function Fixture() {
         )
       );
     }
+    window.documentReferenceRootIdentity = () => {
+      const snapshot = () =>
+        JSON.stringify(wrapper.editor.getEditorState().toJSON());
+      const initial = snapshot();
+      wrapper.editor.update(
+        () => {
+          $getRoot().append(
+            $createParagraphNode().append($createTextNode('Identity control'))
+          );
+        },
+        { discrete: true }
+      );
+      const created = snapshot();
+      wrapper.editor.update(
+        () => {
+          const rootNode = $getRoot();
+          const paragraph = rootNode.getLastChild();
+          if (!$isElementNode(paragraph))
+            throw new Error('Missing actual created paragraph');
+          $setState(paragraph, idState, null);
+          paragraph.setFormat('center');
+          rootNode.setFormat('right');
+        },
+        { discrete: true }
+      );
+      return { initial, created, updated: snapshot() };
+    };
     const element = root;
     window.documentMentionFixture = {
       capture: () => ({
@@ -211,6 +262,7 @@ function Fixture() {
   });
   onCleanup(() => {
     delete window.documentMentionFixture;
+    delete window.documentReferenceRootIdentity;
     wrapper.editor.setRootElement(null);
     wrapper.cleanup();
   });

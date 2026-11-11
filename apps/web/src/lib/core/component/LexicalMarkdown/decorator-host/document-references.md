@@ -38,9 +38,25 @@ Use a new report/output directory for each run. The static-preview native outer
 boundary uses the actual view's selection context around a Source StaticMarkdown
 preview. Its five fixture WASM files must come from one recorded seal.
 
-The native document hosts and typed adapter rows have a separate mounted gate.
-They require the actual document action/query producer, signature revision
-metadata, real ordered Normal Enter and published editability. This Source
-checkpoint covers the host extraction and Source behavior. Conversion/action
-parity, native remounts, authorization and app registry installation are verified
-by the subsequent matched-seal gate.
+The native document hosts and typed adapter rows require the actual document
+action/query producer, signature revision metadata, real ordered Normal Enter
+and published editability. Each context belongs to one acknowledged view
+generation and owns its subscriptions and cached preview disposal. Card identity
+comes from the read-only typed native query; rendering never allocates an ID.
+Preview height notifications require a handled native update. An admitted equal
+height still notifies, while Read, CommentOnly and wrong-type refusals do not.
+The optional notification remains absent when no real layout owner exists.
+
+The native render/selection cohort imports the same frozen Source model into
+both engines before observing components. It registers Source metadata before
+real parse/set and retains fresh-factory captures separately. Supply
+DOCUMENT_MENTION_NATIVE_MANIFEST for the exact five-file private seal. Dependency
+attachments check the actual served WASM bytes, generated glue source and
+served glue response hash in addition to the producing pristine Source scripts.
+Use a separate artifact directory and report epoch; never replace old RED
+receipts or normalize model/DOM comparisons.
+
+Render/selection equality does not establish conversion/actions, navigation,
+cached preview remounts, complete authorization behavior or app registration.
+Those require their own matched-seal controls before app-row activation. The
+layout callback is not a main-commit or uploaded-file ownership receipt.
