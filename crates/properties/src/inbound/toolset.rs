@@ -26,7 +26,9 @@ pub use bulk_set_entity_property_options::{
 pub use create_tag::{CreateTag, CreateTagResponse};
 pub use delete_tag::{DeleteTag, DeleteTagResponse};
 pub use edit_tag::{EditTag, EditTagResponse};
-pub use get_entity_properties::{GetEntityProperties, GetEntityPropertiesResponse};
+pub use get_entity_properties::{
+    GetEntityProperties, GetEntityPropertiesResponse, ToolEntityType, ToolPropertyTargetEntityType,
+};
 pub use list_tags::{ListTags, ListTagsResponse};
 pub use set_entity_property::{SetEntityProperty, SetEntityPropertyResponse};
 
