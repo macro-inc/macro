@@ -204,6 +204,9 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             name,
             "ReadContent"
                 | "ReadMetadata"
+                // Initiative.read() and Channel.share().
+                | "ReadInitiative"
+                | "ShareWithChannel"
                 | "EditDocument"
                 | "ReadCanvas"
                 | "EditCanvas"
