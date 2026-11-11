@@ -35,8 +35,29 @@ pub fn with_session_plugins_with_id_state(
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
 ) -> EditorBuilder {
-    register_editor_commands(builder.extension_state(NodeIdIndex::default()))
-        .plugin(NodeIds { peer, id_state })
+    install_session_plugins(builder, peer, id_state, true)
+}
+
+#[cfg(feature = "application")]
+pub(crate) fn with_session_plugins_excluding_root(
+    builder: EditorBuilder,
+    peer: u64,
+    id_state: &'static StateKey<Option<String>>,
+) -> EditorBuilder {
+    install_session_plugins(builder, peer, id_state, false)
+}
+
+fn install_session_plugins(
+    builder: EditorBuilder,
+    peer: u64,
+    id_state: &'static StateKey<Option<String>>,
+    track_root: bool,
+) -> EditorBuilder {
+    register_editor_commands(builder.extension_state(NodeIdIndex::default())).plugin(NodeIds {
+        peer,
+        id_state,
+        track_root,
+    })
 }
 
 pub(super) static ID: StateKey<Option<String>> = StateKey::new("id", |value| {
@@ -56,6 +77,7 @@ struct NodeIdIndex {
 struct NodeIds {
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
+    track_root: bool,
 }
 impl Plugin for NodeIds {
     fn name(&self) -> &'static str {
@@ -75,6 +97,9 @@ impl Plugin for NodeIds {
             // Yield so selection/table handlers still own actual insertion.
             for node in nodes {
                 for record in lexical_rich_nodes::utils::dfs(tx.view(), Some(*node), None) {
+                    if !self.track_root && record.node == NodeKey::ROOT {
+                        continue;
+                    }
                     tx.set_state(record.node, self.id_state, None)?;
                 }
             }
@@ -83,6 +108,9 @@ impl Plugin for NodeIds {
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
         for (key, mutation) in &commit.changes.mutations {
+            if !self.track_root && *key == NodeKey::ROOT {
+                continue;
+            }
             let old = tx.extension::<NodeIdIndex>()?.keys.get(key).cloned();
             let mut id = if *mutation == Mutation::Destroyed || !tx.is_attached(*key) {
                 None
@@ -294,3 +322,6 @@ impl Plugin for RestoreHistoryAwareness {
         Ok(Handled::Yes)
     }
 }
+
+#[cfg(all(test, feature = "application"))]
+mod test;

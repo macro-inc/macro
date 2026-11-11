@@ -14,6 +14,8 @@ mod builder;
 pub(crate) mod reported_errors;
 pub use reported_errors::ReportedModelErrorObserver;
 mod history;
+#[cfg(feature = "application")]
+pub(crate) use builder::with_session_plugins_excluding_root;
 pub use builder::{
     default_editor_builder, register_editor_commands, with_session_plugins,
     with_session_plugins_with_id_state,
