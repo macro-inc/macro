@@ -1,0 +1,28 @@
+apps/web/src/components/app/tab-layout/tests/tab-manager.test.ts
+  s_7751889d4bfab0::t_eb8f2a521ba327 153-167
+docs/agent-guide/navigation.md
+  s_7751889d4bfab0::t_3eb9286636c75f 29-31
+apps/web/src/components/app/tab-layout/tab-manager.ts
+  s_7751889d4bfab0::t_eb8f2a521ba327 518-523
+apps/web/src/components/app/tab-layout/tests/tab-hotkeys.test.tsx
+  s_7751889d4bfab0::t_eb8f2a521ba327 1-145
+apps/web/src/components/app/tab-layout/DesktopTabsController.tsx
+  s_7751889d4bfab0::t_3eb9286636c75f 100
+  s_7751889d4bfab0::t_eb8f2a521ba327 101-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "08582d3fb774f0ada00287f326f79f24971a14a2",
+  "prompts": {},
+  "sessions": {
+    "s_7751889d4bfab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9f35743-e64a-4e39-829f-fb0ddcf04a32",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
