@@ -143,6 +143,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                     class={props.class}
                     iconClass={props.iconClass}
                     fallback={pill()}
+                    label={props.showLabel ? property().displayName : undefined}
                     openLabel={(name) =>
                       t('entityActions.openEntityNamed', { name })
                     }

@@ -18,6 +18,8 @@ export function EntityLinkPill(props: {
   fallback: JSX.Element;
   openLabel: (name: string) => string;
   changeLabel: string;
+  /** The property's name, shown before the value as the plain pill does. */
+  label?: string;
   leadingIcon?: JSX.Element;
   class?: string;
   iconClass?: string;
@@ -42,11 +44,13 @@ export function EntityLinkPill(props: {
     openDocument(type, value.entity_id, display.linkParams(), event.shiftKey);
   });
 
+  // A document's type is known only once its preview loads; keep the split
+  // pill mounted meanwhile so the swap can't drop focus or shift the row.
+  const isLinkable = () =>
+    Boolean(reference() && (display.blockOrFileType() || display.isLoading()));
+
   return (
-    <Show
-      when={reference() && display.blockOrFileType()}
-      fallback={props.fallback}
-    >
+    <Show when={isLinkable()} fallback={props.fallback}>
       <ButtonGroup
         variant={props.variant ?? 'secondary'}
         finish={props.variant === 'ghost' ? undefined : 'raised'}
@@ -57,8 +61,12 @@ export function EntityLinkPill(props: {
           data-property-row-action
           aria-label={props.openLabel(display.name())}
           class="min-w-0 shrink justify-start"
+          disabled={!display.blockOrFileType()}
           onClick={open}
         >
+          <Show when={props.label}>
+            {(label) => <span class="shrink-0 text-ink-muted">{label()}:</span>}
+          </Show>
           {props.leadingIcon}
           <span
             aria-hidden="true"

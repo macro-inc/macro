@@ -8,6 +8,7 @@ import { EntityLinkPill } from './EntityLinkPill';
 const mocks = vi.hoisted(() => ({
   openDocument: vi.fn(),
   blockType: (): string | undefined => 'company',
+  loading: false,
 }));
 
 vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
@@ -18,6 +19,7 @@ vi.mock('../hooks/usePropertyEntityDisplay', () => ({
     name: () => 'Acme',
     icon: () => null,
     blockOrFileType: () => mocks.blockType(),
+    isLoading: () => mocks.loading,
     linkParams: () => undefined,
   }),
 }));
@@ -40,11 +42,12 @@ function EditorState() {
   return <output>{ctx.editorOpen() ? 'Editing' : 'Not editing'}</output>;
 }
 
-function renderPill(canEdit = true) {
+function renderPill(canEdit = true, label?: string) {
   render(() => (
     <Root property={company} canEdit={canEdit}>
       <EntityLinkPill
         property={company}
+        label={label}
         fallback={<span>Plain pill</span>}
         openLabel={(name) => `Open ${name}`}
         changeLabel="Change company"
@@ -57,6 +60,7 @@ function renderPill(canEdit = true) {
 beforeEach(() => {
   mocks.openDocument.mockClear();
   mocks.blockType = () => 'company';
+  mocks.loading = false;
 });
 afterEach(cleanup);
 
@@ -100,4 +104,24 @@ it('stays a plain pill when the item cannot be opened', () => {
   renderPill();
   expect(screen.getByText('Plain pill')).toBeTruthy();
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('keeps the split pill while the item is still loading', () => {
+  mocks.blockType = () => undefined;
+  mocks.loading = true;
+  renderPill();
+  expect(screen.queryByText('Plain pill')).toBeNull();
+  const name = screen.getByRole('button', { name: 'Open Acme' });
+  expect(name.hasAttribute('disabled')).toBe(true);
+  fireEvent.click(name);
+  expect(mocks.openDocument).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Change company' }));
+  expect(screen.getByText('Editing')).toBeTruthy();
+});
+
+it('shows the property name before the value when labelled', () => {
+  renderPill(true, 'Customer');
+  expect(
+    screen.getByRole('button', { name: 'Open Acme' }).textContent
+  ).toContain('Customer:');
 });
