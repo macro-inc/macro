@@ -24,6 +24,10 @@ import {
   NativeUserMentionsOverlay,
 } from './NativeUserMentionsOverlay';
 import type { NativeMarkdownOverlayInstallation } from './nativeOverlayPorts';
+import {
+  createNativeComments,
+  type NativeComments,
+} from './overlay-hosts/native-comments';
 import { registerNativeInlineSearch } from './overlay-hosts/native-inline-search';
 import { createNativeListenerScope } from './overlay-hosts/native-listeners';
 import { registerNativeMentionSearch } from './overlay-hosts/native-mention-search';
@@ -38,6 +42,7 @@ export function installNativeMarkdownOverlays(
     readonly actions?: NativeActionsOptions;
     readonly tags?: NativeTagsOptions;
     readonly formatting?: Component;
+    readonly comments?: boolean;
   }
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
@@ -65,8 +70,14 @@ export function installNativeMarkdownOverlays(
     disposed = true;
     listeners.dispose();
   };
+  let comments: NativeComments | undefined;
   try {
     listeners.add(registerNativeChecklist(view));
+    if (options.comments) {
+      const installed = createNativeComments(view);
+      comments = installed;
+      listeners.add(() => installed.dispose());
+    }
     listeners.add(registerNativeTrailingParagraph(view, options.canEdit));
     listeners.add(registerNativeTableTouchSelection(view, options.canEdit));
     const dragListeners = createNativeListenerScope();
@@ -265,6 +276,7 @@ export function installNativeMarkdownOverlays(
     view.root.contentEditable === 'true';
   return {
     ...(Overlays ? { Overlays } : {}),
+    ...(comments ? { comments } : {}),
     focusAtEnd() {
       if (!canFocus()) return;
       dispatchApplicationCommand(

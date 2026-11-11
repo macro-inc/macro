@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import type { NativeComments } from './overlay-hosts/native-comments';
 
 /** Capabilities actually installed on the native document body. */
 export interface NativeMarkdownOverlayInstallation {
@@ -6,5 +7,7 @@ export interface NativeMarkdownOverlayInstallation {
   readonly Overlays?: Component;
   /** Present only when the native exterior-focus policy is installed. */
   readonly focusAtEnd?: () => void;
+  /** Present only when the body installs native comment marks. */
+  readonly comments?: NativeComments;
   dispose(): void;
 }

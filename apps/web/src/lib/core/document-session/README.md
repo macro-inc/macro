@@ -90,7 +90,7 @@ body installs the native checkbox pointer bridge and exterior-focus action
 through this hook. Exterior focus retains the current focused-range guard,
 admits `group-b.focus-end` through the real SessionPort and focuses the browser
 only after command completion while the installation remains live and editable.
-Existing `runtime.editing` consumers remain separate.
+With `comments: true` it also installs `runtime.overlays.comments`: mark anchors and caret mark ids from the native mirror, Source `selected` class toggling, and mark publish/remove through `SessionPort.comment`. Existing `runtime.editing` consumers remain separate.
 
 The returned runtime disposes overlays, then editing, then the view/session and
 its own telemetry. A completed overlay installation is unwound if a later

@@ -280,6 +280,7 @@ export default function RustMarkdownEditor(props: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,
                     },
+                    comments: true,
                     actions: {
                       actionContext: {
                         sourceDocumentId: documentId(),

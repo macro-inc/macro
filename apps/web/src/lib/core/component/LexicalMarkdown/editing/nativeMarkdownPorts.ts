@@ -24,7 +24,7 @@ export interface NativeSelectionBookmark {
   readonly selection: ViewSelection;
   readonly text: string;
 }
-/** Read-only DOM anchors for shared comment-margin geometry, never editor writes. */
+/** Read-only DOM anchors for shared comment-margin geometry; installed on the overlay port. */
 export interface NativeCommentAnchor {
   readonly markId: string;
   readonly elements: readonly HTMLElement[];
@@ -54,16 +54,6 @@ export interface NativeMarkdownEditingPort {
     insertTable(rows: number, columns: number): void;
     undo(): void;
     redo(): void;
-  };
-  readonly comments: {
-    captureSelection(): NativeSelectionBookmark | null;
-    publish(
-      markId: string,
-      bookmark: NativeSelectionBookmark
-    ): Promise<boolean>;
-    remove(markId: string): Promise<boolean>;
-    select(markId: string | undefined): void;
-    readonly anchors: Accessor<readonly NativeCommentAnchor[]>;
   };
   readonly focus: {
     atStart(): void;

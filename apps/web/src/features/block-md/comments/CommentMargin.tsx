@@ -39,8 +39,9 @@ const useCommentsContext = (
       // Activating a thread selects its mark, and a selected mark keeps its
       // thread active, so releasing the thread releases the mark too.
       if (threadId === null) {
-        const nativeComments = state.editor.md.nativeRuntime?.editing?.comments;
-        if (nativeComments) nativeComments.select(undefined);
+        const nativeComments =
+          state.editor.md.nativeRuntime?.overlays?.comments;
+        if (nativeComments) nativeComments.select([]);
         else
           state.editor.md.editor?.dispatchCommand(
             MARK_SELECTED_COMMENT_COMMAND,

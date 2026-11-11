@@ -174,8 +174,8 @@ export function CommentThreadDrawer() {
     // selection-sync effect null the newly activated thread on the next
     // editor update (see CommentsProvider) — and the old selection has
     // served its purpose anyway.
-    const nativeComments = md.nativeRuntime?.editing?.comments;
-    if (nativeComments) nativeComments.select(undefined);
+    const nativeComments = md.nativeRuntime?.overlays?.comments;
+    if (nativeComments) nativeComments.select([]);
     else md.editor?.update(() => $setSelection(null));
     setCommentState('activeCommentThread', target);
     setCommentState('highlightedCommentThreads', [target]);
@@ -193,8 +193,8 @@ export function CommentThreadDrawer() {
     // The dismissing tap lands on the drawer overlay, so the editor's
     // selection still sits inside the comment mark. Clear it so tapping the
     // highlight again registers as a selection change and reopens the drawer.
-    const nativeComments = md.nativeRuntime?.editing?.comments;
-    if (nativeComments) nativeComments.select(undefined);
+    const nativeComments = md.nativeRuntime?.overlays?.comments;
+    if (nativeComments) nativeComments.select([]);
     else md.editor?.update(() => $setSelection(null));
     setCommentState('activeCommentThread', null);
     setCommentState('highlightedCommentThreads', []);
