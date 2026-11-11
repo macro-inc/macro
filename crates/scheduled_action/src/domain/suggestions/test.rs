@@ -899,7 +899,7 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
     )
     .await;
     assert!(!with_idea.ok);
-    assert!(with_idea.problems[0].contains("leave `idea` out"));
+    assert!(with_idea.problems[0].contains("leave `card` out"));
     // The idea's title is checked like any idea's.
     let SuggestRequest::Routine {
         routine,

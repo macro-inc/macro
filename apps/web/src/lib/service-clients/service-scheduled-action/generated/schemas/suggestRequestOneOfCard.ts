@@ -5,6 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { RoutineIdea } from './routineIdea';
+import type { RoutineSuggestionCard } from './routineSuggestionCard';
 
-export type SuggestRequestOneOfIdea = null | RoutineIdea;
+export type SuggestRequestOneOfCard = null | RoutineSuggestionCard;

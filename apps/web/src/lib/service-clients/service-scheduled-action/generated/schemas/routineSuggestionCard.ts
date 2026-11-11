@@ -8,10 +8,11 @@
 import type { Category } from './category';
 
 /**
- * How a drafted routine suggestion shows among the person's ideas: every
-routine a session drafts is also one idea, kept and closed with it.
+ * How a drafted routine suggestion shows in the person's Suggestions feed:
+every routine a session drafts is also one suggestion there, kept and
+closed with it.
  */
-export interface RoutineIdea {
+export interface RoutineSuggestionCard {
   /** The feed's filters it shows under. */
   categories?: Category[];
   /**

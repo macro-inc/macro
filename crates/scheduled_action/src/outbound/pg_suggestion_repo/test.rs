@@ -55,7 +55,7 @@ fn stored(kept: Kept) -> Uuid {
 /// produced.
 async fn routine_idea(pool: &PgPool, suggestion: Uuid) -> Option<(String, Vec<String>)> {
     let idea = sqlx::query!(
-        r#"SELECT i.id, i.state FROM idea i JOIN idea_routine r ON r.idea_id = i.id
+        r#"SELECT i.id, i.state FROM suggestion i JOIN suggestion_routine r ON r.suggestion_id = i.id
            WHERE r.routine_suggestion_id = $1"#,
         suggestion,
     )
@@ -63,7 +63,7 @@ async fn routine_idea(pool: &PgPool, suggestion: Uuid) -> Option<(String, Vec<St
     .await
     .unwrap()?;
     let produced = sqlx::query_scalar!(
-        "SELECT entity_id FROM idea_target WHERE idea_id = $1 AND role = 'produced'",
+        "SELECT entity_id FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced'",
         idea.id,
     )
     .fetch_all(pool)
@@ -262,7 +262,7 @@ async fn a_drafted_suggestion_and_its_idea_are_kept_and_closed_together(pool: Pg
     // Every change to the ideas was logged under the generation.
     let logged = sqlx::query_scalar!(
         r#"SELECT action FROM suggestion_change
-           WHERE generation_id = $1 AND subject = 'idea' ORDER BY created_at, id"#,
+           WHERE generation_id = $1 AND subject = 'suggestion' ORDER BY created_at, id"#,
         generation,
     )
     .fetch_all(&pool)
@@ -316,7 +316,7 @@ async fn a_drafted_suggestion_without_its_idea_still_closes(pool: PgPool) {
             .await
             .unwrap(),
     );
-    sqlx::query("DELETE FROM idea WHERE user_id = $1")
+    sqlx::query("DELETE FROM suggestion WHERE user_id = $1")
         .bind(USER_A)
         .execute(&pool)
         .await

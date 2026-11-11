@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE idea SET state = $2, state_reason = NULL, updated_at = $3, state_changed_at = $3\n           WHERE id = (SELECT idea_id FROM idea_routine WHERE routine_suggestion_id = $1)\n             AND state IN ('proposed', 'accepted')\n           RETURNING id, user_id",
+  "query": "UPDATE suggestion SET state = $2, state_reason = NULL, updated_at = $3, state_changed_at = $3\n           WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)\n             AND state IN ('proposed', 'accepted')\n           RETURNING id, user_id",
   "describe": {
     "columns": [
       {
@@ -26,5 +26,5 @@
       false
     ]
   },
-  "hash": "90c709009918b357e53c7c67f44955ba93f6e65366db466fdaf7c3081b64bc5f"
+  "hash": "9b1f31aaea9c12101775cb44475be9a5b0f9dd068e4df5f1fd5c907222423e4c"
 }

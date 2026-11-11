@@ -3,7 +3,7 @@ use sqlx::PgPool;
 
 use super::*;
 
-const OWNER: &str = "macro|ideas-db-utils@macro.com";
+const OWNER: &str = "macro|suggestions-db-utils@macro.com";
 
 async fn setup(pool: &PgPool) -> (Uuid, Uuid) {
     let macro_user_id = Uuid::now_v7();
@@ -90,7 +90,7 @@ async fn a_routine_idea_closes_once(pool: PgPool) {
             .unwrap()
     );
     tx.commit().await.unwrap();
-    let state = sqlx::query_scalar!("SELECT state FROM idea WHERE user_id = $1", OWNER)
+    let state = sqlx::query_scalar!("SELECT state FROM suggestion WHERE user_id = $1", OWNER)
         .fetch_one(&pool)
         .await
         .unwrap();

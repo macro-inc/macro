@@ -264,7 +264,7 @@ where
             } => {
                 if idea.is_some() {
                     return Ok(rejected(vec![
-                        "only a drafted routine is shown among ideas; leave `idea` out of a catalog routine"
+                        "only a drafted routine is shown among suggestions; leave `card` out of a catalog routine"
                             .to_owned(),
                     ]));
                 }
