@@ -30,7 +30,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
 - Read managed terminators through managedLineBreak and the dynamic slot.before getter; preserve BR identity and resolve deferred insertion anchors after cleanup.
 - Mark successful own DOM range writes with the module-wide pinned selection-change guard; consume only after anchor-owner routing, before point normalization, preserving boundary and post-delete processing.
-- Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes. Settle focused root-boundary feedback after collaborative history when removing the caret does not emit a browser event, preserving the browser position for the equivalent admitted model point.
+- Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes. Settle focused root-boundary feedback after collaborative history when removing the caret does not emit a browser event, preserving the browser position for the equivalent admitted model point. Keep that point through modifier-only keydowns when the live root boundary still resolves to it.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
 - Admit an actual first DOM range before Click listeners, route Click through Rust with KeepModel, and let Image/HR components select their nodes instead of selecting every decorator.

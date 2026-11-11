@@ -14,6 +14,7 @@ import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
 import {
   isSelectionWithinEditor,
+  readFocusedRootSelection,
   readSelection,
   readSelectionFromChange,
   resolvePoint,
@@ -480,10 +481,17 @@ export function registerEvents(view: EditorView): {
     }
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
-    const selection =
+    let selection =
       routed === CommandCode.Undo || routed === CommandCode.Redo
         ? readSelectionFromChange(view)
         : readSelection(view);
+    if (/^(Alt|AltGraph|Control|Meta|Shift)$/.test(event.key)) {
+      // A modifier leaves the browser caret in place. Keep a root boundary
+      // already admitted as a descendant point, including between Undo and Redo.
+      const boundary = readFocusedRootSelection(view);
+      if (boundary && sameSelection(boundary, view.selection().selection))
+        selection = boundary;
+    }
     if (
       !routed &&
       !rustListeners.has('KeyDown') &&
