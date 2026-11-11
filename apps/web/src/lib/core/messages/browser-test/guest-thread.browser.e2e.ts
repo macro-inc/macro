@@ -51,7 +51,7 @@ test('guest can use the shared thread and text composer without app providers', 
         '[data-message-id="participant-message"] [data-message-reaction-chip]'
       )
       .hover();
-    await expect(page.getByText(/Visitor reacted with/)).toBeVisible();
+    await expect(page.getByText(/Participant reacted with/)).toBeVisible();
   }
   await expect(page.getByRole('button', { name: 'Attach files' })).toHaveCount(
     0

@@ -4,7 +4,7 @@ const CALL = '00000000-0000-7000-8000-0000000ca110';
 const GUEST_MESSAGE = '00000000-0000-7000-8000-0000000a0001';
 const MEMBER = 'macro|me@example.com';
 const GUEST = 'guest:guest-1';
-const OPAQUE = 'participant:00000000-0000-5000-8000-000000000001';
+const OPAQUE = 'guest|00000000-0000-5000-8000-000000000001';
 const PATH = '/src/features/channel/Call/chat/browser-test/call-chat.html';
 const LINK = 'https://example.com/shared-page';
 
@@ -24,11 +24,7 @@ function makeMessage(id: string, sender: string, content: string) {
     created_at: now,
     updated_at: now,
     attachments: [],
-    reactions: [] as {
-      emoji: string;
-      users: string[];
-      names?: Record<string, string>;
-    }[],
+    reactions: [] as { emoji: string; users: string[] }[],
     deleted_at: null as string | null,
     edited_at: null as string | null,
   };
@@ -49,11 +45,47 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
     reactions: item.reactions.map((reaction) => ({
       ...reaction,
       users: reaction.users.map((id) => (id === MEMBER ? OPAQUE : id)),
-      names: reaction.users.includes(MEMBER)
-        ? { [OPAQUE]: 'Morgan' }
-        : undefined,
     })),
   });
+  const guestContent = (content: string) => {
+    let valid = true;
+    const rewritten = content.replace(
+      /<m-reply-target>(.*?)<\/m-reply-target>/gs,
+      (match, payload: string) => {
+        try {
+          const quote = JSON.parse(payload) as {
+            parent: { type: string; id: string };
+            targetMessageId: string;
+            senderId: string;
+          };
+          const target = messages.find(
+            (item) => item.id === quote.targetMessageId
+          );
+          const expected =
+            target?.sender_id === MEMBER ? OPAQUE : target?.sender_id;
+          if (
+            quote.parent.type !== 'call' ||
+            quote.parent.id !== CALL ||
+            !target ||
+            quote.senderId !== expected
+          ) {
+            valid = false;
+            return match;
+          }
+          return `<m-reply-target>${JSON.stringify({ ...quote, senderId: target.sender_id })}</m-reply-target>`;
+        } catch {
+          valid = false;
+          return match;
+        }
+      }
+    );
+    if (
+      content.includes('<m-reply-target>') &&
+      !content.includes('</m-reply-target>')
+    )
+      valid = false;
+    return valid ? rewritten : undefined;
+  };
   const thread = (guest: boolean) => {
     const [root, ...replies] = messages;
     if (!root) return null;
@@ -99,10 +131,15 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
         (path.endsWith('/messages') || path.endsWith(`/messages/call/${CALL}`))
       ) {
         const body = request.postDataJSON() as { id: string; content: string };
+        const content = guest ? guestContent(body.content) : body.content;
+        if (content === undefined) {
+          await route.fulfill({ status: 400, json: {} });
+          return;
+        }
         const item = makeMessage(
           messages.length ? body.id : CALL,
           guest ? GUEST : MEMBER,
-          guest ? body.content.replaceAll(OPAQUE, MEMBER) : body.content
+          content
         );
         messages.push(item);
         await route.fulfill({ json: guest ? guestView(item) : item });
@@ -142,7 +179,12 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
       }
       if (item && request.method() === 'PATCH') {
         const content = (request.postDataJSON() as { content: string }).content;
-        item.content = guest ? content.replaceAll(OPAQUE, MEMBER) : content;
+        const rewritten = guest ? guestContent(content) : content;
+        if (rewritten === undefined) {
+          await route.fulfill({ status: 400, json: {} });
+          return;
+        }
+        item.content = rewritten;
         item.edited_at = new Date().toISOString();
         item.updated_at = item.edited_at;
         await route.fulfill({ json: guest ? guestView(item) : item });
@@ -269,15 +311,30 @@ test('guest and member render the same rows with redacted identity', async ({
   context,
   page,
 }, testInfo) => {
+  const root = makeMessage(CALL, MEMBER, 'Welcome to the call');
+  root.reactions.push({ emoji: '👍', users: [MEMBER] });
   const fake = fakeServer(context, [
-    makeMessage(CALL, MEMBER, 'Welcome to the call'),
+    root,
     makeMessage(GUEST_MESSAGE, GUEST, 'Hello from Casey'),
   ]);
   await fake.ready;
   const guest = await open(page, 'guest', fake.errors);
   await expect(guest.locator('[data-message]')).toHaveCount(2);
   await expect(guest.getByText('Morgan')).toBeVisible();
+  await expect(guest.getByText('Morgan (Guest)')).toHaveCount(0);
   await expect(guest.getByText('Casey (Guest)')).toBeVisible();
+  await expect(guest).not.toContainText('participant:');
+  expect(
+    fake.requests.filter((request) =>
+      request.includes('/auth/user/profile_pictures')
+    )
+  ).toEqual([]);
+  if (testInfo.project.name === 'desktop') {
+    await guest
+      .locator(`[data-message-id="${CALL}"] [data-message-reaction-chip]`)
+      .hover();
+    await expect(page.getByText(/Morgan reacted with/)).toBeVisible();
+  }
   await expect(
     guest.locator(`[data-message-id="${CALL}"] [data-slot="avatar"] > span`)
   ).toHaveText('M');
@@ -448,7 +505,7 @@ test('guest changes appear to member and ownership limits actions', async ({
     member.getByRole('button', { name: /Replying to/ })
   ).toBeVisible();
   await expect(
-    member.getByRole('button', { name: /Replying to participant:/ })
+    member.getByRole('button', { name: /Replying to guest\|/ })
   ).toHaveCount(0);
   await expect(
     member.locator(`[data-message-id="${GUEST_MESSAGE}"]`)

@@ -129,12 +129,12 @@ describe('SenderIcon', () => {
     expect(getByTestId('user-icon').textContent).toBe('macro|peter@macro.com');
   });
 
-  it('draws an opaque participant with initials and no profile card', () => {
+  it('draws a call member stand-in with initials and no profile card', () => {
     const { getByTestId, queryByTestId } = renderSender({
-      ...message('participant:opaque'),
-      imported_author: { name: 'Participant' },
+      ...message('guest|00000000-0000-5000-8000-000000000001'),
+      imported_author: { name: 'Member' },
     });
-    expect(getByTestId('bot-icon').textContent).toBe('Participant');
+    expect(getByTestId('bot-icon').textContent).toBe('Member');
     expect(queryByTestId('user-icon')).toBeNull();
     expect(queryByTestId('user-card')).toBeNull();
   });

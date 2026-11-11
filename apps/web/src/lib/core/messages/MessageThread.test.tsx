@@ -278,7 +278,10 @@ it('uses a guest viewer and transport for own actions', () => {
   expect(transport.react).toHaveBeenCalled();
   cleanup();
 
-  const otherMessage = { ...guestMessage, sender_id: 'participant:other' };
+  const otherMessage = {
+    ...guestMessage,
+    sender_id: 'guest|00000000-0000-5000-8000-000000000001',
+  };
   const otherView = render(() => (
     <MessageViewerProvider viewerId={() => 'guest:viewer'}>
       <MessageTransportProvider value={transport}>

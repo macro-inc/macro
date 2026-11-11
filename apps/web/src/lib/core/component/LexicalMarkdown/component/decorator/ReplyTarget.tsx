@@ -10,7 +10,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import {
-  useMessageQuoteName,
+  useMessageSenderName,
   useMessageViewerOverride,
 } from '@core/messages/message-transport';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -30,7 +30,7 @@ import { QuoteReplyPreview } from './QuoteReplyPreview';
 export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   const navigateReference = useContext(MessageReferenceNavigation);
   const guest = !!useMessageViewerOverride();
-  const quoteName = useMessageQuoteName();
+  const senderNameForId = useMessageSenderName();
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
   const channelBots = useChannelBotsQuery(() =>
@@ -41,7 +41,7 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
     props.parent.type === 'document' ? props.parent.id : ''
   );
   const senderName = () =>
-    quoteName?.(props.targetMessageId) ||
+    senderNameForId?.(props.senderId) ||
     getBotDisplayName(
       props.senderId,
       undefined,

@@ -11,7 +11,7 @@ import { useUserId } from '@core/context/user';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import {
-  MessageQuoteNameProvider,
+  MessageSenderNameProvider,
   type MessageTransport,
   MessageTransportProvider,
   MessageViewerProvider,
@@ -207,12 +207,14 @@ function CallChatView(props: ChatViewProps) {
         return true;
       }}
     >
-      <MessageQuoteNameProvider
-        resolve={(id) => {
+      <MessageSenderNameProvider
+        resolve={(senderId) => {
           const thread = chat.thread();
           const message =
             thread &&
-            [thread.root, ...thread.replies].find((item) => item.id === id);
+            [thread.root, ...thread.replies].find(
+              (item) => item.sender_id === senderId
+            );
           return props.guest
             ? (message?.imported_author?.name ??
                 message?.guest_name ??
@@ -308,7 +310,7 @@ function CallChatView(props: ChatViewProps) {
             </Show>
           </CallChatBody>
         </StaticMarkdownContext>
-      </MessageQuoteNameProvider>
+      </MessageSenderNameProvider>
     </MessageReferenceNavigation.Provider>
   );
 }

@@ -241,9 +241,10 @@ The guest composer is the shared `ChannelInput`: its text posts and quoted
 replies appear in the same `MessageThread` as signed-in messages. Guests cannot
 add mentions, attachments, or anchors. A guest's reactions and edits appear to
 signed-in participants; a guest can edit or delete only their own messages.
-Quoted account messages show the sender's profile name on both sides. Guest
-responses carry opaque participant IDs, while signed-in quotes retain normal
-account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
+Quoted account messages show the sender's profile name on both sides. Guests
+see account senders and reactors as call-scoped `guest|` stand-ins with the
+account display name and initials; real guests retain the `(Guest)` label.
+Signed-in quotes retain normal account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
 deletes; the changes should appear live. Closing and reopening the chat refreshes
 the thread.
 

@@ -1,5 +1,8 @@
 import { useUserId } from '@core/context/user';
-import { useMessageViewerOverride } from '@core/messages/message-transport';
+import {
+  useMessageSenderName,
+  useMessageViewerOverride,
+} from '@core/messages/message-transport';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
@@ -19,6 +22,7 @@ export function Reactions(props: ReactionsProps) {
   const actions = useMessageActions();
   const accountUserId = useUserId();
   const userId = useMessageViewerOverride() ?? accountUserId;
+  const senderName = useMessageSenderName();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
 
   const canReact = () => actions?.onReact !== undefined;
@@ -42,7 +46,7 @@ export function Reactions(props: ReactionsProps) {
                 emoji={reaction.emoji}
                 count={reaction.users.length}
                 users={reaction.users}
-                names={reaction.names}
+                resolveName={senderName}
                 currentUserId={userId() ?? undefined}
                 selected={didCurrentUserReact()}
                 interactive={canReact()}

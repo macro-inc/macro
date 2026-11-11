@@ -22,6 +22,7 @@ import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { MessageThread, threadListItem } from '../MessageThread';
 import {
+  MessageSenderNameProvider,
   MessageTransportProvider,
   MessageViewerProvider,
 } from '../message-transport';
@@ -30,17 +31,16 @@ const parent: MessageParent = {
   type: 'call',
   id: '00000000-0000-7000-8000-0000000ca110',
 };
-const viewerId = 'guest:viewer';
+const viewerId = 'guest|00000000-0000-7000-8000-000000000001';
 const namedReaction = {
   emoji: '👏',
-  users: ['participant:reactor'],
-  names: { 'participant:reactor': 'Visitor' },
+  users: ['guest|00000000-0000-5000-8000-000000000002'],
 };
 const root: Message = {
   id: parent.id,
   parent,
   kind: 'call_root',
-  sender_id: 'participant:host',
+  sender_id: 'guest|00000000-0000-5000-8000-000000000001',
   imported_author: { name: 'Host' },
   content: '',
   mentions: [],
@@ -55,7 +55,7 @@ const replies: Message[] = [
     id: 'participant-message',
     kind: 'message',
     content: 'Participant message',
-    sender_id: 'participant:someone',
+    sender_id: 'guest|00000000-0000-5000-8000-000000000002',
     imported_author: { name: 'Participant' },
     thread_id: root.id,
     reactions: [namedReaction],
@@ -65,7 +65,7 @@ const replies: Message[] = [
     id: 'guest-message',
     kind: 'message',
     content: 'Guest message',
-    sender_id: 'guest:other',
+    sender_id: 'guest|00000000-0000-7000-8000-000000000002',
     guest_name: 'Guest',
     imported_author: undefined,
     thread_id: root.id,
@@ -145,9 +145,7 @@ function Fixture() {
           item.id === id
             ? {
                 ...item,
-                reactions: add
-                  ? [{ emoji, users: [viewerId], names: { [viewerId]: 'Me' } }]
-                  : [],
+                reactions: add ? [{ emoji, users: [viewerId] }] : [],
               }
             : item
         )
@@ -167,51 +165,65 @@ function Fixture() {
                     <QuickAccessProvider>
                       <MessageViewerProvider viewerId={() => viewerId}>
                         <MessageTransportProvider value={transport}>
-                          <main class="mx-auto flex h-screen max-w-[600px] flex-col bg-page p-4 text-ink">
-                            <output aria-label="Last action">
-                              {lastAction()}
-                            </output>
-                            <div class="min-h-0 flex-1 overflow-y-auto">
-                              <MessageThread
-                                data={threadListItem(thread())}
-                                canWrite
-                                expanded
-                                hideReplyInput
+                          <MessageSenderNameProvider
+                            resolve={(senderId) => {
+                              const message = [
+                                thread().root,
+                                ...thread().replies,
+                              ].find((item) => item.sender_id === senderId);
+                              return (
+                                message?.imported_author?.name ??
+                                message?.guest_name ??
+                                undefined
+                              );
+                            }}
+                          >
+                            <main class="mx-auto flex h-screen max-w-[600px] flex-col bg-page p-4 text-ink">
+                              <output aria-label="Last action">
+                                {lastAction()}
+                              </output>
+                              <div class="min-h-0 flex-1 overflow-y-auto">
+                                <MessageThread
+                                  data={threadListItem(thread())}
+                                  canWrite
+                                  expanded
+                                  hideReplyInput
+                                />
+                              </div>
+                              <ChannelInput
+                                parent={parent}
+                                input={{
+                                  id: 'guest-composer',
+                                  mode: 'channel',
+                                  placeholder: 'Message call',
+                                }}
+                                features={{
+                                  mentions: false,
+                                  createItems: false,
+                                  gifs: false,
+                                  richBlocks: false,
+                                  attachments: false,
+                                  dictation: false,
+                                }}
+                                onSend={async (snapshot) => {
+                                  updateReplies((items) => [
+                                    ...items,
+                                    {
+                                      ...root,
+                                      id: `sent-${items.length}`,
+                                      kind: 'message',
+                                      sender_id: viewerId,
+                                      guest_name: 'Me',
+                                      imported_author: undefined,
+                                      content: snapshot.value,
+                                      thread_id: root.id,
+                                    },
+                                  ]);
+                                  setLastAction('compose');
+                                }}
                               />
-                            </div>
-                            <ChannelInput
-                              parent={parent}
-                              input={{
-                                id: 'guest-composer',
-                                mode: 'channel',
-                                placeholder: 'Message call',
-                              }}
-                              features={{
-                                mentions: false,
-                                createItems: false,
-                                gifs: false,
-                                richBlocks: false,
-                                attachments: false,
-                                dictation: false,
-                              }}
-                              onSend={async (snapshot) => {
-                                updateReplies((items) => [
-                                  ...items,
-                                  {
-                                    ...root,
-                                    id: `sent-${items.length}`,
-                                    kind: 'message',
-                                    sender_id: viewerId,
-                                    guest_name: 'Me',
-                                    imported_author: undefined,
-                                    content: snapshot.value,
-                                    thread_id: root.id,
-                                  },
-                                ]);
-                                setLastAction('compose');
-                              }}
-                            />
-                          </main>
+                            </main>
+                          </MessageSenderNameProvider>
                         </MessageTransportProvider>
                       </MessageViewerProvider>
                     </QuickAccessProvider>

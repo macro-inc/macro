@@ -121,14 +121,24 @@ describe('Reactions', () => {
 });
 
 describe('formatReactorNames', () => {
-  it('names reactors outside Macro by their given name', () => {
+  it('names reactors outside Macro from their own messages', () => {
     expect(
       formatReactorNames(
         ['user-1', 'external-reactor:1', 'external-reactor:2'],
         'user-1',
-        { 'external-reactor:1': 'Ana' }
+        (id) => (id === 'external-reactor:1' ? 'Ana' : undefined)
       )
     ).toBe('You, Ana, and 1 other person');
+  });
+
+  it('counts call stand-ins who have not posted', () => {
+    const posted = 'guest|00000000-0000-5000-8000-000000000001';
+    const unposted = 'guest|00000000-0000-5000-8000-000000000002';
+    expect(
+      formatReactorNames([posted, unposted], undefined, (id) =>
+        id === posted ? 'Member' : undefined
+      )
+    ).toBe('Member and 1 other person');
   });
 
   it('returns empty string for empty input', () => {

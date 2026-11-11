@@ -9,8 +9,7 @@ type ReactionChipProps = {
   emoji: string;
   count: number;
   users: string[];
-  /** Names of reactors outside Macro, by their id in `users`. */
-  names?: Record<string, string>;
+  resolveName?: (senderId: string) => string | undefined;
   currentUserId: string | undefined;
   selected?: boolean;
   interactive?: boolean;
@@ -21,19 +20,19 @@ type ReactionChipProps = {
  * Format a list of user display names with Oxford comma style.
  * Current user ("You") is always listed first regardless of input order.
  * e.g. "You", "You and Alice", "You, Alice, and Bob"
- * Reactors outside Macro go by their entry in `externalNames`; without one they
+ * Reactors outside Macro use a name from their own loaded messages; without one they
  * are counted as other people.
  */
 export function formatReactorNames(
   userIds: string[],
   currentUserId: string | undefined,
-  externalNames: Record<string, string> = {}
+  resolveName: (senderId: string) => string | undefined = () => undefined
 ): string {
   if (userIds.length === 0) return '';
 
   const isNamed = (id: string) =>
     id === currentUserId ||
-    externalNames[id] !== undefined ||
+    resolveName(id) !== undefined ||
     tryMacroId(id) !== undefined;
   const ordered = [
     ...userIds.filter((id) => id === currentUserId),
@@ -43,7 +42,7 @@ export function formatReactorNames(
 
   const names = [
     ...ordered.map((id) =>
-      id === currentUserId ? 'You' : (externalNames[id] ?? idToDisplayName(id))
+      id === currentUserId ? 'You' : (resolveName(id) ?? idToDisplayName(id))
     ),
     ...(others === 0
       ? []
@@ -60,13 +59,13 @@ export function formatReactorNames(
 
 function ReactionTooltipContent(props: {
   users: string[];
-  names?: Record<string, string>;
+  resolveName?: (senderId: string) => string | undefined;
   currentUserId: string | undefined;
   emoji: string;
 }): JSX.Element {
   return (
     <span>
-      {formatReactorNames(props.users, props.currentUserId, props.names)}{' '}
+      {formatReactorNames(props.users, props.currentUserId, props.resolveName)}{' '}
       reacted with <span class="text-base">{props.emoji}</span>
     </span>
   );
@@ -87,7 +86,7 @@ export function ReactionChip(props: ReactionChipProps) {
           content={
             <ReactionTooltipContent
               users={props.users}
-              names={props.names}
+              resolveName={props.resolveName}
               currentUserId={props.currentUserId}
               emoji={props.emoji}
             />
@@ -132,7 +131,7 @@ export function ReactionChip(props: ReactionChipProps) {
         <Popover.Content class="menu-surface z-modal p-1.5 text-ink-muted text-xs">
           <ReactionTooltipContent
             users={props.users}
-            names={props.names}
+            resolveName={props.resolveName}
             currentUserId={props.currentUserId}
             emoji={props.emoji}
           />
