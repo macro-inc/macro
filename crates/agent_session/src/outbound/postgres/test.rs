@@ -3406,7 +3406,10 @@ async fn a_warm_session_whose_runtime_answered_expires(pool: PgPool) {
 
     assert_eq!(repo.expire().await.unwrap(), vec![session.id]);
     assert!(matches!(
-        AgentSessionRepo::get(&repo, session.id).await.unwrap().status,
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .status,
         SessionStatus::Disconnected
     ));
 }
