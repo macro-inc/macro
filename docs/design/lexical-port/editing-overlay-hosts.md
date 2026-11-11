@@ -539,3 +539,46 @@ projection and the existing abort check, before document readiness. Binding duri
 generation is null. A plain document can then open the shared equation menu
 without an existing equation row. The Chromium startup controls use the actual
 app session factory and separately exercise close before projection.
+
+
+## Direct document mention insertion after file/folder upload
+
+`group-b.insert-document-mention` accepts an object with required string
+`documentId`, `documentName`, and `blockName`, plus optional `blockParams`,
+`mentionUuid`, `collapsed`, `channelType`, and `createdAt` (integer milliseconds
+for document mentions; ignored for Agent mentions).
+It uses the ordinary application envelope and current Session admission. Missing
+or null timestamps use the injected clock; zero and negative timestamps are
+retained. Empty IDs, names, and UUIDs are retained rather than rejected.
+
+The Normal handler constructs the actual configured node before insertion. An
+`agent` block creates an Agent session mention, ignores document-only fields,
+sets only a truthy UUID after the factory returns, and never reads the document
+timestamp clock. Other
+blocks use the existing document factory and apply the truthy UUID setter to its
+returned payload before insertion. Expanded ranges collapse forward and
+insert a plain space before the mention; other selection kinds use the existing
+insertion helper. Root/shadow parents are wrapped only when still required, and
+`select_next(0, 0)` restores the Source decorator caret.
+
+File/folder upload hosts complete their existing tracking and notification I/O
+before admitting this action against the then-current selection and generation.
+This action neither removes search nor requires a strict menu span. Entity drop
+instead captures a structural target and inserts a paragraph before or after it;
+that separate path is not provided by this action. No JavaScript renderer,
+upload controller, app installation, or artifact capability follows from the
+model action alone.
+
+The active-null previous-caret fallback has a named OFF bug: Source attempts to
+write `_cachedIsBackward` on a frozen committed RangeSelection and throws. Native
+retains the shared helper's safe previous-caret insertion for that case. A
+committed-null selection still falls back to root end, and NodeSelection still
+replaces selected text. This exception does not waive any other selection case.
+
+Expanded ranges whose logical destination is an Element point expose a second
+named OFF bug: Source forces the moved endpoint to a text point and throws
+`PointType.set`. Native preserves the valid destination kind and inserts the
+space plus mention at that resolved boundary. Paragraph, Root, and mixed
+Element-destination cases are covered in both directions. Mixed Text-destination
+ranges retain strict Source text and trailing-text caret behavior. This is local
+to direct document insertion; generic selection policy is unchanged.

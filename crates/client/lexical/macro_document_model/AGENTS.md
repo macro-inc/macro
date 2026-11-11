@@ -24,6 +24,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 - Insert typed user mentions separately after search removal and host I/O, using current selection/admission, Source constructor fallback, insert_nodes_at_selection and select_next(0, 0); do not reuse strict menu-select range admission.
 - Insert tag mentions through group-a.insert-tag-mention after search removal; an expanded range collapses forwards and prepends one space, as Source tagsPlugin does. The `#` search kind uses Source's tag trigger boundaries (open brackets/quotes before, closers/quotes after).
+- Insert document mentions after file/folder host I/O through group-b.insert-document-mention using the current selection; preserve expanded-range append, injected timestamps and Agent construction, and keep captured-position entity drops separate.
 
 - Read inline-search controller caches through surface::query_editor; preserve every ordered callback (including equal payloads), Source peer import versus dirty-transform timing, and UI-only host resets.
 
