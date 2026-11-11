@@ -730,7 +730,7 @@ impl<'editor> Transaction<'editor> {
         json: &SerializedNode,
         import: JsonImport,
     ) -> Result<(), Error> {
-        self.import_fields(key.into(), json, import, false)
+        self.import_fields(key.into(), json, import, false, &[])
     }
     /// Apply remote values without virtual setters, retaining unchanged typed state.
     pub fn apply_remote_fields(
@@ -738,7 +738,15 @@ impl<'editor> Transaction<'editor> {
         key: impl Into<NodeKey>,
         json: &SerializedNode,
     ) -> Result<(), Error> {
-        self.import_fields(key.into(), json, JsonImport::FULL, true)
+        self.apply_remote_fields_retaining_state(key.into(), json, &[])
+    }
+    pub(crate) fn apply_remote_fields_retaining_state(
+        &mut self,
+        key: NodeKey,
+        json: &SerializedNode,
+        retain_ordinary: &[&str],
+    ) -> Result<(), Error> {
+        self.import_fields(key, json, JsonImport::FULL, true, retain_ordinary)
     }
     fn import_fields(
         &mut self,
@@ -746,6 +754,7 @@ impl<'editor> Transaction<'editor> {
         json: &SerializedNode,
         import: JsonImport,
         raw: bool,
+        retain_ordinary: &[&str],
     ) -> Result<(), Error> {
         self.guard_write()?;
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
@@ -780,7 +789,14 @@ impl<'editor> Transaction<'editor> {
             }
         }
         let shared = self.pending.shared_state_configs.for_type(index)?;
-        let state = NodeState::import(&filtered, &layout, existing.as_deref(), Some(&shared), raw);
+        let state = NodeState::import(
+            &filtered,
+            &layout,
+            existing.as_deref(),
+            Some(&shared),
+            raw,
+            retain_ordinary,
+        );
         self.writable(key)?.state = state.map(Arc::new);
         if import.base_fields {
             let number = |name: &str| {

@@ -81,6 +81,7 @@ impl ParsedNode<'_> {
             previous.as_deref(),
             Some(&shared),
             false,
+            &[],
         );
         tx.writable(key)?.state = state.map(Arc::new);
         if text {

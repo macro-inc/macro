@@ -261,6 +261,21 @@ impl LoroProjection {
                         minimal_splice(key, before, after, &mut splices)?;
                     }
                 }
+                let retained = if key == NodeKey::ROOT {
+                    self.policy.retained_live_root_state()
+                } else {
+                    &[]
+                };
+                let stored_state = incoming.get("$").and_then(Value::as_object);
+                let stored_slots: Vec<_> = retained
+                    .iter()
+                    .map(|&name| {
+                        (
+                            name,
+                            stored_state.and_then(|state| state.get(name)).cloned(),
+                        )
+                    })
+                    .collect();
                 for field in self.policy.keep_local_on_remote(&kind) {
                     match state.view().export_json(key)?.get(*field) {
                         Some(value) => {
@@ -282,10 +297,32 @@ impl LoroProjection {
                         }
                     }
                 }
-                updates.push(NodeChange::Update {
-                    node: NodeTarget::Key(key),
-                    json: incoming,
-                });
+                let change = if retained.is_empty() {
+                    NodeChange::Update {
+                        node: NodeTarget::Key(key),
+                        json: incoming,
+                    }
+                } else {
+                    // The retained keys describe the real stored slots before local overlays.
+                    for (name, value) in stored_slots {
+                        if let Some(value) = value {
+                            let entry = incoming
+                                .entry("$")
+                                .or_insert_with(|| Value::Object(SerializedNode::new()));
+                            let values = entry.as_object_mut().ok_or_else(|| schema_error("$"))?;
+                            values.insert(name.to_owned(), value);
+                        } else if let Some(values) =
+                            incoming.get_mut("$").and_then(Value::as_object_mut)
+                        {
+                            values.shift_remove(name);
+                        }
+                    }
+                    NodeChange::UpdateRootRetainingState {
+                        json: incoming,
+                        retain: retained,
+                    }
+                };
+                updates.push(change);
             }
             self.index.bind(key, &map, self.policy)?;
         }

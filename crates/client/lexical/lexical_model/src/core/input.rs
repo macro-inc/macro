@@ -174,6 +174,14 @@ pub enum NodeChange {
         /// Full new fields.
         json: SerializedNode,
     },
+    /// Replace stored root fields while retaining selected live NodeState values.
+    /// Normal writable-node copy-on-write still applies and may invoke state parsers.
+    UpdateRootRetainingState {
+        /// Full incoming root fields from the stored document.
+        json: SerializedNode,
+        /// Synced nested NodeState keys retained in the live root.
+        retain: &'static [&'static str],
+    },
     /// Splice text by UTF-16 positions.
     SpliceText {
         /// Target text.

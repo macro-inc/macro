@@ -254,3 +254,159 @@ fn standalone_key_raw_import_keeps_empty_missing_and_nonstring_ids_omitted() {
         );
     }
 }
+
+#[test]
+fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slot() {
+    let now = Now {
+        mono: doc_sync_core::Millis(0),
+        wall: doc_sync_core::UnixMillis(0),
+    };
+    let config = crate::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(std::sync::atomic::AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let policy = config.policy;
+    let doc = lexical_loro::new_doc(7).unwrap();
+    lexical_loro::mirror::set_state(
+        &doc,
+        &serde_json::json!({
+            "type":"root","version":1,"format":"","indent":0,"direction":null,
+            "$":{"id":"root"},
+            "children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+                "$":{"id":"initial-paragraph"},"textFormat":0,"textStyle":"","children":[]}]
+        }),
+    )
+    .unwrap();
+    let mut surface = EditorSurface::new(config, 7, now).unwrap();
+    let mut effects = Vec::new();
+    surface.init(&doc, now, Access::Edit, &mut effects).unwrap();
+    assert!(
+        surface.state().to_json().unwrap().root["$"]
+            .get("documentMetadata")
+            .is_none()
+    );
+    surface.focused = true;
+    surface.focus_known = true;
+    let paragraph = surface.state().first_child_or_err(NodeKey::ROOT).unwrap();
+    let point = Point::element(paragraph, ChildIndex(0));
+    surface
+        .apply(
+            &doc,
+            Input::SelectionFromView {
+                selection: ViewSelection::Range {
+                    anchor: point,
+                    focus: point,
+                    resolution_dirty: false,
+                },
+                change: None,
+            },
+            now,
+            Access::Edit,
+            &mut effects,
+        )
+        .unwrap();
+    surface
+        .apply(
+            &doc,
+            Input::Command {
+                command: Command::InsertText("a".into()),
+                selection: ViewSelection::KeepModel,
+            },
+            now,
+            Access::Edit,
+            &mut effects,
+        )
+        .unwrap();
+    let typed = surface.state().to_json().unwrap();
+    let bare = serde_json::json!({"version":10});
+    assert_eq!(typed.root["$"]["documentMetadata"], bare);
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
+        bare
+    );
+    let metadata_fixups = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed_fixups = metadata_fixups.clone();
+    let _subscription = doc.subscribe_root(Arc::new(move |event| {
+        if event.origin == FIXUP_ORIGIN
+            && event.events.iter().any(|diff| {
+                matches!(&diff.diff, loro::event::Diff::Map(map) if map.updated.contains_key("documentMetadata"))
+            })
+        {
+            observed_fixups.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }));
+    surface
+        .apply(&doc, Input::Undo, now, Access::Edit, &mut effects)
+        .unwrap();
+    assert!(surface.state().root_text_content().is_empty());
+    assert_eq!(
+        surface.state().to_json().unwrap().root["$"]["documentMetadata"],
+        bare
+    );
+    assert!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]
+            .get("documentMetadata")
+            .is_none()
+    );
+    surface
+        .projection
+        .as_ref()
+        .unwrap()
+        .check(&doc, surface.state())
+        .unwrap();
+
+    surface
+        .apply(&doc, Input::Redo, now, Access::Edit, &mut effects)
+        .unwrap();
+    let redone = surface.state().to_json().unwrap();
+    assert_eq!(redone.root["$"], typed.root["$"]);
+    assert_eq!(surface.state().root_text_content().as_ref(), "a");
+    assert_eq!(
+        redone.root["children"][0]["$"]["id"],
+        typed.root["children"][0]["$"]["id"]
+    );
+    assert_eq!(
+        redone.root["children"][0]["children"][0]["$"]["id"],
+        typed.root["children"][0]["children"][0]["$"]["id"]
+    );
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
+        bare
+    );
+    surface
+        .projection
+        .as_ref()
+        .unwrap()
+        .check(&doc, surface.state())
+        .unwrap();
+    // An ordinary remote import also retains the live key while recording the actual raw value.
+    let peer = lexical_loro::fork_doc(&doc, 8).unwrap();
+    let from = peer.oplog_vv();
+    let mut remote = lexical_loro::reconstruct_state(&peer, policy).unwrap();
+    remote.root["$"]["documentMetadata"] = serde_json::json!({"version":11});
+    lexical_loro::mirror::set_state(&peer, &serde_json::Value::Object(remote.root)).unwrap();
+    let update = peer.export(loro::ExportMode::updates(&from)).unwrap();
+    doc.import(&update).unwrap();
+    surface
+        .remote_pending(&doc, now, Access::Edit, &mut effects, false)
+        .unwrap();
+    assert_eq!(
+        surface.state().to_json().unwrap().root["$"]["documentMetadata"],
+        bare
+    );
+    assert_eq!(
+        lexical_loro::reconstruct_state(&doc, policy).unwrap().root["$"]["documentMetadata"],
+        serde_json::json!({"version":11})
+    );
+    surface
+        .projection
+        .as_ref()
+        .unwrap()
+        .check(&doc, surface.state())
+        .unwrap();
+    assert_eq!(
+        metadata_fixups.load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+}
