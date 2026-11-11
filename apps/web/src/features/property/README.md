@@ -114,7 +114,8 @@ composer/bulk editor lives in `editor/entity-property-editor.tsx`; both editor c
 `PropertyEntitySelector` handles keyboard navigation on its search input, before
 an enclosing dropdown consumes the event. Do not move that handler to `document`:
 Kobalte can prevent the arrow key's default before a document listener runs.
-Ignore IME composition events so confirming text does not select a person.
+Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
+must cancel composition without dismissing the popover.
 
 ## Side-panel collections
 
