@@ -13,6 +13,10 @@ import { createNativeContactContext } from '@core/component/LexicalMarkdown/deco
 import { createNativeDiffInsertContext } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-host';
 import { createNativeDiffInsertViews } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-views';
 import { createNativeDiffElementView } from '@core/component/LexicalMarkdown/decorator-host/native-diff-view';
+import { createNativeDocumentCardContext } from '@core/component/LexicalMarkdown/decorator-host/native-document-card-host';
+import { createNativeDocumentCardViews } from '@core/component/LexicalMarkdown/decorator-host/native-document-card-views';
+import { createNativeDocumentMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-document-mention-host';
+import { createNativeDocumentMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-document-mention-views';
 import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
 import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
 import { createNativeHorizontalRuleViews } from '@core/component/LexicalMarkdown/decorator-host/native-horizontal-rule';
@@ -115,6 +119,14 @@ export default function RustMarkdownEditor(props: {
     !state.generation.isGenerating() &&
     !state.generation.generatedAndWaiting() &&
     !state.editor.error();
+  const documentMentionContext = createNativeDocumentMentionContext(theme, {
+    isInteractable: canInteractWithMedia,
+  });
+  overlayLifecycle.add(() => documentMentionContext.dispose());
+  const documentCardContext = createNativeDocumentCardContext(theme, {
+    isInteractable: canInteractWithMedia,
+  });
+  overlayLifecycle.add(() => documentCardContext.dispose());
   const imageContext = createNativeImageContext(
     theme,
     canInteractWithMedia,
@@ -217,6 +229,8 @@ export default function RustMarkdownEditor(props: {
                   ),
                   ...createNativeSnapshotViews(snapshotContext),
                   ...createNativeEquationViews(equationContext),
+                  ...createNativeDocumentMentionViews(documentMentionContext),
+                  ...createNativeDocumentCardViews(documentCardContext),
                   ...createNativeImageDecoratorViews(imageContext),
                   ...createNativeVideoDecoratorViews(videoContext),
                   ...createNativeFastStaticDecoratorViews(selectionContext),

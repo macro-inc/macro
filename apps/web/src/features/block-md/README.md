@@ -27,3 +27,10 @@ read-only storage checkpoint before disconnecting.
 its lease. Cancelled async opens cannot mount into another document/account.
 Keep session WASM and its optional view imports outside the flag-off startup
 path; never initialize a worker eagerly.
+
+The native registry includes document mentions and document cards through their
+view-owned typed hosts. Both use the same live body interaction policy as media
+and release subscriptions with the editor. Card layout notifications remain
+absent until a real native layout owner is supplied. Render/selection leaf
+comparisons do not establish app navigation or conversion acceptance; run the
+matched frontend and native package with both registry rows enabled.
