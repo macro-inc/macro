@@ -141,6 +141,7 @@ export function CodeBoxAccessory(props: {
   host: CodeAccessoryHost;
 }) {
   const host = props.host;
+  const floatRef = () => host.mountElement?.() ?? props.floatRef;
   const language = host.language;
   const isPreviewMode = host.previewEnabled;
   const setIsPreviewMode = host.setPreviewEnabledLocally;
@@ -165,7 +166,7 @@ export function CodeBoxAccessory(props: {
 
   createEffect(() => {
     if (isNested) return;
-    props.floatRef.classList.add('__accessory-code-box');
+    floatRef().classList.add('__accessory-code-box');
   });
 
   return (
@@ -176,7 +177,7 @@ export function CodeBoxAccessory(props: {
           glueToElement(el, () => ({
             root: host.root,
             observeMutations: host.observeMutations,
-            element: () => props.floatRef,
+            element: floatRef,
           }));
         }}
       >

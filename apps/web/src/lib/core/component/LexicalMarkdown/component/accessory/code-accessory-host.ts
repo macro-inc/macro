@@ -18,6 +18,8 @@ export interface CodeAccessoryHost {
   deleteCode: () => void;
   codeText: () => string;
   root: () => HTMLElement | null;
+  /** The code element now; a native view may replace it while the accessory stays mounted. */
+  mountElement?: Accessor<HTMLElement | undefined>;
   observeMutations: (onMutation: () => void) => () => void;
 }
 

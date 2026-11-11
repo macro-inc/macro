@@ -1,5 +1,6 @@
 import { ENABLE_SVG_PREVIEW } from '@core/constant/featureFlags';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { createSignal, type Setter } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { CodeBoxAccessory } from '../../component/accessory/CodeBoxAccessory';
 import {
@@ -51,6 +52,10 @@ export function createNativeCodeAccessories(
   const [store, setStore] = createStore<Record<string, AccessoryItem>>({});
   const refreshers = new Map<number, () => void>();
   const editableAtMount = new Map<number, boolean>();
+  const elements = new Map<
+    number,
+    [() => HTMLElement | undefined, Setter<HTMLElement | undefined>]
+  >();
 
   const host = (key: number): CodeAccessoryHost => {
     const state = createCodeAccessoryState();
@@ -81,6 +86,7 @@ export function createNativeCodeAccessories(
       deleteCode: () => deleteNativeCode(view, key),
       codeText: () => codeText(view, key),
       root: () => view.root,
+      mountElement: elements.get(key)?.[0],
       observeMutations: (onMutation) =>
         observeRootMutations(view.root, onMutation),
     };
@@ -92,6 +98,9 @@ export function createNativeCodeAccessories(
     element.classList.add('__decorator-mount-ref');
     if (!editableAtMount.has(key))
       editableAtMount.set(key, options.ready() && view.isEditable);
+    const current = elements.get(key);
+    if (current) current[1](element);
+    else elements.set(key, createSignal<HTMLElement | undefined>(element));
     setStore(String(key), {
       key: String(key),
       mountRef: element,
@@ -108,6 +117,7 @@ export function createNativeCodeAccessories(
       if (mutation === 'destroyed') {
         refreshers.delete(key);
         editableAtMount.delete(key);
+        elements.delete(key);
         setStore(String(key), undefined!);
         continue;
       }
@@ -122,6 +132,7 @@ export function createNativeCodeAccessories(
       release();
       refreshers.clear();
       editableAtMount.clear();
+      elements.clear();
     },
   };
 }
