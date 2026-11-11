@@ -19,6 +19,7 @@ import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import {
   type EditorView,
+  type LatestPublishedObserver,
   mountSessionView,
   type NodeViewRegistry,
   type ViewOptions,
@@ -123,6 +124,8 @@ export function createRustEditorSession(
     view: ViewOptions;
     installEditing?: (view: EditorView) => NativeMarkdownEditingPort;
     installOverlays?: (view: EditorView) => NativeMarkdownOverlayInstallation;
+    /** Construction-time observers of the latest published presentation. */
+    latestPublished?: readonly LatestPublishedObserver[];
   }
 ) {
   const configured = configureSession(
@@ -152,7 +155,8 @@ export function createRustEditorSession(
           ((name) => startEditorOperation(name, options.documentId)),
       },
       configured.session,
-      options.module
+      options.module,
+      options.latestPublished
     );
     mounted = runtime;
     overlays = options.installOverlays?.(runtime.view);
