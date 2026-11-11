@@ -46,7 +46,6 @@ const row = (
   content: {
     entity: { type: 'task', id: 'task-a', name: 'Task' } as never,
     notifications: [notification],
-    entityAt: () => ({}) as never,
   },
 });
 
@@ -81,6 +80,65 @@ describe('describeInboxRow', () => {
 
   it('names no author for an actor kind this build doesn’t know', () => {
     expect(action({ kind: 'other' })).toBe('assigned you a task');
+  });
+
+  it('says a runtime request asks to use the machine', () => {
+    const request = {
+      id: 'n-3',
+      entity_type: 'harness',
+      entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+      sender_id: 'macro|ana@example.com',
+      notification_metadata: {
+        tag: 'entity_access_requested',
+        content: {
+          requestId: 'r-1',
+          revision: 1,
+          entityName: 'Render box',
+          accessLevel: 'edit',
+        },
+      },
+    } as unknown as UnifiedNotification;
+    expect(
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, request),
+        names
+      )
+    ).toEqual({ action: 'Ana requested to use', subject: 'Render box' });
+  });
+
+  it('says who removed runtime access and which agents stopped', () => {
+    const removal = (agents: string[]) =>
+      ({
+        id: 'n-4',
+        entity_type: 'harness',
+        entity_id: '0198a4cc-e138-7670-a308-a6b766602712',
+        sender_id: 'macro|ana@example.com',
+        notification_metadata: {
+          tag: 'runtime_access_removed',
+          content: {
+            runtimeName: 'Render box',
+            agents: agents.map((name, index) => ({
+              botId: `b-${index}`,
+              name,
+            })),
+          },
+        },
+      }) as unknown as UnifiedNotification;
+    const describe = (agents: string[]) =>
+      describeInboxRow(
+        row({ kind: 'user', id: 'macro|ana@example.com' }, removal(agents)),
+        names
+      );
+    expect(describe(['Scout'])).toEqual({
+      action: 'Ana removed your access to Render box',
+      subject: 'Scout has stopped.',
+    });
+    expect(describe(['Scout', 'Atlas']).subject).toBe(
+      'Scout and Atlas have stopped.'
+    );
+    expect(describe(['Scout', 'Atlas', 'Iris']).subject).toBe(
+      'Scout and 2 others have stopped.'
+    );
   });
 
   it('names an outside sender from the notification', () => {
@@ -122,7 +180,6 @@ const stack = (
   content: {
     entity: { type: 'channel', id: 'entity', name: 'The entity' } as never,
     notifications,
-    entityAt: () => ({}) as never,
   },
 });
 

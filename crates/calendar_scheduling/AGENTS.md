@@ -31,7 +31,14 @@ MacroDB migrations.
 
 - Depends on: `calendar_events`, `teams`, `email_validator`; optionally `call`
   via `calendar_events` (meeting links).
-- Used by: `forms`, `ai_tools`.
+- Used by: `forms`, `ai_tools`, `calendar_service` (router, mounted at `/scheduling`).
+
+## Interfaces
+
+- Host routes in `src/inbound/router.rs` carry `utoipa::path` annotations and are
+  listed in `services/calendar_service/src/api/swagger.rs`; the SDK's
+  `macro.calendar.booking` wraps them. Domain models derive `ToSchema` under the
+  `schema` feature (part of `inbound`); keep `ToSchema` beside every `JsonSchema`.
 
 ## Recipes
 

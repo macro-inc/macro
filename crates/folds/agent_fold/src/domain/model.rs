@@ -232,9 +232,11 @@ pub struct FoldedMessage {
     /// confirmed: a prompt on the wire, a stop just pressed. Cleared when the
     /// confirmed frame folds in its place. Always false on the server's fold.
     pub pending: bool,
-    /// When the log stored the prompt this user message came from. `None` on
-    /// agent and control messages, on a prompt not stored yet, and on history
-    /// a runtime replays on load, whose frames are as old as the load.
+    /// When the message was sent: for a prompt, when the log stored it; for an
+    /// agent reply, when the log stored the frame that finished its turn.
+    /// `None` on control messages, on a reply still running, on a frame not
+    /// stored yet, and on history a runtime replays on load, whose frames are
+    /// as old as the load.
     pub posted_at: Option<DateTime<Utc>>,
 }
 

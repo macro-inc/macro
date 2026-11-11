@@ -26,6 +26,7 @@ entity_mutation = { path = "../entity_mutation" }
 favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
 graphql_calendar = { path = "../graphql_calendar" }
+graphql_contacts = { path = "../graphql_contacts" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }
 graphql_crm = { path = "../graphql_crm" }
@@ -38,6 +39,7 @@ graphql_notification = { path = "../graphql_notification" }
 graphql_notification_inbox = { path = "../graphql_notification_inbox" }
 graphql_permission = { path = "../graphql_permission" }
 graphql_properties = { path = "../graphql_properties" }
+graphql_registered_work = { path = "../graphql_registered_work" }
 graphql_scheduled_action = { path = "../graphql_scheduled_action" }
 graphql_soup = { path = "../graphql_soup" }
 graphql_work_feed = { path = "../graphql_work_feed" }
@@ -63,6 +65,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 saved_views = { path = "../saved_views" }
 
 [dev-dependencies]
+contacts = { path = "../contacts", default-features = false, features = ["ports"] }
 bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }

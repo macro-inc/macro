@@ -48,7 +48,7 @@ jobs:
       run: bun install --frozen-lockfile
       working-directory: packages/sdk
     - name: Validate SDK
-      run: bun run check && bun test && bun run coverage && bun run build
+      run: bun run check && bun test && bun run coverage && bun run build && bun run check:pack
       working-directory: packages/sdk
     - name: Publish package
       run: npm publish --access public

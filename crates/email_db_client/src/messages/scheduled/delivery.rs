@@ -46,7 +46,7 @@ pub async fn claim_delivery(
         return Ok(None);
     }
     let schedule = sqlx::query!(
-        r#"SELECT send_time, sent, processing, actor_id, delivery_claim_id,
+        r#"SELECT send_time, sent, processing, actor_id, agent_correlation_id, delivery_claim_id,
                   delivery_started_at, delivery_message_id, delivery_status, approved_attachments,
                   (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'
                    AND (CASE WHEN processing THEN
@@ -94,6 +94,7 @@ pub async fn claim_delivery(
             sent: false,
             processing: true,
             actor_id: schedule.actor_id,
+            agent_correlation_id: schedule.agent_correlation_id,
         },
         token,
         message_id_header: header,

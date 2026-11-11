@@ -41,7 +41,6 @@ export type ChannelsViewState = {
   >;
   /** Personal display order, independent of shared section membership. */
   sectionOrder: ChannelSectionKey[];
-  asideWidth: number;
 };
 
 export type ChannelsViewStateOptions = Partial<

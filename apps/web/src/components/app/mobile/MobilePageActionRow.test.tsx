@@ -77,8 +77,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
 }));
-vi.mock('@app/features/chat/SoupChatInput', () => ({
-  SoupChatInput: () => {
+vi.mock('@app/features/agents-view/mobile-agent-composer', () => ({
+  MobileAgentComposer: () => {
     mocks.mountComposer();
     onCleanup(mocks.unmountComposer);
     return (

@@ -3,7 +3,7 @@ mod calendar_join_request;
 mod channel_push;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
-    RequestedAccessLevel,
+    RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -1742,14 +1742,14 @@ impl notification::domain::models::NotificationExtEmail for CalendarEventReminde
             .format_title(None)
             .unwrap_or_else(|_| "Calendar reminder".into());
         let when = self.format_body(None).unwrap_or_default();
-        notification::domain::models::queue_message::EmailContent {
-            subject: format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
-            body: format!(
+        notification::domain::models::queue_message::EmailContent::new(
+            format!("Reminder: {}", title.replace(['\r', '\n'], " ")),
+            format!(
                 "<p>{}</p><p>{}</p><p>Calendar reminder from Macro.</p>",
                 html_escape::encode_text(&title),
                 html_escape::encode_text(&when)
             ),
-        }
+        )
     }
     fn rate_limit_config() -> notification::domain::models::RateLimitConfig {
         notification::domain::models::RateLimitConfig {

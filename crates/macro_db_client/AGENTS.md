@@ -77,8 +77,13 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
+- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
+- `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
+
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
+- `call_participants.client` defaults to `person` for older call writers;
+  programmatic joins set `agent` or `api_key` after recording attendance.
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
 - Keep concurrent index migrations to one statement with `-- no-transaction`;
   build replacement indexes before dropping old constraints, and validate large
@@ -90,7 +95,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   Deploy additive revision and team-share columns before service changes. Keep permanent
   `saved_view_tombstone` IDs and the deletion trigger to prevent delayed creates
   from resurrecting deleted definitions. Use a fresh disposable database when
-  checking replacement branch migrations.
+  checking replacement branch migrations. `saved_view_position` holds each
+  viewer's personal order and cascades with both the view and the user.
 
 - External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
 
@@ -123,3 +129,5 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+
+- `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.

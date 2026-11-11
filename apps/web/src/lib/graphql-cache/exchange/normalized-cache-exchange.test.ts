@@ -607,6 +607,12 @@ function harness(
     query: vi.fn((_query, _variables, _context) => ({
       toPromise: () => Promise.resolve({ data: {} }),
     })),
+    createRequestOperation: vi.fn((kind, request, context) =>
+      makeOperation(kind, request, context)
+    ),
+    executeRequestOperation: vi.fn((_operation) => ({
+      toPromise: () => Promise.resolve({ data: {} }),
+    })),
     mutation: vi.fn((query, variables, context) => ({
       toPromise: () => {
         const request = createRequest(query, variables);
@@ -3722,7 +3728,7 @@ describe('normalizedCacheExchange', () => {
       { failure: 'rejects', legacy: true },
       { failure: 'hangs', legacy: true },
     ])(
-      'releases a draft when admission $failure (legacy=$legacy)',
+      'releases a draft once admission keeps failing: $failure (legacy=$legacy)',
       async ({ failure, legacy }) => {
         vi.useFakeTimers();
         try {
@@ -3751,9 +3757,14 @@ describe('normalizedCacheExchange', () => {
             },
             onMutationAttemptResult,
           });
-          await vi.advanceTimersByTimeAsync(2_010);
+          // Three admissions (each bounded at two seconds when it hangs) with
+          // a one-second deferral between them.
+          await vi.advanceTimersByTimeAsync(8_010);
           expect(host.rollbacks).toEqual(['1']);
-          expect(host.defers).toHaveLength(0);
+          expect(host.defers).toMatchObject([
+            { transactionId: '1' },
+            { transactionId: '1' },
+          ]);
           expect(host.commits).toMatchObject([{ transactionId: '2' }]);
           expect(forwarded).toHaveLength(1);
           expect(onMutationAttemptResult).toHaveBeenCalledWith(
@@ -3771,24 +3782,78 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
-    it('returns a terminal recovery failure to a live caller without sending it', async () => {
-      const { ops, results, forwarded } = harness(host, undefined, {
-        beforeMutationAttempt: async () => {
-          throw new Error('Local storage unavailable');
-        },
-      });
-      ops.next(makeMutationOp(1, optimistic));
-      await vi.waitFor(() => expect(results).toHaveLength(1));
-      expect(forwarded).toHaveLength(0);
-      expect(host.defers).toHaveLength(0);
-      expect(host.rollbacks).toEqual(['1']);
-      expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
-        kind: 'permanently-failed',
-        error: results[0]?.error,
-      });
-      expect(results[0]?.error?.graphQLErrors[0]?.extensions.code).toBe(
-        'LOCAL_RECOVERY_FAILED'
-      );
+    it('sends a mutation whose admission fails once instead of rolling it back', async () => {
+      vi.useFakeTimers();
+      try {
+        const beforeMutationAttempt = vi
+          .fn<() => Promise<boolean>>()
+          .mockRejectedValueOnce(new Error('Local storage reopening'))
+          .mockResolvedValue(true);
+        const onMutationAttemptResult = vi.fn(async () => {});
+        const { ops, results, forwarded } = harness(host, undefined, {
+          beforeMutationAttempt,
+          onMutationAttemptResult,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(10);
+        // The caller is told its write is queued, not that it failed.
+        expect(results).toHaveLength(1);
+        expect(results[0]?.error).toBeUndefined();
+        expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+          kind: 'queued',
+        });
+        expect(host.defers).toMatchObject([{ transactionId: '1' }]);
+        expect(forwarded).toHaveLength(0);
+
+        await vi.advanceTimersByTimeAsync(1_010);
+        expect(beforeMutationAttempt).toHaveBeenCalledTimes(2);
+        expect(host.rollbacks).toHaveLength(0);
+        expect(forwarded).toHaveLength(1);
+        expect(host.commits).toMatchObject([{ transactionId: '1' }]);
+        expect(onMutationAttemptResult).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ transactionId: '1' }),
+          expect.objectContaining({ error: undefined }),
+          false
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reports a recovery failure through settlement once admission keeps failing', async () => {
+      vi.useFakeTimers();
+      try {
+        const onMutationAttemptResult = vi.fn(async () => {});
+        const { ops, results, forwarded } = harness(host, undefined, {
+          beforeMutationAttempt: async () => {
+            throw new Error('Local storage unavailable');
+          },
+          onMutationAttemptResult,
+        });
+        ops.next(makeMutationOp(1, optimistic));
+        await vi.advanceTimersByTimeAsync(2_010);
+        expect(forwarded).toHaveLength(0);
+        expect(host.defers).toHaveLength(2);
+        expect(host.rollbacks).toEqual(['1']);
+        expect(optimisticMutationDispositionOf(results[0])).toMatchObject({
+          kind: 'queued',
+        });
+        expect(onMutationAttemptResult).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ transactionId: '1' }),
+          expect.objectContaining({
+            error: expect.objectContaining({
+              graphQLErrors: [
+                expect.objectContaining({
+                  extensions: { code: 'LOCAL_RECOVERY_FAILED' },
+                }),
+              ],
+            }),
+          }),
+          false
+        );
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it.each([true, false])(
@@ -5479,13 +5544,19 @@ describe('normalizedCacheExchange', () => {
           const { ops, client, results, forwarded } = harness(host, undefined, {
             onCacheError,
           });
-          vi.mocked(client.query).mockReturnValue({
+          vi.mocked(client.executeRequestOperation).mockReturnValue({
             toPromise: () => read.promise,
           } as never);
           ops.next(makeMutationOp(1, optimistic));
           await vi.advanceTimersByTimeAsync(0);
           expect(host.commits).toHaveLength(1);
-          expect(client.query).toHaveBeenCalledOnce();
+          expect(client.query).not.toHaveBeenCalled();
+          expect(client.executeRequestOperation).toHaveBeenCalledOnce();
+          // urql drops a query whose key has a dispatch outstanding.
+          const [repair] = vi.mocked(client.executeRequestOperation).mock
+            .calls[0];
+          expect(repair.key).toBeLessThan(0);
+          expect(repair.key).not.toBe(createRequest(QUERY, {}).key);
           if (stage === 'persistence') {
             read.resolve({
               ...queryResult(makeOp(2, 'network-only')),

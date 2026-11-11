@@ -46,6 +46,7 @@ use uuid::Uuid;
 use super::*;
 
 mod calendar;
+mod contacts;
 mod crm_record;
 mod database_activity;
 mod database_row;
@@ -54,6 +55,7 @@ mod email_archive;
 mod form_activity;
 mod initiative;
 mod notification_inbox;
+mod registered_work;
 mod scheduled_actions;
 mod soup_patches;
 mod stale_client;
@@ -2007,6 +2009,7 @@ async fn activity_updates_subscribes_as_the_authenticated_user() {
             chrono::Utc::now(),
         );
         activity::ActivityRecord {
+            agent_correlation_id: activity.agent_correlation_id,
             id: activity.id,
             actor: activity.actor.clone(),
             subject_id: activity.subject_id.clone(),
@@ -2608,6 +2611,7 @@ fn activity_record(
     occurred_at_secs: i64,
 ) -> activity::ActivityRecord {
     activity::ActivityRecord {
+        agent_correlation_id: None,
         id: Uuid::from_u128(id),
         actor: activity::Actor::new_from_user(
             MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),

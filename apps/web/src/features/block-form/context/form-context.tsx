@@ -181,7 +181,6 @@ export type FormMetadataPatch = {
   audience?: FormAudience;
   status?: FormStatus;
   closesAt?: string | null;
-  tallyVisible?: boolean;
   responsesVisible?: boolean;
   anonymous?: boolean;
   /** A static file id, or `null` to remove it. */
@@ -365,10 +364,7 @@ export type FormContext = {
       formId: Accessor<string>,
       enabled: Accessor<boolean>
     ) => ReadSource<ResponseCounts>;
-    createTally: (
-      formId: Accessor<string>,
-      enabled: Accessor<boolean>
-    ) => ReadSource<QuestionTally[]>;
+    createTally: (formId: Accessor<string>) => ReadSource<QuestionTally[]>;
     /** People in the channels a form was posted to, its owner excluded. */
     createInvited: (
       formId: Accessor<string>,

@@ -1,9 +1,15 @@
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
+import {
+  accessRequestsClient,
+  fetchAccessRequestState,
+  refreshSharedAccess,
+} from '@queries/access-requests/requests';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
   type Harness,
   type HarnessPairing,
+  type HarnessResident,
   storageServiceClient,
 } from '@service-storage/client';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
@@ -14,6 +20,12 @@ export type ApproveHarnessPairingParams = {
   code: string;
   name?: string;
   teamId?: string;
+};
+
+export type PatchHarnessParams = {
+  harnessId: string;
+  name?: string;
+  allowPermissionBypass?: boolean;
 };
 
 export type DeleteHarnessParams = {
@@ -42,10 +54,89 @@ export function useHarnessesQuery() {
   return useQuery(() => harnessesQueryOptions);
 }
 
-export function invalidateHarnesses() {
-  return queryClient.invalidateQueries({
-    queryKey: harnessKeys.list.queryKey,
+const harnessDirectoryQueryOptions = queryOptions({
+  queryKey: harnessKeys.directory.queryKey,
+  queryFn: async (): Promise<Harness[]> =>
+    await throwOnErr(() => storageServiceClient.getHarnessDirectory()),
+  staleTime: 15_000,
+  throwOnError: false,
+});
+
+/** Every runtime of the viewer's teammates, usable by the viewer or not. */
+export function useHarnessDirectoryQuery() {
+  return useQuery(() => harnessDirectoryQueryOptions);
+}
+
+function harnessResidentsQueryOptions(harnessId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: harnessKeys.residents(harnessId).queryKey,
+    queryFn: async (): Promise<HarnessResident[]> =>
+      await throwOnErr(() =>
+        storageServiceClient.getHarnessResidents({ harness_id: harnessId })
+      ),
+    enabled,
+    throwOnError: false,
   });
+}
+
+/** The agents living on a runtime the viewer may use. */
+export function useHarnessResidentsQuery(
+  harnessId: () => string,
+  enabled: () => boolean
+) {
+  return useQuery(() => harnessResidentsQueryOptions(harnessId(), enabled()));
+}
+
+/** Both views of who may use which runtime, after that changes. */
+export function invalidateHarnesses() {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey }),
+    queryClient.invalidateQueries({ queryKey: harnessKeys.directory.queryKey }),
+  ]);
+}
+
+/** A new request for User access, or the one that was already waiting. */
+export type HarnessAccessRequestOutcome = 'sent' | 'already_requested';
+
+/**
+ * Ask a runtime's owner for User access, superseding an earlier request for
+ * less. A person deciding to request is an explicit act; nothing calls this on
+ * its own.
+ */
+export async function requestHarnessAccess(
+  harnessId: string
+): Promise<HarnessAccessRequestOutcome> {
+  const entity = { entityType: 'harness', entityId: harnessId } as const;
+  const state = await fetchAccessRequestState(entity);
+  const mine = state.mine;
+  if (mine?.status === 'pending' && mine.requestedLevel === 'edit') {
+    return 'already_requested';
+  }
+  await throwOnErr(() =>
+    accessRequestsClient.submit(entity, 'edit', mine?.revision)
+  );
+  refreshSharedAccess(entity);
+  return 'sent';
+}
+
+export type SetHarnessTeamAccessParams = {
+  harnessId: string;
+  teamId: string;
+  enabled: boolean;
+};
+
+export function useSetHarnessTeamAccessMutation() {
+  return useMutation(() => ({
+    mutationFn: async (vars: SetHarnessTeamAccessParams) =>
+      await throwOnErr(() =>
+        storageServiceClient.setHarnessTeamAccess({
+          harness_id: vars.harnessId,
+          team_id: vars.teamId,
+          enabled: vars.enabled,
+        })
+      ),
+    onSuccess: () => invalidateHarnesses(),
+  }));
 }
 
 /**
@@ -98,21 +189,40 @@ export function useApproveHarnessPairingMutation() {
 export function useApproveOwnHarnessPairingMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: async (code: string) => {
-      const pairing = await throwOnErr(() =>
-        storageServiceClient.getHarnessPairing({ code })
-      );
-      return await throwOnErr(() =>
+    // Approved as a private runtime that prompts; setup turns bypass on
+    // through the runtime's web setting when the user chose Full access in setup.
+    mutationFn: async (code: string) =>
+      await throwOnErr(() =>
         storageServiceClient.approveHarnessPairing({
           code,
-          allow_permission_bypass:
-            pairing.requested_allow_permission_bypass ?? false,
+          allow_permission_bypass: false,
         })
-      );
-    },
+      ),
     onSuccess: async () => await invalidateHarnesses(),
     onError: (error) =>
       console.error('failed to approve local harness pairing', error),
+  }));
+}
+
+export async function patchHarness(vars: PatchHarnessParams) {
+  const updated = await throwOnErr(() =>
+    storageServiceClient.patchHarness({
+      harness_id: vars.harnessId,
+      name: vars.name,
+      allow_permission_bypass: vars.allowPermissionBypass,
+    })
+  );
+  queryClient.setQueryData<Harness[]>(harnessKeys.list.queryKey, (current) =>
+    current?.map((harness) => (harness.id === updated.id ? updated : harness))
+  );
+  return updated;
+}
+
+export function usePatchHarnessMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: patchHarness,
+    onError: (error) => console.error('failed to change harness', error),
   }));
 }
 

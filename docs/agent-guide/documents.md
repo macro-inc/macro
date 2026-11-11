@@ -334,7 +334,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -898,6 +900,14 @@ creation/rename/duplication/deletion.
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
 batch so the AI can reread. Tool rows expand to show the actual results and warnings.
+In code mode these tools are hidden: programs use the SDK's
+`macro.documents.spreadsheet(document)` handle (`read`, `calculate`, and
+`applyEdits(operations, { expectedRevision })`, over DSS
+`POST /documents/{id}/spreadsheet/read|calculate|edits`), which runs the same
+engine, and `macro.documents.createSpreadsheet()` creates a blank workbook.
+`sheet.edit(instructions)` (`POST /documents/{id}/spreadsheet/ai-edit`) hands a
+described change to the editing worker's writer model, which saves one batch;
+it is billed as an AI edit, and the result lists the changes and warnings.
 
 Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
@@ -2440,6 +2450,10 @@ an actual task mention additionally get a filter menu (status, priority,
 assignee, due date) that reveals on hover and stays while filters are active;
 filters dim unmatched items in place and persist with the document. Plain
 checkbox lists have no filter, and removing the last task mention removes it.
+Assignee labels resolve only identities referenced by the document's loaded tasks,
+in bounded lookup batches. They do not load the personal directory. Missing names
+stay Unknown; changing references releases old label data without erasing persisted
+filter identities.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu
@@ -2488,7 +2502,10 @@ composer. Companies and contacts appear together under **Contacts & Companies**;
 **People** holds Macro users and groups only. Selecting a CRM contact inserts
 its record link, including when its email matches a Macro user. User-only pickers
 exclude CRM records. On mobile, the single list includes both CRM record types, while only
-Macro people and groups are pinned. With
+Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
+kill switch removes contact results and disables their search while leaving
+companies and Macro users available; existing contact mentions still work.
+Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. With
 `ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
@@ -3113,6 +3130,7 @@ AI can create a native workbook without an open editor using `CreateDocument`
 with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
 Read the returned document with `ReadSpreadsheet`, then populate it with
 `EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
+In code mode, `macro.documents.createSpreadsheet({ name })` does the same.
 Spreadsheet reads and edits run against server state even when no tab is open.
 An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:

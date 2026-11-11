@@ -346,7 +346,7 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
 
     // Establish the flag from the fixture's .ics attachment.
     let mut conn = pool.acquire().await?;
-    crate::threads::update::sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    crate::threads::update::sync_thread_attachment_flags(&mut conn, thread_id).await?;
     drop(conn);
     assert!(fetch_calendar_flag(&pool, thread_id).await?);
 
@@ -371,6 +371,45 @@ async fn delete_message_clears_calendar_flag_when_last_ics_message_removed(
         }
     );
     assert!(!fetch_calendar_flag(&pool, thread_id).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("sync_thread_attachment_kind_flags"))
+)]
+async fn delete_message_clears_kind_flags_of_its_attachments(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-00000000c201")?;
+    let message_id = Uuid::parse_str("00000000-0000-0000-0000-00000000c501")?;
+
+    let mut conn = pool.acquire().await?;
+    crate::threads::update::sync_thread_attachment_flags(&mut conn, thread_id).await?;
+    drop(conn);
+
+    let message = crate::messages::get_simple_messages::get_simple_message(
+        &pool,
+        &message_id,
+        "00000000-0000-0000-0000-000000000c01",
+    )
+    .await?
+    .expect("fixture message present");
+    let mut tx = pool.begin().await?;
+    crate::messages::delete::delete_message_with_tx(&mut tx, &message).await?;
+    tx.commit().await?;
+
+    // The PDF and PNG left with the message; the other message's .docx stays.
+    let flags = sqlx::query!(
+        "SELECT has_pdf_attachment, has_image_attachment, has_document_attachment
+         FROM email_threads WHERE id = $1",
+        thread_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!flags.has_pdf_attachment);
+    assert!(!flags.has_image_attachment);
+    assert!(flags.has_document_attachment);
     Ok(())
 }
 
@@ -583,5 +622,46 @@ async fn parsed_reads_preserve_restored_draft_generation(
             .draft_generation,
         2
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_message_sender_and_pretty_sender_skips_messages_without_sender_contact(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let with_contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0601")?;
+    let without_contact_id = Uuid::parse_str("00000000-0000-0000-0000-0000000e0626")?;
+
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, from_contact_id)
+        VALUES ($1, $2, $3, false, false, NULL)
+        "#,
+        without_contact_id,
+        thread_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let senders = crate::messages::get::get_message_sender_and_pretty_sender(
+        &pool,
+        &[link_id],
+        &[with_contact_id, without_contact_id],
+    )
+    .await?;
+
+    assert_eq!(senders.len(), 1);
+    assert!(!senders.contains_key(&without_contact_id));
+    let sender = senders.get(&with_contact_id).unwrap();
+    assert_eq!(sender.sender, "alice@example.com");
+    assert_eq!(sender.pretty_sender, "Alice Smith");
+
     Ok(())
 }

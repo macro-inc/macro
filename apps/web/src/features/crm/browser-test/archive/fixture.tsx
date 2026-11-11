@@ -20,7 +20,12 @@ import { CompanySharingSection } from '../../views/company-sharing-section';
 import { ContactHeader } from '../../views/contact-header';
 import { RecordDetailsSection } from '../../views/record-details-section';
 import { RecordHeaderActions } from '../../views/record-header-actions';
-import { client, message, storageServiceClient } from './preview-adapters';
+import {
+  client,
+  message,
+  selectedContact,
+  storageServiceClient,
+} from './preview-adapters';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const params = new URLSearchParams(location.search);
@@ -35,7 +40,7 @@ function Fixture() {
     storage: storageServiceClient as unknown as typeof Storage,
   };
   const source = useCompanyQuery(deps, () => 'company-1');
-  const contact = useContactQuery(deps, () => 'contact-1');
+  const contact = useContactQuery(deps, selectedContact);
   return (
     <main class="flex h-dvh min-w-0 flex-col bg-panel text-ink">
       <SidePanel.Root floating defaultOpen={false}>

@@ -27,7 +27,6 @@ trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }
-dashmap = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 harness_id = { path = "../harness_id" }
@@ -74,7 +73,9 @@ tar = { workspace = true }
 
 # Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
 # Linux, and a musl build has no system OpenSSL to link: compile it in.
+# mimalloc is the musl release's allocator (see `src/main.rs`).
 [target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { workspace = true }
 openssl-sys = { workspace = true, features = ["vendored"] }
 
 [target.'cfg(windows)'.dependencies]
@@ -94,3 +95,7 @@ chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+
+[package.metadata.cargo-shear]
+# Linked for its `vendored` feature on musl, never named in code.
+ignored = ["openssl-sys"]

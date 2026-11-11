@@ -1,3 +1,4 @@
+import { TutorialPill } from '@app/features/video-tutorials';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/ImageActions';
@@ -11,8 +12,11 @@ import {
   canLabel,
   type DocumentGeometry,
   distributeCommand,
+  movedInPresentation,
+  presentationOrder,
   screenToWorld,
   setArtifactCommand,
+  setPresentationOrderCommand,
   styleCommand,
 } from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
@@ -39,6 +43,7 @@ import {
 } from 'solid-js';
 import type { CanvasClipboard } from '../clipboard';
 import { ArtifactInspector } from '../components/artifact-inspector';
+import { ArtifactLibraryInspector } from '../components/artifact-library-inspector';
 import { ConnectorInspector } from '../components/connector-inspector';
 import type { CanvasEmbedViewProps } from '../components/embed-view';
 import { EraserTrail } from '../components/eraser-trail';
@@ -46,6 +51,7 @@ import { MediaUploadPreviews } from '../components/media-upload-previews';
 import { SelectionLayoutInspector } from '../components/selection-layout-inspector';
 import { StyleInspector } from '../components/style-inspector';
 import { TextInspector } from '../components/text-inspector';
+import { useArtifactLibrary } from '../context/artifact-library';
 import { setDocumentDisplayCommand } from '../core/document-display';
 import {
   selectionLayoutCommand,
@@ -61,6 +67,7 @@ import type {
 import type { CanvasInsertState } from '../primitives/create-insert-state';
 import { attachTextInput } from '../primitives/text-input';
 import { useCanvasMediaSource } from '../queries/media';
+import { ArtifactPresentation } from './artifact-presentation';
 import { CanvasArtifactView } from './artifact-view';
 import { CanvasContextMenu } from './canvas-context-menu';
 import {
@@ -116,6 +123,8 @@ export function CanvasView(props: {
     return item?.type === 'artifact' ? item : undefined;
   };
   const artifactsFlag = useFeatureFlag(enableCanvasArtifacts);
+  const artifacts = useArtifactLibrary();
+  const [presenting, setPresenting] = createSignal<string>();
   const selectedImage = () => {
     const item = selectedItem();
     return item?.type === 'image' ? item : undefined;
@@ -127,6 +136,12 @@ export function CanvasView(props: {
     src: imageSource.url,
     imageId: () => selectedImage()?.id ?? '',
   });
+  // Only the root surface: nothing drawn or placed yet. Stops at the first item.
+  const emptyBoard = () => {
+    const { items, rootId } = state.snapshot();
+    for (const id in items) if (id !== rootId) return false;
+    return true;
+  };
   const imageActionsDisabled = () =>
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
   const styleKinds = () =>
@@ -260,6 +275,18 @@ export function CanvasView(props: {
       data-canvas-next
     >
       <main class="relative size-full overflow-hidden">
+        <Show when={artifactsFlag().enabled ? presenting() : undefined} keyed>
+          {(startId) => (
+            <ArtifactPresentation
+              editor={editor}
+              startId={startId}
+              onExit={() => {
+                setPresenting(undefined);
+                focus();
+              }}
+            />
+          )}
+        </Show>
         <Show when={props.insert.location()} keyed>
           {(location) => (
             <CanvasInsertMenu
@@ -448,15 +475,43 @@ export function CanvasView(props: {
                   </Show>
                   <Show when={artifactsFlag().enabled && selectedArtifact()}>
                     {(artifact) => (
-                      <ArtifactInspector
-                        item={artifact()}
-                        onChange={(content) =>
-                          editor.execute(setArtifactCommand, {
-                            id: artifact().id,
-                            content,
-                          })
-                        }
-                      />
+                      <>
+                        <ArtifactInspector
+                          item={artifact()}
+                          onChange={(content) =>
+                            editor.execute(setArtifactCommand, {
+                              id: artifact().id,
+                              content,
+                            })
+                          }
+                          position={
+                            presentationOrder(state.document).findIndex(
+                              (item) => item.id === artifact().id
+                            ) + 1
+                          }
+                          count={presentationOrder(state.document).length}
+                          onPresent={() => setPresenting(artifact().id)}
+                          onMove={(delta) => {
+                            const ids = movedInPresentation(
+                              state.document,
+                              artifact().id,
+                              delta
+                            );
+                            if (ids)
+                              editor.execute(setPresentationOrderCommand, {
+                                ids,
+                              });
+                          }}
+                        />
+                        <Show when={artifacts.edit}>
+                          {(edit) => (
+                            <ArtifactLibraryInspector
+                              library={artifacts.library()}
+                              onEdit={edit()}
+                            />
+                          )}
+                        </Show>
+                      </>
                     )}
                   </Show>
                   <Show when={selectedImage()}>
@@ -657,6 +712,7 @@ export function CanvasView(props: {
                       active={state.embeds.active() === itemProps.item.id}
                       onEnter={() => state.embeds.enter(itemProps.item.id)}
                       onExit={exitEmbed}
+                      onPresent={() => setPresenting(itemProps.item.id)}
                     />
                   ),
                   document: (itemProps) => (
@@ -812,6 +868,12 @@ export function CanvasView(props: {
             onClose={focus}
           />
         </ContextMenu>
+        {/* A new board's empty state, until something is on it or a drawing tool is picked. */}
+        <Show when={emptyBoard() && state.tool() === 'select'}>
+          <div class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <TutorialPill tutorial="canvas" class="pointer-events-auto" />
+          </div>
+        </Show>
         <CanvasDrawingToolbar
           onAttach={props.insert.openFromToolbar}
           attachOpen={!!props.insert.location()}

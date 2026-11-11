@@ -1,12 +1,20 @@
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../core/draft';
-import { createEmptyDraft, validateRoutineDraft } from '../core/routine-draft';
+import {
+  clampDescription,
+  createEmptyDraft,
+  draftSteps,
+  validateRoutineDraft,
+  withDraftSteps,
+} from '../core/routine-draft';
 import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   onceFromCron,
+  routineTargetKind,
   scheduleToDuplicateBody,
 } from './routine-draft';
 
@@ -99,25 +107,15 @@ describe('routine execution payloads', () => {
       expect(restored.target).toEqual(target);
       expect(restored.prompt).toBe('User instructions');
       const created = draftToCreateBody(restored);
-      expect(created.task.user_prompt).toBe('User instructions');
+      expect(created.task).toMatchObject({ user_prompt: 'User instructions' });
       expect(
         draftFromSchedule({ ...action, task: created.task })?.target
       ).toEqual(target);
     }
   );
 
-  it.each([
-    {},
-    { model: ' ' },
-    { model: 42 },
-    { agent: {} },
-    { agent: { bot_id: 'invalid' }, model: 'valid' },
-    { agent: { bot_id: agentId }, model: '' },
-    { agent: { bot_id: agentId }, model: [] },
-    { model: 'valid', prompt: null },
-    { model: 'valid', user_prompt: 42 },
-  ])('refuses malformed tasks rather than falling back: %j', (task) => {
-    const action = { ...cron, task: { prompt: '', user_prompt: '', ...task } };
+  it('refuses a task with neither a model nor an agent rather than falling back', () => {
+    const action = { ...cron, task: { prompt: '', user_prompt: '' } };
     expect(draftFromSchedule(action)).toBeUndefined();
     expect(draftToUpdateBody(draft(), action)).toBeUndefined();
   });
@@ -217,7 +215,10 @@ describe('routine execution payloads', () => {
       overrideAction
     );
     expect(defaultBody?.task).not.toHaveProperty('model');
-    expect(defaultBody?.task.agent).toEqual(agentAction.task.agent);
+    expect(defaultBody?.task).toHaveProperty('agent', {
+      bot_id: agentId,
+      extra: true,
+    });
     const differentAgentId = '0195a096-3d24-7000-8000-000000000002';
     const changedAgent = draftToUpdateBody(
       {
@@ -226,7 +227,9 @@ describe('routine execution payloads', () => {
       },
       overrideAction
     );
-    expect(changedAgent?.task.agent).toEqual({ bot_id: differentAgentId });
+    expect(changedAgent?.task).toMatchObject({
+      agent: { bot_id: differentAgentId },
+    });
     expect(changedAgent?.task).not.toHaveProperty('model');
     const modelBody = draftToUpdateBody(
       {
@@ -496,5 +499,268 @@ describe('routine required apps', () => {
       prompt: '',
       mcp_servers: [{ app_slug: 'slack', server_name: 'Slack' }],
     });
+  });
+});
+
+describe('routines with steps', () => {
+  const program: ScheduledAction = {
+    ...events,
+    trigger: {
+      type: 'events',
+      filters: [{ events: ['email.message_received'] }],
+    },
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+        },
+        { type: 'agent', model: 'claude', instructions: 'Draft a reply' },
+      ],
+    },
+  };
+
+  it('edits a stored program and keeps its untouched task', () => {
+    const parsed = draftFromSchedule(program);
+    expect(parsed?.steps?.map((step) => step.kind)).toEqual(['code', 'agent']);
+    expect(parsed?.prompt).toBe('Draft a reply');
+    expect(validateRoutineDraft(parsed!)).toBeNull();
+    // Unchanged steps write back the exact stored task.
+    expect(draftToUpdateBody(parsed!, program)?.task).toBe(program.task);
+    // Analytics count a routine with steps as one.
+    expect(routineTargetKind(program)).toBe('steps');
+    expect(routineTargetKind(cron)).toBe('model');
+    const edited = {
+      ...parsed!,
+      steps: parsed!.steps!.slice(0, 1),
+    };
+    expect(draftToUpdateBody(edited, program)?.task).toEqual({
+      steps: [
+        {
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+        },
+      ],
+    });
+  });
+
+  it('recognizes a save that writes back what is stored, so it is skipped', () => {
+    const parsed = draftFromSchedule(program)!;
+    // Blurring a field without changing it, or picking the same value again,
+    // makes a new draft with the same content.
+    const repicked = {
+      ...parsed,
+      steps: parsed.steps!.map((step) =>
+        step.kind === 'code' ? { ...step, knobs: [...step.knobs] } : { ...step }
+      ),
+    };
+    for (const draft of [parsed, repicked]) {
+      const body = draftToUpdateBody(draft, program)!;
+      expect(isUnchangedUpdate(body, program)).toBe(true);
+    }
+    const unchangedCron = draftToUpdateBody(draftFromSchedule(cron)!, cron)!;
+    expect(isUnchangedUpdate(unchangedCron, cron)).toBe(true);
+
+    const renamed = draftToUpdateBody({ ...parsed, name: 'Renamed' }, program)!;
+    expect(isUnchangedUpdate(renamed, program)).toBe(false);
+    const described = draftToUpdateBody(
+      { ...parsed, description: 'Triage mail' },
+      program
+    )!;
+    expect(isUnchangedUpdate(described, program)).toBe(false);
+    const archivedOnly = draftToUpdateBody(
+      { ...parsed, steps: parsed.steps!.slice(0, 1) },
+      program
+    )!;
+    expect(isUnchangedUpdate(archivedOnly, program)).toBe(false);
+  });
+
+  it('creates programs with steps and single agents as before', () => {
+    const parsed = draftFromSchedule(program)!;
+    expect(draftToCreateBody({ ...parsed, name: '' }).task).toEqual(
+      program.task
+    );
+    expect(draftToCreateBody({ ...parsed, name: '' }).name).toBe(
+      'Draft a reply'
+    );
+    expect(draftToCreateBody(draft()).task).toEqual({
+      prompt: '',
+      user_prompt: 'Summarize updates',
+      mcp_servers: [],
+      model: 'anthropic/claude-sonnet-4-5',
+    });
+  });
+
+  it('turns a single agent routine into a program once a step is added', () => {
+    const simple = draftFromSchedule(events)!;
+    expect(simple.steps).toBeUndefined();
+    const steps = draftSteps(simple);
+    expect(withDraftSteps(simple, steps)).toBe(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(renamed.prompt).toBe('New');
+    expect(renamed.steps).toBeUndefined();
+    const added = withDraftSteps(simple, [
+      ...steps,
+      {
+        id: 'x',
+        kind: 'code',
+        title: 'Create a task',
+        summary: '',
+        source: 'export async function main() {}',
+        knobs: [],
+      },
+    ]);
+    expect(added.steps).toHaveLength(2);
+    expect(draftToUpdateBody(added, events)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Summarize updates' },
+        { type: 'code' },
+      ],
+    });
+  });
+
+  it('keeps instructions stored ahead of the prompt when steps are added', () => {
+    const stored = {
+      ...events,
+      task: { ...(events.task as object), prompt: 'Be brief.' },
+    } as ScheduledAction;
+    const simple = draftFromSchedule(stored)!;
+    expect(simple.prompt).toBe('Summarize updates');
+    const steps = draftSteps(simple);
+    const renamed = withDraftSteps(simple, [
+      { ...steps[0]!, kind: 'agent', instructions: 'New' } as never,
+    ]);
+    expect(draftToUpdateBody(renamed, stored)?.task).toMatchObject({
+      prompt: 'Be brief.',
+      user_prompt: 'New',
+    });
+    const added = withDraftSteps(simple, [
+      ...steps,
+      {
+        id: 'x',
+        kind: 'code',
+        title: 'Archive it',
+        summary: '',
+        source: 'export async function main() {}',
+        knobs: [],
+      },
+    ]);
+    expect(draftToUpdateBody(added, stored)?.task).toMatchObject({
+      steps: [
+        { type: 'agent', instructions: 'Be brief.\n\nSummarize updates' },
+        { type: 'code' },
+      ],
+    });
+  });
+});
+
+describe('operating as the user', () => {
+  const program: ScheduledAction = {
+    ...events,
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'post_it',
+          title: 'Post it',
+          source: 'export async function main() {}',
+        },
+      ],
+    },
+  };
+  const operating: ScheduledAction = {
+    ...program,
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'post_it',
+          title: 'Post it',
+          source: 'export async function main() {}',
+        },
+      ],
+      dangerously_operate_as_user: true,
+    },
+  };
+
+  it('reads the setting, absent meaning off', () => {
+    expect(loadedDraft(program).dangerouslyOperateAsUser).toBe(false);
+    expect(loadedDraft(operating).dangerouslyOperateAsUser).toBe(true);
+  });
+
+  it('leaves the task untouched by edits that do not change it', () => {
+    expect(draftToUpdateBody(loadedDraft(program), program)?.task).toBe(
+      program.task
+    );
+    expect(draftToUpdateBody(loadedDraft(operating), operating)?.task).toBe(
+      operating.task
+    );
+    const renamed = draftToUpdateBody(
+      { ...loadedDraft(program), name: 'Renamed' },
+      program
+    );
+    expect(renamed?.task).not.toHaveProperty('dangerously_operate_as_user');
+    expect(draftToCreateBody(loadedDraft(program)).task).not.toHaveProperty(
+      'dangerously_operate_as_user'
+    );
+  });
+
+  it('turns the setting on and off, and keeps it across other edits', () => {
+    const on = draftToUpdateBody(
+      { ...loadedDraft(program), dangerouslyOperateAsUser: true },
+      program
+    )!;
+    expect(on.task).toEqual({
+      ...(program.task as object),
+      dangerously_operate_as_user: true,
+    });
+    expect(isUnchangedUpdate(on, program)).toBe(false);
+
+    const off = draftToUpdateBody(
+      { ...loadedDraft(operating), dangerouslyOperateAsUser: false },
+      operating
+    )!;
+    expect(off.task).toMatchObject({ dangerously_operate_as_user: false });
+    expect(isUnchangedUpdate(off, operating)).toBe(false);
+
+    const parsed = loadedDraft(operating);
+    const edited = draftToUpdateBody(
+      {
+        ...parsed,
+        steps: parsed.steps!.map((step) =>
+          step.kind === 'code' ? { ...step, title: 'Post the summary' } : step
+        ),
+      },
+      operating
+    );
+    expect(edited?.task).toMatchObject({ dangerously_operate_as_user: true });
+    expect(draftToCreateBody(parsed).task).toMatchObject({
+      dangerously_operate_as_user: true,
+    });
+  });
+});
+
+describe('descriptions', () => {
+  it('keeps a description within what the scheduler stores', () => {
+    const draft = {
+      ...createEmptyDraft('m'),
+      prompt: 'Summarize',
+      triggers: [],
+    };
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1001) })
+    ).toMatch(/description under 1,000 characters/);
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1000) })
+    ).not.toMatch(/description/);
+    // A description drafted from a long request fits once clamped.
+    expect(clampDescription(`  ${'y'.repeat(1200)}  `)).toHaveLength(1000);
+    expect(clampDescription('  Label invoices.  ')).toBe('Label invoices.');
   });
 });

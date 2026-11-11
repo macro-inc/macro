@@ -221,6 +221,7 @@ impl SessionOpener for RecordingOpener {
     ) -> crate::domain::error::Result<AgentSession> {
         session_owner_user(&request.owner)?;
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -261,6 +262,7 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -447,7 +449,7 @@ impl BotDirectory for OneBotDirectory {
 
 /// What a requester says when no runtime creates the session.
 const RUNTIME_UNAVAILABLE_REASON: &str =
-    "this agent's runtime did not open the session; make sure macrod is running and up to date";
+    "this agent's machine did not open the session; make sure macrod is running and up to date";
 
 /// Stands in for the bot's runtime: records what was asked and answers with
 /// a session under the requested id, as macrod would have created it.
@@ -480,6 +482,7 @@ impl ExternalSessionRequester for RecordingRequester {
             ));
         }
         let session = AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -1419,6 +1422,8 @@ async fn an_external_open_carries_its_instructions() {
 mod coding_preferences;
 mod owned_purge;
 mod read;
+mod task;
+mod updates;
 mod user_cleanup;
 
 /// The client speculates under an id it mints and sends it alongside the

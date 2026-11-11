@@ -8,6 +8,7 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { AgentDmRuntimeStatus } from '@app/features/runtime-sharing/views/AgentDmRuntimeStatus';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -55,6 +56,15 @@ import {
 import { ChannelInviteButton } from '@channel/channel-invite-button';
 import { useChannelPictureActions } from '@channel/channel-picture';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
+import {
+  isPendingDirectMessageId,
+  pendingDirectMessageRecipient,
+} from '@channel/primitives/pending-direct-messages';
+import {
+  PendingDirectMessage,
+  PendingDirectMessageTitle,
+} from '@channel/views/pending-direct-message';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -99,6 +109,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Suspense,
   Switch,
@@ -283,6 +294,7 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
           {/* Only header islands receive taps on touch screens. */}
@@ -330,7 +342,44 @@ function NewTop(props: { channelId: string }) {
   );
 }
 
+/** A DM its first message will create, opened as a block (touch layouts). */
+function PendingDirectMessageBlock(props: { pendingId: string }) {
+  const panel = useSplitPanelOrThrow();
+  const recipientId = pendingDirectMessageRecipient(props.pendingId);
+  // A temporary id this tab didn't open (a reload, a restored layout) has no
+  // conversation behind it.
+  if (!recipientId) {
+    onMount(() => panel.handle.close());
+    return null;
+  }
+
+  return (
+    <>
+      <SplitHeaderLeft>
+        <HeaderIsland class="shrink">
+          <PendingDirectMessageTitle
+            pendingId={props.pendingId}
+            recipientId={recipientId}
+          />
+        </HeaderIsland>
+      </SplitHeaderLeft>
+      <PendingDirectMessage
+        pendingId={props.pendingId}
+        recipientId={recipientId}
+      />
+    </>
+  );
+}
+
 export function NewChannelBlockAdapter(props: BlockChannelProps) {
+  const blockId = useBlockId();
+  if (isPendingDirectMessageId(blockId)) {
+    return <PendingDirectMessageBlock pendingId={blockId} />;
+  }
+  return <ChannelBlockAdapter {...props} />;
+}
+
+function ChannelBlockAdapter(props: BlockChannelProps) {
   // Every other block gets its hotkey scope from `BlockContainer`, which the
   // channel block does not render — so set `blockHotkeyScopeSignal` here or
   // `useBlockEntityCommands` would register nothing at all. Commands go on
@@ -344,6 +393,9 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
+  // An inline preview (the Notifications list's) focuses the composer when a
+  // click or Enter opened it, and hands Esc back to that list.
+  const preview = useMaybePreviewPanel();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
   useBlockEntityCommands({
@@ -603,7 +655,12 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
                 <Suspense fallback={<ChannelLoading />}>
                   <TraceFlow name="channel.messages.view">
                     <ChannelMessages
-                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                      autofocus={
+                        (canAutofocusSplitContent && !navigatedFromJK()) ||
+                        (preview?.focusRequest() ?? 0) > 0
+                      }
+                      composerFocusRequest={preview?.focusRequest()}
+                      onEscapeToList={preview?.onEscapeToList}
                     />
                   </TraceFlow>
                 </Suspense>

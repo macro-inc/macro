@@ -255,6 +255,30 @@ const occurrenceSelection = selectRecords(
 );
 
 /**
+ * Reads the occurrence records behind range keys, one selection page at a
+ * time, since a range can hold more keys than one read accepts.
+ */
+export async function readOccurrenceRecords(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  keys: readonly string[]
+) {
+  const records = [];
+  for (
+    let index = 0;
+    index < keys.length;
+    index += MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    const page = await readRecordsByKeys(
+      host,
+      occurrenceSelection,
+      keys.slice(index, index + MAX_RECORD_SELECTION_PAGE_SIZE)
+    );
+    records.push(...page.records);
+  }
+  return records;
+}
+
+/**
  * Reads the occurrences behind range keys. A key whose record lacks a field
  * the selection asks for, such as one cached by a build with fewer fields,
  * comes back unreadable rather than as an item.
@@ -263,27 +287,12 @@ async function readOccurrenceItems(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   keys: readonly string[]
 ) {
-  const items = [];
-  const unreadable: string[] = [];
-  for (
-    let index = 0;
-    index < keys.length;
-    index += MAX_RECORD_SELECTION_PAGE_SIZE
-  ) {
-    const batch = keys.slice(index, index + MAX_RECORD_SELECTION_PAGE_SIZE);
-    const { records } = await readRecordsByKeys(
-      host,
-      occurrenceSelection,
-      batch
-    );
-    const read = new Set<string>();
-    for (const { recordKey, record } of records) {
-      read.add(recordKey);
-      items.push(mapCalendarOccurrence(record));
-    }
-    for (const key of batch) if (!read.has(key)) unreadable.push(key);
-  }
-  return { items, unreadable };
+  const records = await readOccurrenceRecords(host, keys);
+  const read = new Set(records.map(({ recordKey }) => recordKey));
+  return {
+    items: records.map(({ record }) => mapCalendarOccurrence(record)),
+    unreadable: keys.filter((key) => !read.has(key)),
+  };
 }
 
 // Unreadable keys each host already refetched, so a row the server no longer

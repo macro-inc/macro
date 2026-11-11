@@ -34,7 +34,7 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
     /// CRM companies (and contacts, when the address is a known contact) that
     /// the people on a call belong to, in the CRMs of the teams of the Macro
     /// accounts on the call. A team's own members never match its CRM, and
-    /// hidden records and teams with the CRM disabled are skipped.
+    /// hidden records are skipped. Email contribution consent is independent.
     async fn matching_records(
         &self,
         people: &CallPeople,
@@ -58,7 +58,6 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
             WITH teams AS (
                 SELECT DISTINCT tu.team_id
                 FROM team_user tu
-                JOIN team_crm_settings s ON s.team_id = tu.team_id AND s.crm_enabled
                 WHERE LOWER(tu.user_id) = ANY($1)
             ),
             people AS (

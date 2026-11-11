@@ -25,11 +25,15 @@ impl RedisEditingActivityStore {
 
 fn session_key(activity: &Activity) -> Result<String, Report> {
     // Encoding a tuple keeps separators within identifiers unambiguous.
-    let identity = serde_json::to_string(&(
+    let legacy_identity = (
         activity.actor.as_ref(),
         &activity.subject_id,
         &activity.entity_id,
-    ))?;
+    );
+    let identity = match activity.agent_correlation_id {
+        Some(id) => serde_json::to_string(&(legacy_identity, id))?,
+        None => serde_json::to_string(&legacy_identity)?,
+    };
     Ok(format!("documents:editing:{identity}"))
 }
 
