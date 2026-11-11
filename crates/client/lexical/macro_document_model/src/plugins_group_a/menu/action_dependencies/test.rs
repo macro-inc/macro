@@ -68,3 +68,26 @@ fn action_dependency_query_rejects_stale_before_strict_payload_decode() -> Resul
     );
     Ok(())
 }
+
+#[test]
+fn action_dependency_query_requires_an_object_instead_of_positional_fields() -> Result<(), Error> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let generation = editor.state().max_key().generation();
+    for data in [json!([]), json!([[]]), json!([["text"]]), json!(null)] {
+        assert!(crate::surface::query_editor(
+            "group-a.action-dependencies", &data, generation, &editor,
+        ).is_err(), "object-only payload: {data}");
+        assert!(matches!(
+            crate::surface::query_editor(
+                "group-a.action-dependencies",
+                &data,
+                generation + 1,
+                &editor,
+            ),
+            Err(Error::Invariant("application query generation"))
+        ));
+    }
+    Ok(())
+}

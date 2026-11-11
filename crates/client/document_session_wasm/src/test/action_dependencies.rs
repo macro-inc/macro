@@ -75,6 +75,20 @@ fn action_dependencies_use_the_actual_readonly_registry_and_query_generation(
         Err(BoundaryError::Invalid("application query generation"))
     ));
     assert!(query::query(&session, invalid).is_err());
+    for data in [
+        serde_json::json!([]),
+        serde_json::json!([[]]),
+        serde_json::json!(null),
+    ] {
+        let request = wire::QueryMsg {
+            kind: 9,
+            key: 0,
+            flags: session.machine.generation(),
+            text: serde_json::json!({"name":"group-a.action-dependencies", "data":data})
+                .to_string(),
+        };
+        assert!(query::query(&session, request).is_err());
+    }
     assert_eq!(session.surface().state().to_json()?, before);
     Ok(())
 }

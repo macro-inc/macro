@@ -12,7 +12,11 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
     if name != INSERT.name() {
         return Ok(None);
     }
-    let _: Input = serde_json::from_str(json)?;
+    let value: serde_json::Value = serde_json::from_str(json)?;
+    if !value.is_object() {
+        return Err(Error::Invariant("horizontal-rule object payload"));
+    }
+    let _: Input = serde_json::from_value(value)?;
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &INSERT, generation,
     ))))

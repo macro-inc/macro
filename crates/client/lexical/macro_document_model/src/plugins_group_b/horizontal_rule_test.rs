@@ -116,5 +116,6 @@ fn divider_without_a_range_still_constructs_detached_but_stale_never_constructs(
             .is_err()
     );
     assert!(surface::decode_command("group-b.horizontal-rule", "null", generation, None).is_err());
+    assert!(surface::decode_command("group-b.horizontal-rule", "[]", generation, None).is_err());
     Ok(())
 }

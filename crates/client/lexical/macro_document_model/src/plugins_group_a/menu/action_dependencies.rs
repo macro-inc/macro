@@ -21,6 +21,9 @@ pub(crate) fn query(
     if generation != state.max_key().generation() {
         return Err(Error::Invariant("application query generation"));
     }
+    if !data.is_object() {
+        return Err(Error::Invariant("action dependencies object payload"));
+    }
     let input: Input = serde_json::from_value(data.clone())?;
     let view = state.view();
     Ok(Some(json!({
