@@ -4,10 +4,10 @@ use crate::domain::models::{
     Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
     BotSenderProfile, ChannelAttachment, ChannelAttachmentType, ChannelInfo,
     ChannelJoinCodeResponse, ChannelMetadata, ChannelParticipant, ChannelPreview,
-    ChannelPreviewRow, CreateChannelRequest, CreateChannelResponse, CreateEntityMentionOptions,
-    CreatedChannel, EntityMention, GetOrCreateChannelResponse, GetOrCreateDmRequest,
-    GetOrCreatePrivateRequest, PatchChannelRequest, ReferenceShareResult, ReferencedShareItem,
-    RemoveParticipantsRequest, Sender,
+    ChannelPreviewRow, ChannelShareEntityType, CreateChannelRequest, CreateChannelResponse,
+    CreateEntityMentionOptions, CreatedChannel, EntityMention, GetOrCreateChannelResponse,
+    GetOrCreateDmRequest, GetOrCreatePrivateRequest, PatchChannelRequest, ReferenceShareOutcome,
+    ReferenceShareResult, ReferencedShareItem, RemoveParticipantsRequest, Sender,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -618,6 +618,34 @@ pub trait ChannelService: Send + Sync + 'static {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),
             ))
+        }
+    }
+
+    /// Share one item with a channel's current members, the way posting it in
+    /// a message does, failing with [`ChannelMutationErr::Forbidden`] when the
+    /// actor may not share it. Sharing again is a no-op.
+    fn share_item_with_channel(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        entity_type: ChannelShareEntityType,
+        entity_id: String,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+        async move {
+            let item = ReferencedShareItem::new(entity_id, entity_type.to_domain());
+            let results = self
+                .share_referenced_items_with_channel(actor, channel_id, vec![item])
+                .await?;
+            if results
+                .iter()
+                .any(|result| result.outcome == ReferenceShareOutcome::Shared)
+            {
+                Ok(())
+            } else {
+                Err(ChannelMutationErr::Forbidden(
+                    entity_type.not_permitted().to_string(),
+                ))
+            }
         }
     }
 

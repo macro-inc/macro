@@ -12,7 +12,7 @@ use crate::domain::models::{
     Activity, ActivityType, AttachmentChannelReference, AttachmentCommentReference,
     AttachmentEntityReference, AttachmentGenericReference, ChannelAttachment,
     ChannelAttachmentType, ChannelParticipant, ChannelType, CreateEntityMentionOptions,
-    ParticipantRole, ReferenceShareOutcome, ReferencedShareItem, Sender,
+    ParticipantRole, Sender,
 };
 pub use crate::domain::models::{
     AddParticipantsRequest, ChannelJoinCodeResponse, ChannelPreview, ChannelPreviewData,
@@ -491,19 +491,16 @@ pub async fn share_with_channel_handler<
         .get_authenticated_user()
         .cloned()
         .map_err(|_| ChannelsHandlerErr::BadRequest("authenticated user required"))?;
-    let item = ReferencedShareItem::new(req.entity_id.to_string(), req.entity_type.to_domain());
-    let results = state
+    state
         .service
-        .share_referenced_items_with_channel(actor, channel_id, vec![item])
+        .share_item_with_channel(
+            actor,
+            channel_id,
+            req.entity_type,
+            req.entity_id.to_string(),
+        )
         .await?;
-    if results
-        .iter()
-        .any(|result| result.outcome == ReferenceShareOutcome::Shared)
-    {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(ChannelMutationErr::Forbidden(req.entity_type.not_permitted().to_string()).into())
-    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Handler for `DELETE /channels/{channel_id}/participants`.

@@ -49,7 +49,7 @@ DMs, and the shared message store other domains discuss things on.
 ## Tool contracts
 
 - `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
-  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `CalendarEvent.shareWithChannel`); both take `ChannelShareEntityType` from `domain/models.rs`.
+  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `Channel.share` and `CalendarEvent.shareWithChannel`); both call `ChannelService::share_item_with_channel` with a `ChannelShareEntityType` from `domain/models.rs`.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
 
 ## Checks

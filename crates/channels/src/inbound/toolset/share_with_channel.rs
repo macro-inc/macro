@@ -1,10 +1,7 @@
 //! Share one item with the current members of a channel.
 
 use super::{ChannelToolContext, channel_mutation_error};
-use crate::domain::{
-    models::{ReferenceShareOutcome, ReferencedShareItem},
-    ports::ChannelService,
-};
+use crate::domain::ports::ChannelService;
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
     ToolResult,
@@ -84,25 +81,16 @@ where
             .require_channel_member(&request_context, self.channel_id)
             .await?;
 
-        let item = ReferencedShareItem::new(entity_id, self.entity_type.to_domain());
-        let results = service_context
+        service_context
             .service
-            .share_referenced_items_with_channel(
+            .share_item_with_channel(
                 request_context.user_id.clone(),
                 self.channel_id,
-                vec![item],
+                self.entity_type,
+                entity_id.to_string(),
             )
             .await
             .map_err(|error| channel_mutation_error("share with the channel", error))?;
-        let shared = results
-            .iter()
-            .any(|result| result.outcome == ReferenceShareOutcome::Shared);
-        if !shared {
-            return Err(ToolCallError {
-                description: self.entity_type.not_permitted().to_string(),
-                internal_error: anyhow::anyhow!("reference share was not permitted"),
-            });
-        }
 
         Ok(ShareWithChannelResponse {
             channel_id: self.channel_id,
