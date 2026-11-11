@@ -123,7 +123,7 @@ function getUniqueRects(rects: DOMRect[]): DOMRect[] {
  * @param overlapMargin Vertical margin to determine if rects are on the same line
  * @returns Array of DOM rectangles representing the selection
  */
-function createRectsFromDOMRange(
+export function createRectsFromDOMRange(
   range: Range,
   overlapMargin = 10,
   rootWidth?: number
@@ -390,12 +390,6 @@ export function LocationHighlight(props: {
     return getLocationRects(props.editor, props.location, props.mapping);
   });
 
-  const styles = () => {
-    return rects().map((r) => {
-      return getHighlightStyle(r, props.mountRef, props.padding ?? 0);
-    });
-  };
-
   createEffect(() => {
     if (props.captureBoundingDomRect) {
       const bounds = boundingRect(rects());
@@ -404,19 +398,38 @@ export function LocationHighlight(props: {
   });
 
   return (
+    <HighlightRects
+      rects={rects()}
+      mountRef={props.mountRef}
+      class={props.class}
+      padding={props.padding}
+    />
+  );
+}
+
+/** Highlight boxes for viewport rects, positioned inside a highlight layer. */
+export function HighlightRects(props: {
+  rects: DOMRect[];
+  mountRef: HTMLElement;
+  class?: string;
+  padding?: PaddingValue;
+}) {
+  const styles = () =>
+    props.rects.map((r) =>
+      getHighlightStyle(r, props.mountRef, props.padding ?? 0)
+    );
+  return (
     <Portal mount={props.mountRef}>
       <For each={styles()}>
-        {(style) => {
-          return (
-            <div
-              class={cn(
-                'absolute top-0 left-0 m-0 select-none pointer-events-none',
-                props.class
-              )}
-              style={style}
-            />
-          );
-        }}
+        {(style) => (
+          <div
+            class={cn(
+              'absolute top-0 left-0 m-0 select-none pointer-events-none',
+              props.class
+            )}
+            style={style}
+          />
+        )}
       </For>
     </Portal>
   );
