@@ -21,6 +21,7 @@ import type { CachedGraphqlChannel } from '../channel/graphql';
 import { emailLinksQueryOptions } from '../email/link';
 import { queryReadyGate } from '../gate';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
+import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
 import { buildContactContextFacts } from './context-facts';
 
 // Selectors capture resolved ownership. Retained data from an old observer/key
@@ -91,7 +92,10 @@ export function createContactContextSource(options: {
         subscribeToVisibleCacheChanges(
           host,
           () => cached.refetch({ cancelRefetch: false }),
-          { searchBuckets: () => ['channel', 'dm'] }
+          {
+            searchBuckets: () => ['channel', 'dm'],
+            intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+          }
         )
       );
     })

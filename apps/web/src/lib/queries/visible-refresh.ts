@@ -3,9 +3,12 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 
 const REFRESH_INTERVAL_MS = 250;
+/** For refreshes that rebuild account-wide state, such as the channel index. */
+export const ACCOUNT_WIDE_REFRESH_INTERVAL_MS = 2_000;
 
 /**
- * Throttles refreshes while visible. Hidden tabs retain one dirty bit instead
+ * Throttles refreshes while visible: the first change refreshes at once and
+ * the rest of a burst share one refresh per `intervalMs`. Hidden tabs retain one dirty bit instead
  * of repeatedly reading; becoming visible refreshes once against the latest
  * state. Async refreshes finish before one dirty follow-up runs, so a busy
  * source cannot continually cancel its readers. With `refreshOnShow`, becoming
@@ -16,7 +19,10 @@ const REFRESH_INTERVAL_MS = 250;
  */
 export function createVisibleRefresh(
   refresh: () => void | Promise<unknown>,
-  { refreshOnShow = false }: { refreshOnShow?: boolean } = {}
+  {
+    refreshOnShow = false,
+    intervalMs = REFRESH_INTERVAL_MS,
+  }: { refreshOnShow?: boolean; intervalMs?: number } = {}
 ): {
   markDirty: () => void;
   dispose: () => void;
@@ -45,7 +51,7 @@ export function createVisibleRefresh(
   const scheduled = leadingAndTrailing(
     throttle,
     () => fireAndForget(runRefresh(), 'visible-refresh'),
-    REFRESH_INTERVAL_MS
+    intervalMs
   );
   const removeVisibilityListener = makeEventListener(
     document,
