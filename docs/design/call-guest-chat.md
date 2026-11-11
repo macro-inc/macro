@@ -60,6 +60,8 @@ Every `Message` returned to a guest is redacted so no account identity leaves:
   opaque reactor id, as external-chat reactions do for people outside Macro.
 - `mentions`, `attachments`, `triggered_by` and any other account or entity references
   are emptied.
+- Guest quote input must reference a message in the same call and use that
+  message's guest-visible sender ID; invalid quote targets are rejected.
 
 ## Frontend seams
 

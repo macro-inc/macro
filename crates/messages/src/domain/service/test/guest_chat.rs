@@ -241,12 +241,111 @@ fn malformed_quotes_do_not_expose_account_ids_to_guests() {
         format!("before <m-reply-target>{{\"senderId\":\"{account}\""),
         format!("before <m-reply-target>{{\"senderId\":\"{account}\"</m-reply-target> after"),
     ] {
-        let redacted = rewrite_quote_content(&content, call, &senders, false);
+        let redacted = rewrite_quote_content(&content, call, &senders, false).unwrap();
         assert!(!redacted.contains(account));
         assert!(!redacted.contains("<m-reply-target>"));
     }
     let safe = "<m-reply-target>{\"senderId\":\"guest:123\"}</m-reply-target>";
-    assert_eq!(rewrite_quote_content(safe, call, &senders, false), safe);
+    assert_eq!(rewrite_quote_content(safe, call, &senders, false).unwrap(), safe);
+}
+
+#[test]
+fn guest_quotes_require_a_verified_target_and_sender() {
+    let call = Uuid::now_v7();
+    let account_target = Uuid::now_v7();
+    let guest_target = Uuid::now_v7();
+    let bot_target = Uuid::now_v7();
+    let account = "macro|author@example.com".to_owned();
+    let guest = ChannelSender::new_from_guest(Uuid::now_v7())
+        .as_ref()
+        .to_owned();
+    let bot = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID)
+        .as_ref()
+        .to_owned();
+    let senders = HashMap::from([
+        (account_target, account.clone()),
+        (guest_target, guest.clone()),
+        (bot_target, bot.clone()),
+    ]);
+    let quote = |parent: Uuid, target: Uuid, sender: &str| {
+        format!(
+            "<m-reply-target>{{\"parent\":{{\"type\":\"call\",\"id\":\"{parent}\"}},\"targetMessageId\":\"{target}\",\"senderId\":\"{sender}\"}}</m-reply-target>\n\nreply"
+        )
+    };
+
+    let opaque = format!("participant:{}", Uuid::new_v5(&call, account.as_bytes()));
+    let account_quote = rewrite_quote_content(
+        &quote(call, account_target, &opaque),
+        call,
+        &senders,
+        true,
+    )
+    .unwrap();
+    assert!(account_quote.contains(&account));
+    for (target, sender) in [(guest_target, guest.as_str()), (bot_target, bot.as_str())] {
+        let content = quote(call, target, sender);
+        let rewritten = rewrite_quote_content(&content, call, &senders, true).unwrap();
+        assert!(rewritten.contains(&format!("\"senderId\":\"{sender}\"")));
+        assert!(rewritten.ends_with("\n\nreply"));
+    }
+    for content in [
+        quote(Uuid::now_v7(), account_target, &opaque),
+        quote(call, Uuid::now_v7(), &opaque),
+        quote(call, account_target, &account),
+        quote(call, account_target, "participant:00000000-0000-5000-8000-000000000001"),
+        quote(call, guest_target, "guest|00000000-0000-7000-8000-000000000001"),
+        "<m-reply-target>broken</m-reply-target>\n\nreply".into(),
+    ] {
+        assert!(matches!(
+            rewrite_quote_content(&content, call, &senders, true),
+            Err(MessageError::Invalid(_))
+        ));
+    }
+}
+
+#[tokio::test]
+async fn unverified_guest_quotes_are_not_posted_or_patched() {
+    let (mut repo, events, _, call, guest) = setup();
+    let mut own_reply = repo.message.clone();
+    own_reply.id = Uuid::now_v7();
+    own_reply.thread_id = Some(call);
+    own_reply.sender_id = ChannelSender::new_from_guest(guest);
+    repo.replies = vec![own_reply.clone()];
+    let service = GuestChatService::new(
+        Arc::new(MessageService::new(repo.clone(), events.clone())),
+        Arc::new(Authorizer { call, guest }),
+    );
+    let forged = format!(
+        "<m-reply-target>{{\"parent\":{{\"type\":\"call\",\"id\":\"{call}\"}},\"targetMessageId\":\"{call}\",\"senderId\":\"macro|outside@example.com\"}}</m-reply-target>\n\nreply"
+    );
+
+    assert!(matches!(
+        service
+            .post_message(
+                call,
+                "active-session",
+                GuestChatPost {
+                    id: Uuid::now_v7(),
+                    content: forged.clone(),
+                }
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(matches!(
+        service
+            .patch_message(
+                call,
+                "active-session",
+                own_reply.id,
+                GuestChatPatch { content: forged }
+            )
+            .await,
+        Err(MessageError::Invalid(_))
+    ));
+    assert!(repo.creates.lock().unwrap().is_empty());
+    assert!(repo.edits.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

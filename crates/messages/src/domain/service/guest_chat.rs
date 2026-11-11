@@ -180,7 +180,7 @@ pub(super) fn rewrite_quote_content(
     call_id: Uuid,
     senders: &HashMap<Uuid, String>,
     guest_input: bool,
-) -> String {
+) -> Result<String, MessageError> {
     const OPEN: &str = "<m-reply-target>";
     const CLOSE: &str = "</m-reply-target>";
     let mut output = String::with_capacity(content.len());
@@ -190,10 +190,9 @@ pub(super) fn rewrite_quote_content(
         remaining = &remaining[start + OPEN.len()..];
         let Some(end) = remaining.find(CLOSE) else {
             if guest_input {
-                output.push_str(OPEN);
-                output.push_str(remaining);
+                return Err(MessageError::Invalid("invalid reply target"));
             }
-            return output;
+            return Ok(output);
         };
         let payload = &remaining[..end];
         let rewritten = serde_json::from_str::<serde_json::Value>(payload)
@@ -209,7 +208,12 @@ pub(super) fn rewrite_quote_content(
                     }
                     let target = Uuid::parse_str(value.get("targetMessageId")?.as_str()?).ok()?;
                     let sender = senders.get(&target)?;
-                    (id == opaque_id(call_id, sender)).then_some(sender.clone())
+                    let expected = if sender.starts_with("macro|") {
+                        opaque_id(call_id, sender)
+                    } else {
+                        sender.clone()
+                    };
+                    (id == expected).then_some(sender.clone())
                 } else if id.starts_with("macro|") {
                     Some(opaque_id(call_id, id))
                 } else {
@@ -223,14 +227,12 @@ pub(super) fn rewrite_quote_content(
             output.push_str(rewritten);
             output.push_str(CLOSE);
         } else if guest_input {
-            output.push_str(OPEN);
-            output.push_str(payload);
-            output.push_str(CLOSE);
+            return Err(MessageError::Invalid("invalid reply target"));
         }
         remaining = &remaining[end + CLOSE.len()..];
     }
     output.push_str(remaining);
-    output
+    Ok(output)
 }
 
 fn redact(
@@ -239,7 +241,8 @@ fn redact(
     names: &HashMap<String, String>,
     senders: &HashMap<Uuid, String>,
 ) -> Message {
-    message.content = rewrite_quote_content(&message.content, call_id, senders, false);
+    message.content = rewrite_quote_content(&message.content, call_id, senders, false)
+        .unwrap_or_default();
     if message.sender_id.as_user().is_some() {
         let original = message.sender_id.as_ref().to_owned();
         message.imported_author = Some(ImportedAuthor {
@@ -403,7 +406,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
         content: &str,
     ) -> Result<String, MessageError> {
         let senders = self.thread_senders(call_id).await?;
-        Ok(rewrite_quote_content(content, call_id, &senders, true))
+        rewrite_quote_content(content, call_id, &senders, true)
     }
 
     async fn redact_message(&self, call_id: Uuid, message: Message) -> Message {
