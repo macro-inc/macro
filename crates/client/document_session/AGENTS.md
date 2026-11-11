@@ -88,6 +88,8 @@ the pending timer; no mutable Loro document handle escapes.
 Run the current TS stack differential from the repository root:
 `bunx vitest run --config packages/lexical-conformance/diff/collab.config.mts`.
 Run `cargo test -p document_session --all-features -j4` for the native bridge too.
+Use the production `register_editor_commands` in application formatting integration
+controls; a registry-only Macro builder has no core formatting command handlers.
 `tests/telemetry.rs` isolates its tracing subscriber from parallel unit callsites.
 
 Common staging exposes same-core unpublished scopes and StagedUpdate in every feature profile. Route its single-consumption admission command through normal handle readiness/access checks; never add it to local_commands. register_editor_commands installs the one generic admission handler for native application builders. The compatibility feature keeps CompatUpdate and old scope names as aliases; compat_editor_builder installs that same handler without native behavior plugins. Recover refused state with recover_unadopted before retrying; adoption alone is not a successful-commit receipt.

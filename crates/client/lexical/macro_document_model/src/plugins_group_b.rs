@@ -9,6 +9,7 @@ mod decorator_actions;
 mod decorator_content_actions;
 mod diff;
 mod focus;
+mod formatting;
 mod keyboard;
 mod links;
 mod list_insert;
@@ -122,6 +123,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = formatting::decode(name, json)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = focus::decode(name, json)? {
         return Ok(Some(command));
     }
