@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { Show } from 'solid-js';
+import type { IdeaItemParts } from '../context/ideas-source';
 import type { Idea, IdeaStatus } from '../core/idea';
 import { IdeaTile } from './idea-tile';
 
@@ -7,6 +8,7 @@ import { IdeaTile } from './idea-tile';
 export function PriorityRow(props: {
   idea: Idea;
   status: IdeaStatus;
+  parts: Pick<IdeaItemParts, 'Waiting'>;
   onOpen(): void;
 }) {
   return (
@@ -33,7 +35,22 @@ export function PriorityRow(props: {
               />
               <span class="shrink-0">{t('ideas.badgeFailed')}</span>
             </Show>
-            <span class="truncate">{props.idea.summary}</span>
+            <Show
+              when={
+                props.status === 'open' &&
+                props.idea.kind === 'entity' &&
+                props.idea.draft
+              }
+              keyed
+              fallback={<span class="truncate">{props.idea.summary}</span>}
+            >
+              {(draft) => (
+                <span class="truncate">
+                  {t('ideas.replyDrafted')}
+                  <props.parts.Waiting thread={draft} lead=" · " />
+                </span>
+              )}
+            </Show>
           </span>
         </span>
         <span

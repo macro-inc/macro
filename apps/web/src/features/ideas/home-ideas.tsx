@@ -9,6 +9,7 @@ import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrence
 import { createMemo } from 'solid-js';
 import { layoutDay } from './core/day';
 import { type Idea, topPriorities } from './core/idea';
+import { IDEA_ITEM_PARTS } from './idea-items';
 import { useIdeasSource } from './queries/ideas-source';
 import { HomeIdeasView } from './views/home-ideas-view';
 
@@ -62,6 +63,7 @@ function HomeIdeasContent() {
     <HomeIdeasView
       today={today()}
       priorities={priorities()}
+      parts={IDEA_ITEM_PARTS}
       onOpenEvent={(chip) => {
         const event = today()?.events.find((event) => event.id === chip.id);
         if (!event) return;

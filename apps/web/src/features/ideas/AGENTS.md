@@ -61,7 +61,12 @@ only, behind `enable-ideas`.
   quote, drafted reply, routine sentence, a finished run's result), then
   source chips and actions. Done ideas sit under "Done today", dismissed ones
   under "Dismissed". The parts that read the app's items (`IdeaItemParts`:
-  source chip, draft text, result) are supplied by `idea-items.tsx`.
+  source chip, draft text, waiting time, result) are supplied by
+  `idea-items.tsx`.
+- The API has no due or waiting times. A reply idea's "waiting 2 days" and
+  the sender on its chip come from the email thread itself
+  (`queries/idea-thread.ts`, `core/thread.ts`): the last message, when the
+  person didn't write it. Without that, a card shows when the idea arrived.
 - Violet marks what AI picked (a routine's values) and the dot on an idea new
   since the last visit.
 - Gate every entry point with `useIdeasFlag`, which is also false on touch.

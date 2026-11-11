@@ -56,6 +56,7 @@ const PARTS: IdeaItemParts = {
     </button>
   ),
   Draft: (props) => <p>Draft {props.draft.partId}</p>,
+  Waiting: (props) => <span data-idea-waiting>{props.lead}waiting 2 days</span>,
   Result: (props) => (
     <p data-idea-result>
       {props.target.entityType} {props.target.entityId}: {props.line}
@@ -233,6 +234,7 @@ function HomeFixture() {
     <main class="h-dvh overflow-y-auto bg-panel p-8 font-sans text-ink">
       <div class="mx-auto max-w-180">
         <HomeIdeasView
+          parts={PARTS}
           today={
             PARAMS.get('calendar') === 'none'
               ? undefined

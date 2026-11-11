@@ -4,14 +4,13 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { useItemPreviewData } from '@core/component/ItemPreview';
-import { useThreadQuery } from '@queries/email/thread';
 import { isAccessiblePreviewItem } from '@queries/preview/types';
-import type { ApiThread } from '@service-email/generated/schemas';
 import { type ItemType, stringToItemType } from '@service-storage/client';
-import type { InfiniteData } from '@tanstack/solid-query';
 import { Show } from 'solid-js';
 import type { IdeaItemParts } from './context/ideas-source';
 import type { IdeaTarget } from './core/idea';
+import { waitingFor } from './core/thread';
+import { useIdeaThread } from './queries/idea-thread';
 
 /** The app's item type for an idea's target; a saved routine is listed by its own name. */
 function itemType(target: IdeaTarget): ItemType | undefined {
@@ -71,7 +70,15 @@ function Source(props: { target: IdeaTarget; onOpen(): void }) {
           <Show when={item.icon()} keyed>
             {(icon) => <EntityIcon targetType={icon} size="xs" />}
           </Show>
-          <span class="truncate">{name()}</span>
+          <Show
+            when={itemType(props.target) === 'email'}
+            fallback={<span class="truncate">{name()}</span>}
+          >
+            <EmailSourceName
+              threadId={props.target.entityId}
+              subject={name()}
+            />
+          </Show>
         </button>
       )}
     </Show>
@@ -105,30 +112,61 @@ function Result(props: { target: IdeaTarget; title: string; line: string }) {
   );
 }
 
-/** A draft's plain text, from its thread's loaded messages. */
-function draftTextSelector(messageId: string | undefined) {
-  return (data: InfiniteData<ApiThread, number>) => {
-    for (const page of data.pages) {
-      const draft = page.messages.find(
-        (message) => message.db_id === messageId
-      );
-      if (draft) return draft.body_text ?? draft.snippet ?? undefined;
-    }
+function Draft(props: { draft: IdeaTarget }) {
+  const thread = useIdeaThread(
+    () => props.draft.entityId,
+    () => props.draft.partId
+  );
 
-    return undefined;
-  };
+  return (
+    <p class="line-clamp-3">{thread()?.draftText ?? t('ideas.draftReady')}</p>
+  );
 }
 
-function Draft(props: { draft: IdeaTarget }) {
-  const thread = useThreadQuery(
-    () => props.draft.entityId,
-    () => ({ select: draftTextSelector(props.draft.partId) })
-  );
-  const text = () =>
-    thread.isSuccess ? thread.data?.trim() || undefined : undefined;
+function Waiting(props: {
+  thread: IdeaTarget;
+  lead?: string;
+  fallback?: string;
+}) {
+  const thread = useIdeaThread(() => props.thread.entityId);
+  const waiting = () => {
+    const since = thread()?.waitingSince;
+    const length = since ? waitingFor(since, new Date()) : undefined;
+    if (!length) return undefined;
 
-  return <p class="line-clamp-3">{text() ?? t('ideas.draftReady')}</p>;
+    return length.unit === 'days'
+      ? t('ideas.waitingDays', { count: length.count })
+      : t('ideas.waitingHours', { count: length.count });
+  };
+
+  return (
+    <Show when={waiting()} fallback={props.fallback}>
+      {(text) => (
+        <span data-idea-waiting>
+          {props.lead}
+          {text()}
+        </span>
+      )}
+    </Show>
+  );
+}
+
+/** An email chip's name: who wrote last, then the subject. */
+function EmailSourceName(props: { threadId: string; subject: string }) {
+  const thread = useIdeaThread(() => props.threadId);
+
+  return (
+    <span class="truncate">
+      <Show when={thread()?.sender}>{(sender) => `${sender()} · `}</Show>
+      {props.subject}
+    </span>
+  );
 }
 
 /** The card parts that read the app's items, for the For you page. */
-export const IDEA_ITEM_PARTS: IdeaItemParts = { Source, Draft, Result };
+export const IDEA_ITEM_PARTS: IdeaItemParts = {
+  Source,
+  Draft,
+  Waiting,
+  Result,
+};

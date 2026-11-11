@@ -25,6 +25,10 @@ for (const theme of ['dark', 'light']) {
     await expect(
       card(page, 'idea-quiet').locator('[data-idea-sends]')
     ).toHaveText('Runs in the background. It posts and sends nothing.');
+    // A reply idea says how long the other side has waited, not when it arrived.
+    await expect(
+      card(page, 'idea-reply').locator('[data-idea-time]')
+    ).toHaveText('waiting 2 days');
     await page.screenshot({
       path: testInfo.outputPath(`for-you-${theme}.png`),
       fullPage: true,

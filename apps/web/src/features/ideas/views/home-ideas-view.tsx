@@ -4,6 +4,7 @@ import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import { PriorityRow } from '../components/priority-row';
 import { TodayTimeline } from '../components/today-timeline';
+import type { IdeaItemParts } from '../context/ideas-source';
 import type { DayEvent, DayStrip } from '../core/day';
 import { type Idea, ideaStatus } from '../core/idea';
 
@@ -15,6 +16,7 @@ export function HomeIdeasView(props: {
   /** Undefined without a calendar. */
   today?: { date: Date; strip: DayStrip };
   priorities: Idea[];
+  parts: Pick<IdeaItemParts, 'Waiting'>;
   onOpenEvent(event: DayEvent): void;
   onOpenIdea(idea: Idea): void;
   onOpenAll(): void;
@@ -47,6 +49,7 @@ export function HomeIdeasView(props: {
                 <PriorityRow
                   idea={idea}
                   status={ideaStatus(idea)}
+                  parts={props.parts}
                   onOpen={() => props.onOpenIdea(idea)}
                 />
               )}

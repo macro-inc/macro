@@ -32,6 +32,16 @@ export default {
   openRoutine: 'Open routine',
   clear: 'Clear',
   started: 'started {{when}}',
+  waitingDays: {
+    one: 'waiting {{count}} day',
+    other: 'waiting {{count}} days',
+  },
+  waitingHours: {
+    one: 'waiting {{count}} hour',
+    other: 'waiting {{count}} hours',
+  },
+  routineIsOn: 'is on',
+  replyDrafted: 'A reply is drafted',
   newIdea: 'New',
   doneToday: 'Done today',
   dismissedSection: 'Dismissed',

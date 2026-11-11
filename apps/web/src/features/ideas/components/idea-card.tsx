@@ -95,6 +95,15 @@ function ideaTime(idea: Idea, status: IdeaStatus): string | undefined {
   return formatRelativeTimestamp(idea.createdAt, { condensed: true });
 }
 
+/** The thread someone may be waiting on: an open reply idea's email thread. */
+function replyThread(idea: Idea, status: IdeaStatus): IdeaTarget | undefined {
+  if (status !== 'open' || idea.kind !== 'entity' || idea.action !== 'reply') {
+    return undefined;
+  }
+
+  return idea.about.find((target) => target.entityType === 'email_thread');
+}
+
 /** A block one step forward from the card: a quote, a draft, a result. */
 function Inset(props: { class?: string; children: JSX.Element }) {
   return (
@@ -325,7 +334,14 @@ export function IdeaCard(props: IdeaCardProps) {
               class="ml-auto shrink-0 pl-2 text-[13px] text-ink-extra-muted"
               data-idea-time
             >
-              {time()}
+              <Show
+                when={replyThread(props.idea, props.status)}
+                fallback={time()}
+              >
+                {(thread) => (
+                  <props.parts.Waiting thread={thread()} fallback={time()} />
+                )}
+              </Show>
             </span>
           )}
         </Show>
@@ -414,7 +430,10 @@ export function DoneIdeaRow(props: { idea: Idea; onOpen(): void }) {
         id={`idea-title-${props.idea.id}`}
         class="min-w-0 truncate text-[15px] font-normal text-ink-muted"
       >
-        {props.idea.title}
+        <Show when={props.idea.kind === 'routine'} fallback={props.idea.title}>
+          <span class="font-medium text-ink">{props.idea.title}</span>{' '}
+          {t('ideas.routineIsOn')}
+        </Show>
       </h2>
       <span class="shrink-0 text-[13px] text-ink-extra-muted" data-idea-time>
         {formatRelativeTimestamp(props.idea.stateChangedAt, {
