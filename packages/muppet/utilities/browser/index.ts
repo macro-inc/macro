@@ -42,18 +42,12 @@ export const chromium = async ({
   headless = true,
   executable = 'chromium',
   flags = [],
-  env,
-  detached = false,
 }: {
   readonly profile: string;
   readonly port?: number;
   readonly headless?: boolean;
   readonly executable?: string;
   readonly flags?: readonly string[];
-  /** Its whole environment; this process's when not given. */
-  readonly env?: Readonly<Record<string, string>>;
-  /** Keeps running after this process ends, e.g. started from a script's process. */
-  readonly detached?: boolean;
 }): Promise<Running> => {
   const child = Bun.spawn(
     [
@@ -67,9 +61,8 @@ export const chromium = async ({
       ...flags,
       'about:blank',
     ],
-    { stdout: 'ignore', stderr: 'ignore', env: env && { ...env }, detached }
+    { stdout: 'ignore', stderr: 'ignore' }
   );
-  if (detached) child.unref();
   const stop = async () => {
     child.kill();
     await child.exited;
