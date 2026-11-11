@@ -496,6 +496,37 @@ fn only_public_lookups_on_macro_skip_the_owner() {
     );
 }
 
+#[test]
+fn only_drives_writes_wait_for_the_owner_in_their_own_turn() {
+    for write in [
+        "copy_file",
+        "create_file",
+        "edit_google_doc",
+        "restore_file",
+        "trash_file",
+        "update_file",
+    ] {
+        assert!(owner_confirms("google_drive", write), "{write}");
+    }
+    for read in [
+        "download_file_content",
+        "get_file_metadata",
+        "get_file_permissions",
+        "list_files",
+        "list_recent_files",
+        "list_shared_drives",
+        "read_file_content",
+        "search_files",
+    ] {
+        assert!(!owner_confirms("google_drive", read), "{read}");
+    }
+    assert!(
+        !owner_confirms("linear", "create_file"),
+        "another app's tool of the same name is not Drive's"
+    );
+    assert!(!owner_confirms(MACRO_SERVER_SLUG, "trash_file"));
+}
+
 /// Hold `call` in-process on a task, and the approval it is waiting on once
 /// the owner has been told.
 async fn waiting_in_process(

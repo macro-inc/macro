@@ -906,6 +906,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   tablet/desktop chrome stay unchanged.
   Keep the away-call phone island in the shared `call` float region between
   composers and the dock, without displacing either. See [Calls](../../docs/agent-guide/calls.md).
+- Keep saved call detail on its shared playback and SidePanel composition; follow `src/features/block-call/AGENTS.md` for transcript/chat timing, phone dock ownership, and checks.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
