@@ -114,6 +114,14 @@ in
       default = "incus";
       description = "`macrod enroll --from`: `incus` or `file:<path>`.";
     };
+    agentMode = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Run agents without administrator rights: the macro user loses
+        passwordless sudo and the docker group. False keeps both.
+      '';
+    };
     dataDisk = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       # The Incus disk device named `data`.
@@ -143,13 +151,13 @@ in
       isNormalUser = true;
       uid = 1000;
       group = "macro";
-      extraGroups = [ "docker" ];
+      extraGroups = lib.optionals (!cfg.agentMode) [ "docker" ];
       shell = pkgs.bashInteractive;
       # Starts the display, window manager and browser at boot.
       linger = true;
     };
     users.groups.macro.gid = 1000;
-    security.sudo.extraRules = [
+    security.sudo.extraRules = lib.optionals (!cfg.agentMode) [
       {
         users = [ "macro" ];
         commands = [
