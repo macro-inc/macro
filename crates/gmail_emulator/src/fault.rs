@@ -132,6 +132,12 @@ pub enum Route {
     /// The OAuth token-info endpoint
     #[strum(serialize = "oauth.tokeninfo")]
     OauthTokenInfo,
+    /// The OAuth authorization endpoint: the sign-in page and its form
+    #[strum(serialize = "oauth.authorize")]
+    OauthAuthorize,
+    /// The OpenID Connect userinfo endpoint
+    #[strum(serialize = "oauth.userinfo")]
+    OauthUserInfo,
 }
 
 impl TryFrom<String> for Route {
@@ -164,7 +170,9 @@ impl Route {
             | Self::ConnectionsList
             | Self::OtherContactsList
             | Self::OauthToken
-            | Self::OauthTokenInfo => 1,
+            | Self::OauthTokenInfo
+            | Self::OauthAuthorize
+            | Self::OauthUserInfo => 1,
             Self::HistoryList => 2,
             Self::MessagesList
             | Self::MessagesGet

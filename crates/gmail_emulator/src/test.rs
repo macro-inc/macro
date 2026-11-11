@@ -8,6 +8,7 @@ mod history;
 mod mail;
 mod people;
 mod push;
+mod sign_in;
 
 use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::models::AccessToken;
