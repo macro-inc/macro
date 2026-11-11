@@ -621,8 +621,8 @@ The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout d
 whether it answers in the thread as the classic bot or opens an agent session. Without the
 rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
-event without attendees creates the event right away (unlike AI chat, where creation waits
-for the user to confirm a composer card). For an event with attendees the bot is prompted to
+event without attendees creates the event right away (unlike an agent session, where
+creation waits for the session owner to review it). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items

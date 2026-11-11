@@ -1,7 +1,5 @@
 import { analytics } from '@app/lib/analytics';
-import { DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
-import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -14,8 +12,6 @@ import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity, type SoupEntityTag } from '@queries/soup/cache';
 import { seedDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import type { CreateChatRequest } from '@service-cognition/generated/schemas';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
@@ -23,7 +19,6 @@ import type { PropertyInput } from '@service-storage/generated/schemas/propertyI
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
 import { decodeBase64Bytes } from './base64';
-import { isPaymentError } from './handlePaymentError';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,
@@ -500,43 +495,6 @@ export async function createCanvasFileFromJsonString(args: {
   });
 
   return { documentId: canvas.metadata.documentId };
-}
-
-export async function createChat(
-  args?: CreateChatRequest,
-  opts?: {
-    /** UI surface the creation originated from, for analytics. */
-    source?: string;
-  }
-) {
-  const { showPaywall } = usePaywallState();
-
-  const maybeChat = await cognitionApiServiceClient.createChat(args ?? {});
-
-  fireAndForget(invalidateUserQuota(), 'create-entity');
-  if (maybeChat.isErr()) {
-    if (isPaymentError(maybeChat)) {
-      showPaywall(PaywallKey.CHAT_LIMIT);
-    }
-    return { error: 'Failed to create chat.' };
-  }
-  const chat = maybeChat.value;
-  fireAndForget(postNewHistoryItem('chat', chat.id), 'create-entity');
-  setPreviewOnCreate({
-    itemId: chat.id,
-    itemType: 'chat',
-    name: args?.name ?? DEFAULT_CHAT_NAME,
-  });
-  refreshCreatedSoupEntity(chat.id, 'chat');
-
-  analytics.track('create_entity', {
-    entityType: 'chat',
-    entityId: chat.id,
-    projectId: args?.projectId,
-    source: opts?.source,
-  });
-
-  return { chatId: chat.id };
 }
 
 /** Uploads a file to the static file service and returns the id */
