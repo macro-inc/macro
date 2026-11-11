@@ -1,0 +1,20 @@
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_9ac501a8ae08a3::t_548e3c711701b8 28
+  s_9ac501a8ae08a3::t_3ed63d0f3817d3 110-113,119-124
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4ece64821164ad9b521959a99181fbbe26017b86",
+  "prompts": {},
+  "sessions": {
+    "s_9ac501a8ae08a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d21cc32a-5996-4e2f-8c17-f5b597904396",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
