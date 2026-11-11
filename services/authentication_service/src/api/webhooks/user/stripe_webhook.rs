@@ -922,17 +922,7 @@ async fn subscription_items(
     loop {
         let page = stripe::SubscriptionItem::list(&ctx.stripe_client, &params).await?;
         for item in &page.data {
-            let named = item
-                .metadata
-                .as_ref()
-                .and_then(|metadata| metadata.get("computer_id"))
-                .or_else(|| {
-                    item.price
-                        .as_ref()
-                        .and_then(|price| price.metadata.as_ref())
-                        .and_then(|metadata| metadata.get("computer_id"))
-                });
-            let computer_id = match named {
+            let computer_id = match teams::outbound::customer_repo::item_computer_id(item) {
                 Some(id) => match hosted_runtimes::domain::ids::ComputerId::parse_uuid_str(id) {
                     Ok(id) => Some(id),
                     Err(_) => {

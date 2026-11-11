@@ -350,3 +350,40 @@ async fn a_trialing_subscription_refuses_a_computer_item(pool: sqlx::PgPool) {
     let requests = server.received_requests().await.unwrap();
     assert!(subscription_update(&requests).is_empty());
 }
+
+#[test]
+fn the_items_own_computer_id_wins_over_its_prices() {
+    let on_both = stripe::SubscriptionItem {
+        metadata: Some(HashMap::from([(
+            "computer_id".to_owned(),
+            "computer-item".to_owned(),
+        )])),
+        price: Some(stripe::Price {
+            metadata: Some(HashMap::from([(
+                "computer_id".to_owned(),
+                "computer-price".to_owned(),
+            )])),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let on_price = stripe::SubscriptionItem {
+        price: Some(stripe::Price {
+            metadata: Some(HashMap::from([(
+                "computer_id".to_owned(),
+                "computer-price".to_owned(),
+            )])),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let on_neither = stripe::SubscriptionItem {
+        metadata: Some(HashMap::from([("other".to_owned(), "x".to_owned())])),
+        price: Some(stripe::Price::default()),
+        ..Default::default()
+    };
+
+    assert_eq!(item_computer_id(&on_both), Some("computer-item"));
+    assert_eq!(item_computer_id(&on_price), Some("computer-price"));
+    assert_eq!(item_computer_id(&on_neither), None);
+}

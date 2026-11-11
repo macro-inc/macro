@@ -9,7 +9,8 @@ use super::*;
 mod test;
 
 /// The `computer_id` metadata key on a computer's item and price.
-pub(super) const COMPUTER_ID_KEY: &str = "computer_id";
+/// The metadata key naming the computer a subscription item bills.
+pub const COMPUTER_ID_KEY: &str = "computer_id";
 /// Subscription items read per page.
 const ITEM_PAGE: u64 = 100;
 
@@ -40,7 +41,9 @@ struct ComputerPriceRecurring {
     interval_count: u64,
 }
 
-fn item_computer_id(item: &stripe::SubscriptionItem) -> Option<String> {
+/// The computer a subscription item bills: its own metadata's, else its
+/// price's. Purchase and the billing webhook's reconcile both read it here.
+pub fn item_computer_id(item: &stripe::SubscriptionItem) -> Option<&str> {
     let on_item = item
         .metadata
         .as_ref()
@@ -50,7 +53,7 @@ fn item_computer_id(item: &stripe::SubscriptionItem) -> Option<String> {
         .as_ref()
         .and_then(|price| price.metadata.as_ref())
         .and_then(|metadata| metadata.get(COMPUTER_ID_KEY));
-    on_item.or(on_price).cloned()
+    on_item.or(on_price).map(String::as_str)
 }
 
 impl CustomerRepositoryImpl {
@@ -273,7 +276,7 @@ impl CustomerRepositoryImpl {
                     id: item.id.clone(),
                     price_id: price.id.clone(),
                     quantity: item.quantity.unwrap_or(1),
-                    computer_id: item_computer_id(item),
+                    computer_id: item_computer_id(item).map(str::to_owned),
                 });
             }
             if !page.has_more {
