@@ -3340,6 +3340,9 @@ chips, static decorators and horizontal rules in the native body. Select an
 inline chip to check its selection styling and use the rule's Remove control.
 Reopen the document to check that the shared renderers mount again.
 
+Open a native document containing an agent preview chip and sealed agent
+activity. Check the preview and completed steps, then reopen the document.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
