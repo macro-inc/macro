@@ -44,9 +44,10 @@ async fn guest_projection_and_quote_storage() {
     let pool = PgPool::connect(&std::env::var("CGC_DATABASE_URL").expect("database URL"))
         .await
         .expect("scratch database");
-    let rows = sqlx::query(
-        "SELECT DISTINCT parent_entity_id FROM comms_messages WHERE parent_entity_type = 'call' ORDER BY parent_entity_id"
-    ).fetch_all(&pool).await.expect("calls");
+    let rows = sqlx::query("SELECT id FROM call_entities ORDER BY id")
+        .fetch_all(&pool)
+        .await
+        .expect("calls");
     let identities = sqlx::query("SELECT id, email FROM \"User\" WHERE id LIKE 'macro|%'")
         .fetch_all(&pool)
         .await
@@ -61,10 +62,7 @@ async fn guest_projection_and_quote_storage() {
     let mut checked = 0;
     let mut quotes = 0;
     for row in rows {
-        let call_id: Uuid = row
-            .get::<String, _>("parent_entity_id")
-            .parse()
-            .expect("call id");
+        let call_id: Uuid = row.get("id");
         let value = service
             .read_thread(call_id, "probe")
             .await

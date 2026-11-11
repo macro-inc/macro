@@ -113,6 +113,8 @@ def compare(old_path, new_path, *, normalize_time=False, check_names=False):
             })
         if check_names and key in new and has_names(new[key]) and not any(difference["key"] == key for difference in differences):
             differences.append({"key": key, "paths": ["/names"], "classification": "regression"})
+    if check_names and old_path.read_bytes() != new_path.read_bytes() and not differences:
+        differences.append({"key": "serialized_reads", "paths": ["/bytes"], "classification": "regression"})
     return len(old), len(new), differences
 
 

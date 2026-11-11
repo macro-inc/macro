@@ -33,6 +33,7 @@ struct Parent {
     id: String,
     parent: MessageParent,
     messages: Vec<(Uuid, Option<Uuid>, String, bool)>,
+    viewers: Vec<String>,
 }
 
 fn next(state: &mut u64) -> u64 {
@@ -99,6 +100,7 @@ async fn parents(pool: &PgPool) -> Vec<Parent> {
                 id: id.clone(),
                 parent,
                 messages: Vec::new(),
+                viewers: Vec::new(),
             });
         }
         parents.last_mut().expect("new parent").messages.push((
@@ -123,6 +125,7 @@ async fn parents(pool: &PgPool) -> Vec<Parent> {
                 id: id.clone(),
                 parent: MessageParent::parse("document", &id).expect("document id"),
                 messages: Vec::new(),
+                viewers: Vec::new(),
             });
         }
     }
@@ -141,30 +144,80 @@ async fn parents(pool: &PgPool) -> Vec<Parent> {
                 id: id.clone(),
                 parent: MessageParent::parse("channel", &id).expect("channel id"),
                 messages: Vec::new(),
+                viewers: Vec::new(),
             });
         }
+    }
+    let rows = sqlx::query("SELECT id::text AS id FROM call_entities ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .expect("calls");
+    for row in rows {
+        let id: String = row.get("id");
+        if !parents
+            .iter()
+            .any(|parent| parent.kind == "call" && parent.id == id)
+        {
+            parents.push(Parent {
+                kind: "call".into(),
+                id: id.clone(),
+                parent: MessageParent::parse("call", &id).expect("call id"),
+                messages: Vec::new(),
+                viewers: Vec::new(),
+            });
+        }
+    }
+    let channel_members = sqlx::query(
+        "SELECT channel_id::text AS id, user_id FROM comms_channel_participants WHERE left_at IS NULL ORDER BY channel_id, user_id",
+    )
+    .fetch_all(pool)
+    .await
+    .expect("channel members");
+    let call_owners = sqlx::query("SELECT id::text AS id, user_id FROM call_entities ORDER BY id")
+        .fetch_all(pool)
+        .await
+        .expect("call owners");
+    let document_owners =
+        sqlx::query("SELECT id::text AS id, owner AS user_id FROM \"Document\" ORDER BY id")
+            .fetch_all(pool)
+            .await
+            .expect("document owners");
+    for parent in &mut parents {
+        let mut members = std::collections::BTreeSet::new();
+        let rows: &[sqlx::postgres::PgRow] = match parent.kind.as_str() {
+            "channel" => &channel_members,
+            "call" => &call_owners,
+            "document" => &document_owners,
+            _ => &[],
+        };
+        for row in rows {
+            let id: String = row.get("id");
+            let user: String = row.get("user_id");
+            if id == parent.id && user.starts_with("macro|") {
+                members.insert(user);
+            }
+        }
+        if !matches!(parent.kind.as_str(), "channel" | "call" | "document") {
+            for (_, _, sender, _) in &parent.messages {
+                if sender.starts_with("macro|") {
+                    members.insert(sender.clone());
+                }
+            }
+        }
+        parent.viewers = members.into_iter().take(3).collect();
     }
     parents.sort_by(|a, b| (&a.kind, &a.id).cmp(&(&b.kind, &b.id)));
     parents
 }
 
-async fn viewer_ids(pool: &PgPool) -> Vec<String> {
-    let rows = sqlx::query("SELECT id FROM \"User\" WHERE id LIKE 'macro|%' ORDER BY id LIMIT 3")
-        .fetch_all(pool)
-        .await
-        .expect("viewers");
-    rows.into_iter().map(|row| row.get("id")).collect()
-}
-
 async fn read_cases(
     service: &MessageService<PgMessageRepository, Events>,
     parents: &[Parent],
-    viewers: &[String],
     file: &mut impl Write,
 ) -> usize {
     let mut cases = 0;
     for parent in parents {
-        for viewer in viewers {
+        for viewer in &parent.viewers {
             let key = format!("{}:{}:{viewer}", parent.kind, parent.id);
             let query = MessageTimelineQuery {
                 limit: Some(100),
@@ -245,10 +298,10 @@ async fn read_cases(
 }
 
 async fn write_cases(
+    pool: &PgPool,
     service: &MessageService<PgMessageRepository, Events>,
     events: &Events,
     parents: &mut [Parent],
-    viewers: &[String],
     file: &mut impl Write,
     event_file: &mut impl Write,
     operations: usize,
@@ -259,12 +312,50 @@ async fn write_cases(
         .expect("fixed time")
         .parse::<u128>()
         .expect("millis");
+    let root_case = sqlx::query(
+        "SELECT ce.id, cp.channel_id FROM call_entities ce \
+         JOIN comms_channel_participants cp ON cp.user_id = ce.user_id AND cp.left_at IS NULL \
+         ORDER BY ce.id, cp.channel_id LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .expect("call root fixture");
+    if let Some(row) = root_case {
+        let call_id: Uuid = row.get("id");
+        let channel_id: Uuid = row.get("channel_id");
+        sqlx::query(
+            "UPDATE call_entities SET discussion = 'channel_thread', channel_id = $2 WHERE id = $1",
+        )
+        .bind(call_id)
+        .bind(channel_id)
+        .execute(pool)
+        .await
+        .expect("scratch call root fixture");
+        let created = service.ensure_call_root(call_id).await;
+        let root = created.as_ref().expect("call root");
+        let parent = parents
+            .iter_mut()
+            .find(|parent| parent.kind == "channel" && parent.id == channel_id.to_string())
+            .expect("root channel parent");
+        parent.messages.push((
+            root.id,
+            root.thread_id,
+            root.sender_id.as_ref().to_owned(),
+            true,
+        ));
+        let key = format!("call_root:{call_id}:ensure");
+        write(file, key.clone(), result(created));
+        let published = std::mem::take(&mut *events.0.lock().expect("events mutex"));
+        write(event_file, key, json!(published));
+    }
     for parent in parents.iter() {
         for (root_id, _, _, is_call_root) in &parent.messages {
             if !is_call_root {
                 continue;
             }
-            let viewer = &viewers[0];
+            let Some(viewer) = parent.viewers.first() else {
+                continue;
+            };
             let access = || receipt::<MessageWrite>(parent, viewer, AccessLevel::Owner);
             for operation in ["patch", "delete", "react"] {
                 let key = format!("call_root:{root_id}:{operation}");
@@ -297,7 +388,10 @@ async fn write_cases(
     for index in 0..operations {
         let parent_index = index % parents.len();
         let parent = &mut parents[parent_index];
-        let viewer = &viewers[(next(&mut state) as usize) % viewers.len()];
+        if parent.viewers.is_empty() {
+            continue;
+        }
+        let viewer = &parent.viewers[(next(&mut state) as usize) % parent.viewers.len()];
         let kind = next(&mut state) % 11;
         let target = parent
             .messages
@@ -444,9 +538,11 @@ async fn differential_messages() {
         .await
         .expect("scratch database");
     let mut parents = parents(&pool).await;
-    let viewers = viewer_ids(&pool).await;
     assert!(!parents.is_empty(), "corpus has no message parents");
-    assert!(!viewers.is_empty(), "corpus has no account viewers");
+    assert!(
+        parents.iter().any(|parent| !parent.viewers.is_empty()),
+        "corpus has no account viewers"
+    );
     let reaction_count: i64 = sqlx::query_scalar("SELECT count(*) FROM comms_reactions")
         .fetch_one(&pool)
         .await
@@ -455,10 +551,21 @@ async fn differential_messages() {
         .fetch_one(&pool)
         .await
         .expect("thread count");
+    let channel_types: std::collections::BTreeMap<String, i64> = sqlx::query(
+        "SELECT channel_type::text AS channel_type, count(*) AS count FROM comms_channels GROUP BY channel_type",
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("channel types")
+    .into_iter()
+    .map(|row| (row.get("channel_type"), row.get("count")))
+    .collect();
     let corpus = json!({
-        "parents": parents.len(), "viewers": viewers.len(),
+        "parents": parents.len(), "viewers": parents.iter().flat_map(|parent| &parent.viewers).collect::<std::collections::BTreeSet<_>>().len(),
+        "parents_with_viewers": parents.iter().filter(|parent| !parent.viewers.is_empty()).count(),
         "messages": parents.iter().map(|parent| parent.messages.len()).sum::<usize>(),
         "reactions": reaction_count, "threads": thread_count,
+        "channel_types": channel_types,
         "parent_kinds": parents.iter().fold(std::collections::BTreeMap::<String, usize>::new(), |mut counts, parent| { *counts.entry(parent.kind.clone()).or_default() += 1; counts }),
     });
     std::fs::write(output.join("corpus.json"), corpus.to_string()).expect("corpus count");
@@ -468,7 +575,7 @@ async fn differential_messages() {
             pool.clone(),
         ));
     let mut reads = BufWriter::new(File::create(output.join("reads.jsonl")).expect("reads"));
-    read_cases(&service, &parents, &viewers, &mut reads).await;
+    read_cases(&service, &parents, &mut reads).await;
     let mut writes = BufWriter::new(File::create(output.join("writes.jsonl")).expect("writes"));
     let mut published = BufWriter::new(File::create(output.join("events.jsonl")).expect("events"));
     let operations = std::env::var("CGC_OPERATIONS")
@@ -480,10 +587,10 @@ async fn differential_messages() {
         .parse::<u64>()
         .expect("numeric seed");
     write_cases(
+        &pool,
         &service,
         &events,
         &mut parents,
-        &viewers,
         &mut writes,
         &mut published,
         operations,

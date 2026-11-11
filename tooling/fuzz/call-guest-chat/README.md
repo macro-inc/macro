@@ -7,6 +7,14 @@ dumps stay under `/tmp`; the report contains counts, operation keys and IDs,
 never message bodies. It also compares `ChannelSender::parse_from_str` on 20,000
 seeded and adversarial inputs. The one allowed parser difference is a canonical
 `participant:<uuid>` value.
+Read probes use up to three verified account members per parent: active channel
+participants, call owners, document owners, or message senders for other parent
+types. The service test uses access receipts directly, so it compares service
+behavior after authorization rather than the HTTP authorization layer.
+All call records are included, even when their chat has no messages yet.
+When an eligible call owner and channel exist, the write probe converts one call
+to a channel discussion in each scratch copy to exercise call-root creation and
+mutation rejection.
 
 Run from the repository root:
 
@@ -41,7 +49,8 @@ nix develop -c python3 tooling/fuzz/call-guest-chat/run.py \
 For a comms-table-only dump, first create the source database with the current
 MacroDB schema and restore the dump there. Include `comms_messages`,
 `comms_message_threads`, `comms_reactions`, attachments, mentions, channels,
-channel participants, calls, and referenced account and parent rows. The
+channel participants, calls, activity rows, and referenced `User`, `Document`,
+`call_entities`, and other parent rows. The
 runner clones this prepared database. Keep dumps and restored databases under
 local control and delete them after use.
 
