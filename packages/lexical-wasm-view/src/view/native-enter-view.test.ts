@@ -330,6 +330,48 @@ test('an unbound Port cannot queue another owner input until the guarded tuple p
   }
 });
 
+test('derived edits reject bound and unbound owners before executor queue admission', async () => {
+  const bound = mount();
+  const ordinary = mount(undefined, false);
+  const input = EditorInputMsg.fromEditorSetState({
+    json: initial('forbidden derived edit'),
+  });
+  try {
+    bound.view.registerViewCommand(
+      enter,
+      () => {
+        for (const runtime of [bound, ordinary]) {
+          const queue = vi.spyOn(runtime.executor, 'run');
+          try {
+            expect(() => runtime.port.inputIfSessionEdit(input)).toThrow(
+              'Ordinary native admission during scoped callback'
+            );
+            expect(queue).not.toHaveBeenCalled();
+          } finally {
+            queue.mockRestore();
+          }
+        }
+        return true;
+      },
+      4
+    );
+    expect(bound.port.nativeEnter?.dispatch()).toBe(true);
+    expect(bound.root.textContent).toBe('draft');
+    expect(ordinary.root.textContent).toBe('draft');
+    ordinary.port.inputIfSessionEdit(
+      EditorInputMsg.fromEditorSetState({
+        json: initial('allowed outside callback'),
+      })
+    );
+    expect(ordinary.root.textContent).toBe('allowed outside callback');
+  } finally {
+    await bound.close();
+    await ordinary.close();
+    bound.root.remove();
+    ordinary.root.remove();
+  }
+});
+
 test.each([undefined, null, { reason: 'opaque' }])(
   'original callback cause follows accepted Diff and FIFO drain %j',
   async (cause) => {
