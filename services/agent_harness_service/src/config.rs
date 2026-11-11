@@ -249,6 +249,10 @@ pub struct Config {
     /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
+    /// Port the load balancer's health check is served on, from its own
+    /// thread so it answers while the main runtime is busy (`health.rs`).
+    #[macro_config_default(8103)]
+    pub health_port: u16,
     /// Optional host-reachable egress origin for external runtimes in local stacks.
     pub external_egress_base_url: Option<String>,
     /// OAuth client ID for the Pipedream API.
