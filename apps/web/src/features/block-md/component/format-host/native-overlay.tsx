@@ -1,4 +1,3 @@
-import { HostedFloatingFormatMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingFormatMenu';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { toast } from '@core/component/Toast/Toast';
 import { Telemetry } from '@macro-inc/observability';
@@ -10,6 +9,7 @@ import {
   Show,
 } from 'solid-js';
 import { CommentButton } from '../CommentButton';
+import { NativeBodyFormatPopup } from './native-body-popup';
 import { createNativeDocumentFormattingObserver } from './native-observer';
 
 /** Own only the optional body menu; the document owns its actual native view. */
@@ -72,12 +72,10 @@ export function createNativeBodyFormattingOverlay(options: {
         <FloatingMenuGroup>
           <Show when={formatting.controller()}>
             {(controller) => (
-              <HostedFloatingFormatMenu
-                host={controller().menu}
-                options={{
-                  showLinkButton: false,
-                  ...(commentAction ? { commentAction } : {}),
-                }}
+              <NativeBodyFormatPopup
+                host={controller().host}
+                popup={controller().bodyPopup}
+                commentAction={commentAction}
               />
             )}
           </Show>

@@ -1,6 +1,7 @@
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { HostedFloatingFormatMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingFormatMenu';
+import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
@@ -16,6 +17,7 @@ import * as native from '../../../../../lib/core/document-session/wasm/document_
 import { MarkdownDocumentProvider } from '../../../context/markdown-document-context';
 import { createMarkdownDocumentState } from '../../../context/markdown-document-state';
 import { FormatTools } from '../../FormatTools';
+import { NativeBodyFormatPopup } from '../native-body-popup';
 import { createNativeDocumentFormattingObserver } from '../native-observer';
 import '@app/index.css';
 
@@ -39,11 +41,17 @@ function NativeFormattingFixture() {
   const [live, setLive] = createSignal('');
   const [selectionFacts, setSelectionFacts] = createSignal('');
   const floating = new URLSearchParams(location.search).has('floating');
+  const bodyPopup = new URLSearchParams(location.search).has('body');
   let body: HTMLDivElement | undefined;
   let runtime: ReturnType<typeof mountLocalSessionView> | undefined;
   let closed = false;
+  const canInteract = () =>
+    canEdit() &&
+    !state.generation.isGenerating() &&
+    !state.generation.generatedAndWaiting() &&
+    !state.editor.error();
   const formatting = createNativeDocumentFormattingObserver({
-    canEdit,
+    canEdit: canInteract,
     alive: () => !closed,
   });
   onMount(() => {
@@ -177,64 +185,109 @@ function NativeFormattingFixture() {
           }}
         >
           <FloatingMenuGroup>
-            <main class="mx-auto max-w-4xl p-8">
-              <Show when={!floating && formatting.controller()}>
+            <div class="portal-scope relative" data-block-content>
+              <main class="mx-auto max-w-4xl p-8">
+                <Show when={!floating && !bodyPopup && formatting.controller()}>
+                  {(controller) => (
+                    <Toolbar aria-label="Document formatting">
+                      <FormatTools
+                        withinPopup
+                        formattingHost={controller().host}
+                      />
+                    </Toolbar>
+                  )}
+                </Show>
+                <div
+                  id="body"
+                  ref={body}
+                  role="textbox"
+                  aria-label="Body"
+                  contentEditable={canEdit()}
+                  class="md border border-edge p-4 my-8"
+                />
+                <button type="button" onClick={loadFormatting}>
+                  Load formatting facts
+                </button>
+                <button type="button" onClick={loadTable}>
+                  Load table
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setCanEdit(false);
+                    activeRuntime().view.setEditable(false);
+                  }}
+                >
+                  Read only
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSaved(activeRuntime().view.query.serializedState())
+                  }
+                >
+                  Save state
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => state.generation.setIsGenerating(true)}
+                >
+                  Lock generation
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => state.generation.setGeneratedAndWaiting(true)}
+                >
+                  Lock waiting
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() =>
+                    state.editor.setError(MarkdownEditorErrors.JSON_PARSE_ERROR)
+                  }
+                >
+                  Lock error
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    state.generation.setIsGenerating(false);
+                    state.generation.setGeneratedAndWaiting(false);
+                    state.editor.setError(null);
+                  }}
+                >
+                  Unlock formatting
+                </button>
+                <output id="selection-facts" hidden>
+                  {selectionFacts()}
+                </output>
+                <output id="live-state" hidden>
+                  {live()}
+                </output>
+                <output id="saved">{saved()}</output>
+              </main>
+              <Show when={floating && formatting.controller()}>
                 {(controller) => (
-                  <Toolbar aria-label="Document formatting">
-                    <FormatTools
-                      withinPopup
-                      formattingHost={controller().host}
-                    />
-                  </Toolbar>
+                  <HostedFloatingFormatMenu
+                    host={controller().menu}
+                    options={{}}
+                  />
                 )}
               </Show>
-              <div
-                id="body"
-                ref={body}
-                role="textbox"
-                aria-label="Body"
-                contentEditable={canEdit()}
-                class="md border border-edge p-4 my-8"
-              />
-              <button type="button" onClick={loadFormatting}>
-                Load formatting facts
-              </button>
-              <button type="button" onClick={loadTable}>
-                Load table
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setCanEdit(false);
-                  activeRuntime().view.setEditable(false);
-                }}
-              >
-                Read only
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setSaved(activeRuntime().view.query.serializedState())
-                }
-              >
-                Save state
-              </button>
-              <output id="selection-facts" hidden>
-                {selectionFacts()}
-              </output>
-              <output id="live-state" hidden>
-                {live()}
-              </output>
-              <output id="saved">{saved()}</output>
-            </main>
-            <Show when={floating && formatting.controller()}>
-              {(controller) => (
-                <HostedFloatingFormatMenu
-                  host={controller().menu}
-                  options={{}}
-                />
-              )}
-            </Show>
+              <Show when={bodyPopup && formatting.controller()}>
+                {(controller) => (
+                  <NativeBodyFormatPopup
+                    host={controller().host}
+                    popup={controller().bodyPopup}
+                  />
+                )}
+              </Show>
+            </div>
           </FloatingMenuGroup>
         </MarkdownDocumentProvider>
       </PosthogProvider>

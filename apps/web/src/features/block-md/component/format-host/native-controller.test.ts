@@ -467,3 +467,56 @@ test.each(['generating', 'waiting', 'error'])(
     }
   }
 );
+
+test('body popup rectangle rejects another real editor range while its own model range remains', async () => {
+  const first = mount();
+  const second = mount();
+  const links = createNativeDocumentLinkMenuHost(first.view, {
+    canEdit: () => true,
+    alive: () => true,
+  });
+  const controller = createNativeDocumentFormattingHost(first.view, {
+    canEdit: () => true,
+    alive: () => true,
+    links,
+  });
+  const selection = document.getSelection();
+  const choose = (root: HTMLElement, x: number) => {
+    const node = document
+      .createTreeWalker(root, NodeFilter.SHOW_TEXT)
+      .nextNode();
+    if (!(node instanceof Text) || !selection)
+      throw new Error('Missing actual text range');
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    // jsdom has no layout. Keep the actual DOM Range and stub only its rectangle.
+    Object.defineProperty(range, 'getBoundingClientRect', {
+      value: () => new DOMRect(x, 20, 30, 15),
+    });
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  try {
+    first.port.setState(state('First owner'));
+    second.port.setState(state('Second owner'));
+    select(first, 'First owner');
+    first.root.tabIndex = 0;
+    second.root.tabIndex = 0;
+    first.root.focus();
+    choose(first.root, 10);
+    expect(controller.bodyPopup.rectangle()?.x).toBe(10);
+    second.root.focus();
+    choose(second.root, 900);
+    expect(document.activeElement).toBe(second.root);
+    expect(first.view.selection().selection.kind).toBe('range');
+    expect(controller.bodyPopup.rectangle()).toBeUndefined();
+  } finally {
+    selection?.removeAllRanges();
+    controller.dispose();
+    links.dispose();
+    await first.close();
+    await second.close();
+    first.root.remove();
+    second.root.remove();
+  }
+});

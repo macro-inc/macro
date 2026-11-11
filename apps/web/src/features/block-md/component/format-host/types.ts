@@ -1,4 +1,7 @@
-import type { FormattingSelection } from '@core/component/LexicalMarkdown/editing/overlay-hosts/format';
+import type {
+  FormatMenuHost,
+  FormattingSelection,
+} from '@core/component/LexicalMarkdown/editing/overlay-hosts/format';
 import type { NodeTransformType } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import type { TextFormatType } from 'lexical';
 import type { Accessor } from 'solid-js';
@@ -31,4 +34,11 @@ export interface DocumentFormattingHost {
   unlink(): void;
   insertEquation?(): void;
   insertDivider?(): void;
+}
+
+/** Popup presentation from the current native view; rectangle() performs only DOM reads. */
+export interface BodyFormattingPopupHost {
+  rectangle(): DOMRect | undefined;
+  registerPopup: FormatMenuHost['registerPopup'];
+  registerListeners: FormatMenuHost['registerListeners'];
 }

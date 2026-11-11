@@ -351,8 +351,16 @@ type FormatToolsProps = {
   size?: ButtonSize;
   onRequestLink?: () => void;
 } & (
-  | { withinPopup?: boolean; formattingHost?: undefined }
-  | { withinPopup: true; formattingHost: DocumentFormattingHost }
+  | {
+      withinPopup?: boolean;
+      formattingHost?: undefined;
+      showLinkButton?: never;
+    }
+  | {
+      withinPopup: true;
+      formattingHost: DocumentFormattingHost;
+      showLinkButton?: boolean;
+    }
 );
 
 export function FormatTools(props: FormatToolsProps) {
@@ -403,6 +411,11 @@ export function FormatTools(props: FormatToolsProps) {
     );
   });
   const cleanups: Array<() => void> = [];
+  const refocusEditor = () => {
+    const formatting = host();
+    if (formatting) formatting.focus();
+    else lastFocusedEditor()?.focus();
+  };
 
   function handleLink(e?: MouseEvent | KeyboardEvent) {
     e?.preventDefault();
@@ -565,11 +578,7 @@ export function FormatTools(props: FormatToolsProps) {
         >
           <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
-        <Dropdown.Content
-          onCloseAutoFocus={() => {
-            lastFocusedEditor()?.focus();
-          }}
-        >
+        <Dropdown.Content onCloseAutoFocus={refocusEditor}>
           <Dropdown.Group>
             <div class="w-full flex gap-1 justify-center items-center">
               <For each={InlineFormats}>
@@ -628,11 +637,7 @@ export function FormatTools(props: FormatToolsProps) {
           <TextAA class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Show when={!props.buttonIsDisabled()}>
-          <Dropdown.Content
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
+          <Dropdown.Content onCloseAutoFocus={refocusEditor}>
             <Dropdown.Group>
               <div class="w-full flex gap-1 justify-center items-center">
                 <For each={props.formats}>
@@ -685,11 +690,7 @@ export function FormatTools(props: FormatToolsProps) {
         <Dynamic component={props.icon ?? ThreeDots} />
       </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <Dropdown.Content
-          onCloseAutoFocus={() => {
-            lastFocusedEditor()?.focus();
-          }}
-        >
+        <Dropdown.Content onCloseAutoFocus={refocusEditor}>
           <Dropdown.Group>
             <For each={Object.keys(InlineIcons)}>
               {(format) => (
@@ -732,11 +733,7 @@ export function FormatTools(props: FormatToolsProps) {
         <Dynamic component={props.icon ?? ThreeDots} />
       </Dropdown.Trigger>
       <Show when={!buttonIsDisabled()}>
-        <Dropdown.Content
-          onCloseAutoFocus={() => {
-            lastFocusedEditor()?.focus();
-          }}
-        >
+        <Dropdown.Content onCloseAutoFocus={refocusEditor}>
           <Dropdown.Group>
             <For each={props.elements}>
               {(format) => (
@@ -792,11 +789,7 @@ export function FormatTools(props: FormatToolsProps) {
           <DotsThreeLarge class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Show when={!buttonIsDisabled()}>
-          <Dropdown.Content
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
+          <Dropdown.Content onCloseAutoFocus={refocusEditor}>
             <Dropdown.Group>
               <div class="flex items-center gap-1">
                 <For each={MoreInlineFormats}>
@@ -859,12 +852,7 @@ export function FormatTools(props: FormatToolsProps) {
           <CaretDown class="size-3" />
         </Dropdown.Trigger>
         <Show when={!buttonIsDisabled()}>
-          <Dropdown.Content
-            class="text-xs"
-            onCloseAutoFocus={() => {
-              lastFocusedEditor()?.focus();
-            }}
-          >
+          <Dropdown.Content class="text-xs" onCloseAutoFocus={refocusEditor}>
             <Dropdown.Group>
               <For each={blockFormats}>
                 {(format) => (
@@ -914,27 +902,29 @@ export function FormatTools(props: FormatToolsProps) {
             buttonIsDisabled={buttonIsDisabled}
             size={buttonSize()}
           />
-          <Button
-            variant="ghost"
-            size={buttonSize()}
-            onPointerDown={(e: PointerEvent) => e.preventDefault()}
-            onClick={(e) => {
-              if (!selection()?.hasLinks && props.onRequestLink) {
-                e.preventDefault();
-                e.stopPropagation();
-                props.onRequestLink();
-              } else {
-                handleLink(e);
-              }
-            }}
-            tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
-            disabled={buttonIsDisabled()}
-          >
-            <Dynamic
-              component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
-              class="size-4"
-            />
-          </Button>
+          <Show when={props.showLinkButton ?? true}>
+            <Button
+              variant="ghost"
+              size={buttonSize()}
+              onPointerDown={(e: PointerEvent) => e.preventDefault()}
+              onClick={(e) => {
+                if (!selection()?.hasLinks && props.onRequestLink) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  props.onRequestLink();
+                } else {
+                  handleLink(e);
+                }
+              }}
+              tooltip={selection()?.hasLinks ? 'Remove Link' : 'Insert Link'}
+              disabled={buttonIsDisabled()}
+            >
+              <Dynamic
+                component={selection()?.hasLinks ? BrokenLinkIcon : LinkIcon}
+                class="size-4"
+              />
+            </Button>
+          </Show>
           <MoreInlineDropdown />
           <Toolbar.Divider />
           <TextBlockDropdown />

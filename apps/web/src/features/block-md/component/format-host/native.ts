@@ -8,7 +8,10 @@ import type {
 } from '@macro-inc/lexical-wasm-view';
 import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
 import type { InputSettlement } from '@macro-inc/lexical-wasm-view/view/port';
-import { sameSelection } from '@macro-inc/lexical-wasm-view/view/selection';
+import {
+  isSelectionWithinEditor,
+  sameSelection,
+} from '@macro-inc/lexical-wasm-view/view/selection';
 import type { ViewSelection } from '@macro-inc/lexical-wasm-view/view/types';
 import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
@@ -19,7 +22,7 @@ import {
   type NativeFormattingTableFacts,
   readNativeFormattingTableFacts,
 } from './native-table-facts';
-import type { DocumentFormattingHost } from './types';
+import type { BodyFormattingPopupHost, DocumentFormattingHost } from './types';
 
 const escapeCommand = createViewCommand(
   'Key(Escape)',
@@ -162,6 +165,31 @@ export function createNativeDocumentFormattingHost(
       };
     };
 
+    const rectangle = (): DOMRect | undefined => {
+      if (!active()) return undefined;
+      const current = view.selection().selection;
+      if (current.kind === 'range') {
+        const dom = view.root.ownerDocument.getSelection();
+        if (
+          !dom ||
+          dom.rangeCount === 0 ||
+          !isSelectionWithinEditor(view, dom.anchorNode, dom.focusNode)
+        )
+          return undefined;
+        return dom.getRangeAt(0).getBoundingClientRect();
+      }
+      if (current.kind !== 'table') return undefined;
+      // Source popupPlugin uses the first/last cells in actual TableSelection order.
+      const cells = (tables()?.selectedCells ?? [])
+        .map((key) => view.getElementByKey(key))
+        .filter((element) => element !== null);
+      const first = cells[0];
+      const last = cells.at(-1);
+      if (!first || !last) return undefined;
+      const a = first.getBoundingClientRect();
+      const b = last.getBoundingClientRect();
+      return new DOMRect(a.left, a.top, b.right - a.left, b.bottom - a.top);
+    };
     const updatePopup = () => {
       if (!popup) return;
       popup.visible(false);
@@ -295,7 +323,12 @@ export function createNativeDocumentFormattingHost(
         );
       },
     };
-    return { host, menu, observer, dispose };
+    const bodyPopup: BodyFormattingPopupHost = {
+      rectangle,
+      registerPopup: menu.registerPopup,
+      registerListeners: menu.registerListeners,
+    };
+    return { host, menu, bodyPopup, observer, dispose };
   } catch (error) {
     disposed = true;
     return scope.fail(error);
