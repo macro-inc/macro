@@ -45,6 +45,29 @@ describe('createHandler', () => {
     });
   });
 
+  test('the OpenAI apps challenge serves the configured token', async () => {
+    const handle = createHandler(
+      parseConfig({ ...BINDINGS, OPENAI_APPS_CHALLENGE: 'challenge-token' })
+    );
+
+    const response = await handle(
+      new Request('https://mcp-chatgpt.test/.well-known/openai-apps-challenge')
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('challenge-token');
+  });
+
+  test('the OpenAI apps challenge is a 404 without a token', async () => {
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      new Request('https://mcp-chatgpt.test/.well-known/openai-apps-challenge')
+    );
+
+    expect(response.status).toBe(404);
+  });
+
   test('a request without a bearer token is sent to the metadata', async () => {
     const handle = createHandler(parseConfig(BINDINGS));
 

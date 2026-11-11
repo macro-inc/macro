@@ -8,6 +8,8 @@
  *
  * Secrets (`wrangler secret put <NAME> --env <env>`):
  *   DD_API_KEY - optional; sent with trace exports to a Datadog intake
+ *   OPENAI_APPS_CHALLENGE - the domain verification token from OpenAI's app
+ *     dashboard, served at /.well-known/openai-apps-challenge
  */
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
