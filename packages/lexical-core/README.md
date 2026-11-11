@@ -14,6 +14,13 @@ characters inside a URL remain literal. Code, existing links, mention payloads,
 and escaped URL text retain their own syntax. Existing bare URLs become clickable
 when imported; their source Markdown is not rewritten in storage.
 
+An editor links a typed or pasted URL only once the caret leaves it, so a
+message sent right after its URL holds the URL as plain text. Export writes such
+a URL without escaping its `*`, `_`, `` ` `` or `~`, so it imports as a link. For
+the same reason, import links a URL whose only escapes are of those characters
+(saved by older clients); any other escape, such as `\.` or `\:`, keeps it
+literal.
+
 The editor and parser share URL validation and normalization. Preserve existing
 percent escapes, use the HTTP/HTTPS/mailto allowlist, and continue past rejected
 matches to find later valid links.

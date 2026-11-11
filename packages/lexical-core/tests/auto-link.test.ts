@@ -127,12 +127,59 @@ describe('Markdown URL imports', () => {
     'javascript:alert(1)',
     'https\\://example\\.com',
     'https://example\\.com',
+    'https://example\\.com/a\\_b',
+    'https://example.com/a\\\\b\\_c',
     '<m-user-mention>{"userId":"u1","email":"hello@example.com","displayName":"https://example.com"}</m-user-mention>',
     '![https://label.example.com](https://image.example.com/image.png)',
   ])('keeps protected content inert: %s', (markdown) => {
     parse(markdown)
       .getEditorState()
       .read(() => expect(links($getRoot())).toEqual([]));
+  });
+  it('links a URL whose only escapes are formatting escapes', () => {
+    parse('Read https://example.com/post?a=x\\_y\\*z\\~w&s=20 later')
+      .getEditorState()
+      .read(() => {
+        expect(links($getRoot())).toEqual([
+          {
+            text: 'https://example.com/post?a=x_y*z~w&s=20',
+            url: 'https://example.com/post?a=x_y*z~w&s=20',
+          },
+        ]);
+        expect($getRoot().getTextContent()).toBe(
+          'Read https://example.com/post?a=x_y*z~w&s=20 later'
+        );
+      });
+  });
+  it('saves plain-text URLs without escaping their formatting characters', () => {
+    const url = 'https://example.com/post?a=x_y&s=20';
+    const editor = parse('');
+    editor.update(
+      () => {
+        $getRoot()
+          .clear()
+          .append(
+            $createParagraphNode().append(
+              $createTextNode(`snake_case ${url} and `),
+              $createTextNode(url).setFormat('bold')
+            )
+          );
+      },
+      { discrete: true }
+    );
+    const markdown = editor
+      .getEditorState()
+      .read(() => $convertToMarkdownString(INTERNAL_TRANSFORMERS));
+    expect(markdown).toBe(`snake\\_case ${url} and **${url}**`);
+    parse(markdown)
+      .getEditorState()
+      .read(() => {
+        expect(links($getRoot())).toEqual([
+          { text: url, url },
+          { text: url, url },
+        ]);
+        expect($getRoot().getAllTextNodes()[3].hasFormat('bold')).toBe(true);
+      });
   });
   it('does not nest links inside explicit Markdown or internal links', () => {
     parse(
@@ -249,21 +296,24 @@ describe('explicitly removed links', () => {
       expect($isUnlinkedTextNode(node)).toBe(true);
     });
   });
-  it('exports literal text to external Markdown without internal tags or links', () => {
-    const editor = parse(
-      `<m-link>{"url":"${appStore}","text":"${appStore}","unlinked":true}</m-link>`
-    );
-    const markdown = editor
-      .getEditorState()
-      .read(() => $convertToMarkdownString(EXTERNAL_TRANSFORMERS));
-    expect(markdown).not.toContain('<m-link>');
-    parse(markdown, EXTERNAL_TRANSFORMERS)
-      .getEditorState()
-      .read(() => {
-        expect(links($getRoot())).toEqual([]);
-        expect($getRoot().getTextContent()).toBe(appStore);
-      });
-  });
+  it.each([appStore, 'https://example.com/a_b?c=d'])(
+    'exports literal text to external Markdown without internal tags or links: %s',
+    (url) => {
+      const editor = parse(
+        `<m-link>{"url":"${url}","text":"${url}","unlinked":true}</m-link>`
+      );
+      const markdown = editor
+        .getEditorState()
+        .read(() => $convertToMarkdownString(EXTERNAL_TRANSFORMERS));
+      expect(markdown).not.toContain('<m-link>');
+      parse(markdown, EXTERNAL_TRANSFORMERS)
+        .getEditorState()
+        .read(() => {
+          expect(links($getRoot())).toEqual([]);
+          expect($getRoot().getTextContent()).toBe(url);
+        });
+    }
+  );
 });
 
 describe('shared URL recognition', () => {
