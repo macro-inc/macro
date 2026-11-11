@@ -20,6 +20,7 @@ export function createTasksViewSearch(options: {
   nonListLayoutsEnabled?: Accessor<boolean>;
   restoreTab?: (tab: TasksTab) => void;
   savedViewActive?: Accessor<boolean>;
+  beforeLayoutChange?: () => void;
 }) {
   const { state, search } = options;
   // Missing URL controls restore the entry snapshot, not the latest selection.
@@ -81,6 +82,7 @@ export function createTasksViewSearch(options: {
         const requestedLayout =
           layout ?? (savedViewActive ? state.layout : entry.layout);
 
+        if (requestedLayout !== state.layout) options.beforeLayoutChange?.();
         options.setState(
           produce((draft) => {
             if (!savedViewActive && draft.tab !== tab) {
@@ -150,6 +152,7 @@ export function createTasksViewSearch(options: {
 
   const setState = new Proxy(options.setState, {
     apply(target, thisArg, args: unknown[]) {
+      if (args[0] === 'layout') options.beforeLayoutChange?.();
       Reflect.apply(target, thisArg, args);
       if (!options.enabled) return;
 

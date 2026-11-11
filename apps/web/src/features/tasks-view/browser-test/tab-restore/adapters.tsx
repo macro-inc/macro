@@ -1,7 +1,12 @@
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import type { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { ok } from 'neverthrow';
-import { type Accessor, createContext, useContext } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createSignal,
+  useContext,
+} from 'solid-js';
 
 export {
   createCollapsedSidebarSectionsStorage,
@@ -26,7 +31,8 @@ export const useSplitPanel = () => useContext(PanelContext);
 export function withSplitPanelOwner<T>(name: string, create: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, create);
 }
-export const useUserId = () => () => VIEWER;
+export const [viewer, setViewer] = createSignal(VIEWER);
+export const useUserId = () => viewer;
 export const useFeatureFlag = () => () => ({ enabled: false });
 export const useTagSets = () => () => [];
 export const useTagSetsReady = () => () => true;
@@ -41,7 +47,7 @@ export const useContactFilterOptions = () => ({
   visibleIds: () => [],
   search: () => '',
 });
-export const useQueryAccount = () => () => ({ id: VIEWER, session: 1 });
+export const useQueryAccount = () => () => ({ id: viewer(), session: 1 });
 export const useGlobalNotificationSource = () => undefined;
 export const markRowNotificationsSeenOnOpen = () => {};
 export function useAssigneePicker(selectedIds: Accessor<string[]>) {

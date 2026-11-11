@@ -112,21 +112,26 @@ export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
 };
 
 function selectEntryState(state: TasksViewState): TasksEntryState {
+  if (state.savedViewActive) {
+    // A direct saved-view entry has no earlier built-in snapshot to retain.
+    // Seed that entry from built-in defaults, never from temporary edits.
+    return {
+      ...DEFAULT_TASKS_ENTRY_STATE,
+      facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
+      sort: DEFAULT_TASKS_ENTRY_STATE.sort.map((item) => ({ ...item })),
+      collapsedGroupIds: [],
+    };
+  }
   return {
     version: 1,
     layout: state.layout,
-    tab: state.savedViewActive ? 'my-tasks' : state.tab,
-    search: state.savedViewActive ? '' : state.search,
+    tab: state.tab,
+    search: state.search,
     groupBy: state.groupBy,
     sort: state.sort.map((item) => ({ ...item })),
-    facets: normalizeFacetSelection(
-      state.savedViewActive ? DEFAULT_TASK_FACET_SELECTION : state.facets
-    ),
+    facets: normalizeFacetSelection(state.facets),
     collapsedGroupIds: [...state.collapsedGroupIds],
-    dueDate:
-      !state.savedViewActive && state.dueDate
-        ? { ...state.dueDate }
-        : undefined,
+    dueDate: state.dueDate ? { ...state.dueDate } : undefined,
   };
 }
 

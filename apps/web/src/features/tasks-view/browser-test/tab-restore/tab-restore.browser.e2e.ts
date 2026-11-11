@@ -109,3 +109,22 @@ test('saved-view drafts do not overwrite a built-in tab or survive returning to 
     '{"status":["in-review"]}'
   );
 });
+
+test('account changes clear tab snapshots and replace the previous tab URL', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await statusFilter(page, info.project.name === 'phone', 'Completed');
+  await page
+    .getByRole('button', { name: 'Switch account', exact: true })
+    .click();
+  await expect(page.getByTestId('tab')).toHaveText('my-tasks');
+  await expect(page.getByTestId('facets')).toHaveText(
+    '{"status":["in-progress","in-review","not-started"]}'
+  );
+  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await expect(page.getByTestId('facets')).toHaveText(
+    '{"status":["in-progress","in-review","not-started"]}'
+  );
+});

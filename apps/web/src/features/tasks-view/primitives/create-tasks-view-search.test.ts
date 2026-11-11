@@ -35,6 +35,7 @@ function setup(
     nonListLayoutsEnabled?: Accessor<boolean>;
     restoreTab?: (tab: TasksTab) => Partial<TasksViewState>;
     savedViewActive?: Accessor<boolean>;
+    beforeLayoutChange?: (layout: TasksViewState['layout']) => void;
   } = {}
 ) {
   return createRoot((dispose) => {
@@ -74,11 +75,21 @@ function setup(
       restoreTab: restoreTab
         ? (tab) => setState({ ...restoreTab(tab), tab })
         : undefined,
+      beforeLayoutChange: () => options.beforeLayoutChange?.(state.layout),
     });
 
     return { state, search, setSearch, writeSearch, ...controls };
   });
 }
+
+it('captures the outgoing list before control and URL layout changes', () => {
+  const captured: TasksViewState['layout'][] = [];
+  const view = setup({ beforeLayoutChange: (layout) => captured.push(layout) });
+  view.setState('layout', 'board');
+  view.setState('layout', 'list');
+  view.setSearch('layout', 'gantt');
+  expect(captured).toEqual(['list', 'board', 'list']);
+});
 
 it('restores layout and controls from URL history without losing entry-only state', () => {
   const view = setup({

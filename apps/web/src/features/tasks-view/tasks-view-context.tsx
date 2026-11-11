@@ -470,7 +470,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         if (changed && id) setState('search', '');
         if (accountChanged) {
           clearTabs();
-          restoreBuiltInTab('my-tasks', false);
+          restoreBuiltInTab(props.scopeKey ? initialTab : 'my-tasks', false);
+          if (syncSearch) navigateSavedView(undefined);
         } else if (!id && wasSelected) {
           restoreBuiltInTab(routeTab(), false);
         }
@@ -502,6 +503,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       nonListLayoutsEnabled: () => !isTouchDevice(),
       restoreTab: restoreBuiltInTab,
       savedViewActive: isSavedViewActive,
+      beforeLayoutChange: () => panel.handle.captureEntryState(),
     });
 
   const source = withSplitPanelOwner(ownedSlot('data-source'), () =>

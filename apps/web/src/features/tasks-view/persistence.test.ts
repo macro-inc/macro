@@ -16,11 +16,11 @@ afterEach(() => {
   for (const dispose of DISPOSERS.splice(0)) dispose();
 });
 
-function createView(entry?: Record<string, unknown>) {
+function createView(entry?: Record<string, unknown>, saved = false) {
   return createRoot((dispose) => {
     DISPOSERS.push(dispose);
     const captors = new Map<string, () => unknown>();
-    const [savedViewActive, setSavedViewActive] = createSignal(false);
+    const [savedViewActive, setSavedViewActive] = createSignal(saved);
     const persistence = createTasksViewPersistence({
       handle: {
         currentEntryState: () => entry,
@@ -215,4 +215,29 @@ it('captures live list position before switching and restores each tab on return
     scrollOffset: 720,
   });
   restored.dispose?.();
+});
+
+it('captures defaults rather than temporary settings on a direct saved-view entry', () => {
+  const view = createView(undefined, true);
+  view.setState({
+    tab: 'team-tasks',
+    layout: 'board',
+    groupBy: 'assignee',
+    sort: [{ id: 'created_at', reversed: true }],
+    facets: { status: ['completed'] },
+    dueDate: { type: 'overdue' },
+    collapsedGroupIds: ['temporary-group'],
+    search: 'temporary',
+  });
+  expect(view.capture()[TASKS_ENTRY_STATE_KEY]).toMatchObject({
+    tab: 'my-tasks',
+    layout: 'list',
+    groupBy: 'priority',
+    sort: [{ id: 'updated_at' }],
+    dueDate: undefined,
+    search: '',
+    collapsedGroupIds: [],
+    tabs: {},
+  });
+  expect(view.restoreTab(view.state, 'team-tasks')).toBeUndefined();
 });

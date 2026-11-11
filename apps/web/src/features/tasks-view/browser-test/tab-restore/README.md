@@ -13,5 +13,6 @@ The real `TasksViewProvider`, filter controls, saved-view draft, split router,
 entry captors, and view-retention hook run over synthetic task data. The fixture
 replaces account/directory sources, preview rendering, and unrelated routes, not
 tab switching or persistence. Desktop and phone cases cover independent status
-filters, matching task results, whole-view resume, and saved-view draft discard.
+filters, matching task results, whole-view resume, saved-view draft discard,
+and account-scoped resets.
 Screenshots and failure traces stay in the ignored `test-results` directory.

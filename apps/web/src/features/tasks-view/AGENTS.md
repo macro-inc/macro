@@ -49,7 +49,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
 - Limit new Assignee choices to team members and available agents without contact discovery; reuse existing selected-first ordering at opening and keep rows stable while selecting; preserve selected outsiders, the semantic Me token, Unassigned, and broad Created by options.
 - Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
-- Keep built-in tab filters, due dates, raw layout, grouping, ordered sort, local search, collapsed groups, and list focus/scroll in per-tab entry snapshots; retain them through history and view resume, not across a reload.
+- Keep built-in tab filters, due dates, raw layout, grouping, ordered sort, local search, collapsed groups, and list focus/scroll in per-tab entry snapshots; capture before tab/layout changes, clear on account replacement, and retain through history and view resume, not across a reload.
 - Do not persist temporary saved-view settings in entry or tab snapshots; tab switches and detail navigation discard those edits, while detail navigation retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
 - Keep embedded Project/CRM task consumers free of saved-view management.

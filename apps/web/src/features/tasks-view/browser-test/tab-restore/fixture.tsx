@@ -40,7 +40,7 @@ import type {
 } from '../../queries/use-tasks-query';
 import { TasksViewProvider, useTasksView } from '../../tasks-view-context';
 import type { TasksViewState } from '../../types';
-import { PanelContext, VIEWER } from './adapters';
+import { PanelContext, setViewer, VIEWER } from './adapters';
 import { resolveContentLocation, splitContentFromLocation } from './routes';
 
 const STATUS: PropertyDefinition = {
@@ -228,11 +228,14 @@ function Controls() {
           <TasksMobileTabs leading={<TasksFilterDrawer />} />
         </div>
       </Show>
-      <div class="my-4 flex gap-2">
+      <div class="my-4 flex flex-wrap gap-2">
         <Button onClick={() => view.selectSavedView(SAVED_ID)}>
           Open saved view
         </Button>
         <Button onClick={() => view.startSavedView()}>New saved view</Button>
+        <Button onClick={() => setViewer('another-test-viewer')}>
+          Switch account
+        </Button>
       </div>
       <output hidden data-testid="tab">
         {view.state.tab}
