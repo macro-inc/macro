@@ -278,6 +278,11 @@ opaque markers grant no active scope or mutation authority; unowned state reads
 and synthetic no-op commits carry no origin. Never serialize or print marker
 addresses, or infer a new publication from a historical/read-only capture.
 
+Use DecoratorRenderObserver to prepare an opaque per-view observation and expose
+it only after actual consumption; validate owner/epoch before asynchronous
+installation and retire outstanding authority on detach. Keep native sidecars
+outside transport DTOs and retain only signatures/revisions, not graph snapshots.
+
 
 Prepare owned main transitions with `Transaction::prepare` only after the real
 pipeline completes. `PreparedUpdate` contains an unpublished same-editor snapshot,

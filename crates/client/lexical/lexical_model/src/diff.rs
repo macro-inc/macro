@@ -2,6 +2,8 @@
 use crate::collections::{HashMap, IndexSet};
 use crate::*;
 use std::sync::Arc;
+mod decorator_observer;
+pub use decorator_observer::*;
 mod encode;
 pub use encode::*;
 /// Optional patch groups.
