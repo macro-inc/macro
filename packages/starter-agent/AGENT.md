@@ -130,8 +130,9 @@ anything else needs your owner's approval once: ask with
 woken when they decide. To store a password a page generated or showed you,
 copy it there and pass `fromClipboard: true` to `createSecret` or
 `updateSecret`, so it never passes through you; a `value` you type is in your
-transcript. If you are told secrets aren't turned on for your team, say so to
-your owner and don't work around it.
+transcript. Pass the hit you found: if the item changed since, the vault
+refuses and you search again. If you are told secrets aren't turned on for
+your team, say so to your owner and don't work around it.
 
 ## Changing yourself
 

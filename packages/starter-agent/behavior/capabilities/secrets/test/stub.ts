@@ -9,9 +9,15 @@
  * (400 invalid_session_attribution), the feature flags (404 not_found, as the
  * human routes answer a flag that is off), the team (403 invalid_agent), the
  * mutation header (400 invalid_request), the route and body (404 / 400), the
- * item (404 not_found), then access: usable, else pending (a live request, or a
- * shared grant without approval), else not_granted; then forbidden and
+ * item (404 not_found, also for a person's private item), then access:
+ * usable, else pending (a live request, or a shared grant without approval;
+ * never for an item the agent created), else not_granted; then forbidden and
  * version_conflict.
+ *
+ * Items are the team's, shared with it (the default) or private to the
+ * person who made it; the creator never changes. A share with the team
+ * grants an agent nothing: only an Agent grant does, which needs the
+ * owner's standing approval unless the agent created the item.
  */
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { isoText } from '@macro-inc/muppet/utilities/time';
@@ -46,6 +52,8 @@ type Item = {
   version: number;
   /** Whether this agent created it. */
   readonly creator: boolean;
+  /** Shared with the team, or private to the person who made it. */
+  readonly share: 'team' | 'private';
   totpSeed?: string;
 };
 
@@ -168,7 +176,8 @@ export const stubVault = ({
     const grant = grants.get(item.id);
     const usable =
       grant !== undefined && (item.creator || grant.approved === true);
-    const pending = live(item.id);
+    // A request on an item the agent created is only the request's own status, never the item's.
+    const pending = item.creator ? undefined : live(item.id);
     return {
       status: usable
         ? 'usable'
@@ -190,9 +199,9 @@ export const stubVault = ({
   /** Why `item` can't be used, or undefined if it can. */
   const unusable = (item: Item): ErrorCode | undefined => {
     if (access(item).status === 'usable') return undefined;
+    if (item.creator) return 'not_granted';
     const grant = grants.get(item.id);
-    const awaitingApproval =
-      grant !== undefined && !item.creator && !grant.approved;
+    const awaitingApproval = grant !== undefined && !grant.approved;
     return live(item.id) !== undefined || awaitingApproval
       ? 'pending'
       : 'not_granted';
@@ -203,6 +212,7 @@ export const stubVault = ({
     name: item.name,
     kind: item.kind,
     url: item.url,
+    version: item.version,
     access: access(item),
   });
 
@@ -248,6 +258,10 @@ export const stubVault = ({
     return json(result.status, result.body);
   };
 
+  /** Whether the agent's team can see an item at all: a person's private item is theirs alone. */
+  const visible = (item: Item): boolean =>
+    item.teamId === teamId && (item.share === 'team' || item.creator);
+
   const handle = async (request: globalThis.Request): Promise<Response> => {
     const url = new URL(request.url);
     const text = request.method === 'GET' ? '' : await request.clone().text();
@@ -288,7 +302,7 @@ export const stubVault = ({
       const q = (url.searchParams.get('q') ?? '').toLowerCase();
       const start = Number(url.searchParams.get('cursor') ?? '0');
       const found = [...items.values()].filter(
-        (item) => item.teamId === teamId && item.name.toLowerCase().includes(q)
+        (item) => visible(item) && item.name.toLowerCase().includes(q)
       );
       const page = found.slice(start, start + limit);
       return json(200, {
@@ -313,6 +327,7 @@ export const stubVault = ({
           secret: input.secret,
           version: 1,
           creator: true,
+          share: 'team',
         };
         items.set(item.id, item);
         // Creation grants the creator Edit, needing no approval.
@@ -354,8 +369,7 @@ export const stubVault = ({
     if (schema !== undefined && !schema.safeParse(input).success)
       return refuse('invalid_request');
     const item = items.get(itemId);
-    if (item === undefined || item.teamId !== teamId)
-      return refuse('not_found');
+    if (item === undefined || !visible(item)) return refuse('not_found');
 
     if (action === 'access-requests/mine') return json(200, requestState(item));
 
@@ -453,6 +467,7 @@ export const stubVault = ({
       readonly secret: ItemSecret;
       readonly totpSeed?: string;
       readonly teamId?: string;
+      readonly share?: 'team' | 'private';
     }): string => {
       const id = newId();
       items.set(id, {
@@ -464,6 +479,7 @@ export const stubVault = ({
         secret: item.secret,
         version: 1,
         creator: false,
+        share: item.share ?? 'team',
         totpSeed: item.totpSeed,
       });
       return id;
