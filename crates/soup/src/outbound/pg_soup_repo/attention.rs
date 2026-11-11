@@ -32,7 +32,7 @@
 //! drops candidates their hydration legs reject and refills from the next
 //! page; a short page here still means the feed is exhausted.
 
-use activity::Action;
+use activity::{Action, Actor};
 use cowlike::CowLike;
 use item_filters::ast::properties::properties_filter_matches_propertyless;
 use model_entity::EntityType;
@@ -159,14 +159,18 @@ fn email_inbox_gate() -> String {
 /// What an agent did for the viewer is the agent's work, not theirs: a bot
 /// acting on their behalf (the actor is not the subject), or any write made
 /// inside an agent session's code-mode invocation (a correlation is recorded,
-/// whatever the actor).
+/// whatever the actor). The one bot whose work for them counts is the system
+/// bot, which writes only the starter documents and support channel a new
+/// account starts with.
 fn own_work(alias: &str) -> String {
     let sent: &'static str = Action::Sent.into();
+    let system = Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID);
     format!(
-        "{alias}.actor_id = {alias}.subject_id \
+        "({alias}.actor_id = {alias}.subject_id OR {alias}.actor_id = '{system}') \
          AND {alias}.agent_correlation_id IS NULL \
          AND {alias}.action NOT IN ({views}) \
          AND ({alias}.entity_type <> 'email_thread' OR {alias}.action = '{sent}')",
+        system = system.as_ref(),
         views = view_tags_sql(),
     )
 }
