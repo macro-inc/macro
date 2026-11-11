@@ -5,6 +5,7 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createVirtualizer,
   defaultRangeExtractor,
+  measureElement,
   type Range,
 } from '@tanstack/solid-virtual';
 import {
@@ -94,6 +95,18 @@ function VirtualRows<K extends string>(
     },
     getScrollElement: () => props.scrollRoot,
     estimateSize: () => props.estimateSize,
+    // A transition updates these keys before it updates the rows on screen,
+    // so a row can be measured at an index that now belongs to another key.
+    // Keep that key's size instead of giving it this row's height.
+    measureElement: (element, entry, instance) => {
+      const index = instance.indexFromElement(element);
+      const key = instance.options.getItemKey(index);
+      if (element.dataset.key !== key) {
+        return instance.itemSizeCache.get(key) ?? props.estimateSize;
+      }
+
+      return measureElement(element, entry, instance);
+    },
     initialOffset: () => props.scrollRoot.scrollTop,
     get scrollMargin() {
       return props.scrollMargin ?? 0;
@@ -200,6 +213,7 @@ function VirtualRows<K extends string>(
                 element = node;
               }}
               data-index={row().index}
+              data-key={key}
               class="absolute left-0 w-full"
               style={{
                 top: `${row().start - (props.scrollMargin ?? 0)}px`,

@@ -1,5 +1,12 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createComponent, createSignal } from 'solid-js';
+import {
+  createComponent,
+  createResource,
+  createSignal,
+  Suspense,
+  startTransition,
+} from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ChannelRailVirtualizer,
@@ -35,7 +42,9 @@ function measure(height: number) {
   viewportHeight = height;
   for (const observer of [...observers]) {
     const entries = [...observer.targets].map((target) => {
-      const blockSize = target.hasAttribute('data-viewport') ? height : 32;
+      const blockSize = target.hasAttribute('data-viewport')
+        ? height
+        : Number(target.firstElementChild?.getAttribute('data-height') ?? 32);
       const size = [{ inlineSize: 300, blockSize }];
       return {
         target,
@@ -303,6 +312,84 @@ describe('channel rail virtualizer', () => {
     expect(long.parentElement?.style.top).toBe('0px');
     expect(short.parentElement?.style.top).toBe('260px');
     expect(view.getByText('last').parentElement?.style.top).toBe('300px');
+  });
+
+  it('keeps row heights measured while a transition still shows the previous rows', async () => {
+    // Solid commits transitions from its scheduler, which fake timers stop.
+    vi.useRealTimers();
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        if (this.hasAttribute('data-viewport')) return 200;
+        return Number(
+          this.firstElementChild?.getAttribute('data-height') ?? 32
+        );
+      }
+    );
+    const viewport = document.createElement('div');
+    viewport.setAttribute('data-viewport', '');
+    Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+    document.body.append(viewport);
+    const [keys, setKeys] = createSignal(['a', 'b', 'status']);
+    const [request, setRequest] = createSignal(0);
+    let release = () => {};
+    const [route] = createResource(request, (value) =>
+      value === 0
+        ? 0
+        : new Promise<number>((resolve) => {
+            release = () => resolve(value);
+          })
+    );
+    const view = render(
+      () =>
+        createComponent(Suspense, {
+          get children() {
+            return [
+              () => route(),
+              createComponent(ChannelRailVirtualizer<string>, {
+                get keys() {
+                  return keys();
+                },
+                scrollRoot: viewport,
+                estimateSize: 32,
+                children: (key) => {
+                  const row = document.createElement('button');
+                  row.textContent = key;
+                  // A section's trailing status row is empty when there is nothing to load.
+                  row.setAttribute(
+                    'data-height',
+                    key === 'status' ? '0' : '32'
+                  );
+                  return row;
+                },
+              }),
+            ];
+          },
+        }),
+      { container: viewport }
+    );
+    measure(200);
+
+    // A navigation waits on its route while a new conversation reaches the top.
+    fireAndForget(
+      startTransition(() => {
+        setRequest(1);
+        setKeys(['new', 'a', 'b', 'status']);
+      }),
+      'channels-view'
+    );
+    // Solid starts the transition in a microtask.
+    await Promise.resolve();
+    // The rows on screen still show the previous keys when they are measured.
+    expect(view.queryByText('new')).toBeNull();
+    measure(200);
+    release();
+    // A resize observer reports only sizes that changed, so none arrive now.
+    await vi.waitFor(() => expect(view.getByText('new')).toBeTruthy());
+
+    expect(view.getByText('new').parentElement?.style.top).toBe('0px');
+    expect(view.getByText('a').parentElement?.style.top).toBe('32px');
+    expect(view.getByText('b').parentElement?.style.top).toBe('64px');
+    expect(view.getByText('status').parentElement?.style.top).toBe('96px');
   });
 
   it('retains focused or dragged rows outside the viewport', () => {
