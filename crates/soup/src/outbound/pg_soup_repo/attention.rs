@@ -1,8 +1,8 @@
 //! The attention candidate query behind Home's work feed and the
 //! notifications inbox: one keyset-paginated page merging the viewer's
 //! attention (the newest pending, i.e. unseen or seen, notification) with,
-//! when asked, their own work (latest activity that counts as work), newest
-//! first.
+//! when asked, their own work (latest activity they did themselves that
+//! counts as work; an agent's work for them does not), newest first.
 //!
 //! An item's place in the feed is `sort_at = max(attention_at, touched_at)`.
 //! The query runs two streams, each ordered by its own timestamp: the
@@ -151,14 +151,21 @@ fn email_inbox_gate() -> String {
 }
 
 /// Whether the `activity_events` row aliased `alias` is the viewer's own work:
-/// any action but a view, except that an email thread is only worked on by
-/// sending from it. Archiving, starring, labeling and moving a thread record
-/// edits, and done itself archives, so counting them would bring every
-/// completed email back as own work.
+/// any action but a view that they did themselves, except that an email
+/// thread is only worked on by sending from it. Archiving, starring, labeling
+/// and moving a thread record edits, and done itself archives, so counting
+/// them would bring every completed email back as own work.
+///
+/// What an agent did for the viewer is the agent's work, not theirs: a bot
+/// acting on their behalf (the actor is not the subject), or any write made
+/// inside an agent session's code-mode invocation (a correlation is recorded,
+/// whatever the actor).
 fn own_work(alias: &str) -> String {
     let sent: &'static str = Action::Sent.into();
     format!(
-        "{alias}.action NOT IN ({views}) \
+        "{alias}.actor_id = {alias}.subject_id \
+         AND {alias}.agent_correlation_id IS NULL \
+         AND {alias}.action NOT IN ({views}) \
          AND ({alias}.entity_type <> 'email_thread' OR {alias}.action = '{sent}')",
         views = view_tags_sql(),
     )

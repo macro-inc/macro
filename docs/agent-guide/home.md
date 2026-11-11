@@ -50,6 +50,8 @@ the server work feed (`user.workFeed` plus the `workFeedUpdates` subscription)
 instead of merging sources in the browser; Noise, search, and touch devices keep
 the merged feed. Verify these against a backend that serves the work feed: a
 document you edited with no notifications appears read and offers no **Mark Done**.
+A task or document an agent session creates or edits for you is the session's
+work, not yours: it stays out of Home unless a notification brings it in.
 **Mark Done** clears a row's notifications (and archives an inbox email): a row
 that is only notifications leaves and stays gone after a reload, while a row you
 also worked on stays, read, at the time of your own work. **Undo** brings a done
