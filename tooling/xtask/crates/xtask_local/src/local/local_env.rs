@@ -21,6 +21,10 @@ use anyhow::Result;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, identity, proxy, resources};
 
+/// Thread stack for local debug builds (16 MiB); see `RUST_MIN_STACK` in
+/// [`LocalEnv::to_env`].
+const DEBUG_BUILD_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
+
 /// The public hostnames `--with-cf-tunnel` minted for this run.
 ///
 /// Both exist for the same reason: an agent that is not on this machine — a
@@ -141,6 +145,14 @@ impl LocalEnv {
         );
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
+        // Local stacks run unoptimized debug builds, whose async state machines
+        // outgrow std's 2 MiB default thread stack (e.g. Soup's `POST
+        // /items/soup`) and abort the service. Tokio's worker threads take
+        // std's default size, which `RUST_MIN_STACK` sets.
+        env.insert(
+            "RUST_MIN_STACK".into(),
+            DEBUG_BUILD_THREAD_STACK_BYTES.to_string(),
+        );
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("APP_BASE_URL".into(), self.frontend_origin.clone());
