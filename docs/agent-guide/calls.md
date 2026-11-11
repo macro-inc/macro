@@ -97,13 +97,14 @@ others have sent to the channel since you joined, and **View** swaps to the Mess
 call still connected. On the meeting page it navigates to the channel.
 
 Channel members connected to the call are notified of its thread's messages like followers, so a
-message sent in the call chat pops up for everyone else on the call, even before they post in it. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
+message sent in the call chat pops up for everyone else on the call, even before they post in it.
+The call's root accepts replies and nothing else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
 and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
-that no notification reaches the person in the call, and that ending the call updates the row.
+that a message sent in the call chat notifies the other person in the call, and that ending the
+call updates the row.
 
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,

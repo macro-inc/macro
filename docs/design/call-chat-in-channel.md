@@ -322,8 +322,8 @@ that reads `discussion` has reached people.
 - `crates/messages`: root rejects edit, delete, thread delete and reactions for users, bots and agent
   tools; a client cannot set `kind`; first-reply retry creates the root once under races; call-parent
   posts are rejected on `channel_thread`; timeline entries for each status, with one query per page.
-- `crates/channels`: connected people get nothing on all three effects, and normal thread rules for
-  everyone else; the caller is not a follower for starting the call; a call root does not suppress
+- `crates/channels`: channel members connected to the call get all three effects like followers,
+  connected guests outside the channel get none, and normal thread rules apply to everyone else; the caller is not a follower for starting the call; a call root does not suppress
   first-message invites; normal channel mentions during a call still notify.
 - `crates/agent_trigger`, `crates/scheduled_action`: a root triggers nothing, and a reply triggers
   normally.
