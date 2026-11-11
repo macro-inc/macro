@@ -122,6 +122,7 @@ Keep the floating link controller and markup on `LinkMenuHost`; its Source
 adapter retains PluginManager ownership and HIGH Escape/CRITICAL Enter order.
 Keep the table size picker on `TablePickerHost`; its Source adapter retains
 PluginManager ownership, string dimensions and no-header insertion.
+Keep the GIF Source commit synchronous; await only native commit promises, check the originating upload request before closing a menu, and mark uploaded-file ownership from actual main commit evidence before consume can throw.
 Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
 Source capture, dirty cancellation, root identity and synchronous commit result.
 Assemble mention hosts at the shared controller's original initialization point;

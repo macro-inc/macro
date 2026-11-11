@@ -13,13 +13,13 @@ export interface GifMenuHost<Target, Insertion> {
   ): Insertion | undefined;
   subscribeChanges(insertion: Insertion, onDirty: () => void): () => void;
   isCurrent(insertion: Insertion): boolean;
-  /** Actual synchronous insertion result; queued dispatch is not completion. */
+  /** Resolve the actual insertion result; Source commits remain synchronous. */
   commit(
     insertion: Insertion,
     gif: Gif,
     staticFileId: string,
     onInserted: () => void
-  ): boolean;
+  ): boolean | Promise<boolean>;
   /** The host's plugin manager owns picker registration and cleanup. */
   registerPicker(canEdit: Accessor<boolean>, onOpen: () => void): void;
   /** Register under the panel's current owner, including upload cancellation. */

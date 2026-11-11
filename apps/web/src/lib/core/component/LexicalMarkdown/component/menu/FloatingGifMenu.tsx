@@ -180,10 +180,16 @@ export function HostedFloatingGifMenu<Target, Insertion>(props: {
       )
         return;
 
-      inserted = props.host.commit(insertion, gif, result.value, () => {
+      const committed = props.host.commit(insertion, gif, result.value, () => {
         inserted = true;
       });
-      closeToEditor();
+      if (typeof committed === 'boolean') {
+        inserted = committed;
+        closeToEditor();
+      } else {
+        inserted = await committed;
+        if (uploadController === request) closeToEditor();
+      }
     } finally {
       request.signal.removeEventListener('abort', unregisterUpdate);
       unregisterUpdate();

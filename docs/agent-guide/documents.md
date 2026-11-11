@@ -35,6 +35,14 @@ while the editor retains a focused range leaves that range in place. Queued
 focus waits for native completion and rechecks disposal/editability before
 browser focus. These checks do not establish slash-menu or full document-app acceptance.
 
+The isolated GIF menu controls live in
+`LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
+animated-byte upload, cancellation and actual commit errors before enabling a
+native slash host. Source comparison captures assign fixture IDs through real
+node transforms before publication. A NodeSelection currently reports insertion
+without attaching the new GIF, leaving an orphaned upload; both engines retain
+that behavior until it is corrected together.
+
 When opening an older document without `documentMetadata`, verify that hydration
 preserves the model and sends no local document update or WAL append. The first
 real text edit adds version 10 in that edit’s normal update; read-only export
