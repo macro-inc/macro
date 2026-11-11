@@ -88,3 +88,23 @@ describe('Idea drafts', () => {
     expect(drafts[0]).toBeInstanceOf(EmailDraft);
   });
 });
+
+describe('Idea accept', () => {
+  test('accept sends the idea as it was read', async () => {
+    const requests: unknown[] = [];
+    const client = {
+      scheduledAction: {
+        acceptIdea: async (request: unknown) => {
+          requests.push(request);
+          return { data: undefined };
+        },
+      },
+    } as unknown as MacroClient;
+
+    await Idea.from(client, REPLY_IDEA).accept();
+
+    expect(requests).toEqual([
+      { path: { id: 'idea' }, body: { updatedAt: '2026-11-09T00:00:00Z' } },
+    ]);
+  });
+});
