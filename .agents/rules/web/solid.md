@@ -77,6 +77,12 @@ State ownership, reactivity, and async error handling.
   further down does not save you. This has blanked the calendar grid twice — see
   `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and
   `useSystemSkillsQuery`.
+- **FE-70** A computation that walks a whole large query result (thousands of
+  rows, or rows with nested arrays) reads `unwrap(query.data)` from
+  `solid-js/store`, not `query.data`. The result is a store proxy, so every
+  field read in a tracked scope creates a signal: walking a 14,700-channel
+  list tracked held about seven times the list's own memory. The read of
+  `query.data` still tracks the result being replaced.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".

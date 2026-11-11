@@ -11,6 +11,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import type { QueryAccount } from '../auth/account-scope';
 import { channelActivityQueryOptions } from '../channel/activity';
 import {
@@ -106,7 +107,8 @@ export function createContactContextSource(options: {
       !queryReadyGate(links)
     )
       return;
-    const c = channels.data;
+    // Raw rows: walking them through the store creates a signal per field.
+    const c = unwrap(channels.data);
     const a = activity.data;
     const l = links.data;
     if (
