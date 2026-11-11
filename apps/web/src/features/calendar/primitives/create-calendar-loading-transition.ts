@@ -3,6 +3,7 @@ import { createSolidMachine } from '@macro-inc/machine/solid';
 import { onCleanup } from 'solid-js';
 
 const SKELETON_SHOW_DELAY_MS = 120;
+const SKELETON_FRAME_LIMIT_MS = 34;
 const SKELETON_MIN_VISIBLE_MS = 240;
 // Matches the skeleton's duration-180 opacity transition.
 const SKELETON_FADE_OUT_MS = 180;
@@ -110,12 +111,31 @@ export function createCalendarLoadingTransition(
     },
     scopes: {
       waiting: (_state, dispatch) => {
-        const timer = setTimeout(
-          () => dispatch({ t: 'delay-elapsed', now: Date.now() }),
-          SKELETON_SHOW_DELAY_MS
-        );
+        let frame: number;
+        let waitedMs = 0;
+        let lastFrameAt: number | undefined;
 
-        return () => clearTimeout(timer);
+        // The delay counts frames, each for at most SKELETON_FRAME_LIMIT_MS.
+        // Mounting a grid can hold the thread past the whole delay while the
+        // answer waits behind it; counted as one frame, that answer still
+        // finishes the load before the skeleton can appear.
+        const countFrame = (now: number) => {
+          if (lastFrameAt !== undefined) {
+            waitedMs += Math.min(now - lastFrameAt, SKELETON_FRAME_LIMIT_MS);
+          }
+          lastFrameAt = now;
+
+          if (waitedMs >= SKELETON_SHOW_DELAY_MS) {
+            dispatch({ t: 'delay-elapsed', now: Date.now() });
+            return;
+          }
+
+          frame = requestAnimationFrame(countFrame);
+        };
+
+        frame = requestAnimationFrame(countFrame);
+
+        return () => cancelAnimationFrame(frame);
       },
       visible: (state, dispatch) => {
         if (state.loading) {
@@ -125,11 +145,7 @@ export function createCalendarLoadingTransition(
         const elapsedMs = Date.now() - state.visibleSince;
         const remainingMs = Math.max(0, SKELETON_MIN_VISIBLE_MS - elapsedMs);
 
-        if (remainingMs === 0) {
-          dispatch({ t: 'minimum-elapsed' });
-          return;
-        }
-
+        // Always a task later: FullCalendar lays out the events being revealed.
         const timer = setTimeout(
           () => dispatch({ t: 'minimum-elapsed' }),
           remainingMs

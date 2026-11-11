@@ -258,17 +258,9 @@ export function CalendarLoadingSkeleton(props: {
           return;
         }
 
-        if (loading) {
-          transition.setLoading(true);
-          return;
-        }
-
-        // Let FullCalendar finish laying out events before revealing them.
-        const timer = setTimeout(() => transition.setLoading(false));
-
-        onCleanup(() => {
-          clearTimeout(timer);
-        });
+        // A load that finishes while the skeleton is still waiting cancels it
+        // in the same task, before an overdue delay can show it.
+        transition.setLoading(loading);
       }
     )
   );

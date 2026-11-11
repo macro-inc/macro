@@ -56,7 +56,10 @@ filled bars for all-day/multi-day-style entries with single subtle text lines fo
 single-day timed-style entries, without placeholder dots or time chips. Patterns stay
 stable for each date and clear the date headers. Skeletons preserve the grid, scroll
 position, and navigation.
-Quick loads skip the skeletons. Real events lay out underneath during the brief
+Quick loads skip the skeletons: the delay counts animation frames, so time the
+thread spends mounting a grid never uses it up, and events that are in memory or
+answered locally appear without skeletons on slow phones too.
+Real events lay out underneath during the brief
 minimum display, then fade in as the skeletons fade out. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
