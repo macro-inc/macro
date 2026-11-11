@@ -587,6 +587,11 @@ where
         ))
     }
 
+    /// The fleet the computers run on, for running programs in a guest.
+    pub fn fleet(&self) -> &Machines {
+        &self.fleet
+    }
+
     /// macrod connected on `harness_id`. Returns whether it is a computer's.
     #[tracing::instrument(skip(self), err)]
     pub async fn macrod_connected(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {

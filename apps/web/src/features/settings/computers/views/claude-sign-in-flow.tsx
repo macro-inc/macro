@@ -133,7 +133,7 @@ export function ClaudeSignInFlow(props: {
       });
       if (current !== generation) return;
       signedIn = true;
-      props.onSignedIn(result.account ?? undefined);
+      props.onSignedIn();
     } catch (failure) {
       if (current !== generation) return;
       setCode('');

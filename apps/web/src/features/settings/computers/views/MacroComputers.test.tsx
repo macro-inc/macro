@@ -382,7 +382,6 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
     allow_permission_bypass: true,
     computer_id: 'computer-1',
     claude_mode: 'own_account' as const,
-    capabilities: { claude: { status: 'signed_out' as const } },
   };
   const computer: ComputerStatus = {
     id: 'computer-1',

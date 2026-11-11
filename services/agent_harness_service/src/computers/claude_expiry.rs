@@ -11,9 +11,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeAccount, HarnessCapabilities};
 use hosted_runtimes::domain::claude_sign_in::{
-    ClaudeReport, ClaudeSignIn, ClaudeSignInExpiry, ClaudeSignInNotice, ClaudeSignInNotices,
+    ClaudeSignIn, ClaudeSignInExpiry, ClaudeSignInNotice, ClaudeSignInNotices,
     ClaudeSignInStage, ClaudeSignIns,
 };
 use hosted_runtimes::domain::ids::ComputerId;
@@ -24,7 +23,6 @@ use model_notifications::{ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
-use sqlx::types::Json;
 use teams::domain::model::{TeamError, TeamRole};
 use teams::domain::team_repo::TeamRepository;
 use teams::outbound::team_repo::TeamRepositoryImpl;
@@ -72,9 +70,7 @@ impl ClaudeSignIns for PgClaudeSignIns {
                 login.signed_in_at,
                 login.expires_at,
                 login.notice_stage AS "notice_stage: ClaudeSignInStage",
-                login.notice_expires_at,
-                h.capabilities AS "capabilities: Json<HarnessCapabilities>",
-                h.capabilities_reported_at
+                login.notice_expires_at
             FROM harness_account_logins login
             JOIN harnesses h ON h.id = login.harness_id
             JOIN hosted_runtime c ON c.id = h.computer_id
@@ -104,14 +100,6 @@ impl ClaudeSignIns for PgClaudeSignIns {
                     stage,
                     expires_at: row.notice_expires_at,
                 });
-                // Claude reports whether it is signed in; the login row holds
-                // the expiry its reports last carried.
-                let report = row.capabilities.0.claude.map(|account| match account {
-                    ClaudeAccount::SignedOut => ClaudeReport::SignedOut,
-                    ClaudeAccount::SignedIn { .. } => ClaudeReport::SignedIn {
-                        expires_at: row.expires_at,
-                    },
-                });
                 Some(ClaudeSignIn {
                     login_id: row.login_id,
                     computer_id,
@@ -120,8 +108,7 @@ impl ClaudeSignIns for PgClaudeSignIns {
                     computer_name: row.name,
                     signed_in_by,
                     signed_in_at: row.signed_in_at,
-                    report,
-                    reported_at: row.capabilities_reported_at,
+                    expires_at: row.expires_at,
                     last_notice,
                 })
             })

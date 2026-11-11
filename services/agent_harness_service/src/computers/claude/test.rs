@@ -112,7 +112,6 @@ async fn computer_route_access(
                 shared_team_ids: Vec::new(),
                 connected: false,
                 last_connected_at: None,
-                capabilities: Default::default(),
                 computer_id: Some(computer_id::ComputerId::new_from_uuid(
                     uuid::Uuid::from_u128(1),
                 )),
@@ -131,10 +130,8 @@ async fn computer_route_access(
                             id: uuid::Uuid::from_u128(0x2001),
                             provider,
                             identity: harnesses::domain::account_logins::ProviderAccountIdentity {
-                                external_account_id: "acct-1".to_owned(),
-                                display_email: Some("team@example.com".to_owned()),
-                                display_org: Some("Acme".to_owned()),
-                                plan: Some("max".to_owned()),
+                                external_account_id: "sha256:0123456789abcdef0123456789abcdef"
+                                    .to_owned(),
                             },
                         },
                         signed_in_by: Some(
@@ -179,17 +176,15 @@ async fn computer_route_access(
             )])),
         );
     }
-    let redis = redis::Client::open("redis://127.0.0.1:1").unwrap();
-    let control = super::ComputerControl::start(
-        agent_harness::outbound::runtime_registry::RuntimeRegistry::new(),
-        redis.clone(),
-        &tasks,
-        shutdown.clone(),
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        Arc::new(crate::computers::harnessd::NoFleet),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
     );
     let app = super::router(
-        control,
-        redis,
-        HarnessServiceImpl::new(repo),
+        harnessd,
+        harnesses,
         MacroAuthorizationState::new(Arc::new(authorization)),
         hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         fleet_attachment,
@@ -226,9 +221,6 @@ async fn computer_route_access(
             serde_json::json!({
                 "mode": "own_account",
                 "account": {
-                    "email": "team@example.com",
-                    "organization": "Acme",
-                    "plan": "max",
                     "signedInBy": "macro|owner@example.com",
                     "signedInAt": "2026-01-02T00:00:00Z",
                     "expiresAt": null,
@@ -328,8 +320,11 @@ async fn computer_route_access(
 #[tokio::test]
 async fn computer_invalid_code_is_a_typed_retryable_response() {
     use axum::response::IntoResponse as _;
-    let result = serde_json::from_value(serde_json::json!({"status": "invalid_code"})).unwrap();
-    let response = super::ComputerRouteError::from_result(result).into_response();
+    let answer = serde_json::from_value(
+        serde_json::json!({"result": "error", "agent": "claude", "kind": "invalid_code"}),
+    )
+    .unwrap();
+    let response = super::ComputerRouteError::from_answer(answer).into_response();
     assert_eq!(
         response.status(),
         axum::http::StatusCode::UNPROCESSABLE_ENTITY
@@ -357,145 +352,81 @@ async fn computer_claude_cancel_refuses_flag_off() {
 }
 
 #[tokio::test]
-async fn computer_dropped_submit_reconciles_a_committed_runtime_result() {
-    dropped_submit_reconciles(true).await;
-}
-
-#[tokio::test]
-async fn computer_dropped_submit_reconciles_even_if_cancellation_disconnects() {
-    dropped_submit_reconciles(false).await;
-}
-
-async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
-    use agent_runtime_protocol::domain::channel::Channel;
-    use agent_runtime_protocol::domain::schema::v0::{
-        ComputerCommand, ComputerControlResult, ToRuntimeMessage, ToServerMessage,
-    };
+async fn a_completion_whose_caller_left_still_records_its_signer() {
     use harness_id::HarnessId;
-    use harnesses::domain::{
-        account_logins::{AccountLoginChange, AgentProvider, ProviderAccountIdentity},
-        ports::MockHarnessRepo,
-        service::HarnessServiceImpl,
-    };
-    use std::sync::Arc;
+    use harnessd_protocol::{AgentProvider, ClaudeAccount, Request, Response};
+    use std::sync::{Arc, Mutex};
 
-    let redis = redis::Client::open(macro_env_var::read_env_var("REDIS_URI").unwrap()).unwrap();
-    let harness_id = HarnessId::new_from_uuid(uuid::Uuid::now_v7());
-    let runtimes = agent_harness::outbound::runtime_registry::RuntimeRegistry::new();
-    let (carrier, mut runtime) = Channel::duplex();
-    runtimes.attach(harness_id, carrier);
+    let changes = Arc::new(Mutex::new(Vec::new()));
+    let transport = Arc::new(
+        crate::computers::harnessd::fakes::FakeHarnessd::new(|_| Response::SignedIn {
+            agent: AgentProvider::Claude,
+            claude: Some(ClaudeAccount {
+                credential_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
+                expires_at: None,
+            }),
+        })
+        .holding_complete(),
+    );
+    let harnesses = Arc::new(crate::computers::harnessd::fakes::recording_harnesses(
+        Arc::clone(&changes),
+    ));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        transport.clone(),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
+    );
     let cleanup = tokio_util::task::TaskTracker::new();
-    let shutdown = tokio_util::sync::CancellationToken::new();
-    let control =
-        super::ComputerControl::start(runtimes, redis.clone(), &cleanup, shutdown.clone());
-    let (mode_saved, saved) = tokio::sync::oneshot::channel();
-    let mut repo = MockHarnessRepo::new();
-    repo.expect_record_account_login()
-        .times(1)
-        .return_once(move |id, change| {
-            assert_eq!(id, harness_id);
-            assert_eq!(
-                change,
-                AccountLoginChange::SignedIn {
-                    provider: AgentProvider::Claude,
-                    account: ProviderAccountIdentity {
-                        external_account_id: "acct-1".to_owned(),
-                        display_email: Some("team@example.com".to_owned()),
-                        display_org: Some("Acme".to_owned()),
-                        plan: Some("max".to_owned()),
-                    },
-                    signed_in_by: macro_user_id::user_id::MacroUserIdStr::try_from(
-                        "macro|owner@example.com".to_owned()
-                    )
-                    .unwrap(),
-                }
-            );
-            Box::pin(async move {
-                mode_saved.send(()).unwrap();
-                Ok(true)
-            })
-        });
     let state = super::ClaudeAccessState {
-        harnesses: Arc::new(HarnessServiceImpl::new(repo)),
+        harnesses,
+        harnessd: harnessd.clone(),
         rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
             feature_flags::outbound::fake::FakeFeatureFlags::default(),
         ),
         fleet_attachment: FleetAttachment::Attached,
-        control,
-        redis: redis.clone(),
         cleanup: cleanup.clone(),
         authorization_state: macro_authorization::MacroAuthorizationState::new(Arc::new(())),
     };
-    let request = tokio::spawn(async move {
-        state
-            .complete_sign_in(
-                harness_id,
-                "test-code".to_owned(),
-                macro_user_id::user_id::MacroUserIdStr::try_from(
-                    "macro|owner@example.com".to_owned(),
-                )
-                .unwrap(),
-            )
-            .await
-    });
-    let ToRuntimeMessage::ComputerControl {
-        request_id: completion_id,
-        command,
-        ..
-    } = runtime.rx.recv().await.unwrap()
-    else {
-        panic!("expected completion command");
-    };
-    assert!(matches!(
-        command,
-        ComputerCommand::ClaudeSignInComplete { .. }
-    ));
-    request.abort();
-    assert!(request.await.unwrap_err().is_cancelled());
-    let ToRuntimeMessage::ComputerControl {
-        request_id: cancel_id,
-        command,
-        ..
-    } = runtime.rx.recv().await.unwrap()
-    else {
-        panic!("expected cancel command");
-    };
-    assert_eq!(command, ComputerCommand::ClaudeSignInCancel);
-    // macrod committed just before cancellation; its result still owns the mode write.
-    runtime
-        .tx
-        .send(ToServerMessage::ComputerControlResponse {
-            request_id: completion_id,
-            result: ComputerControlResult::SignedIn {
-                account_id: "acct-1".to_owned(),
-                account: Some("team@example.com".to_owned()),
-                organization: Some("Acme".to_owned()),
-                plan: Some("max".to_owned()),
-            },
-        })
-        .unwrap();
-    if acknowledge_cancel {
-        runtime
-            .tx
-            .send(ToServerMessage::ComputerControlResponse {
-                request_id: cancel_id,
-                result: ComputerControlResult::SignInCancelled,
-            })
+    let signer =
+        macro_user_id::user_id::MacroUserIdStr::try_from("macro|owner@example.com".to_owned())
             .unwrap();
-    } else {
-        drop(runtime);
-    }
-    tokio::time::timeout(std::time::Duration::from_secs(2), saved)
-        .await
-        .unwrap()
-        .unwrap();
-    shutdown.cancel();
+    let computer = computer_id::ComputerId::new_from_uuid(uuid::Uuid::from_u128(1));
+
+    let request = tokio::spawn({
+        let signer = signer.clone();
+        async move {
+            state
+                .run(
+                    HarnessId::TEST_A,
+                    computer,
+                    Request::SignInComplete {
+                        agent: AgentProvider::Claude,
+                        code: "abc#def".to_owned(),
+                    },
+                    Some(signer),
+                )
+                .await
+        }
+    });
+    transport.complete_started.notified().await;
+    request.abort();
+    // harnessd answers the completion only after the caller left.
+    transport.release_complete();
     cleanup.close();
     cleanup.wait().await;
-    super::bus::AccountChange::claim(&redis, harness_id, &cleanup)
-        .await
-        .unwrap()
-        .release()
-        .await
-        .unwrap();
+
+    assert_eq!(
+        *changes.lock().unwrap(),
+        vec![(
+            HarnessId::TEST_A,
+            harnesses::domain::account_logins::AccountLoginChange::SignedIn {
+                provider: AgentProvider::Claude,
+                account: harnesses::domain::account_logins::ProviderAccountIdentity {
+                    external_account_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
+                },
+                expires_at: None,
+                signed_in_by: Some(signer),
+            }
+        )]
+    );
 }

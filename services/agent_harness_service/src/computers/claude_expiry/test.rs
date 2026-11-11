@@ -61,14 +61,8 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
         HarnessId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c));
     sqlx::query!(
         r#"
-        INSERT INTO harnesses (
-            id, name, owner_user_id, created_by, computer_id, capabilities, capabilities_reported_at
-        )
-        VALUES (
-            $1, 'Build box', 'macro|owner@example.com', 'macro|owner@example.com', $2,
-            '{"screen": true, "claude": {"status": "signed_in", "account_id": "acct-1", "account": "team@example.com", "expires_at": "2026-11-25T12:00:00Z"}}',
-            '2026-11-01T12:01:00Z'
-        )
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, computer_id)
+        VALUES ($1, 'Build box', 'macro|owner@example.com', 'macro|owner@example.com', $2)
         "#,
         harness_id.as_uuid(),
         signed_in.as_uuid(),
@@ -76,13 +70,13 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
     .execute(&pool)
     .await
     .unwrap();
-    // The login row, not the capability report, holds the expiry to warn about.
+    // The login row holds the expiry harnessd last reported.
     let login_id = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_1001);
     sqlx::query!(
         r#"
         WITH account AS (
-            INSERT INTO provider_accounts (id, provider, external_account_id, display_email)
-            VALUES ($3, 'claude', 'acct-1', 'team@example.com')
+            INSERT INTO provider_accounts (id, provider, external_account_id)
+            VALUES ($3, 'claude', 'sha256:0123456789abcdef0123456789abcdef')
             RETURNING id
         )
         INSERT INTO harness_account_logins
@@ -119,10 +113,7 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
         computer_name: "Build box".to_owned(),
         signed_in_by: Some(MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()),
         signed_in_at: at(1, 12),
-        report: Some(ClaudeReport::SignedIn {
-            expires_at: Some(at(20, 12)),
-        }),
-        reported_at: Some(at(1, 12) + chrono::Duration::minutes(1)),
+        expires_at: Some(at(20, 12)),
         last_notice: None,
     };
 

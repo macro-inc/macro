@@ -16,6 +16,7 @@ use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
+use harnesses::domain::service::HarnessServiceImpl;
 use hosted_runtimes::domain::enrollment::{Deployment, DeploymentSource, DeploymentUnavailable};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::operator::ComputerOperator;
@@ -35,8 +36,8 @@ use crate::config::{ComputerFleetConfig, Config};
 
 pub(crate) mod claude;
 pub(crate) mod claude_expiry;
-pub(crate) mod control;
 pub(crate) mod default_agent;
+pub mod harnessd;
 mod presence;
 pub mod sign_in_ahead;
 
@@ -47,9 +48,11 @@ use presence::PresenceGuard;
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
-/// macrod reports a rejected sign-in within about a minute; checking as often
-/// keeps that notice prompt.
+/// How often expiry notices are checked.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
+/// How often every awake computer's harnessd status is read, catching a
+/// sign-in or sign-out made on the computer itself.
+const CLAUDE_STATUS_TICK: Duration = Duration::from_secs(60);
 
 pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
 
@@ -178,6 +181,7 @@ enum Pass {
     Timers,
     Reconcile,
     ClaudeSignIns,
+    ClaudeStatus,
 }
 
 impl Pass {
@@ -187,6 +191,7 @@ impl Pass {
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
+            Self::ClaudeStatus => CLAUDE_STATUS_TICK,
         }
     }
 }
@@ -197,7 +202,15 @@ pub struct ClaudeSignInWatch<Ingress> {
     pub sign_ins: claude_expiry::PgClaudeSignIns,
     /// Their notices.
     pub notices: claude_expiry::IngressClaudeSignInNotices<Ingress>,
+    /// harnessd on every computer, whose status the watch refreshes.
+    pub harnessd: HostedHarnessd,
+    /// Where the awake computers are listed.
+    pub pool: PgPool,
 }
+
+/// [`harnessd::Harnessd`] over the harness table.
+pub type HostedHarnessd =
+    harnessd::Harnessd<HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
 
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
@@ -212,6 +225,7 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Timers,
         Pass::Reconcile,
         Pass::ClaudeSignIns,
+        Pass::ClaudeStatus,
     ] {
         tracker.spawn(run_pass(
             pass,
@@ -236,31 +250,44 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
-        let outcome =
-            match pass {
-                Pass::Effects => operator
-                    .run_fleet_effects_until(shutdown.cancelled())
-                    .await
-                    .map(|_| ()),
-                Pass::Timers => shutdown
-                    .run_until_cancelled(operator.fire_timers())
-                    .await
-                    .transpose()
-                    .map(|_| ()),
-                Pass::Reconcile => shutdown
-                    .run_until_cancelled(operator.reconcile())
-                    .await
-                    .transpose()
-                    .map(|_| ()),
-                Pass::ClaudeSignIns => shutdown
-                    .run_until_cancelled(operator.notify_claude_sign_ins(
-                        &claude_sign_ins.sign_ins,
-                        &claude_sign_ins.notices,
-                    ))
-                    .await
-                    .transpose()
-                    .map(|_| ()),
-            };
+        let outcome: anyhow::Result<()> = match pass {
+            Pass::Effects => operator
+                .run_fleet_effects_until(shutdown.cancelled())
+                .await
+                .map(|_| ())
+                .map_err(anyhow::Error::from),
+            Pass::Timers => shutdown
+                .run_until_cancelled(operator.fire_timers())
+                .await
+                .transpose()
+                .map(|_| ())
+                .map_err(anyhow::Error::from),
+            Pass::Reconcile => shutdown
+                .run_until_cancelled(operator.reconcile())
+                .await
+                .transpose()
+                .map(|_| ())
+                .map_err(anyhow::Error::from),
+            Pass::ClaudeSignIns => shutdown
+                .run_until_cancelled(operator.notify_claude_sign_ins(
+                    &claude_sign_ins.sign_ins,
+                    &claude_sign_ins.notices,
+                ))
+                .await
+                .transpose()
+                .map(|_| ())
+                .map_err(anyhow::Error::from),
+            Pass::ClaudeStatus => shutdown
+                .run_until_cancelled(
+                    claude_sign_ins
+                        .harnessd
+                        .refresh_awake(&claude_sign_ins.pool),
+                )
+                .await
+                .transpose()
+                .map(|_| ())
+                .map_err(anyhow::Error::from),
+        };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();
             tracing::error!(pass = name, error = ?error, "computer pass failed");
@@ -435,8 +462,11 @@ pub struct ComputerPresence<Inner> {
 }
 
 /// [`sign_in_ahead::SignInAhead`] over the harness table.
-pub type SignInAheadHandle =
-    Arc<sign_in_ahead::SignInAhead<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+pub type SignInAheadHandle = Arc<
+    sign_in_ahead::SignInAhead<
+        HarnessServiceImpl<harnesses::outbound::pg_harness_repo::PgHarnessRepo>,
+    >,
+>;
 
 impl<Inner> ComputerPresence<Inner> {
     pub fn new(
@@ -490,7 +520,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     .ok();
             }
             drop(guard);
-            // After the presence lock: the command round-trips through macrod.
+            // After the presence lock: the command execs harnessd on the computer.
             if let Some(ahead) = self.sign_in_ahead.get() {
                 let ahead = Arc::clone(ahead);
                 self.tasks
