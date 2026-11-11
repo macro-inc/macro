@@ -214,9 +214,15 @@ export function TaskList(props: TaskListProps) {
 
     return value;
   };
+  const listTab = () => (state.savedViewActive ? undefined : state.tab);
+  const listStorage = createTasksListEntryStorage(
+    panel.handle,
+    scopeKey,
+    listTab
+  );
   const [, setPersistedListState] = makePersistedState(
     [readListState, applyListState],
-    { storages: createTasksListEntryStorage(panel.handle, scopeKey) }
+    { storages: listStorage }
   );
 
   const visibleRows = source.items;
@@ -368,16 +374,21 @@ export function TaskList(props: TaskListProps) {
     restoredScroll = true;
   }
 
-  let activeTab = state.tab;
-  createEffect(() => {
-    const nextTab = state.tab;
-    if (nextTab === activeTab) return;
-
-    activeTab = nextTab;
-    listInteractions.selection.clear();
-    list.focus.clear({ reason: 'programmatic' });
-    setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
-  });
+  createEffect(
+    on(
+      listTab,
+      (tab) => {
+        listInteractions.selection.clear();
+        list.focus.clear({ reason: 'programmatic' });
+        const restored =
+          tab === undefined
+            ? undefined
+            : listStorage.restoreTab(readListState(), tab);
+        setPersistedListState(restored ?? DEFAULT_TASKS_LIST_STATE);
+      },
+      { defer: true }
+    )
+  );
 
   createEffect(() => {
     visibleRows();

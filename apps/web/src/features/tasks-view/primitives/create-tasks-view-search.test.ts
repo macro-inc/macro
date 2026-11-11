@@ -33,6 +33,7 @@ function setup(
     scopedTab?: TasksTab;
     enabled?: boolean;
     nonListLayoutsEnabled?: Accessor<boolean>;
+    restoreTab?: (tab: TasksTab) => Partial<TasksViewState>;
   } = {}
 ) {
   return createRoot((dispose) => {
@@ -59,6 +60,7 @@ function setup(
     const writeSearch = vi.fn((patch: Partial<TasksTabSearchParams>) => {
       setSearch(patch);
     });
+    const restoreTab = options.restoreTab;
     const controls = createTasksViewSearch({
       state,
       setState,
@@ -67,6 +69,9 @@ function setup(
       tab: () => options.scopedTab ?? search.tab,
       enabled: options.enabled ?? true,
       nonListLayoutsEnabled: options.nonListLayoutsEnabled,
+      restoreTab: restoreTab
+        ? (tab) => setState({ ...restoreTab(tab), tab })
+        : undefined,
     });
 
     return { state, search, setSearch, writeSearch, ...controls };
@@ -346,6 +351,49 @@ it('retains saved secondary sorts while synchronizing matching URL controls', ()
   view.setSearch('sortReversed', 'true');
   expect(view.state.sort).toEqual(savedSort);
   expect(view.state.layout).toBe('gantt');
+});
+
+it('restores URL tab changes from each tab snapshot before applying URL overrides', () => {
+  const view = setup({
+    state: { facets: { status: ['in-progress'] }, layout: 'board' },
+    restoreTab: (tab) =>
+      tab === 'team-tasks'
+        ? {
+            facets: { status: ['completed'] },
+            layout: 'list',
+            groupBy: 'status',
+            dueDate: { type: 'overdue' },
+            sort: [{ id: 'created_at', reversed: true }],
+          }
+        : {
+            facets: { status: ['in-progress'] },
+            layout: 'board',
+            groupBy: 'priority',
+            dueDate: { type: 'today' },
+            sort: [{ id: 'priority' }, { id: 'updated_at' }],
+          },
+  });
+  view.setSearch('tab', 'team-tasks');
+  expect(view.state).toMatchObject({
+    facets: { status: ['completed'] },
+    layout: 'list',
+    groupBy: 'status',
+    dueDate: { type: 'overdue' },
+    sort: [{ id: 'created_at', reversed: true }],
+  });
+  view.setState('dueDate', { type: 'tomorrow' });
+  view.setSearch('dueDate', undefined);
+  expect(view.state.dueDate).toEqual({ type: 'overdue' });
+  view.setSearch('tab', 'my-tasks');
+  expect(view.state).toMatchObject({
+    facets: { status: ['in-progress'] },
+    layout: 'board',
+    groupBy: 'priority',
+    dueDate: { type: 'today' },
+    sort: [{ id: 'priority' }, { id: 'updated_at' }],
+  });
+  view.setSearch({ sort: 'priority', sortReversed: 'false' });
+  expect(view.state.sort).toEqual([{ id: 'priority' }, { id: 'updated_at' }]);
 });
 
 it('keeps saved scope and draft filters when changing presentation', () => {

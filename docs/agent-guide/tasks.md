@@ -82,8 +82,14 @@ response: every already loaded continuation row should stay mounted, with no
 brief collapse to the first 10 rows. Verify both background and explicit refresh,
 including a changed cursor and a failed later page. Retrying should replace the
 old pages; changing projects or filters must discard the old scope immediately.
-The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
-and switching tabs clears it like any other filter. On mobile, the tabs
+The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu.
+Each built-in tab retains its own filters (including tags and due dates), layout,
+sort, grouping, search text, collapsed groups, and list focus/scroll for this view
+session. Switching tabs restores that tab instead of clearing or borrowing filters.
+Entry history and leaving/returning to Tasks keep these snapshots; reloading does
+not persist them. Existing mobile layout fallbacks still apply. Saved-view edits
+remain temporary: switching away discards them without changing a built-in tab.
+On mobile, the tabs
 are pills and the leading sliders button opens one drawer containing Sort, Group, and
 Filters (including Tags). The mobile bottom dock has **+ Task** and Search,
 with no floating Ask AI input.
@@ -98,6 +104,13 @@ preview. This flag also gates project-task and Projects collection timelines. Wh
 saved Gantt layouts and Gantt URLs render List without clearing the selected
 layout, so enabling the flag restores Gantt. The local override is
 `VITE_ENABLE_GANTT=true` (or `false` to force it off).
+
+**Tab-restore check (desktop and phone):** select My tasks and filter Status to
+In progress. Select All tasks and filter Status to Completed. Return to each tab
+and confirm its own status selection and matching results. Also try independent
+due dates, grouping, sort, text search, and list positions; leave Tasks and return,
+then repeat. Edit a saved view temporarily, switch to a built-in tab, and reopen
+the saved view: its confirmed settings return, while the built-in tab is unchanged.
 
 **Keyboard:** **H** and **←** collapse the focused item or its parent group.
 On a focused group header, **H** collapses only that group; pressing it again

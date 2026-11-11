@@ -1,18 +1,12 @@
 import { createCollapsedSidebarSectionsStorage } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
-import type {
-  MakePersistedStateOptions,
-  PersistenceStorage,
-} from '@app/lib/persistence';
-import {
-  createEntryPersistenceStorage,
-  type EntryPersistenceHandle,
-} from '@components/app/split-layout/entry-persistence';
+import type { EntryPersistenceHandle } from '@components/app/split-layout/entry-persistence';
+import { createTabbedEntryPersistenceStorage } from '@components/app/split-layout/tabbed-entry-persistence';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import { TASK_TAB_IDS } from './core/task-navigation';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
-import type { TasksViewState } from './types';
+import type { TasksTab, TasksViewState } from './types';
 
 export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
@@ -140,15 +134,20 @@ function createTasksEntryStorage(options: {
   handle: EntryPersistenceHandle;
   restore: boolean;
   scopeKey?: string;
-}): PersistenceStorage<TasksViewState> {
-  return createEntryPersistenceStorage({
+  savedViewActive?: Accessor<boolean>;
+}) {
+  return createTabbedEntryPersistenceStorage({
     handle: options.handle,
     key: options.scopeKey
       ? `${TASKS_ENTRY_STATE_KEY}:${options.scopeKey}`
       : TASKS_ENTRY_STATE_KEY,
-    restore: (current, stored) => {
-      if (!options.restore) return undefined;
-
+    tabs: TASK_TAB_IDS,
+    tab: (state: TasksViewState) =>
+      (options.savedViewActive?.() ?? state.savedViewActive)
+        ? undefined
+        : state.tab,
+    restoreEntryState: options.restore,
+    restore: (current: TasksViewState, stored) => {
       const result = tasksEntryStateSchemaWithDefaults.safeParse(stored);
       const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
@@ -163,21 +162,37 @@ function createTasksEntryStorage(options: {
         collapsedGroupIds: [...restored.collapsedGroupIds],
       };
     },
-    select: selectEntryState,
+    select: (state) =>
+      selectEntryState({
+        ...state,
+        savedViewActive: options.savedViewActive?.() ?? state.savedViewActive,
+      }),
   });
 }
 
 export function createTasksListEntryStorage(
   handle: EntryPersistenceHandle,
-  scopeKey?: string
-): PersistenceStorage<TasksListStateSnapshot> {
-  return createEntryPersistenceStorage({
+  scopeKey?: string,
+  tab?: Accessor<TasksTab | undefined>
+) {
+  return createTabbedEntryPersistenceStorage({
     handle,
     key: scopeKey
       ? `${TASKS_LIST_ENTRY_STATE_KEY}:${scopeKey}`
       : TASKS_LIST_ENTRY_STATE_KEY,
-    restore: (current, stored) => {
-      const result = tasksListStateSchemaWithDefaults.safeParse(stored);
+    tabs: TASK_TAB_IDS,
+    tab: (_state: TasksListStateSnapshot) => tab?.(),
+    restore: (current: TasksListStateSnapshot, stored) => {
+      const activeTab = tab?.();
+      const tabs =
+        stored && typeof stored === 'object' && 'tabs' in stored
+          ? stored.tabs
+          : undefined;
+      const selected =
+        activeTab && tabs && typeof tabs === 'object'
+          ? Reflect.get(tabs, activeTab)
+          : stored;
+      const result = tasksListStateSchemaWithDefaults.safeParse(selected);
       const restored = result.success ? result.data : DEFAULT_TASKS_LIST_STATE;
 
       return {
@@ -200,24 +215,29 @@ export type CreateTasksViewPersistenceOptions = {
   restoreEntryState?: boolean;
   restorePreferences?: boolean;
   scopeKey?: string;
+  savedViewActive?: Accessor<boolean>;
 };
 
 /** Persists Tasks navigation and user-level sidebar preferences. */
 export function createTasksViewPersistence(
   options: CreateTasksViewPersistenceOptions
-): MakePersistedStateOptions<TasksViewState> {
+) {
+  const entry = createTasksEntryStorage({
+    handle: options.handle,
+    restore: options.restoreEntryState ?? true,
+    scopeKey: options.scopeKey,
+    savedViewActive: options.savedViewActive,
+  });
   return {
+    restoreTab: entry.restoreTab,
+    clearTabs: entry.clearTabs,
     storages: [
-      createCollapsedSidebarSectionsStorage({
+      createCollapsedSidebarSectionsStorage<TasksViewState>({
         key: 'macro:tasks:preferences:v1',
         userId: options.userId,
         restore: options.restorePreferences ?? true,
       }),
-      createTasksEntryStorage({
-        handle: options.handle,
-        restore: options.restoreEntryState ?? true,
-        scopeKey: options.scopeKey,
-      }),
+      entry,
     ],
   };
 }

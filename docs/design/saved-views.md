@@ -395,8 +395,13 @@ not mistaken for the visible search results.
   duplicating another sidebar view uses that view's saved definition. Other viewers cannot overwrite
   the shared definition.
 - Only a confirmed write updates the saved baseline. Failures keep the draft and
-  its inputs. Leaving the view discards temporary settings, including when a
-  background save fails after navigation.
+  its inputs. Leaving the view discards temporary settings, including a switch
+  to another tab or a background save that fails after navigation.
+- Built-in Tasks tabs retain independent entry snapshots of filters, due dates,
+  layout, grouping, ordered sorts, local search, collapsed groups, and list position.
+  The existing entry captors carry these through history and view resume, not a
+  separate persistent cache. Saved-view drafts never overwrite these snapshots;
+  returning to a saved view reads its confirmed definition again.
 - Task-detail navigation and its return breadcrumb retain the originating saved
   view identity, but do not persist an unsaved filter draft. Scope async results
   to the account, selected view, and revision before installing them. A confirmed
