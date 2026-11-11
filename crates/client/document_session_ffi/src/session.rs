@@ -1,5 +1,7 @@
 //! Synchronous native session ownership; no mutex is held across host I/O.
 use crate::*;
+mod media;
+pub use media::*;
 struct NativeHost<S: Surface> {
     session: DocumentSession<S>,
     last_mono: u64,

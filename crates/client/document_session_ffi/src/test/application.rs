@@ -253,7 +253,7 @@ fn native_application_surface_uses_shared_shortcuts_and_download_exports() {
     assert_eq!(after, before);
 }
 
-pub(super) fn application_config() -> FfiSessionConfig {
+pub(crate) fn application_config() -> FfiSessionConfig {
     FfiSessionConfig {
         sync: SyncConfig {
             doc: "native-application-fixture".parse().unwrap(),

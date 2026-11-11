@@ -610,7 +610,7 @@ fn native_selection_context_and_ordered_maps_cross_the_typed_boundary() {
     );
 }
 
-mod application;
+pub(crate) mod application;
 mod decorator_actions;
 mod decorators;
 

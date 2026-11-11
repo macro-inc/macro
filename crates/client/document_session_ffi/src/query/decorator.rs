@@ -15,6 +15,8 @@ pub struct FfiDecorator {
     pub is_keyboard_selectable: bool,
     /// Shared media constraints and scale, only for actual image/video nodes.
     pub media: Option<FfiMediaLayout>,
+    /// Instance-owned block alignment for actual media nodes, independent of serialized properties.
+    pub block_format: Option<ElementFormat>,
 }
 /// Shared media dimensions in CSS pixels, before applying display scale.
 #[derive(Debug, uniffi::Record)]
@@ -109,6 +111,10 @@ pub(super) fn facts(
                 is_inline: view.is_inline(key),
                 is_keyboard_selectable: view.is_keyboard_selectable(key),
                 media,
+                block_format: view
+                    .get::<ImageNode>(key)
+                    .map(|node| node.block.format)
+                    .or_else(|| view.get::<VideoNode>(key).map(|node| node.block.format)),
             })
         })
         .collect()

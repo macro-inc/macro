@@ -7,6 +7,7 @@ fn facts(key: NodeKey) -> Vec<FfiDecorator> {
         is_inline: false,
         is_keyboard_selectable: true,
         media: None,
+        block_format: None,
     }]
 }
 fn signature(key: NodeKey, value: Option<&str>) -> Vec<DecoratorRenderChange> {

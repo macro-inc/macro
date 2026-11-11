@@ -42,6 +42,19 @@ impl NativeDecoratorView {
             Err(invalid("decorator view retired"))
         }
     }
+    pub(crate) fn validate_revision(
+        &self,
+        lease: u64,
+        key: NodeKey,
+        revision: u64,
+    ) -> Result<(), FfiSessionError> {
+        self.validate_lease(lease)?;
+        if self.phase != ViewPhase::Exposed || self.observer.exposed_revision(key) != Some(revision)
+        {
+            return Err(invalid("decorator component changed"));
+        }
+        Ok(())
+    }
     pub(crate) fn retire(&mut self, lease: u64) -> bool {
         if self.phase == ViewPhase::Retired || self.lease != lease {
             return false;
