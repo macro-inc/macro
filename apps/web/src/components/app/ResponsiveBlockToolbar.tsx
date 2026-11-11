@@ -22,7 +22,6 @@ import {
 import { ToolButton } from './tool-button';
 
 export type { BlockTool };
-export { ToolButton };
 
 function getToolLabel(tool: BlockTool) {
   return typeof tool.label === 'function' ? tool.label() : tool.label;
