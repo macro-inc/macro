@@ -14624,7 +14624,6 @@ dependencies = [
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
- "reqwest 0.13.4",
  "rustls",
  "serde",
  "serde_json",
