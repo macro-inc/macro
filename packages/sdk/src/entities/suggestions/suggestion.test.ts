@@ -108,7 +108,10 @@ describe('Suggestion accept', () => {
     await Suggestion.from(client, REPLY_SUGGESTION).accept();
 
     expect(requests).toEqual([
-      { path: { id: 'suggestion' }, body: { updatedAt: '2026-11-09T00:00:00Z' } },
+      {
+        path: { id: 'suggestion' },
+        body: { updatedAt: '2026-11-09T00:00:00Z' },
+      },
     ]);
   });
 });

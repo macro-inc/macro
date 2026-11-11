@@ -97,7 +97,9 @@ export class SuggestionNamespace {
    */
   async list(): Promise<Suggestion[]> {
     const feed = unwrap(await this.client.scheduledAction.listSuggestions());
-    return feed.suggestions.map((suggestion) => Suggestion.from(this.client, suggestion));
+    return feed.suggestions.map((suggestion) =>
+      Suggestion.from(this.client, suggestion),
+    );
   }
 
   /** Every suggestion of the user's, open or not, and how many more may be added. Only a suggestions generation session may. */

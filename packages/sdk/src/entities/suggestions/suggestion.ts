@@ -220,7 +220,9 @@ export class Suggestion {
    */
   async dismiss(): Promise<void> {
     unwrap(
-      await this.client.scheduledAction.dismissSuggestion({ path: { id: this.id } }),
+      await this.client.scheduledAction.dismissSuggestion({
+        path: { id: this.id },
+      }),
     );
   }
 
