@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { useProperty } from '../core/context';
+import { type PropertyEditFn, useProperty } from '../core/context';
 import { Root } from '../core/Root';
 import type { EntityProperty } from '../types';
 import { EntityLinkPill } from './EntityLinkPill';
@@ -42,11 +42,7 @@ function EditorState() {
   return <output>{ctx.editorOpen() ? 'Editing' : 'Not editing'}</output>;
 }
 
-function renderPill(
-  canEdit = true,
-  label?: string,
-  onEdit?: (property: EntityProperty, anchor?: HTMLElement) => void
-) {
+function renderPill(canEdit = true, label?: string, onEdit?: PropertyEditFn) {
   render(() => (
     <Root property={company} canEdit={canEdit} onEdit={onEdit}>
       <EntityLinkPill
