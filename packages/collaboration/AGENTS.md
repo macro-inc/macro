@@ -18,6 +18,7 @@ Transfer native ownership to SessionExecutor only through create; constructor fa
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
+On close failure, drain the admitted storage queue and adapter to a stable watermark before fencing further admissions and releasing the lease; finish each cleanup once without replacing the original thrown value.
 Round native wake delays up and rearm unchanged deadlines after early browser ticks; a fired host timeout must not strand native snapshot or reconnect work.
 Attribute only unowned v1 rows without a user to the current user, identically
 during load and conditional adoption; never relabel an owned session row.
