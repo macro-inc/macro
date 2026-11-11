@@ -18,6 +18,7 @@ import {
 } from './CallSessionController';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 import { traceCallMedia } from './call-media-telemetry';
+import { createCallSounds } from './primitives/call-sounds';
 
 type LivekitJsCallControllerState = {
   activeChannelId: string | null;
@@ -50,6 +51,7 @@ type LivekitJsCallControllerOptions = {
   bumpTrackVersion: () => void;
   bumpSpeakerVersion: () => void;
   setScreenSharing: (value: boolean) => void;
+  playSound: (event: 'join' | 'leave') => void;
 };
 
 export function createLivekitJsCallController(
@@ -58,6 +60,10 @@ export function createLivekitJsCallController(
   let stopReceiverStatsSampling: (() => void) | null = null;
   let disposed = false;
   let connectGeneration = 0;
+  const sounds = createCallSounds({
+    room: options.room,
+    play: options.playSound,
+  });
 
   function isCurrentRoom(room: Room) {
     return !disposed && options.room() === room;
@@ -244,6 +250,7 @@ export function createLivekitJsCallController(
       callId: tokenResponse.callId,
     });
     options.setRoom(targetRoom);
+    sounds.attach(targetRoom, tokenResponse.callId);
     options.setActiveCall(tokenResponse.channelId, tokenResponse.callId);
 
     try {
@@ -259,6 +266,11 @@ export function createLivekitJsCallController(
 
     // Sync participants that were already in the room when we connected.
     syncParticipantMap(targetRoom);
+    sounds.joined(
+      targetRoom,
+      tokenResponse.callId,
+      preferences?.recovery === true
+    );
 
     // Sample receive-side decode stats for the life of the room; the sampler
     // flushes one summary analytics event when stopped at teardown.
@@ -320,12 +332,14 @@ export function createLivekitJsCallController(
     }
   }
 
-  async function disconnect() {
+  async function disconnect(intentional = true) {
     connectGeneration += 1;
+    if (!intentional) sounds.abandon();
     const room = options.room();
+    if (room) options.cancelPendingMediaSetup();
+    if (intentional) await sounds.leaving(room);
     if (!room) return;
 
-    options.cancelPendingMediaSetup();
     try {
       await room.disconnect();
     } finally {

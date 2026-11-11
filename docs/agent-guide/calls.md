@@ -41,6 +41,30 @@ in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Ca
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
 
+### Join and leave sounds
+
+Browser calls play a short ascending cue when you or another participant joins,
+and a descending cue when someone deliberately leaves. Joining an occupied call
+plays only your own join cue. Reconnects and recovery rejoins stay silent.
+
+**Settings → Notifications → Sounds → Call sounds** is on by default, independent
+of the notification-sounds switch. Join and Leave preview buttons play the fixed
+cues. The shared volume slider and quiet-hours schedule apply. Guest browser
+calls use the default settings because they have no signed-in device profile.
+
+`Call/primitives/call-sounds.ts` exchanges explicit visit announcements over the
+room's reliable data channel; RTC roster changes never make sounds. Announcements
+are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
+sessions do not announce departures or joins. Native channel calls need a bridge
+extension before they can send or play these cues. Do not infer a leave from a
+missing participant, because recovery uses the same RTC removal events.
+
+To verify, join one browser call from two participants. Check each self join,
+the first participant hearing the second join, and both sides of a deliberate
+leave. Rejoin deliberately, then interrupt and restore the second connection:
+recovery must not play a leave or another join. Turn Call sounds off on one
+participant and confirm the other participant still hears announcements.
+
 ### Saved call detail
 
 On desktop the header keeps the breadcrumb, the call's More menu, Call again before Ask Macro,
