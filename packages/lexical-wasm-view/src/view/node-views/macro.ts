@@ -104,14 +104,24 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
   if (node.type === 'agent-context') dom.hidden = true;
   if (node.type === 'await') {
     dom.classList.add('macro-await-node');
-    const state: unknown = node.stateJSON ? JSON.parse(node.stateJSON) : null;
-    const local: unknown =
-      state !== null && typeof state === 'object'
-        ? Reflect.get(state, 'local')
-        : undefined;
-    dom.classList.toggle('local', local !== false);
+    dom.classList.toggle('local', isLocal(node));
   }
   if (node.type === 'equation') dom.classList.add('md-editor-equation');
+}
+/** Source CommentNode extends MarkNode, whose DOM carries theme.mark. */
+function addMarkTheme(dom: HTMLElement, ctx: RenderContext): void {
+  dom.classList.add(
+    ...themeClass(ctx.theme, 'mark').split(/\s+/).filter(Boolean)
+  );
+}
+/** Source `$getLocal(node) ?? true`: only an explicit false marks a remote peer's node. */
+function isLocal(node: ViewNode): boolean {
+  const state: unknown = node.stateJSON ? JSON.parse(node.stateJSON) : null;
+  return (
+    state === null ||
+    typeof state !== 'object' ||
+    Reflect.get(state, 'local') !== false
+  );
 }
 function elementTag(node: ViewNode): string {
   const tag = node.props().tag;
@@ -149,6 +159,7 @@ function elementProperties(node: ViewNode, dom: HTMLElement): void {
   else if (node.type === 'comment-mark') {
     dom.classList.add('comment');
     dom.classList.toggle('draft', Boolean(props.isDraft));
+    dom.classList.toggle('local', isLocal(node));
     if (props.threadId) dom.dataset.threadId = String(props.threadId);
     else delete dom.dataset.threadId;
   }
@@ -283,11 +294,13 @@ export function registerMacroElementViews(
   registry.replace('comment-mark', {
     createDOM(node, ctx) {
       const dom = mark.createDOM(node, ctx);
+      addMarkTheme(dom, ctx);
       elementProperties(node, dom);
       return dom;
     },
     updateDOM(previous, next, dom, ctx) {
       const replace = mark.updateDOM(previous, next, dom, ctx);
+      addMarkTheme(dom, ctx);
       elementProperties(next, dom);
       return replace;
     },
