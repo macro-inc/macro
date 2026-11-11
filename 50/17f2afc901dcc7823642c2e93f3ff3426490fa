@@ -1,0 +1,29 @@
+apps/web/src/features/channel/Call/CallControls/CallTeamShareChangeStatus.tsx
+  s_e28579a043217e::t_7cd7fbffe4e169 1
+  s_e28579a043217e::t_0beda17982fa6b 21,23-26,30,38,42-43,52,60,73,79-85
+  s_e28579a043217e::t_c3c57dea354246 39-41
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_e28579a043217e::t_0beda17982fa6b 6-15
+apps/web/src/lib/queries/call/call.ts
+  s_e28579a043217e::t_7cd7fbffe4e169 1
+  s_e28579a043217e::t_0beda17982fa6b 351
+packages/sdk/src/entities/calls/call-record.ts
+  s_e28579a043217e::t_839db95e02a952 227
+  s_e28579a043217e::t_c3c57dea354246 215-216,221-226,228-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5017f2afc901dcc7823642c2e93f3ff3426490fa",
+  "prompts": {},
+  "sessions": {
+    "s_e28579a043217e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "490a404d-4c83-41f2-b737-127d76ca9d95",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
