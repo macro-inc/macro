@@ -183,7 +183,11 @@ export function registerMacroDecoratorViews(
     registry.register(type, {
       decorator: component,
       createDecoratorHost(mount, context) {
-        if (type === 'html-render' || type === 'document-card') {
+        if (
+          type === 'html-render' ||
+          type === 'document-card' ||
+          type === 'paste'
+        ) {
           const selection = context.document.defaultView?.getSelection();
           if (selection) {
             selection.anchorNode;
@@ -209,7 +213,11 @@ export function registerMacroDecoratorViews(
       }),
       createDOM(node, ctx) {
         const dom = ctx.document.createElement(decoratorTag(node));
-        if (type === 'html-render' || type === 'document-card')
+        if (
+          type === 'html-render' ||
+          type === 'document-card' ||
+          type === 'paste'
+        )
           dom.style.display = 'block';
         decoratorProperties(node, dom);
         return dom;
