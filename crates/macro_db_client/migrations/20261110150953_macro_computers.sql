@@ -168,6 +168,11 @@ CREATE TABLE hosted_runtime_effect (
 CREATE INDEX hosted_runtime_effect_due_idx ON hosted_runtime_effect (worker, run_after);
 
 -- At most one pending timer per kind per computer; scheduling replaces it.
+-- `fire_at` is when the timer's lifecycle event is due: the operator's
+-- timer pass delivers every row with fire_at <= now and deletes it in the
+-- same transaction, only if fire_at is still the one it read (a rescheduled
+-- timer survives). Timers are never cancelled; an event that no longer
+-- applies is ignored by the lifecycle.
 CREATE TABLE hosted_runtime_timer (
     computer_id UUID NOT NULL REFERENCES hosted_runtime (id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
