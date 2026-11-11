@@ -9,10 +9,13 @@ import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkd
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
 import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
+import { createNativeImageContext } from '@core/component/LexicalMarkdown/decorator-host/native-image-host';
+import { createNativeImageDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/native-image-views';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
+import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -64,6 +67,7 @@ export default function RustMarkdownEditor(props: {
   const owner = getOwner() ?? undefined;
   const { documentId, permissions, state } = useMarkdownDocument();
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
+  const [ready, setReady] = createSignal(false);
   const abort = new AbortController();
   const userMentionContext = createNativeUserMentionContext(theme);
   const overlayLifecycle = createNativeListenerScope();
@@ -74,6 +78,19 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => equationContext.dispose());
   const [equationMenuActive, setEquationMenuActive] = createSignal(true);
   overlayLifecycle.add(() => setEquationMenuActive(false));
+  const imageUploads = createNativeImageUploadController();
+  overlayLifecycle.add(() => imageUploads.dispose());
+  const imageContext = createNativeImageContext(
+    theme,
+    () =>
+      ready() &&
+      permissions.canEdit() &&
+      !state.generation.isGenerating() &&
+      !state.generation.generatedAndWaiting() &&
+      !state.editor.error(),
+    imageUploads.events
+  );
+  overlayLifecycle.add(() => imageContext.dispose());
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -86,6 +103,7 @@ export default function RustMarkdownEditor(props: {
     rejectReady?.(failure);
     if (!abort.signal.aborted && failure !== lastError) {
       lastError = failure;
+      setReady(false);
       props.onError?.(failure);
       Telemetry.error(failure, { surface: 'rust-editor.session' });
     }
@@ -131,6 +149,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeEquationViews(equationContext),
+                  ...createNativeImageDecoratorViews(imageContext),
                   ...createNativeFastHTMLDecoratorViews({
                     theme,
                     host: {},
@@ -160,6 +179,7 @@ export default function RustMarkdownEditor(props: {
                     return late.fail(new Error('Editor open cancelled'));
                   }
                   overlayLifecycle.add(() => installed.dispose());
+                  imageUploads.bindView(view);
                   return { ...installed, dispose: overlayLifecycle.dispose };
                 } catch (error) {
                   return overlayLifecycle.fail(error);
@@ -231,7 +251,10 @@ export default function RustMarkdownEditor(props: {
                 }
               });
             });
-            if (!abort.signal.aborted) props.onReady?.();
+            if (!abort.signal.aborted) {
+              setReady(true);
+              props.onReady?.();
+            }
             if (props.autoFocus && !isTouchDevice() && !abort.signal.aborted)
               mounted.view.focus();
           });

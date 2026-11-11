@@ -3321,6 +3321,11 @@ Open a native document containing an HTML block and check that its rendered
 content appears inside the editor. Check the visible content after closing
 and reopening the document.
 
+In a native document, verify that an existing remote image renders. Paste an
+image file into the body and check that the preview stays visible during upload
+and that the saved image renders after reload. In a test where the upload fails,
+verify that the editor reports the failure and retains the local preview.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
