@@ -807,6 +807,9 @@ pub enum RemoveUserFromTeamError {
     /// The removed member's open seat could not be released, and the removal was rolled back.
     #[error("failed to release the removed member's open seat")]
     OpenSeatRelease(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// The member's seat is billed, so it cannot be taken back as an included one.
+    #[error("The member's seat is not included")]
+    SeatNotIncluded,
 }
 
 /// Arguments for creating a subscription
@@ -853,6 +856,9 @@ pub enum SetTeamMemberPlanError {
     /// Seat plans only apply to paying (or enterprise) teams.
     #[error("The team has no active subscription")]
     TeamNotPaying,
+    /// The member's seat is included and never billed, so it has no plan to change.
+    #[error("The member's seat is included and has no paid plan")]
+    SeatIncluded,
     /// Underlying team error
     #[error("{0}")]
     TeamError(#[from] TeamError),
@@ -962,6 +968,9 @@ pub enum JoinTeamDirectlyError {
     /// Underlying join team error
     #[error("Underlying join team error {0}")]
     JoinTeamError(#[from] JoinTeamError),
+    /// The user is already a member of the team.
+    #[error("The user is already a member of the team")]
+    AlreadyMember,
 }
 
 /// Errors for revoking permissions for team members

@@ -95,6 +95,13 @@ event contract (schema, sanitization, delivery semantics).
   (`TeamRepository::get_user_display_name`). A failed lookup is logged and the
   email falls back to the inviter's address, so it never blocks an invite.
 
+- `team_user.seat_included` marks a team agent's seat (`add_team_agent`): it
+  gets a paying team's premium roles, but joining, removing, or rolling it back
+  never reads or changes the team subscription, and its plan cannot change
+  (`SetTeamMemberPlanError::SeatIncluded`). `undo_team_agent_join` removes only
+  an included membership. Billing code that counts members against Stripe seat
+  quantities must skip included seats (`is_seat_included`).
+
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.

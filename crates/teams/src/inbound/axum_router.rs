@@ -406,6 +406,13 @@ impl IntoResponse for SetTeamMemberPlanError {
                 }),
             )
                 .into_response(),
+            SetTeamMemberPlanError::SeatIncluded => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "the member's seat is included and has no paid plan".into(),
+                }),
+            )
+                .into_response(),
             SetTeamMemberPlanError::TeamError(e) => e.into_response(),
             SetTeamMemberPlanError::CustomerError(_)
             | SetTeamMemberPlanError::RolesError(_)
