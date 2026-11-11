@@ -1,3 +1,4 @@
+import type { NativePluginManifest } from '@macro-inc/collaboration/session/native-plugins';
 import type {
   PreparedEditorRegisteredNodes,
   RegistryPreparation,
@@ -9,7 +10,8 @@ import type { ShimBackend } from './index';
 export type BackendFactory = (
   config: CreateEditorArgs,
   normalized: EditorConfig,
-  registered: PreparedEditorRegisteredNodes
+  registered: PreparedEditorRegisteredNodes,
+  nativePlugins: NativePluginManifest
 ) => ShimBackend;
 let factory: BackendFactory | undefined;
 let hookIndex: readonly string[] | undefined;
@@ -48,11 +50,12 @@ export function prepareRegisteredNodes(
 export function createBackend(
   config: CreateEditorArgs,
   normalized: EditorConfig,
-  registered: PreparedEditorRegisteredNodes
+  registered: PreparedEditorRegisteredNodes,
+  nativePlugins: NativePluginManifest
 ): ShimBackend {
   if (factory === undefined)
     throw new Error('Lexical engine has not been initialized');
-  return factory(config, normalized, registered);
+  return factory(config, normalized, registered, nativePlugins);
 }
 
 export function foreignHookIndex(): readonly string[] {

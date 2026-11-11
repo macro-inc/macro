@@ -27,7 +27,7 @@ use the real development conformance host.
 
 - Keep the development conformance backend out of production imports; production must bind the actual EditorSession without a second core.
 - Keep classes, constants and root exports safe to evaluate before WASM initialization; require initialization only when constructing an editor or calling the engine.
-- Run upstream @lexical packages unchanged over this core; JS node registration and handlers are authoritative, without parallel native behavior plugins.
+- Run upstream @lexical packages unchanged over this core; keep JS logic authoritative unless the immutable construction manifest explicitly selects its native owner, and reject duplicate JS logic registration for selected owners.
 - Use the shared production lexical-wasm-view package for DOM work; do not copy it.
 - Keep JS command identity in a WeakMap; diagnostic names are not identities.
 - Keep node/selection identity caches per version, never in a global Map.
@@ -126,6 +126,8 @@ Keep _updating true through update listeners and deferred callbacks without gran
 Forward LexicalNodeReplacement from the replacement type barrel so the root preserves the canonical upstream alias; keep bound internal replacement configs private.
 
 Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.
+
+Install the canonical nativePlugins manifest once at editor construction and pass it as a separate backend factory argument. Default to no native owners; the development conformance backend rejects nonempty manifests instead of substituting native policy. Production ownership requires the actual named staged installer before JS logic may be skipped.
 
 Route public builtin creation factories through actual registered replacements while preserving node identity and cold module evaluation.
 

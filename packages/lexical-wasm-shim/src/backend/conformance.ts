@@ -74,7 +74,11 @@ export function initializeConformance(
   hookNames = Object.freeze(modelHooks);
   initialized = true;
   bindBackendFactory(
-    (_config, normalized, prepared) => {
+    (_config, normalized, prepared, nativePlugins) => {
+      if (nativePlugins.length !== 0)
+        throw new Error(
+          'Native plugin ownership requires the production session'
+        );
       const builtins = new Set<NodeClass>([
         RootNode,
         TextNode,

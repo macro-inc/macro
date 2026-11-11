@@ -1,3 +1,7 @@
+import {
+  installNativePluginManifest,
+  type NativePluginManifest,
+} from '@macro-inc/collaboration/session/native-plugins';
 import type { EditorThemeClasses, SerializedEditorState } from 'lexical';
 import { createBackend, prepareRegisteredNodes } from './backend/factory';
 import { dispatchCommand, registerCommand } from './command/registry';
@@ -77,6 +81,7 @@ export interface CreateEditorArgs {
   readonly parentEditor?: LexicalEditor | null;
   readonly nodes?: readonly NodeConfigInput[];
   readonly onError?: (error: unknown, editor: LexicalEditor) => void;
+  readonly nativePlugins?: NativePluginManifest;
   readonly html?: HTMLConfig;
   readonly editable?: boolean;
 }
@@ -210,6 +215,10 @@ export class LexicalEditor {
               : undefined,
           });
     this._nodes = registered.registeredNodes;
+    const nativePlugins = installNativePluginManifest(
+      this,
+      config.nativePlugins ?? []
+    );
     this._config = {
       disableEvents,
       dom: { ...DEFAULT_EDITOR_DOM_CONFIG, ...config.dom },
@@ -221,7 +230,12 @@ export class LexicalEditor {
       html ? html.import : undefined
     );
     this._editable = editable;
-    const backend = createBackend(config, this._config, registered);
+    const backend = createBackend(
+      config,
+      this._config,
+      registered,
+      nativePlugins
+    );
     this.runtime = new NodeRuntime(backend, nativeNode);
     this.state = new EditorState(this, backend.initialVersion);
     const withUpdating = <T>(body: () => T): T => {
