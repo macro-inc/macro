@@ -53,6 +53,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Resolve asynchronous snippet content only for its issued generation-aware token and matching AwaitNode; preserve source extractor cache behavior, diagnostic cleanup, placeholder placement and merged history.
 - Export PasteFacts and its MIME constant for file-admission facts; read paste modifiers only from ClipboardPayload.intent and never from MIME entries.
 - Canonicalize hydrated document metadata through typed reads without state writes; upgrade its version only in the first ordinary local update.
+- Reuse the canonical metadata default for missing, null and non-object inputs; parse objects and arrays afresh so default omission preserves source identity.
 - Dispatch ordinary Outdent through the shared rich-text helper at Editor priority so table and plain lists use virtual list indentation, preserving source range gating and Tab default prevention.
 - Route table list Tab before row growth through table::input; consume eligible list Tab regardless of nested indent handling and prevent default before list dispatch or row insertion.
 - Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
