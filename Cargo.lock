@@ -19831,7 +19831,6 @@ dependencies = [
  "chrono-tz",
  "feature_flags",
  "futures",
- "http 1.4.0",
  "http-body-util",
  "ideas",
  "macro_authorization",
