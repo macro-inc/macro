@@ -67,10 +67,14 @@ export function useMessageViewerOverride():
 }
 
 const MessageSenderNameContext =
-  createContext<(senderId: string) => string | undefined>();
+  createContext<
+    (senderId: string, targetMessageId?: string) => string | undefined
+  >();
 
 export function MessageSenderNameProvider(
-  props: ParentProps<{ resolve: (senderId: string) => string | undefined }>
+  props: ParentProps<{
+    resolve: (senderId: string, targetMessageId?: string) => string | undefined;
+  }>
 ) {
   return (
     <MessageSenderNameContext.Provider value={props.resolve}>

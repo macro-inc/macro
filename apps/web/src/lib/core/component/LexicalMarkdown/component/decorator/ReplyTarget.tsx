@@ -41,7 +41,7 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
     props.parent.type === 'document' ? props.parent.id : ''
   );
   const senderName = () =>
-    senderNameForId?.(props.senderId) ||
+    senderNameForId?.(props.senderId, props.targetMessageId) ||
     getBotDisplayName(
       props.senderId,
       undefined,

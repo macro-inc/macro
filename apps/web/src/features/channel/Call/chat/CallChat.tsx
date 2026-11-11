@@ -17,7 +17,9 @@ import {
   MessageTransportProvider,
   MessageViewerProvider,
 } from '@core/messages/message-transport';
+import { tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isBotSenderId } from '@queries/messages/message-sender';
 import {
   newMessageId,
   useSendMessageMutation,
@@ -201,18 +203,25 @@ function CallChatView(props: ChatViewProps) {
       }}
     >
       <MessageSenderNameProvider
-        resolve={(senderId) => {
+        resolve={(senderId, targetMessageId) => {
+          if (tryMacroId(senderId) || isBotSenderId(senderId)) return undefined;
           const thread = chat.thread();
+          if (!thread) return undefined;
+          const messages = [thread.root, ...thread.replies];
           const message =
-            thread &&
-            [thread.root, ...thread.replies].find(
-              (item) => item.sender_id === senderId
-            );
-          return props.guest
-            ? (message?.imported_author?.name ??
-                message?.guest_name ??
-                undefined)
-            : undefined;
+            messages.find(
+              (item) =>
+                item.id === targetMessageId && item.sender_id === senderId
+            ) ??
+            (senderId
+              ? messages.find((item) => item.sender_id === senderId)
+              : undefined);
+          if (message?.sender?.type === 'bot') return undefined;
+          return (
+            message?.guest_name?.trim() ||
+            message?.imported_author?.name?.trim() ||
+            undefined
+          );
         }}
       >
         <StaticMarkdownContext>

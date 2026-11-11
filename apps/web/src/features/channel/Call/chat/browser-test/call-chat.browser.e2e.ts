@@ -3,7 +3,7 @@ import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 const CALL = '00000000-0000-7000-8000-0000000ca110';
 const GUEST_MESSAGE = '00000000-0000-7000-8000-0000000a0001';
 const MEMBER = 'macro|me@example.com';
-const GUEST = 'guest:guest-1';
+const GUEST = 'guest|00000000-0000-7000-8000-000000000002';
 const OPAQUE = 'guest|00000000-0000-5000-8000-000000000001';
 const PATH = '/src/features/channel/Call/chat/browser-test/call-chat.html';
 const LINK = 'https://example.com/shared-page';
@@ -347,6 +347,12 @@ test('guest and member render the same rows with redacted identity', async ({
   const member = await open(memberPage, 'member', fake.errors);
   await expect(member.locator('[data-message]')).toHaveCount(2);
   await expect(member.getByText('Casey (Guest)')).toBeVisible();
+  await action(memberPage, GUEST_MESSAGE, 'Reply');
+  await send(memberPage, 'Reply to Casey');
+  await expect(
+    member.getByRole('button', { name: /Replying to Casey:/ })
+  ).toBeVisible();
+  await expect(member).not.toContainText('guest|');
   await memberPage.screenshot({
     path: testInfo.outputPath('member.png'),
     fullPage: true,

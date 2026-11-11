@@ -3,13 +3,14 @@ import type { ChannelInputProps } from '@channel/Input/ChannelInput';
 import type { InputHandle, InputSnapshot } from '@channel/Input/types';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import {
+  useMessageSenderName,
   useMessageTransport,
   useMessageViewerOverride,
 } from '@core/messages/message-transport';
 import type { MessageActionHandler } from '@core/messages/types';
 import type { MessageListItem, MessageThread } from '@service-storage/messages';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX, useContext } from 'solid-js';
+import { createSignal, For, type JSX, useContext } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import CallChat from './CallChat';
 
@@ -66,6 +67,7 @@ vi.mock('@core/messages/MessageThread', () => ({
   threadListItem: (thread: MessageThread) => thread.root,
   MessageThread: (props: {
     data: MessageListItem;
+    replies?: MessageThread['replies'];
     onReply?: MessageActionHandler;
     targetId?: string;
     targetRequestKey?: string | number;
@@ -73,8 +75,16 @@ vi.mock('@core/messages/MessageThread', () => ({
     const navigate = useContext(MessageReferenceNavigation);
     const transport = useMessageTransport();
     const viewer = useMessageViewerOverride();
+    const senderName = useMessageSenderName();
     return (
       <>
+        <For each={[props.data, ...(props.replies ?? [])]}>
+          {(message) => (
+            <span data-testid={`quote-name-${message.id}`}>
+              {senderName?.(message.sender_id, message.id)}
+            </span>
+          )}
+        </For>
         <span data-testid="viewer">{viewer?.()}</span>
         <button
           onClick={() =>
@@ -115,6 +125,75 @@ vi.mock('@core/messages/MessageThread', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+it('resolves non-Macro quote authors from their own loaded messages for members', () => {
+  const root: MessageThread['root'] = {
+    id: 'call-id',
+    parent: { type: 'call', id: 'call-id' },
+    sender_id: 'macro|member@example.test',
+    imported_author: { name: 'Not the member name' },
+    content: 'Member message',
+    created_at: '2026-09-28T00:00:00Z',
+    updated_at: '2026-09-28T00:00:00Z',
+    attachments: [],
+    mentions: [],
+    reactions: [],
+  };
+  const replies: MessageThread['replies'] = [
+    {
+      ...root,
+      id: 'guest-message',
+      sender_id: 'guest|00000000-0000-7000-8000-000000000002',
+      guest_name: 'Guest Tester',
+      imported_author: null,
+    },
+    {
+      ...root,
+      id: 'external-message',
+      sender_id: '',
+      imported_author: { name: 'External Sender' },
+    },
+    {
+      ...root,
+      id: 'second-external-message',
+      sender_id: '',
+      imported_author: { name: 'Another Sender' },
+    },
+    {
+      ...root,
+      id: 'bot-message',
+      sender_id: 'bot|00000000-0000-7000-8000-000000000003',
+      imported_author: { name: 'Not the bot name' },
+    },
+  ];
+  mocks.source = {
+    thread: () => ({ root, replies }),
+    parent: () => root.parent,
+    empty: () => false,
+    loading: () => false,
+    failed: () => false,
+    refresh: mocks.refresh,
+  };
+  render(() => (
+    <CallChat
+      access={{ kind: 'member' }}
+      callId="call-id"
+      open
+      onClose={() => {}}
+    />
+  ));
+  expect(screen.getByTestId('quote-name-guest-message').textContent).toBe(
+    'Guest Tester'
+  );
+  expect(screen.getByTestId('quote-name-external-message').textContent).toBe(
+    'External Sender'
+  );
+  expect(
+    screen.getByTestId('quote-name-second-external-message').textContent
+  ).toBe('Another Sender');
+  expect(screen.getByTestId('quote-name-call-id').textContent).toBe('');
+  expect(screen.getByTestId('quote-name-bot-message').textContent).toBe('');
 });
 
 it.each(['user-id', 'another-user'])(

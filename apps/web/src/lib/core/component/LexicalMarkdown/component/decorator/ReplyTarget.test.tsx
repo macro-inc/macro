@@ -1,5 +1,6 @@
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import { MessageSenderNameProvider } from '@core/messages/message-transport';
 import type {
   ReplyTargetDecoratorProps,
   ReplyTargetParent,
@@ -45,11 +46,16 @@ vi.mock('@queries/storage/document-metadata', () => ({
 vi.mock('../core/BlockLink', () => ({ openDocument: mocks.open }));
 vi.mock('./QuoteReplyPreview', () => ({
   QuoteReplyPreview: (props: {
+    label: string;
     onClick: (event: MouseEvent) => void;
     disabled?: boolean;
   }) => (
-    <button disabled={props.disabled} onClick={props.onClick}>
-      Quoted message
+    <button
+      aria-label="Quoted message"
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      <span data-testid="quote-label">{props.label}</span>
     </button>
   ),
 }));
@@ -57,6 +63,28 @@ vi.mock('./QuoteReplyPreview', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+it('uses the loaded thread name for a quoted non-Macro sender', () => {
+  const resolve = vi.fn(() => 'Guest Tester');
+  render(() => (
+    <MessageSenderNameProvider resolve={resolve}>
+      <ReplyTarget
+        parent={{ type: 'call', id: 'call-id' }}
+        targetMessageId="guest-message"
+        targetThreadId="call-id"
+        senderId="guest|00000000-0000-7000-8000-000000000002"
+        displayText="Quoted text"
+        key="node-key"
+        theme={{}}
+      />
+    </MessageSenderNameProvider>
+  ));
+  expect(screen.getByTestId('quote-label').textContent).toBe('Guest Tester');
+  expect(resolve).toHaveBeenCalledWith(
+    'guest|00000000-0000-7000-8000-000000000002',
+    'guest-message'
+  );
 });
 
 it.each<{
