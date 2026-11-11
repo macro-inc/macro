@@ -5,10 +5,25 @@ import type { Accessor, JSX } from 'solid-js';
 import { createEffect, onCleanup } from 'solid-js';
 import { registerEditorMutationObserver } from '../plugins/shared/utils';
 
-type GlueToElementProps = {
-  editor: LexicalEditor;
-  element: Accessor<HTMLElement | undefined | null>;
-};
+type GlueToElementProps =
+  | {
+      editor: LexicalEditor;
+      element: Accessor<HTMLElement | undefined | null>;
+    }
+  | {
+      /** Engine-neutral host: the editor root and its DOM mutation subscription. */
+      root: () => HTMLElement | null;
+      observeMutations: (onMutation: () => void) => () => void;
+      element: Accessor<HTMLElement | undefined | null>;
+    };
+
+const rootOf = (props: GlueToElementProps) =>
+  'editor' in props ? props.editor.getRootElement() : props.root();
+
+const observeMutations = (props: GlueToElementProps, onMutation: () => void) =>
+  'editor' in props
+    ? registerEditorMutationObserver(props.editor, onMutation)
+    : props.observeMutations(onMutation);
 
 // Add to type definitions
 declare module 'solid-js' {
@@ -48,7 +63,7 @@ export function glueToElement(
 
   async function updatePosition() {
     const el = propAccessor().element();
-    const root = propAccessor().editor.getRootElement();
+    const root = rootOf(propAccessor());
     const mount = floatingElement.offsetParent as HTMLElement | null;
 
     if (!el || !root || !mount) {
@@ -85,8 +100,8 @@ export function glueToElement(
       floatingElement,
       updatePosition
     );
-    cleanupEditorMutationObserver = registerEditorMutationObserver(
-      propAccessor().editor,
+    cleanupEditorMutationObserver = observeMutations(
+      propAccessor(),
       scheduleUpdatePosition
     );
   });

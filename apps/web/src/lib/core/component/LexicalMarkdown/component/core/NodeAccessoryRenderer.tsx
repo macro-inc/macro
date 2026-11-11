@@ -26,32 +26,40 @@ export function NodeAccessoryRenderer(props: {
     }
   );
 
+  return (
+    <Show when={editorRootParent()}>
+      {(parent) => <NodeAccessoryLayer parent={parent()} store={props.store} />}
+    </Show>
+  );
+}
+
+/** Accessories portaled into an editor root's parent, for either engine. */
+export function NodeAccessoryLayer(props: {
+  parent: HTMLElement;
+  store: AccessoryStore;
+}) {
   const list = createMemo(() => {
     return Object.values(props.store);
   });
 
   return (
-    <Show when={editorRootParent()}>
-      {(parent) => (
-        <Portal mount={parent()}>
-          <div
-            class="__node-accessories absolute top-0 left-0"
-            style={{ 'z-index': MarkdownStackingContext.Accessories }}
-          >
-            <For each={list()}>
-              {(item) => {
-                return (
-                  <Dynamic
-                    component={() =>
-                      item.component({ ref: item.mountRef, key: item.key })
-                    }
-                  />
-                );
-              }}
-            </For>
-          </div>
-        </Portal>
-      )}
-    </Show>
+    <Portal mount={props.parent}>
+      <div
+        class="__node-accessories absolute top-0 left-0"
+        style={{ 'z-index': MarkdownStackingContext.Accessories }}
+      >
+        <For each={list()}>
+          {(item) => {
+            return (
+              <Dynamic
+                component={() =>
+                  item.component({ ref: item.mountRef, key: item.key })
+                }
+              />
+            );
+          }}
+        </For>
+      </div>
+    </Portal>
   );
 }
