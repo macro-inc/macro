@@ -86,7 +86,10 @@ impl WorkspaceTemplate {
         agent: &MacroUserIdStr<'_>,
         seed: &PersonaSeed,
     ) -> Result<Vec<RenderedFile>, RenderError> {
-        let owner = seed.creator_id.as_ref().ok_or(RenderError::MissingCreator)?;
+        let owner = seed
+            .creator_id
+            .as_ref()
+            .ok_or(RenderError::MissingCreator)?;
         let example = self
             .files
             .iter()
@@ -134,7 +137,10 @@ fn identity(seed: &PersonaSeed) -> Option<String> {
     if job.is_empty() && personality.is_empty() {
         return None;
     }
-    let mut text = format!("# {}\n\nMy owner described me when they invited me.\n", seed.name.trim());
+    let mut text = format!(
+        "# {}\n\nMy owner described me when they invited me.\n",
+        seed.name.trim()
+    );
     if !job.is_empty() {
         text.push_str(&format!("\n## What I do\n\n{job}\n"));
     }

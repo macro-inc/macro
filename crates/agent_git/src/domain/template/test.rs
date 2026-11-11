@@ -59,7 +59,10 @@ fn the_runtime_entry_points_are_embedded() {
         "behavior/index.ts",
     ] {
         assert!(
-            WORKSPACE_TEMPLATE.files.iter().any(|file| file.path == path),
+            WORKSPACE_TEMPLATE
+                .files
+                .iter()
+                .any(|file| file.path == path),
             "{path}"
         );
     }

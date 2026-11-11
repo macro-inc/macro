@@ -1,7 +1,7 @@
 //! Bare repos under a storage root, managed with the `git` CLI.
 
-use std::path::{Path, PathBuf};
 use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;

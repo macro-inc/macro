@@ -76,7 +76,9 @@ fn collect(
 
 /// Entries of the monorepo checkout that are not part of an agent's repo.
 fn skipped(name: &str) -> bool {
-    matches!(name, "node_modules" | ".worktrees" | ".direnv" | "biome.jsonc")
-        || name.starts_with(".scripts")
+    matches!(
+        name,
+        "node_modules" | ".worktrees" | ".direnv" | "biome.jsonc"
+    ) || name.starts_with(".scripts")
         || name.ends_with(".tsbuildinfo")
 }

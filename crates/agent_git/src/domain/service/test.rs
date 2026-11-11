@@ -546,7 +546,11 @@ fn the_settings_name_the_agent_and_its_owner() {
     assert_eq!(settings["name"], "Sam");
     assert_eq!(settings["email"], "sam@agents.example.com");
     assert_eq!(settings["timeZone"], "UTC");
-    assert!(settings["model"].as_str().is_some_and(|model| !model.is_empty()));
+    assert!(
+        settings["model"]
+            .as_str()
+            .is_some_and(|model| !model.is_empty())
+    );
     assert!(!files.iter().any(|file| file.path == "agent.example.json"));
 }
 
