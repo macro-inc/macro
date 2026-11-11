@@ -3354,7 +3354,7 @@ export const readSkill = async (
 
 /**
  * Every request is refused, whether or not the chat exists, before any
-admission, storage, or model work. Start an agent session instead.
+admission, storage, or model work. Continue the chat in Agents instead.
  * @summary Refuse a chat message: legacy AI chats are read-only.
  */
 export type sendChatMessageResponse410 = {

@@ -625,7 +625,7 @@ export class Sdk extends HeyApiClient {
      * Refuse a chat message: legacy AI chats are read-only.
      *
      * Every request is refused, whether or not the chat exists, before any
-     * admission, storage, or model work. Start an agent session instead.
+     * admission, storage, or model work. Continue the chat in Agents instead.
      */
     public sendChatMessage<ThrowOnError extends boolean = false>(options?: Options<SendChatMessageData, ThrowOnError>): RequestResult<unknown, SendChatMessageErrors, ThrowOnError> {
         return (options?.client ?? this.client).post<unknown, SendChatMessageErrors, ThrowOnError>({ url: '/stream/chat/message', ...options });

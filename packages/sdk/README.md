@@ -777,8 +777,8 @@ the handle only retains metadata. `list()` and `key.delete()` manage keys.
 `tokenForEmail(email)` exchanges credentials subject to ordinary server authorization.
 
 AI chats are read-only history: `macro.chats` finds them and `chat.history()`
-reads them, but nothing creates, copies or sends to one. Start an agent session
-instead.
+reads them, but nothing creates, copies or sends to one. Continue a chat in
+Agents instead.
 `macro.ai.usage({ from, until, users, features })` reads AI usage.
 
 # Events

@@ -4039,7 +4039,7 @@ export type SendChatMessageData = {
 
 export type SendChatMessageErrors = {
     /**
-     * Legacy AI chats are read-only; start an agent session instead
+     * Legacy AI chats are read-only; continue the chat in Agents instead
      */
     410: ChatMessageError;
 };

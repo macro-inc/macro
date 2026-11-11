@@ -2730,11 +2730,11 @@
       "post": {
         "tags": ["chat_message"],
         "summary": "Refuse a chat message: legacy AI chats are read-only.",
-        "description": "Every request is refused, whether or not the chat exists, before any\nadmission, storage, or model work. Start an agent session instead.",
+        "description": "Every request is refused, whether or not the chat exists, before any\nadmission, storage, or model work. Continue the chat in Agents instead.",
         "operationId": "send_chat_message",
         "responses": {
           "410": {
-            "description": "Legacy AI chats are read-only; start an agent session instead",
+            "description": "Legacy AI chats are read-only; continue the chat in Agents instead",
             "content": {
               "application/json": {
                 "schema": {

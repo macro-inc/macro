@@ -1,6 +1,7 @@
 use crate::cognition::api::context::test::{
     ADMISSION_TEST_USER, TestAdmission, authorized_request, test_api_context,
 };
+use crate::cognition::api::stream::chat_message::CHAT_READ_ONLY_MESSAGE;
 use axum::http::StatusCode;
 use http_body_util::BodyExt;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -46,6 +47,7 @@ async fn every_send_is_refused_before_admission_or_storage(pool: sqlx::PgPool) {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(body["code"], "chat_read_only");
+        assert_eq!(body["error"], CHAT_READ_ONLY_MESSAGE);
     }
 
     assert!(admission.calls.lock().unwrap().is_empty());

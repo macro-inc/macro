@@ -8,6 +8,10 @@ use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// What every legacy chat write is told; matches the read-only notice in the web app.
+pub const CHAT_READ_ONLY_MESSAGE: &str =
+    "This chat is read-only. Continue it in Agents to keep going.";
+
 /// Why a chat message was refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -29,7 +33,7 @@ impl ChatMessageError {
     /// The refusal every legacy chat write gets.
     pub fn chat_read_only() -> Self {
         Self {
-            error: "AI chats are read-only. Start an agent session instead.".to_owned(),
+            error: CHAT_READ_ONLY_MESSAGE.to_owned(),
             code: ChatMessageErrorCode::ChatReadOnly,
         }
     }
@@ -47,12 +51,12 @@ impl IntoResponse for ChatMessageError {
 /// Refuse a chat message: legacy AI chats are read-only.
 ///
 /// Every request is refused, whether or not the chat exists, before any
-/// admission, storage, or model work. Start an agent session instead.
+/// admission, storage, or model work. Continue the chat in Agents instead.
 #[utoipa::path(
     post,
     path = "/stream/chat/message",
     responses(
-        (status = 410, description = "Legacy AI chats are read-only; start an agent session instead", body = ChatMessageError),
+        (status = 410, description = "Legacy AI chats are read-only; continue the chat in Agents instead", body = ChatMessageError),
     )
 )]
 #[tracing::instrument]
