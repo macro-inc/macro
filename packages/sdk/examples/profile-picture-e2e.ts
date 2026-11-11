@@ -142,14 +142,15 @@ try {
 }
 check('second change within 1s is throttled', throttled);
 
-// 4. Switch by file id without re-uploading, after the throttle window.
+// 4. Switch back to saved uploads by id, without re-uploading, after the
+// throttle window.
 await Bun.sleep(1100);
-await alice.me.update({ profilePicture: second.id });
+await alice.me.update({ profilePicture: alice.images.byId(second.id) });
 await Bun.sleep(1100);
-await alice.me.update({ profilePicture: first.id });
+await alice.me.update({ profilePicture: alice.images.byId(first.id) });
 const back = await alice.me.profilePicture();
 check(
-  'switch by file id (no re-upload)',
+  'switch to saved uploads by id (no re-upload)',
   back instanceof StaticImage && back.id === first.id,
 );
 

@@ -7,6 +7,8 @@
 //! container is asked for - decides which runtime a session's transport comes
 //! from.
 
+use std::sync::Arc;
+
 use agent_egress::domain::model::SessionToken;
 use agent_harness::domain::error::{HarnessError, Result};
 use agent_harness::domain::model::{AgentKind, SpawnContainer};
@@ -71,8 +73,8 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
 
 /// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
-    /// In-memory session provisioner.
-    pub manager: InMemAgentManager,
+    /// In-memory session provisioner, shared with the runtime gauges.
+    pub manager: Arc<InMemAgentManager>,
 }
 
 /// The deployment's [`ContainerManager`]: the sandbox provider for the
@@ -282,6 +284,32 @@ where
                 Ok(())
             }
             Route::Sandbox => self.sandbox.teardown(session).await,
+        }
+    }
+
+    /// Drops this process's in-process conversation, agent task and egress
+    /// token for `session`, if it holds any. Map removals only, so no route
+    /// lookup: a session of any other runtime has nothing here to drop.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        if let Some(inmem) = &self.inmem {
+            inmem.manager.teardown(session);
+        }
+        Ok(())
+    }
+
+    /// Asks the in-process manager, which compares the session's live state
+    /// with what a cold attach would rebuild. The route is looked up only
+    /// when this process holds the session's conversation.
+    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
+        let Some(inmem) = &self.inmem else {
+            return Ok(true);
+        };
+        if !inmem.manager.holds(session) {
+            return Ok(true);
+        }
+        match self.route(session).await? {
+            Route::InMem(facts) => Ok(inmem.manager.rebuilds_identically(&facts).await?),
+            Route::Sandbox => Ok(true),
         }
     }
 }

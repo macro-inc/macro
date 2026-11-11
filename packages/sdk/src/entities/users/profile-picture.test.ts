@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { MacroClient } from '../../utils/client';
 import { StaticImage } from '../images/image';
+import { ImagesNamespace } from '../images/namespace';
 import { MeNamespace } from '../me/namespace';
 import { UserNamespace } from './namespace';
 import { ExternalProfilePicture } from './profile-picture';
@@ -104,13 +105,15 @@ describe('profile pictures', () => {
     expect(pictures.has(b)).toBe(false);
   });
 
-  test('me.profilePicture reads the caller, and update accepts a file id', async () => {
+  test('me.profilePicture reads the caller, and update switches to a saved image', async () => {
     const { client, calls } = makeClient([
       { id: 'macro|me@example.com', url: `${STATIC_FILES}/file/${MINE}` },
     ]);
     const me = new MeNamespace(client);
     expect(((await me.profilePicture()) as StaticImage).id).toBe(MINE);
-    await me.update({ profilePicture: 'earlier' });
+    await me.update({
+      profilePicture: new ImagesNamespace(client).byId('earlier'),
+    });
     await me.update({ profilePicture: StaticImage.byId(client, 'other') });
     expect(calls.puts).toEqual(['earlier', 'other']);
   });

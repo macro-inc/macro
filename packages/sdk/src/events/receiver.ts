@@ -77,6 +77,8 @@ function hydrate(
  * {@link MacroEvents.webhook} at a persisted webhook URL.
  *
  * Obtain via `macro.events` — do not construct directly.
+ *
+ * @mcp-exclude Registers live event handlers and listeners; MCP calls carry JSON only.
  */
 export class MacroEvents {
   private readonly handlers = new Map<EventName, Set<AnyHandler>>();

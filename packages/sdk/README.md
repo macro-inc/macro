@@ -69,7 +69,7 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
-Switch between earlier uploads with `macro.me.update({ profilePicture: image.id })`,
+Switch between earlier uploads with `macro.me.update({ profilePicture: macro.images.byId(savedId) })`,
 and read pictures with `macro.me.profilePicture()`, `user.profilePicture()` or
 `macro.users.profilePictures(users)`. Pictures set through Macro are a
 `StaticImage`; legacy URL pictures are an `ExternalProfilePicture` (`{ url }`).
