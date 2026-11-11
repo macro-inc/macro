@@ -101,6 +101,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     unshared: 'unshareScheduledActionTemplate',
     shared: 'shareScheduledActionTemplate',
     archived: 'retireSuggestion retireRoutineSuggestion',
+    linked: 'attachSuggestionDraft',
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
