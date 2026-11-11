@@ -160,7 +160,11 @@ impl<P: ActivityEventPublisher, A: ActivityAudienceExpander> ActivityRealtimePub
                 .collect();
             let session_rows: Vec<_> = activities
                 .iter()
-                .filter(|activity| activity.agent_correlation_id.is_some())
+                // Reads (`opened`) never reach session viewers, as in the read path.
+                .filter(|activity| {
+                    activity.agent_correlation_id.is_some()
+                        && !matches!(activity.action, Action::Opened)
+                })
                 .map(ActivityWireRow::from_activity)
                 .collect();
             if !session_rows.is_empty() {

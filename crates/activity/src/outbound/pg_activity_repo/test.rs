@@ -1068,17 +1068,11 @@ async fn session_activity_preserves_invocations_and_paginates_without_entity_gra
             .is_empty()
     );
     // Session deletion removes its mapping, never the entity's existing history.
+    // The route refuses a deleted session at its access check before reading.
     sqlx::query!("DELETE FROM agent_session WHERE id = $1", session)
         .execute(&pool)
         .await
         .unwrap();
-    assert!(
-        repo.agent_activity(session, None, None, nz(10))
-            .await
-            .unwrap()
-            .records
-            .is_empty()
-    );
     assert_eq!(
         repo.entity_feed(EntityType::Document, "private-document", None, nz(10))
             .await
@@ -1086,5 +1080,64 @@ async fn session_activity_preserves_invocations_and_paginates_without_entity_gra
             .records
             .len(),
         5
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn session_activity_is_stamped_on_insert_and_leaves_out_reads(pool: PgPool) {
+    use crate::domain::ports::AgentActivityReads;
+    let session = Uuid::now_v7();
+    let run = Uuid::now_v7();
+    sqlx::query!("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ($1, 'macro|owner@example.com', $2, 'test', 'test', '/workspace')", session, Uuid::now_v7()).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+        run,
+        session
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgActivityRepo::new(pool.clone());
+    let timestamp = Utc::now();
+    let row = |ordinal: u32, action: CommonAction, correlation: Option<Uuid>| {
+        Activity::common(
+            Uuid::from_u128(500),
+            ordinal,
+            Actor::new_from_user(user("macro|actor@example.com")),
+            None,
+            EntityType::Document,
+            "document",
+            action,
+            timestamp,
+        )
+        .with_agent_correlation(correlation)
+    };
+    repo.insert_activities(&[
+        row(0, CommonAction::Edited, Some(run)),
+        row(1, CommonAction::Opened, Some(run)),
+        row(2, CommonAction::Edited, None),
+    ])
+    .await
+    .unwrap();
+
+    // The trigger stamps correlated rows only, whatever the writer sent.
+    let stamped = sqlx::query_scalar!(
+        "SELECT agent_session_id FROM activity_events WHERE entity_id = 'document' ORDER BY id"
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(stamped.iter().filter(|id| **id == Some(session)).count(), 2);
+    assert_eq!(stamped.iter().filter(|id| id.is_none()).count(), 1);
+
+    let page = repo
+        .agent_activity(session, None, None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert!(
+        page.records
+            .iter()
+            .all(|record| record.agent_correlation_id == Some(run))
     );
 }
