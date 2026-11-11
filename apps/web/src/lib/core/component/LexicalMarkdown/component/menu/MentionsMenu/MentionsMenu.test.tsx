@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   contactSourceEnabled: undefined as (() => boolean) | undefined,
   setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
+  peopleLoading: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
     [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
@@ -141,7 +142,7 @@ vi.mock('@core/context/quickAccess', () => ({
         items: () => [],
         totalCount: () => 0,
         hasMore: () => false,
-        isLoading: () => false,
+        isLoading: () => mocks.peopleLoading(),
         isLoadingMore: () => false,
         loadMore: async () => {},
       };
@@ -222,6 +223,7 @@ afterEach(() => {
   mocks.contactSourceEnabled = undefined;
   mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
+  mocks.peopleLoading = () => false;
   mocks.loadMoreContacts.mockClear();
   mocks.calendarEvents = [];
   cleanup();
@@ -703,4 +705,30 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('says it is searching, not that there are no results, until the people source answers', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  const [loading, setLoading] = createSignal(true);
+  mocks.peopleLoading = loading;
+  const menu = createMenuOperations();
+  menu.setSearchTerm('jacob');
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  setLoading(false);
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(screen.queryByText('Searching…')).toBeNull();
 });
