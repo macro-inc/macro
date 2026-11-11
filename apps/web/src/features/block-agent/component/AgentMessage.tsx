@@ -178,6 +178,15 @@ function ToolGroupPart(props: {
       : -1;
   const active = () => activeIndex() !== -1;
   const activity = useSessionActivity(() => props.message.agentSessionId);
+  // The session's live line names what the turn is doing now, so it belongs
+  // on the run the turn is still in: one with a call in flight, or the
+  // newest run while the agent thinks between calls.
+  const current = () =>
+    active() ||
+    (props.inFlight &&
+      props.message.parts
+        .slice(props.end)
+        .every((part) => part.kind === 'thought'));
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
@@ -199,7 +208,7 @@ function ToolGroupPart(props: {
         count={calls().length}
         active={active()}
         activeIndex={active() ? activeIndex() : undefined}
-        summary={active() ? activity() : undefined}
+        summary={current() ? activity() : undefined}
       >
         {renderParts()}
       </LiveToolGroup>

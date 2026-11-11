@@ -28,7 +28,7 @@ export interface ToolGroupProps {
   activeIndex?: number;
   /**
    * The session's live one-line status over these calls, shown in place of
-   * the count while the run is active; the count stays beside it.
+   * the title while the turn is in this run; the count stays beside it.
    */
   summary?: string;
   defaultOpen?: boolean;
@@ -158,7 +158,7 @@ export function ToolGroup(props: ToolGroupProps) {
         onClick={() => setExpanded(!expanded())}
       >
         <Show
-          when={props.active && props.summary}
+          when={props.summary}
           fallback={<TextShimmer text={title()} active={props.active} />}
         >
           {(summary) => (

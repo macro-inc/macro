@@ -1826,8 +1826,9 @@ opens every group and tool result at once.
 
 While a turn runs tool calls, the server words them as one live status line
 ("Searching your workspace…", "Reading 12 emails…") with a cheap model and
-pushes it to every viewer (`agent_session_activity`). It replaces the active
-group's **Calling N tools** label (the count stays beside it, and the caret
+pushes it to every viewer (`agent_session_activity`). It replaces the
+**Calling N tools** label of the run the turn is in (one with a call in flight,
+or the newest run while the agent thinks between calls) (the count stays beside it, and the caret
 still opens the raw calls), the open activity line of an agent reply in a
 channel, and shows under a working session's row in the Agents list. It is
 throttled per turn (every 4s for the first 10 lines, then every 15s, at most
