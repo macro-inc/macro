@@ -14614,7 +14614,6 @@ dependencies = [
  "anyhow",
  "bytes",
  "chrono",
- "h2 0.4.16",
  "hyper 1.9.0",
  "hyper-util",
  "models_opensearch",
@@ -14631,6 +14630,7 @@ dependencies = [
  "tokio-retry",
  "tokio-rustls",
  "tracing",
+ "transport_failure",
  "uuid",
  "workspace-hack",
 ]
@@ -20923,6 +20923,20 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "transport_failure"
+version = "0.1.0"
+dependencies = [
+ "h2 0.4.16",
+ "hyper 1.9.0",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tokio",
+ "workspace-hack",
 ]
 
 [[package]]

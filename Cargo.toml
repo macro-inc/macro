@@ -149,6 +149,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/transport_failure",
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
