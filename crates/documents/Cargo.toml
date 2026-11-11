@@ -36,6 +36,8 @@ ai_tools = [
   "dep:psd_engine",
   "dep:schemars",
   "dep:sha2",
+  "dep:tower",
+  "dep:transport_failure",
   "document_create_adapters",
   "outbound",
   "ports",
@@ -206,6 +208,8 @@ psd_engine = { path = "../psd_engine", optional = true }
 reqwest = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+tower = { workspace = true, optional = true, features = ["retry"] }
+transport_failure = { path = "../transport_failure", optional = true }
 
 
 # Attachment
@@ -218,7 +222,10 @@ channel_sender = { path = "../channel_sender" }
 messages = { path = "../messages", features = ["ports", "test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 embedding = { path = "../embedding" }
+bytes = { workspace = true }
 http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["http2", "server"] }
+hyper-util = { workspace = true, features = ["http2", "server"] }
 kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
