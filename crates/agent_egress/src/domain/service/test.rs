@@ -1457,6 +1457,57 @@ async fn a_tool_call_to_macros_own_server_is_held_under_its_name() {
     assert_eq!((held[0].0.as_str(), held[0].1.as_str()), ("macro", "Macro"));
 }
 
+fn google_drive() -> EgressTarget {
+    EgressTarget::McpServer(McpDestination::Connected(
+        McpServerSlug::parse("google_drive").expect("slug"),
+    ))
+}
+
+/// A change to the owner's Drive waits for them even in their own turn.
+#[tokio::test]
+async fn a_drive_write_in_the_owners_own_turn_is_held_for_them() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"trash_file","arguments":{"fileId":"f"}}}"#,
+            ),
+        )
+        .await
+        .expect("held");
+    assert_eq!(response.status(), StatusCode::IM_USED, "the hold answered");
+    assert!(!service.forward.was_called());
+    let held = service.approvals.held.lock().unwrap();
+    let [(slug, name, call, _)] = held.as_slice() else {
+        panic!("one call was held");
+    };
+    assert_eq!(
+        (slug.as_str(), name.as_str(), call.name.as_str()),
+        ("google_drive", "Google Drive", "trash_file")
+    );
+}
+
+/// Reading the owner's Drive in their own turn asks nobody.
+#[tokio::test]
+async fn a_drive_read_in_the_owners_own_turn_goes_straight_through() {
+    let service = gated(prompted_by(Some(owner())), SpyCredentials::knowing());
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            google_drive(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"search_files","arguments":{"query":"x"}}}"#,
+            ),
+        )
+        .await
+        .expect("proxied");
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+    assert!(service.approvals.held.lock().unwrap().is_empty());
+}
+
 /// Only `tools/call` runs anything; the handshake and listing still flow so
 /// the agent sees its tools.
 #[tokio::test]

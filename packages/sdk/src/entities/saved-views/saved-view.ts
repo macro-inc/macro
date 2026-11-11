@@ -104,7 +104,11 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
   /** When the view was last changed. */
   readonly updatedAt = this.field('updatedAt');
 
-  /** Reload the view, picking up its current revision. */
+  /**
+   * Reload the view, picking up its current revision.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.set(await this.fetch());
     return this;
@@ -114,6 +118,9 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
    * Change the name, replace the configuration, or change sharing: a `team`
    * shares the view with it and `null` makes it private; omitted fields are
    * kept. Only the owner can edit.
+   *
+   * @write
+   * @idempotent
    */
   async edit(changes: {
     name?: string;
@@ -139,7 +146,12 @@ export class SavedView extends MacroEntity<SavedViewDefinition> {
     this.detail.set(record);
   }
 
-  /** Delete the view for its owner and anyone it is shared with. Only the owner can delete. */
+  /**
+   * Delete the view for its owner and anyone it is shared with. Only the owner can delete.
+   *
+   * @destructive
+   * @idempotent
+   */
   async remove(): Promise<void> {
     const { revision } = await this.detail.get();
     await this.mutate((client) =>

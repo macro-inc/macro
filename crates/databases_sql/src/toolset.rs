@@ -120,7 +120,8 @@ fn sql_error(error: SqlError) -> ToolCallError {
             )
         }
         SqlError::Run(
-            RunError::NoSuchRow { .. }
+            RunError::ReadOnly
+            | RunError::NoSuchRow { .. }
             | RunError::TooManyRows { .. }
             | RunError::MismatchedValue { .. }
             | RunError::Internal { .. },

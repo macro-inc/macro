@@ -24,7 +24,11 @@ type ContactDetail = GetContactResponses[200];
 
 /** A CRM contact: a person observed interacting with the team. */
 export class Contact extends FavoritableEntity<ContactDetail> {
-  /** A shared message thread scoped to this resource. */
+  /**
+   * A shared message thread scoped to this resource.
+   *
+   * @readonly
+   */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(
       this.client,
@@ -33,7 +37,11 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** A mixed message and activity timeline page. */
+  /**
+   * A mixed message and activity timeline page.
+   *
+   * @readonly
+   */
   timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
@@ -95,12 +103,22 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** When the team last interacted with this contact. */
   readonly lastInteraction = this.field('lastInteraction');
 
-  /** Hide the contact from CRM listings. Display-only; reversible with {@link unhide}. */
+  /**
+   * Hide the contact from CRM listings. Display-only; reversible with {@link unhide}.
+   *
+   * @write
+   * @idempotent
+   */
   async hide(): Promise<void> {
     await this.setHidden(true);
   }
 
-  /** Un-hide the contact, restoring it to CRM listings. */
+  /**
+   * Un-hide the contact, restoring it to CRM listings.
+   *
+   * @write
+   * @idempotent
+   */
   async unhide(): Promise<void> {
     await this.setHidden(false);
   }
@@ -114,7 +132,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** Rename the contact for the caller's current team. */
+  /**
+   * Rename the contact for the caller's current team.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactName({
@@ -124,7 +147,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** Add an email when absent. Existing addresses cannot be replaced or cleared. */
+  /**
+   * Add an email when absent. Existing addresses cannot be replaced or cleared.
+   *
+   * @write
+   * @idempotent
+   */
   async setEmail(email: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactEmail({
@@ -134,7 +162,12 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** Link or switch a personal-provider contact's company. Unlinking is not supported. */
+  /**
+   * Link or switch a personal-provider contact's company. Unlinking is not supported.
+   *
+   * @write
+   * @idempotent
+   */
   async setCompany(company: Company): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmContactCompany({
@@ -173,7 +206,11 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     return { type: 'crm_contact', id: this.id };
   }
 
-  /** The comment threads on this contact, newest thread first. */
+  /**
+   * The comment threads on this contact, newest thread first.
+   *
+   * @readonly
+   */
   async comments(): Promise<DiscussionThread[]> {
     return listDiscussionThreads(this.client, this.commentParent);
   }
@@ -183,6 +220,8 @@ export class Contact extends FavoritableEntity<ContactDetail> {
    * `threadId` (the thread's root comment id) is given.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
    */
   async comment(
     body: string | RichMessage,
@@ -191,7 +230,11 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     return postDiscussionComment(this.client, this.commentParent, body, opts);
   }
 
-  /** A handle to one of this contact's comments by id. */
+  /**
+   * A handle to one of this contact's comments by id.
+   *
+   * @readonly
+   */
   commentById(id: string): DiscussionComment {
     return DiscussionComment.byId(this.client, this.commentParent, id);
   }

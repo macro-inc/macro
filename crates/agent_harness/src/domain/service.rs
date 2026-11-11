@@ -19,11 +19,13 @@ mod test;
 mod admission;
 mod deliver;
 mod external_replies;
+mod idle;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
 mod present;
 mod queue;
+mod reattach;
 mod session_mcp;
 mod warm;
 
@@ -167,6 +169,11 @@ struct AgentHarnessInner<
     /// in this process. A restart starts empty; resume and the first local
     /// command restore from the session store.
     hydrated: DashSet<AgentSessionId>,
+    /// Shared by every dial this replica serves: how many sessions may be
+    /// attaching and restoring at once.
+    reattach_permits: tokio::sync::Semaphore,
+    /// Each harness's latest dial, cancelled when the harness dials again.
+    dials: DashMap<harness_id::HarnessId, reattach::Dial>,
     /// The sessions with a command admitted and not yet resolved, and which
     /// turn it opened once dispatch names one. Marked the moment a
     /// turn-occupying action is admitted (queue.rs's `enqueue_then_dispatch`),
@@ -201,6 +208,9 @@ struct AgentHarnessInner<
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
     presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits.
+    worker_idle_timeout: std::time::Duration,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -389,6 +399,8 @@ where
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
+                reattach_permits: tokio::sync::Semaphore::new(reattach::REATTACH_CONCURRENCY),
+                dials: DashMap::new(),
                 busy: pending,
                 lifecycle_publisher,
                 mentions,
@@ -396,6 +408,7 @@ where
                 projections: DashMap::new(),
                 typing_phases: DashMap::new(),
                 presented_shapes: DashMap::new(),
+                worker_idle_timeout: queue::WORKER_IDLE_TIMEOUT,
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
@@ -416,6 +429,16 @@ where
         self
     }
 
+    /// Release quiet sessions and retire their command workers after
+    /// `timeout` with no command, instead of
+    /// [`queue::WORKER_IDLE_TIMEOUT`]. Set before cloning the harness.
+    pub fn with_worker_idle_timeout(mut self, timeout: std::time::Duration) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure the idle timeout before cloning the harness")
+            .worker_idle_timeout = timeout;
+        self
+    }
+
     /// Configure durable system-event delivery before cloning the harness.
     pub fn with_notifications(
         mut self,
@@ -425,6 +448,18 @@ where
             .expect("configure outbox before cloning harness")
             .notification_store = Some(store);
         self
+    }
+
+    /// How many sessions have a command worker in this process right now.
+    #[must_use]
+    pub fn command_workers(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// How many sessions have their durable queue loaded in this process.
+    #[must_use]
+    pub fn hydrated_sessions(&self) -> usize {
+        self.inner.hydrated.len()
     }
 
     /// Reconcile durable events through the same routed worker as user prompts.
@@ -682,58 +717,6 @@ where
         command: HarnessCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         self.enqueue(session_id, command, false)
-    }
-
-    /// Load the sessions a runtime that dialed in again still serves.
-    ///
-    /// Only sessions whose bot is bound to `harness` are touched, each on its
-    /// own command worker, so a reattach waits behind whatever that session
-    /// is already doing. One session failing never stops the others.
-    #[tracing::instrument(
-        name = "agent.runtime.reattach",
-        skip_all,
-        fields(
-            %harness,
-            agent.runtime.live_sessions = acp_sessions.len(),
-            agent.runtime.reattach_sessions = tracing::field::Empty,
-            agent.runtime.reattach_failures = tracing::field::Empty,
-        )
-    )]
-    pub async fn reattach_live_sessions(
-        &self,
-        harness: harness_id::HarnessId,
-        acp_sessions: Vec<agent_client_protocol::schema::v1::SessionId>,
-        cause: tracing::Span,
-    ) {
-        tracing::Span::current().follows_from(&cause);
-        let sessions = match self
-            .inner
-            .runtimes
-            .sessions_on_harness(harness, &acp_sessions)
-            .await
-        {
-            Ok(sessions) => sessions,
-            Err(error) => {
-                tracing::error!(error = ?error, "could not resolve a runtime's live sessions");
-                return;
-            }
-        };
-        let span = tracing::Span::current();
-        span.record("agent.runtime.reattach_sessions", sessions.len());
-        let results = futures::future::join_all(
-            sessions
-                .iter()
-                .map(|session_id| self.execute(*session_id, HarnessCommand::Reattach)),
-        )
-        .await;
-        let mut failures = 0;
-        for (session_id, result) in sessions.iter().zip(results) {
-            if let Err(error) = result {
-                failures += 1;
-                tracing::warn!(error = ?error, %session_id, "could not reattach a live session");
-            }
-        }
-        span.record("agent.runtime.reattach_failures", failures);
     }
 
     /// Post the announcement for a prompt an external runtime delivers.

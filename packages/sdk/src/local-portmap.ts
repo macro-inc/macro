@@ -25,10 +25,21 @@ export function resolveLocalPortmap(): LocalPortmap | undefined {
   }
 }
 
+/** The repository root, or `undefined` outside a git checkout (or a runtime without processes). */
+function repositoryRoot(): string | undefined {
+  try {
+    return execSync('git rev-parse --show-toplevel', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
 function findPortmap(): string | undefined {
-  const root = execSync('git rev-parse --show-toplevel', {
-    encoding: 'utf8',
-  }).trim();
+  const root = repositoryRoot();
+  if (!root) return undefined;
   const generated = join(root, 'infra', 'local', 'generated');
   if (!existsSync(generated)) return undefined;
 

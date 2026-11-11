@@ -10,8 +10,9 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
-import { fetchAllChannels } from '../channel/channels';
-import { channelKeys } from '../channel/keys';
+import type { QueryAccount } from '../auth/account-scope';
+import { useQueryAccount } from '../auth/use-query-account';
+import { listChannelsQueryOptions } from '../channel/channels';
 import { queryClient } from '../client';
 import { withCallbacks } from '../utils';
 import { channelLabelKeys } from './keys';
@@ -138,13 +139,11 @@ export function useSmartTagPreviewQuery(
 }
 
 function availableSectionChannelsQueryOptions(
-  actorId: string | undefined,
+  account: QueryAccount | undefined,
   enabled: boolean
 ) {
   return queryOptions({
-    queryKey: channelKeys.listChannels._ctx.account(actorId).queryKey,
-    queryFn: ({ signal }) => fetchAllChannels(signal),
-    enabled: enabled && Boolean(actorId),
+    ...listChannelsQueryOptions(account, enabled),
     reconcile: 'id',
     staleTime: 0,
   });
@@ -154,9 +153,9 @@ function availableSectionChannelsQueryOptions(
 export function useAvailableSectionChannelsQuery(
   enabled: Accessor<boolean> = () => true
 ) {
-  const userId = useUserId();
+  const account = useQueryAccount();
   return useQuery(() =>
-    availableSectionChannelsQueryOptions(userId(), enabled())
+    availableSectionChannelsQueryOptions(account(), enabled())
   );
 }
 

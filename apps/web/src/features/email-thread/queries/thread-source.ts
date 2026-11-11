@@ -1,4 +1,5 @@
 import { invalidateInvitationScheduling } from '@queries/calendar/invitations';
+import { isListedLocalDraft } from '@queries/email/local-draft-entities';
 import { createLocalDraftSource } from '@queries/email/local-draft-source';
 import { localDraftMessage } from '@queries/email/local-drafts';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
@@ -156,15 +157,7 @@ export function createEmailThreadSource(
           [draft.threadId, draft.serverThreadId].includes(requested) ||
           (base && [draft.threadId, draft.serverThreadId].includes(base.db_id))
       );
-    const edits = copies.filter(
-      (draft) =>
-        draft.status !== 'synced' &&
-        !(
-          draft.status === 'deleting' &&
-          draft.queuedAttemptId &&
-          draft.queuedAttemptId === draft.latestAttemptId
-        )
-    );
+    const edits = copies.filter(isListedLocalDraft);
     const messages = edits.map(localDraftMessage);
     if (!base) {
       const draft = edits.find((draft) => !draft.content.replying_to_id);

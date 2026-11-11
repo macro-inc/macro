@@ -26,6 +26,7 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
+  HarnessEntity,
   InitiativeEntity,
   Notification,
   ProjectEntity,
@@ -95,7 +96,8 @@ type SoupEntity =
   | CrmCompanyEntity
   | CrmContactEntity
   | CalendarEventEntity
-  | ForeignEntity;
+  | ForeignEntity
+  | HarnessEntity;
 
 type SoupItemWithOptionalNotifications = DisplayableSoupItem & {
   data: {
@@ -983,6 +985,14 @@ export const mapApiSoupItemToEntity = (
 
       return out;
     })
+    .with({ tag: 'harness' }, (item) => ({
+      id: item.data.id,
+      name: item.data.name,
+      ownerId: item.data.ownerId,
+      createdAt: item.data.createdAt,
+      updatedAt: item.data.updatedAt,
+      type: 'harness' as const,
+    }))
     .with({ tag: 'document' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,

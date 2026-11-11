@@ -45,8 +45,22 @@ key issuance, and account merge/link flows.
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
 - Signup-policy changes specifically:
-  `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
-  and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+  `cargo test -p authentication_service --lib config::test` (the lib's
+  test-only queries need a live `DATABASE_URL`) and
+  `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+
+## Profile pictures
+
+- `PUT /user/profile_picture` and `PUT /user/profile_picture/file` share
+  `src/api/user/profile_picture_change.rs`: throttle to 1/sec/user (key
+  `profile-picture-set`, 429), then publish `user.picture_changed`
+  (`user_events`, topic `macro.users`) through `ApiContext::event_broker`
+  after the DB write. `file_id` is set only on the file route; an empty url
+  means removed (both `None`). A publish failure logs a warn and never fails
+  the request. The 20/hour upload reservation limit is separate.
+- `POST /user/profile_pictures` accepts API keys (`UserOrInternal`) and
+  returns each picture's `url`; the SDK derives the file id from
+  `<static>/file/<id>`.
 
 ## Subscription checkout
 
@@ -139,9 +153,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.
-- The signup allowlist has a temporary Develop-only bypass
-  (`DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST`) that overrides the allowlist even
-  when present; see `README.md` before changing signup behavior.
+- Develop admits new accounts only for `@macro.com` and allowlisted addresses;
+  `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST=true` opens it to everyone. See
+  `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
 - New Outlook connections need the deployment switch
@@ -187,6 +201,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   refuses any sign-in whose verified id_token lacks `xms_edov: true` (the
   email's domain verified by Microsoft), so FusionAuth creates or links no
   user on an unverified address.
+- A session code (`/session/login/{session_code}`, the native and dev-proxy
+  SSO handoff) redeems once: `take_mobile_login_session` reads and deletes it
+  in one Redis script, so concurrent redemptions yield one success. A failed
+  token refresh puts it back for the rest of its 5 minutes, so client retries
+  of a 500 work. Never record the code, the redirect URL carrying `token=`, or
+  a refresh token in spans, logs, or `Debug`; the span records `outcome`.
 - When the FusionAuth JWT populate lambda fails (its `fetch` to
   `/webhooks/user/jwt` times out after 2 s or gets a non-200), FusionAuth still
   issues the access token, just without the Macro claims. `/jwt/refresh`
