@@ -148,7 +148,8 @@ export function createRustEditorSession(
           options.view.startPerformance ??
           ((name) => startEditorOperation(name, options.documentId)),
       },
-      configured.session
+      configured.session,
+      options.module
     );
     mounted = runtime;
     overlays = options.installOverlays?.(runtime.view);
