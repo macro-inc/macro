@@ -1,0 +1,31 @@
+apps/web/src/lib/core/messages/MessageThread.tsx
+  s_c6a08203850d89::t_b07e03d23a7ed7 9,60-61
+  s_c6a08203850d89::t_69f594e68b3764 50-59,106-109,124-131,165-173,183-191
+apps/web/src/lib/core/messages/MessageThread.test.tsx
+  s_c6a08203850d89::t_62697e9a339060 7,22,28,294-341
+  s_e3883ea272cda0::t_7e74ab21baac97 342-343
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6fceacd057dddcfd9acfb93f7b313f2a431bc399",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": null
+    },
+    "s_e3883ea272cda0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51c12313-7b8a-47ce-87ba-30737bc3ee95",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
