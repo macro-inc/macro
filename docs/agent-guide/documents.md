@@ -2620,6 +2620,10 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
 Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
 `6.` or `6. ` for an ordered list that starts at 6).
+At the document root, Enter in an empty checklist, bullet or numbered item
+returns to a paragraph. A nested empty item exits one list level; a populated
+item splits normally. Verify the resulting caret, undo and read-only behavior
+on the production body profile.
 Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
 see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;

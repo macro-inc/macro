@@ -487,3 +487,47 @@ fn right_arrow_yields_without_a_collapsed_escape_boundary() -> Result<(), Error>
     }
     Ok(())
 }
+
+#[test]
+fn ordinary_enter_exits_empty_configured_task_lists_to_a_paragraph_range() -> Result<(), Error> {
+    for list_type in [ListType::Check, ListType::Bullet, ListType::Number] {
+        let mut editor = crate::surface::preset_builder_with_mode(
+            EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .build()
+        .expect("body surface");
+        let (list, _) = editor.update(|tx| {
+            let list = tx.create(ListNode::new(list_type, 1))?;
+            let item = tx.create(ListItemNode::default())?;
+            tx.append(list, &[item.key()])?;
+            tx.append(NodeKey::ROOT, &[list.key()])?;
+            tx.select_start(item)?;
+            Ok(list.key())
+        })?;
+        assert!(editor.state().view().is::<crate::nodes::TaskListNode>(list));
+        let (handled, commit) = editor.dispatch(&Command::Key {
+            command: KeyCommand::Enter,
+            event: Some(KeyEvent {
+                key: "Enter".into(),
+                ..KeyEvent::default()
+            }),
+        })?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(commit.default_prevented);
+        let state = editor.state().view();
+        let children = state.children_keys(NodeKey::ROOT)?;
+        assert_eq!(children.len(), 1);
+        let paragraph = children[0];
+        assert!(state.is::<Paragraph>(paragraph));
+        assert!(state.children(paragraph).next().is_none());
+        let range = editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("paragraph range");
+        assert_eq!(range.anchor, Point::element(paragraph, ChildIndex(0)));
+        assert_eq!(range.focus, range.anchor);
+    }
+    Ok(())
+}

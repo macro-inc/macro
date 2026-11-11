@@ -35,7 +35,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Import stored ListNode JSON without resolving replacements; authored list creation still applies replacements, matching upstream static-config import.
 - Construct host-converted HTML drafts through clipboard::generate_nodes_from_dom_drafts so list factories apply recursively without changing stored imports or stripping constructor context.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.
-- Route host Enter through `list::register::handle_registered_insert_paragraph` before the rich-text fallback; it consumes registered numbering options.
+- Register list InsertParagraph at Low priority and consume registered numbering options before the Editor rich-text fallback; builders without list behavior retain their ordinary fallback.
 - Use `text::entity` for every text entity; `text_entity` only re-exports it.
 - Register LinkNode before AutoLink; autolink changes are transactional `AUTO_LINK_CHANGED` events.
 - Keep shared Match/Matcher and pinned linkify-it patterns in `utils`; regenerate the oracle corpus with the documented script.

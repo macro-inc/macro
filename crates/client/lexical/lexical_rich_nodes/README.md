@@ -74,9 +74,11 @@ these literal unit ports also exercise the model directly.
 `list` implements ListNode/ListItemNode, intrinsic numbering/merge/orphan repair,
 list conversion/removal, structural indent/outdent, empty-item Enter, optional
 strict indentation, marker style synchronization and checklist navigation. The
-five package command keys dispatch at Low priority. Host Enter routing calls
-`handle_registered_insert_paragraph` before rich-text insertion, so the registered
-numbering option is consumed without introducing a duplicate stock-command key.
+five package command keys and the ordinary InsertParagraph command dispatch at
+Low priority. The registered list listener calls
+`handle_registered_insert_paragraph` before Editor-priority rich-text insertion,
+consuming the numbering option. Nonempty items yield to rich-text insertion;
+builders without list registration retain their ordinary fallback.
 Numbering is signed 32-bit as specified for stored list values; command start
 payloads use the same integer contract rather than the later JsNumber sketch.
 

@@ -18,7 +18,7 @@ pub struct UpdateListStart {
     /// New first value.
     pub new_start: i32,
 }
-static COMMANDS: [CommandRegistration; 5] = [
+static COMMANDS: [CommandRegistration; 6] = [
     CommandRegistration {
         command: CommandKind::Extension(&INSERT_ORDERED_LIST),
         priority: CommandPriority::Low,
@@ -44,6 +44,11 @@ static COMMANDS: [CommandRegistration; 5] = [
         priority: CommandPriority::Low,
         placement: Placement::After,
     },
+    CommandRegistration {
+        command: CommandKind::InsertParagraph,
+        priority: CommandPriority::Low,
+        placement: Placement::After,
+    },
 ];
 pub(super) struct ListCommands;
 impl Plugin for ListCommands {
@@ -54,6 +59,13 @@ impl Plugin for ListCommands {
         &COMMANDS
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled> {
+        if matches!(command, Command::InsertParagraph) {
+            return Ok(if register::handle_registered_insert_paragraph(tx)? {
+                Handled::Yes
+            } else {
+                Handled::No
+            });
+        }
         let Command::Extension(command) = command else {
             return Ok(Handled::No);
         };
@@ -79,3 +91,6 @@ impl Plugin for ListCommands {
         Ok(Handled::Yes)
     }
 }
+
+#[cfg(test)]
+mod test;
