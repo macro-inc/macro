@@ -9,7 +9,7 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enablePasswords } from '@core/constant/featureFlags';
 import { idToDisplayName } from '@core/user/util';
-import { useUserNamesQuery } from '@queries/auth';
+import { useUserNames } from '@queries/auth';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { PasswordsProvider } from './context/passwords-context';
@@ -19,7 +19,7 @@ import { VaultView } from './views/vault-view';
 
 function PasswordsTeamView() {
   const team = useCurrentTeamQuery();
-  const names = useUserNamesQuery({
+  const names = useUserNames({
     userIds: () =>
       team.isPending
         ? []
@@ -28,17 +28,14 @@ function PasswordsTeamView() {
   const recipients = createMemo(() =>
     passwordRecipients(
       team.isPending ? undefined : team.data,
-      names.flatMap((query) => {
-        const name = query.isPending ? undefined : query.data;
-        return name ? [name] : [];
-      }),
+      names().flatMap(({ name }) => (name ? [name] : [])),
       idToDisplayName
     )
   );
   usePageViewTracking('passwords');
   usePending('passwords.team', () => team.isLoading);
   usePending('passwords.recipients', () =>
-    names.some((query) => query.isLoading)
+    names().some((name) => name.loading)
   );
   let dirty: () => boolean = () => false;
   useBeforeLeave(() => !dirty());
@@ -59,9 +56,9 @@ function PasswordsTeamView() {
               source: createPasswordSource(teamId),
               recipients,
               recipientsLoading: () =>
-                team.isLoading || names.some((query) => query.isLoading),
+                team.isLoading || names().some((name) => name.loading),
               recipientsError: () =>
-                team.isError || names.some((query) => query.isError),
+                team.isError || names().some((name) => Boolean(name.error)),
               writeClipboard: (value) => navigator.clipboard.writeText(value),
             }}
           >

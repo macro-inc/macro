@@ -4,7 +4,9 @@ import {
   OnboardingPending,
   OnboardingSignup,
 } from '@app/features/onboarding/onboarding';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -22,6 +24,7 @@ import {
   readRedirectParam,
 } from './core/post-auth-target';
 import { requiresReauthentication } from './core/reauthentication';
+import { ssoFallbackNotice } from './core/sso-fallback';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
 import { MobileWebSignupView } from './views/mobile-web-signup-view';
@@ -38,6 +41,7 @@ export function Login(props: { signupMode?: boolean }) {
   );
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
+  const microsoftSignup = useFeatureFlag(enableMicrosoftSignup);
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
   return (
@@ -49,11 +53,15 @@ export function Login(props: { signupMode?: boolean }) {
       <AuthView
         intent={props.signupMode ? 'signup' : 'login'}
         showApple={getNativeMobilePlatform() === 'ios'}
+        showMicrosoft={microsoftSignup().enabled}
         compact={virtualKeyboardVisible()}
         initialEmail={email}
         // Dev persona links (`?email=`) sign straight in against a local backend.
         autoStart={import.meta.env.DEV && email !== undefined}
         token={sessionTokenParam(params.token)}
+        ssoFallbackNotice={ssoFallbackNotice(
+          typeof params.sso_error === 'string' ? params.sso_error : undefined
+        )}
         onVerified={() => {
           const referral = new URLSearchParams(window.location.search).get(
             'referral'

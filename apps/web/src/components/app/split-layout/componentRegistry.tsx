@@ -14,9 +14,7 @@ import { NOT_FOUND_ROUTE_ID } from '@app/routes/app-route';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  enableChatV3Agents,
   enableProjects,
-  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -338,19 +336,12 @@ registerComponent(
   () => <NotificationsRouteView />,
   () => composableLayout()
 );
-registerComponent(
-  'routines',
-  () => <AgentsRouteView />,
-  () => composableLayout()
-);
-registerComponent(
-  'agents',
-  () => <AgentsRouteView />,
-  () =>
-    isFeatureEnabled(enableChatV3Agents)
-      ? { splitPanelLayout: 'composable' }
-      : undefined
-);
+registerComponent('routines', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
+registerComponent('agents', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent(
   'mail',
   () => <MailRouteView />,
@@ -527,16 +518,8 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
-    'chat-attachment',
-    lazy(() => import('@core/component/AI/component/debug/Attachment'))
-  );
-  registerComponent(
     'chat-tool',
     lazy(() => import('@core/component/AI/component/debug/Tool'))
-  );
-  registerComponent(
-    'http-stream',
-    lazy(() => import('@core/component/AI/component/debug/HttpStream'))
   );
   registerComponent(
     'static-markdown-stream',

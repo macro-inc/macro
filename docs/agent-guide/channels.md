@@ -37,6 +37,34 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+## Composer focus and Esc
+
+Every way of opening a conversation follows one rule
+(`arrivalFocusesComposer` in `features/channel/composer-arrival-focus.ts`):
+a click, Enter or Cmd+K focuses its composer, whether it opens from the Chat
+sidebar, Home, the Notifications list, search, a link or mention, a
+notification, or in a new split. Arrow keys and `j` / `k` preview conversations
+and keep focus in the list. Back/Forward, switching to a view that restores its
+last conversation (the sidebar or a `g` shortcut), and taps leave focus where
+it is, so the on-screen keyboard stays down. A click or Enter on the
+conversation already open focuses its composer again.
+
+Esc steps back out. In the composer, the first Esc moves focus to the message
+list; anything in the composer that answers Esc first still does (mention and
+emoji menus, dictation, a message being edited, a thread reply). On the message
+list, a selected message or focused thread reply clears first, then Esc returns
+to the list the conversation was opened from, on its row: the Chat sidebar,
+Home, or the Notifications list. A conversation that arrived from elsewhere
+(Cmd+K, a link, search) returns to its row in the Chat sidebar of the same
+split, and a collapsed Chat sidebar opens for it. Without a list, including a
+narrow split that shows the conversation alone, Esc reaches the split as before
+(clearing a selection, leaving spotlight).
+
+To check this, arrow through several conversations (focus stays in the list),
+press Enter (the composer takes focus), press Esc twice (back on the same row),
+then click another conversation and type. Repeat from Home and from the
+Notifications list.
+
 ## Message links
 
 A channel search namespace with `threadId` and no `messageId` targets the thread
@@ -118,6 +146,13 @@ three-step flow:
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+The channel header's Invite dialog and Participants add controls use paged personal
+suggestions, not a complete address book. Next options (or PageDown) replaces the
+window; selected people and typed external addresses remain independent. Existing
+members are excluded, including anyone who joins while selected. A large roster
+can leave a short or empty page with more options available. Add all teammates
+uses the current team roster, never just the visible suggestion page.
 
 The first message in a DM to an unregistered recipient sends an email saying
 `<sender email> sent you a message on Macro`, with the message and a **View message**
@@ -586,8 +621,8 @@ The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout d
 whether it answers in the thread as the classic bot or opens an agent session. Without the
 rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
-event without attendees creates the event right away (unlike AI chat, where creation waits
-for the user to confirm a composer card). For an event with attendees the bot is prompted to
+event without attendees creates the event right away (unlike an agent session, where
+creation waits for the session owner to review it). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
@@ -1341,9 +1376,9 @@ The sectioned sidebar also offers **New section** in the same menu.
 Check each creation action with the sidebar flag on and off; changing the layout
 must not change the creation flow.
 
-When calls are enabled, `Live` appears below the rail's toolbar while an active
-quick call is available. It stays visible while browsing sections and during conversation
-search, and disappears when no active quick calls remain. Entries are titled
+Standalone quick calls retain a separate `Live` list below the rail's toolbar;
+this list does not contain channel-call indicators. It stays visible while
+browsing sections and searching, and disappears when no active quick calls remain. Entries are titled
 `Call with <creator's name>`. Clicking a call opens
 its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
 Live rows use the shaking incoming-phone icon, respecting reduced motion.
@@ -1523,32 +1558,25 @@ produce one connection; leaving from either control ends the same call. Navigate
 away and return while connected to check that the call and its controls remain
 usable.
 
-The **Open chat** button at the bottom-right opens chat beside the video.
-**Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
-Active phone calls keep the channel header island and place Copy Meeting Url
-in a matching header island using the shared `CopyButton`. The media control bar
-fills the space beside the separate chat button, below the video and within side
-insets. Back keeps the call running. Controls and header islands stay visible;
-idle auto-hide is disabled. Phone calls hide the app's bottom navigation and
-channel Invite action; Invite returns when leaving the live call tab. Tap or click a participant to
-focus them and tap again to return to the grid; speakers have an accent border.
-The panel has a **Call chat** heading and
-spans the full call content height, including the media controls row. The controls
-stay centered under the video on wide panes. In narrow desktop panes, chat overlays
-the video. On phones, chat opens in the shared bottom sheet; drag the handle, tap the backdrop, or press Escape
-to dismiss it. On desktop, **Close chat** or Escape closes the panel. Closing
-returns focus to the chat button, and reopening preserves the draft and scroll
-position. The call continues while chat is open or closed.
+The call header shows the live waveform and elapsed time, with Copy meeting link
+and Invite on desktop. Media controls stay centered below the tiles; Chat opens
+from its own adjacent toggle. The full-height panel has Chat and People tabs,
+with a desktop close action and a shared phone sheet. Narrow panes use compact
+controls and an inset chat overlay covering the whole call. Phone calls hide
+the dock, retain Back and the channel title, and keep their compact controls
+visible. Back returns to the app without leaving. Camera-off tiles use neutral
+initials; the speaker has a success-colored outline.
+
+Away from the call, the desktop rail opens its participant/control popover and
+can show a draggable mini player. Phones show a compact call island above the
+dock without replacing the current composer. Channel-call live and ringing
+indicators live on conversation rows; the separate `Live` list is only for
+standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
-panel. Guests in quick and scheduled calls can also open chat and read and send
-text without signing in. Guest authors appear as **Name (Guest)**. Their composer
-uses Enter to send on desktop and the Send button on touch devices, preserves drafts on close, and
-keeps failed messages available to retry. Guest chat refreshes while open and is
-available only while that guest is connected to the call. Check a signed-in
-participant and a guest exchanging messages in both directions, then verify the
-guest loses access after leaving or after the call ends. Guest messages remain
-in the saved call discussion. Each call session has one persistent message thread;
+panel. Guest chat is turned off for now: a guest in a quick or scheduled call
+sees only the participants list, with the **Chat** tab disabled, and cannot read
+or send messages. Each call session has one persistent message thread;
 signed-in participants use the
 shared message composer, attachments, reactions, and message actions. The `@`
 menu offers Macro and available owned and team agents. Mention an agent and send

@@ -42,6 +42,10 @@ import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -318,6 +322,14 @@ export function createSoupEntityActions(
         disabled: !globalSplitManager()?.canAppendSplit(),
         onClick: openEntity({ openInNewSplit: true }),
       });
+      if (canOpenInNewTab()) {
+        const open = openEntity({ openInNewSplit: false });
+        topItems.push({
+          id: 'open-in-tab',
+          label: t('entityActions.openInNewTab'),
+          onClick: () => openInNewTab(open),
+        });
+      }
     }
 
     // Middle group: Rename, Archive, Set status/priority/assignee, Move to

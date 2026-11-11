@@ -5525,6 +5525,27 @@ export type CreateProjectResponse = {
     error: boolean;
 };
 
+export type CreateSavedViewDefinitionRequest = {
+    /**
+     * Consumer configuration with its `kind` and `version`, at most 32 KiB.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    /**
+     * Client-chosen ID, reused to retry the same creation; generated when absent.
+     */
+    id?: string | null;
+    /**
+     * Nonempty display name, at most 120 characters.
+     */
+    name: string;
+    /**
+     * Team to share with, which the creator must belong to.
+     */
+    sharedTeamId?: string | null;
+};
+
 /**
  * Request body for creating a skill — a markdown document containing
  * instructions that AI reads and follows when the skill is referenced in an
@@ -16786,6 +16807,18 @@ export type ReorderPinRequest = {
     pinnedItemType: string;
 };
 
+export type ReorderSavedViewDefinitionsRequest = {
+    /**
+     * Visible definitions of that kind in their new order, at most 200;
+     * definitions left out follow them by creation time.
+     */
+    ids: Array<string>;
+    /**
+     * Consumer kind whose order is replaced, such as `email`.
+     */
+    kind: string;
+};
+
 /**
  * The event that ends a repeating animation.
  */
@@ -17341,6 +17374,62 @@ export type SavedQuery = {
      * Identifier.
      */
     id: string;
+};
+
+/**
+ * A saved filter definition, not a snapshot of matching entities.
+ */
+export type SavedViewDefinition = {
+    /**
+     * Versioned configuration interpreted by the consuming feature, with its
+     * `kind` (such as `email` or `task`) and `version`.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+    /**
+     * Stable identity of this definition.
+     */
+    id: string;
+    /**
+     * Display name chosen by the owner.
+     */
+    name: string;
+    /**
+     * User who owns and can edit this definition.
+     */
+    ownerId: string;
+    /**
+     * Current revision, required by updates and deletion.
+     */
+    revision: number;
+    /**
+     * Team with access, or absent when the definition is private.
+     */
+    sharedTeamId?: string | null;
+    updatedAt: string;
+};
+
+/**
+ * A page in the viewer's own order, then by creation time and ID.
+ */
+export type SavedViewDefinitionPage = {
+    /**
+     * Opaque cursor for the next page, absent when the listing is complete.
+     */
+    nextCursor?: string | null;
+    /**
+     * Definitions the viewer can currently access.
+     */
+    views: Array<SavedViewDefinition>;
+};
+
+/**
+ * An explicit sharing change: a team, or `null` to make the definition private.
+ */
+export type SavedViewSharingRequest = {
+    teamId?: string | null;
 };
 
 /**
@@ -19061,6 +19150,34 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * A paired runtime (a macrod machine), listed only by attention feeds: its
+ * access requests and removals are notifications filed under it, and it has
+ * no page of its own, so Settings → Machines opens it.
+ */
+export type SoupHarness = {
+    /**
+     * When the machine was paired.
+     */
+    createdAt: string;
+    /**
+     * The harness uuid.
+     */
+    id: string;
+    /**
+     * The machine's display name.
+     */
+    name: string;
+    /**
+     * The person or team that owns the machine.
+     */
+    ownerId: string;
+    /**
+     * When the machine was last changed.
+     */
+    updatedAt: string;
+};
+
+/**
  * An initiative (called a project in the frontend) in the Soup feed.
  */
 export type SoupInitiativeSoupPropertiesField = {
@@ -19182,6 +19299,12 @@ export type SoupItem = {
      */
     data: SoupDatabaseRowSoupPropertiesField;
     tag: 'databaseRow';
+} | {
+    /**
+     * Paired runtime, listed only by attention feeds.
+     */
+    data: SoupHarness;
+    tag: 'harness';
 };
 
 /**
@@ -21936,6 +22059,24 @@ export type UpdateMeetingRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
+export type UpdateSavedViewDefinitionRequest = {
+    /**
+     * Complete replacement configuration; absent keeps the current one.
+     */
+    config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Revision that must still be current when the update commits.
+     */
+    expectedRevision: number;
+    /**
+     * Replacement name; absent keeps the current one.
+     */
+    name?: string | null;
+    sharing?: null | SavedViewSharingRequest;
+};
+
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
@@ -22139,11 +22280,41 @@ export type UserDocumentsResponse = {
     total: number;
 };
 
+/**
+ * Metadata for [`UserTopicEvent::PictureChanged`].
+ */
+export type UserPictureChangedMetadata = {
+    /**
+     * Static file id of the new picture; `None` when it is not a static file
+     * (set by URL) or the picture was removed.
+     */
+    file_id?: string | null;
+    /**
+     * URL of the new picture; `None` when the picture was removed.
+     */
+    url?: string | null;
+    /**
+     * User whose profile picture changed.
+     */
+    user_id: MacroUserIdStr;
+};
+
 export type UserPinsResponse = {
     /**
      * The pins returned from the query
      */
     recent: Array<PinnedItem>;
+};
+
+/**
+ * A user's profile picture changed or was removed.
+ */
+export type UserTopicEvent = {
+    event_type: 'user.picture_changed';
+    /**
+     * A user's profile picture changed or was removed.
+     */
+    metadata: UserPictureChangedMetadata;
 };
 
 export type UserViewsResponse = {
@@ -22545,7 +22716,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -33721,6 +33892,173 @@ export type CreateViewHandlerResponses = {
 };
 
 export type CreateViewHandlerResponse = CreateViewHandlerResponses[keyof CreateViewHandlerResponses];
+
+export type ListSavedViewDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only definitions of this consumer kind, such as `email`.
+         */
+        kind?: string;
+        /**
+         * Page size, 1 to 50; defaults to 25.
+         */
+        first?: number;
+        /**
+         * `nextCursor` from the previous page.
+         */
+        after?: string;
+    };
+    url: '/saved_views/definitions';
+};
+
+export type ListSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSavedViewDefinitionsError = ListSavedViewDefinitionsErrors[keyof ListSavedViewDefinitionsErrors];
+
+export type ListSavedViewDefinitionsResponses = {
+    200: SavedViewDefinitionPage;
+};
+
+export type ListSavedViewDefinitionsResponse = ListSavedViewDefinitionsResponses[keyof ListSavedViewDefinitionsResponses];
+
+export type CreateSavedViewDefinitionData = {
+    body: CreateSavedViewDefinitionRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions';
+};
+
+export type CreateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSavedViewDefinitionError = CreateSavedViewDefinitionErrors[keyof CreateSavedViewDefinitionErrors];
+
+export type CreateSavedViewDefinitionResponses = {
+    201: SavedViewDefinition;
+};
+
+export type CreateSavedViewDefinitionResponse = CreateSavedViewDefinitionResponses[keyof CreateSavedViewDefinitionResponses];
+
+export type ReorderSavedViewDefinitionsData = {
+    body: ReorderSavedViewDefinitionsRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions/order';
+};
+
+export type ReorderSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderSavedViewDefinitionsError = ReorderSavedViewDefinitionsErrors[keyof ReorderSavedViewDefinitionsErrors];
+
+export type ReorderSavedViewDefinitionsResponses = {
+    200: Array<SavedViewDefinition>;
+};
+
+export type ReorderSavedViewDefinitionsResponse = ReorderSavedViewDefinitionsResponses[keyof ReorderSavedViewDefinitionsResponses];
+
+export type DeleteSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to delete
+         */
+        saved_view_id: string;
+    };
+    query: {
+        /**
+         * Revision that must still be current when the deletion commits.
+         */
+        expectedRevision: number;
+    };
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type DeleteSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSavedViewDefinitionError = DeleteSavedViewDefinitionErrors[keyof DeleteSavedViewDefinitionErrors];
+
+export type DeleteSavedViewDefinitionResponses = {
+    204: void;
+};
+
+export type DeleteSavedViewDefinitionResponse = DeleteSavedViewDefinitionResponses[keyof DeleteSavedViewDefinitionResponses];
+
+export type GetSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to read
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type GetSavedViewDefinitionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSavedViewDefinitionError = GetSavedViewDefinitionErrors[keyof GetSavedViewDefinitionErrors];
+
+export type GetSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type GetSavedViewDefinitionResponse = GetSavedViewDefinitionResponses[keyof GetSavedViewDefinitionResponses];
+
+export type UpdateSavedViewDefinitionData = {
+    body: UpdateSavedViewDefinitionRequest;
+    path: {
+        /**
+         * The saved view to update
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type UpdateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSavedViewDefinitionError = UpdateSavedViewDefinitionErrors[keyof UpdateSavedViewDefinitionErrors];
+
+export type UpdateSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;

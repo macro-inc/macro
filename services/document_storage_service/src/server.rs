@@ -1019,6 +1019,9 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_sender.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        )),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -1027,6 +1030,7 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let sender = webhook_stream_sender;
+        let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
@@ -1036,6 +1040,7 @@ async fn run_server() -> anyhow::Result<()> {
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
                         &sender,
+                        &workspace_resolver,
                     ) => result,
                 };
 
@@ -1471,6 +1476,54 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let user_picture_brokers = config.kafka_brokers.as_ref().to_string();
+    let user_picture_fanout = Arc::new(
+        contacts::domain::service::picture_fanout::UserPictureFanout::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            contacts::outbound::picture_gateway::ConnectionGatewayPictureNotifier::new(
+                conn_gateway_client.clone(),
+            ),
+        ),
+    );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting user picture fan-out consumer");
+                let result = contacts::inbound::user_picture_consumer::run_user_picture_consumer(
+                    &user_picture_brokers,
+                    user_picture_fanout.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("user picture fan-out consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "user picture fan-out consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // Wire Macro AI to react to mentions with the classic in-channel chat
     // reply. The router posts replies through the channel service we just
     // built and runs the agent loop in-process with the channel-bot toolset:
@@ -1817,17 +1870,27 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        Arc::new(contacts::domain::service::ContactsDomainService {
-            repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-            notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-        }),
+        contacts_service.clone(),
     );
+
+    // Directory refreshes follow contacts_invalidation immediately after writes.
+    // Keep membership and names on the primary, matching the legacy contacts read.
+    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
+        contacts::domain::service::directory::ContactsDirectoryService::new(
+            contacts_service,
+            contacts::outbound::names::DbContactNames::new(db.clone()),
+        ),
+    ));
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
@@ -2370,7 +2433,20 @@ async fn run_server() -> anyhow::Result<()> {
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    // GraphQL and REST share one saved-view service; each committed write
+    // pushes a change to the pages that show those views.
+    let saved_views = Arc::new(crate::service::saved_views::service(
+        db.clone(),
+        crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
+            (*conn_gateway_client).clone(),
+            Arc::new(crate::service::saved_views::Membership(
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            )),
+            event_broker_tracker.clone(),
+        ),
+    ));
     let api_context = ApiContext {
+        saved_views,
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
@@ -2467,6 +2543,7 @@ async fn run_server() -> anyhow::Result<()> {
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
             scheduled_action_read_service,
         ),
+        graphql_contacts_context,
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
@@ -2522,10 +2599,14 @@ async fn run_server() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
-            activity_realtime_service,
+            activity_realtime_service.clone(),
         ),
         agent_session_log_subscriptions: complete_graph::agent_session_log_subscriptions(
             agent_session_log_realtime,
+        ),
+        agent_session_activity_subscriptions: complete_graph::agent_session_activity_subscriptions(
+            activity_realtime_service,
+            db.clone(),
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

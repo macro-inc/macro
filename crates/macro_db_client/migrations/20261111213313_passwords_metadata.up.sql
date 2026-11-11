@@ -1,3 +1,5 @@
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE password_member_removals (
     id UUID PRIMARY KEY,
     team_id UUID NOT NULL REFERENCES team(id) ON DELETE CASCADE,

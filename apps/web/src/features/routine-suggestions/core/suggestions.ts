@@ -7,6 +7,7 @@ import type {
 import type { ScheduleDraft } from '../../routines/core/draft';
 import {
   type Knob,
+  sentenceParts,
   sentenceText,
   withKnobValue,
 } from '../../routines/core/knobs';
@@ -23,11 +24,18 @@ import type { RoutineSurface } from './surfaces';
 
 type CatalogPick = Extract<RoutineSuggestion, { kind: 'catalog' }>;
 
-/** A suggestion as its row shows it, with the routine it saves. */
+/** A suggestion as its card shows it, with the routine it saves. */
 export type SuggestionItem = {
+  /** The suggestion's id; `template:<key>` for a template. */
   id: string;
   from: SuggestionFrom;
   kind: RoutineSuggestion['kind'];
+  /**
+   * One of Macro's templates offered beside the suggestions, not a
+   * suggestion: it can't be dismissed, and its routine doesn't point back
+   * at one.
+   */
+  template: boolean;
   /** The catalog routine it starts from, for catalog picks. */
   catalogKey?: string;
   /** The sidebars it shows in, first the one it belongs to most. */
@@ -35,10 +43,10 @@ export type SuggestionItem = {
   title: string;
   /** What it does, with AI's knob values filled in. */
   summary: string;
-  /** When it runs, e.g. "When a new email arrives". */
-  when: string;
-  /** "For you · reason" for AI's picks, "Template from Macro" for Macro's. */
-  byline: string;
+  /** What starts it and what it does, for its card's chain line. */
+  chain: SuggestionChain;
+  /** Why it fits the person, for AI's picks. */
+  reason?: string;
   /** Saving it needs the person's own tags to exist first. */
   needsPersonalTags: boolean;
   /**
@@ -50,12 +58,18 @@ export type SuggestionItem = {
   draft: ScheduleDraft;
 };
 
-/** What the person may change before enabling it from its row. */
+/** What starts a routine and what it does, in a few words each. */
+export type SuggestionChain = {
+  trigger: string;
+  action: string;
+  /** The action is AI's, so the line marks it with a sparkle. */
+  actionAi: boolean;
+};
+
+/** What the person changed before turning it on: its knobs' values. */
 export type SuggestionEdits = {
-  title: string;
-  /** An Ask AI routine's instructions; absent where its steps are code. */
-  instructions?: string;
-  notify: boolean;
+  /** The sentence step's knobs; absent where it has none. */
+  knobs?: Knob[];
 };
 
 /** What the person has done with a suggestion in this list so far. */
@@ -64,16 +78,6 @@ export type SuggestionStatus =
   | { kind: 'enabling' }
   | { kind: 'enabled'; routineId: string }
   | { kind: 'failed'; message: string };
-
-/** The byline under a suggestion's title: who suggests it, and why. */
-export function suggestionByline(
-  from: SuggestionFrom,
-  reason: string | null | undefined
-): string {
-  if (from === 'macro') return 'Template from Macro';
-  const why = reason?.trim();
-  return why ? `For you · ${why}` : 'For you';
-}
 
 function isKnobValue(value: unknown): value is string | number | boolean {
   return (
@@ -144,7 +148,7 @@ function draftedDraft(routine: ActionConfiguration): ScheduleDraft | undefined {
 }
 
 /**
- * A suggestion as its row shows it, or undefined when it can't be shown: a
+ * A suggestion as its card shows it, or undefined when it can't be shown: a
  * catalog pick the catalog doesn't (yet) have, or a draft the editor can't
  * read.
  */
@@ -153,12 +157,14 @@ export function suggestionItem(
   catalog: readonly RoutineTemplate[],
   context: SuggestionContext
 ): SuggestionItem | undefined {
+  const reason = suggestion.reason?.trim();
   const shared = {
     id: suggestion.id,
     from: suggestion.from,
     kind: suggestion.kind,
+    template: false,
     surfaces: suggestion.surfaces,
-    byline: suggestionByline(suggestion.from, suggestion.reason),
+    ...(suggestion.from === 'for_you' && reason ? { reason } : {}),
   };
   if (suggestion.kind === 'catalog') {
     const entry = catalog.find((routine) => routine.key === suggestion.key);
@@ -169,7 +175,7 @@ export function suggestionItem(
       catalogKey: suggestion.key,
       title: entry.title,
       summary: draft.description || entry.description,
-      when: templateChain(entry).trigger,
+      chain: templateChain(entry),
       needsPersonalTags:
         context.codeSteps && Object.values(entry.namedKnobs).includes('tag'),
       reviewFirst: false,
@@ -179,11 +185,17 @@ export function suggestionItem(
   const draft = draftedDraft(suggestion.routine);
   if (!draft) return undefined;
   const [first] = draft.triggers ?? [];
+  const [step] = draft.steps ?? [];
   return {
     ...shared,
     title: suggestion.routine.name,
     summary: suggestion.routine.description ?? '',
-    when: first ? describeTrigger(first) : '',
+    chain: {
+      trigger: first ? describeTrigger(first) : '',
+      // A code step by its title; a lone Ask AI routine has no steps.
+      action: step?.kind === 'code' ? step.title : 'Ask AI',
+      actionAi: step?.kind !== 'code',
+    },
     needsPersonalTags: false,
     reviewFirst: true,
     draft: { ...draft, enabled: true, suggestionId: suggestion.id },
@@ -199,31 +211,145 @@ export function suggestionTitle(
   return catalog.find((routine) => routine.key === suggestion.key)?.title;
 }
 
-/** The row's editable fields before the person changes anything. */
-export function initialEdits(item: SuggestionItem): SuggestionEdits {
+/** One of Macro's templates as a card, beside the suggestions. */
+export function templateItem(
+  entry: RoutineTemplate,
+  context: SuggestionContext
+): SuggestionItem {
+  const draft = templateDraft(entry, context.base, context);
+  const code = sentenceStep(draft);
+  const description =
+    (code && sentenceText(code.sentence, code.knobs)) || draft.description;
   return {
-    title: item.draft.name,
-    // Only a lone Ask AI routine keeps its instructions in `prompt`.
-    instructions:
-      item.draft.steps === undefined ? item.draft.prompt : undefined,
-    notify: item.draft.runVisibility === 'listed',
+    id: `template:${entry.key}`,
+    from: 'macro',
+    kind: 'catalog',
+    template: true,
+    catalogKey: entry.key,
+    surfaces: entry.surfaces,
+    title: entry.title,
+    summary: description || entry.description,
+    chain: templateChain(entry),
+    needsPersonalTags:
+      context.codeSteps && Object.values(entry.namedKnobs).includes('tag'),
+    reviewFirst: false,
+    draft: { ...draft, description, enabled: true },
   };
 }
 
-/** The routine to save, with the person's edits applied. */
+/** Where the code step whose sentence a card shows sits, and the step. */
+function sentenceStep(
+  draft: ScheduleDraft
+): { index: number; sentence: string; knobs: Knob[] } | undefined {
+  const steps = draft.steps ?? [];
+  for (const [index, step] of steps.entries()) {
+    if (
+      step.kind === 'code' &&
+      step.sentence &&
+      sentenceParts(step.sentence, step.knobs)
+    )
+      return { index, sentence: step.sentence, knobs: step.knobs };
+  }
+  return undefined;
+}
+
+/** The sentence a card shows, with the person's knob values. */
+export function suggestionSentence(
+  item: SuggestionItem,
+  edits: SuggestionEdits
+): { sentence: string; knobs: Knob[] } | undefined {
+  const step = sentenceStep(item.draft);
+  return step && { sentence: step.sentence, knobs: edits.knobs ?? step.knobs };
+}
+
+/** The routine to save, with the person's knob values. */
 export function draftWithEdits(
   item: SuggestionItem,
   edits: SuggestionEdits
 ): ScheduleDraft {
-  const instructions = edits.instructions?.trim();
-  return {
-    ...item.draft,
-    name: edits.title.trim() || item.draft.name,
-    ...(item.draft.steps === undefined && instructions
-      ? { prompt: instructions }
-      : {}),
-    runVisibility: edits.notify ? 'listed' : 'unlisted',
-  };
+  const step = sentenceStep(item.draft);
+  const knobs = edits.knobs;
+  if (!step || !knobs) return item.draft;
+  const steps = item.draft.steps?.map(
+    (current, index): StepDraft =>
+      index === step.index && current.kind === 'code'
+        ? { ...current, knobs }
+        : current
+  );
+  // A catalog routine's description is its sentence, so it follows the
+  // values; a drafted routine keeps the description AI wrote.
+  const description =
+    item.kind === 'catalog'
+      ? (sentenceText(step.sentence, knobs) ?? item.draft.description)
+      : item.draft.description;
+  return { ...item.draft, ...(steps ? { steps } : {}), description };
+}
+
+/** What a card's one action does. */
+export type SuggestionAction = 'turn-on' | 'review' | 'use';
+
+/**
+ * AI's catalog picks turn on in a click; a drafted routine and Macro's
+ * templates open in the editor first.
+ */
+export function suggestionAction(item: SuggestionItem): SuggestionAction {
+  if (item.reviewFirst) return 'review';
+  return item.from === 'for_you' ? 'turn-on' : 'use';
+}
+
+/**
+ * The part of the app whose icon and tint a card shows. In a sidebar, where
+ * every suggestion belongs to the same part, it is the first other part the
+ * routine works in, else Calendar for a scheduled one, so the icons differ by
+ * what each routine does; elsewhere it is the part it belongs to most.
+ * Agents hosts every AI routine, so it says nothing about what one does.
+ */
+export function suggestionLook(
+  item: Pick<SuggestionItem, 'surfaces' | 'draft'>,
+  sidebar?: RoutineSurface
+): RoutineSurface {
+  if (!sidebar) return item.surfaces[0] ?? 'agents';
+  const other = item.surfaces.find(
+    (surface) => surface !== sidebar && surface !== 'agents'
+  );
+  if (other) return other;
+  const scheduled = item.draft.triggers?.some(
+    (trigger) => trigger.kind === 'schedule'
+  );
+  return scheduled ? 'calendar' : sidebar;
+}
+
+/**
+ * The sidebar card's icon stack: up to three different looks, in the order
+ * of the suggestions that have them, so the stack shows the variety on offer.
+ */
+export function stackLooks(
+  items: readonly Pick<SuggestionItem, 'surfaces' | 'draft'>[],
+  sidebar: RoutineSurface
+): RoutineSurface[] {
+  const looks: RoutineSurface[] = [];
+  for (const item of items) {
+    const look = suggestionLook(item, sidebar);
+    if (!looks.includes(look)) looks.push(look);
+    if (looks.length === 3) break;
+  }
+  return looks;
+}
+
+/**
+ * Everything Discover offers: AI's picks first, then Macro's, each in the
+ * server's order, then the templates no suggestion already offers.
+ */
+export function discoverItems(
+  suggestions: readonly SuggestionItem[],
+  templates: readonly SuggestionItem[]
+): SuggestionItem[] {
+  const offered = new Set(suggestions.map((item) => item.catalogKey));
+  return [
+    ...suggestions.filter((item) => item.from === 'for_you'),
+    ...suggestions.filter((item) => item.from !== 'for_you'),
+    ...templates.filter((item) => !offered.has(item.catalogKey)),
+  ];
 }
 
 /** The suggestions a surface's sidebar shows, in the server's order. */
