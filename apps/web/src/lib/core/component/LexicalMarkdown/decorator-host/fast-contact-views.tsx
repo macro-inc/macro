@@ -31,8 +31,7 @@ export function createNativeFastContactDecoratorViews<
         typeof value.name !== 'string' ||
         typeof value.emailOrDomain !== 'string' ||
         typeof value.isCompany !== 'boolean' ||
-        (value.mentionUuid !== undefined &&
-          typeof value.mentionUuid !== 'string')
+        (value.mentionUuid != null && typeof value.mentionUuid !== 'string')
       )
         throw new Error('Invalid contact mention payload');
       return {
@@ -40,7 +39,8 @@ export function createNativeFastContactDecoratorViews<
         name: value.name,
         emailOrDomain: value.emailOrDomain,
         isCompany: value.isCompany,
-        mentionUuid: value.mentionUuid,
+        // Stored documents carry mentionUuid: null when it was never set.
+        mentionUuid: value.mentionUuid ?? undefined,
         key: String(node.key),
         theme: context.theme,
         host: context.host,
