@@ -112,6 +112,8 @@ Run routed history keys through model KeyDown and command listeners first; only 
 
 Detect duplicate durable IDs only against attached owners; subtree removal may leave stale descendant index entries, and undo/redo must preserve the restored identities.
 
+Application sessions mint Source-shaped `nanoid(8)` ids from the continuing per-peer NodeRandom stream: reserve this commit's attached nonempty incoming ids first, redraw indexed or reserved candidates at most 16 times, then fail the follow-up round (accepted main commit, no ids written). Standalone sessions keep `session-{peer}-{key}`. Tests: `src/editor/runtime_id_test.rs`.
+
 Recover an unadopted compatibility update through CompatUpdate::recover_unadopted
 when normal readiness/access policy refuses it; preserve its exact pending state
 for a later caller decision. Recovery is single-consumption and does not roll back

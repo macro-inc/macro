@@ -69,10 +69,12 @@ pub fn application_editor_config(
         } else {
             builder
         };
+        // Source wrapper nodeIdPlugin idLength (LexicalWrapperContext.tsx).
         with_session_plugins_excluding_root(
             builder,
             peer,
             &macro_document_model::node_ids::ID_STATE,
+            8,
         )
     });
     config

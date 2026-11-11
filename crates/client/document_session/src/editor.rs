@@ -1018,3 +1018,6 @@ mod clipboard_id_test;
 
 #[cfg(all(test, feature = "application"))]
 mod import_storage_test;
+
+#[cfg(all(test, feature = "application"))]
+mod runtime_id_test;

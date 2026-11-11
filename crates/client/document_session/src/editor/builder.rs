@@ -35,16 +35,25 @@ pub fn with_session_plugins_with_id_state(
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
 ) -> EditorBuilder {
-    install_session_plugins(builder, peer, id_state, true)
+    install_session_plugins(builder, peer, id_state, true, IdMint::Session)
 }
 
+/// Application tracking: Root carries no tracked id, and nodes created without
+/// one receive Source nodeIdPlugin `nanoid(id_length)` from NodeRandom.
 #[cfg(feature = "application")]
 pub(crate) fn with_session_plugins_excluding_root(
     builder: EditorBuilder,
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
+    id_length: usize,
 ) -> EditorBuilder {
-    install_session_plugins(builder, peer, id_state, false)
+    install_session_plugins(
+        builder,
+        peer,
+        id_state,
+        false,
+        IdMint::Nanoid { length: id_length },
+    )
 }
 
 fn install_session_plugins(
@@ -52,12 +61,44 @@ fn install_session_plugins(
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
     track_root: bool,
+    mint: IdMint,
 ) -> EditorBuilder {
     register_editor_commands(builder.extension_state(NodeIdIndex::default())).plugin(NodeIds {
         peer,
         id_state,
         track_root,
+        mint,
     })
+}
+
+/// How a node without a usable id receives one.
+#[derive(Clone, Copy)]
+enum IdMint {
+    /// Standalone sessions: `session-{peer}-{key}`, suffixed on collision.
+    Session,
+    /// Application sessions: Source `nanoid(length)` from the NodeRandom stream.
+    #[cfg(feature = "application")]
+    Nanoid { length: usize },
+}
+
+/// Fresh draws before a nanoid mint fails instead of reusing a taken id.
+#[cfg(feature = "application")]
+const NANOID_ATTEMPTS: usize = 16;
+
+/// Draw fresh Source nanoids until one is neither indexed nor reserved by an
+/// incoming node of the same commit; fail after a bounded number of draws.
+#[cfg(feature = "application")]
+fn mint_nanoid(tx: &Transaction<'_>, length: usize, reserved: &[String]) -> Result<String, Error> {
+    for _ in 0..NANOID_ATTEMPTS {
+        let candidate = macro_document_model::nanoid(tx, length)
+            .map_err(|error| Error::invariant(error.to_string()))?;
+        if !tx.extension::<NodeIdIndex>()?.ids.contains_key(&candidate)
+            && !reserved.contains(&candidate)
+        {
+            return Ok(candidate);
+        }
+    }
+    Err(Error::Invariant("node id generation exhausted"))
 }
 
 pub(super) static ID: StateKey<Option<String>> = StateKey::new("id", |value| {
@@ -78,6 +119,7 @@ struct NodeIds {
     peer: u64,
     id_state: &'static StateKey<Option<String>>,
     track_root: bool,
+    mint: IdMint,
 }
 impl Plugin for NodeIds {
     fn name(&self) -> &'static str {
@@ -107,6 +149,14 @@ impl Plugin for NodeIds {
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        // Application minting must not take an id an incoming attached node of
+        // this commit already stores but the index has not seen yet. Reserving
+        // reads ids only; it neither writes state nor changes the index.
+        #[cfg(feature = "application")]
+        let reserved = match self.mint {
+            IdMint::Nanoid { .. } => self.incoming_ids(tx, commit)?,
+            IdMint::Session => Vec::new(),
+        };
         for (key, mutation) in &commit.changes.mutations {
             if !self.track_root && *key == NodeKey::ROOT {
                 continue;
@@ -127,13 +177,20 @@ impl Plugin for NodeIds {
                         .get(value)
                         .is_some_and(|owner| owner != key && tx.is_attached(*owner)))
             {
-                let base = format!("session-{}-{key}", self.peer);
-                *value = base.clone();
-                let mut suffix = 0_u64;
-                while tx.extension::<NodeIdIndex>()?.ids.contains_key(value) {
-                    suffix += 1;
-                    *value = format!("{base}-{suffix}");
-                }
+                *value = match self.mint {
+                    IdMint::Session => {
+                        let base = format!("session-{}-{key}", self.peer);
+                        let mut candidate = base.clone();
+                        let mut suffix = 0_u64;
+                        while tx.extension::<NodeIdIndex>()?.ids.contains_key(&candidate) {
+                            suffix += 1;
+                            candidate = format!("{base}-{suffix}");
+                        }
+                        candidate
+                    }
+                    #[cfg(feature = "application")]
+                    IdMint::Nanoid { length } => mint_nanoid(tx, length, &reserved)?,
+                };
                 tx.set_state(*key, self.id_state, Some(value.clone()))?;
             }
             if old != id {
@@ -149,6 +206,27 @@ impl Plugin for NodeIds {
             }
         }
         Ok(())
+    }
+}
+#[cfg(feature = "application")]
+impl NodeIds {
+    /// Nonempty stored ids of this commit's attached, non-destroyed mutations.
+    fn incoming_ids(&self, tx: &Transaction<'_>, commit: &Commit) -> Result<Vec<String>, Error> {
+        let mut ids = Vec::new();
+        for (key, mutation) in &commit.changes.mutations {
+            if *mutation == Mutation::Destroyed
+                || (!self.track_root && *key == NodeKey::ROOT)
+                || !tx.is_attached(*key)
+            {
+                continue;
+            }
+            if let Some(id) = tx.get_state(*key, self.id_state)?
+                && !id.is_empty()
+            {
+                ids.push(id);
+            }
+        }
+        Ok(ids)
     }
 }
 struct RichCommands;
