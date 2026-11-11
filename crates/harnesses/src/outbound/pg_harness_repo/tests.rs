@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -929,4 +931,78 @@ async fn bound_agents_leave_out_residents_whose_owner_lost_access(pool: PgPool) 
         listed(repo.list_bound_agents(harness).await.unwrap()),
         [own_resident, teammate_coder]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn usable_harnesses_are_exactly_those_the_caller_can_run(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let reader = "macro|reader@example.com";
+    let leaver = "macro|leaver@example.com";
+    let outsider = "macro|outsider@example.com";
+    let team_id = team_of(&pool, &[OWNER_ID, TEAMMATE_ID, reader, leaver]).await;
+    team_of(&pool, &[outsider]).await;
+
+    let owned = private_harness(&pool, OWNER_ID).await;
+    let team_shared = private_harness(&pool, TEAMMATE_ID).await;
+    repo.set_team_access(team_shared, team_id, true)
+        .await
+        .unwrap();
+    let team_read = private_harness(&pool, TEAMMATE_ID).await;
+    let direct = private_harness(&pool, TEAMMATE_ID).await;
+    grant_directly(&pool, direct, reader).await;
+    grant_directly(&pool, direct, leaver).await;
+    let outsiders = private_harness(&pool, outsider).await;
+    grant_directly(&pool, outsiders, OWNER_ID).await;
+    let deleted = private_harness(&pool, OWNER_ID).await;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'view'), ($3, 'harness', $4, 'user', 'view')
+        "#,
+        team_read.as_uuid(),
+        team_id.to_string(),
+        owned.as_uuid(),
+        reader,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        deleted.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", leaver)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let expected = [
+        (OWNER_ID, vec![owned, team_shared]),
+        (TEAMMATE_ID, vec![team_shared, team_read, direct]),
+        (reader, vec![team_shared, direct]),
+        (leaver, vec![]),
+        (outsider, vec![outsiders]),
+    ];
+    for (caller, harnesses) in expected {
+        let listed = repo
+            .list_usable_harnesses(user(caller))
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|harness| harness.id.as_uuid())
+            .collect::<BTreeSet<_>>();
+        let can_run = sqlx::query_scalar!(
+            "SELECT id FROM harnesses WHERE harness_can_run(id, $1)",
+            caller
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let harnesses = harnesses.iter().map(|harness| harness.as_uuid()).collect();
+        assert_eq!(listed, harnesses, "{caller}");
+        assert_eq!(listed, can_run.into_iter().collect(), "{caller}");
+    }
 }

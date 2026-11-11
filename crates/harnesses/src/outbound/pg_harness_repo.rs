@@ -397,46 +397,55 @@ impl HarnessRepo for PgHarnessRepo {
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, Self::Err> {
+        // Each grant lookup must keep `source_id` as an index condition: one
+        // `OR` across the user and team sources scans every harness grant in
+        // `entity_access`. Access is read once per candidate, and only
+        // `harness_access_level` decides which candidates are usable.
         let rows = sqlx::query_as!(
             HarnessRow,
             r#"
+            WITH listed AS MATERIALIZED (
+                SELECT
+                    h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
+                    h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
+                    harness_access_level(h.id, $1) AS access
+                FROM harnesses h
+                WHERE h.deleted_at IS NULL
+                  AND (
+                    h.owner_user_id = $1
+                    OR h.created_by = $1
+                    OR h.id IN (
+                        SELECT ea.entity_id FROM entity_access ea
+                        WHERE ea.source_id = $1 AND ea.entity_type = 'harness' AND ea.source_type = 'user'
+                        UNION ALL
+                        SELECT ea.entity_id
+                        FROM team_user tu
+                        JOIN entity_access ea ON ea.source_id = tu.team_id::text
+                        WHERE tu.user_id = $1 AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+                    )
+                  )
+            )
             SELECT
-                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
-                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
+                l.id AS "id!", l.kind AS "kind!", l.name AS "name!", l.owner_user_id,
+                l.created_by AS "created_by!", l.allow_permission_bypass AS "allow_permission_bypass!",
+                l.created_at AS "created_at!", l.updated_at AS "updated_at!",
+                l.last_connected_at, l.last_disconnected_at,
                 EXISTS (
                     SELECT 1 FROM harness_runtime_connection c
-                    WHERE c.harness_id = h.id AND c.lease_expires_at > now()
+                    WHERE c.harness_id = l.id AND c.lease_expires_at > now()
                 ) AS "has_live_connection!",
                 EXISTS (
                     SELECT 1 FROM harness_runtime_connection c
-                    WHERE c.harness_id = h.id
+                    WHERE c.harness_id = l.id
                 ) AS "has_connection_record!",
-                harness_access_level(h.id, $1) AS "access?: AccessLevel",
+                l.access AS "access?: AccessLevel",
                 ARRAY(
                     SELECT ea.source_id FROM entity_access ea
-                    WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+                    WHERE ea.entity_id = l.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
                 ) AS shared_team_ids
-            FROM harnesses h
-            WHERE h.deleted_at IS NULL
-              AND harness_can_run(h.id, $1)
-              AND (
-                h.owner_user_id = $1
-                OR h.created_by = $1
-                OR h.id IN (
-                    SELECT ea.entity_id FROM entity_access ea
-                    WHERE ea.entity_type = 'harness'
-                      AND (
-                        (ea.source_type = 'user' AND ea.source_id = $1)
-                        OR (
-                            ea.source_type = 'team'
-                            AND ea.source_id IN (
-                                SELECT tu.team_id::text FROM team_user tu WHERE tu.user_id = $1
-                            )
-                        )
-                      )
-                )
-              )
-            ORDER BY h.created_at DESC
+            FROM listed l
+            WHERE l.access IN ('edit', 'owner')
+            ORDER BY l.created_at DESC
             "#,
             caller.as_ref(),
         )
