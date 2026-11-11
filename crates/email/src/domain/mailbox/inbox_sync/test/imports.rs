@@ -476,6 +476,84 @@ async fn crm_fanout_normalizes_deduplicates_and_omits_self_and_invalid_addresses
     assert!(sends[0].to_string().contains("friend"));
 }
 #[tokio::test]
+async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours() {
+    use models_email::service::backfill::{
+        BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
+    };
+
+    for malformed in ["@example.com", "local@", "local@extra@example.com"] {
+        let (svc, fake) = setup();
+        let at = chrono::DateTime::from_timestamp(123, 0).unwrap();
+        {
+            let mut state = fake.0.lock().unwrap();
+            let message = &mut state
+                .import
+                .fetched
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .message;
+            message.is_sent = true;
+            message.internal_date_ts = Some(at);
+            message.to = [
+                (" First@Example.com ", "First"),
+                (malformed, "Invalid"),
+                ("Second@Example.com", "Second"),
+                (" Owner@Example.com ", "Self"),
+                ("first@example.com", "Duplicate first"),
+                ("third@example.com", "Third"),
+                (" second@example.com ", "Duplicate second"),
+            ]
+            .into_iter()
+            .map(
+                |(email, name)| models_email::service::address::ContactInfo {
+                    email: email.into(),
+                    name: Some(name.into()),
+                    photo_url: None,
+                },
+            )
+            .collect();
+        }
+
+        assert!(matches!(
+            svc.process(Ok(input(operation()))).await,
+            InboxSyncDisposition::DoneDelete
+        ));
+        let sent: Vec<_> = fake
+            .calls()
+            .into_iter()
+            .filter_map(|call| match call {
+                Call::Import("backfill_queue", value) => Some(
+                    serde_json::from_value::<BackfillPubsubMessage>(value)
+                        .unwrap()
+                        .backfill_operation,
+                ),
+                _ => None,
+            })
+            .collect();
+        let expected = [
+            ("first@example.com", "First"),
+            ("second@example.com", "Second"),
+            ("third@example.com", "Third"),
+        ]
+        .map(|(email, name)| {
+            BackfillOperation::PopulateCrmContact(LinkScopedPayload {
+                link_id: LINK,
+                payload: PopulateCrmContactPayload {
+                    contact_email: email.into(),
+                    contact_name: Some(name.into()),
+                    first_at: at,
+                    last_at: at,
+                    is_sent: true,
+                },
+            })
+        });
+        assert_eq!(sent, expected, "malformed address: {malformed}");
+    }
+}
+
+#[tokio::test]
 async fn a_failed_crm_fanout_remains_retryable_after_the_message_was_committed() {
     let (svc, fake) = setup();
     {
