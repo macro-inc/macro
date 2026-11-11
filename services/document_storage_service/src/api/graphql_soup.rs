@@ -227,6 +227,7 @@ fn insert_graphql_context_data(
     data.insert(state.entity_access_service.clone());
     data.insert(state.graphql_soup_item_loader.clone());
     data.insert(state.agent_session_log_subscriptions.clone());
+    data.insert(state.agent_session_activity_subscriptions.clone());
     // Mutation replies must read their committed state from the primary email
     // service. Ordinary Soup lists and subscriptions retain their own reader.
     data.insert(email_mutation_thread_loader(

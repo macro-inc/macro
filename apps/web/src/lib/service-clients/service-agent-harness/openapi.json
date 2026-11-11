@@ -3860,6 +3860,10 @@
             "format": "uuid",
             "description": "Originating code-mode invocation, absent on older events."
           },
+          "agent_verb": {
+            "type": ["string", "null"],
+            "description": "SDK display verb, absent on older events."
+          },
           "entity_id": {
             "type": "string",
             "description": "The entity acted on."

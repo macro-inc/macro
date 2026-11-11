@@ -14,6 +14,7 @@ import { getPlatform, isTauri } from '@core/util/platform';
 import {
   redactLinkTokenProperties,
   redactLinkTokens,
+  redactPrivatePageTokens,
 } from '@core/util/telemetryUrl';
 import { getWebOrigin } from '@core/util/webOrigin';
 import type { Language } from '@service-auth/generated/schemas/language';
@@ -158,7 +159,7 @@ const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
 function isPrivateCallPage() {
   const path = window.location.pathname + window.location.hash;
-  return redactLinkTokens(path) !== path;
+  return redactPrivatePageTokens(path) !== path;
 }
 
 const initializePosthog = (instance: PostHog) => {
