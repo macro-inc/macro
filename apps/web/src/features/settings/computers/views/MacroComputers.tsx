@@ -233,7 +233,9 @@ function ManagedComputerRow(props: {
   const restoreBilling = async () => {
     const confirmed = await confirmDialog({
       title: t('computers.restoreTitle', { name: props.computer.name }),
-      body: t('computers.restoreBody'),
+      body: props.computer.compReason
+        ? t('computers.restoreBodyComped')
+        : t('computers.restoreBody'),
       confirmLabel: t('computers.restore'),
     });
     if (!confirmed) return;

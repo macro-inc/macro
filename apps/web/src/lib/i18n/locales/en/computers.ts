@@ -118,6 +118,8 @@ export default {
   restoreTitle: 'Restore {{name}}?',
   restoreBody:
     "It's billed again on your team subscription: you're charged a prorated amount now for the rest of this billing period. The computer and its disk are kept, powered off.",
+  restoreBodyComped:
+    'It stays included at no charge. The computer and its disk are kept, powered off.',
   releaseNow: 'Release now',
   releaseDeletesAgents: {
     one: '{{count}} agent on this computer will be deleted',
