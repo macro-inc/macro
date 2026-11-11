@@ -12,6 +12,7 @@ import { For, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { BenefitScene } from '../../core/benefit-pages';
 import { FeatureDemoBackdrop } from '../FeatureDemoBackdrop';
+import { wallpapers } from '../TutorialWallpaper';
 
 const icons = {
   email: Email,
@@ -22,6 +23,43 @@ const icons = {
   pr: PullRequest,
 };
 type ItemKind = keyof typeof icons;
+
+const blockPalettes = {
+  email: wallpapers.mail,
+  doc: wallpapers.docs,
+  task: wallpapers.tasks,
+  call: wallpapers.calls,
+  chat: wallpapers.chat,
+  pr: wallpapers.github,
+  agent: wallpapers.agents,
+};
+
+function blockStyle(kind: keyof typeof blockPalettes) {
+  return {
+    '--benefit-block-color': blockPalettes[kind].colors[1],
+    '--benefit-block-deep': blockPalettes[kind].colors[2],
+  };
+}
+
+const sceneBlocks: Record<BenefitScene, keyof typeof blockPalettes> = {
+  'pr-channel': 'chat',
+  'task-email': 'email',
+  references: 'doc',
+  'task-task': 'task',
+  'auto-tags': 'email',
+  'task-tags': 'task',
+  'shared-tags': 'doc',
+  'tag-filter': 'email',
+  'channel-access': 'chat',
+  membership: 'chat',
+  'leave-channel': 'chat',
+  'customer-event': 'email',
+  'engineering-event': 'task',
+  'property-event': 'call',
+  search: 'email',
+  'agent-search': 'agent',
+  'search-history': 'email',
+};
 
 function Tag(props: { label: string; color?: string }) {
   return (
@@ -52,7 +90,12 @@ function Item(props: {
   tag?: string;
 }) {
   return (
-    <div class="benefit-item" data-faded={props.faded}>
+    <div
+      class="benefit-item"
+      data-faded={props.faded}
+      data-benefit-block={props.kind}
+      style={blockStyle(props.kind)}
+    >
       <span class="benefit-item-icon">
         <Dynamic component={icons[props.kind]} />
       </span>
@@ -112,14 +155,22 @@ function LinkedWorkGraphic(props: { mode: keyof typeof linkedWork }) {
   const work = () => linkedWork[props.mode];
   return (
     <div class="benefit-linked-scene">
-      <div class="benefit-glass benefit-linked-source">
+      <div
+        class="benefit-glass benefit-linked-source"
+        data-benefit-block={work().kind}
+        style={blockStyle(work().kind)}
+      >
         <div class="benefit-card-label">
           <Dynamic component={icons[work().kind]} />
           {work().title}
         </div>
         <small>{work().detail}</small>
         <p>{work().message}</p>
-        <span class="benefit-inline-mention">
+        <span
+          class="benefit-inline-mention"
+          data-benefit-block={work().linkedKind}
+          style={blockStyle(work().linkedKind)}
+        >
           <Dynamic component={icons[work().linkedKind]} />
           {work().linkedTitle}
         </span>
@@ -128,7 +179,11 @@ function LinkedWorkGraphic(props: { mode: keyof typeof linkedWork }) {
         <span>↔</span>
         <small>Linked both ways</small>
       </div>
-      <div class="benefit-glass benefit-linked-target">
+      <div
+        class="benefit-glass benefit-linked-target"
+        data-benefit-block={work().linkedKind}
+        style={blockStyle(work().linkedKind)}
+      >
         <div class="benefit-card-label">
           <Dynamic component={icons[work().linkedKind]} />
           {work().linkedTitle}
@@ -147,7 +202,11 @@ function LinkedWorkGraphic(props: { mode: keyof typeof linkedWork }) {
 function ReferenceGraphic() {
   return (
     <div class="benefit-reference-scene">
-      <div class="benefit-reference-source">
+      <div
+        class="benefit-reference-source"
+        data-benefit-block="doc"
+        style={blockStyle('doc')}
+      >
         <File />
         <span>Launch notes</span>
       </div>
@@ -186,7 +245,11 @@ function AutoTagGraphic(props: { task?: boolean }) {
         <Tag label="Urgent" color="#dc8b87" />
       </div>
       <Callout>Tags applied by your agent</Callout>
-      <div class="benefit-glass benefit-tagged-email">
+      <div
+        class="benefit-glass benefit-tagged-email"
+        data-benefit-block={props.task ? 'task' : 'email'}
+        style={blockStyle(props.task ? 'task' : 'email')}
+      >
         <div class="benefit-card-label">
           <Dynamic component={props.task ? Task : Email} />
           {props.task ? 'New task' : 'Incoming email'} <small>9:41 AM</small>
@@ -207,7 +270,11 @@ function AutoTagGraphic(props: { task?: boolean }) {
           <Tag label="High priority" color="#e2ab7a" />
         </div>
       </div>
-      <div class="benefit-rule">
+      <div
+        class="benefit-rule"
+        data-benefit-block="agent"
+        style={blockStyle('agent')}
+      >
         <Sparkle />
         <span>
           {props.task
@@ -245,7 +312,11 @@ function SharedTagsGraphic() {
           ]}
         >
           {(item) => (
-            <div class="benefit-glass benefit-tag-card">
+            <div
+              class="benefit-glass benefit-tag-card"
+              data-benefit-block={item.kind}
+              style={blockStyle(item.kind)}
+            >
               <Dynamic component={icons[item.kind]} />
               <strong>{item.title}</strong>
               <small>{item.detail}</small>
@@ -265,7 +336,11 @@ function SearchGraphic(props: {
   return (
     <div class="benefit-search-scene">
       <Show when={props.mode === 'agent'}>
-        <div class="benefit-glass benefit-agent-query">
+        <div
+          class="benefit-glass benefit-agent-query"
+          data-benefit-block="agent"
+          style={blockStyle('agent')}
+        >
           <Sparkle />
           <span>What happened with Northwind’s checkout issue?</span>
         </div>
@@ -334,7 +409,11 @@ function SearchGraphic(props: {
 function ChannelAccessGraphic() {
   return (
     <div class="benefit-channel-scene">
-      <div class="benefit-glass benefit-channel-card">
+      <div
+        class="benefit-glass benefit-channel-card"
+        data-benefit-block="chat"
+        style={blockStyle('chat')}
+      >
         <div class="benefit-card-label">
           <Chat />
           Product
@@ -345,7 +424,11 @@ function ChannelAccessGraphic() {
           <small>10:24 AM</small>
         </div>
         <p>Here’s the plan for Friday.</p>
-        <span class="benefit-inline-mention">
+        <span
+          class="benefit-inline-mention"
+          data-benefit-block="doc"
+          style={blockStyle('doc')}
+        >
           <File />
           Launch notes
         </span>
@@ -432,7 +515,11 @@ function EventGraphic(props: { mode: keyof typeof eventExamples }) {
   const example = () => eventExamples[props.mode];
   return (
     <div class="benefit-event-context-scene">
-      <div class="benefit-glass benefit-event-card">
+      <div
+        class="benefit-glass benefit-event-card"
+        data-benefit-block={example().kind}
+        style={blockStyle(example().kind)}
+      >
         <Dynamic component={icons[example().kind]} />
         <div>
           <small>WHEN</small>
@@ -441,10 +528,20 @@ function EventGraphic(props: { mode: keyof typeof eventExamples }) {
       </div>
       <div class="benefit-connection" />
       <div class="benefit-event-context">
-        <span class="benefit-inline-mention">{example().context}</span>
+        <span
+          class="benefit-inline-mention"
+          data-benefit-block={example().kind}
+          style={blockStyle(example().kind)}
+        >
+          {example().context}
+        </span>
       </div>
       <div class="benefit-connection" />
-      <div class="benefit-glass benefit-event-card">
+      <div
+        class="benefit-glass benefit-event-card"
+        data-benefit-block="agent"
+        style={blockStyle('agent')}
+      >
         <Sparkle />
         <div>
           <small>ROUTINE INSTRUCTIONS</small>
@@ -459,7 +556,14 @@ function EventGraphic(props: { mode: keyof typeof eventExamples }) {
 /** Editorial illustrations using Paper's annotation and translucent surface language. */
 export function BenefitGraphic(props: { scene: BenefitScene; label: string }) {
   return (
-    <div class="benefit-graphic" role="img" aria-label={props.label}>
+    <div
+      class="benefit-graphic"
+      role="img"
+      aria-label={props.label}
+      style={{
+        '--feature-glow': blockPalettes[sceneBlocks[props.scene]].colors[1],
+      }}
+    >
       <FeatureDemoBackdrop />
       <div class="benefit-art" aria-hidden="true">
         <Switch>

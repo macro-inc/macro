@@ -28,6 +28,20 @@ main.feature-page:has(.benefit-page)::before { display: none; }
   backdrop-filter: blur(10px);
   border-radius: 22px;
 }
+.feature-page .feature-page-section .benefit-glass[data-benefit-block] {
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--benefit-block-color) 15%, #101012),
+    color-mix(in srgb, var(--benefit-block-deep) 4%, #101012) 75%);
+}
+.benefit-graphic [data-benefit-block] > svg,
+.benefit-graphic [data-benefit-block] > .benefit-card-label > svg,
+.benefit-graphic [data-benefit-block] > .benefit-item-icon {
+  color: var(--benefit-block-color);
+}
+.benefit-inline-mention[data-benefit-block] {
+  color: color-mix(in srgb, var(--benefit-block-color) 65%, white);
+  background: color-mix(in srgb, var(--benefit-block-color) 10%, transparent);
+}
 .benefit-card-label { display: flex; align-items: center; gap: 10px; color: #bfbfc5; font-size: 14px; }
 .benefit-card-label > span, .benefit-card-label > small { margin-left: auto; color: #89898e; font-size: 12px; }
 .benefit-avatar { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(140deg, #ffffff29, #ffffff10); color: #eee; font-size: 13px; flex-shrink: 0; }
