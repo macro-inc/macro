@@ -65,6 +65,15 @@ export function consumeOpenInNewTabIntent(): OpenInNewTabIntent | undefined {
   return current.intent;
 }
 
+/**
+ * Arms the intent without a modifier click, for menu actions that open in a
+ * new tab. It expires like a click's, since guards and middleware can resolve
+ * the navigation after the caller's open returns.
+ */
+export function armOpenInNewTabIntent(intent: OpenInNewTabIntent): void {
+  armed = { intent, expires: performance.now() + INTENT_EXPIRY_MS };
+}
+
 /** Tab operations call this before navigating so they can't hijack themselves. */
 export function disarmOpenInNewTabIntent(): void {
   armed = undefined;

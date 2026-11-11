@@ -11,6 +11,10 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
+import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -757,6 +761,23 @@ function CommandSearchMenu(
     runWithInputFocused: true,
   });
 
+  const confirmTabHotkey = registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewTab'),
+    condition: () => canOpenInNewTab() && selectedIsEntity(),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      if (query() === CommandState.query() && !selectedItem()) return false;
+      runWhenCurrent(() => {
+        const item = selectedItem();
+        if (item) openInNewTab(() => handleItemAction(item, false));
+      });
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
   const escapeHotkey = registerHotkey({
     hotkey: 'escape',
     scopeId: hotkeyScope,
@@ -1040,6 +1061,12 @@ function CommandSearchMenu(
               <HotkeyHint
                 command={confirmSplitHotkey}
                 label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
+            <Show when={canOpenInNewTab()}>
+              <HotkeyHint
+                command={confirmTabHotkey}
+                label={t('commandMenu.openInNewTab')}
               />
             </Show>
           </Match>
