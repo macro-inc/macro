@@ -1,6 +1,7 @@
 import type { PasteNodeDecoratorProps } from '@macro-inc/lexical-core';
 import { cn, Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import type { PasteNodeHostProp } from '../../decorator-host/paste-node-host';
 import { PasteActionsMenu } from './paste/PasteActionsMenu';
 import { PasteTextViewer } from './paste/PasteTextViewer';
 import { ReferencedText } from './paste/ReferencedText';
@@ -12,7 +13,7 @@ import { usePasteNode } from './paste/usePasteNode';
  * conversation renders as a quote reply ({@link ReferencedText}), the same
  * row a channel reply uses.
  */
-export function PasteNode(props: PasteNodeDecoratorProps) {
+export function PasteNode(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
   return (
     <Show
       when={props.origin === 'referenced'}
@@ -29,7 +30,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
  * bottom-left and a `⋯` menu floating in the top-right. Clicking it opens
  * the full text. Mirrors the DocumentCard.
  */
-function PastedText(props: PasteNodeDecoratorProps) {
+function PastedText(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
   const node = usePasteNode(props);
   const [open, setOpen] = createSignal(false);
 

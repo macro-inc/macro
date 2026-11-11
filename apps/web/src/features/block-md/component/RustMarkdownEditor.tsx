@@ -32,6 +32,8 @@ import { createNativeHorizontalRuleViews } from '@core/component/LexicalMarkdown
 import { createNativeImageContext } from '@core/component/LexicalMarkdown/decorator-host/native-image-host';
 import { createNativeImageDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/native-image-views';
 import { createNativeMagicDecoratorContext } from '@core/component/LexicalMarkdown/decorator-host/native-magic-host';
+import { createNativePasteNodeContext } from '@core/component/LexicalMarkdown/decorator-host/native-paste-node-host';
+import { createNativePasteNodeViews } from '@core/component/LexicalMarkdown/decorator-host/native-paste-node-views';
 import {
   createNativePullRequestMentionContext,
   createNativePullRequestMentionViews,
@@ -151,6 +153,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => tagMentionContext.dispose());
   const dateMentionContext = createNativeDateMentionContext(theme);
   overlayLifecycle.add(() => dateMentionContext.dispose());
+  const pasteNodeContext = createNativePasteNodeContext(theme);
+  overlayLifecycle.add(() => pasteNodeContext.dispose());
   const pullRequestMentionContext =
     createNativePullRequestMentionContext(theme);
   overlayLifecycle.add(() => pullRequestMentionContext.dispose());
@@ -358,6 +362,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeTagMentionViews(tagMentionContext),
                   ...createNativeDateMentionViews(dateMentionContext),
+                  ...createNativePasteNodeViews(pasteNodeContext),
                   ...createNativeDatabaseQueryViews(databaseQueryContext),
                   ...createNativeAgentSessionMentionViews(
                     agentSessionMentionContext
