@@ -73,8 +73,10 @@ controls are in `LexicalMarkdown/editing/drag-browser-test`; they use trusted
 mouse HTML5 dragging and do not establish touch dragging or a click block menu.
 
 Native body comments use the same margin, drawer and thread queries as the Off
-engine. Selecting text shows Comment in the floating menu (commenters see only
-Comment); it opens a draft from the session's durable selection cursors, which
+engine. Selecting text shows Comment in the body formatting popup; it opens a
+draft from the session's durable selection cursors. Native comment-only access
+currently exposes Comment; the Source Task and Copy link to snippet siblings
+remain unmounted. The draft
 follows edits until the mark is published through the session's isolated
 staging peer. Existing comment marks bind to their threads, highlight at the
 caret, and open from comment links once the native body is ready.
