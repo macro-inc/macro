@@ -14,7 +14,6 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`agent_session_id`](agent_session_id/AGENTS.md) | Part of agent sessions: `AgentSessionId`, the identity of an agent session, and `ReplicaId`/`ManagerFence`, the harness replica that manages a live session and the … |
 | [`bearer_token`](bearer_token/AGENTS.md) | Shared infrastructure for agent sessions and auth: the SHA-256 digest and display prefix of the bearer tokens Macro mints for bots (`mbot_…`) and harnesses (`mhns_…`). |
 | `bot_id` |  |
-| `bot_token` |  |
 | [`calendar_event_id`](calendar_event_id/AGENTS.md) | Shared type for Calendar: `CalendarEventId`, the id of a calendar event row Macro stores, a `uuid_id!` newtype (CS-10). |
 | `channel_sender` |  |
 | [`chat_id`](chat_id/AGENTS.md) | Shared type for AI chat: `ChatId`, the `TEXT` id of a chat, as a `nutype` String newtype (CS-10). |
@@ -26,7 +25,6 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`entity_basic_types`](entity_basic_types/AGENTS.md) | Shared types: the `DocumentBasic`, `ChatBasic` and `BasicProject` rows that db queries load and `entity_access`'s axum extractors read from request extensions. |
 | `filter_ast` |  |
 | `harness_id` |  |
-| `harness_token` |  |
 | [`id_newtype`](id_newtype/AGENTS.md) | Shared infrastructure: `uuid_id!`, the one way to declare a UUID-backed id newtype (CS-10). |
 | `macro_sync_service_jwt` |  |
 | [`macro_user_id`](macro_user_id/AGENTS.md) | Shared infrastructure: the identity type used across the whole backend. |
