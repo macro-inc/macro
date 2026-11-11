@@ -2328,6 +2328,7 @@ dependencies = [
  "url",
  "urlencoding",
  "user_api_key",
+ "user_events",
  "user_language",
  "user_quota",
  "utoipa",
