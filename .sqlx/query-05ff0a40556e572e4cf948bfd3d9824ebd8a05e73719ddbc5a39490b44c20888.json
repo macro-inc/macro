@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subscription_item_change SET outcome = 'pending' WHERE idempotency_key = 'computer-add:scheduled'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "05ff0a40556e572e4cf948bfd3d9824ebd8a05e73719ddbc5a39490b44c20888"
+}

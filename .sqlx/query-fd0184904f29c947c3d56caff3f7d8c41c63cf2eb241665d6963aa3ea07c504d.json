@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_crm_settings SET crm_enabled=FALSE WHERE FALSE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fd0184904f29c947c3d56caff3f7d8c41c63cf2eb241665d6963aa3ea07c504d"
+}

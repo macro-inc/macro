@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT holds_units, awake, host_id FROM hosted_runtime WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "holds_units",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "awake",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "host_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2fa35930a970bfe5e6384f2a41e03ac546bba924afbce3625ba3e76aa2d4aeeb"
+}

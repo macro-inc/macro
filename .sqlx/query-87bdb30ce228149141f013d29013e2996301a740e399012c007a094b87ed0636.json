@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE team_invite SET last_sent_at = NOW() - INTERVAL '30 minutes' WHERE team_id = $1 AND email = 'invite@macro.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "87bdb30ce228149141f013d29013e2996301a740e399012c007a094b87ed0636"
+}

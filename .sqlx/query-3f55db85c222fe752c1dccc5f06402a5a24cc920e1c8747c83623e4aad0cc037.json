@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT outcome FROM subscription_item_change WHERE idempotency_key = 'computer-add:pending'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "outcome",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3f55db85c222fe752c1dccc5f06402a5a24cc920e1c8747c83623e4aad0cc037"
+}
