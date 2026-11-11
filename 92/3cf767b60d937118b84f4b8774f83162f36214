@@ -1,0 +1,35 @@
+docs/specs/workspace-archive/inventory.md
+  s_34bbf220c32656::t_6e8c1b4a5e23c0 1-621
+docs/specs/workspace-archive/tables.md
+  s_34bbf220c32656::t_d9e573226902a0 1-424
+docs/README.md
+  s_34bbf220c32656::t_8d742616e23a70 11,32-33
+docs/specs/workspace-archive/README.md
+  s_c6a08203850d89::t_a9f8663d1f9473 1-1002
+docs/specs/workspace-archive/testing.md
+  s_34bbf220c32656::t_f98f4f224709d4 1-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "923cf767b60d937118b84f4b8774f83162f36214",
+  "prompts": {},
+  "sessions": {
+    "s_34bbf220c32656": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8d9f5511-cc13-4a83-b98c-4098cef65cc2",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
