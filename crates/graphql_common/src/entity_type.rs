@@ -32,6 +32,8 @@ pub enum GraphqlSoupEntityType {
     AgentSession,
     /// Row of a Macro database table.
     DatabaseRow,
+    /// A paired runtime, listed only by attention feeds.
+    Harness,
 }
 
 /// Canonical entity types accepted by cross-entity APIs.
@@ -122,6 +124,7 @@ impl GraphqlSoupEntityType {
             EntityType::AgentSession => Self::AgentSession,
             EntityType::Initiative => Self::Initiative,
             EntityType::DatabaseRow => Self::DatabaseRow,
+            EntityType::Harness => Self::Harness,
             EntityType::User
             | EntityType::Reminder
             | EntityType::Team
@@ -131,7 +134,6 @@ impl GraphqlSoupEntityType {
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::ExternalChat
-            | EntityType::Harness
             | EntityType::Form => return None,
         })
     }
@@ -153,6 +155,7 @@ impl GraphqlSoupEntityType {
             Self::AgentSession => EntityType::AgentSession,
             Self::Initiative => EntityType::Initiative,
             Self::DatabaseRow => EntityType::DatabaseRow,
+            Self::Harness => EntityType::Harness,
         }
     }
 }
