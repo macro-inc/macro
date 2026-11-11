@@ -83,7 +83,7 @@ let
   };
 in
 {
-  imports = [ ./_agent-brain.nix ];
+  imports = [ ./_agent.nix ];
 
   options.macro.box = {
     macrod = lib.mkOption {
