@@ -17,6 +17,12 @@ person. Served by the harness under the scheduler's gateway prefix
   request's code-mode invocation (`RequestSessions`), may call them; others
   get 403. Reading the feed with `?timezone=` counts the person in for
   nightly generations (`SuggestionAudience`).
+- A generation session ends by having each idea it wrote checked against its
+  cited items: its last programs call `macro.ai.structuredCompletion` (tool
+  free) on the model `IdeaService::with_checker_model` names, which sees only
+  the idea and the items' text and lists what the items don't state; the
+  session rewrites those ideas. This lives in the brief (`domain/prompt.md`),
+  not in code. The calls are the hidden session's, recorded non-billable.
 - Code only validates (`domain/check.rs`), stores and logs. Ranking, wording and
   when an idea stops mattering are the session's call; a refused write answers
   `{ ok: false, problems }` the session can act on. Keep it that way: no

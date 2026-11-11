@@ -64,6 +64,8 @@ pub struct IdeaService<Repo, Access, Flags> {
     flags: Option<Flags>,
     /// The SDK reference an ideas session's brief carries.
     sdk_reference: String,
+    /// The model an ideas session has check each new idea against its items.
+    checker_model: String,
 }
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
@@ -89,6 +91,7 @@ where
             audience,
             flags,
             sdk_reference: String::new(),
+            checker_model: String::new(),
         }
     }
 
@@ -97,6 +100,13 @@ where
     /// documentation.
     pub fn with_sdk_reference(mut self, reference: String) -> Self {
         self.sdk_reference = reference;
+        self
+    }
+
+    /// Have ideas sessions check each new idea against its items with
+    /// `model`, in a completion that sees nothing else.
+    pub fn with_checker_model(mut self, model: String) -> Self {
+        self.checker_model = model;
         self
     }
 
@@ -309,7 +319,13 @@ where
     }
 
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
-        prompt::brief(trigger, timezone.name(), Utc::now(), &self.sdk_reference)
+        prompt::brief(
+            trigger,
+            timezone.name(),
+            Utc::now(),
+            &self.sdk_reference,
+            &self.checker_model,
+        )
     }
 
     async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, IdeaError> {

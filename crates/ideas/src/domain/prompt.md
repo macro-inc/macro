@@ -121,4 +121,25 @@ results.push(await told(macro.ideas.suggest({ kind: 'entity', action: 'reply', .
 
 Writes answer `{ ok, problems }`; when `ok` is false, fix what `problems` says and try again. Before writing, shorten each title and summary and replace jargon without changing the meaning.
 
-Last, check your own work as a skeptical colleague would, in one program: for every idea you wrote this run, return its title, summary and prompt next to the text it rests on, read again from its `about` items (a thread's sent messages in full, a document's content, the channel messages or call lines that mention it; `(await macro.ideas.review()).ideas` has each idea's `about` as `{ entityType, entityId }`). Every name, amount, date and "someone did something" in an idea must be in that text, and nothing in it may show the matter is already handled or past. Rewrite an idea that says more than its items do, retire one that doesn't hold, and then stop with one short line.
+Last, have every idea you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every idea you wrote this run) and `now` the date line at the end of this brief:
+
+```js
+const source = async ({ entityType, entityId }) => {
+  if (entityType === 'email_thread') return (await each(await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
+  if (entityType === 'document') { const d = macro.documents.byId(entityId); return [await d.name(), await d.content()].join(' '); }
+  if (entityType === 'call') { const c = macro.calls.byId(entityId); return [await c.name(), day(await c.startedAt()), ...(await c.transcript()).map((x) => [x.speakerId, x.content].join(' '))].join(' '); }
+  if (entityType === 'channel') return (await each(await take(macro.channels.byId(entityId).messages(), 60), async (m) => [(await m.author())?.id, day(await m.createdAt()), await m.content()].join(' '))).join(' ');
+  return '';
+};
+const ideas = (await macro.ideas.review()).ideas.filter((i) => keys.includes(i.dedupKey));
+return { data: (await each(ideas, async (i) => {
+  const text = (await each(i.about, source)).join(' ').slice(0, 40000);
+  const answer = await macro.ai.structuredCompletion({ model: '{checker_model}', thinking: 'low', toolset: { type: 'none' },
+    prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<idea>', i.title, i.summary, i.prompt ?? '', '</idea>'].join(' '),
+    'additional_instructions': 'List every statement in the idea that the sources do not state: a figure, a date or deadline, a name, a status, an approval, or that someone did, said, sent, agreed to or asked for something. Sums and rates the sources do not give count. Quote the words from the idea and say in a few words what the sources say instead, or that they say nothing. What the idea proposes to do next is not a statement. Answer with an empty list when the sources state everything.',
+    'output_schema': { name: 'Unsupported', schema: { type: 'object', properties: { unsupported: { type: 'array', items: { type: 'string' } } }, required: ['unsupported'] } } });
+  return { key: i.dedupKey, unsupported: answer.outcome?.result?.unsupported ?? answer.outcome };
+})).filter((x) => x.unsupported?.length !== 0), reviews: [] };
+```
+
+The answer lists only the ideas with a problem; an idea not listed passed. `unsupported` is what an idea states that its items don't. For each entry: when another item you read does state it, add that item to the idea's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed idea with `idea.rewrite` in one program, and retire one left with nothing to say. Then run the check again with only the keys you rewrote, and repeat until it lists nothing, three checks at most. Then stop with one short line.

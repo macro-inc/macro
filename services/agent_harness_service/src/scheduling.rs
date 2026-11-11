@@ -534,7 +534,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_sdk_reference(agent_code_mode::domain::index_digest(
             ideas::domain::prompt::SYMBOLS,
             ideas::domain::prompt::FIELDS_OF,
-        )),
+        ))
+        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned()),
     );
     let generation = Arc::new(
         GenerationService::new(
