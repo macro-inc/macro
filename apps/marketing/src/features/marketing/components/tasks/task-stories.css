@@ -34,6 +34,7 @@
 @media (prefers-reduced-motion: reduce) { .task-pr-pill { transition: none; } }
 
 .task-agent-scene { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.task-agent-scene .sample-chat-composer { padding: 12px; }
 .task-agent-scene[data-typing='true'] .demo-mention-editor:not(:empty)::after { content: ''; display: inline-block; height: 1em; margin-left: 1px; border-right: 1px solid currentColor; vertical-align: -0.1em; }
 
 /* Keep both walkthrough composers in the channel's single-line layout. */

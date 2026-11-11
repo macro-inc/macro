@@ -874,7 +874,7 @@ plain-text reply in that same thread, without another @Macro mention. Playback
 waits 1.4 seconds before each agent reply and holds the first result for 2.2
 seconds before the follow-up. It starts when the main composer is fully visible.
 Composer handles and explicit reply state drive playback; no synthetic input or
-Reply/Cancel button clicks are used. Keep composer geometry stable during typing. Visitor input stops typing and preserves the draft.
+Reply/Cancel button clicks are used. Keep composer geometry stable during typing, with rounded corners on touch and desktop and a 12px inset from the task demo frame. Visitor input stops typing and preserves the draft.
 The message-to-task walkthrough first scrolls its request into view. Its persistent
 pointer opens the task composer, selects High from the real priority menu, creates
 the task, opens its linked brief, and returns through the inline task mention.
