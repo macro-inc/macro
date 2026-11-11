@@ -357,8 +357,7 @@ fn apply_update(
         }
         // A card the session presented on the turn's behalf (a code-mode
         // view) went to the reader, never to the agent.
-        SessionUpdate::ToolCall(call)
-            if agent_session::domain::model::is_presented(call.meta.as_ref()) => {}
+        SessionUpdate::ToolCall(call) if agent_session::domain::model::is_presented(&call) => {}
         SessionUpdate::ToolCall(call) => {
             parts.push(tool_call_part(
                 logged_tool_name(call.meta.as_ref(), &call.title),
