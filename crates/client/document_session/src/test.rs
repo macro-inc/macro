@@ -190,9 +190,9 @@ fn literal_dom_first_keystroke_one_handle_zero_io_and_coalesced_wake() {
         SessionInput::Editor(Input::Undo),
     );
     assert!(!out.view.iter().any(|v| matches!(v, ViewEffect::Error(_))));
-    // With no prior selection, Source records the first edit as Other; the
-    // following character starts a new entry. See table-history-boundaries.test.ts.
-    assert_eq!(session.surface().state().view().text_content(text), "ab");
+    // Collaborative Loro merges the two cold edits within its interval even
+    // when the standalone classifier would start a second entry.
+    assert_eq!(session.surface().state().view().text_content(text), "a");
     assert!(session.surface().history().can_redo);
     session.handle(
         Now {

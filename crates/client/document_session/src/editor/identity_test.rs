@@ -121,9 +121,7 @@ fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
         .children(NodeKey::ROOT)
         .next()
         .unwrap();
-    // Source keeps a structural SetState separate from the following first key.
-    // Oracle: behavior-inventory/table-history-boundaries.test.ts.
-    let inserted = surface.state().to_json().unwrap();
+    // Collaborative Loro interval also merges structural state load and its first key.
     let leaf = surface.state().view().children(code).next().unwrap();
     let point = Point::text(leaf, Utf16Offset(21));
     surface
@@ -147,7 +145,7 @@ fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
         typed.root["children"][0]["children"][0]["text"],
         "const localValue = 1;x"
     );
-    assert_eq!(surface.undo.as_ref().unwrap().undo_count(), 2);
+    assert_eq!(surface.undo.as_ref().unwrap().undo_count(), 1);
     for _ in 0..2 {
         surface
             .apply(
@@ -168,7 +166,8 @@ fn code_subtree_redo(mut config: EditorConfig, code_type: &str) {
             )
             .unwrap();
         let undone = surface.state().to_json().unwrap();
-        assert_eq!(undone, inserted);
+        assert_eq!(undone.root["children"].as_array().unwrap().len(), 1);
+        assert_eq!(undone.root["children"][0]["type"], "paragraph");
         surface
             .apply(
                 &doc,

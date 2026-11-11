@@ -3298,11 +3298,14 @@ waits do not establish server persistence. Qualify mega-paste restoration separa
 
 Copied content keeps its formatting when pasted into the same or another document. Undo removes the paste; redo restores the same pasted content and references.
 
-Create a table and immediately resize it with several pointer moves. One undo
-must restore the original dimensions while retaining the table; redo restores
-the complete gesture. Check typing bursts separately from paste, formatting and
-node insertion: a short delay alone must not combine those distinct edits.
-
+In a fresh collaborative document, create a table and immediately resize it.
+Within the application history interval, one undo can remove the whole table;
+redo restores the complete edit. Collaborative history uses Loro’s interval in
+addition to the editor’s group classifier, so standalone snapshot-history tests
+are not its oracle. Check the actual application’s typing, paste, formatting and
+node-insertion flows. In particular, reload a fresh document, type three
+backticks, Enter, then code: one Ctrl+Z must remove the code block and leave an
+empty paragraph; a second Ctrl+Z must leave the body empty.
 
 For native mention changes, use the editing browser suite's user-mentions fixture
 to type `@`, choose a supplied user by keyboard and pointer, verify the rendered

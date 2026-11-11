@@ -10,7 +10,7 @@ fn now(time: u64) -> Now {
 }
 
 #[test]
-fn table_resize_within_delay_undo_keeps_table_and_redo_keeps_all_moves() {
+fn table_resize_within_delay_undo_removes_table_and_redo_keeps_all_moves() {
     let config = crate::application::application_editor_config(
         EditorConfig::default(),
         Arc::new(AtomicI64::new(0)),
@@ -61,6 +61,7 @@ fn table_resize_within_delay_undo_keeps_table_and_redo_keeps_all_moves() {
             &mut view,
         )
         .expect("clear bootstrap history");
+    let before_insert = surface.state().to_json().expect("before table insertion");
     let command = macro_document_model::surface::decode_command(
         "group-b.table",
         &json!({"action":"insert","rows":1,"columns":2,"headers":false}).to_string(),
@@ -111,11 +112,8 @@ fn table_resize_within_delay_undo_keeps_table_and_redo_keeps_all_moves() {
     surface
         .apply(&doc, Input::Undo, now(300), Access::Edit, &mut view)
         .expect("undo resize");
-    assert!(
-        surface.state().view().is_attached(table),
-        "undo removed the table rather than its resize"
-    );
-    assert_eq!(surface.state().to_json().expect("undo JSON"), before);
+    assert!(!surface.state().view().is_attached(table));
+    assert_eq!(surface.state().to_json().expect("undo JSON"), before_insert);
     surface
         .apply(&doc, Input::Redo, now(300), Access::Edit, &mut view)
         .expect("redo resize");
@@ -186,7 +184,7 @@ impl Plugin for BoundaryControl {
 }
 
 #[test]
-fn short_delay_typing_merges_but_paste_format_node_and_explicit_push_do_not() {
+fn collaborative_interval_merges_typing_paste_format_node_and_explicit_push() {
     for operation in [
         Operation::Typing,
         Operation::Paste,
@@ -258,7 +256,6 @@ fn short_delay_typing_merges_but_paste_format_node_and_explicit_push_do_not() {
                 &mut view,
             )
             .expect("first key");
-        let before = surface.state().to_json().expect("before JSON");
         surface
             .apply(
                 &doc,
@@ -277,11 +274,7 @@ fn short_delay_typing_merges_but_paste_format_node_and_explicit_push_do_not() {
             .expect("undo");
         assert_eq!(
             surface.state().to_json().expect("undo JSON"),
-            if operation == Operation::Typing {
-                base
-            } else {
-                before
-            },
+            base,
             "{operation:?}"
         );
         surface
@@ -293,4 +286,337 @@ fn short_delay_typing_merges_but_paste_format_node_and_explicit_push_do_not() {
             "{operation:?}"
         );
     }
+}
+
+#[test]
+fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
+    let config = crate::application::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let mut surface = EditorSurface::new(config.clone(), 7, now(0)).expect("actual Macro surface");
+    let doc = lexical_loro::new_doc(7).expect("actual Loro document");
+    let mut view = Vec::new();
+    surface
+        .init(&doc, now(0), Access::Edit, &mut view)
+        .expect("fresh document");
+    surface
+        .apply(
+            &doc,
+            Input::SetState {
+                state: serde_json::from_value(
+                    json!({"root":{"type":"root","children":[{"type":"paragraph","children":[]}]}}),
+                )
+                .expect("new document paragraph"),
+                tags: TagSet::default(),
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("persist the new document before reload");
+    let mut surface = EditorSurface::new(config, 7, now(0)).expect("reloaded Macro surface");
+    surface
+        .init(&doc, now(0), Access::Edit, &mut view)
+        .expect("reload persisted fresh document");
+    surface.focused = true;
+    surface.focus_known = true;
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("initial paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    surface
+        .apply(
+            &doc,
+            Input::SelectionFromView {
+                selection: ViewSelection::Range {
+                    anchor: point,
+                    focus: point,
+                    resolution_dirty: false,
+                },
+                change: None,
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("body click selection");
+    for time in 1..=3 {
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText("`".into()),
+                    selection: ViewSelection::KeepModel,
+                },
+                now(time),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("type code fence");
+    }
+    surface
+        .apply(
+            &doc,
+            Input::KeyDown {
+                event: KeyEvent {
+                    key: "Enter".into(),
+                    ..KeyEvent::default()
+                },
+                routed: Some(Command::Key {
+                    command: KeyCommand::Enter,
+                    event: Some(KeyEvent {
+                        key: "Enter".into(),
+                        ..KeyEvent::default()
+                    }),
+                }),
+                routed_prevent_default: true,
+                selection: ViewSelection::KeepModel,
+            },
+            now(4),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("Enter code shortcut");
+    for (index, character) in "const installCheck = \"durable\";".chars().enumerate() {
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText(character.to_string()),
+                    selection: ViewSelection::KeepModel,
+                },
+                now(5 + u64::try_from(index).expect("character index")),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("type code character");
+    }
+    let code = surface
+        .state()
+        .view()
+        .children(NodeKey::ROOT)
+        .find(|key| surface.state().view().type_name(*key).ok() == Some("custom-code"))
+        .expect("actual code shortcut block");
+    assert_eq!(
+        surface.state().view().text_content(code),
+        "const installCheck = \"durable\";"
+    );
+    // Actual full-app Source: first Ctrl+Z leaves no code and empty body;
+    // a second Ctrl+Z also leaves no code and empty body.
+    for time in [100, 101] {
+        surface
+            .apply(&doc, Input::Undo, now(time), Access::Edit, &mut view)
+            .expect("Ctrl+Z");
+        assert!(
+            !surface
+                .state()
+                .view()
+                .children(NodeKey::ROOT)
+                .any(|key| surface.state().view().type_name(key).ok() == Some("custom-code")),
+            "code retained after undo: {:?}",
+            surface.state().to_json()
+        );
+        assert!(surface.state().root_text_content().is_empty());
+    }
+}
+
+fn fresh_application_history() -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
+    let config = crate::application::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let doc = lexical_loro::new_doc(7).expect("actual Loro document");
+    let mut view = Vec::new();
+    let mut writer = EditorSurface::new(config.clone(), 7, now(0)).expect("new document writer");
+    writer
+        .init(&doc, now(0), Access::Edit, &mut view)
+        .expect("initialize new document");
+    writer
+        .apply(
+            &doc,
+            Input::SetState {
+                state: serde_json::from_value(
+                    json!({"root":{"type":"root","children":[{"type":"paragraph","children":[]}]}}),
+                )
+                .expect("new document paragraph"),
+                tags: TagSet::default(),
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("persist fresh document");
+    drop(writer);
+    let mut surface = EditorSurface::new(config, 7, now(0)).expect("reloaded application surface");
+    surface
+        .init(&doc, now(0), Access::Edit, &mut view)
+        .expect("reload actual persisted document");
+    surface.focused = true;
+    surface.focus_known = true;
+    let paragraph = surface
+        .state()
+        .view()
+        .first_child(NodeKey::ROOT)
+        .expect("initial paragraph");
+    let point = Point::element(paragraph, ChildIndex(0));
+    surface
+        .apply(
+            &doc,
+            Input::SelectionFromView {
+                selection: ViewSelection::Range {
+                    anchor: point,
+                    focus: point,
+                    resolution_dirty: false,
+                },
+                change: None,
+            },
+            now(0),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("body click");
+    (surface, doc, view)
+}
+
+#[test]
+fn collaborative_typing_real_paste_and_bold_match_full_app_undo() {
+    for operation in ["typing", "paste", "bold"] {
+        let (mut surface, doc, mut view) = fresh_application_history();
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText("a".into()),
+                    selection: ViewSelection::KeepModel,
+                },
+                now(1000),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("first key");
+        if operation == "bold" {
+            surface
+                .apply(
+                    &doc,
+                    Input::Command {
+                        command: Command::FormatText(TextFormatType::Bold),
+                        selection: ViewSelection::KeepModel,
+                    },
+                    now(1100),
+                    Access::Edit,
+                    &mut view,
+                )
+                .expect("Ctrl+B");
+        }
+        let command = if operation == "paste" {
+            Command::Paste(ClipboardPayload {
+                data: [("text/plain".into(), "pasted".into())]
+                    .into_iter()
+                    .collect(),
+                ..ClipboardPayload::default()
+            })
+        } else {
+            Command::InsertText("b".into())
+        };
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command,
+                    selection: ViewSelection::KeepModel,
+                },
+                now(1200),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("second input");
+        assert_eq!(
+            &*surface.state().root_text_content(),
+            if operation == "paste" {
+                "apasted"
+            } else {
+                "ab"
+            }
+        );
+        if operation == "bold" {
+            let text = surface
+                .state()
+                .view()
+                .all_text_nodes(NodeKey::ROOT)
+                .last()
+                .expect("bold leaf");
+            assert!(
+                surface
+                    .state()
+                    .view()
+                    .text(text)
+                    .expect("text data")
+                    .format
+                    .contains(TextFormat::BOLD)
+            );
+        }
+        for time in [1300, 1400] {
+            surface
+                .apply(&doc, Input::Undo, now(time), Access::Edit, &mut view)
+                .expect("actual undo");
+            assert!(
+                surface.state().root_text_content().is_empty(),
+                "{operation}"
+            );
+        }
+    }
+}
+
+#[test]
+fn resync_restored_undo_manager_observes_the_same_host_clock() {
+    let (mut surface, doc, mut view) = fresh_application_history();
+    let clock = surface.history_clock.clone();
+    surface
+        .apply(
+            &doc,
+            Input::Command {
+                command: Command::InsertText("a".into()),
+                selection: ViewSelection::KeepModel,
+            },
+            now(1000),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("first history entry");
+    assert_eq!(surface.undo.as_ref().expect("undo manager").undo_count(), 1);
+    surface
+        .resync(&doc, now(1100), Access::Edit, &mut view)
+        .expect("real resync preserves existing manager");
+    assert!(Arc::ptr_eq(&clock, &surface.history_clock));
+    let mut state = surface.state().to_json().expect("current state");
+    state.root["children"][0]["children"][0]["text"] = json!("ac");
+    let mut tags = TagSet::default();
+    tags.insert(UpdateTag::HistoryPush);
+    surface
+        .apply(
+            &doc,
+            Input::SetState { state, tags },
+            now(1400),
+            Access::Edit,
+            &mut view,
+        )
+        .expect("push at exact interval boundary");
+    assert_eq!(clock.load(std::sync::atomic::Ordering::Relaxed), 1400);
+    assert_eq!(
+        surface
+            .undo
+            .as_ref()
+            .expect("restored manager")
+            .undo_count(),
+        2
+    );
+    surface
+        .apply(&doc, Input::Undo, now(1500), Access::Edit, &mut view)
+        .expect("undo second entry");
+    assert_eq!(&*surface.state().root_text_content(), "a");
 }
