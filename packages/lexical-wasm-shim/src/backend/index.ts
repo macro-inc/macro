@@ -47,6 +47,10 @@ export interface ShimBackend extends NodeHandleBackend {
     receiver: unknown
   ): unknown;
   readState(version: string, body: () => unknown): unknown;
+  getNodeMap<Node>(
+    version: string,
+    resolve: (raw: unknown) => Node
+  ): Map<string, Node>;
   flush(): void;
   finishNoop(): boolean;
   commit(): CommitPacket;

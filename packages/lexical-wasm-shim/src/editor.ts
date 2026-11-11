@@ -39,6 +39,11 @@ let activeEditor: LexicalEditor | undefined;
 let activeStateEditor: LexicalEditor | undefined;
 let readOnlyMode = false;
 const stateOwners = new WeakMap<EditorState, LexicalEditor>();
+// A retained lazy map owns its graph even before it materializes any nodes.
+const stateMapOwners = new WeakMap<
+  Map<string, LexicalNode>,
+  { readonly cache: object; readonly version: object }
+>();
 const synchronousUpdates = new WeakMap<
   LexicalEditor,
   (body: () => void, options?: UpdateOptions) => void
@@ -81,6 +86,19 @@ export type { DOMExportOutputMap, HTMLConfig } from './nodes/editor-config';
 
 export class EditorState {
   private readonly ownership: object;
+  private nodeMap: Map<string, LexicalNode> | undefined;
+
+  get _nodeMap(): Map<string, LexicalNode> {
+    if (this.nodeMap === undefined) {
+      const map = this.editor.runtime.nodeMap(this.version);
+      stateMapOwners.set(map, {
+        cache: this.editor.runtime.handles,
+        version: this.ownership,
+      });
+      this.nodeMap = map;
+    }
+    return this.nodeMap;
+  }
 
   constructor(
     private readonly editor: LexicalEditor,

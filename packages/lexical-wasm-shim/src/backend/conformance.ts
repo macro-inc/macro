@@ -214,11 +214,26 @@ export class ConformanceBackend implements ShimBackend {
       released: () => void;
     }
   >();
+  private readonly stateSnapshots = new Map<string, unknown>();
 
   constructor(config: unknown) {
     if (!initialized) throw new Error('conformance WASM is not initialized');
     this.handle = new wasm.EditorHandle(config);
+    try {
+      this.capturePublishedState('0');
+    } catch (error) {
+      this.handle.free();
+      throw error;
+    }
     editors.register(this, this.handle, this);
+  }
+  private capturePublishedState(version: string): void {
+    const id = api.get('LexicalEditor.getEditorState');
+    if (id === undefined) throw new Error('Missing native state API');
+    this.readState(version, () => {
+      const snapshot = this.enter((handle) => handle.call(id, { args: [] }));
+      this.stateSnapshots.set(version, snapshot);
+    });
   }
   private bridge(callback: Callback): Callback {
     let bridge = this.bridges.get(callback);
@@ -292,6 +307,44 @@ export class ConformanceBackend implements ShimBackend {
   readState(version: string, body: () => unknown): unknown {
     return this.enter((handle) => handle.read_state(version, body));
   }
+  getNodeMap<Node>(
+    version: string,
+    resolve: (raw: unknown) => Node
+  ): Map<string, Node> {
+    let result: Map<string, Node> | undefined;
+    this.readState(version, () => {
+      const snapshot = this.stateSnapshots.get(version);
+      if (snapshot === undefined)
+        throw new Error('Unknown or released native state map');
+      const raw = this.call('get:_nodeMap', [], snapshot);
+      if (
+        raw === null ||
+        typeof raw !== 'object' ||
+        !('$map' in raw) ||
+        !Array.isArray(raw.$map)
+      )
+        throw new Error('Invalid native node map');
+      const entries = new Map<string, Node>();
+      for (const pair of raw.$map) {
+        if (!Array.isArray(pair) || pair.length !== 2)
+          throw new Error('Invalid native node map entry');
+        let key: unknown = pair[0];
+        if (
+          key !== null &&
+          typeof key === 'object' &&
+          '$key' in key &&
+          'raw' in key
+        )
+          key = key.raw;
+        if (typeof key !== 'string')
+          throw new Error('Invalid native node map key');
+        entries.set(key === '0' ? 'root' : key, resolve(pair[1]));
+      }
+      result = entries;
+    });
+    if (result === undefined) throw new Error('Native state read did not run');
+    return result;
+  }
   flush(): void {
     this.execute((handle) => handle.flush());
   }
@@ -309,7 +362,20 @@ export class ConformanceBackend implements ShimBackend {
     if (active.includes(this))
       throw new Error('editor is executing a model operation');
     try {
-      return decodeHostPacket(this.enter((handle) => handle.commit()));
+      const packet = decodeHostPacket(this.enter((handle) => handle.commit()));
+      const metadata: unknown = JSON.parse(packet.metadata_json);
+      if (
+        metadata === null ||
+        typeof metadata !== 'object' ||
+        !('version' in metadata) ||
+        typeof metadata.version !== 'number' ||
+        !Number.isSafeInteger(metadata.version) ||
+        metadata.version < 0
+      )
+        throw new Error('Invalid committed native version');
+      const version = String(metadata.version);
+      this.capturePublishedState(version);
+      return packet;
     } finally {
       this.pending = false;
       this.resetUpdateMetadata();
@@ -342,6 +408,7 @@ export class ConformanceBackend implements ShimBackend {
   releaseVersion(version: string): void {
     if (this.disposed) return;
     this.enter((handle) => handle.release_version(version));
+    this.stateSnapshots.delete(version);
     this.notifyVersionReleased(version);
   }
   private notifyVersionReleased(version: string): void {
@@ -366,6 +433,7 @@ export class ConformanceBackend implements ShimBackend {
     for (const [version, collection] of this.collections) {
       if (collection.unowned()) {
         this.enter((handle) => handle.release_version(version));
+        this.stateSnapshots.delete(version);
         this.collections.delete(version);
         collection.released();
         this.notifyVersionReleased(version);

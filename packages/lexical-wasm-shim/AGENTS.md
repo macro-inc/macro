@@ -140,3 +140,5 @@ Keep LexicalNode, LexicalEditor, EditorState and selection classes type-only at
 the public root, as pinned upstream; implementation modules retain their runtime
 classes. The public $getEditorDOMRenderConfig accepts an optional editor and
 otherwise uses the active editor; keep the explicit internal helper private.
+
+Resolve EditorState._nodeMap through its backend's acknowledged version index and retain the state's version token with a separately retained map. The development backend captures its published state handles at bootstrap/admission; getEditorState inside a historical read still means the current publication, so never use it to reconstruct an older map.

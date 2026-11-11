@@ -122,6 +122,12 @@ export class NodeRuntime {
     bindings.set(node, { runtime: this, handle: raw.$h });
   }
 
+  nodeMap(version: number): Map<string, LexicalNode> {
+    return this.backend.getNodeMap(String(version), (raw) =>
+      this.handles.node(raw)
+    );
+  }
+
   encode(value: unknown): unknown {
     if (value === undefined) return { $undef: true };
     if (value === null || typeof value !== 'object') return value;
