@@ -112,6 +112,8 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(Actions)
 }
 struct Actions;
+#[cfg(test)]
+mod test;
 static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
     command: CommandKind::Extension(&TABLE),
     priority: CommandPriority::Editor,
