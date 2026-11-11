@@ -197,11 +197,14 @@ fn filter(input: &str) -> Result<Filter, GraphError> {
     }
 
     match all_consuming(comparison).parse(input) {
-        Ok((_, (path, value))) if path.len() == 1 => Ok(Filter::Field {
-            name: path[0].to_string(),
-            value,
-        }),
-        _ => Err(invalid_filter()),
+        Ok((_, (path, value))) => match path.as_slice() {
+            [name] => Ok(Filter::Field {
+                name: name.to_string(),
+                value,
+            }),
+            _ => Err(invalid_filter()),
+        },
+        Err(_) => Err(invalid_filter()),
     }
 }
 

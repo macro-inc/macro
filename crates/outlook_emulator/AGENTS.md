@@ -34,8 +34,8 @@ standalone process, without Microsoft accounts.
 - `src/lib.rs`: `OutlookEmulator`, its URLs and its control methods.
 - `src/seed.rs`: the seed file (YAML or JSON) and `NewMessage`;
   `seed.example.yaml` is one that a test keeps valid.
-- `src/mailbox.rs`: folders, messages, the change sequence and delta rounds,
-  contacts, the request limit.
+- `src/mailbox.rs`: folders, messages, the change sequence, contacts, the
+  request limit; `src/mailbox/delta.rs`: a folder's delta rounds.
 - `src/state.rs`: tokens, faults, the clock, subscriptions, `send` and
   delivery between mailboxes.
 - `src/graph.rs`: what every request passes (token, faults, request limit),
