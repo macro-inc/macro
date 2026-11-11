@@ -61,11 +61,10 @@ const earlier = message(
   'Earlier in the channel',
   { created_at: new Date(Date.parse(STARTED_AT) - 60_000).toISOString() }
 );
-const after = message(
-  '00000000-0000-7000-8000-000000000a01',
-  'Posted outside the call',
-  { created_at: new Date(Date.now() + 60_000).toISOString() }
-);
+const after = () =>
+  message('00000000-0000-7000-8000-000000000a01', 'Posted outside the call', {
+    created_at: new Date(Date.now() + 60 * 60_000).toISOString(),
+  });
 
 type Scenario = {
   status: object;
@@ -82,7 +81,7 @@ async function open(
   const posted: unknown[] = [];
   const entries = [
     ...(scenario.outside
-      ? [{ type: 'message', message: listItem(after, []) }]
+      ? [{ type: 'message', message: listItem(after(), []) }]
       : []),
     {
       type: 'call',

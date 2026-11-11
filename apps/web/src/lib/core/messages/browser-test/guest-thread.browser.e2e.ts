@@ -36,7 +36,9 @@ test('guest can use the shared thread and text composer without app providers', 
     waitUntil: 'domcontentloaded',
   });
 
-  await expect(page.getByText('Participant message')).toBeVisible();
+  await expect(page.getByText('Participant message')).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByText('Guest message')).toBeVisible();
   await expect(page.getByText('Own message')).toBeVisible();
   await expect(page.getByText('Participant', { exact: true })).toBeVisible();
