@@ -132,6 +132,20 @@ function omitUnsupportedRecentTargets(body: DriveAstBody): DriveAstBody {
   return supported;
 }
 
+/**
+ * Soup reads a name-sorted page from one query over its own entities, which
+ * email threads are not part of. Drop the folder's email target rather than
+ * ask for rows the page cannot return.
+ */
+function omitUnsupportedNameTargets(body: DriveAstBody): DriveAstBody {
+  const supported = { ...body };
+
+  delete supported.ef;
+  delete supported.emailView;
+
+  return supported;
+}
+
 /** Builds the Soup AST for Drive without relying on legacy query state. */
 export function buildDriveQuery(
   options: BuildDriveQueryOptions
@@ -156,6 +170,8 @@ export function buildDriveQuery(
   if (location.kind === 'tab' && location.tab === 'recent') {
     sortMethod = 'touched_by_me';
     body = omitUnsupportedRecentTargets(body);
+  } else if (sortMethod === 'name') {
+    body = omitUnsupportedNameTargets(body);
   }
 
   return {

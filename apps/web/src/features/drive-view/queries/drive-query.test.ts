@@ -160,6 +160,21 @@ describe('buildDriveQuery', () => {
     });
   });
 
+  it('drops the folder email target a name-sorted page cannot return', () => {
+    const folder = {
+      ...selection,
+      location: { kind: 'folder', id: 'folder' },
+    } satisfies DriveSelection;
+
+    expect(request(folder).body.ef).toEqual({ l: { ProjectId: 'folder' } });
+
+    const byName = request({ ...folder, sort: 'name' });
+    expect(byName.body.ef).toBeUndefined();
+    expect(byName.body.emailView).toBeUndefined();
+    expect(byName.body.pf).toEqual({ l: { pid: 'folder' } });
+    expect(byName.body.cf).toEqual({ l: { pid: 'folder' } });
+  });
+
   it('uses touched_by_me for Recent without unsupported email/channel trees', () => {
     const recent = request({
       ...selection,
