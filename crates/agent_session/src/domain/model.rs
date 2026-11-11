@@ -115,6 +115,18 @@ pub struct LeaseView {
     pub asking_replica_draining: bool,
 }
 
+/// What asking a session's actor to release itself silently did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionRelease {
+    /// The actor stopped without writing or announcing anything.
+    Released,
+    /// The actor has work open (a turn, a permission request, a queued
+    /// command, or an unfinished handshake) and keeps running.
+    Busy,
+    /// No live actor for the session here.
+    NotAttached,
+}
+
 /// Where a session's live actor runs, from one service instance's viewpoint.
 #[derive(Debug, Clone)]
 pub enum SessionManagement {

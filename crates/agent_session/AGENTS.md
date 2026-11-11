@@ -63,6 +63,14 @@ consumer talks to.
 
 - `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
+`release_session` stops an idle actor silently (`CloseReason::Released`): the
+actor refuses with `SessionRelease::Busy` unless its machine is live with no
+turn, permission request, elicitation or queued action; otherwise it flushes
+buffered frames and stops without the `disconnected` frame, telemetry close or
+`session_stopped` callback that every other stop has, and its claim is
+released under its fence. Use it only to free memory; a stop anyone should
+see goes through `close_session`.
+
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
