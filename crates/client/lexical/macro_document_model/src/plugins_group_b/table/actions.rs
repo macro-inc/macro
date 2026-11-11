@@ -1,5 +1,7 @@
 //! Typed application table actions independent of DOM controls.
 use super::*;
+#[cfg(test)]
+mod desktop_test;
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(untagged)]
 enum Headers {
