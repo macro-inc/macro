@@ -54,7 +54,9 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    - every generated call goes through `unwrap()`
    - cursor lists → `paginate()` → `AsyncGenerator`; search → `entitySearch(...)`
    - camelCase + `undefined` on the SDK side even when the wire is snake_case/nullable
-   - TSDoc every public member. No `any`.
+   - TSDoc every public member. No `any`. End each public method's TSDoc with its
+     MCP hint tag (`@readonly`, `@write`, `@destructive`; `packages/sdk-mcp/AGENTS.md`)
+     and update that package's tool snapshots (`bunx vitest run -u` there).
    - an entity with its own page in the app gets `webUrl()`, built from
      `this.client.webAppUrl` and the route the web app's copy-link action uses
      (`/app/agent/<id>`, not the entity type when they differ), plus a

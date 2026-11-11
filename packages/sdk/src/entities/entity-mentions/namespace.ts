@@ -16,7 +16,11 @@ export class EntityMentionNamespace {
     return EntityMention.byId(this.client, id);
   }
 
-  /** Create a mention from a source resource to a target resource. */
+  /**
+   * Create a mention from a source resource to a target resource.
+   *
+   * @write
+   */
   async create(
     source: EntityReference,
     target: EntityReference,

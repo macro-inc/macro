@@ -23,6 +23,19 @@ export interface AgentNotes {
 
 const AGENT_TAGS: readonly `@${string}`[] = ['@routing', '@agent'];
 
+/**
+ * The hint tags `packages/sdk-mcp` turns methods into MCP operations with,
+ * also omitted from the public reference. `@readonly` is a TSDoc standard
+ * tag, so it is only removed from methods.
+ */
+const MCP_MODIFIER_TAGS: readonly `@${string}`[] = [
+  '@write',
+  '@destructive',
+  '@openworld',
+  '@idempotent',
+];
+const MCP_BLOCK_TAGS: readonly `@${string}`[] = ['@mcp-exclude'];
+
 export async function renderSdkDocs(
   root: string,
   output: string
@@ -60,7 +73,8 @@ export async function renderSdkDocs(
     basePath: sdk,
     tsconfig: join(sdk, 'tsconfig.json'),
     plugin: ['typedoc-plugin-markdown'],
-    blockTags: [...OptionDefaults.blockTags, ...AGENT_TAGS],
+    blockTags: [...OptionDefaults.blockTags, ...AGENT_TAGS, ...MCP_BLOCK_TAGS],
+    modifierTags: [...OptionDefaults.modifierTags, ...MCP_MODIFIER_TAGS],
     name: 'Macro SDK',
     readme: join(root, 'packages/sdk-docs/pages/home.md'),
     exclude: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**'],
@@ -90,12 +104,30 @@ export async function renderSdkDocs(
   const project = await app.convert();
   if (!project) throw new Error('TypeDoc could not convert the public SDK.');
   const notes = takeAgentNotes(project, Comment, ReflectionKind);
+  removeMcpTags(project, ReflectionKind);
   // TypeDoc only warns when it cannot clear old output. Fail here so callers
   // never consume stale files left behind by a failed render.
   await rm(output, { recursive: true, force: true });
   await app.generateOutputs(project);
   if (app.logger.hasErrors()) throw new Error('TypeDoc generation failed.');
   return notes;
+}
+
+/** Remove the MCP hint tags from every comment. */
+function removeMcpTags(
+  project: TypeDoc.ProjectReflection,
+  kinds: typeof TypeDoc.ReflectionKind
+) {
+  for (const reflection of Object.values(project.reflections)) {
+    const own = reflection.comment;
+    if (!own) continue;
+    for (const tag of MCP_MODIFIER_TAGS) own.modifierTags.delete(tag);
+    if (reflection.kindOf(kinds.CallSignature | kinds.Method))
+      own.modifierTags.delete('@readonly');
+    own.blockTags = own.blockTags.filter(
+      (block) => !MCP_BLOCK_TAGS.includes(block.tag)
+    );
+  }
 }
 
 /** Collect every `@routing` and `@agent` block and remove it from the outputs. */
