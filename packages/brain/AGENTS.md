@@ -8,7 +8,7 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 
 ## Start here
 
-- `src/anthropic-relay.ts`: brain-owned loopback Anthropic relay. Issue path-bound random capabilities per SDK query (one for the whole voice call), revoke on completion/failure/abort, and stream only messages/count_tokens to the fixed upstream. Never pass the real gateway credential to turn or voice child env, argv or files, even when it equals the Macro key.
+- `src/anthropic-relay.ts`: brain-owned loopback Anthropic relay. Issue path-bound random capabilities per SDK query, revoke on completion/failure/abort, and stream only messages/count_tokens to the fixed upstream. Never pass the real gateway credential to turn env, argv or files, even when it equals the Macro key.
 - `src/code-mode.ts`: public MCP client; server-owned ExecuteCode, DescribeCodeTools and ReadCodeDocs are supplied by `runtime.ts` to every non-triage runner turn. Never move its key into turn options or a subprocess.
 
 - `src/mod.ts`: the stable public API; `template/brain.ts`: agent-owned wiring.
@@ -79,9 +79,6 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 Use `src/telemetry.ts` for brain spans and traced transports. Keep attributes to
 categories, counts and opaque IDs; hash email-bearing user IDs. Telemetry is
 opt-in through the agent environment file; README documents its endpoint and parent.
-
-Voice calls live in `src/calls/`; its guide covers the media interfaces and
-quiet-mic regression fixtures. Speech uses agent-key gateway auth.
 
 The runtime contract is `prepare(signal)`, `run(signal)`, `health()`,
 `post(turn, channel, text)` and `checkFixture(fixture)`. Wrappers forward all

@@ -203,20 +203,3 @@ test('quiet-hours middleware can suppress delivery with a typed reason', async (
     },
   });
 });
-test('onCall receives lifecycle data and can use the default brain capabilities', async () => {
-  const calls: string[] = [];
-  await boot({
-    onCall: async (call, brain) => {
-      calls.push(call.id);
-      await brain.remember('calls', call.phase);
-    },
-    onEvent: async (_event, brain) => {
-      await brain.onCall({
-        id: 'call',
-        phase: 'ended',
-        metadata: { durationSeconds: 20 },
-      });
-    },
-  });
-  assert.deepEqual(calls, ['call']);
-});

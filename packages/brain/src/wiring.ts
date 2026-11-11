@@ -42,12 +42,6 @@ export type OutboundMiddleware = (
   message: OutboundMessage,
   next: OutboundNext
 ) => Promise<PostResult>;
-/** Call transports supply an opaque identity and typed lifecycle; no transport is installed here. */
-export type BrainCall = {
-  id: string;
-  phase: 'incoming' | 'connected' | 'ended';
-  metadata: Readonly<Record<string, unknown>>;
-};
 export type TierDefinition = {
   concurrency: number;
   perRunUsd: number;
@@ -74,5 +68,4 @@ export type Wiring = {
   /** Void/true handles the wake in code; false requests the default heartbeat turn. */
   onSchedule?(trigger: Wake, brain: Brain): Awaitable<void | boolean>;
   outbound?: OutboundMiddleware[];
-  onCall?(call: BrainCall, brain: Brain): Awaitable<void>;
 };

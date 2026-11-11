@@ -170,38 +170,6 @@ test('Node children receive a cleared environment without service credentials', 
   }
 });
 
-test('call adapters dispatch typed lifecycle events to the composition hook', async () => {
-  const root = await nodeFs.mkdtemp(
-    nodePath.join(nodeOs.tmpdir(), 'brain-call-hook-')
-  );
-  try {
-    const copied = await runCommand('cp', {
-      args: [
-        '-r',
-        `${new URL('../template/', import.meta.url).pathname}.`,
-        root,
-      ],
-      clearEnv: true,
-      env: { PATH: process.env['PATH'] ?? '' },
-    });
-    assert.deepEqual(copied.code, 0);
-    const phases: string[] = [];
-    await dryRun(async (deps) => {
-      const brain = new Brain(deps, {
-        onCall: async (call, runtime) => {
-          phases.push(call.phase);
-          await runtime.remember('calls', call.id);
-        },
-      });
-      await brain.onCall({ id: 'call-test', phase: 'incoming', metadata: {} });
-      return brain;
-    }, root);
-    assert.deepEqual(phases, ['incoming']);
-  } finally {
-    await nodeFs.rm(root, { recursive: true });
-  }
-});
-
 test('supervisor conformance rejects a broken health contract independently of own tests', async () => {
   const root = await nodeFs.mkdtemp(
     nodePath.join(nodeOs.tmpdir(), 'brain-conformance-')

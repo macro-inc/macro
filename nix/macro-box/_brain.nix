@@ -27,37 +27,18 @@ pkgs.buildNpmPackage {
   inherit version;
   src = source;
   nodejs = pkgs.nodejs_24;
-  npmDepsHash = "sha256-SUO3mPp8s/qBP5tVShj+wFUAcPIYeSXSZx76MNdwrSg=";
+  npmDepsHash = "sha256-qPfpDwdDsb+D5mviiibtdNmqHbR/PMIbtoXs065Olqc=";
   npmFlags = [ "--ignore-scripts" ];
   dontNpmBuild = true;
   nativeBuildInputs = [
     pkgs.makeWrapper
     pkgs.esbuild
-    pkgs.autoPatchelfHook
   ];
-  buildInputs = [ pkgs.stdenv.cc.cc.lib ];
-  # patchelf #639 corrupts libvips' low-address .init when expanding its RPATH.
-  # Leave that bundled library intact; patch its addon and the other native files.
-  dontAutoPatchelf = true;
-  postFixup = ''
-    for library in "$out/lib/brain/${version}/node_modules/@img/"sharp-libvips-*/lib; do
-      addAutoPatchelfSearchPath "$library"
-    done
-    while IFS= read -r -d "" native; do
-      autoPatchelf -- "$native"
-    done < <(find "$out" -type f \( -name '*.node' -o -name ffmpeg \) -print0)
-  '';
+  # The wrapper starts the library and its configuration check names what is missing.
   doInstallCheck = true;
   installCheckPhase = ''
-    ${pkgs.nodejs_24}/bin/node --input-type=module -e '
-      const root = "'"$out"'/lib/brain/${version}/node_modules/@livekit/";
-      const { inference } = await import(root + "agents/dist/index.js");
-      const rtc = await import(root + "rtc-node/dist/index.js");
-      if (!inference.STT || !inference.TTS) throw new Error("missing inference SDK");
-      const source = new rtc.AudioSource(24000, 1);
-      source.close();
-      await rtc.dispose();
-    '
+    if env -i $out/bin/brain health 2>error; then exit 1; fi
+    grep -q 'missing environment: .*MACRO_API_KEY' error
   '';
 
   buildPhase = ''

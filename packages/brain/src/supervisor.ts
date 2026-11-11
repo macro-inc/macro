@@ -115,12 +115,15 @@ export function childEnvironment(
   return env;
 }
 
+// A cold first boot of a small computer typechecks against an unwarmed disk cache.
+const CHECK_STEP_TIMEOUT_MS = 300_000;
+
 async function runCheck(workspace: string, args: string[]): Promise<void> {
   const child = spawn(process.execPath, args, {
     cwd: workspace,
     env: childEnvironment(workspace, true),
     stdio: 'inherit',
-    timeout: 60_000,
+    timeout: CHECK_STEP_TIMEOUT_MS,
     killSignal: 'SIGKILL',
   });
   await new Promise<void>((resolve, reject) => {

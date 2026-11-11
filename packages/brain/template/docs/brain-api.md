@@ -33,7 +33,7 @@ The public module exports these typed primitives:
 | --- | --- |
 | `Composition` | `(deps: BrainDeps) => BrainRuntime \| Promise<BrainRuntime>`. Default export. |
 | `BrainRuntime` | `prepare(signal)`, `run(signal)`, `health()`, `post(...)`, `checkFixture(fixture)`. Abort drains admitted turns. |
-| `Brain(deps, wiring?)` | Default composition. `Wiring` has typed event, filter, turn, tool, tier, schedule, outbound and call hooks. Public control methods include `post`, `reply`, `handoff`, `remember`, `schedule`, `health`. |
+| `Brain(deps, wiring?)` | Default composition. `Wiring` has typed event, filter, turn, tool, tier, schedule and outbound hooks. Public control methods include `post`, `reply`, `handoff`, `remember`, `schedule`, `health`. |
 | `BrainDeps` | Scoped config, HTTP, tasks, routines, runner, git, presence, executable, base environment and log adapters. Replace adapters to compose behavior or test it. Credentials belong in these adapters, never in prompts. |
 | `events` | `eventStream`, `parseEnvelope`, event types and reconnect/catch-up helpers. Unknown events retain `eventType` and `metadata`. |
 | `judge(input, deps)` | Async relevance decision; custom relevance implements the same signature. |
@@ -131,15 +131,6 @@ outbound: [async (message, next) => {
 }],
 ```
 
-```ts
-// Runtime call transports dispatch brain.onCall(call). A custom hook replaces
-// the default join policy; join explicitly for incoming calls.
-async onCall(call, brain) {
-  if (call.phase === 'ended') await brain.remember('calls', call.id);
-}
-```
-
-`BrainCall` has `id`, `phase: incoming | connected | ended`, and opaque `metadata`.
 `RouteItem` is a discriminated union: respond has lane/batch, heartbeat has reason,
 and work has task/conversation/description. `TurnRequest` has optional
 `maxBudgetUsd`, in-process `tools`, and Claude `builtinTools` (`[]` disables built-ins), and `strictMcpConfig` (ignores on-disk MCP servers); `afterTurn` receives the admitted `Turn`.
@@ -176,46 +167,6 @@ replacement queue processing. Receipt IDs persist across the handoff to avoid
 duplicate delivery. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
-
-## Voice calls
-
-The Node 24 runner installs the `calls` transport by default. `Brain.onCall`
-receives `{ id, phase, metadata }`; without a hook, an incoming call joins and
-speaks. A hook replaces that default and can call `brain.joinCall` explicitly:
-
-```ts
-async onCall(call, brain) {
-  if (call.phase !== 'incoming') return;
-  await brain.joinCall(call, {
-    answer: (_who, text) => !text.startsWith('Private aside:'),
-    allowHandOff: true,
-  });
-}
-```
-
-`CallPolicy.voice` can select another provider model when the creator requests
-it; otherwise calls read the server-committed `config/voice.json`. Preserve the
-user's voice choice. `config/calls.json` holds channel opt-ins, excluded channels,
-and call IDs to skip. Rings, live DMs and invited meetings also qualify. Customer
-channel exclusions always win; a hung-up call stays excluded after restart.
-
-Call sessions read the same OPERATING.md and memory as message turns. The
-`hand_off` tool schedules the normal work tier, which continues after hang-up.
-A call summary is remembered and posted to its conversation; standalone meetings
-use a DM with their host. LiveKit uses `@livekit/rtc-node` directly on Node 24.
-Nova-3 STT and Aura-2 TTS use pinned LiveKit Inference primitives through the
-Macro computer gateway and team credits; project secrets and upstream JWTs
-never enter the agent's process. Local turn-taking remains in `calls`; Inference
-does not own the conversation. Rescue finalizes a fresh unresolved-span stream
-instead of batch recognition. Barge-in clears playback and closes that turn's
-TTS sockets instead of sending a provider Clear command. The package README
-records the supported endpointing/keyterm options and capability differences. `calls` exports the media, turn-taking, discovery,
-replay and transport modules for custom compositions and injected tests.
-
-Private `log/calls/<opaque-call-id>/` diagnostics include events.jsonl and WAVs.
-They expire after seven days and only fifty call directories are retained. Calls
-have a one-hour recording limit. Do not commit or upload these diagnostics;
-telemetry carries only IDs, event categories, counts and timing.
 
 ## How I get better at knowing what's for me
 

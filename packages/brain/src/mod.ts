@@ -1,7 +1,6 @@
 /** @macro-inc/brain public composition API. See docs/brain-api.md in your repo. */
 export { Brain, type BrainDeps, type Wiring } from './brain.ts';
 export { type Budget, SpendLedger } from './budget.ts';
-export * as calls from './calls/mod.ts';
 export * as events from './events.ts';
 export { HeartbeatStore } from './heartbeat.ts';
 export { History } from './history.ts';
@@ -45,7 +44,6 @@ export type { Candidate, Decision } from './jev.ts';
 export type { LearningConfig, MustWakeFixture } from './learning.ts';
 export type { BrainTool, TurnRequest } from './runner.ts';
 export type {
-  BrainCall,
   OutboundMessage,
   OutboundMiddleware,
   OutboundNext,

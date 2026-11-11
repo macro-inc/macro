@@ -99,18 +99,15 @@ not receive it. The public MCP lists code mode for every client but ChatGPT.
 Permissions, budget admission and the persona's charter still apply.
 
 The gateway credential may be the same value as the Macro user API key.
-Neither value enters Claude turn or voice child environments, arguments or
-files. The brain owns a listener bound only to `127.0.0.1` on a random port;
+Neither value enters Claude turn environments, arguments or files. The brain owns a listener bound only to `127.0.0.1` on a random port;
 each SDK query receives its own random URL path and bearer token. Only POST
 `/v1/messages` and `/v1/messages/count_tokens` reach the fixed configured
 upstream, with the brain injecting the real credential. Missing, revoked and
 other-query tokens are rejected. SSE bytes stream through without buffering
 or changing usage events; downstream disconnect and query abort close upstream
-requests. Tokens last **per SDK query (a voice call holds one for the whole
-call)**, not per spoken ask. End, failure or abort revokes the token. The host
+requests. Tokens last per SDK query. End, failure or abort revokes the token. The host
 closes the listener after draining, including failed composition startup.
-Existing SDK budget limits and cumulative voice usage accounting remain in
-place.
+Existing SDK budget limits remain in place.
 
 Turns never get the Macro key. They call the `brain` binary (`post`, `reply`,
 `context`, `handoff`, `remember`, `recall`, `forget`, `focus`, `promise`,
@@ -250,46 +247,6 @@ timeout; prepared hosts are unhealthy until activation, and stopped intake is
 disconnected while draining. Every activation independently verifies a fake DM answer,
 the health shape, and draining an admitted turn on abort; workspace tests cannot
 replace these conformance checks.
-
-## Calls
-
-`src/calls/` ports the per-participant gain, local endpointing and prerecorded
-rescue pipeline, turn-taking, barge-in/ducking and sentence-streamed speech.
-The runner installs its Macro API watcher through `BrainDeps.calls`; a custom
-`Wiring.onCall` can choose whether to invoke `brain.joinCall(call, policy)`.
-See `template/docs/brain-api.md` for policies and shared memory/work behavior.
-
-Voice selection lives in server-committed `config/voice.json`; channel opt-ins
-and exclusions live in `config/calls.json`. LiveKit runs natively on Node 24.
-The offline Nix package includes its platform addon and required shared libraries.
-Speech uses pinned `@livekit/agents` Inference STT (`deepgram/nova-3`) and
-TTS (`deepgram/aura-2`), through `/brain/inference/stt` and
-`/brain/inference/tts`. These are speech primitives; the call turn machine
-remains local. Agent-key authentication checks team/computer eligibility and
-credit admission. The gateway signs a 60-second `inference.perform` JWT for
-its upstream connection; project credentials and Cloud tokens never reach the VM.
-STT seconds and Aura-2 characters are metered to team credits.
-
-Inference preserves keyterms, interim transcripts, smart formatting and 300 ms
-endpointing, plus Inference's `utterance_end` boolean. It does not expose the
-separate `utterance_end_ms` control. The advertised `vad_events: true` option
-failed live Cloud checks with protocol error 2006 (numeric channel decoding),
-so it stays off. SDK speech-start/finalized speech-end events and the unchanged
-local segmenter detect quiet speech and sustained barge-in. No batch recognition
-API is available in the pinned SDK: rescue sends only the unresolved PCM span
-through a fresh finalized Inference stream, with trailing silence. This costs an
-extra connection plus the SDK's three-second final-transcript settlement window,
-and loses Deepgram's distinct prerecorded recognition path.
-There is no provider Clear command: barge-in clears local playback and terminates
-the turn's TTS sockets, then starts a fresh stream for the next reply. The voice
-catalog filters provider metadata to Inference-supported Aura-2 selectors; fixed
-samples also synthesize through LiveKit Inference.
-
-`npm test` includes call regressions. `calls.replayWav` runs captured audio
-through the same injected ear and turn machine without a live room or model.
-Diagnostics in ignored `log/calls/` are private, expire after seven days and
-retain at most fifty calls, with a one-hour session limit. Transcripts and WAVs
-stay out of telemetry and source control.
 
 New templates subscribe to `*` with Jev `{ "mode": "all" }`. Unknown events
 join conversation/event lanes and cheap tool-free triage before full turns.

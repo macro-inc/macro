@@ -1,11 +1,8 @@
 // Runtime adapters supplied by the supervisor, separate from agent composition.
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
-import { z } from 'zod';
 import { anthropicRelay } from './anthropic-relay.ts';
 import type { BrainDeps } from './brain.ts';
-import { SpeechGateway } from './calls/speech.ts';
-import { callTransport } from './calls/transport.ts';
 import { MacroCodeMode } from './code-mode.ts';
 import { loadConfig } from './config.ts';
 import { MacroHttp } from './macro.ts';
@@ -33,16 +30,6 @@ export async function runtimeDeps(
     if (value) baseEnv[name] = value;
   }
 
-  const rings = new Map<string, number>();
-  const speechBase = config.anthropicBaseUrl.replace(
-    /\/anthropic\/?$/,
-    '/inference'
-  );
-  if (speechBase === config.anthropicBaseUrl)
-    throw new Error('brain Anthropic URL must end in /anthropic');
-  const gatewayMessage = z.object({ type: z.string(), data: z.unknown() });
-  const callMessage = z.object({ call_id: z.string() });
-
   const relay = await anthropicRelay(
     config.anthropicBaseUrl,
     config.anthropicAuthToken
@@ -62,51 +49,7 @@ export async function runtimeDeps(
         apiKey: config.macroApiKey,
         open: openGatewaySocket,
         log: (line) => console.error(JSON.stringify(line)),
-        onMessage(data) {
-          try {
-            const envelope = gatewayMessage.parse(
-              typeof data === 'string' ? JSON.parse(data) : data
-            );
-            if (
-              !['call_started', 'call_ended', 'call_declined'].includes(
-                envelope.type
-              )
-            )
-              return;
-            const call = callMessage.parse(
-              typeof envelope.data === 'string'
-                ? JSON.parse(envelope.data)
-                : envelope.data
-            );
-            if (envelope.type === 'call_started')
-              rings.set(call.call_id, Date.now());
-            else rings.delete(call.call_id);
-          } catch {
-            console.error(JSON.stringify({ calls: 'invalid_notification' }));
-          }
-        },
       }),
-    calls: callTransport({
-      workspace: config.workspace,
-      http,
-      gateway: new SpeechGateway(speechBase, config.macroApiKey, 'Agent'),
-      ringing: () => {
-        for (const [id, time] of rings)
-          if (Date.now() - time > 60000) rings.delete(id);
-        return new Set(rings.keys());
-      },
-      emit: (type) => console.error(JSON.stringify({ calls: type })),
-      anthropic: relay.access,
-      modelOptions: {
-        pathToClaudeCodeExecutable: 'claude',
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        env: {
-          ...baseEnv,
-          CLAUDE_CONFIG_DIR: `${config.workspace}/cache/claude`,
-        },
-      },
-    }),
     http,
     tasks: sdkTasks(macro),
     routines: sdkRoutines(macro),

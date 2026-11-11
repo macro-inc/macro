@@ -1,5 +1,4 @@
 import * as nodeFs from 'node:fs/promises';
-import { readFile } from 'node:fs/promises';
 // The running brain: events in, Jev, lanes, tiered turns, commits out.
 //
 // message.posted → history → (work running in that conversation? inject) →
@@ -9,8 +8,6 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SpanStatusCode } from '@opentelemetry/api';
 import { SpendLedger } from './budget.ts';
-import { parseVoiceConfig } from './calls/config.ts';
-import type { CallPolicy, CallTransport } from './calls/transport.ts';
 import type { Config } from './config.ts';
 import {
   type Control,
@@ -52,7 +49,7 @@ import {
 import type { RunHandle, Runner, Tier } from './runner.ts';
 import { type Routines, Schedules, type Trigger } from './schedules.ts';
 import { startSpan } from './telemetry.ts';
-import type { BrainCall, OutboundNext, PostResult, Wiring } from './wiring.ts';
+import type { OutboundNext, PostResult, Wiring } from './wiring.ts';
 import { conversationKey, type Tasks, Work } from './work.ts';
 import { type Git, GitWriter, Workspace } from './workspace.ts';
 
@@ -70,7 +67,6 @@ export type BrainDeps = {
   git: Git;
   /** Live presence adapter retains its credential in the library. */
   presence: () => () => void;
-  calls?: CallTransport;
   /** The `brain` executable turns call. */
   exe: string;
   /** PATH and HOME for turns. */
@@ -343,14 +339,6 @@ export class Brain implements Control {
       controlHandler(this, this.controlToken, (line) => this.log(line))
     );
     const offline = this.deps.presence();
-    const callStop = new AbortController();
-    const callSignal = AbortSignal.any([signal, callStop.signal]);
-    const calls = this.deps.calls
-      ?.watch((call) => this.onCall(call), callSignal, this.me)
-      .catch((error: unknown) => {
-        this.problems.add('calls');
-        this.log({ calls_failed: String(error) });
-      });
     const heartbeats = new Set<Promise<void>>();
     const queueHeartbeat = (reason: string | null) => {
       const running = this.heartbeat(reason)
@@ -449,8 +437,6 @@ export class Brain implements Control {
       this.connected = false;
       clearInterval(heartbeat);
       offline();
-      callStop.abort();
-      await calls;
       await this.lanes.shutdown();
       await this.work.drain();
       await Promise.all(heartbeats);
@@ -919,83 +905,6 @@ export class Brain implements Control {
     return (
       this.wiring.onSchedule !== undefined &&
       (await this.wiring.onSchedule(wake, this)) !== false
-    );
-  }
-  /** Call adapters dispatch lifecycle events here; transports are supplied separately. */
-  async onCall(call: BrainCall): Promise<void> {
-    if (this.draining && call.phase !== 'ended')
-      throw new Error('brain is draining for reload');
-    if (this.wiring.onCall) await this.wiring.onCall(call, this);
-    else if (call.phase === 'incoming') await this.joinCall(call);
-  }
-
-  /** Join with the shared persona, memory and work tier. Hooks may change call policy. */
-  async joinCall(call: BrainCall, policy: CallPolicy = {}): Promise<void> {
-    const transport = this.deps.calls;
-    if (!transport) throw new Error('no call transport is installed');
-    await transport.join(
-      call,
-      {
-        context: async () => {
-          const persona = await this.workspace.persona();
-          const name = /^# (.+)$/m.exec(persona.operating)?.[1];
-          if (!name)
-            throw new Error('OPERATING.md must start with the agent name');
-          return {
-            name,
-            operating: persona.operating,
-            model: persona.events.model,
-            voice: parseVoiceConfig(
-              JSON.parse(await this.writer.readRemote('config/voice.json'))
-            ).model,
-            briefing: JSON.stringify({
-              self: await this.memory.self(),
-              notes: await this.memory.recall(''),
-            }),
-            budgetUsd: Math.min(
-              persona.budget.perRunUsd.respond,
-              persona.budget.perDayUsd - (await this.ledger.spentToday())
-            ),
-          };
-        },
-        handOff: async (channel, task) =>
-          (await this.handoff({ channel, root: null }, 'Work from call', task))
-            .taskId,
-        finished: async (id, channel, summary) => {
-          await this.memory.remember(`call-${id}`, summary);
-          if (channel)
-            await this.post(null, channel, `Call summary: ${summary}`);
-          await this.writer.commitTurn(`call-${id}`, 'remember call summary');
-        },
-        hungUp: async (id) => {
-          let ids: string[] = [];
-          try {
-            ids = JSON.parse(
-              await readFile(
-                this.workspace.path('cache/call-hungup.json'),
-                'utf8'
-              )
-            );
-          } catch (error) {
-            if (
-              !(
-                error instanceof Error &&
-                'code' in error &&
-                error.code === 'ENOENT'
-              )
-            )
-              throw error;
-          }
-          await this.writer.write(
-            'cache/call-hungup.json',
-            JSON.stringify([...new Set([...ids, id])].slice(-50))
-          );
-        },
-        spent: async (usd) => {
-          await this.ledger.record(usd);
-        },
-      },
-      policy
     );
   }
   // Control: what turns and macrod call.

@@ -158,39 +158,3 @@ test('git receives only repo credentials, never the Macro API key', async () => 
     await nodeFs.rm(root, { recursive: true });
   }
 });
-
-test('server voice changes are read without disturbing an active local edit', async () => {
-  const { root, remote, clone } = await clonedWorkspace();
-  const server = `${root}/server`;
-  await gitCli(root)(['clone', '-q', remote, server]);
-  const serverGit = gitCli(server);
-  await nodeFs.mkdir(`${server}/config`);
-  await nodeFs.writeFile(
-    `${server}/config/voice.json`,
-    '{"model":"aura-2-thalia-en"}\n'
-  );
-  await serverGit(['add', 'config/voice.json']);
-  await serverGit([
-    '-c',
-    'user.name=Server',
-    '-c',
-    'user.email=server@example.com',
-    '-c',
-    'commit.gpgsign=false',
-    'commit',
-    '-qm',
-    'set voice',
-  ]);
-  await serverGit(['push', '-q', 'origin', 'main']);
-  await nodeFs.writeFile(`${clone}/OPERATING.md`, '# Local draft\n');
-  const writer = new GitWriter(new Workspace(clone), gitCli(clone));
-  assert.equal(
-    JSON.parse(await writer.readRemote('config/voice.json')).model,
-    'aura-2-thalia-en'
-  );
-  assert.equal(
-    await nodeFs.readFile(`${clone}/OPERATING.md`, 'utf8'),
-    '# Local draft\n'
-  );
-  await nodeFs.rm(root, { recursive: true });
-});
