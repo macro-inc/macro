@@ -275,6 +275,7 @@ export default {
   folderDuplicateLimitHint:
     'Folders with more than 100 files, chats, and subfolders can’t be duplicated.',
   toastGithubLinkCopied: 'GitHub link copied to clipboard',
+  toastGithubLinkCopyFailed: 'Could not copy GitHub link',
   toastBranchNameCopied: 'Branch name copied to clipboard',
   download: 'Download',
   copyGithubLink: 'Copy GitHub Link',
