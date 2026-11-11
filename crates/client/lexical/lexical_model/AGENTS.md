@@ -24,7 +24,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/plugin/command_listener.rs` adds ordinary synchronous host listeners to the
   same command lists without enabling foreign nodes; adapters own scoped host
-  transport, event guards and reentry permissions.
+  transport, event guards and reentry permissions. Use the narrow EditorCore
+  registration/presence forwarders to restore logical host listeners after an
+  actual core replacement; no mutable editor escape or version inference is needed.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
 - `src/diff/` owns the versioned flat ABI; keep all 12 opcodes in sync with the independent TS decoder test. Native decorator signature sidecars are resolved by the consuming view, never serialized as state or observed by Commit.diff.
 - `src/core/` owns input policy, raw remote edits and host effects.

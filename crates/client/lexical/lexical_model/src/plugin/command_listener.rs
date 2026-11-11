@@ -75,6 +75,15 @@ impl Editor {
         self.listener_table = listener_table(&self.listeners);
         id
     }
+    /// Whether this exact registration still belongs to the current editor.
+    pub fn has_command_listener(&self, id: &CommandListenerId) -> bool {
+        self.listeners.values().flatten().any(|listener| {
+            listener
+                .command_callback
+                .as_ref()
+                .is_some_and(|(entry, _)| entry == id)
+        })
+    }
     /// Remove an ordinary registration; repeated or unrelated cleanup is harmless.
     pub fn unregister_command_listener(&mut self, id: &CommandListenerId) {
         for list in self.listeners.values_mut() {
@@ -98,6 +107,10 @@ impl Transaction<'_> {
     ) -> CommandListenerId {
         self.editor
             .register_command_listener(registration, callback)
+    }
+    /// Observe actual registration presence without reentering the host.
+    pub fn has_command_listener(&self, id: &CommandListenerId) -> bool {
+        self.editor.has_command_listener(id)
     }
     /// Remove a registration while preserving the current priority snapshot.
     pub fn unregister_command_listener(&mut self, id: &CommandListenerId) {
