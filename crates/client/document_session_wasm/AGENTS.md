@@ -284,3 +284,5 @@ Sticky encoding/identity faults retain original causes then throw on the getter,
 survive Reset, and require disposal plus a new real session. Canonical Sync,
 AddPeerIds, WAL and Stop remain live under that fault; do not recover by replaying
 a JS updater or initializing the broken session again.
+
+Use query kind 9 for initial/on-demand group-b.checklist-plan reads; retain the pre-decode current-generation fence and do not add per-list steady-edit queries.

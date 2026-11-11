@@ -55,3 +55,5 @@ Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich
 Include the fixture file ID and escape control characters in libtest trial names so nextest lists every case once on a single line. Keep original fixture identity and oracle data.
 
 Forward application queries through EditorSurface.application_query under the session mutex, rejecting stale model generations before payload decoding; never reconstruct committed controller state from serialized nodes.
+
+Read group-b.checklist-plan through the existing generation-checked application_query under the session mutex; preserve tagged coverage/calendar failures and keep provider facts explicit.
