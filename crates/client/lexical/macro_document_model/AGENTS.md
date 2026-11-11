@@ -10,6 +10,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Insert typed user mentions separately after search removal and host I/O, using current selection/admission, Source constructor fallback, insert_nodes_at_selection and select_next(0, 0); do not reuse strict menu-select range admission.
+
 - Read inline-search controller caches through surface::query_editor; preserve every ordered callback (including equal payloads), Source peer import versus dirty-transform timing, and UI-only host resets.
 
 - Compose application plugins, command decoders and bulk-query handlers in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations. Register Macro shortcuts through isolated post-insertion updates and the source Enter listener, preserving first-paragraph-child matching even for interior/expanded selections.

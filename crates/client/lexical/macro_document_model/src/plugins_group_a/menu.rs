@@ -4,6 +4,7 @@ use crate::{
     plugins_group_b::{BlockKind, NODE_TRANSFORM},
 };
 use lexical_model::*;
+mod mention_user;
 pub(crate) mod search;
 mod source;
 
@@ -155,7 +156,7 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
         ))));
     }
     if name != SELECT.name() {
-        return Ok(None);
+        return mention_user::decode(name, json, generation);
     }
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &SELECT,
@@ -166,9 +167,10 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
     ))))
 }
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    search::register(builder)
+    let builder = search::register(builder)
         .extension_state(source::ExtractionState::default())
-        .plugin(Menu)
+        .plugin(Menu);
+    mention_user::register(builder)
 }
 struct Menu;
 impl Plugin for Menu {
