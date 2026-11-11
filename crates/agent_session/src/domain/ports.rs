@@ -1045,6 +1045,14 @@ pub trait AgentSessionRealtime {
         async { Ok(()) }
     }
 
+    /// Publish a running session's newest activity summary to its viewers.
+    fn publish_activity_summarized(
+        &self,
+        _event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a session's changed queue - the whole queue, every time - to
     /// its viewers.
     fn publish_queue_changed(
