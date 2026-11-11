@@ -177,7 +177,11 @@ export class Contact extends FavoritableEntity<ContactDetail> {
     );
   }
 
-  /** The contact's phone numbers (E.164), oldest first, with where each came from. */
+  /**
+   * The contact's phone numbers (E.164), oldest first, with where each came from.
+   *
+   * @readonly
+   */
   async phones(): Promise<ContactPhone[]> {
     const { phones } = unwrap(
       await this.client.storage.getCrmContactPhones({
@@ -190,6 +194,9 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /**
    * Replace the contact's phone numbers. Each must include its country code,
    * starting with `+`; formatting is ignored. Returns the saved numbers.
+   *
+   * @write
+   * @idempotent
    */
   async setPhones(phones: string[]): Promise<ContactPhone[]> {
     const { phones: saved } = unwrap(
