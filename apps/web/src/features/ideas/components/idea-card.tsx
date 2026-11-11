@@ -164,7 +164,7 @@ function IdeaBody(props: IdeaCardProps) {
           <>
             <Inset class="flex items-end gap-2 text-ink-muted">
               <p
-                class="line-clamp-3 min-w-0 flex-1"
+                class="line-clamp-2 min-w-0 flex-1"
                 role="note"
                 aria-label={t('ideas.promptLabel')}
               >
@@ -342,7 +342,7 @@ export function IdeaCard(props: IdeaCardProps) {
       </header>
       <div class="flex min-w-0 flex-col gap-2.5 pl-9.5">
         <Show when={showsSummary()}>
-          <p class="text-[15px] leading-6 text-ink-muted">
+          <p class="line-clamp-2 text-[15px] leading-6 text-ink-muted">
             {props.idea.summary}
           </p>
         </Show>
@@ -352,7 +352,11 @@ export function IdeaCard(props: IdeaCardProps) {
         <Show when={result()} keyed>
           {(target) => (
             <Inset class="py-2.5">
-              <props.parts.Result target={target} line={props.idea.summary} />
+              <props.parts.Result
+                target={target}
+                title={props.idea.title}
+                line={props.idea.summary}
+              />
             </Inset>
           )}
         </Show>

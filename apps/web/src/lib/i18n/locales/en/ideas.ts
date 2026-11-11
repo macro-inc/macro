@@ -35,7 +35,6 @@ export default {
   newIdea: 'New',
   doneToday: 'Done today',
   dismissedSection: 'Dismissed',
-  untitledItem: 'Untitled',
   runFailed:
     'The run didn’t finish. Nothing more will happen unless you run it again.',
   actionFailed: 'That didn’t work. Try again.',

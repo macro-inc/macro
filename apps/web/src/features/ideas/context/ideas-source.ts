@@ -50,6 +50,9 @@ export type IdeaItemParts = {
   Source: Component<{ target: IdeaTarget; onOpen(): void }>;
   /** The text of a drafted reply. */
   Draft: Component<{ draft: IdeaTarget }>;
-  /** What a finished idea made: its icon and name, over a line about it. */
-  Result: Component<{ target: IdeaTarget; line: string }>;
+  /**
+   * What a finished idea made: its icon and name, over a line about it. A run
+   * that made nothing but its session goes by `title`.
+   */
+  Result: Component<{ target: IdeaTarget; title: string; line: string }>;
 };
