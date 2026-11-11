@@ -17,12 +17,36 @@ export interface NativeCommentBookmark extends NativeSelectionBookmark {
   readonly cursors: CommentSelection;
 }
 
+/** One comment-mark node whose ids changed in a commit; absent ids mean no node. */
+export interface NativeCommentMarkChange {
+  readonly key: NodeKey;
+  readonly before: readonly string[] | undefined;
+  readonly after: readonly string[] | undefined;
+  /** The mounted element for `after`, when it exists. */
+  readonly element: HTMLElement | null;
+  readonly isDraft: boolean;
+}
+export interface NativeCommentCommit {
+  readonly changes: readonly NativeCommentMarkChange[];
+  readonly selectionChanged: boolean;
+  /** Mark ids still present anywhere after this commit. */
+  readonly remainingIds: ReadonlySet<string>;
+}
+
 /** Comment capabilities of the native body, independent of any Lexical editor. */
 export interface NativeComments {
+  /** The editable body root whose clicks reselect caret marks. */
+  readonly root: HTMLElement;
+  /** Mark ids on the comment-mark node with this key, if it exists. */
+  markIds(key: NodeKey): readonly string[] | undefined;
+  /** Every current comment-mark node as a change from nothing. */
+  snapshot(): readonly NativeCommentMarkChange[];
+  /** Called after each commit, once the indexes reflect it. */
+  subscribe(listener: (commit: NativeCommentCommit) => void): () => void;
   /** Every rendered comment mark, keyed by mark id in document order. */
   readonly anchors: Accessor<readonly NativeCommentAnchor[]>;
-  /** Mark ids at the caret, following Source `$getMarkIdsAtCaret`. */
-  readonly caretMarkIds: Accessor<readonly string[]>;
+  /** Mark ids at the caret (Source `$getMarkIdsAtCaret`); null without a selection. */
+  readonly caretMarkIds: Accessor<readonly string[] | null>;
   captureSelection(): NativeCommentBookmark | null;
   /** True only when the session accepted the mark. */
   publish(markId: string, bookmark: NativeCommentBookmark): Promise<boolean>;
@@ -54,10 +78,27 @@ export function createNativeComments(view: EditorView): NativeComments {
   const [anchors, setAnchors] = createSignal<readonly NativeCommentAnchor[]>(
     []
   );
-  const [caretMarkIds, setCaretMarkIds] = createSignal<readonly string[]>([]);
+  const [caretMarkIds, setCaretMarkIds] = createSignal<
+    readonly string[] | null
+  >(null);
   // Comment-mark keys and their ids; maintained from sparse commit mutations.
   const marks = new Map<NodeKey, readonly string[]>();
   let selected: readonly string[] = [];
+  const listeners = new Set<(commit: NativeCommentCommit) => void>();
+  const change = (
+    key: NodeKey,
+    before: readonly string[] | undefined
+  ): NativeCommentMarkChange => {
+    const current = node(key);
+    return {
+      key,
+      before,
+      after: marks.get(key),
+      element: view.getElementByKey(key),
+      isDraft: current?.props().isDraft === true,
+    };
+  };
+  const remainingIds = () => new Set([...marks.values()].flat());
   let disposed = false;
 
   const node = (key: NodeKey | null | undefined) =>
@@ -82,8 +123,10 @@ export function createNativeComments(view: EditorView): NativeComments {
       if (isMark(current)) return markIds(current);
     return null;
   };
-  const readCaretMarkIds = (): string[] => {
+  const readCaretMarkIds = (): string[] | null => {
     const { selection } = view.selection();
+    // Source returns early for a null selection and clears for other kinds.
+    if (selection.kind === 'none' || selection.kind === 'keep') return null;
     if (selection.kind !== 'range') return [];
     const { key, offset } = selection.anchor;
     const anchor = node(key);
@@ -144,22 +187,33 @@ export function createNativeComments(view: EditorView): NativeComments {
   setCaretMarkIds(readCaretMarkIds());
   const release = view.onCommit((commit) => {
     if (disposed) return;
-    let changed = commit.fullReconcile;
-    if (commit.fullReconcile) rebuild();
-    else
+    const changes: NativeCommentMarkChange[] = [];
+    if (commit.fullReconcile) {
+      const previous = new Map(marks);
+      rebuild();
+      for (const key of new Set([...previous.keys(), ...marks.keys()]))
+        changes.push(change(key, previous.get(key)));
+    } else
       for (const key of new Set([
         ...commit.mutations.keys(),
         ...commit.properties,
       ]))
         if (marks.has(key) || node(key)?.type === 'comment-mark') {
+          const before = marks.get(key);
           index(key);
-          changed = true;
+          changes.push(change(key, before));
         }
-    if (changed) {
+    if (changes.length) {
       publishAnchors();
       applySelected(selected);
     }
     setCaretMarkIds(readCaretMarkIds());
+    const event: NativeCommentCommit = {
+      changes,
+      selectionChanged: commit.selectionChanged,
+      remainingIds: remainingIds(),
+    };
+    for (const listener of [...listeners]) listener(event);
   });
 
   const reply = async (
@@ -181,6 +235,13 @@ export function createNativeComments(view: EditorView): NativeComments {
   };
 
   return {
+    root: view.root,
+    markIds: (key) => marks.get(key),
+    snapshot: () => [...marks.keys()].map((key) => change(key, undefined)),
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     anchors,
     caretMarkIds,
     captureSelection() {
@@ -213,6 +274,7 @@ export function createNativeComments(view: EditorView): NativeComments {
     dispose() {
       if (disposed) return;
       disposed = true;
+      listeners.clear();
       release();
     },
   };

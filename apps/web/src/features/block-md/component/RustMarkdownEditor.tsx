@@ -1,5 +1,7 @@
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
+import { NativeMessageCommentsProvider } from '@block-md/comments/NativeMessageCommentsProvider';
+import { URL_PARAMS } from '@block-md/constants';
 import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
 import { DecoratorHostContext } from '@core/component/LexicalMarkdown/context/DecoratorHostContext';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
@@ -44,7 +46,9 @@ import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/e
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
-import { useUserId } from '@core/context/user';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -73,6 +77,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -97,6 +102,8 @@ export default function RustMarkdownEditor(props: {
   const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
   const userId = useUserId();
+  const authenticated = useIsAuthenticated();
+  const { commentId } = useUrlParams(URL_PARAMS);
   const owner = getOwner() ?? undefined;
   const { documentId, kind, permissions, state } = useMarkdownDocument();
   const documentKind = kind();
@@ -490,6 +497,23 @@ export default function RustMarkdownEditor(props: {
       />
       <Show when={runtime()?.overlays?.Overlays}>
         {(Overlays) => <Dynamic component={Overlays()} />}
+      </Show>
+      <Show
+        when={
+          ENABLE_MARKDOWN_COMMENTS &&
+          authenticated() === true &&
+          runtime()?.overlays?.comments
+        }
+      >
+        {(comments) => (
+          <Suspense>
+            <NativeMessageCommentsProvider
+              activeComment={() => commentId() ?? undefined}
+              comments={comments()}
+              ready={ready}
+            />
+          </Suspense>
+        )}
       </Show>
       <Show when={equationMenuActive() && runtime()}>
         <DecoratorHostContext.Provider value={equationContext.host}>
