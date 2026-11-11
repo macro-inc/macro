@@ -24,7 +24,7 @@ use uuid::Uuid;
     strum::AsRefStr,
     strum::EnumString,
 )]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",
@@ -35,6 +35,15 @@ use uuid::Uuid;
 pub enum AgentProvider {
     /// An Anthropic Claude account, for Claude Code.
     Claude,
+}
+
+impl AgentProvider {
+    /// The agent's name as people see it, e.g. in a notification title.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude",
+        }
+    }
 }
 
 /// What a provider reports about an account at sign-in.

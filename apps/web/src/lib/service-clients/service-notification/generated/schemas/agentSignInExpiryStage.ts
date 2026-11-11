@@ -6,13 +6,13 @@
  */
 
 /**
- * How close a computer's Claude sign-in is to no longer working.
+ * How close a computer's agent sign-in is to no longer working.
  */
-export type ClaudeSignInExpiryStage =
-  (typeof ClaudeSignInExpiryStage)[keyof typeof ClaudeSignInExpiryStage];
+export type AgentSignInExpiryStage =
+  (typeof AgentSignInExpiryStage)[keyof typeof AgentSignInExpiryStage];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const ClaudeSignInExpiryStage = {
+export const AgentSignInExpiryStage = {
   expires_soon: 'expires_soon',
   expires_today: 'expires_today',
   expired: 'expired',
