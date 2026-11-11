@@ -44,7 +44,7 @@ const HINT_TITLES: Record<HintClass, string> = {
   read: 'read',
   write: 'create and change',
   send: 'send',
-  delete: 'delete and overwrite',
+  delete: 'delete, overwrite and other irreversible changes',
 };
 
 /**

@@ -33,9 +33,9 @@ export type Property = {
 
 /**
  * Which tool an operation lands in. `read` only reads, `write` changes data
- * in a way the user can undo, `send` sends something outside Macro (email,
- * external chat), and `delete` removes or overwrites something that cannot
- * be taken back.
+ * in a way the user can undo, `send` only sends something new outside Macro
+ * (such as an email), and `delete` removes, overwrites or otherwise changes
+ * something in a way that cannot be taken back.
  */
 export type HintClass = 'read' | 'write' | 'send' | 'delete';
 

@@ -197,7 +197,7 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
    * Preserve the idempotency key; uncertain outcomes are never automatically resent.
    * The server enforces one request per second per user.
    *
-   * @send
+   * @destructive
    * @openworld
    */
   async send(
