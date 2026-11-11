@@ -205,3 +205,34 @@ test('checklist filter pointer target is available on hover and unavailable afte
     })
   ).toBe(!hasTouch);
 });
+
+test('descendant edits restore checklist tabindex while own toggles clear it', async ({
+  page,
+  hasTouch,
+}) => {
+  await page
+    .getByRole('button', { name: 'Load checklists', exact: true })
+    .click();
+  const checkbox = page.getByRole('checkbox').filter({ hasText: 'Open row!!' });
+  await expect(
+    page.locator('#body ul').filter({ hasText: 'Open row!!' })
+  ).toHaveClass(/md-check/);
+  await checkbox.getByText('Open row!!', { exact: true }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('!');
+  await expect(checkbox).toContainText('Open row!!!');
+  await expect(checkbox).toHaveAttribute('tabindex', '-1');
+  await toggleChecklistMarker(page, checkbox, hasTouch);
+  await expect(checkbox).toBeChecked();
+  expect(await checkbox.getAttribute('tabindex')).toBeNull();
+});
+
+test('shortcut-created checked lists receive their class and Source zero progress bar', async ({
+  page,
+}) => {
+  await page.getByRole('textbox', { name: 'Body', exact: true }).click();
+  await page.keyboard.type('[x] ');
+  await expect(page.getByRole('checkbox')).toBeChecked();
+  await expect(page.locator('#body ul')).toHaveClass(/md-check/);
+  await expect(page.locator('.mdtl-bar')).toHaveText('0/0');
+});

@@ -545,6 +545,7 @@ export class EditorView implements ViewSink {
             this.replace(mutation.before, node, dom);
         }
       }
+      this.updateListItemAncestors(diff);
       let created: Set<NodeKey> | undefined;
       for (const [key, mutation] of diff.mutations)
         if (mutation.kind === 'created') {
@@ -788,6 +789,37 @@ export class EditorView implements ViewSink {
     const decorator = this.decorators.get(node.key);
     if (decorator) next.appendChild(decorator.host);
     previous.replaceWith(next);
+  }
+  /** Source reconciles dirty ancestors even when only their descendants mutated. */
+  private updateListItemAncestors(diff: AppliedDiff): void {
+    const roots = new Set(diff.children);
+    for (const mutation of diff.mutations.values()) {
+      if (mutation.before?.parent != null) roots.add(mutation.before.parent);
+      if (mutation.after?.parent != null) roots.add(mutation.after.parent);
+    }
+    const visited = new Set<NodeKey>();
+    for (const key of roots) {
+      for (
+        let node = this.node(key);
+        node && !visited.has(node.key);
+        node = node.parent === null ? null : this.node(node.parent)
+      ) {
+        visited.add(node.key);
+        if (
+          (node.type !== 'listitem' && node.type !== 'task-list-item') ||
+          diff.properties.has(node.key) ||
+          diff.mutations.get(node.key)?.kind === 'created'
+        )
+          continue;
+        const dom = this.dom.get(node.key);
+        if (!dom)
+          throw new Error('Missing DOM for dirty list item: ' + node.key);
+        if (
+          this.registry.get(node.type).updateDOM(node, node, dom, this.context)
+        )
+          this.replace(node, node, dom);
+      }
+    }
   }
   private reconcileChildren(
     key: NodeKey,

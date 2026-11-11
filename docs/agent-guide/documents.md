@@ -48,7 +48,13 @@ repeat; revoked Session write access must reject the toggle even if the local UI
 still appears editable. Closing/remounting overlays must retain exactly one
 listener. The isolated native browser check in
 `LexicalMarkdown/editing/browser-test` covers these gestures and raw save/reopen
-state. Click below the editor after leaving it: an empty terminal paragraph is
+state. Focus a checklist label and press Cmd/Ctrl+Enter; its checked styling
+must follow the model, and undo/redo must restore the exact pre/post-toggle
+state. Edit only a checklist label, then toggle its marker; compare focus behavior
+and raw list classes and attributes against Source. The fixture clears seed
+history before testing user edits. Component
+checks do not prove persistence; document checks must wait for the actual server
+acknowledgement. Click below the editor after leaving it: an empty terminal paragraph is
 reused, otherwise one paragraph is appended and its caret takes typing. A click
 while the editor retains a focused range leaves that range in place. Queued
 focus waits for native completion and rechecks disposal/editability before
