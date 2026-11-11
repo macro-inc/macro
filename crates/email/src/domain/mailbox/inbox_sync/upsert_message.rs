@@ -18,7 +18,7 @@ use models_email::service::{
 use std::collections::HashSet;
 use uuid::Uuid;
 mod attachments;
-mod contacts;
+pub(super) mod contacts;
 mod notifications;
 mod persistence;
 #[cfg(test)]

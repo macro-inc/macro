@@ -1,13 +1,12 @@
-use std::collections::HashSet;
-
-use crate::pubsub::backfill::email_api_error::map_email_api_error;
-use crate::pubsub::context::PubSubContext;
-use contacts::domain::ports::ContactsIngress;
+use super::email_api_error::map_email_api_error;
+use super::*;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::backfill::{JobScopedPayload, SeedSentContactPayload};
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-
+use models_email::service::{
+    backfill::*,
+    link,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
+use std::collections::HashSet;
 /// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
 /// message and enqueues a sender<->recipient contact connection for every
 /// non-generic To/Cc/Bcc address on it. Fanned out one-per-message by the
@@ -18,16 +17,24 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// than the whole recipient list, so the contacts service connects the sender
 /// to each recipient only — not the recipients to each other.
 #[tracing::instrument(skip(ctx))]
-pub async fn seed_sent_contact(
-    ctx: &PubSubContext,
+pub(super) async fn seed_sent_contact<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     scope: &JobScopedPayload<SeedSentContactPayload>,
     link: &link::Link,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let p = &scope.payload;
 
     let Some(fetched) = ctx
-        .email_api
-        .get_message(link.id, &p.message_provider_id)
+        .gmail
+        .message(link.id, &p.message_provider_id)
         .await
         .map_err(|error| {
             map_email_api_error(error, "Failed to get sent message for contact seed")
@@ -68,16 +75,13 @@ pub async fn seed_sent_contact(
 
         // Idempotent on the consumer side, so a retried seed message that
         // re-enqueues already-sent connections is harmless.
-        ctx.contacts_ingress
-            .enqueue_contacts(users)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: anyhow::anyhow!("{e:?}")
-                        .context("Failed to enqueue contact connection for sent-message seed"),
-                })
-            })?;
+        ctx.effects.connect(users).await.map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: anyhow::anyhow!("{e:?}")
+                    .context("Failed to enqueue contact connection for sent-message seed"),
+            })
+        })?;
     }
 
     Ok(())

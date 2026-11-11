@@ -6,6 +6,9 @@ use models_email::service::{
 };
 use uuid::Uuid;
 
+/// Queued backfill execution and delivery policy.
+pub mod worker;
+
 mod connection;
 pub use connection::*;
 

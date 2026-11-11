@@ -1,9 +1,10 @@
-use crate::pubsub::context::PubSubContext;
-use crm::domain::service::CrmService;
-use models_email::email::service::backfill::DepopulateCrmContactPayload;
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-
+use super::*;
+use crate::domain::mailbox::connection::ConnectionSourceError;
+use models_email::service::{
+    backfill::*,
+    link,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
 /// Removes a contact from the CRM tables for one `(link, contact_email)`
 /// when a sent message is deleted.
 ///
@@ -15,7 +16,7 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// [`crm::domain::companies_repo::CompaniesRepository::depopulate_contact`].
 ///
 /// Pre-check: before invoking the CRM cascade we verify via
-/// [`email_db_client::contacts::get::link_has_any_message_with`] that
+/// the stored-message lookup that
 /// this link no longer has any message (sent or received) involving
 /// `contact_email`. Sources track interactions in both directions, so
 /// the row must stay until both directions are gone. If a sibling
@@ -28,15 +29,23 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// cascade could see a transient deleted state; the populate path on
 /// that new message re-creates the rows on its next run.
 #[tracing::instrument(skip(ctx, link, p), err, fields(link_id = %link.id))]
-pub async fn depopulate_crm_contact(
-    ctx: &PubSubContext,
+pub(super) async fn depopulate_crm_contact<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     link: &link::Link,
     p: &DepopulateCrmContactPayload,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let macro_user_id = link.macro_id.to_string();
 
     let team_id = ctx
-        .crm_service
+        .crm
         .get_team_id_for_user(&macro_user_id)
         .await
         .map_err(|e| {
@@ -51,18 +60,18 @@ pub async fn depopulate_crm_contact(
         return Ok(());
     };
 
-    let still_has_any = email_db_client::contacts::get::link_has_any_message_with(
-        &ctx.db,
-        link.id,
-        &p.contact_email,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to check remaining messages with contact"),
-        })
-    })?;
+    let still_has_any = ctx
+        .repository
+        .has_contact_messages(link.id, &p.contact_email)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to check remaining messages with contact"),
+            })
+        })?;
 
     if still_has_any {
         tracing::debug!(
@@ -72,7 +81,7 @@ pub async fn depopulate_crm_contact(
     }
 
     let outcome = ctx
-        .crm_service
+        .crm
         .depopulate_contact(&team_id, &link.id, &p.contact_email)
         .await
         .map_err(|e| {

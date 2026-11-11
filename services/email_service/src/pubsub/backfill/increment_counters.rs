@@ -35,7 +35,7 @@ pub(super) async fn handle_job_completed(
 }
 
 /// Map one completion-outbox delivery into the backfill application service.
-pub(super) async fn finalize_backfill(
+pub(crate) async fn finalize_backfill(
     ctx: &PubSubContext,
     link_id: Uuid,
     job_id: Uuid,

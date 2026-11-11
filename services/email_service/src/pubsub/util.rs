@@ -10,9 +10,6 @@ use models_email::api::refresh::RefreshEmailEvent;
 
 #[cfg(test)]
 mod test;
-use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-};
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -228,42 +225,12 @@ pub async fn enqueue_populate_crm_contacts(
     contacts: impl IntoIterator<Item = CrmContactRecipient>,
     is_sent: bool,
 ) -> Result<(), ProcessingError> {
-    let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name, first_at, last_at) in contacts {
-        let contact_email = raw_email.trim().to_ascii_lowercase();
-        let Some((local, domain)) = contact_email.split_once('@') else {
-            continue;
-        };
-        if local.is_empty() || domain.is_empty() || domain.contains('@') {
-            continue;
-        }
-        if contact_email == self_email || !seen.insert(contact_email.clone()) {
-            continue;
-        }
-
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: PopulateCrmContactPayload {
-                    contact_email,
-                    contact_name,
-                    first_at,
-                    last_at,
-                    is_sent,
-                },
-            }),
-        };
-
-        ctx.sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue PopulateCrmContact message"),
-                })
-            })?;
-    }
-
-    Ok(())
+    email::domain::mailbox::inbox_sync::enqueue_crm_contacts(
+        link_id,
+        self_email,
+        contacts,
+        is_sent,
+        |message| ctx.sqs_client.enqueue_email_backfill_message(message),
+    )
+    .await
 }

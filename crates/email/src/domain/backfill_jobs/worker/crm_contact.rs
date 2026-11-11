@@ -1,11 +1,10 @@
-use crate::pubsub::backfill::write_slot;
-use crate::pubsub::context::PubSubContext;
-use crm::domain::model::CrmError;
-use crm::domain::service::CrmService;
-use models_email::email::service::backfill::PopulateCrmContactPayload;
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-
+use super::*;
+use ::crm::domain::model::CrmError;
+use models_email::service::{
+    backfill::*,
+    link,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
 /// Records a CRM interaction for one `(link, contact_email)` —
 /// possibly inserting new `crm_companies` / `crm_contacts` /
 /// `crm_contact_sources` rows.
@@ -29,15 +28,23 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// A refused slot, or a population that timed out waiting for a CRM lock,
 /// is deferred like a busy backfill write instead of spending a delivery.
 #[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
-pub async fn populate_crm_contact(
-    ctx: &PubSubContext,
+pub(super) async fn populate_crm_contact<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     link: &link::Link,
     p: &PopulateCrmContactPayload,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let macro_user_id = link.macro_id.to_string();
 
     let team_id = ctx
-        .crm_service
+        .crm
         .get_team_id_for_user(&macro_user_id)
         .await
         .map_err(|e| {
@@ -51,28 +58,19 @@ pub async fn populate_crm_contact(
         return Ok(());
     };
 
-    let slot = write_slot::acquire_crm_population(ctx, team_id).await?;
-    slot.hold(ctx.crm_service.populate_contact(
-        &team_id,
-        &link.id,
-        link.email_address.0.as_ref(),
-        &p.contact_email,
-        p.contact_name.as_deref(),
-        p.first_at,
-        p.last_at,
-        p.is_sent,
-    ))
-    .await
-    .map_err(|e| {
-        let reason = match e {
-            CrmError::Contended => FailureReason::BackfillWritesBusy,
-            _ => FailureReason::DatabaseQueryFailed,
-        };
-        ProcessingError::Retryable(DetailedError {
-            reason,
-            source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
-        })
-    })?;
+    let slot = super::admit_write_slot(ctx.effects.acquire_crm(team_id).await)?;
+    slot.hold(ctx.crm.populate_contact(&team_id, link, p))
+        .await
+        .map_err(|e| {
+            let reason = match e {
+                CrmError::Contended => FailureReason::BackfillWritesBusy,
+                _ => FailureReason::DatabaseQueryFailed,
+            };
+            ProcessingError::Retryable(DetailedError {
+                reason,
+                source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
+            })
+        })?;
 
     Ok(())
 }

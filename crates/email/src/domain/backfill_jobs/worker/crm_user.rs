@@ -1,22 +1,30 @@
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::enqueue_populate_crm_contacts;
-use crm::domain::email_privacy::EmailPrivacyService;
-use crm::domain::service::CrmService;
-use models_email::email::service::backfill::PopulateCrmForUserPayload;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-
+use super::*;
+use crate::domain::mailbox::connection::ConnectionSourceError;
+use crate::domain::mailbox::inbox_sync::enqueue_crm_contacts;
+use models_email::service::{
+    backfill::*,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
 /// Fans out historical contacts only for the user's explicitly consented
 /// primary mailbox. Consent and exclusions are rechecked by each contact job.
 ///
 /// Stale requests after withdrawal, account switching, or team removal no-op.
 #[tracing::instrument(skip_all, err, fields(team_id, link_id))]
-pub async fn populate_crm_for_user(
-    ctx: &PubSubContext,
+pub(super) async fn populate_crm_for_user<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     payload: &PopulateCrmForUserPayload,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let macro_id_str = payload.macro_id.0.as_ref();
     let team_id = ctx
-        .crm_service
+        .crm
         .get_team_id_for_user(macro_id_str)
         .await
         .map_err(|e| {
@@ -32,7 +40,7 @@ pub async fn populate_crm_for_user(
     };
 
     let mailbox = ctx
-        .crm_service
+        .crm
         .contribution_mailbox(team_id, macro_id_str)
         .await
         .map_err(|e| {
@@ -60,32 +68,57 @@ pub async fn populate_crm_for_user(
     // only updates already-tracked rows). Sent first so received-pass
     // contacts at brand-new companies can also land. Both passes are
     // idempotent.
-    let sent_recipients =
-        email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
-            &ctx.db,
-            mailbox.link_id,
-        )
+    let sent_recipients = ctx
+        .repository
+        .sent_contacts(mailbox.link_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch sent-message recipients"),
+                source: e
+                    .into_original()
+                    .context("Failed to fetch sent-message recipients"),
             })
         })?;
 
-    enqueue_populate_crm_contacts(ctx, mailbox.link_id, &self_email, sent_recipients, true).await?;
-
-    let received_senders = email_db_client::contacts::get::fetch_received_sender_contacts_by_link(
-        &ctx.db,
+    enqueue_crm_contacts(
         mailbox.link_id,
+        &self_email,
+        sent_recipients,
+        true,
+        |message| async {
+            ctx.queue
+                .enqueue(message)
+                .await
+                .map_err(ConnectionSourceError::into_original)
+        },
+    )
+    .await?;
+
+    let received_senders = ctx
+        .repository
+        .received_contacts(mailbox.link_id)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to fetch received-message senders"),
+            })
+        })?;
+
+    enqueue_crm_contacts(
+        mailbox.link_id,
+        &self_email,
+        received_senders,
+        false,
+        |message| async {
+            ctx.queue
+                .enqueue(message)
+                .await
+                .map_err(ConnectionSourceError::into_original)
+        },
     )
     .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch received-message senders"),
-        })
-    })?;
-
-    enqueue_populate_crm_contacts(ctx, mailbox.link_id, &self_email, received_senders, false).await
 }

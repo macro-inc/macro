@@ -36,8 +36,11 @@ the gateway `/email` prefix.
   only decodes and acknowledges the domain disposition. Settlement transactions,
   Gmail calls, and retry publication are in `outbound/message_labels/gmail_ops.rs`.
   Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
-  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` keeps
-  the shared backfill context unchanged. History and upsert orchestration also
+  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` holds
+  only its service and receiver. Backfill also has a separate `BackfillContext`: its
+  domain worker owns admission, retry/deferral, metadata, attachment and CRM policy,
+  with adapters in `outbound/backfill_jobs/worker/`. Its temporary `LegacyBackfill`
+  port retains initialization, thread/message imports and completion accounting. History and upsert orchestration also
   live in the domain; these adapters retain the existing journal, invitation,
   upload, notification and persistence implementations. The pending-label
   compatibility module only re-exports the adapter used by backfill.
@@ -119,8 +122,8 @@ the gateway `/email` prefix.
   requeue or redeliver a rate-limited message, never drop it. Up to twelve
   refused backfill requests per mailbox wait up to 20 s for room so backfill's
   slots don't idle; the rest are sent back as new, delayed messages
-  (`pubsub/backfill/deferral.rs`), because waiting out the visibility timeout
-  would spend the queue's 20 deliveries.
+  (`email::domain::backfill_jobs::worker`), because waiting out the visibility
+  timeout would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
 - An attachment row can be deleted after it is claimed: a Gmail draft gets a

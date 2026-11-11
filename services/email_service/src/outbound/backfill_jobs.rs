@@ -1,5 +1,7 @@
 //! Existing job queries, atomic writes, and backfill initialization messages.
 
+pub(crate) mod worker;
+
 use email::domain::backfill_jobs::{BackfillJobQueue, BackfillJobRepository};
 use models_email::service::{
     backfill::{
