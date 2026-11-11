@@ -39,6 +39,9 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('./components/pending-requests-section', () => ({
+  PendingRequestsSection: () => null,
+}));
 vi.mock('./components/teammate-runtimes-section', () => ({
   TeammateRuntimesSection: () => null,
 }));
@@ -470,19 +473,22 @@ describe('Harness', () => {
     expect(names).toEqual(['Dev box', 'Old laptop']);
   });
 
-  it('hides the section when every runtime is offline', () => {
+  it('lists a machine that is offline, so its owner can still manage it', () => {
     harnessMocks.query.data = [
       {
         ...REGISTERED_HARNESS,
         connected: false,
-        last_connected_at: null,
+        last_connected_at: '2026-10-24T00:47:21Z',
       },
     ];
 
     render(() => <Harness />);
 
-    expect(screen.queryByRole('heading', { name: 'Your machines' })).toBeNull();
-    expect(screen.queryByText('Dev box')).toBeNull();
+    const row = document.querySelector('[data-runtime-row="Dev box"]');
+    expect(row).not.toBeNull();
+    expect(
+      within(row as HTMLElement).getByRole('button', { name: 'Remove' })
+    ).toBeTruthy();
   });
 
   it("leaves teammates' runtimes out of Your runtimes", () => {

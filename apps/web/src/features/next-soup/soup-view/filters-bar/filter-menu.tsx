@@ -12,6 +12,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import type { SearchableOptionSource } from './option-source';
 import {
   SearchableMultiSelectInline,
   type SearchableOption,
@@ -374,6 +375,7 @@ export function FilterSubmenu<TId extends string>(props: {
 
 /** Searchable submenu for filters with many options like assignees */
 export const SearchableFilterSubmenu = (props: {
+  source?: SearchableOptionSource;
   label: string;
   active?: boolean;
   options: Accessor<SearchableOption[]>;
@@ -443,6 +445,7 @@ export const SearchableFilterSubmenu = (props: {
       <Dropdown.SubContent {...submenu.contentProps} class="w-65 max-w-[90vw]">
         <Dropdown.Group class="p-0 gap-0">
           <SearchableMultiSelectInline
+            source={props.source}
             onRequestClose={() => setIsOpen(false)}
             placeholder={props.placeholder}
             activeIds={props.activeIds}
