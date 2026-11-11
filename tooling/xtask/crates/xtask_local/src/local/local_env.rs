@@ -799,10 +799,6 @@ impl BootStubEnv {
             "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID".into(),
             "price_local_computer_xl_yearly".into(),
         );
-        // Macro computers' billing policy, read by authentication_service and
-        // agent_harness_service alike; production uses the same values.
-        env.insert("COMPUTER_RETENTION_DAYS".into(), "14".into());
-        env.insert("COMPUTER_PAST_DUE_GRACE_DAYS".into(), "7".into());
         env.insert(
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),

@@ -160,11 +160,13 @@ pub struct Config {
     /// Optional physical fleet selection; absence attaches no computer fleet.
     pub computers_fleet: Option<ComputerFleetKind>,
     /// Days a Macro computer whose billing ended keeps its disk before it is
-    /// destroyed; the timers the fleet operator fires use it. Mandatory; 14
-    /// in production, the same value authentication_service reads.
+    /// destroyed; the timers the fleet operator fires use it. The same value
+    /// authentication_service reads.
+    #[macro_config_default(14)]
     pub computer_retention_days: u32,
     /// Days a Macro computer keeps running on a past-due subscription before
-    /// it is turned off. Mandatory; 7 in production.
+    /// it is turned off.
+    #[macro_config_default(7)]
     pub computer_past_due_grace_days: u32,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,

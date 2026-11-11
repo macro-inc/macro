@@ -66,8 +66,8 @@ require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
 See [the required variable list](../../docs/development/running-locally.md#macro-computers).
 Retention (14 days) and past-due grace (7 days) are the typed
-`lifecycle::BillingPolicy`, from the mandatory `COMPUTER_RETENTION_DAYS` and
-`COMPUTER_PAST_DUE_GRACE_DAYS` in both services; `PgComputerRepo::new(pool,
+`lifecycle::BillingPolicy`, from `COMPUTER_RETENTION_DAYS` and
+`COMPUTER_PAST_DUE_GRACE_DAYS` (typed config defaults, same in both services); `PgComputerRepo::new(pool,
 policy)` applies every transition with it (`ComputerRepo::policy`). Keep the
 other lifecycle timings (`MACROD_GRACE`, `RESERVATION_TTL`, leases, polling)
 as named policy constants. Every backoff goes through

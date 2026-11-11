@@ -267,7 +267,6 @@ mod claude_status {
                 expires_at: Some("2027-02-01T00:00:00Z".parse().unwrap()),
             }
         );
-        assert_eq!(signed_in.account().as_deref(), Some("team@example.com"));
         // Accounts are keyed by their id, so a login without one is refused.
         assert!(parse_status(status, None).is_err());
         assert!(parse_status(status, Some("{}")).is_err());

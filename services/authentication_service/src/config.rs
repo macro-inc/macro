@@ -220,10 +220,12 @@ pub struct Config {
     pub stripe_computer_large_yearly_price_id: StripeComputerLargeYearlyPriceId,
     pub stripe_computer_xl_yearly_price_id: StripeComputerXlYearlyPriceId,
     /// Days a Macro computer whose billing ended keeps its disk, restorable,
-    /// before it is destroyed. Mandatory; 14 in production.
+    /// before it is destroyed.
+    #[macro_config_default(14)]
     pub computer_retention_days: u32,
     /// Days a Macro computer keeps running on a past-due subscription before
-    /// it is turned off. Mandatory; 7 in production.
+    /// it is turned off.
+    #[macro_config_default(7)]
     pub computer_past_due_grace_days: u32,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
