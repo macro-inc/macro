@@ -71,7 +71,9 @@ export function dispatchApplicationCommandIfSessionEdit(
   after?: (handled: boolean) => void
 ): void {
   if (!(view.port instanceof SessionPort))
-    throw new Error('Media normalization requires the native session port');
+    throw new Error(
+      'Session-edit application commands require the native session port'
+    );
   const input = applicationInput(view, name, payload);
   if (input) view.port.inputIfSessionEdit(input, after);
 }

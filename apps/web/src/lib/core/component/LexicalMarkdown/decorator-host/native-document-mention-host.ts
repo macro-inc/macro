@@ -1,10 +1,7 @@
 import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
 import type { DecoratorProps } from '@macro-inc/lexical-wasm-view/view/registry';
 import type { EditorThemeClasses } from 'lexical';
-import {
-  dispatchApplicationCommand,
-  dispatchApplicationCommandIfSessionEdit,
-} from '../plugins/group-b/command';
+import { dispatchApplicationCommandIfSessionEdit } from '../plugins/group-b/command';
 import type { DocumentMentionHost } from './document-mention-host';
 import type { NativeDecoratorContext } from './native-adapter';
 import { createNativeSelectionDecoratorContext } from './native-selection-host';
@@ -52,11 +49,12 @@ export function createNativeDocumentMentionContext(
       !currentView.getElementByKey(index)
     )
       return;
-    dispatchApplicationCommand(currentView, 'group-b.document-mention', {
-      key: index,
-      action,
-      ...fields,
-    });
+    // Readers can collapse a preview locally; only session edit access writes it.
+    dispatchApplicationCommandIfSessionEdit(
+      currentView,
+      'group-b.document-mention',
+      { key: index, action, ...fields }
+    );
   }
   return {
     theme,

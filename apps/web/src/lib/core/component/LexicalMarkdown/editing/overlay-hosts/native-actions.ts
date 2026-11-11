@@ -4,7 +4,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { ACTIONS } from '../../plugins/actions/actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
 import {
-  dispatchApplicationCommand,
+  dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
   queryApplication,
 } from '../../plugins/group-b/command';
@@ -203,8 +203,13 @@ export function createNativeActionMenuHost(
     },
     hasDependencies,
     closeSearch() {
+      // Closing the UI writes only under current session edit access.
       if (active())
-        dispatchApplicationCommand(view, 'group-a.search-close', {});
+        dispatchApplicationCommandIfSessionEdit(
+          view,
+          'group-a.search-close',
+          {}
+        );
     },
     select(item, origin, context) {
       fireAndForget(select(item, origin, context), 'native-action-menu');

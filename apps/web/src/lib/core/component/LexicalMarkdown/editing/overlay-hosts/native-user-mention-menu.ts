@@ -1,6 +1,6 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import {
-  dispatchApplicationCommand,
+  dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
 } from '../../plugins/group-b/command';
 import {
@@ -26,8 +26,13 @@ export function createNativeUserMentionMenuHost(
   return {
     root: () => (active() ? view.root : null),
     closeSearch() {
+      // Closing the UI writes only under current session edit access.
       if (active())
-        dispatchApplicationCommand(view, 'group-a.search-close', {});
+        dispatchApplicationCommandIfSessionEdit(
+          view,
+          'group-a.search-close',
+          {}
+        );
     },
     async select(item) {
       if (item.kind !== 'user')

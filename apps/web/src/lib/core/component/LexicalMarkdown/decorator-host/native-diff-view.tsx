@@ -4,7 +4,7 @@ import { applyElementDirection } from '@macro-inc/lexical-wasm-view/view/node-vi
 import type { NodeView } from '@macro-inc/lexical-wasm-view/view/registry';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
 import { render } from 'solid-js/web';
-import { dispatchApplicationCommand } from '../plugins/group-b/command';
+import { dispatchApplicationCommandIfSessionEdit } from '../plugins/group-b/command';
 
 function optionalString(node: ViewNode, name: string): string | undefined {
   const value = node.props()[name];
@@ -38,7 +38,8 @@ export function createNativeDiffElementView(
       const key = node.key;
       const label = optionalString(node, 'label');
       const dispatch = (name: string) =>
-        dispatchApplicationCommand(context.view, name, { key });
+        // Accept and reject write only under current session edit access.
+        dispatchApplicationCommandIfSessionEdit(context.view, name, { key });
       render(
         () => (
           <div
