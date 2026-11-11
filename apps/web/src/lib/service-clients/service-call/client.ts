@@ -13,6 +13,7 @@ import type { GuestChatMessage } from '@service-storage/generated/schemas/guestC
 import type { GuestChatPage } from '@service-storage/generated/schemas/guestChatPage';
 import type { GuestChatPost } from '@service-storage/generated/schemas/guestChatPost';
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
+import type { JoinCallRequest } from '@service-storage/generated/schemas/joinCallRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
@@ -202,6 +203,18 @@ export const callServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  /** Join exactly this live session; an ended call never starts a replacement. */
+  joinCall(callId: string) {
+    const body: JoinCallRequest = { onOtherCall: 'switch', replace: true };
+    return fetchWithToken<CallTokenResponse>(
+      `${host}/call/record/${encodeURIComponent(callId)}/join`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    );
   },
 
   async leaveCall(channelId: string) {

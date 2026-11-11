@@ -904,6 +904,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
   teardown; once the last participant drops, the server ends the call first.
+- Bind channel Join, recovery, and retry to one call ID; only explicit Start or Call again may use get-or-create. Preserve that intent and ID through channel navigation.
 - Keep active phone calls viewport-filling with visible header islands and idle
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.

@@ -37,6 +37,7 @@ function setup(extra: Partial<Parameters<typeof createCallLifecycle>[0]> = {}) {
   const ports = {
     shouldRequestToken: vi.fn(() => true),
     requestToken: vi.fn(async () => token),
+    startCall: vi.fn(async () => token),
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(async () => {}),
     leave: vi.fn(async () => {}),
@@ -93,6 +94,104 @@ describe('shared call lifecycle', () => {
     vi.useRealTimers();
   });
 
+  it('never creates a replacement when the call ends after recovery lookup', async () => {
+    const { lifecycle, ports, join, disconnect } = setup();
+    await join();
+    const ended = new ThrownResultError([
+      { code: 'GONE', message: 'Call ended' },
+    ]);
+    ports.requestToken.mockRejectedValueOnce(ended);
+    disconnect();
+    await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS + 300);
+    expect(ports.requestToken).toHaveBeenLastCalledWith(call.callId);
+    expect(ports.startCall).not.toHaveBeenCalled();
+    expect(ports.connect).toHaveBeenCalledOnce();
+    expect(ports.leave).not.toHaveBeenCalled();
+    expect(ports.setError).toHaveBeenLastCalledWith(
+      'This call has ended. Start a new call to continue.'
+    );
+    expect(lifecycle.getState().t).toBe('failed');
+  });
+
+  it('keeps stale joins and retries bound to the selected call', async () => {
+    const { lifecycle, ports } = setup();
+    const ended = new ThrownResultError([
+      { code: 'GONE', message: 'Call ended' },
+    ]);
+    ports.requestToken.mockRejectedValue(ended);
+    ports.lookup.mockResolvedValue({ callId: 'replacement-call' });
+    await expect(
+      lifecycle.join(call.channelId, undefined, 'user', {
+        kind: 'join',
+        callId: call.callId,
+      })
+    ).rejects.toBe(ended);
+    await expect(lifecycle.join(call.channelId)).rejects.toBe(ended);
+    expect(ports.requestToken).toHaveBeenNthCalledWith(1, call.callId);
+    expect(ports.requestToken).toHaveBeenNthCalledWith(2, call.callId);
+    expect(ports.startCall).not.toHaveBeenCalled();
+    expect(ports.lookup).not.toHaveBeenCalled();
+    expect(ports.leave).not.toHaveBeenCalled();
+  });
+
+  it('does not create a call when a channel-only join finds no live session', async () => {
+    const { lifecycle, ports } = setup({ currentCall: () => undefined });
+    ports.lookup.mockResolvedValue(null);
+    await expect(lifecycle.join(call.channelId)).rejects.toThrow(
+      'The call has ended'
+    );
+    expect(ports.requestToken).not.toHaveBeenCalled();
+    expect(ports.startCall).not.toHaveBeenCalled();
+    expect(ports.leave).not.toHaveBeenCalled();
+  });
+
+  it('allows an explicit Start action to create a session', async () => {
+    const { lifecycle, ports } = setup({ currentCall: () => undefined });
+    const joining = lifecycle.join(call.channelId, undefined, 'user', {
+      kind: 'start',
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    await joining;
+    expect(ports.startCall).toHaveBeenCalledExactlyOnceWith(call.channelId);
+    expect(ports.requestToken).not.toHaveBeenCalled();
+    expect(ports.lookup).not.toHaveBeenCalled();
+    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token);
+  });
+
+  it('retries the allocated session when explicit Start fails during media setup', async () => {
+    const { lifecycle, ports } = setup();
+    const failure = new Error('Media setup failed');
+    ports.connect.mockRejectedValueOnce(failure);
+    const started = expect(
+      lifecycle.join(call.channelId, undefined, 'user', {
+        kind: 'start',
+      })
+    ).rejects.toBe(failure);
+    await vi.advanceTimersByTimeAsync(300);
+    await started;
+    const retried = lifecycle.join(call.channelId);
+    await vi.advanceTimersByTimeAsync(300);
+    await retried;
+    expect(ports.startCall).toHaveBeenCalledOnce();
+    expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(call.callId);
+  });
+
+  it('captures the live session before a permission prompt can outlast it', async () => {
+    const preparation = deferred<() => Promise<void>>();
+    const { lifecycle, ports } = setup({
+      currentCall: () => undefined,
+      prepareToken: () => preparation.promise,
+    });
+    const joining = lifecycle.join(call.channelId);
+    await vi.advanceTimersByTimeAsync(0);
+    ports.lookup.mockResolvedValue({ callId: 'replacement-call' });
+    preparation.resolve(async () => {});
+    await vi.advanceTimersByTimeAsync(300);
+    await joining;
+    expect(ports.requestToken).toHaveBeenCalledExactlyOnceWith(call.callId);
+    expect(ports.lookup).toHaveBeenCalledOnce();
+    expect(ports.startCall).not.toHaveBeenCalled();
+  });
   it('shares one in-flight join across controls and rejects a competing channel', async () => {
     const { lifecycle, ports } = setup();
     const first = lifecycle.join(call.channelId);
@@ -223,6 +322,21 @@ describe('shared call lifecycle', () => {
     expect(ports.watch).toHaveBeenCalledOnce();
   });
 
+  it('refuses a stale target instead of opening the current call in that channel', async () => {
+    const { lifecycle, ports, join } = setup();
+    await join();
+    const open = vi.fn();
+    await expect(
+      lifecycle.join(call.channelId, open, 'deep_link', {
+        kind: 'join',
+        callId: 'ended-call',
+      })
+    ).rejects.toThrow('The call has ended');
+    expect(open).not.toHaveBeenCalled();
+    expect(ports.connect).toHaveBeenCalledOnce();
+    expect(lifecycle.getState()).toEqual({ t: 'active', call });
+  });
+
   it('keeps the existing session when selecting its call tab again', async () => {
     const { lifecycle, ports, join } = setup();
     await join();
@@ -339,6 +453,7 @@ describe('shared call lifecycle', () => {
       expect(lifecycle.getState()).toEqual({
         t: 'failed',
         channelId: call.channelId,
+        intent: { kind: 'join', callId: call.callId },
         error,
       });
       expect(ports.setError).toHaveBeenLastCalledWith(message);

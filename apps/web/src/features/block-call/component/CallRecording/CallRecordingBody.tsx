@@ -110,7 +110,7 @@ export function CallRecordingBody(props: {
   );
 
   const callCtx = useCallContextOptional();
-  const { canCallAgain, callAgain } = useCallAgain(
+  const { canCallAgain, callAgain, joinCall } = useCallAgain(
     () => props.callId,
     () => record().channelId
   );
@@ -221,7 +221,7 @@ export function CallRecordingBody(props: {
                               variant="success"
                               size="xl"
                               class="mt-6"
-                              onClick={callAgain}
+                              onClick={joinCall}
                             >
                               <PhoneCallIcon />
                               {t('calls.detailJoinCall')}

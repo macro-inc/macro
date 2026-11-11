@@ -43,8 +43,8 @@ import {
 } from '@channel/Channel/channel-tabs';
 import {
   URL_PARAMS as CHANNEL_URL_PARAMS,
-  isJoinCallRequested,
   isOpenCallTabRequested,
+  parseCallJoinIntent,
   toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
@@ -456,9 +456,10 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
   // Decide whether the user asked to auto-join the call (via ?join_call=true
   // deep link or programmatic open props) before creating signals so we
   // can land directly on the Call tab without flashing Messages first.
-  const wantsJoinCall =
-    isJoinCallRequested(props[CHANNEL_URL_PARAMS.joinCall]) ||
-    isJoinCallRequested(searchParams[CHANNEL_URL_PARAMS.joinCall]);
+  const initialJoinIntent =
+    parseCallJoinIntent(props[CHANNEL_URL_PARAMS.joinCall]) ??
+    parseCallJoinIntent(searchParams[CHANNEL_URL_PARAMS.joinCall]);
+  const wantsJoinCall = !!initialJoinIntent;
 
   const callCtx = useCallContextOptional();
   const hasActiveCallHere = !!(
@@ -507,7 +508,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
   });
-  const [pendingJoinCall, setPendingJoinCall] = createSignal(wantsJoinCall);
+  const [pendingJoinCall, setPendingJoinCall] = createSignal(initialJoinIntent);
 
   // Navigation flows into the surface as state; the messages part navigates
   // whenever a fresh request lands, whether or not it was mounted at the time.
@@ -573,11 +574,9 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
   // Once the auto-join attempt settles — joined, failed, or calls disabled —
   // replace the URL so the deep link cannot fire a second time. This used to
   // wait for the call to mount, which left `join_call=true` in the URL forever
-  // when the join failed; any later reload (the browser discarding this tab
-  // overnight and restoring it on wake, say) then re-ran the join — and since
-  // the join API is a get-or-create, that starts a brand-new call in the
-  // channel. Retrying a failed join is the Call tab's "Try again", not a
-  // refresh.
+  // when the join failed; a later reload then replayed the old action.
+  // Consume both join and explicit-start intents once. Retrying a failed
+  // join is the Call tab's "Try again", not a refresh.
   createComputed(() => {
     if (pendingJoinCall()) return;
     if (searchParams[CHANNEL_URL_PARAMS.joinCall] === undefined) return;
@@ -605,9 +604,10 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
         return;
       }
 
-      if (isJoinCallRequested(params[CHANNEL_URL_PARAMS.joinCall])) {
+      const intent = parseCallJoinIntent(params[CHANNEL_URL_PARAMS.joinCall]);
+      if (intent) {
         setActiveTab(getCallJoinTab());
-        setPendingJoinCall(true);
+        setPendingJoinCall(intent);
       }
     },
     goToLatest: async () => {
@@ -646,7 +646,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
           canCall={canCall}
           channelId={channelId}
           pendingJoinCall={pendingJoinCall}
-          onHandled={() => setPendingJoinCall(false)}
+          onHandled={() => setPendingJoinCall(undefined)}
         />
         <div
           class={cn(
@@ -699,7 +699,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
                 <TraceFlow name="channel.call.view">
                   <ChannelCallTab
                     channelId={channelId}
-                    pendingJoin={pendingJoinCall}
+                    pendingJoin={() => !!pendingJoinCall()}
                   />
                 </TraceFlow>
               </Match>

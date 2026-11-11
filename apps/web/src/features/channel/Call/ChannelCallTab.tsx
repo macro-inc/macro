@@ -59,7 +59,7 @@ function ParticipantNamesLine(props: { ids: string[] }) {
 function JoinCallEmptyState(props: {
   channelId: string;
   isJoining: boolean;
-  onJoin: () => void;
+  onJoin: (callId?: string) => void;
 }) {
   const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const callRecordQuery = useLiveCallRecordQuery(
@@ -92,7 +92,7 @@ function JoinCallEmptyState(props: {
         variant="primary"
         size="lg"
         class="px-5"
-        onClick={props.onJoin}
+        onClick={() => props.onJoin(activeCallQuery.data?.callId)}
         disabled={props.isJoining}
       >
         <PhoneIcon class="size-5" />
@@ -131,9 +131,12 @@ export function ChannelCallTab(props: {
   const channel = useChannel(props.channelId);
   const [outsideCount, setOutsideCount] = createSignal(0);
 
-  async function handleJoin() {
+  async function handleJoin(callId?: string) {
     try {
-      await call.joinCall();
+      await call.joinCall(
+        'user',
+        callId ? { kind: 'join', callId } : undefined
+      );
     } catch (error) {
       console.error('Failed to join call', error);
     }
@@ -210,7 +213,7 @@ export function ChannelCallTab(props: {
           </Show>
           <button
             type="button"
-            onClick={handleJoin}
+            onClick={() => handleJoin()}
             disabled={call.isJoining()}
             class="rounded-lg bg-surface-2 px-4 py-2 text-sm text-ink hover:bg-surface-3 transition-colors disabled:opacity-50 disabled:pointer-events-none"
           >
