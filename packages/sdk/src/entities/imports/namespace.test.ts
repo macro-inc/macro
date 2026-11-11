@@ -124,7 +124,7 @@ describe('imports', () => {
     expect(calls).toEqual(['status jira', 'cancel notion']);
   });
 
-  test('start approves only an import review of the same source', async () => {
+  test('start approves only an import review of the same source and reports where it stands', async () => {
     const submitted: string[] = [];
     const review = (id: string, source: string) =>
       ({
@@ -134,9 +134,23 @@ describe('imports', () => {
           submitted.push(id);
         },
       }) as unknown as SessionReview;
-    const imports = new ImportsNamespace({} as unknown as MacroClient);
+    const client = {
+      cognition: {
+        workspaceReportHandler: async ({
+          path,
+        }: {
+          path: { source: string };
+        }) => ({
+          data: { status: 'importing', imported: path.source.length },
+        }),
+      },
+    } as unknown as MacroClient;
+    const imports = new ImportsNamespace(client);
 
-    await imports.linear.start(review('linear-review', 'linear'));
+    // Returned as-is from a code-mode program, so it must be JSON.
+    expect(
+      await imports.linear.start(review('linear-review', 'linear')),
+    ).toMatchObject({ status: 'importing', imported: 'linear'.length });
     await expect(
       imports.jira.start(review('notion-review', 'notion')),
     ).rejects.toThrow('does not present a jira import');

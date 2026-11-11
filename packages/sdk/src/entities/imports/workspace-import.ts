@@ -66,10 +66,11 @@ export class WorkspaceImport {
 
   /**
    * Start writing the plan the import review presents, once the user said
-   * yes: approves the review, with any changes they made on its card. Refused
-   * while the plan is still being made.
+   * yes: approves the review, with any changes they made on its card, and
+   * reports where the import stands. Refused while the plan is still being
+   * made.
    */
-  async start(review: SessionReview): Promise<void> {
+  async start(review: SessionReview): Promise<WorkspaceImportReport> {
     const [item] = await review.items();
     const draft = item?.draft;
     if (!draft || !('source' in draft) || draft.source !== this.source)
@@ -77,6 +78,7 @@ export class WorkspaceImport {
         `review ${review.id} does not present a ${this.source} import`,
       );
     await review.submitAll();
+    return this.status();
   }
 
   /** Where planning or writing stands; never call it in a loop. */

@@ -84,8 +84,9 @@ export class ImportLedger {
  *   end by asking "Should I kick it off?".
  * - Nothing is written until the review is approved. If the user says yes,
  *   start it in a later program with
- *   `macro.imports.notion.start(execution.session().reviews.byId(id))`; while
- *   the plan is still being made it is refused, so say it isn't ready yet.
+ *   `macro.imports.notion.start(execution.session().reviews.byId(id))`, which
+ *   returns the import's report to return as `data`; while the plan is still
+ *   being made it is refused, so say it isn't ready yet.
  * - `cancel()` stops planning or writing; what was imported stays.
  *
  * ## Single items and the ledger
