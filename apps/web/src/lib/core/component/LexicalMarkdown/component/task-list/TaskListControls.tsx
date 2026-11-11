@@ -9,17 +9,6 @@
  * mentions and trailing `!` markers. Filters persist on the list node and dim
  * excluded items in place.
  */
-import { combine, literal, NIL_UUID } from '@app/features/soup';
-import {
-  getTaskAssigneeIds,
-  getTaskDueDate,
-  getTaskPriorityOptionId,
-  getTaskStatusOptionId,
-  isTaskEntity,
-  type TaskEntityWithProperties,
-} from '@entity';
-import { useContacts } from '@queries/contacts/contacts';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
 import type { LexicalEditor, NodeKey } from 'lexical';
 import {
   createEffect,
@@ -47,29 +36,13 @@ import {
   type TaskInfo,
 } from '../../plugins/checklist-controls/model';
 import { TaskListBar } from './TaskListBar';
-
-/** Pin every non-document soup target so the query returns tasks only. */
-const NON_TASK_TARGETS = {
-  calf: literal('id', NIL_UUID),
-  callf: literal('CallId', NIL_UUID),
-  ccf: literal('id', NIL_UUID),
-  cf: literal('cid', NIL_UUID),
-  chanf: literal('ChannelId', NIL_UUID),
-  cthf: literal('ThreadId', NIL_UUID),
-  ef: literal('ThreadId', NIL_UUID),
-  fef: literal('id', NIL_UUID),
-  pf: literal('pid', NIL_UUID),
-};
+import { createTaskListNames, createTaskListTaskInfo } from './task-list-facts';
 
 export function TaskListControlsRenderer(props: {
   editor: LexicalEditor;
   data: ChecklistControlsData;
 }) {
-  const contacts = useContacts();
-  const nameById = createMemo(
-    () => new Map(contacts().map((user) => [user.id, user.name ?? user.email]))
-  );
-  const resolveName = (id: string) => nameById().get(id) ?? 'Unknown';
+  const { resolveName } = createTaskListNames();
 
   const taskIds = createMemo(() => {
     const ids = new Set<string>();
@@ -81,42 +54,7 @@ export function TaskListControlsRenderer(props: {
     return [...ids].sort();
   });
 
-  // One soup query covers every task the document mentions.
-  const tasksQuery = useSoupAstItemsQuery(
-    () => ({
-      params: {
-        expand: true,
-        limit: 200,
-        sort_method: 'updated_at',
-        sort_direction: 'desc',
-      },
-      body: {
-        ...NON_TASK_TARGETS,
-        df:
-          combine(
-            '|',
-            taskIds().map((id) => literal('id', id))
-          ) ?? literal('id', NIL_UUID),
-      },
-    }),
-    () => ({ enabled: taskIds().length > 0 })
-  );
-
-  const taskInfo = createMemo((): Record<string, TaskInfo> => {
-    const map: Record<string, TaskInfo> = {};
-    if (tasksQuery.isPending) return map;
-    for (const entity of tasksQuery.data?.entities ?? []) {
-      if (!isTaskEntity(entity)) continue;
-      const task = entity as TaskEntityWithProperties;
-      map[task.id] = {
-        statusOptionId: getTaskStatusOptionId(task) ?? null,
-        priorityOptionId: getTaskPriorityOptionId(task) ?? null,
-        assigneeIds: getTaskAssigneeIds(task),
-        due: getTaskDueDate(task) ?? null,
-      };
-    }
-    return map;
-  });
+  const taskInfo = createTaskListTaskInfo(taskIds);
 
   const lists = createMemo(() =>
     Object.values(props.data.mounts).filter(
