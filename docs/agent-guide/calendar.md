@@ -49,7 +49,9 @@ response and a failed write followed by another click.
 Opening the calendar draws the visible period alone. The two neighboring periods
 mount on later tasks once the visible period has its events, or after a moment
 when that load is slow. They start beside whatever period is on screen by then,
-and paging waits for them.
+and paging waits for them. On the iOS and Android apps the periods seen last and
+the calendar list are kept on the device for a week, so a cold start draws them
+before the cache answers; the fresh read then replaces them.
 
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar

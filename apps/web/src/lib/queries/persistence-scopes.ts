@@ -4,6 +4,7 @@ import { getOrCreateCacheScope } from '@graphql-cache/scope';
 import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { hasCachedUserIdentity } from './auth/user-info-cache';
+import { calendarKeys } from './calendar/keys';
 import { channelKeys } from './channel/keys';
 import { createPersistenceKey, type PersistScope } from './persistence';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
@@ -17,6 +18,17 @@ const persistedChannelQueryPrefixes = [
 
 export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
   return persistedChannelQueryPrefixes.some((prefix) =>
+    partialMatchKey(queryKey, prefix)
+  );
+}
+
+const persistedCalendarQueryPrefixes = [
+  calendarKeys.occurrences._def,
+  calendarKeys.visibleCalendars.queryKey,
+] as const;
+
+export function shouldPersistCalendarQuery(queryKey: QueryKey): boolean {
+  return persistedCalendarQueryPrefixes.some((prefix) =>
     partialMatchKey(queryKey, prefix)
   );
 }
@@ -58,6 +70,17 @@ export function createQueryPersistenceScopes(
             buster,
             shouldPersist: (queryKey: QueryKey) =>
               partialMatchKey(queryKey, soupKeys.astItems._def),
+            shouldRestore: hasLoginCookie,
+          } satisfies PersistScope,
+          {
+            // A cold start draws the periods seen last, in their calendar
+            // colors, before the cache engine can answer its first read.
+            store: createPerQueryIDBStore({
+              dbName: scopedKey('calendar'),
+            }),
+            maxAge: { value: 7, unit: 'd' },
+            buster,
+            shouldPersist: shouldPersistCalendarQuery,
             shouldRestore: hasLoginCookie,
           } satisfies PersistScope,
           {
