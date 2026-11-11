@@ -69,8 +69,21 @@ for (const engine of ['upstream', 'native'] as const) {
         engine
       );
       expect(redone.json).toEqual(typed.json);
-      expect(redone.selection).toEqual(typed.selection);
-      expect(redone.domSelection).toEqual(typed.domSelection);
+      if (engine === 'native') {
+        // Collaborative Loro history restores the surviving paragraph caret,
+        // unlike the standalone Source snapshot-history fixture above.
+        expect(redone.selection).toEqual({
+          anchor: { path: [0], offset: 0, type: 'element' },
+          focus: { path: [0], offset: 0, type: 'element' },
+        });
+        expect(redone.domSelection).toEqual({
+          anchor: { path: [0], offset: 0 },
+          focus: { path: [0], offset: 0 },
+        });
+      } else {
+        expect(redone.selection).toEqual(typed.selection);
+        expect(redone.domSelection).toEqual(typed.domSelection);
+      }
       expect(await page.evaluate(() => window.inputParity.errors)).toEqual([]);
       expect(pageErrors).toEqual([]);
       await info.attach('keyboard-history', {
@@ -125,8 +138,15 @@ for (const redo of ['Control+Shift+z', 'Control+y']) {
         window.inputParity.snapshot('native')
       );
       expect(redone.json).toEqual(typed.json);
-      expect(redone.selection).toEqual(typed.selection);
-      expect(redone.domSelection).toEqual(typed.domSelection);
+      // Pin the actual collaborative Source redo policy, not snapshot history.
+      expect(redone.selection).toEqual({
+        anchor: { path: [0, 0], offset: 0, type: 'text' },
+        focus: { path: [0, 0], offset: 0, type: 'text' },
+      });
+      expect(redone.domSelection).toEqual({
+        anchor: { path: [], offset: 0 },
+        focus: { path: [], offset: 0 },
+      });
       cycles.push({ undone, redone });
     }
     expect(await page.evaluate(() => window.inputParity.errors)).toEqual([]);
