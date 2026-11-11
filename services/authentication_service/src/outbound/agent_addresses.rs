@@ -16,6 +16,9 @@ mod test;
 pub const GATEWAY_KEY: &str = "MACRO_GATEWAY";
 /// Macro's Anthropic gateway for brains, on the harness's egress listener.
 pub const ANTHROPIC_BASE_URL_KEY: &str = "ANTHROPIC_BASE_URL";
+/// Macro's call speech gateway for brains, on the same listener: the
+/// runtime opens `ws(s)://…/stt` and `…/tts` under it.
+pub const SPEECH_URL_KEY: &str = "MACRO_SPEECH_URL";
 
 /// Resolves [`EnrollmentEnvironment`] from the service URL types.
 pub struct AgentAddresses;
@@ -63,6 +66,7 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
     let mcp = McpServiceUrl::new().map_err(TeamAgentError::internal)?;
     let gateway = ApiGatewayUrl::new().map_err(TeamAgentError::internal)?;
     let egress = AgentHarnessEgressUrl::new().map_err(TeamAgentError::internal)?;
+    let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
     Ok(vec![
         (
             DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
@@ -113,13 +117,8 @@ fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
             checked(McpServiceUrl::OVERRIDE_ENV_VAR_NAME, &mcp, false)?,
         ),
         (GATEWAY_KEY, checked(GATEWAY_KEY, &gateway, false)?),
-        (
-            ANTHROPIC_BASE_URL_KEY,
-            format!(
-                "{}/brain/anthropic",
-                checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?
-            ),
-        ),
+        (ANTHROPIC_BASE_URL_KEY, format!("{egress}/brain/anthropic")),
+        (SPEECH_URL_KEY, format!("{egress}/brain/inference")),
     ])
 }
 

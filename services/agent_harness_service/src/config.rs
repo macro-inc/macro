@@ -198,6 +198,14 @@ pub struct Config {
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
+    /// LiveKit project key the speech gateway signs inference-only tokens
+    /// with. Set with [`Self::livekit_api_secret`]; both empty turns agent
+    /// call speech off.
+    #[macro_config_default(String::new())]
+    pub livekit_api_key: String,
+    /// LiveKit project secret; never leaves the gateway.
+    #[macro_config_default(String::new())]
+    pub livekit_api_secret: String,
     /// Run sandboxes on the local Docker daemon instead of Daytona.
     ///
     /// Default off: a deployed harness must keep using Daytona even if this
