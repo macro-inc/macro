@@ -16,6 +16,7 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/scheduled-actions/suggestions"),
         ("POST", "/scheduled-actions/suggestions/01a1/retire"),
         ("POST", "/email/drafts"),
+        ("POST", "/cognition/structured-completion"),
         ("POST", "/search"),
         ("POST", "/crm/pipelines/01a1/rows"),
     ] {

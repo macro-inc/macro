@@ -179,6 +179,8 @@ async fn propagate_request(
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
+        session_id: correlation.map(|(_, correlation)| correlation.session_id),
+        scope: correlation.and_then(|(_, correlation)| correlation.scope),
     };
     crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))
         .instrument(tracing::info_span!(
