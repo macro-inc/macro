@@ -128,6 +128,8 @@ export interface MutationQueueTelemetry {
   }): MutationEnqueueTelemetry;
   attempt(mutation: ClaimedMutation): MutationAttemptTelemetry;
   skipped(reason: MutationQueueSkipReason): void;
+  /** This runner gave back a lease left by a runner whose page is gone. */
+  abandonedLeaseReleased(): void;
   storageReset(): void;
 }
 
@@ -147,6 +149,7 @@ export const NOOP_MUTATION_QUEUE_TELEMETRY: MutationQueueTelemetry = {
   enqueue: () => NOOP_ENQUEUE,
   attempt: () => NOOP_MUTATION_ATTEMPT_TELEMETRY,
   skipped: () => undefined,
+  abandonedLeaseReleased: () => undefined,
   storageReset: () => undefined,
 };
 
@@ -716,6 +719,15 @@ export function createMutationQueueTelemetry({
           ...queueAttributes(),
           'mutation_queue.skip_reason': reason,
         });
+    },
+    abandonedLeaseReleased() {
+      count('lease.abandoned-released');
+      // Rare, and each one would otherwise have stalled the queue for the
+      // full lease, so every occurrence is logged.
+      Telemetry.info('graphql.mutation_queue.abandoned_lease_released', {
+        ...environmentAttributes(),
+        ...queueAttributes(),
+      });
     },
     storageReset() {
       count('storage-reset');

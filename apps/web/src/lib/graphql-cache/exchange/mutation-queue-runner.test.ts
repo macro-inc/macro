@@ -8,7 +8,7 @@ import {
   stringifyDocument,
 } from '@urql/core';
 import { getOperationAST, parse } from 'graphql';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { filter, makeSubject, mergeMap, pipe } from 'wonka';
 import type { CacheHost } from '../host/types';
 import {
@@ -29,6 +29,7 @@ import {
   type MutationAttemptTelemetry,
   NOOP_MUTATION_QUEUE_TELEMETRY,
 } from './mutation-queue-telemetry';
+import type { QueueOwners } from './queue-owners';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -75,7 +76,10 @@ function enqueue(
       : { kind: 'not-runnable' },
   };
 }
-function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
+function fixture(
+  options: MutationQueueRunnerDeps['options'] = {},
+  queueOwners?: QueueOwners
+) {
   const forwarded: Operation[] = [];
   const commit = vi.fn<CacheHost['commitOptimisticWrite']>(
     async () =>
@@ -100,7 +104,8 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
       reset: false,
     })),
     currentRevision: async () => INITIAL_CACHE_REVISION,
-    claimNextMutation: async () => undefined,
+    currentStorageGeneration: async () => 'storage',
+    claimNextMutation: vi.fn(async () => undefined),
   } as unknown as CacheHost;
   let runner!: MutationQueueRunner;
   runner = createMutationQueueRunner({
@@ -121,6 +126,7 @@ function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
     }),
     options,
     owner: 'owner',
+    queueOwners,
     forward: (op) => forwarded.push(op),
     writeThrough: (result) =>
       runner.settle(result, queueAttemptOf(result.operation)!),
@@ -358,4 +364,149 @@ it('reports retry exhaustion apart from a permanent rollback', async () => {
       { failure: 'server', errorCode: 'INTERNAL', httpStatus: undefined },
     ],
   ]);
+});
+
+describe('leases left unsettled', () => {
+  const owners = (
+    leases: Awaited<ReturnType<QueueOwners['abandoned']>>['leases'],
+    pendingUntil?: number
+  ) =>
+    ({
+      record: vi.fn(),
+      hasCandidates: () => leases.length > 0 || pendingUntil !== undefined,
+      abandoned: vi.fn(async () => ({ leases, pendingUntil })),
+      dispose: () => undefined,
+    }) satisfies QueueOwners;
+
+  it('is on record before the request is sent', async () => {
+    const queueOwners = owners([]);
+    const { runner, forwarded } = fixture({}, queueOwners);
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueOwners.record).toHaveBeenLastCalledWith('storage');
+
+    queueOwners.record.mockImplementation(() => {
+      expect(forwarded).toHaveLength(0);
+    });
+    await runner.admit(operation(), enqueue(operation(), '4'), runner.epoch());
+    expect(queueOwners.record).toHaveBeenLastCalledWith('storage', {
+      transactionId: '1',
+      leaseGeneration: '4',
+    });
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it('is given back when its page is gone, and the head is claimed at once', async () => {
+    const gone = { owner: 'gone', transactionId: '1', leaseGeneration: '2' };
+    const queueOwners = owners([gone]);
+    const { telemetry } = recordingTelemetry();
+    const released = vi.spyOn(telemetry, 'abandonedLeaseReleased');
+    const { runner, forwarded, host } = fixture(
+      { mutationQueueTelemetry: telemetry },
+      queueOwners
+    );
+    const head = enqueue(operation(), '3').initialClaim;
+    vi.mocked(host.claimNextMutation)
+      // Leased to the runner that is gone.
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(
+        head.kind === 'claimed' ? head.mutation : undefined
+      );
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+      '1',
+      { owner: 'gone', generation: '2' },
+      expect.any(Number),
+      'Queue runner is gone'
+    );
+    expect(released).toHaveBeenCalledOnce();
+    expect(host.claimNextMutation).toHaveBeenCalledTimes(2);
+    expect(forwarded).toHaveLength(1);
+  });
+
+  it('is asked for again once its request can no longer be on the wire', async () => {
+    const queueOwners = owners([], Date.now() + 12_000);
+    const { runner, host } = fixture({}, queueOwners);
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueOwners.abandoned).toHaveBeenLastCalledWith('storage', 60_000);
+    expect(host.deferOptimisticWrite).not.toHaveBeenCalled();
+    expect(host.claimNextMutation).toHaveBeenCalledOnce();
+
+    // Sooner than the regular thirty-second poll.
+    await vi.advanceTimersByTimeAsync(12_000);
+    expect(host.claimNextMutation).toHaveBeenCalledTimes(2);
+    expect(queueOwners.abandoned).toHaveBeenCalledTimes(2);
+  });
+
+  it('is left to run out when the gone runner had already settled it', async () => {
+    const queueOwners = owners([
+      { owner: 'gone', transactionId: '1', leaseGeneration: '2' },
+    ]);
+    const { runner, host } = fixture({}, queueOwners);
+    vi.mocked(host.deferOptimisticWrite).mockRejectedValue(
+      new Error('stale mutation claim')
+    );
+    runner.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(host.deferOptimisticWrite).toHaveBeenCalledOnce();
+    // Nothing was released, so the head is not asked for again.
+    expect(host.claimNextMutation).toHaveBeenCalledOnce();
+  });
+
+  it('is given back by its own runner after a lost acknowledgement', async () => {
+    const { telemetry, attempts } = recordingTelemetry();
+    const { runner, forwarded, commit, host } = fixture({
+      mutationQueueTelemetry: telemetry,
+    });
+    commit.mockRejectedValueOnce(new Error('local disk unavailable'));
+    await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+    await runner.settle(
+      {
+        operation: forwarded[0],
+        data: savedDraft,
+        stale: false,
+        hasNext: false,
+      },
+      queueAttemptOf(forwarded[0])!
+    );
+
+    expect(host.deferOptimisticWrite).toHaveBeenCalledExactlyOnceWith(
+      '1',
+      { owner: 'owner', generation: '1' },
+      Date.now() + 5_000,
+      'Acknowledgement lost'
+    );
+    expect(attempts[0]?.finished).toEqual([
+      ['ack-lost', { retryDelayMs: 5_000 }],
+    ]);
+  });
+
+  it('waits out the lease when it cannot be given back either', async () => {
+    const { telemetry, attempts } = recordingTelemetry();
+    const { runner, forwarded, commit, host } = fixture({
+      mutationQueueTelemetry: telemetry,
+    });
+    commit.mockRejectedValueOnce(new Error('local disk unavailable'));
+    vi.mocked(host.deferOptimisticWrite).mockRejectedValueOnce(
+      new Error('local disk unavailable')
+    );
+    await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+    await runner.settle(
+      {
+        operation: forwarded[0],
+        data: savedDraft,
+        stale: false,
+        hasNext: false,
+      },
+      queueAttemptOf(forwarded[0])!
+    );
+
+    expect(attempts[0]?.finished).toEqual([
+      ['ack-lost', { retryDelayMs: 300_000 }],
+    ]);
+  });
 });

@@ -113,6 +113,7 @@ import {
   withOptimisticMutationDisposition,
 } from './optimistic';
 import { queryShape } from './query-shape';
+import { createQueueOwners } from './queue-owners';
 import { runSubscriptionCacheEffects } from './subscription-cache-trace';
 
 /** Server writes acknowledged since this query left for the network. */
@@ -928,6 +929,7 @@ export function normalizedCacheExchange(
         client,
         options,
         owner: queueOwner,
+        queueOwners: createQueueOwners(queueOwner),
         forward: enqueueForward,
         writeThrough,
         cacheDocument: (op) => ({
