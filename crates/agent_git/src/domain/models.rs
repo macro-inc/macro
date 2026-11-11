@@ -191,6 +191,9 @@ pub enum AgentGitError {
     /// Too many pushes in the current window.
     #[error("too many pushes; retry in a minute")]
     PushRateLimited,
+    /// `main` has no readable `config/voice.json`.
+    #[error("the agent's repo has no valid config/voice.json")]
+    NoVoice,
     /// Anything else.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),

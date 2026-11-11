@@ -87,6 +87,16 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
   database and filesystem mutations so recovery cannot publish storage after a
   concurrent deletion completes.
 
+- `GET`/`PUT /internal/repos/{agent_user_id}/voice` (internal key) read and
+  commit `config/voice.json` (`{"model":"aura-2-<name>-<language>"}`,
+  `domain::voice::VoiceModel`) for a team the caller already authorized; another
+  team is 409, a missing repo or an unreadable file is 404. The commit is built
+  with plumbing on a private index (never a work tree), so symlinks the agent
+  committed are never followed; a symlinked `config` refuses the write. It is
+  swapped onto `main` with `update-ref <new> <old>` and rebuilt if a push landed
+  first; saving the current voice commits nothing. A seed `voice` replaces the
+  template's default file at creation.
+
 `agent_git.transfer` retains its span through request/response streaming and
 backend exit, records byte counts and fixed failure categories, and uses the
 SHA-256 repository identity. Never export CGI stderr or raw repository paths.

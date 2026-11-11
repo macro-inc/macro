@@ -8,6 +8,7 @@ use crate::domain::models::{
     RepoToken, RepoTokenHash,
 };
 use crate::domain::template::{PersonaSeed, RenderedFile};
+use crate::domain::voice::VoiceConfig;
 
 /// Repo rows (`agent_repos`).
 pub trait RepoRepository: Send + Sync + 'static {
@@ -75,6 +76,23 @@ pub trait RepoStore: Send + Sync + 'static {
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
+    /// The contents of `path` on `main`; `None` when it is not a file there.
+    fn read_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, Self::Err>> + Send;
+
+    /// Commit `contents` to `path` on `main` as Macro, keeping every other
+    /// file and any concurrent push. Unchanged contents commit nothing.
+    fn commit_file(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        path: &str,
+        contents: &[u8],
+        message: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Team roles.
@@ -135,6 +153,24 @@ pub trait AgentGitService: Send + Sync + 'static {
     fn delete_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), AgentGitError>> + Send;
+
+    /// The voice committed on `main`, for a caller that already authorized
+    /// `team_id`. A missing or unreadable `config/voice.json` is
+    /// [`AgentGitError::NoVoice`].
+    fn voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<VoiceConfig, AgentGitError>> + Send;
+
+    /// Commit a voice to `main` for a caller that already authorized
+    /// `team_id`. Saving the current voice again commits nothing.
+    fn set_voice(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        voice: &VoiceConfig,
     ) -> impl Future<Output = Result<(), AgentGitError>> + Send;
 
     /// Authorize the credential for the request's endpoint, enforce the

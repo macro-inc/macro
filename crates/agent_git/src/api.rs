@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::domain::models::RepoToken;
 use crate::domain::template::PersonaSeed;
+use crate::domain::voice::VoiceConfig;
 
 /// Create (or re-key) the agent's repo.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +18,24 @@ pub struct CreateRepoRequest {
     pub team_id: Uuid,
     /// Who the agent is; written into the repo's charter.
     pub seed: PersonaSeed,
+}
+
+/// The team the caller authorized for a voice read.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceQuery {
+    /// The agent's team, already authorized by the caller.
+    pub team_id: Uuid,
+}
+
+/// Commit a voice to the agent's repo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVoiceRequest {
+    /// The agent's team, already authorized by the caller.
+    pub team_id: Uuid,
+    /// The new `config/voice.json`.
+    pub voice: VoiceConfig,
 }
 
 /// Recover a missing repo with the credential saved in its computer persona.
