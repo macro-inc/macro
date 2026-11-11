@@ -31,6 +31,10 @@ export type ActivityWireRow = {
      */
     agent_correlation_id?: string | null;
     /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
      * The entity acted on.
      */
     entity_id: string;

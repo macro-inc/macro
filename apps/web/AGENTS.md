@@ -235,6 +235,11 @@ and nudge to the minimum height, and closing hands the column back:
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
 
+One document open in two desktop tabs has a backend-free browser regression over
+the real router, tab manager, split layout, and orchestrator: each tab mounts its
+own instance and keeps its own state, and reopening within a tab reuses it:
+`bunx playwright test --config src/components/app/tab-layout/browser-test/playwright.config.ts`.
+
 Desktop app switches open the requested list in the target split when the
 retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
@@ -817,7 +822,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
 - Let `ViewShell.TopBar` own split close and navigation controls; do not add a second split close button inside Agents headers or their preview `headerLeading`.
-- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
+- Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab. Switching parks the active tab's panes (`router.openLayout`/`showLayout`) instead of removing them; the split manager keeps parked splits and `SplitLayout` renders one layer per tab, hiding background layers with `content-visibility` and `inert` without unmounting them. Up to `MAX_PARKED_TABS` stay mounted. Parked splits hold no content, and the orchestrator scopes managed blocks and handles to the live tab (`blockScope`), so one entity can mount once per tab; dedupe applies only within a tab. The strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
@@ -885,6 +890,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   controls below the video; Back dismisses without leaving, while setup and
   tablet/desktop chrome stay unchanged.
   See [Calls](../../docs/agent-guide/calls.md).
+- Keep saved call detail on its shared playback and SidePanel composition; follow `src/features/block-call/AGENTS.md` for transcript/chat timing, phone dock ownership, and checks.
 - Diagnose browser call media with `call.media.*` spans and the `meeting.setup.id`
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).

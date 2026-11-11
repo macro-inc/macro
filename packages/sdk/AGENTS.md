@@ -145,7 +145,8 @@ enforced by the ordinary backend APIs.
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
 `bun run lint`. After building, run `bun run check:pack` to verify isolated
 consumer imports, types, and bundle separation. Coverage requires each generated
-endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`, and
+every wrapped method to have a verb in `src/utils/verbs.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -160,7 +161,7 @@ the existing gateway prefixes.
   `nix-support/node_modules-hashes.json`; use
   `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
   generation otherwise restores dependencies from the old SDK snapshot.
-- Every public method carries one MCP hint tag (`@readonly`, `@write` or
+- Every public method carries one MCP hint tag (`@readonly`, `@write`, `@send` or
   `@destructive`, plus `@openworld`/`@idempotent` when true) or
   `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
   by them and fails on an untagged method. A new or changed public method
