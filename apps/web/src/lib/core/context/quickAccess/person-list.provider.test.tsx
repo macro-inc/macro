@@ -65,7 +65,7 @@ afterEach(() => {
   state.built = 0;
 });
 
-it('keeps one list through typing and advances past the first page of people', async () => {
+it('keeps one list through typing and lists the next page of people below the first', async () => {
   vi.useFakeTimers();
   const search = vi
     .fn<PeopleCache['search']>()
@@ -156,7 +156,7 @@ it('keeps one list through typing and advances past the first page of people', a
 
   setPaging(true);
   await vi.advanceTimersByTimeAsync(5000);
-  expect(ids()).toEqual(['macro|next@example.com']);
+  expect(ids()).toEqual(['macro|first@example.com', 'macro|next@example.com']);
   expect(pageRequests).toBe(1);
   expect(state.built).toBe(1);
 

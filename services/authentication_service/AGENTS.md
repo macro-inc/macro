@@ -49,6 +49,19 @@ key issuance, and account merge/link flows.
   test-only queries need a live `DATABASE_URL`) and
   `cargo run -p authentication_service --bin authentication_service_doppler_config`.
 
+## Profile pictures
+
+- `PUT /user/profile_picture` and `PUT /user/profile_picture/file` share
+  `src/api/user/profile_picture_change.rs`: throttle to 1/sec/user (key
+  `profile-picture-set`, 429), then publish `user.picture_changed`
+  (`user_events`, topic `macro.users`) through `ApiContext::event_broker`
+  after the DB write. `file_id` is set only on the file route; an empty url
+  means removed (both `None`). A publish failure logs a warn and never fails
+  the request. The 20/hour upload reservation limit is separate.
+- `POST /user/profile_pictures` accepts API keys (`UserOrInternal`) and
+  returns each picture's `url`; the SDK derives the file id from
+  `<static>/file/<id>`.
+
 ## Subscription checkout
 
 - `src/service/subscription_checkout.rs` owns introductory eligibility and
