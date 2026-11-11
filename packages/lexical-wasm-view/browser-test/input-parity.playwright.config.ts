@@ -5,6 +5,7 @@ export default defineConfig({
   testDir: import.meta.dirname,
   testMatch: [
     'heading-enter.browser.e2e.ts',
+    'checklist-platform.browser.e2e.ts',
     'history-keyboard.browser.e2e.ts',
     'keyboard-shortcuts.browser.e2e.ts',
     'keydown-owned-range.browser.e2e.ts',

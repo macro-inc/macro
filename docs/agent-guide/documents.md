@@ -3324,7 +3324,11 @@ reconciled editor update commits.
 
 For a native session, type text and check Ctrl+Z with both Ctrl+Shift+Z and
 Ctrl+Y: content and caret must return together. Start with a single emoji in an empty document, undo it, and check that the model and browser both retain the empty paragraph caret at offset zero. Use Cmd+Z and Cmd+Shift+Z on Apple platforms, and verify Select All with Cmd+A there or Ctrl+A elsewhere; shortcut detection follows navigator.platform rather than the user-agent string. KeyDown listeners retain
-precedence over the routed history command. Undo and redo a newly created code
+precedence over the routed history command. Checklist modifier-Enter follows
+Macro IS_MAC (platform starts with Mac or user agent contains Mac), including
+platform/UA mismatch checks. The native root retains iOS/Android composition
+priority; its single OS enum cannot also encode the independent Mac checklist
+modifier in contradictory mobile/Mac profiles. Undo and redo a newly created code
 subtree: compare complete model JSON, including text leaf IDs, as well as the
 DOM text and selection. Also check the caret and document: enter a newline,
 undo, then redo. Redo must return to the committed paragraph and offset even

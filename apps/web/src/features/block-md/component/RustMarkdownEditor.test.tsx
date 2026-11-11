@@ -1,9 +1,16 @@
+import { runInNewContext } from 'node:vm';
+import macroPlatformSource from '@core/constant/isMac?raw';
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import RustMarkdownEditor from './RustMarkdownEditor';
 
 const control = vi.hoisted(() => ({
+  platform: '',
+  userAgent: '',
+  ios: false,
+  android: false,
+  nativePlatform: '',
   create: vi.fn(),
   load: vi.fn(),
   canEdit: (): boolean => true,
@@ -459,7 +466,20 @@ vi.mock('@core/util/fireAndForget', () => ({
     promise.catch(control.detachedError);
   },
 }));
-vi.mock('@core/util/platform', () => ({ isPlatform: () => false }));
+vi.mock('@core/util/platform', () => ({
+  isPlatform: (platform: string) => control.nativePlatform === platform,
+}));
+vi.mock('@core/constant/isMac', () => ({
+  get IS_MAC() {
+    return runInNewContext(
+      macroPlatformSource.replace('export const IS_MAC', 'const IS_MAC') +
+        '\nIS_MAC',
+      {
+        navigator: { platform: control.platform, userAgent: control.userAgent },
+      }
+    );
+  },
+}));
 vi.mock('@macro-inc/collaboration/collab/source', () => ({
   SyncSourceStatus: {
     Connected: 'connected',
@@ -477,10 +497,19 @@ vi.mock('@macro-inc/lexical-wasm-view', () => ({
   registerMacroElementViews: (registry: unknown) => registry,
 }));
 vi.mock('@solid-primitives/platform', () => ({
-  isAndroid: false,
-  isAppleDevice: false,
+  get isAndroid() {
+    return control.android;
+  },
+  get isAppleDevice() {
+    return (
+      control.ios ||
+      /macintosh|macintel|macppc|mac68k|macos/i.test(control.userAgent)
+    );
+  },
   isFirefox: false,
-  isIOS: false,
+  get isIOS() {
+    return control.ios;
+  },
   isSafari: false,
 }));
 
@@ -525,6 +554,11 @@ function session() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  control.platform = '';
+  control.userAgent = '';
+  control.ios = false;
+  control.android = false;
+  control.nativePlatform = '';
   control.afterProjection.mockReset();
   control.load.mockResolvedValue({});
   control.canEdit = () => true;
@@ -905,3 +939,32 @@ it('keeps failure final across the asynchronous flow wrapper boundary', async ()
   expect(ready).not.toHaveBeenCalled();
   rendered.unmount();
 });
+
+it.each([
+  ['MacIntel', 'Windows NT 10.0', false, false, '', 1],
+  ['Linux x86_64', 'Macintosh; Intel Mac OS X', false, false, '', 1],
+  ['Linux x86_64', 'X11; Linux x86_64', false, false, '', 0],
+  ['iPhone', 'iPhone', true, false, '', 2],
+  ['Linux armv8l', 'Android', false, true, '', 3],
+  ['MacIntel', 'Android', false, true, '', 3],
+  ['MacIntel', 'Windows NT 10.0', false, false, 'ios', 2],
+  ['MacIntel', 'Windows NT 10.0', false, false, 'android', 3],
+])(
+  'configures native view OS for platform %s / UA %s / iOS %s / Android %s / native %s',
+  async (platform, userAgent, ios, android, nativePlatform, expected) => {
+    control.platform = platform;
+    control.userAgent = userAgent;
+    control.ios = ios;
+    control.android = android;
+    control.nativePlatform = nativePlatform;
+    const mounted = session();
+    control.create.mockResolvedValue(mounted);
+    const rendered = render(() => (
+      <RustMarkdownEditor context={context} autoFocus={false} />
+    ));
+    await waitFor(() => expect(control.create).toHaveBeenCalledOnce());
+    expect(control.create.mock.calls[0][0].viewOs).toBe(expected);
+    rendered.unmount();
+    await waitFor(() => expect(mounted.close).toHaveBeenCalledOnce());
+  }
+);

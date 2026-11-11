@@ -14,6 +14,9 @@ export default mergeConfig(base, {
         heading: fileURLToPath(
           new URL('./heading-enter.html', import.meta.url)
         ),
+        checklist: fileURLToPath(
+          new URL('./checklist-platform.html', import.meta.url)
+        ),
         paste: fileURLToPath(new URL('./large-paste.html', import.meta.url)),
       },
     },

@@ -9,7 +9,10 @@
     "noEmit": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@core/constant/isMac": ["../../apps/web/src/lib/core/constant/isMac.ts"]
+    }
   },
   "include": ["src", "browser-test", "vite.config.ts", "vitest.config.ts"]
 }

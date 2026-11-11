@@ -82,6 +82,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { IS_MAC } from '@core/constant/isMac';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -98,7 +99,6 @@ import type { SyncDocumentOpenContext } from '@queries/storage/documentLoad/sync
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   isAndroid,
-  isAppleDevice,
   isFirefox,
   isIOS,
   isSafari,
@@ -475,7 +475,7 @@ export default function RustMarkdownEditor(props: {
                   ? 2
                   : isAndroid || isPlatform('android')
                     ? 3
-                    : isAppleDevice
+                    : IS_MAC
                       ? 1
                       : 0,
               span: flow.span,
