@@ -53,6 +53,13 @@ struct ViewEffectMsg { ClosedReason closedReason; SaveReason saveReason; byte ki
 struct QueryMsg { byte kind; uint32 key; string text; uint32 flags; }
 struct QueryReplyMsg { string text; uint32 count; uint32[] keys; string[] nodes; PointMsg[] points; }
 struct ClipboardMsg { string html; string lexical; string plain; }
+// Native export tree. The browser owns DOM/CSSOM serialization, not model traversal.
+struct HtmlStyleMsg { string name; string value; }
+// property marks initial native DOM property writes; parser attributes remain ordinary.
+struct HtmlAttributeMsg { string name; string value; HtmlStyleMsg[] styles; bool property; }
+// kind: 0 element, 1 text, 2 fragment, 3 trusted parser output.
+struct HtmlNodeMsg { byte kind; string tag; string text; HtmlAttributeMsg[] attributes; HtmlNodeMsg[] children; }
+struct ClipboardDomMsg { string lexical; string plain; HtmlNodeMsg[] nodes; }
 struct TypeRowMsg { uint32 index; string name; byte kind; uint32 flags; }
 struct TypeTableMsg { TypeRowMsg[] rows; }
 struct ListenerRowMsg { string command; uint32 priority; }

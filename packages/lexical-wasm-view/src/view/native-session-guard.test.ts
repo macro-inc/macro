@@ -144,6 +144,9 @@ test('real callbacks fence same/other-owner receivers and static admission befor
             'scoped callback'
           );
           expect(() => invoke(session, 'free')).toThrow('scoped callback');
+          expect(() => invoke(session, 'clipboardDom', [0, '{}'])).toThrow(
+            'scoped callback'
+          );
           expect(() => invoke(session, 'viewCommandEnter', [2, 2])).toThrow(
             'scoped callback'
           );

@@ -11,6 +11,7 @@ import type {
 import type { ViewCommandPriority } from './commands';
 import type { NativeEnterScope } from './native-enter';
 import type { NativeCallbackFailure } from './native-enter-output';
+import type { EditorThemeClasses } from './registry';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
 
 /** A deferred application command has no invocation-scoped DOM event. */
@@ -112,7 +113,11 @@ export interface EditorPort {
   ): Promise<InputSettlement>;
   setState(json: string): void;
   initialize(): void;
-  clipboard(kind: number): IClipboardMsg;
+  clipboard(
+    kind: number,
+    theme: EditorThemeClasses,
+    document: Document
+  ): IClipboardMsg;
   query(query: IQueryMsg): IQueryReplyMsg;
   composition(
     kind: number,

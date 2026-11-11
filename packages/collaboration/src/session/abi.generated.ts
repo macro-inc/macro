@@ -17,7 +17,7 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 50, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
+3, 54, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
 101, 0, 4, 0, 251, 255, 255, 255, 0, 4, 0, 0, 0, 12, 82,
 101, 109, 111, 118, 101, 0, 0, 1, 0, 0, 0, 67, 114, 101,
 97, 116, 101, 69, 108, 101, 109, 101, 110, 116, 0, 0, 2,
@@ -361,28 +361,49 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 97, 114, 100, 77, 115, 103, 0, 1, 0, 0, 12, 0, 0, 0, 0, 3,
 104, 116, 109, 108, 0, 245, 255, 255, 255, 0, 108, 101,
 120, 105, 99, 97, 108, 0, 245, 255, 255, 255, 0, 112, 108,
-97, 105, 110, 0, 245, 255, 255, 255, 0, 84, 121, 112, 101,
-82, 111, 119, 77, 115, 103, 0, 1, 0, 0, 13, 0, 0, 0, 0, 4,
-105, 110, 100, 101, 120, 0, 251, 255, 255, 255, 0, 110,
-97, 109, 101, 0, 245, 255, 255, 255, 0, 107, 105, 110,
-100, 0, 254, 255, 255, 255, 0, 102, 108, 97, 103, 115, 0,
-251, 255, 255, 255, 0, 84, 121, 112, 101, 84, 97, 98, 108,
-101, 77, 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111,
-119, 115, 0, 242, 255, 255, 255, 0, 45, 0, 0, 0, 0, 76,
-105, 115, 116, 101, 110, 101, 114, 82, 111, 119, 77, 115,
-103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109, 109, 97,
-110, 100, 0, 245, 255, 255, 255, 0, 112, 114, 105, 111,
-114, 105, 116, 121, 0, 251, 255, 255, 255, 0, 76, 105,
-115, 116, 101, 110, 101, 114, 84, 97, 98, 108, 101, 77,
+97, 105, 110, 0, 245, 255, 255, 255, 0, 72, 116, 109, 108,
+83, 116, 121, 108, 101, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0,
+0, 0, 2, 110, 97, 109, 101, 0, 245, 255, 255, 255, 0, 118,
+97, 108, 117, 101, 0, 245, 255, 255, 255, 0, 72, 116, 109,
+108, 65, 116, 116, 114, 105, 98, 117, 116, 101, 77, 115,
+103, 0, 1, 0, 0, 13, 0, 0, 0, 0, 4, 110, 97, 109, 101, 0,
+245, 255, 255, 255, 0, 118, 97, 108, 117, 101, 0, 245,
+255, 255, 255, 0, 115, 116, 121, 108, 101, 115, 0, 242,
+255, 255, 255, 0, 45, 0, 0, 0, 0, 112, 114, 111, 112, 101,
+114, 116, 121, 0, 255, 255, 255, 255, 0, 72, 116, 109,
+108, 78, 111, 100, 101, 77, 115, 103, 0, 1, 0, 0, 17, 0,
+0, 0, 0, 5, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0,
+116, 97, 103, 0, 245, 255, 255, 255, 0, 116, 101, 120,
+116, 0, 245, 255, 255, 255, 0, 97, 116, 116, 114, 105, 98,
+117, 116, 101, 115, 0, 242, 255, 255, 255, 0, 46, 0, 0, 0,
+0, 99, 104, 105, 108, 100, 114, 101, 110, 0, 242, 255,
+255, 255, 0, 47, 0, 0, 0, 0, 67, 108, 105, 112, 98, 111,
+97, 114, 100, 68, 111, 109, 77, 115, 103, 0, 1, 0, 0, 12,
+0, 0, 0, 0, 3, 108, 101, 120, 105, 99, 97, 108, 0, 245,
+255, 255, 255, 0, 112, 108, 97, 105, 110, 0, 245, 255,
+255, 255, 0, 110, 111, 100, 101, 115, 0, 242, 255, 255,
+255, 0, 47, 0, 0, 0, 0, 84, 121, 112, 101, 82, 111, 119,
+77, 115, 103, 0, 1, 0, 0, 13, 0, 0, 0, 0, 4, 105, 110,
+100, 101, 120, 0, 251, 255, 255, 255, 0, 110, 97, 109,
+101, 0, 245, 255, 255, 255, 0, 107, 105, 110, 100, 0, 254,
+255, 255, 255, 0, 102, 108, 97, 103, 115, 0, 251, 255,
+255, 255, 0, 84, 121, 112, 101, 84, 97, 98, 108, 101, 77,
 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111, 119,
-115, 0, 242, 255, 255, 255, 0, 47, 0, 0, 0, 0, 82, 111,
-117, 116, 101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0, 0,
-6, 100, 111, 99, 0, 245, 255, 255, 255, 0, 107, 105, 110,
-100, 0, 254, 255, 255, 255, 0, 99, 111, 110, 110, 0, 251,
-255, 255, 255, 0, 97, 99, 99, 101, 115, 115, 0, 254, 255,
-255, 255, 0, 99, 111, 100, 101, 0, 251, 255, 255, 255, 0,
-102, 114, 97, 109, 101, 0, 242, 255, 255, 255, 0, 254,
-255, 255, 255, 0, 0, 0, 0, 0
+115, 0, 242, 255, 255, 255, 0, 49, 0, 0, 0, 0, 76, 105,
+115, 116, 101, 110, 101, 114, 82, 111, 119, 77, 115, 103,
+0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109, 109, 97, 110,
+100, 0, 245, 255, 255, 255, 0, 112, 114, 105, 111, 114,
+105, 116, 121, 0, 251, 255, 255, 255, 0, 76, 105, 115,
+116, 101, 110, 101, 114, 84, 97, 98, 108, 101, 77, 115,
+103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111, 119, 115, 0,
+242, 255, 255, 255, 0, 51, 0, 0, 0, 0, 82, 111, 117, 116,
+101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0, 0, 6, 100,
+111, 99, 0, 245, 255, 255, 255, 0, 107, 105, 110, 100, 0,
+254, 255, 255, 255, 0, 99, 111, 110, 110, 0, 251, 255,
+255, 255, 0, 97, 99, 99, 101, 115, 115, 0, 254, 255, 255,
+255, 0, 99, 111, 100, 101, 0, 251, 255, 255, 255, 0, 102,
+114, 97, 109, 101, 0, 242, 255, 255, 255, 0, 254, 255,
+255, 255, 0, 0, 0, 0, 0
 ]);
 
 export const ABI_MAJOR: number = 2;
@@ -6306,6 +6327,524 @@ export class ClipboardMsg implements IClipboardMsg {
       plain: field2,
     };
     return new ClipboardMsg(message);
+  }
+}
+
+
+export interface IHtmlStyleMsg extends BebopRecord {
+
+  readonly name: string;
+
+  readonly value: string;
+}
+
+export class HtmlStyleMsg implements IHtmlStyleMsg {
+  public readonly name: string;
+  public readonly value: string;
+
+  constructor(record: IHtmlStyleMsg) {
+    this.name = record.name;
+    this.value = record.value;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return HtmlStyleMsg.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IHtmlStyleMsg): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    HtmlStyleMsg.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link HtmlStyleMsg}.
+   */
+  public static validateCompatibility(record: IHtmlStyleMsg): void {
+    BebopTypeGuard.ensureString(record.name)
+    BebopTypeGuard.ensureString(record.value)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link HtmlStyleMsg} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IHtmlStyleMsg {
+      return new HtmlStyleMsg(record);
+  }
+
+  /**
+   * Creates a new {@link HtmlStyleMsg} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IHtmlStyleMsg {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`HtmlStyleMsg.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    HtmlStyleMsg.validateCompatibility(parsed);
+    return HtmlStyleMsg.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return HtmlStyleMsg.encode(this);
+  }
+
+  public static encode(record: IHtmlStyleMsg): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    HtmlStyleMsg.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IHtmlStyleMsg, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.name);
+    view.writeString(record.value);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IHtmlStyleMsg {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return HtmlStyleMsg.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IHtmlStyleMsg {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let message: IHtmlStyleMsg = {
+      name: field0,
+      value: field1,
+    };
+    return new HtmlStyleMsg(message);
+  }
+}
+
+
+export interface IHtmlAttributeMsg extends BebopRecord {
+
+  readonly name: string;
+
+  readonly value: string;
+
+  readonly styles: Array<IHtmlStyleMsg>;
+
+  readonly property: boolean;
+}
+
+export class HtmlAttributeMsg implements IHtmlAttributeMsg {
+  public readonly name: string;
+  public readonly value: string;
+  public readonly styles: Array<IHtmlStyleMsg>;
+  public readonly property: boolean;
+
+  constructor(record: IHtmlAttributeMsg) {
+    this.name = record.name;
+    this.value = record.value;
+    this.styles = record.styles;
+    this.property = record.property;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return HtmlAttributeMsg.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IHtmlAttributeMsg): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    HtmlAttributeMsg.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link HtmlAttributeMsg}.
+   */
+  public static validateCompatibility(record: IHtmlAttributeMsg): void {
+    BebopTypeGuard.ensureString(record.name)
+    BebopTypeGuard.ensureString(record.value)
+    BebopTypeGuard.ensureArray(record.styles, HtmlStyleMsg.validateCompatibility);
+    BebopTypeGuard.ensureBoolean(record.property)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link HtmlAttributeMsg} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IHtmlAttributeMsg {
+      return new HtmlAttributeMsg(record);
+  }
+
+  /**
+   * Creates a new {@link HtmlAttributeMsg} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IHtmlAttributeMsg {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`HtmlAttributeMsg.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    HtmlAttributeMsg.validateCompatibility(parsed);
+    return HtmlAttributeMsg.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return HtmlAttributeMsg.encode(this);
+  }
+
+  public static encode(record: IHtmlAttributeMsg): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    HtmlAttributeMsg.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IHtmlAttributeMsg, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.name);
+    view.writeString(record.value);
+    {
+      const length0 = record.styles.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        HtmlStyleMsg.encodeInto(record.styles[i0], view)
+      }
+    }
+    view.writeByte(Number(record.property));
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IHtmlAttributeMsg {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return HtmlAttributeMsg.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IHtmlAttributeMsg {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let field2: Array<IHtmlStyleMsg>;
+    {
+      let length0 = view.readUint32();
+      field2 = new Array<IHtmlStyleMsg>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IHtmlStyleMsg;
+        x0 = HtmlStyleMsg.readFrom(view);
+        field2[i0] = x0;
+      }
+    }
+    let field3: boolean;
+    field3 = !!view.readByte();
+    let message: IHtmlAttributeMsg = {
+      name: field0,
+      value: field1,
+      styles: field2,
+      property: field3,
+    };
+    return new HtmlAttributeMsg(message);
+  }
+}
+
+
+export interface IHtmlNodeMsg extends BebopRecord {
+
+  readonly kind: number;
+
+  readonly tag: string;
+
+  readonly text: string;
+
+  readonly attributes: Array<IHtmlAttributeMsg>;
+
+  readonly children: Array<IHtmlNodeMsg>;
+}
+
+export class HtmlNodeMsg implements IHtmlNodeMsg {
+  public readonly kind: number;
+  public readonly tag: string;
+  public readonly text: string;
+  public readonly attributes: Array<IHtmlAttributeMsg>;
+  public readonly children: Array<IHtmlNodeMsg>;
+
+  constructor(record: IHtmlNodeMsg) {
+    this.kind = record.kind;
+    this.tag = record.tag;
+    this.text = record.text;
+    this.attributes = record.attributes;
+    this.children = record.children;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return HtmlNodeMsg.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IHtmlNodeMsg): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    HtmlNodeMsg.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link HtmlNodeMsg}.
+   */
+  public static validateCompatibility(record: IHtmlNodeMsg): void {
+    BebopTypeGuard.ensureUint8(record.kind)
+    BebopTypeGuard.ensureString(record.tag)
+    BebopTypeGuard.ensureString(record.text)
+    BebopTypeGuard.ensureArray(record.attributes, HtmlAttributeMsg.validateCompatibility);
+    BebopTypeGuard.ensureArray(record.children, HtmlNodeMsg.validateCompatibility);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link HtmlNodeMsg} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IHtmlNodeMsg {
+      return new HtmlNodeMsg(record);
+  }
+
+  /**
+   * Creates a new {@link HtmlNodeMsg} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IHtmlNodeMsg {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`HtmlNodeMsg.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    HtmlNodeMsg.validateCompatibility(parsed);
+    return HtmlNodeMsg.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return HtmlNodeMsg.encode(this);
+  }
+
+  public static encode(record: IHtmlNodeMsg): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    HtmlNodeMsg.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IHtmlNodeMsg, view: BebopView): number {
+    const before = view.length;
+    view.writeByte(record.kind);
+    view.writeString(record.tag);
+    view.writeString(record.text);
+    {
+      const length0 = record.attributes.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        HtmlAttributeMsg.encodeInto(record.attributes[i0], view)
+      }
+    }
+    {
+      const length0 = record.children.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        HtmlNodeMsg.encodeInto(record.children[i0], view)
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IHtmlNodeMsg {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return HtmlNodeMsg.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IHtmlNodeMsg {
+    let field0: number;
+    field0 = view.readByte();
+    let field1: string;
+    field1 = view.readString();
+    let field2: string;
+    field2 = view.readString();
+    let field3: Array<IHtmlAttributeMsg>;
+    {
+      let length0 = view.readUint32();
+      field3 = new Array<IHtmlAttributeMsg>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IHtmlAttributeMsg;
+        x0 = HtmlAttributeMsg.readFrom(view);
+        field3[i0] = x0;
+      }
+    }
+    let field4: Array<IHtmlNodeMsg>;
+    {
+      let length0 = view.readUint32();
+      field4 = new Array<IHtmlNodeMsg>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IHtmlNodeMsg;
+        x0 = HtmlNodeMsg.readFrom(view);
+        field4[i0] = x0;
+      }
+    }
+    let message: IHtmlNodeMsg = {
+      kind: field0,
+      tag: field1,
+      text: field2,
+      attributes: field3,
+      children: field4,
+    };
+    return new HtmlNodeMsg(message);
+  }
+}
+
+
+export interface IClipboardDomMsg extends BebopRecord {
+
+  readonly lexical: string;
+
+  readonly plain: string;
+
+  readonly nodes: Array<IHtmlNodeMsg>;
+}
+
+export class ClipboardDomMsg implements IClipboardDomMsg {
+  public readonly lexical: string;
+  public readonly plain: string;
+  public readonly nodes: Array<IHtmlNodeMsg>;
+
+  constructor(record: IClipboardDomMsg) {
+    this.lexical = record.lexical;
+    this.plain = record.plain;
+    this.nodes = record.nodes;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return ClipboardDomMsg.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IClipboardDomMsg): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    ClipboardDomMsg.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link ClipboardDomMsg}.
+   */
+  public static validateCompatibility(record: IClipboardDomMsg): void {
+    BebopTypeGuard.ensureString(record.lexical)
+    BebopTypeGuard.ensureString(record.plain)
+    BebopTypeGuard.ensureArray(record.nodes, HtmlNodeMsg.validateCompatibility);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link ClipboardDomMsg} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IClipboardDomMsg {
+      return new ClipboardDomMsg(record);
+  }
+
+  /**
+   * Creates a new {@link ClipboardDomMsg} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IClipboardDomMsg {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`ClipboardDomMsg.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    ClipboardDomMsg.validateCompatibility(parsed);
+    return ClipboardDomMsg.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return ClipboardDomMsg.encode(this);
+  }
+
+  public static encode(record: IClipboardDomMsg): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    ClipboardDomMsg.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IClipboardDomMsg, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.lexical);
+    view.writeString(record.plain);
+    {
+      const length0 = record.nodes.length;
+      view.writeUint32(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        HtmlNodeMsg.encodeInto(record.nodes[i0], view)
+      }
+    }
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IClipboardDomMsg {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return ClipboardDomMsg.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IClipboardDomMsg {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let field2: Array<IHtmlNodeMsg>;
+    {
+      let length0 = view.readUint32();
+      field2 = new Array<IHtmlNodeMsg>(length0);
+      for (let i0 = 0; i0 < length0; i0++) {
+        let x0: IHtmlNodeMsg;
+        x0 = HtmlNodeMsg.readFrom(view);
+        field2[i0] = x0;
+      }
+    }
+    let message: IClipboardDomMsg = {
+      lexical: field0,
+      plain: field1,
+      nodes: field2,
+    };
+    return new ClipboardDomMsg(message);
   }
 }
 

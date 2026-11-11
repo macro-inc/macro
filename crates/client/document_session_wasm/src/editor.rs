@@ -846,6 +846,25 @@ impl EditorSession {
         .and_then(|reply| bytes(&reply))
         .map_err(js)
     }
+    /// Browser clipboard DOM, using the caller's configured theme and native selection export.
+    #[wasm_bindgen(js_name=clipboardDom)]
+    pub fn clipboard_dom(&self, kind: u32, theme: &str) -> Result<Vec<u8>, JsError> {
+        if kind > 2 {
+            return Err(js(BoundaryError::Invalid("clipboard kind")));
+        }
+        let theme = serde_json::from_str(theme)
+            .map_err(BoundaryError::from)
+            .map_err(js)?;
+        query::clipboard_dom(
+            self.surface().state(),
+            self.surface().namespace(),
+            kind == 2,
+            query::export_flavor(self),
+            theme,
+        )
+        .and_then(|reply| bytes(&reply))
+        .map_err(js)
+    }
     /// Development checksum of the complete rendered tree.
     #[wasm_bindgen(js_name=debugViewChecksum)]
     pub fn debug_view_checksum(&self) -> Result<u32, JsError> {

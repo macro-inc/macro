@@ -3200,6 +3200,228 @@ impl<'raw> ::bebop::SubRecord<'raw> for ClipboardMsg<'raw> {
 impl<'raw> ::bebop::Record<'raw> for ClipboardMsg<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct HtmlStyleMsg<'raw> {
+    pub name: &'raw str,
+    pub value: &'raw str,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for HtmlStyleMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.name.serialized_size() +
+        self.value.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.name._serialize_chained(dest)? +
+            zelf.value._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            name: v0,
+            value: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for HtmlStyleMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HtmlAttributeMsg<'raw> {
+    pub name: &'raw str,
+    pub value: &'raw str,
+    pub styles: ::std::vec::Vec<HtmlStyleMsg<'raw>>,
+    pub property: bool,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for HtmlAttributeMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<HtmlStyleMsg<'raw>>>::MIN_SERIALIZED_SIZE +
+        <bool>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.name.serialized_size() +
+        self.value.serialized_size() +
+        self.styles.serialized_size() +
+        self.property.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.name._serialize_chained(dest)? +
+            zelf.value._serialize_chained(dest)? +
+            zelf.styles._serialize_chained(dest)? +
+            zelf.property._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            name: v0,
+            value: v1,
+            styles: v2,
+            property: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for HtmlAttributeMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct HtmlNodeMsg<'raw> {
+    pub kind: u8,
+    pub tag: &'raw str,
+    pub text: &'raw str,
+    pub attributes: ::std::vec::Vec<HtmlAttributeMsg<'raw>>,
+    pub children: ::std::vec::Vec<HtmlNodeMsg<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for HtmlNodeMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u8>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<HtmlAttributeMsg<'raw>>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<HtmlNodeMsg<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.kind.serialized_size() +
+        self.tag.serialized_size() +
+        self.text.serialized_size() +
+        self.attributes.serialized_size() +
+        self.children.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.kind._serialize_chained(dest)? +
+            zelf.tag._serialize_chained(dest)? +
+            zelf.text._serialize_chained(dest)? +
+            zelf.attributes._serialize_chained(dest)? +
+            zelf.children._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            kind: v0,
+            tag: v1,
+            text: v2,
+            attributes: v3,
+            children: v4,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for HtmlNodeMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClipboardDomMsg<'raw> {
+    pub lexical: &'raw str,
+    pub plain: &'raw str,
+    pub nodes: ::std::vec::Vec<HtmlNodeMsg<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ClipboardDomMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<HtmlNodeMsg<'raw>>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.lexical.serialized_size() +
+        self.plain.serialized_size() +
+        self.nodes.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.lexical._serialize_chained(dest)? +
+            zelf.plain._serialize_chained(dest)? +
+            zelf.nodes._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            lexical: v0,
+            plain: v1,
+            nodes: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ClipboardDomMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct TypeRowMsg<'raw> {
     pub index: u32,
     pub name: &'raw str,
@@ -6527,6 +6749,270 @@ pub mod owned {
     }
 
     impl<'raw> ::bebop::Record<'raw> for ClipboardMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct HtmlStyleMsg {
+        pub name: String,
+        pub value: String,
+    }
+
+    impl<'raw> ::core::convert::From<super::HtmlStyleMsg<'raw>> for HtmlStyleMsg {
+        fn from(value: super::HtmlStyleMsg) -> Self {
+            Self {
+                name: value.name.into(),
+                value: value.value.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for HtmlStyleMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <String>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.name.serialized_size() +
+            self.value.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.name._serialize_chained(dest)? +
+                zelf.value._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                name: v0,
+                value: v1,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for HtmlStyleMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct HtmlAttributeMsg {
+        pub name: String,
+        pub value: String,
+        pub styles: ::std::vec::Vec<HtmlStyleMsg>,
+        pub property: bool,
+    }
+
+    impl<'raw> ::core::convert::From<super::HtmlAttributeMsg<'raw>> for HtmlAttributeMsg {
+        fn from(value: super::HtmlAttributeMsg) -> Self {
+            Self {
+                name: value.name.into(),
+                value: value.value.into(),
+                styles: value.styles.into_iter().map(|value| value.into()).collect(),
+                property: value.property,
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for HtmlAttributeMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <String>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<HtmlStyleMsg>>::MIN_SERIALIZED_SIZE +
+            <bool>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.name.serialized_size() +
+            self.value.serialized_size() +
+            self.styles.serialized_size() +
+            self.property.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.name._serialize_chained(dest)? +
+                zelf.value._serialize_chained(dest)? +
+                zelf.styles._serialize_chained(dest)? +
+                zelf.property._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                name: v0,
+                value: v1,
+                styles: v2,
+                property: v3,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for HtmlAttributeMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct HtmlNodeMsg {
+        pub kind: u8,
+        pub tag: String,
+        pub text: String,
+        pub attributes: ::std::vec::Vec<HtmlAttributeMsg>,
+        pub children: ::std::vec::Vec<HtmlNodeMsg>,
+    }
+
+    impl<'raw> ::core::convert::From<super::HtmlNodeMsg<'raw>> for HtmlNodeMsg {
+        fn from(value: super::HtmlNodeMsg) -> Self {
+            Self {
+                kind: value.kind,
+                tag: value.tag.into(),
+                text: value.text.into(),
+                attributes: value.attributes.into_iter().map(|value| value.into()).collect(),
+                children: value.children.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for HtmlNodeMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u8>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<HtmlAttributeMsg>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<HtmlNodeMsg>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.kind.serialized_size() +
+            self.tag.serialized_size() +
+            self.text.serialized_size() +
+            self.attributes.serialized_size() +
+            self.children.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.kind._serialize_chained(dest)? +
+                zelf.tag._serialize_chained(dest)? +
+                zelf.text._serialize_chained(dest)? +
+                zelf.attributes._serialize_chained(dest)? +
+                zelf.children._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                kind: v0,
+                tag: v1,
+                text: v2,
+                attributes: v3,
+                children: v4,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for HtmlNodeMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct ClipboardDomMsg {
+        pub lexical: String,
+        pub plain: String,
+        pub nodes: ::std::vec::Vec<HtmlNodeMsg>,
+    }
+
+    impl<'raw> ::core::convert::From<super::ClipboardDomMsg<'raw>> for ClipboardDomMsg {
+        fn from(value: super::ClipboardDomMsg) -> Self {
+            Self {
+                lexical: value.lexical.into(),
+                plain: value.plain.into(),
+                nodes: value.nodes.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for ClipboardDomMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <String>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<HtmlNodeMsg>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.lexical.serialized_size() +
+            self.plain.serialized_size() +
+            self.nodes.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.lexical._serialize_chained(dest)? +
+                zelf.plain._serialize_chained(dest)? +
+                zelf.nodes._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                lexical: v0,
+                plain: v1,
+                nodes: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for ClipboardDomMsg {}
 
     #[derive(Clone, Debug, PartialEq)]
     pub struct TypeRowMsg {

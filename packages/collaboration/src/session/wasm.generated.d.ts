@@ -98,6 +98,10 @@ export class EditorSession {
      */
     clipboard(kind: number): Uint8Array;
     /**
+     * Browser clipboard DOM, using the caller's configured theme and native selection export.
+     */
+    clipboardDom(kind: number, theme: string): Uint8Array;
+    /**
      * Dispatch an allocation-light standard command.
      */
     command(code: number, a: number, b: number, text: string | null | undefined, now: number): number;
@@ -476,6 +480,7 @@ export interface InitOutput {
     readonly editorsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_clipboard: (a: number, b: number) => [number, number, number, number];
+    readonly editorsession_clipboardDom: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly editorsession_command: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_composition: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_compositionEnd: (a: number, b: number, c: any, d: number, e: number) => [number, number, number];

@@ -1,6 +1,6 @@
 import {
   Access,
-  ClipboardMsg,
+  ClipboardDomMsg,
   EditorInputMsg,
   FLAG_HANDLED,
   type IQueryMsg,
@@ -21,6 +21,7 @@ import type {
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
+import { serializeClipboardDom } from './clipboard-dom';
 import {
   type CommentSelection,
   encodeCommentSelectionCursors,
@@ -39,6 +40,7 @@ import type {
   TextFromView,
   ViewSink,
 } from './port';
+import type { EditorThemeClasses } from './registry';
 import type { Point, TypeRow, ViewSelection } from './types';
 
 export function selectionMessage(selection: ViewSelection): ISelectionMsg {
@@ -517,9 +519,12 @@ export class SessionPort implements EditorPort {
       (flags) => after?.(Boolean(flags & FLAG_HANDLED))
     );
   }
-  clipboard(kind: number) {
+  clipboard(kind: number, theme: EditorThemeClasses, document: Document) {
     this.assertRootAdmission();
-    return ClipboardMsg.decode(this.executor.session.clipboard(kind));
+    const data = ClipboardDomMsg.decode(
+      this.executor.session.clipboardDom(kind, JSON.stringify(theme))
+    );
+    return serializeClipboardDom(data, document);
   }
   /** Current durable selection cursors and their exact model text. */
   commentSelection(): CommentSelection | null {

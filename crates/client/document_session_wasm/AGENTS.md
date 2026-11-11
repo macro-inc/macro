@@ -57,6 +57,8 @@ Query kind 8 returns the selection's durable Loro cursors in `nodes` and its exa
 
 ## Boundaries
 
+Keep clipboardDom additive to headless clipboard: export plain, internal JSON and themed DOM in that order; the owner browser serializes the DOM tree while Rust retains selection and registry policy.
+
 - Keep application query kind 9 generation-fenced while forwarding to the surface controller query; ordinary query receivers remain unavailable inside native dispatcher callbacks.
 - Keep search wire-output tests aligned with the full Source controller registration order, including tags between mentions and snippets; preserve every callback and its literal snapshot assertions.
 

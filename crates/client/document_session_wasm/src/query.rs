@@ -114,11 +114,7 @@ pub(crate) fn clipboard(
     })
 }
 /// Block dragging explicitly includes descendants without changing normal copy semantics.
-fn block_clipboard(
-    state: &EditorState,
-    namespace: &str,
-    flavor: ExportFlavor,
-) -> Result<wire::ClipboardMsg, BoundaryError> {
+fn expanded_clipboard_selection(state: &EditorState) -> Result<Selection, BoundaryError> {
     let Some(Selection::Node(roots)) = state.selection() else {
         return Err(BoundaryError::Invalid("block clipboard selection"));
     };
@@ -134,12 +130,26 @@ fn block_clipboard(
             pending.extend(view.children_keys(key)?);
         }
     }
-    let selection = Selection::Node(expanded);
-    let lexical =
-        lexical_rich_nodes::clipboard::get_lexical_content(view, namespace, Some(&selection))?
-            .unwrap_or_default();
+    Ok(Selection::Node(expanded))
+}
+fn block_clipboard(
+    state: &EditorState,
+    namespace: &str,
+    flavor: ExportFlavor,
+) -> Result<wire::ClipboardMsg, BoundaryError> {
+    let selection = expanded_clipboard_selection(state)?;
+    let lexical = lexical_rich_nodes::clipboard::get_lexical_content(
+        state.view(),
+        namespace,
+        Some(&selection),
+    )?
+    .unwrap_or_default();
     Ok(wire::ClipboardMsg {
-        plain: roots.text_content(view),
+        plain: state
+            .selection()
+            .map(|selection| selection.text_content(state.view()))
+            .transpose()?
+            .unwrap_or_default(),
         lexical,
         html: html_for_selection(state, Some(&selection), flavor)?,
     })
@@ -186,6 +196,8 @@ fn selection_cursors(value: &serde_json::Value) -> Result<loro::LoroValue, Bound
         .into(),
     ))
 }
+mod clipboard_dom;
+pub(crate) use clipboard_dom::clipboard_dom;
 
 pub(crate) fn query(
     session: &crate::EditorSession,

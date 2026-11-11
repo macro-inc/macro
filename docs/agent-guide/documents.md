@@ -110,6 +110,8 @@ paint. The blank-document callback uses the mirror's maintained root-child count
 This native-view check does not establish compat-core or application rollout
 readiness.
 
+Copy and cut list, table, divider and mixed content in the native body; compare the actual plain-text and HTML MIME bytes with the same Source selection, including theme classes and browser style serialization. Retain raw internal Lexical JSON separately when fixture node-ID profiles differ; do not strip IDs to report three-format parity.
+
 The large-paste browser fixture also requires exact native/upstream DOM
 attributes, model and Markdown in all three engines. Native node keys are
 properties rather than serialized attributes; do not mask attributes in this

@@ -56,7 +56,11 @@ export class ClipboardAccess {
     private readonly port: EditorPort
   ) {}
   formats(kind: 0 | 1 | 2 = 0) {
-    return this.port.clipboard(kind);
+    return this.port.clipboard(
+      kind,
+      this.view.context.theme,
+      this.view.root.ownerDocument
+    );
   }
   async paste(
     clipboard: DataTransfer,
