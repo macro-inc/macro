@@ -29,6 +29,8 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createRunWhenCurrent } from '@core/util/run-when-current';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -416,6 +418,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -428,21 +431,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
-  let previousPeopleWindow: string | undefined;
-  let previousPeopleQuery = '';
-  createEffect(
-    on(peopleWindowKey, (key) => {
-      if (key === undefined) return;
-      if (
-        previousPeopleWindow !== undefined &&
-        key !== previousPeopleWindow &&
-        previousPeopleQuery === searchTerm()
-      )
-        controller.selectItem(0);
-      previousPeopleWindow = key;
-      previousPeopleQuery = searchTerm();
-    })
-  );
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -622,6 +610,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     targetItems: TARGET_ITEMS,
   });
 
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
+  );
+
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null
   >('start');
@@ -674,6 +676,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
+  const runWhenCurrent = createRunWhenCurrent(
+    () => searchTerm() !== props.menu.searchTerm(),
+    menuOpen
+  );
+
   const closeMenu = () => {
     props.editor?.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
@@ -686,9 +693,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     isActive: menuOpen,
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {
@@ -709,24 +718,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       }
     },
-    onSelect: () => {
-      const selectedItem = controller.selectedItem();
-      // Keep the menu open on an offline agent so Enter reads as "not that
-      // one" rather than silently dismissing with nothing inserted.
-      if (selectedItem && isOffline(selectedItem)) return;
-      if (selectedItem) {
-        itemAction(selectedItem).catch((error) =>
-          Telemetry.error(error, {
-            surface: 'mentions-menu',
-            itemKind: selectedItem.kind,
-          })
-        );
-      } else {
-        closeMenu();
-      }
-      props.menu.setSearchTerm('');
-      setMenuOpen(false);
-    },
+    onSelect: () =>
+      // The list trails the typed term by the debounce; act on the list for
+      // the term on screen.
+      runWhenCurrent(() => {
+        const selectedItem = controller.selectedItem();
+        // Keep the menu open on an offline agent so Enter reads as "not that
+        // one" rather than silently dismissing with nothing inserted.
+        if (selectedItem && isOffline(selectedItem)) return;
+        if (selectedItem) {
+          itemAction(selectedItem).catch((error) =>
+            Telemetry.error(error, {
+              surface: 'mentions-menu',
+              itemKind: selectedItem.kind,
+            })
+          );
+        } else {
+          closeMenu();
+        }
+        props.menu.setSearchTerm('');
+        setMenuOpen(false);
+      }),
     onClose: () => {
       if (canExitViewAll()) {
         controller.exitViewAll();
