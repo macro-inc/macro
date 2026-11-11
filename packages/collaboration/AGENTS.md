@@ -66,7 +66,7 @@ before/after/reentrant Start and cancellation without Start, actual MAX request
 reply, disposal, Close idempotency and unchanged DOM. No DOM view is allocated.
 Generate session/compatibility.generated.ts from document_session_wasm/abi/compatibility.bop with generate-compatibility-schema.ts; preserve compiler output verbatim and keep typed rendering separate from the flat Diff ABI.
 
-Compatibility generation concatenates the five schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Generate native plugin identities from the source-generated Rust shortcut catalog before compatibility generation; reject unknown IDs and preserve catalog order. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
+Compatibility generation concatenates the six schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Generate native plugin identities from the source-generated Rust shortcut catalog before compatibility generation; reject unknown IDs and preserve catalog order. Keep hold.bop after native plugin identities. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
 
 Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero owner/class/instance identifiers natively without changing graph state or invoking public serialization.
 
@@ -97,3 +97,5 @@ model default false; never infer intent from unknown branches or private MIME.
 Keep HTML/Lexical precedence and use this flag only for Markdown policy.
 
 Format the ABI samples and executor trace JSON with Biome after recording; freshness checks canonicalize only JSON whitespace and retain exact ordered packet bytes and calls.
+
+Carry publicationHold from the actual retirement result; None on an open batch does not prove retirement. Acknowledge the local receipt before releasing issued hold authority with fresh clocks, consume actual Machine flags, and acknowledge queued publications before surfacing an opaque failure. Never replay local acknowledgement or infer rollback after an unknown transport result.

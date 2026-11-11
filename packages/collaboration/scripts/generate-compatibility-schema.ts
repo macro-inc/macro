@@ -17,6 +17,7 @@ const inputs = [
   'foreign-native-fields.bop',
   'compatibility-prototypes.bop',
   'compatibility-native-plugins.bop',
+  'hold.bop',
 ];
 const outputs = [
   'crates/client/document_session_wasm/src/compatibility_generated.rs',

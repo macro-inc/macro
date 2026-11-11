@@ -39,6 +39,9 @@ enum CompatOperation : uint16 {
   SetCompositionKey = 55; CreateTableSelection = 56;
   CreateRegisteredNode = 57;
   Splice = 58;
+  // NoNode receiver; one installed CompatNativePlugin ID argument. The staged
+  // policy returns a Boolean handled value without admitting the outer update.
+  RunNativePluginEnter = 59;
 }
 struct CompatRequest {
   CompatOperation operation;
@@ -64,6 +67,7 @@ struct CompatCommit {
   string[] tags;
   ForeignRenderBatch batch;
   CompatSelectionData selection;
+  CompatPublicationHold publicationHold;
 }
 
 // External native publications retain the actual commit metadata until delivery.
@@ -229,6 +233,9 @@ struct CompatBatchReply {
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements; byte dirtyType;
   CompatRecordDelta delta; CompatBatchResult[] results;
   CompatBatchOutcome outcome;
+  // A retirement receipt carries actual deferred authority, never an inferred
+  // ticket. Open updates carry None without claiming that they were retired.
+  CompatPublicationHold publicationHold;
 }
 
 // Constructor tokens identify exact JS functions across editor-local class IDs.

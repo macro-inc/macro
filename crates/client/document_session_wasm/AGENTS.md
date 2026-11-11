@@ -89,6 +89,8 @@ Treat 1.6 MB Brotli as an advisory ceiling; retain nonblocking preload and stric
 
 Generate compatibility_generated.rs and collaboration/session/compatibility.generated.ts from abi/compatibility.bop plus the shared foreign-host schemas using generate-compatibility-schema.ts. Compatibility requests use exact captured record references and separate typed render metadata; preserve the session and flat Diff ABIs. These envelopes do not themselves provide a working production initializer.
 
+Generate publication hold envelopes from hold.bop in the same combined schema pass. Emit issued deferred tickets only from actual local retirement, retain discarded receipts until acknowledgement, and preserve original opaque failure slots. RunNativePluginEnter uses NoNode plus one installed native plugin ID and returns the staged policy's Boolean result without admitting the surrounding update.
+
 Use editor/update-bound native key reservations for compact buffered writes; never invent keys or reuse discarded reservations. Batch capture retains before releases, preserve leased frozen records, and invalidate root text caches in incremental deltas instead of retransmitting document text.
 
 Retain single-use ForeignReservedKey capabilities behind compatBeginCompact/compatReserveKeys tickets; blocks are bounded to 65,536 keys and belong to one editor/update. Retire unused tickets on commit/discard/no-op without rolling the allocator back. These additive reservation exports do not provide batch construction by themselves.

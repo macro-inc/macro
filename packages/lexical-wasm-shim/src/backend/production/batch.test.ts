@@ -6,6 +6,7 @@ import {
   CompatInstanceSeed,
   CompatNodeOperand,
   CompatOperation,
+  CompatPublicationHold,
   CompatSelectionData,
   ForeignCallbackValue,
   ForeignOpaqueValue,
@@ -52,6 +53,7 @@ function receipt(patch: Partial<ICompatBatchReply> = {}): Uint8Array {
     delta: { records: [], removedKeys: [], invalidateRootText: false },
     results: [],
     outcome: CompatBatchOutcome.fromCompatBatchSuccess({}),
+    publicationHold: CompatPublicationHold.fromCompatPublicationHoldNone({}),
     ...patch,
   }).slice();
 }
