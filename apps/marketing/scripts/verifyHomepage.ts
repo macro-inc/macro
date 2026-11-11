@@ -158,16 +158,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
           .locator('.macro-home-scroll')
           .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
         expect(overflow).toBe(false);
-        const hero = await page.locator('.macro-home-hero').boundingBox();
         const graphic = await page
-          .locator('.macro-home-hero [data-context-scene]')
+          .locator('.homepage-feature-links .feature-flow')
           .boundingBox();
-        expect(hero).not.toBeNull();
         expect(graphic).not.toBeNull();
-        expect(graphic!.y).toBeGreaterThanOrEqual(hero!.y);
-        expect(graphic!.y + graphic!.height).toBeLessThanOrEqual(
-          hero!.y + hero!.height + 1
-        );
+        expect(graphic!.x).toBeGreaterThanOrEqual(0);
+        expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(viewport.width);
         await page
           .locator('#email')
           .getByRole('link', { name: 'Learn more about Email', exact: true })

@@ -1,5 +1,4 @@
 import type { Component, JSX } from 'solid-js';
-import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { SceneComputer } from '../components/scenes/SceneComputer';
 import { SceneGlobe } from '../components/scenes/SceneGlobe';
 import { breakpoint, viewportWidth } from '../utils/utilBreakpoint';
@@ -239,7 +238,6 @@ export const RouteJobs: Component = () => {
           flip
         />
       </div>
-      <SitePageClosing />
     </>
   );
 };

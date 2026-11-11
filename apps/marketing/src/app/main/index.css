@@ -153,8 +153,8 @@ html, body, #root, #app-scroll-root { background: #000; }
 .marketing-content > * { max-width: 100%; }
 
 *::selection{
-  background-color: var(--a0);
-  color: var(--b0);
+  background-color: #b8d5ff;
+  color: #101820;
 }
 
 /* Horizontal scroll strips (mobile tab rows, the app-preview rail) should stay

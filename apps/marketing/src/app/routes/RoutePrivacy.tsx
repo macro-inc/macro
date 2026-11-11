@@ -1,5 +1,4 @@
 import type { Component } from 'solid-js';
-import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteLegal.css';
@@ -377,7 +376,6 @@ export const RoutePrivacy: Component = () => {
   return (
     <>
       <UtilPlainText content={content} />
-      <SitePageClosing />
     </>
   );
 };

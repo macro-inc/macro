@@ -234,7 +234,49 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
         Every plan includes a monthly amount of AI usage. Free has a limited
         allowance for trying Macro, Pro covers standard everyday use, and Max
         includes 10× Pro's usage for heavy agent work. If you reach your limit,
-        upgrade from billing settings: Free to Pro, or Pro to Max.
+        upgrade from billing settings: Free to Pro, or Pro to Max. Paid plans
+        can also continue with prepaid credits or usage billing, priced at
+        provider list price plus 25%. Included usage resets each billing period
+        and does not roll over; each team seat has its own allowance.
+      </>
+    ),
+  },
+  {
+    q: 'How do credits and usage billing work?',
+    a: (
+      <>
+        Open Settings → Billing to see included usage, its reset date, and your
+        credit balance. Buy credits in $10, $25, $50, or $100 packs; they apply
+        after included usage and never expire. Usage billing charges your card
+        in $10 increments after included usage and credits, up to your chosen
+        monthly limit. If a charge fails, update your payment method and
+        re-enable usage billing. Team owners buy credits and manage usage
+        billing for the team; members can view the balance.
+      </>
+    ),
+  },
+  {
+    q: 'Can my team mix plans?',
+    a: (
+      <>
+        Yes. Paid teams can mix Pro and Max seats. Manage each member’s plan
+        from the Seat plan menu in Settings → Team. Plan changes are prorated
+        for the remaining billing period, and upgrades take effect immediately.
+        Each seat has its own included AI allowance; unused allowance does not
+        transfer between seats. Prepaid credits and usage billing are shared.
+        Free teams can include unpaid members.
+      </>
+    ),
+  },
+  {
+    q: 'How do I manage or cancel my subscription?',
+    a: (
+      <>
+        In Settings → Billing, choose Manage to open the Stripe billing portal.
+        You can update your payment method, download invoices, or cancel your
+        subscription. After cancellation, your plan stays active until the end
+        of the billing period. You can also change your own plan from billing
+        settings; on a team, this changes only your seat.
       </>
     ),
   },

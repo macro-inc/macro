@@ -14,6 +14,7 @@ import { HomepageClosing } from '../../features/marketing/components/HomepageClo
 import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
 import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
 import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
+import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
 import { setPageSeo } from '../utils/utilSeo';
@@ -127,6 +128,7 @@ export function RouteEmail() {
         </div>
       </header>
       <TutorialVideoEmbed tutorial="mail" />
+      <ProductIntroduction product="Email" />
       <FeaturePageSection
         id="email-accounts"
         title="See your accounts in one inbox."
@@ -142,9 +144,9 @@ export function RouteEmail() {
         description="Use an agent routine to tag incoming emails by customer, project, or topic. The same tags work across emails, docs, and tasks, so you can find the related work together."
       >
         <PaperFeatureGraphic
-          height={300}
+          height={360}
           mobileHeight={390}
-          label="Incoming emails tagged automatically by a routine. Customer and follow-up tags identify the next step, project tags group related emails, and the same tags work in docs and tasks."
+          label="An inbox with one highlighted email automatically tagged Customers and Follow up by a routine. Callouts point to each tag."
         >
           <EmailAutoTagDemo />
         </PaperFeatureGraphic>

@@ -63,6 +63,12 @@
 /* References: avatar, sender, "in", source chip, relative time, quoted body. */
 .doc-ref-row { display: flex; min-width: 0; flex-direction: column; padding: 4px 0; border-radius: 8px; }
 .doc-ref-row + .doc-ref-row { margin-top: 6px; }
+.doc-reference-link { width: 100%; text-align: left; cursor: pointer; }
+.doc-reference-link:hover { background: var(--color-hover); }
+.doc-reference-link:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 2px; }
+@container sample-main (min-width: 600px) {
+  .doc-references-demo .sample-detail-layout[data-panel-open='true'] .sample-details { position: relative; inset: auto; width: 300px; min-width: 300px; max-width: 300px; background: transparent; border-left: 1px solid var(--color-edge-muted); }
+}
 .doc-ref-head { display: flex; min-width: 0; min-height: 24px; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; }
 .doc-ref-head > img { width: 16px; height: 16px; flex: none; border-radius: 50%; object-fit: cover; }
 .doc-ref-head > b { flex: none; font-weight: 500; color: var(--color-ink); }

@@ -13,6 +13,7 @@ the website.
 - Run the marketing build to validate MDX, links, assets, and prerendered pages.
 - Component adapters and document styles live in `apps/marketing/src/features/documentation`.
 - Keep the retired MCP tool reference unpublished; redirect its old URLs to MCP setup.
+- Keep billing guidance on `/pricing`; redirect the retired billing guide there. Keep the keyboard shortcut reference in the app and redirect its retired web guide to Support.
 - Keep one content source. Feature guides render in the feature page’s expandable reference section; do not publish duplicate standalone pages.
 - When consolidating a page, preserve its useful details and add permanent records to `docs.json` and `apps/marketing/seo/page-redirects.json`; run the marketing redirect check and follow the ordered host cutover in README.md.
 
@@ -43,3 +44,4 @@ the website.
 - Document the hosted product; self-hosting is covered only at a high level in Security
 - Don't document internal tooling, infrastructure details, or unreleased features
 - Don't add placeholder or "WIP" pages — add a page only when there's real content for it
+- Keep Security brief: show the three existing compliance badges with `SecurityBadges`, link to `https://security.macro.com` for security reviews, and retain security reporting and self-hosting contacts.

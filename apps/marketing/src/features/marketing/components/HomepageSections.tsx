@@ -330,7 +330,7 @@ export function HomepageSections() {
         />
         <HomepageTestimonials />
         <HomepageBlog />
-        <HomepageClosing root={() => root} />
+        <HomepageClosing />
       </div>
     </div>
   );

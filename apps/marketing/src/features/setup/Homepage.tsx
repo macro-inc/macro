@@ -6,7 +6,10 @@ import { HomepageFeatureLinks } from '../marketing/components/HomepageFeatureLin
 import { HomepageResources } from '../marketing/components/HomepageResources';
 import { HomepageScrollCue } from '../marketing/components/HomepageScrollCue';
 import { HomepageUnification } from '../marketing/components/HomepageUnification';
-import { MacroHero } from '../marketing/components/homepage/MacroHero';
+import {
+  homepageDescription,
+  MacroHero,
+} from '../marketing/components/homepage/MacroHero';
 import { SiteHeader } from '../marketing/components/SiteHeader';
 import { wallpapers } from '../marketing/components/TutorialWallpaper';
 import { routePhoneToMobileSignup } from '../marketing/core/navigation';
@@ -83,6 +86,7 @@ export function Homepage(props: { embedded?: boolean } = {}) {
           }
         >
           <WelcomeStep
+            description={homepageDescription}
             onContinue={() => {}}
             action={
               <div class="homepage-hero-action mt-6 flex justify-center pb-5">

@@ -1,5 +1,4 @@
 import type { Component } from 'solid-js';
-import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteDpa.css';
 import './RouteLegal.css';
@@ -1343,7 +1342,6 @@ export const RouteDpa: Component = () => {
           </section>
         </div>
       </main>
-      <SitePageClosing />
     </>
   );
 };

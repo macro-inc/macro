@@ -1,6 +1,9 @@
 import { routePhoneToMobileSignup } from '../../core/navigation';
 import './macro-hero.css';
 
+export const homepageDescription =
+  'Macro replaces 27+ apps with one connected system designed for humans and agents to work together.';
+
 /** Centered homepage introduction. */
 export function MacroHero() {
   return (
@@ -11,10 +14,7 @@ export function MacroHero() {
           <br />
           for your company.
         </h1>
-        <h2>
-          Your email, chat, tasks, docs, agents and CRM in one tab with team
-          level memory for agents.
-        </h2>
+        <h2>{homepageDescription}</h2>
         <a
           class="site-nav-start homepage-hero-cta macro-home-button"
           href="/app/signup"

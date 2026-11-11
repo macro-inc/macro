@@ -6,7 +6,6 @@ import LogoNyu from '../../assets/logos/nyu.svg';
 import LogoWaterloo from '../../assets/logos/waterloo.svg';
 import partnerAnnouncementVideo from '../../assets/partners/partnership-program-announcement.mp4';
 import partnerAnnouncementPoster from '../../assets/partners/partnership-program-poster.jpg';
-import { SitePageClosing } from '../../features/marketing/components/SitePageClosing';
 import { HomeSectionRule } from '../components/sections/HomeSectionRule';
 import { type FaqItem, SectionFaq } from '../components/sections/SectionFaq';
 import { demoHref } from '../utils/utilCta';
@@ -521,7 +520,6 @@ export const RoutePartners: Component = () => {
           </A>
         </section>
       </div>
-      <SitePageClosing />
     </>
   );
 };

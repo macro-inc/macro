@@ -4,43 +4,35 @@ import { demoEmails } from '../../core/demo-email';
 import { EmailTags } from './frozen/EmailRows';
 import './email-auto-tag-demo.css';
 
-// Illustrative inbox rows using the same tag pills as the other email demos.
+// One focused email shows the routine's tags in their inbox context.
 export function EmailAutoTagDemo() {
-  const emails = demoEmails.filter((email) =>
-    ['dana', 'julia', 'teo'].includes(email.id)
+  const emails = ['julia', 'dana', 'teo'].flatMap((id) =>
+    demoEmails.filter((email) => email.id === id)
   );
   return (
     <div class="email-auto-tag-art">
       <div class="email-auto-tag-rows">
         <For each={emails}>
           {(email, index) => (
-            <div class="email-auto-tag-example">
-              <div
-                class="email-auto-tag-row"
-                classList={{ 'email-auto-tag-highlight': index() === 0 }}
-              >
-                <Envelope class="email-auto-tag-icon" aria-hidden="true" />
-                <div class="email-auto-tag-message">
-                  <div class="email-auto-tag-sender">
-                    <strong>{email.sender}</strong>
-                    <span>{email.time}</span>
-                  </div>
-                  <div class="email-auto-tag-subject">{email.subject}</div>
-                  <EmailTags tags={email.tags} />
-                </div>
+            <div
+              class="email-auto-tag-row"
+              classList={{ 'email-auto-tag-highlight': index() === 1 }}
+            >
+              <Envelope class="email-auto-tag-icon" aria-hidden="true" />
+              <div class="email-auto-tag-message">
+                <strong>{email.sender}</strong>
+                <div class="email-auto-tag-subject">{email.subject}</div>
               </div>
-              <span class="email-auto-tag-annotation">
-                {
-                  [
-                    'Auto-tagged by your routine',
-                    'Grouped by project',
-                    'Same tags in docs & tasks',
-                  ][index()]
-                }
-              </span>
+              <EmailTags tags={email.tags} />
             </div>
           )}
         </For>
+      </div>
+      <div class="email-auto-tag-callout email-auto-tag-customer">
+        <span>Customer</span>
+      </div>
+      <div class="email-auto-tag-callout email-auto-tag-followup">
+        <span>Follow up</span>
       </div>
     </div>
   );

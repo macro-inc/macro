@@ -18,6 +18,7 @@ import {
   preferredPalette,
 } from '../../features/setup/sitePalette';
 import '../../styles/dark-theme.css';
+import '../../styles/body-headings.css';
 import '../../features/setup/cream-preview.css';
 import { DemoMentionMenu } from '../../features/marketing/components/DemoMentionMenu';
 import { PageVignette } from '../../features/marketing/components/PageVignette';

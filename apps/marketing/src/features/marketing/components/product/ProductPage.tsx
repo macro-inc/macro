@@ -28,6 +28,7 @@ import type { TutorialVideoId } from '../../core/tutorial-videos';
 import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { FeaturePage, FeaturePageCta } from '../FeaturePage';
 import { TutorialVideoEmbed } from '../TutorialVideoEmbed';
+import { ProductIntroduction } from './ProductIntroduction';
 import '../email/email-hero.css';
 import './product-page.css';
 import './product-demo-stage.css';
@@ -118,6 +119,7 @@ export function ProductHero(props: {
           />
         )}
       </Show>
+      <ProductIntroduction product={props.product} />
     </>
   );
 }

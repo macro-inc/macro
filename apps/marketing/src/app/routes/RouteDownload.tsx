@@ -1,6 +1,5 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import { FeaturePage } from '../../features/marketing/components/FeaturePage';
-import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/documentation/components/documentation.css';
 import './RouteDownload.css';
@@ -52,7 +51,6 @@ export function RouteDownload() {
           </p>
         </article>
       </div>
-      <HomepageClosing />
     </FeaturePage>
   );
 }

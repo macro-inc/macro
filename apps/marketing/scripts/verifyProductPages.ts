@@ -70,31 +70,18 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         await page.setViewportSize({ width: 1000, height: 844 });
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         const scroller = page.locator('#app-scroll-root');
+        const appLink = page.locator('.site-header a.site-nav-start');
+        const headerBounds = await appLink.boundingBox();
         await scroller.evaluate((element) => {
           element.scrollTop = element.scrollHeight;
         });
-        const appLink = page.locator('.site-header a.site-nav-open');
         await expect(appLink).toHaveCount(1);
-        await expect
-          .poll(() =>
-            page.locator('.site-nav-open-face').evaluate((element) => {
-              const textSize = Number.parseFloat(
-                getComputedStyle(element).fontSize
-              );
-              const matrix = new DOMMatrixReadOnly(
-                getComputedStyle(element.parentElement!).transform
-              );
-              return textSize > 24 && matrix.a === 1;
-            })
-          )
-          .toBe(true);
+        expect(await appLink.boundingBox()).toEqual(headerBounds);
+        await expect(page.locator('.homepage-closing-signup a')).toBeVisible();
         await scroller.evaluate((element) => {
           element.scrollTop = 0;
         });
-        await expect(appLink.locator('.site-nav-open-face')).toHaveCSS(
-          'font-size',
-          '14px'
-        );
+        expect(await appLink.boundingBox()).toEqual(headerBounds);
       }
       console.log(
         `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`

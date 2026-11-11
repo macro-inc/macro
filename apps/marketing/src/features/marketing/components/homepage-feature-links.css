@@ -7,29 +7,20 @@
   padding: 124px 24px 0;
   color: var(--color-ink);
 }
-.homepage-feature-links .feature-flow-expanded { height: 280px; }
+.homepage-feature-links .feature-flow-expanded { height: 340px; }
 .homepage-feature-links .feature-flow-icon { width: 48px; height: 48px; }
 .homepage-feature-links .feature-flow-icon svg { width: 22px; height: 22px; }
 .homepage-feature-links .feature-flow-core { left: 50%; top: 49%; width: 72px; height: 72px; }
 .homepage-feature-links .feature-flow-core svg { width: 32px; height: 32px; }
 .homepage-feature-links .feature-flow-halo { width: 320px; opacity: .65; }
 .homepage-feature-links .feature-flow-node > span {
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
   top: calc(100% + 6px);
-  padding: 3px 7px;
-  border-radius: 5px;
-  background: var(--color-panel, #171717);
-  color: var(--color-ink);
-  font-size: 11px;
+  color: var(--color-ink-muted);
+  font-size: 10px;
   line-height: 1.4;
-  transition: opacity 120ms ease;
 }
 .homepage-feature-links .feature-flow-node:hover,
 .homepage-feature-links .feature-flow-node:focus-visible { z-index: 3; }
-.homepage-feature-links .feature-flow-node:hover > span,
-.homepage-feature-links .feature-flow-node:focus-visible > span { visibility: visible; opacity: 1; }
 @media (max-width: 699px) {
   .homepage-feature-links { width: 100%; padding: 60px 20px 24px; }
   .homepage-feature-links .feature-flow-expanded { height: clamp(340px, 65vw, 400px); margin-bottom: -66px; }
@@ -38,8 +29,5 @@
   .homepage-feature-links .feature-flow-core { width: 66px; height: 66px; }
   .homepage-feature-links .feature-flow-core svg { width: 33px; height: 33px; }
   .homepage-feature-links .feature-flow-halo { width: 240px; }
-  .homepage-feature-links .feature-flow-node > span { font-size: 10px; top: calc(100% + 10px); padding: 0; background: transparent; color: var(--color-ink-muted); visibility: visible; opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .homepage-feature-links .feature-flow-node > span { transition: none; }
+  .homepage-feature-links .feature-flow-node > span { font-size: 10px; top: calc(100% + 10px); }
 }

@@ -77,10 +77,7 @@ export function SiteHeader(props: {
     glowFrame = requestAnimationFrame(() => {
       glowFrame = 0;
       if (!glowTarget) return;
-      // Sign Up paints through its face, which grows as it lands in the footer.
-      const bounds = (
-        glowTarget.querySelector('.site-nav-open-face') ?? glowTarget
-      ).getBoundingClientRect();
+      const bounds = glowTarget.getBoundingClientRect();
       glowTarget.style.setProperty(
         '--glow-x',
         `${((pointerX - bounds.left) / bounds.width) * 100}%`
@@ -188,7 +185,7 @@ export function SiteHeader(props: {
         </a>
         <Show when={!props.hideOpenApp}>
           <a
-            class="site-nav-open"
+            class="site-nav-start"
             onPointerEnter={moveGlow}
             onPointerMove={moveGlow}
             onPointerLeave={stopGlow}
@@ -198,25 +195,22 @@ export function SiteHeader(props: {
             href="/app/signup"
             onClick={routePhoneToMobileSignup}
           >
-            <span class="site-nav-open-label">Sign Up</span>
-            <span class="site-nav-open-face" aria-hidden="true">
-              <span>Sign Up</span>
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 32 32"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M5 16h22M17 6l10 10-10 10"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-            </span>
+            <span>Sign Up</span>
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 32 32"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M5 16h22M17 6l10 10-10 10"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
           </a>
         </Show>
       </div>

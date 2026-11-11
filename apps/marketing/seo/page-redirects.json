@@ -716,5 +716,13 @@
 	"/docs/AI/mcp/tools/web-search": "/docs/AI/mcp/overview",
 	"/AI/mcp/tools/web-search": "/docs/AI/mcp/overview",
 	"/docs/AI/mcp/tools/web-search.md": "/docs/AI/mcp/overview.md",
-	"/AI/mcp/tools/web-search.md": "/docs/AI/mcp/overview.md"
+	"/AI/mcp/tools/web-search.md": "/docs/AI/mcp/overview.md",
+	"/account/billing": "/pricing",
+	"/account/billing.md": "/pricing",
+	"/docs/account/billing": "/pricing",
+	"/docs/account/billing.md": "/pricing",
+	"/keyboard-shortcuts": "/docs/support",
+	"/keyboard-shortcuts.md": "/docs/support",
+	"/docs/keyboard-shortcuts": "/docs/support",
+	"/docs/keyboard-shortcuts.md": "/docs/support"
 }

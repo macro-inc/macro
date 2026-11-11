@@ -81,12 +81,10 @@
         "group": "Account",
         "pages": [
           "account/teams",
-          "account/billing",
           "security"
         ]
       },
       "support",
-      "keyboard-shortcuts",
       {
         "group": "Changelog",
         "pages": [
@@ -129,6 +127,26 @@
     "dark": "/logo/dark.svg"
   },
   "redirects": [
+    {
+      "source": "/keyboard-shortcuts.md",
+      "destination": "https://macro.com/docs/support",
+      "permanent": true
+    },
+    {
+      "source": "/keyboard-shortcuts",
+      "destination": "https://macro.com/docs/support",
+      "permanent": true
+    },
+    {
+      "source": "/account/billing.md",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/account/billing",
+      "destination": "https://macro.com/pricing",
+      "permanent": true
+    },
     {
       "source": "/apps.md",
       "destination": "https://macro.com/download",

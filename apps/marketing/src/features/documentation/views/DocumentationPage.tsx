@@ -13,8 +13,8 @@ import { SitePageClosing } from '../../marketing/components/SitePageClosing';
 import { BENEFIT_PAGES } from '../../marketing/core/benefit-pages';
 import { FEATURE_PAGES } from '../../marketing/core/navigation';
 import { BenefitPage } from '../../marketing/views/BenefitPage';
-import { PageOutline } from '../components/PageOutline';
 import { documentationComponents } from '../components/DocumentationContent';
+import { PageOutline } from '../components/PageOutline';
 import '../components/documentation.css';
 import '../components/guide-home-preview.css';
 import '../components/guide-db-preview.css';
@@ -76,78 +76,80 @@ export default function DocumentationPage() {
       <Show
         when={Object.hasOwn(BENEFIT_PAGES, slug())}
         fallback={
-          <PageOutline><main class="documentation-page">
-            <Show
-              when={page()}
-              fallback={
-                <>
-                  <h1>Guide not found</h1>
-                  <p>
-                    This guide may have moved.{' '}
-                    <a href="/docs">Browse the documentation</a> or search using
-                    the menu.
-                  </p>
-                </>
-              }
-            >
-              {(page) => (
-                <>
-                  <header class="documentation-heading">
-                    <h1>{page().title}</h1>
-                    <p>{page().description}</p>
-                    <Show
-                      when={FEATURE_PAGES.find(
-                        (feature) => feature.guide === page().href
-                      )}
+          <PageOutline>
+            <main class="documentation-page">
+              <Show
+                when={page()}
+                fallback={
+                  <>
+                    <h1>Guide not found</h1>
+                    <p>
+                      This guide may have moved.{' '}
+                      <a href="/docs">Browse the documentation</a> or search
+                      using the menu.
+                    </p>
+                  </>
+                }
+              >
+                {(page) => (
+                  <>
+                    <header class="documentation-heading">
+                      <h1>{page().title}</h1>
+                      <p>{page().description}</p>
+                      <Show
+                        when={FEATURE_PAGES.find(
+                          (feature) => feature.guide === page().href
+                        )}
+                      >
+                        {(feature) => (
+                          <a href={feature().href}>
+                            See the {feature().label} overview and demos ↗
+                          </a>
+                        )}
+                      </Show>
+                    </header>
+                    <article class="documentation-body">
+                      <Suspense fallback={<p>Loading guide…</p>}>
+                        <Dynamic
+                          component={components[page().slug]}
+                          components={documentationComponents}
+                        />
+                      </Suspense>
+                    </article>
+                    <nav
+                      class="documentation-pagination"
+                      aria-label="More guides"
                     >
-                      {(feature) => (
-                        <a href={feature().href}>
-                          See the {feature().label} overview and demos ↗
-                        </a>
-                      )}
-                    </Show>
-                  </header>
-                  <article class="documentation-body">
-                    <Suspense fallback={<p>Loading guide…</p>}>
-                      <Dynamic
-                        component={components[page().slug]}
-                        components={documentationComponents}
-                      />
-                    </Suspense>
-                  </article>
-                  <nav
-                    class="documentation-pagination"
-                    aria-label="More guides"
-                  >
-                    <Show when={neighbors().previous}>
-                      {(prev) => (
-                        <a href={prev().href}>
-                          <small>Previous</small>← {prev().title}
-                        </a>
-                      )}
-                    </Show>
-                    <Show when={neighbors().next}>
-                      {(next) => (
-                        <a href={next().href}>
-                          <small>Next</small>
-                          {next().title} →
-                        </a>
-                      )}
-                    </Show>
-                  </nav>
-                  <p class="documentation-help">
-                    Still have a question?{' '}
-                    <a href="/docs/support">Get in touch.</a>
-                  </p>
-                </>
-              )}
-            </Show>
-          </main></PageOutline>
+                      <Show when={neighbors().previous}>
+                        {(prev) => (
+                          <a href={prev().href}>
+                            <small>Previous</small>← {prev().title}
+                          </a>
+                        )}
+                      </Show>
+                      <Show when={neighbors().next}>
+                        {(next) => (
+                          <a href={next().href}>
+                            <small>Next</small>
+                            {next().title} →
+                          </a>
+                        )}
+                      </Show>
+                    </nav>
+                    <p class="documentation-help">
+                      Still have a question?{' '}
+                      <a href="/docs/support">Get in touch.</a>
+                    </p>
+                  </>
+                )}
+              </Show>
+            </main>
+          </PageOutline>
         }
       >
         <BenefitPage slug={slug()} />
+        <SitePageClosing />
       </Show>
-      <SitePageClosing />
     </Show>
   );
 }

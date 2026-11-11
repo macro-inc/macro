@@ -2,12 +2,11 @@ import { TimelineArtworkBand } from '../../../app/routes/RouteDocuments';
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import { FeatureComparisons } from '../components/comparisons/FeatureComparisons';
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
-import { DocumentOrganizationDemo } from '../components/documents/DocumentOrganizationDemo';
+import { DocumentProjectDemo } from '../components/documents/DocumentProjectDemo';
+import { DocumentReferencesDemo } from '../components/documents/DocumentReferencesDemo';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
 import HomepageCollaborativeDoc from '../components/HomepageCollaborativeDoc';
-import { HomepageMention } from '../components/HomepageMention';
-import HomepageProductPreview from '../components/homepage/HomepageProductPreview';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { documentComparisons } from '../core/feature-comparisons';
 
@@ -86,7 +85,11 @@ export function RouteDocuments() {
           title="Edit documents alongside agents."
           description="Agents have a live cursor in the document, instead of just editing the Markdown and giving you a diff or the next version. If you go offline and come back, your changes sync to your peers and conflicts resolve automatically."
         >
-          <HomepageProductPreview kind="documents" documentOnly />
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            label="Live document collaboration"
+            render={() => <DocumentProjectDemo teamEditing />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="document-links"
@@ -98,37 +101,14 @@ export function RouteDocuments() {
         </FeaturePageSection>
         <FeaturePageSection
           id="document-organization"
-          demo={{
-            tone: 'documents',
-            message: {
-              person: 'jacob',
-              text: (
-                <>
-                  I shared{' '}
-                  <HomepageMention
-                    kind="md"
-                    label="Website brief"
-                    description="The website copy and pricing changes."
-                    href="#document-organization"
-                  />{' '}
-                  in{' '}
-                  <HomepageMention
-                    kind="channel"
-                    label="website"
-                    description="The website project conversation."
-                    href="/channels"
-                  />{' '}
-                  so everyone has the context.
-                </>
-              ),
-            },
-          }}
+          demo={{ tone: 'documents', glassFrame: false }}
           title="Follow links back to Macro Chat."
           description="@mention a doc in a message and both know about each other. You can follow the link to the document or go back to the conversation that mentioned it."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <DocumentOrganizationDemo />}
+            label="Document references"
+            render={() => <DocumentReferencesDemo />}
           />
         </FeaturePageSection>
         <FeaturePageSection

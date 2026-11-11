@@ -2,6 +2,7 @@ import { type JSX, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { TutorialVideoEmbed } from '../../marketing/components/TutorialVideoEmbed';
 import { GuideGraphic } from './GuideGraphic';
+import { SecurityBadges } from './SecurityBadges';
 
 type BlockProps = ParentProps<{
   title?: string;
@@ -127,6 +128,7 @@ export const documentationComponents = {
     ])
   ),
   GuideGraphic,
+  SecurityBadges,
   TutorialVideoEmbed,
   Card,
   CardGroup: (props: ParentProps) => (

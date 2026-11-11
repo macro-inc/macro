@@ -33,7 +33,7 @@ const updatedTitles: Record<string, string> = {
   '/channels': 'Macro Chat — Focused team chat',
   '/documents': 'Macro Docs | Write With Your Team and Your Agents',
   '/download': 'Download Macro',
-  '/tasks': 'Macro Tasks — Automatic task management',
+  '/tasks': 'Macro Tasks — Task management for people and agents',
 };
 
 const linksByRoute = new Map<string, string[]>();

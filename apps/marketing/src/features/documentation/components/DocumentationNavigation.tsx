@@ -179,10 +179,8 @@ const agentGuides = guideNavigation.filter(
 const moreLinks = [
   { href: '/pricing', title: 'Pricing' },
   { href: '/docs/account/teams', title: 'Teams & Admin' },
-  { href: '/docs/account/billing', title: 'Billing & Plans' },
   { href: '/docs/security', title: 'Security' },
   { href: '/docs/support', title: 'Get support' },
-  { href: '/docs/keyboard-shortcuts', title: 'Keyboard shortcuts' },
   { href: '/docs/changelog/introduction', title: 'Changelog' },
   { href: '/posts', title: 'Blog' },
   { href: '/partners', title: 'Partners' },
