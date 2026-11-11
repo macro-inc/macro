@@ -100,6 +100,40 @@ fn imported_pins_keep_only_string_entries() -> Result<(), Error> {
     Ok(())
 }
 
+/// Source parse returns a fresh array for any present value, so a stored null,
+/// non-array or empty list reads as an explicitly stored empty list.
+#[test]
+fn imported_null_invalid_and_empty_pins_are_stored_empty_lists() -> Result<(), Error> {
+    for raw in [Value::Null, json!("x"), json!({ "a": 1 }), json!([])] {
+        let mut editor = editor();
+        editor.update(|tx| {
+            let mut data = serde_json::Map::new();
+            data.insert("$".into(), json!({ "pinnedPropertyIds": raw.clone() }));
+            tx.update_from_json(NodeKey::ROOT, &data)
+        })?;
+        assert_eq!(stored(&editor)?, json!({ "ids": [] }), "{raw}");
+    }
+    Ok(())
+}
+
+#[test]
+fn pinned_properties_reject_positional_operations() {
+    assert!(
+        decode(
+            "group-b.pinned-properties",
+            r#"{"operations":[["a",true]]}"#
+        )
+        .is_err()
+    );
+    assert!(
+        decode(
+            "group-b.pinned-properties",
+            r#"{"operations":{"id":"a","pin":true}}"#
+        )
+        .is_err()
+    );
+}
+
 #[test]
 fn pinned_properties_reject_unexpected_payloads() {
     assert!(decode("group-b.pinned-properties", "{}").is_err());

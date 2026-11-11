@@ -42,6 +42,13 @@ pub(super) fn decode(name: &str, json: &str) -> Result<Option<Command>, Error> {
     if !value.is_object() {
         return Err(Error::Invariant("pinned properties object payload"));
     }
+    // Serde also accepts positional sequences for structs; admit objects only.
+    let entries = value.get("operations").and_then(Value::as_array);
+    if !entries.is_some_and(|entries| entries.iter().all(Value::is_object)) {
+        return Err(Error::Invariant(
+            "pinned property operations must be objects",
+        ));
+    }
     let input: Input = serde_json::from_value(value)?;
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &UPDATE, input,
