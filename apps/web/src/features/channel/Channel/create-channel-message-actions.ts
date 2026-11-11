@@ -137,9 +137,7 @@ function removeLinkPreviewsHandler(
     removeLinkPreviews({
       parent: message.parent ?? options.parent(),
       messageID: message.id,
-      threadID:
-        (message as MessageData & { thread_id?: string | null }).thread_id ??
-        undefined,
+      threadID: message.thread_id ?? undefined,
     });
   };
 }
