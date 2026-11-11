@@ -707,7 +707,7 @@ it('marks an offline agent and refuses to mention it', () => {
   expect(menu.isOpen()).toBe(true);
 });
 
-it('says it is searching, not that there are no results, until the people source answers', async () => {
+it('says it is searching only for a slow search, and never that there are no results before sources answer', async () => {
   vi.useFakeTimers();
   mockNoEmails();
   const [loading, setLoading] = createSignal(true);
@@ -724,11 +724,20 @@ it('says it is searching, not that there are no results, until the people source
       onPick={vi.fn()}
     />
   ));
-  await vi.advanceTimersByTimeAsync(100);
+  // A quick answer shows neither label.
+  await vi.advanceTimersByTimeAsync(200);
+  expect(screen.queryByText('Searching…')).toBeNull();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  await vi.advanceTimersByTimeAsync(300);
   expect(screen.getByText('Searching…')).toBeTruthy();
   expect(screen.queryByText('No results')).toBeNull();
 
+  // Once shown it stays long enough to read, then gives the answer.
   setLoading(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  await vi.advanceTimersByTimeAsync(500);
   expect(screen.getByText('No results')).toBeTruthy();
   expect(screen.queryByText('Searching…')).toBeNull();
 });
