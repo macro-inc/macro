@@ -16,6 +16,25 @@ shares one completion and releases the native view before draining the executor.
 Construction is synchronous once WASM is ready: builders may mount on a detached
 root and later connect that same root without replacing its native session.
 
+Supply the actual generated native module as `mountSessionView`'s fifth
+argument, or `LocalSessionOptions.nativeCommands`, to enable ordered Enter UI
+listeners. `registerViewCommand` then registers Enter at its actual native
+priority and registration position; other commands retain their existing tie
+checks. Duplicate Enter function registration follows Source Set semantics.
+During a native UI callback, use only `view.port.nativeEnter` scoped selection,
+text, own-JSON and closed command operations. Ordinary session receivers,
+including getters, factories and free, are rejected module-wide before bindgen;
+ordinary Port calls also reject before entering the executor queue. Keyboard
+payloads live only in the synchronous admitted call; programmatic Enter supplies
+null. Escape is not part of this capability.
+
+Callback errors retain their original JS value. Exact native failure ordinals
+are deferred while Diff and I/O drain, then the original cause is delivered.
+Closing inside a callback detaches immediately and requests scoped retirement;
+DOM cleanup and terminal I/O finish after the enclosing native entry returns.
+Listener functions survive the current priority snapshot even after cleanup.
+This API does not install application decorators or editing overlays.
+
 `@macro-inc/lexical-wasm-view/compat` exports the compatibility DOM adapter and
 its runtime contract. It binds only the root supplied through setRootElement;
 reconcile then publish mutations before core update listeners. Its current oracle

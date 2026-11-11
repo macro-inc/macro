@@ -17,7 +17,14 @@ import type { SessionExecutor } from '@macro-inc/collaboration/session/executor'
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
-import type { EditorPort, TextFromView, ViewSink } from './port';
+import type { NativeEnterBinding } from './native-enter-output';
+import { assertNativeSessionReceiverAdmission } from './native-session-guard';
+import type {
+  EditorPort,
+  NativeEnterPort,
+  TextFromView,
+  ViewSink,
+} from './port';
 import type { TypeRow, ViewSelection } from './types';
 
 export function selectionMessage(selection: ViewSelection): ISelectionMsg {
@@ -60,15 +67,71 @@ export function selectionMessage(selection: ViewSelection): ISelectionMsg {
 
 /** Executes inputs through the existing serialized host-I/O executor. */
 export class SessionPort implements EditorPort {
+  readonly nativeEnter: NativeEnterPort | undefined;
   constructor(
     private readonly executor: Pick<
       SessionExecutor<EditorSession>,
       'session' | 'run' | 'now'
-    >,
+    > &
+      Partial<Pick<SessionExecutor<EditorSession>, 'runSync'>>,
     private readonly view: ViewSink,
-    private readonly debug = import.meta.env.DEV
-  ) {}
+    private readonly debug = import.meta.env.DEV,
+    private readonly commands?: NativeEnterBinding
+  ) {
+    if (commands) {
+      if (!executor.runSync)
+        throw new Error('Native Enter requires synchronous executor admission');
+      const { dispatcher, owner } = commands;
+      this.nativeEnter = {
+        register: (listener, priority, identity) => {
+          commands.output.assertAttached();
+          return dispatcher.register(
+            executor.session,
+            owner,
+            listener,
+            priority,
+            identity
+          );
+        },
+        hasListeners: () => dispatcher.hasListeners(owner),
+        scope: () => dispatcher.current(owner),
+        pendingSelection: () => dispatcher.pendingSelection(owner),
+        pendingText: (key) => dispatcher.pendingText(owner, key),
+        pendingOwnJSON: (key) => dispatcher.pendingOwnJSON(owner, key),
+        takeFailure: () => commands.output.takeFailure(),
+        dispatchScoped: (input) => {
+          commands.output.assertAttached();
+          return dispatcher.dispatchScoped(owner, input);
+        },
+        dispose: () => dispatcher.unregisterOwner(executor.session, owner),
+        dispatch: () => {
+          commands.output.assertAttached();
+          if (dispatcher.current(owner)) return dispatcher.enterScoped(owner);
+          commands.output.assertLocalAdmission();
+          let handled: boolean | undefined;
+          const run = executor.runSync;
+          if (!run)
+            throw new Error('Synchronous executor admission is unavailable');
+          run.call(
+            executor,
+            () => executor.session.viewCommandEnter(executor.now(), Date.now()),
+            (flags) => {
+              handled = Boolean(flags & FLAG_HANDLED);
+            }
+          );
+          if (handled === undefined)
+            throw new Error('Synchronous Enter completed without native flags');
+          return handled;
+        },
+      };
+    }
+  }
+  private assertRootAdmission(): void {
+    assertNativeSessionReceiverAdmission(this.executor.session);
+    this.commands?.output.assertLocalAdmission();
+  }
   types(): readonly TypeRow[] {
+    this.assertRootAdmission();
     return TypeTableMsg.decode(this.executor.session.typeTable()).rows.map(
       (row) => {
         const kind =
@@ -102,6 +165,7 @@ export class SessionPort implements EditorPort {
     );
   }
   listeners(): ReadonlyMap<string, number> {
+    this.assertRootAdmission();
     return new Map(
       ListenerTableMsg.decode(this.executor.session.listenerTable()).rows.map(
         (row) => [row.command, row.priority]
@@ -115,6 +179,7 @@ export class SessionPort implements EditorPort {
     text: string,
     facts: number
   ): boolean | undefined {
+    this.assertRootAdmission();
     if (!this.debug) return undefined;
     return this.executor.session.debugInsertion(
       SelectionMsg.encode(selectionMessage(selection)),
@@ -125,6 +190,7 @@ export class SessionPort implements EditorPort {
     );
   }
   textFromView(input: TextFromView): void {
+    this.assertRootAdmission();
     const session = this.executor.session;
     this.executor.run(
       () =>
@@ -161,6 +227,18 @@ export class SessionPort implements EditorPort {
     selection: ViewSelection,
     change?: ISelectionChangeMsg
   ): void {
+    const commands = this.commands;
+    if (commands?.dispatcher.current(commands.owner)) {
+      commands.output.assertAttached();
+      if (change)
+        throw new Error('Scoped selection does not accept root input metadata');
+      commands.dispatcher.setPendingSelection(
+        commands.owner,
+        selectionMessage(selection)
+      );
+      return;
+    }
+    this.assertRootAdmission();
     if (change || selection.kind !== 'range' || selection.dirty) {
       const editor = EditorInputMsg.fromEditorSelection({
         selection: selectionMessage(selection),
@@ -199,6 +277,7 @@ export class SessionPort implements EditorPort {
   }
 
   command(code: number, a = 0, b = 0, text?: string): boolean | undefined {
+    this.assertRootAdmission();
     let handled: boolean | undefined;
     this.executor.run(
       () =>
@@ -214,46 +293,73 @@ export class SessionPort implements EditorPort {
     mods: number,
     routed: number,
     key: string,
-    selection: ViewSelection
+    selection: ViewSelection,
+    event?: KeyboardEvent
   ): boolean | undefined {
+    this.assertRootAdmission();
     let handled: boolean | undefined;
     const anchor =
       selection.kind === 'range'
         ? selection.anchor
         : { key: 0, offset: 0, type: 'text' };
     const focus = selection.kind === 'range' ? selection.focus : anchor;
-    this.executor.run(
-      () =>
-        this.executor.session.keyDown(
-          code,
-          mods,
-          routed,
-          key,
-          anchor.key,
-          anchor.offset,
-          anchor.type === 'text' ? 0 : 1,
-          focus.key,
-          focus.offset,
-          focus.type === 'text' ? 0 : 1,
-          selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1,
-          this.executor.now()
-        ),
-      (flags) => {
-        handled = Boolean(flags & FLAG_HANDLED);
-      }
-    );
+    const call = () =>
+      this.executor.session.keyDown(
+        code,
+        mods,
+        routed,
+        key,
+        anchor.key,
+        anchor.offset,
+        anchor.type === 'text' ? 0 : 1,
+        focus.key,
+        focus.offset,
+        focus.type === 'text' ? 0 : 1,
+        selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1,
+        this.executor.now()
+      );
+    const after = (flags: number) => {
+      handled = Boolean(flags & FLAG_HANDLED);
+    };
+    if (key === 'Enter' && this.commands) {
+      if (!event)
+        throw new Error('Native keyboard Enter requires its actual event');
+      const run = this.executor.runSync;
+      if (!run)
+        throw new Error('Synchronous executor admission is unavailable');
+      const { dispatcher, owner } = this.commands;
+      run.call(
+        this.executor,
+        () => dispatcher.withKeyboardEvent(owner, event, call),
+        after
+      );
+    } else this.executor.run(call, after);
     return handled;
   }
-  input(editor: EditorInputMsg, after?: (handled: boolean) => void): void {
-    this.executor.run(
-      () =>
-        this.executor.session.input(
-          SessionInputMsg.encode({ ...emptyInput(2), editor }),
-          this.executor.now(),
-          Date.now()
-        ),
-      (flags) => after?.(Boolean(flags & FLAG_HANDLED))
-    );
+  input(
+    editor: EditorInputMsg,
+    after?: (handled: boolean) => void,
+    event?: KeyboardEvent
+  ): void {
+    this.assertRootAdmission();
+    const call = () =>
+      this.executor.session.input(
+        SessionInputMsg.encode({ ...emptyInput(2), editor }),
+        this.executor.now(),
+        Date.now()
+      );
+    const complete = (flags: number) => after?.(Boolean(flags & FLAG_HANDLED));
+    if (event?.key === 'Enter' && this.commands) {
+      const run = this.executor.runSync;
+      if (!run)
+        throw new Error('Synchronous executor admission is unavailable');
+      const { dispatcher, owner } = this.commands;
+      run.call(
+        this.executor,
+        () => dispatcher.withKeyboardEvent(owner, event, call),
+        complete
+      );
+    } else this.executor.run(call, complete);
   }
   /** Current native authority, independent of local editability and initial config. */
   effectiveAccess(): Access {
@@ -284,14 +390,17 @@ export class SessionPort implements EditorPort {
     );
   }
   clipboard(kind: number) {
+    this.assertRootAdmission();
     return ClipboardMsg.decode(this.executor.session.clipboard(kind));
   }
   query(query: IQueryMsg) {
+    this.assertRootAdmission();
     return QueryReplyMsg.decode(
       this.executor.session.query(QueryMsg.encode(query))
     );
   }
   initialize(): void {
+    this.assertRootAdmission();
     this.executor.run(() => {
       const out = decodeOutput(this.executor.session.initialize());
       this.view.apply(out.view, out.strings, out.viewEffects);
@@ -309,6 +418,7 @@ export class SessionPort implements EditorPort {
     focus: number,
     data: string
   ): void {
+    this.assertRootAdmission();
     this.executor.run(() =>
       this.executor.session.composition(
         kind,

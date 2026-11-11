@@ -381,7 +381,8 @@ export function registerEvents(view: EditorView): {
               (keyCommand && view.runViewCommand(keyCommand, event, 'after')))
           )
             event.preventDefault();
-        }
+        },
+        event
       );
       return;
     }
@@ -482,7 +483,11 @@ export function registerEvents(view: EditorView): {
     if (
       !routed &&
       !rustListeners.has('KeyDown') &&
-      (!keyCommand || !rustListeners.has(keyCommand)) &&
+      (!keyCommand ||
+        (!rustListeners.has(keyCommand) &&
+          !(
+            keyCommand === 'Key(Enter)' && view.port.nativeEnter?.hasListeners()
+          ))) &&
       (sameSelection(selection, view.selection().selection) ||
         isLastSubmittedSelection(selection))
     )
@@ -498,7 +503,8 @@ export function registerEvents(view: EditorView): {
       mods,
       routed,
       event.key,
-      selection
+      selection,
+      event
     );
     if (handled === false) {
       if (

@@ -18,6 +18,8 @@ export {
   EditorView,
   type ViewOptions,
 } from './view/editor-view';
+export type { NativeEnterModule, NativeEnterScope } from './view/native-enter';
+export type { NativeCallbackFailure } from './view/native-enter-output';
 export { createBuiltinRegistry } from './view/node-views/builtins';
 export {
   type MacroDecorators,
@@ -30,6 +32,7 @@ export {
 export type {
   ConformancePort,
   EditorPort,
+  NativeEnterPort,
   TextFromView,
   ViewSink,
 } from './view/port';
