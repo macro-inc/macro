@@ -160,7 +160,6 @@ pub(crate) fn construct_admin_consent_url(
 }
 
 pub(crate) async fn exchange_code_for_tokens(
-    _client: &UnauthedClient,
     login_url: &str,
     client_id: &str,
     client_secret: &str,

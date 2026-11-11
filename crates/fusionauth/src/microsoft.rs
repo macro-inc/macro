@@ -166,7 +166,6 @@ impl FusionAuthClient {
     ) -> Result<oauth::MicrosoftExchangeTokenResponse> {
         let credentials = self.microsoft_credentials()?;
         oauth::exchange_code_for_tokens(
-            &self.unauth_client,
             &credentials.login_url,
             &credentials.client_id,
             &credentials.client_secret,
@@ -187,7 +186,6 @@ impl FusionAuthClient {
     ) -> Result<oauth::MicrosoftExchangeTokenResponse> {
         let credentials = self.microsoft_credentials()?;
         oauth::exchange_code_for_tokens(
-            &self.unauth_client,
             &credentials.login_url,
             &credentials.client_id,
             &credentials.client_secret,
