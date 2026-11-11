@@ -1,0 +1,45 @@
+Cargo.lock
+  s_f1f7d0d5be9ceb::t_8d4c79b9cda246 13113
+apps/web/src/features/channel/Call/call-lifecycle.ts
+  s_f1f7d0d5be9ceb::t_6b02a258b3e23e 544
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_f1f7d0d5be9ceb::t_536bac27d1f9e8 302-333
+apps/web/src/features/channel/Input/ChannelInput.tsx
+  s_f1f7d0d5be9ceb::t_2868083cd9f091 666,668-674
+crates/messages/Cargo.toml
+  s_f1f7d0d5be9ceb::t_229ad62a570a87 59
+crates/messages/src/domain/service/guest_chat.rs
+  s_adc96a1413b8d0::t_cdd723360e4e8c 5-10,12,173,185-275,287,332
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_f1f7d0d5be9ceb::t_4d6aafe275150b 255-279
+docs/agent-guide/calls.md
+  s_f1f7d0d5be9ceb::t_070da307efce47 405-410
+docs/agent-guide/channels.md
+  s_f1f7d0d5be9ceb::t_0f024037ae3728 1577-1579
+docs/design/call-guest-chat.md
+  s_f1f7d0d5be9ceb::t_75dc3767de44fa 63-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cb55d82057d142830e85e83e4ce901234abd1168",
+  "prompts": {},
+  "sessions": {
+    "s_adc96a1413b8d0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cf453c0e-ee88-48e9-8443-8730ca84b73a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f1f7d0d5be9ceb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "400c2a02-faeb-49ee-bafa-b1f07c7830b4",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
