@@ -1172,11 +1172,17 @@ async fn a_background_idea_runs_only_as_the_person_saw_it(pool: PgPool) {
         shown_updated_at,
         by_person: true,
     };
+    let Err(IdeaError::Changed(now)) = h
+        .service
+        .accept(&user(OWNER), idea.id, as_person(idea.updated_at))
+        .await
+    else {
+        panic!("a card read before the rewrite is refused");
+    };
+    // The answer carries the idea as it is now.
     assert!(matches!(
-        h.service
-            .accept(&user(OWNER), idea.id, as_person(idea.updated_at))
-            .await,
-        Err(IdeaError::Changed)
+        &now.kind,
+        IdeaKind::Prompt { prompt, .. } if prompt.starts_with("Compare the quotes and email")
     ));
     assert!(runs.started.lock().unwrap().is_empty());
     h.service
@@ -1193,6 +1199,59 @@ async fn a_background_idea_runs_only_as_the_person_saw_it(pool: PgPool) {
             .1
             .starts_with("Compare the quotes and email the cheapest supplier.")
     );
+}
+
+/// Any idea is acted on only as the person saw it: a composer prompt or a
+/// reply rewritten after the card was read is refused with how it is now,
+/// stays open, and is done once accepted as it is.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn any_idea_is_acted_on_only_as_the_person_saw_it(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let mut composer = prompt_idea("quotes:composer", "Compare quotes");
+    composer.run_mode = Some(RunMode::Composer);
+    for request in [composer, entity_idea("venue:headcount")] {
+        let shown = h.suggest(session, request).await.idea.unwrap();
+        let rewritten = h
+            .service
+            .rewrite(
+                &principal(OWNER),
+                Some(session),
+                shown.id,
+                RewriteIdea {
+                    summary: Some("A fourth one arrived this morning.".to_owned()),
+                    reason: "New mail".to_owned(),
+                    ..RewriteIdea::default()
+                },
+            )
+            .await
+            .unwrap();
+        assert!(rewritten.ok, "{:?}", rewritten.problems);
+        let stale = Accept {
+            shown_updated_at: shown.updated_at,
+            by_person: true,
+        };
+        let Err(IdeaError::Changed(now)) = h.service.accept(&user(OWNER), shown.id, stale).await
+        else {
+            panic!("a stale card is refused");
+        };
+        assert_eq!(now.summary, "A fourth one arrived this morning.");
+        assert_eq!(now.state, IdeaState::Proposed);
+        h.service
+            .accept(
+                &user(OWNER),
+                shown.id,
+                Accept {
+                    shown_updated_at: now.updated_at,
+                    by_person: true,
+                },
+            )
+            .await
+            .unwrap();
+    }
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    assert!(feed.ideas.is_empty());
+    assert_eq!(feed.done.len(), 2);
 }
 
 /// A run waiting for an approval or an answer gets none: past its start

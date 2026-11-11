@@ -704,9 +704,9 @@ pub enum IdeaError {
     /// Only an open ideas session of the person's may call this.
     #[error("only an ideas generation session may do this")]
     NotGenerating,
-    /// The idea changed since the caller read it: read it again.
+    /// The idea changed since the caller read it: here it is as it is now.
     #[error("the idea changed since it was read; read it again")]
-    Changed,
+    Changed(Box<Idea>),
     /// Anything else.
     #[error("internal ideas error: {0:?}")]
     Internal(rootcause::Report),

@@ -830,6 +830,34 @@ impl IdeaRepo for PgIdeaRepo {
         Ok(true)
     }
 
+    async fn set_state_as_shown(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        from: &[IdeaState],
+        to: IdeaState,
+        shown_updated_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let from: Vec<String> = from.iter().map(|state| state.as_ref().to_owned()).collect();
+        let moved = sqlx::query!(
+            r#"UPDATE idea
+               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND updated_at = $6"#,
+            user.as_ref(),
+            id,
+            &from,
+            to.as_ref(),
+            now,
+            shown_updated_at,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            == 1;
+        Ok(moved)
+    }
+
     async fn open_about(
         &self,
         entity_type: EntityType,

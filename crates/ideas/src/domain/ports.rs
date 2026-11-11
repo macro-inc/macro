@@ -175,6 +175,19 @@ pub trait IdeaRepo: Send + Sync + 'static {
         change: &Change,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Move the person's idea `id` to `to` when it is in one of `from` and
+    /// still last changed at `shown_updated_at`: acting on it as the caller
+    /// saw it. Whether it moved.
+    fn set_state_as_shown(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        from: &[IdeaState],
+        to: IdeaState,
+        shown_updated_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Every open idea about the item, once per target naming it.
     fn open_about(
         &self,

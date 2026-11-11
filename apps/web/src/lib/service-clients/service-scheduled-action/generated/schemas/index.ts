@@ -109,6 +109,7 @@ export * from './idea';
 export * from './ideaAllOf';
 export * from './ideaAllOfRun';
 export * from './ideaAllOfStateReason';
+export * from './ideaChanged';
 export * from './ideaKind';
 export * from './ideaKindOneOf';
 export * from './ideaKindOneOfFour';
