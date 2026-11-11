@@ -81,8 +81,10 @@ function wallRange(time: EventTime, fallbackZone: string) {
   if (time.kind === 'allDay') {
     return [Date.parse(time.startDate), Date.parse(time.endDate)] as const;
   }
-  const zone = time.timeZone ?? fallbackZone;
-  return [wallTime(time.startsAt, zone), wallTime(time.endsAt, zone)] as const;
+  return [
+    wallTime(time.startsAt, fallbackZone),
+    wallTime(time.endsAt, fallbackZone),
+  ] as const;
 }
 
 /**
@@ -102,7 +104,11 @@ export function calendarEventTimeUpdate(
   const master = event.seriesTime;
   if (!master)
     throw new Error('The repeating event must be reloaded before editing.');
-  const zone = event.timeZone ?? 'UTC';
+  const zone =
+    (time.kind === 'timed' ? time.timeZone : undefined) ??
+    event.timeZone ??
+    (master.kind === 'timed' ? master.timeZone : undefined) ??
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
   const before: EventTime = event.allDay
     ? { kind: 'allDay', startDate: event.start, endDate: event.end }
     : {
@@ -113,6 +119,22 @@ export function calendarEventTimeUpdate(
       };
   const [oldStart, oldEnd] = wallRange(before, zone);
   const [newStart, newEnd] = wallRange(time, zone);
+  // Validate the dropped instants too: a series rule cannot encode a choice
+  // between the two instants in a repeated local hour.
+  if (time.kind === 'timed') {
+    if (
+      before.kind !== 'timed' ||
+      Date.parse(before.startsAt) !== Date.parse(time.startsAt)
+    ) {
+      instantFromWallTime(newStart, zone);
+    }
+    if (
+      before.kind !== 'timed' ||
+      Date.parse(before.endsAt) !== Date.parse(time.endsAt)
+    ) {
+      instantFromWallTime(newEnd, zone);
+    }
+  }
   const [masterStart, masterEnd] = wallRange(master, zone);
   const originalStart = event.recurrenceId ?? event.occurrenceKey;
   const movedException = Date.parse(originalStart) !== Date.parse(event.start);

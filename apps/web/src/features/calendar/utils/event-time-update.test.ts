@@ -214,6 +214,49 @@ describe('calendar time update requests', () => {
       endsAt: '2026-11-01T08:00:00.000Z',
     });
   });
+  it('refuses a move between the two instants with the same fall-back clock time', () => {
+    const event = {
+      ...RECURRING_EVENT,
+      occurrenceKey: '2026-11-01T05:30:00Z',
+      start: '2026-11-01T05:30:00Z',
+      end: '2026-11-01T07:30:00Z',
+      seriesTime: {
+        kind: 'timed' as const,
+        startsAt: '2026-10-25T05:30:00Z',
+        endsAt: '2026-10-25T06:30:00Z',
+        timeZone: 'America/New_York',
+      },
+    };
+    const time = {
+      ...MOVED_TIME,
+      startsAt: '2026-11-01T06:30:00Z',
+      endsAt: '2026-11-01T08:30:00Z',
+    };
+    expect(() => calendarEventTimeUpdate(event, time, 'all')).toThrow(
+      'daylight-saving'
+    );
+    expect(
+      calendarEventTimeUpdate(event, time, 'this_event').patch.time
+    ).toEqual(time);
+  });
+  it('uses one wall-clock zone when the provider omits the occurrence and master time zones', () => {
+    const event = {
+      ...RECURRING_EVENT,
+      timeZone: undefined,
+      seriesTime: {
+        kind: 'timed' as const,
+        startsAt: '2026-10-26T14:00:00Z',
+        endsAt: '2026-10-26T15:00:00Z',
+      },
+    };
+    const time = { ...MOVED_TIME, timeZone: 'America/Los_Angeles' };
+    expect(calendarEventTimeUpdate(event, time, 'all').patch.time).toEqual({
+      kind: 'timed',
+      startsAt: '2026-10-26T15:00:00.000Z',
+      endsAt: '2026-10-26T16:30:00.000Z',
+      timeZone: 'America/Los_Angeles',
+    });
+  });
   it('keeps one-off writes absolute and rejects missing series metadata', () => {
     expect(
       calendarEventTimeUpdate(

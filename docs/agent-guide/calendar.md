@@ -509,8 +509,9 @@ Cancel. `This event` changes only the selected occurrence; Cancel, Escape, and
 failed saves restore the original position. `All events`, when available, applies
 the start and duration changes relative to the series master, not the selected
 occurrence's date. Daily and weekly rules keep their weekdays and week boundaries
-in step with date moves. Existing time exceptions and repeat patterns that cannot
-be shifted safely offer only `This event`, with an explanation. A duration-only
+in step with date moves. Existing time exceptions, ambiguous daylight-saving
+times, and repeat patterns that cannot be shifted safely offer only `This event`,
+with an explanation. A duration-only
 change can still apply to more complex series. The provider retains other
 individually edited exceptions; this operation does not rewrite them.
 
