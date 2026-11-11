@@ -1,0 +1,50 @@
+crates/webhook/README.md
+  s_c5214cd0a3cbad::t_6c48a6f887da5c 102-104
+crates/webhook/src/inbound/kafka_stream_consumer.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 10
+  s_c5214cd0a3cbad::t_da1df541d7d6ef 12,28-31,34,52,69,71,93-94,96-101,106-108,110,117
+  s_c5214cd0a3cbad::t_311b12c455d62c 95,102-105,109,111-116,118-120
+services/document_storage_service/src/outbound/stream_contacts/test.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 1-91
+services/document_storage_service/src/outbound/mod.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 11
+crates/webhook/src/domain/stream.rs
+  s_c5214cd0a3cbad::t_828c047054f6d1 114,123,134,140,150,160,189-207,305,338
+  s_c5214cd0a3cbad::t_65c081d1181e9a 20,54-60,110,117,128,146,156,301
+crates/contacts/AGENTS.md
+  s_c5214cd0a3cbad::t_6c48a6f887da5c 18
+crates/webhook/src/domain/ingestion/stream.rs
+  s_c5214cd0a3cbad::t_828c047054f6d1 80-82,85,88-95,97
+crates/webhook/src/domain/ports.rs
+  s_c5214cd0a3cbad::t_65c081d1181e9a 108-121
+services/document_storage_service/src/server.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 972-974,983,993
+crates/webhook/src/domain/stream/test.rs
+  s_c5214cd0a3cbad::t_820b5a751148c6 646-649
+  s_c5214cd0a3cbad::t_cee17d5922e940 651-654
+  s_c5214cd0a3cbad::t_59c81819ac2b90 278-316,331,469,559,607-645,650,655-741
+crates/webhook/AGENTS.md
+  s_c5214cd0a3cbad::t_6c48a6f887da5c 40-46
+services/document_storage_service/src/api/context.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 934-940
+crates/webhook/src/domain/ingestion.rs
+  s_c5214cd0a3cbad::t_da1df541d7d6ef 381-387
+services/document_storage_service/src/outbound/stream_contacts.rs
+  s_c5214cd0a3cbad::t_dd7ffffe74fc64 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7d1be59c996e02ee3cc154bb68278cbdd0527bf4",
+  "prompts": {},
+  "sessions": {
+    "s_c5214cd0a3cbad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4f7b7df3-6562-414b-9b03-5f6f14bb774d",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
