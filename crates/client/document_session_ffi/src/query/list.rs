@@ -5,6 +5,20 @@ use lexical_rich_nodes::list::{
     item::get_checked,
     utils::{get_list_depth, is_nested_list_node},
 };
+use macro_document_model::{
+    nodes::Maybe, plugins_group_b::checklist_controls::collect_checklist_item_metadata,
+};
+
+/// Read-only checklist coverage, without task-provider or mutation authority.
+#[derive(Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiChecklistTarget {
+    /// No authoritative ordinary-checklist-row metadata.
+    Unknown,
+    /// A covered ordinary checklist row without a task identifier.
+    Plain,
+    /// A covered row with a non-nullish task identifier; task actions are separate.
+    Task,
+}
 
 /// Model-owned visual marker for one attached list item.
 #[derive(Debug, uniffi::Enum)]
@@ -34,6 +48,8 @@ pub struct FfiListMarker {
     pub depth: u32,
     /// Shared model marker policy.
     pub kind: FfiListMarkerKind,
+    /// Shared metadata coverage; Unknown must never be treated as Plain.
+    pub checklist_target: FfiChecklistTarget,
 }
 
 pub(super) fn markers(
@@ -71,6 +87,15 @@ pub(super) fn markers(
                 key,
                 depth: get_list_depth(state, parent).map_err(invalid)?,
                 kind,
+                checklist_target: match collect_checklist_item_metadata(state, key)
+                    .map_err(invalid)?
+                {
+                    None => FfiChecklistTarget::Unknown,
+                    Some(item) => match item.task_id {
+                        Maybe::Value(_) => FfiChecklistTarget::Task,
+                        Maybe::Missing | Maybe::Null => FfiChecklistTarget::Plain,
+                    },
+                },
             })
         })
         .collect()

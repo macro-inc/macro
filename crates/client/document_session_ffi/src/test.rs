@@ -675,3 +675,5 @@ mod search_query;
 mod checklist_plan;
 
 mod table_facts;
+
+mod checklist_targets;

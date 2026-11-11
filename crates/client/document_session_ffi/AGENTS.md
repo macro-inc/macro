@@ -69,3 +69,5 @@ Compute decoded image dimensions through media_display_dimensions with captured 
 Validate image callbacks against the consumed view lease, exact revision and current Image node under the session mutex; normalize natural size and upgrade URLs only with current Edit access through shared media commands, while Read and Comment remain renderer-local.
 
 Stage decorator facts through the shared model observer under the session mutex; promote its opaque candidate only after the consuming native view acknowledges actual installation, including removal-only batches. Retire exact view leases and require explicit remount preparation after detach; stale callbacks must never reactivate or retire a replacement.
+
+Read checklist_target through shared checklist metadata coverage; Unknown is suppressed, never inferred Plain. This fact is not authorization or a task-provider bridge; ordinary actions still pass current session admission.
