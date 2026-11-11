@@ -49,7 +49,7 @@ pub struct PhaseTiming {
 /// Milestones of one computer's first setup; latched once macrod connects.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetupTimeline {
-    /// The purchase reserved capacity.
+    /// The purchase reserved capacity (the reservation's creation).
     pub reserved_at: DateTime<Utc>,
     /// Payment or comp confirmed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -97,12 +97,14 @@ impl SetupTimeline {
         now: DateTime<Utc>,
     ) -> Vec<PhaseTiming> {
         let mut finished = Vec::new();
-        if self.complete() || matches!(phase, Phase::PaymentFailed) {
+        if self.complete() {
             return finished;
         }
         self.waited_for_capacity |= waiting_for_capacity;
-        let booting = matches!(phase, Phase::Booting { .. } | Phase::Running { .. });
-        if self.paid_at.is_none() && !matches!(phase, Phase::PendingPayment { .. }) {
+        let booting = matches!(phase, Phase::Booting | Phase::Running);
+        // A computer exists only once its purchase is confirmed: the first
+        // advance (at conversion) ends the payment wait.
+        if self.paid_at.is_none() {
             self.paid_at = Some(now);
             finished.push(PhaseTiming {
                 phase: SetupPhase::Payment,

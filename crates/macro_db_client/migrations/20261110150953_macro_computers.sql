@@ -32,15 +32,35 @@ $$
     END;
 $$;
 
+-- New types.
+
+-- An agent's account provider. New providers add a value.
+CREATE TYPE agent_provider AS ENUM ('claude');
+-- The last sign-in expiry notice sent for a login.
+CREATE TYPE account_notice_stage AS ENUM ('expires_soon', 'expires_today', 'expired');
+-- How a subscription item change ended. `abandoned` is a change whose
+-- outcome was never learned and that may no longer be sent.
+CREATE TYPE subscription_item_change_outcome AS ENUM
+    ('pending', 'succeeded', 'payment_failed', 'abandoned');
+-- A Macro computer's catalog size.
+CREATE TYPE computer_size AS ENUM ('standard', 'large', 'xl');
+-- Which worker carries out a computer's outbox effect.
+CREATE TYPE computer_effect_worker AS ENUM ('fleet', 'billing');
+-- A computer's pending lifecycle timer.
+CREATE TYPE computer_timer_kind AS ENUM (
+    'macrod_missing', 'restart_due', 'power_on_retry', 'capacity_changed',
+    'billing_ends', 'past_due_grace', 'retention_expired'
+);
+
 -- New tables.
 
 -- An account at an agent's provider (e.g. a Claude account), shared by every
 -- machine it is signed in on. `external_account_id` is the provider's own id
 -- (Claude: oauthAccount.accountUuid); the display columns are what the
--- provider last reported. New providers widen the CHECK.
+-- provider last reported.
 CREATE TABLE provider_accounts (
     id UUID PRIMARY KEY,
-    provider TEXT NOT NULL CHECK (provider IN ('claude')),
+    provider agent_provider NOT NULL,
     external_account_id TEXT NOT NULL,
     display_email TEXT,
     display_org TEXT,
@@ -62,12 +82,12 @@ CREATE TABLE harness_account_logins (
     id UUID PRIMARY KEY,
     harness_id UUID NOT NULL REFERENCES harnesses (id) ON DELETE CASCADE,
     provider_account_id UUID NOT NULL,
-    provider TEXT NOT NULL CHECK (provider IN ('claude')),
+    provider agent_provider NOT NULL,
     signed_in_by TEXT REFERENCES "User" (id) ON DELETE SET NULL,
     signed_in_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ,
     signed_out_at TIMESTAMPTZ,
-    notice_stage TEXT CHECK (notice_stage IN ('expires_soon', 'expires_today', 'expired')),
+    notice_stage account_notice_stage,
     notice_expires_at TIMESTAMPTZ,
     FOREIGN KEY (provider_account_id, provider) REFERENCES provider_accounts (id, provider)
 );
@@ -93,8 +113,7 @@ CREATE TABLE subscription_item_change (
     subscription_id TEXT NOT NULL,
     path TEXT NOT NULL,
     request JSONB NOT NULL,
-    outcome TEXT NOT NULL DEFAULT 'pending'
-        CHECK (outcome IN ('pending', 'succeeded', 'payment_failed')),
+    outcome subscription_item_change_outcome NOT NULL DEFAULT 'pending',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX subscription_item_change_pending_idx
@@ -110,27 +129,66 @@ CREATE TABLE hosted_runtime_host (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- One computer. `state` is the lifecycle's ComputerState; `host_id`, `awake`
--- and `holds_units` mirror it for capacity queries and are written with it.
--- The resources, catalog entry and price are snapshotted at purchase; comped
--- computers have no price. `created_by` is RESTRICTed so enrollment and
--- billing attribution survive until the computer or team is deleted.
--- `image` is the image the computer was created from, null until the first
--- creation finishes.
--- Bots are soft-deleted, so `default_agent_id` can name a deleted agent.
-CREATE TABLE hosted_runtime (
+-- A purchase holding host capacity while its charge is confirmed. `id` is
+-- the future computer's id. Created under the host lock; the purchase
+-- request (or the confirm worker, until `expires_at`) deletes it, inserting
+-- the computer in the same transaction when the charge succeeded.
+-- `purchase_key` is the buyer's client key, reused when a purchase is
+-- retried, so a retry finds this reservation or the computer it became.
+-- `price_id` is null for a comped purchase, which has a `comp_reason`.
+-- `team_id` has no foreign key: deleting a team first releases its computers
+-- and reservations through hosted_runtimes.
+CREATE TABLE computer_reservation (
     id UUID PRIMARY KEY,
-    team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    size TEXT NOT NULL CHECK (size IN ('standard', 'large', 'xl')),
+    team_id UUID NOT NULL,
+    host_id UUID NOT NULL REFERENCES hosted_runtime_host (id) ON DELETE RESTRICT,
+    size computer_size NOT NULL,
     vcpus INTEGER NOT NULL CHECK (vcpus > 0),
     memory_gib INTEGER NOT NULL CHECK (memory_gib > 0),
     disk_gib INTEGER NOT NULL CHECK (disk_gib > 0),
     catalog_entry TEXT NOT NULL,
     price_id TEXT,
-    host_id UUID REFERENCES hosted_runtime_host (id) ON DELETE RESTRICT,
+    comp_reason TEXT,
+    name TEXT NOT NULL,
+    purchase_key TEXT NOT NULL UNIQUE,
+    created_by TEXT NOT NULL REFERENCES "User" (id) ON DELETE RESTRICT,
+    extra_items JSONB NOT NULL,
+    provision_traceparent TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX computer_reservation_team_idx ON computer_reservation (team_id, created_at);
+CREATE INDEX computer_reservation_host_idx ON computer_reservation (host_id);
+CREATE INDEX computer_reservation_created_by_idx ON computer_reservation (created_by);
+
+-- One computer. `state` is the lifecycle's ComputerState: the machine's
+-- phase (`state.phase.phase`) and, beside it, its billing
+-- (`state.billing.billing`). `awake` mirrors it for capacity queries and is
+-- written with it. A computer holds sold capacity on `host_id` until its
+-- phase is `destroying`. The resources, catalog entry, price and comp reason
+-- are snapshotted at purchase; comped computers have no price.
+-- `purchase_key` is the key of the purchase that bought it. `created_by` is
+-- RESTRICTed so enrollment and billing attribution survive the buyer.
+-- `team_id` has no foreign key: rows outlive a deleted team until their
+-- release effects (billing removal, destroy, harness revocation) have run.
+-- `image` is the image the computer was created from, null until the first
+-- creation finishes.
+-- Bots are soft-deleted, so `default_agent_id` can name a deleted agent.
+CREATE TABLE hosted_runtime (
+    id UUID PRIMARY KEY,
+    team_id UUID NOT NULL,
+    name TEXT NOT NULL,
+    size computer_size NOT NULL,
+    vcpus INTEGER NOT NULL CHECK (vcpus > 0),
+    memory_gib INTEGER NOT NULL CHECK (memory_gib > 0),
+    disk_gib INTEGER NOT NULL CHECK (disk_gib > 0),
+    catalog_entry TEXT NOT NULL,
+    price_id TEXT,
+    comp_reason TEXT,
+    purchase_key TEXT NOT NULL UNIQUE,
+    host_id UUID NOT NULL REFERENCES hosted_runtime_host (id) ON DELETE RESTRICT,
     awake BOOLEAN NOT NULL DEFAULT false,
-    holds_units BOOLEAN NOT NULL DEFAULT true,
     state JSONB NOT NULL,
     version BIGINT NOT NULL DEFAULT 0,
     enrollment_generation BIGINT NOT NULL DEFAULT 0
@@ -142,13 +200,12 @@ CREATE TABLE hosted_runtime (
     enrolled_at TIMESTAMPTZ,
     setup_completed_at TIMESTAMPTZ,
     default_agent_id UUID REFERENCES bots (id) ON DELETE SET NULL,
-    image TEXT,
-    CONSTRAINT hosted_runtime_price_provenance_check
-        CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL))
+    image TEXT
 );
 
 CREATE INDEX hosted_runtime_team_idx ON hosted_runtime (team_id, created_at);
-CREATE INDEX hosted_runtime_host_idx ON hosted_runtime (host_id) WHERE holds_units;
+CREATE INDEX hosted_runtime_host_idx ON hosted_runtime (host_id)
+    WHERE (state->'phase'->>'phase') <> 'destroying';
 CREATE UNIQUE INDEX hosted_runtime_harness_idx ON hosted_runtime (harness_id)
     WHERE harness_id IS NOT NULL;
 CREATE INDEX hosted_runtime_created_by_idx ON hosted_runtime (created_by);
@@ -157,7 +214,7 @@ CREATE INDEX hosted_runtime_created_by_idx ON hosted_runtime (created_by);
 CREATE TABLE hosted_runtime_effect (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     computer_id UUID NOT NULL REFERENCES hosted_runtime (id) ON DELETE CASCADE,
-    worker TEXT NOT NULL CHECK (worker IN ('fleet', 'billing')),
+    worker computer_effect_worker NOT NULL,
     effect JSONB NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
     run_after TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -175,7 +232,7 @@ CREATE INDEX hosted_runtime_effect_due_idx ON hosted_runtime_effect (worker, run
 -- applies is ignored by the lifecycle.
 CREATE TABLE hosted_runtime_timer (
     computer_id UUID NOT NULL REFERENCES hosted_runtime (id) ON DELETE CASCADE,
-    kind TEXT NOT NULL,
+    kind computer_timer_kind NOT NULL,
     fire_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (computer_id, kind)
 );
@@ -186,7 +243,7 @@ CREATE INDEX hosted_runtime_timer_due_idx ON hosted_runtime_timer (fire_at);
 CREATE TABLE hosted_runtime_waitlist (
     team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
-    size TEXT NOT NULL CHECK (size IN ('standard', 'large', 'xl')),
+    size computer_size NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (team_id, user_id, size)
 );

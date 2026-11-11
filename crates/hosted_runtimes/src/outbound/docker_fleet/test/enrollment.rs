@@ -107,17 +107,13 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            price_id: None,
-            state: crate::domain::lifecycle::ComputerState {
-                phase: crate::domain::lifecycle::Phase::Provisioning {
-                    host: crate::domain::ids::HostId::new(Uuid::nil()),
-                    start: true,
-                },
-                ..crate::domain::lifecycle::ComputerState::reserved(
-                    crate::domain::ids::HostId::new(Uuid::nil()),
-                    Utc::now(),
-                )
+            funding: crate::domain::models::Funding::Comped {
+                reason: "fixture".to_owned(),
             },
+            host: crate::domain::ids::HostId::new(Uuid::nil()),
+            state: crate::domain::fakes::state(crate::domain::lifecycle::Phase::Provisioning {
+                start: true,
+            }),
             harness_id: None,
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),

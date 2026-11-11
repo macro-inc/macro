@@ -47,8 +47,5 @@ async fn a_lost_guest_is_recreated_on_its_data_disk_with_a_new_enrollment() {
         [EnrollmentGeneration::new(1), EnrollmentGeneration::new(2)]
     );
     assert_ne!(enrollments[0].0.pairing_id, enrollments[1].0.pairing_id);
-    assert_eq!(
-        computer(&operator, id).state.phase,
-        Phase::Booting { host: HOST }
-    );
+    assert_eq!(computer(&operator, id).state.phase, Phase::Booting);
 }

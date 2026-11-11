@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
-use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
+use crate::domain::lifecycle::{
+    Billing, BillingPolicy, ComputerState, HostId, Phase, Power, SubscriptionItemId,
+};
 use crate::domain::size::{CatalogEntryId, ComputerResources, ComputerSize};
 
 /// How long a host heartbeat advertises an attached operator.
@@ -102,9 +104,11 @@ pub struct Computer {
     pub resources: ComputerResources,
     /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
-    /// Stripe price saved for billing replay.
-    pub price_id: Option<stripe::PriceId>,
-    /// Persisted lifecycle state.
+    /// How the purchase was funded: the saved Stripe price, or the comp reason.
+    pub funding: Funding,
+    /// The fleet host holding the computer.
+    pub host: HostId,
+    /// Persisted lifecycle state: the machine phase and its billing.
     pub state: ComputerState,
     /// The harness macrod claims, created when the instance is created.
     pub harness_id: Option<HarnessId>,
@@ -234,17 +238,79 @@ impl From<Computer> for ComputerRecord {
     }
 }
 
-/// A computer to reserve units for.
+/// How a purchase is funded, saved with it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct NewComputer {
-    /// Purchase funding or billing state.
-    pub billing: PurchaseBilling,
-    /// Persisted in the payment confirmation outbox for exact purchase replay.
-    pub extra_items: Vec<SubscriptionItem>,
-    /// Stable resource identity.
+pub enum Funding {
+    /// Billed on the team subscription at this saved price.
+    Stripe {
+        /// Stripe price saved at purchase, for restores and quotes.
+        price_id: stripe::PriceId,
+    },
+    /// Provided without a charge.
+    Comped {
+        /// Why the computer is free.
+        reason: String,
+    },
+}
+
+impl Funding {
+    /// `"comped"` or `"stripe"`, for telemetry.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::Stripe { .. } => "stripe",
+            Self::Comped { .. } => "comped",
+        }
+    }
+}
+
+/// The buyer's key for one purchase: one per Buy dialog, reused when the
+/// purchase is retried, so a retry never buys a second computer.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct PurchaseKey(String);
+
+/// An empty, overlong or non-printable purchase key.
+#[derive(Debug, thiserror::Error)]
+#[error("purchaseKey must be 1..=128 printable ASCII characters")]
+pub struct InvalidPurchaseKey;
+
+impl PurchaseKey {
+    /// Validate a client key.
+    pub fn try_new(value: String) -> Result<Self, InvalidPurchaseKey> {
+        if value.is_empty() || value.len() > 128 || !value.bytes().all(|b| b.is_ascii_graphic()) {
+            return Err(InvalidPurchaseKey);
+        }
+        Ok(Self(value))
+    }
+
+    /// Borrow the key.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for PurchaseKey {
+    type Error = InvalidPurchaseKey;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_new(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for PurchaseKey {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Self::try_from(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
+
+/// A purchase to hold capacity for while its charge is confirmed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewReservation {
+    /// The future computer's id.
     pub id: ComputerId,
     /// Team that owns the computer.
     pub team_id: Uuid,
+    /// The buyer's key for this purchase.
+    pub purchase_key: PurchaseKey,
     /// Display name.
     pub name: ComputerName,
     /// Purchased catalog size.
@@ -253,10 +319,116 @@ pub struct NewComputer {
     pub resources: ComputerResources,
     /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
-    /// Stripe price saved for billing replay.
-    pub price_id: Option<stripe::PriceId>,
+    /// The saved price, or the comp reason.
+    pub funding: Funding,
     /// Macro user who purchased the computer.
     pub created_by: MacroUserIdStr<'static>,
+    /// Joined into the computer's subscription update, replayed exactly.
+    pub extra_items: Vec<SubscriptionItem>,
+    /// The purchase's trace context, carried to the computer.
+    pub provision_traceparent: Option<String>,
+}
+
+/// Capacity held on a host for a purchase whose charge is being confirmed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reservation {
+    /// The future computer's id.
+    pub id: ComputerId,
+    /// Team that owns the computer.
+    pub team_id: Uuid,
+    /// Host holding the capacity.
+    pub host: HostId,
+    /// The buyer's key for this purchase.
+    pub purchase_key: PurchaseKey,
+    /// Display name.
+    pub name: ComputerName,
+    /// Purchased catalog size.
+    pub size: ComputerSize,
+    /// Resource limits saved at purchase.
+    pub resources: ComputerResources,
+    /// Versioned catalog entry saved at purchase.
+    pub catalog_entry: CatalogEntryId,
+    /// The saved price, or the comp reason.
+    pub funding: Funding,
+    /// Macro user who purchased the computer.
+    pub created_by: MacroUserIdStr<'static>,
+    /// Joined into the computer's subscription update, replayed exactly.
+    pub extra_items: Vec<SubscriptionItem>,
+    /// The purchase's trace context, carried to the computer.
+    pub provision_traceparent: Option<String>,
+    /// After this the confirm worker settles the charge and stops replaying it.
+    pub expires_at: DateTime<Utc>,
+    /// When the purchase began.
+    pub created_at: DateTime<Utc>,
+}
+
+impl Reservation {
+    /// The Stripe idempotency key of this purchase's charge.
+    pub fn charge_key(&self) -> String {
+        format!("computer-add:{}", self.id)
+    }
+
+    /// A reservation as its team sees it: purchasing, setup step Creating.
+    pub fn status(&self) -> ComputerStatus {
+        ComputerStatus {
+            id: self.id,
+            name: self.name.as_str().to_owned(),
+            size: self.size.as_ref().to_owned(),
+            vcpus: i64::from(self.resources.vcpus.get()),
+            memory_gib: i64::from(self.resources.memory_gib.get()),
+            disk_gib: i64::from(self.resources.disk_gib.get()),
+            catalog_entry: self.catalog_entry.as_str().to_owned(),
+            status: ComputerStatusKind::Purchasing,
+            billing: Some(BillingStatus::Purchasing),
+            comp_reason: match &self.funding {
+                Funding::Comped { reason } => Some(reason.clone()),
+                Funding::Stripe { .. } => None,
+            },
+            setup: Some(SetupProgress::of(SetupStep::Creating)),
+            powered_on: true,
+            cancels_at: None,
+            can_undo_cancel: false,
+            retained_until: None,
+            can_restore: false,
+            past_due_since: None,
+            harness_id: None,
+            created_at: self.created_at,
+            purchased_by: self.created_by.to_string(),
+            setup_completed_at: None,
+            default_agent_id: None,
+            agent_count: 0,
+        }
+    }
+}
+
+/// What a purchase key already led to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reserved {
+    /// A new reservation now holds capacity.
+    New(Reservation),
+    /// This key's charge is still being confirmed.
+    Pending(Reservation),
+    /// This key already bought a computer.
+    Purchased(Box<ComputerRecord>),
+}
+
+/// How a purchase ended in the request that made it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Purchase {
+    /// The computer exists and is being set up.
+    Ready(ComputerId),
+    /// The charge's outcome is not known yet; the computer appears (or the
+    /// purchasing entry disappears, uncharged) once it is.
+    Confirming(ComputerId),
+}
+
+impl Purchase {
+    /// The purchased (or future) computer.
+    pub fn computer_id(self) -> ComputerId {
+        match self {
+            Self::Ready(id) | Self::Confirming(id) => id,
+        }
+    }
 }
 
 /// A buy request. For Stripe purchases, `extra_items` join the computer's
@@ -265,6 +437,8 @@ pub struct NewComputer {
 pub struct PurchaseRequest {
     /// Purchase funding or billing state.
     pub billing: PurchaseBilling,
+    /// The buyer's key for this purchase.
+    pub purchase_key: PurchaseKey,
     /// Team that owns the computer.
     pub team_id: Uuid,
     /// The admin or owner buying it.
@@ -412,10 +586,29 @@ pub enum ComputerStatusKind {
     Stopped,
     /// Guest needs a retry or operator attention.
     Failed,
-    /// Purchase payment was refused.
-    PaymentFailed,
+    /// The purchase's charge is being confirmed; no computer exists yet.
+    Purchasing,
     /// Guest has been released.
     Released,
+}
+
+/// Where a computer's billing stands, as its team sees it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum BillingStatus {
+    /// The purchase's charge is being confirmed.
+    Purchasing,
+    /// Billed on the team subscription.
+    Active,
+    /// The team subscription is behind on payment (`pastDueSince`).
+    PastDue,
+    /// Canceled; billed and running until `cancelsAt`.
+    Ending,
+    /// No longer billed; kept stopped until `retainedUntil`, restorable.
+    Ended,
+    /// Provided without a charge (`compReason`).
+    Comped,
 }
 
 /// Steps a new computer goes through, in order.
@@ -446,6 +639,17 @@ pub struct SetupProgress {
     pub total: u8,
 }
 
+impl SetupProgress {
+    /// Progress at `step`.
+    pub fn of(step: SetupStep) -> Self {
+        Self {
+            step,
+            position: step as u8 + 1,
+            total: SetupStep::Ready as u8 + 1,
+        }
+    }
+}
+
 /// A computer as its team sees it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -469,8 +673,8 @@ pub struct ComputerStatus {
     pub catalog_entry: String,
     /// Observed guest status.
     pub status: ComputerStatusKind,
-    /// Latched purchase outcome; unknown for quarantined records.
-    pub payment: Option<PaymentOutcome>,
+    /// Where billing stands; unknown for quarantined records.
+    pub billing: Option<BillingStatus>,
     /// Present for a comped purchase, including after release.
     pub comp_reason: Option<String>,
     /// Present until the computer first connects.
@@ -479,11 +683,15 @@ pub struct ComputerStatus {
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
     pub cancels_at: Option<DateTime<Utc>>,
-    /// Whether a cancel at period end can still be undone; false once its
-    /// billing item was removed ahead of the renewal.
+    /// Whether a cancel at period end can still be undone (until `cancelsAt`).
     pub can_undo_cancel: bool,
-    /// When the disk is destroyed, for a canceled computer.
+    /// When the disk is destroyed, for a computer whose billing ended.
     pub retained_until: Option<DateTime<Utc>>,
+    /// Whether the computer can be restored (`POST .../restore`): billing
+    /// ended and the disk is still retained.
+    pub can_restore: bool,
+    /// Since when the team subscription is past due.
+    pub past_due_since: Option<DateTime<Utc>>,
     /// Harness claimed by this guest.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
     pub harness_id: Option<HarnessId>,
@@ -504,44 +712,60 @@ pub struct ComputerStatus {
 }
 
 impl Computer {
-    /// Project lifecycle state into the team-facing status, with the number
-    /// of agents bound to its harness.
-    pub fn status(&self, agent_count: u32) -> ComputerStatus {
+    /// The saved comp reason, for a comped purchase.
+    pub fn comp_reason(&self) -> Option<&str> {
+        match &self.funding {
+            Funding::Comped { reason } => Some(reason),
+            Funding::Stripe { .. } => None,
+        }
+    }
+
+    /// Project lifecycle state into the team-facing status at `now`, with
+    /// the number of agents bound to its harness.
+    pub fn status(
+        &self,
+        agent_count: u32,
+        now: DateTime<Utc>,
+        policy: BillingPolicy,
+    ) -> ComputerStatus {
         let waiting_for_capacity = self.state.waiting_for_capacity();
         let setup_step = match self.state.phase {
             _ if waiting_for_capacity => None,
             _ if self.enrolled_at.is_some() => None,
-            Phase::PendingPayment { .. } => Some(SetupStep::Creating),
             Phase::Provisioning { .. } if self.harness_id.is_none() => Some(SetupStep::Creating),
             Phase::Provisioning { .. } => Some(SetupStep::Booting),
-            Phase::Booting { .. } | Phase::Restarting { .. } => Some(SetupStep::Connecting),
-            _ => None,
+            Phase::Booting | Phase::Crashed { retry: Some(_), .. } => Some(SetupStep::Connecting),
+            Phase::Running
+            | Phase::Crashed { retry: None, .. }
+            | Phase::Stopping
+            | Phase::Stopped
+            | Phase::Destroying => None,
         };
         let status = match self.state.phase {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
-            Phase::Running { .. } => ComputerStatusKind::Ready,
-            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Starting,
-            Phase::Stopped { .. } if self.state.power_on_requested => ComputerStatusKind::Starting,
-            Phase::Stopping { .. } => ComputerStatusKind::Stopping,
-            Phase::Stopped { .. } => ComputerStatusKind::Stopped,
-            Phase::Failed { .. } => ComputerStatusKind::Failed,
-            Phase::PaymentFailed => ComputerStatusKind::PaymentFailed,
-            Phase::Destroyed => ComputerStatusKind::Released,
-            Phase::PendingPayment { .. } | Phase::Provisioning { .. } => {
-                ComputerStatusKind::SettingUp
-            }
+            Phase::Running => ComputerStatusKind::Ready,
+            Phase::Booting | Phase::Crashed { retry: Some(_), .. } => ComputerStatusKind::Starting,
+            Phase::Stopped if self.state.power_on_requested => ComputerStatusKind::Starting,
+            Phase::Stopping => ComputerStatusKind::Stopping,
+            Phase::Stopped => ComputerStatusKind::Stopped,
+            Phase::Crashed { retry: None, .. } => ComputerStatusKind::Failed,
+            Phase::Destroying => ComputerStatusKind::Released,
+            Phase::Provisioning { .. } => ComputerStatusKind::SettingUp,
         };
-        let setup = setup_step.map(|step| SetupProgress {
-            step,
-            position: step as u8 + 1,
-            total: SetupStep::Ready as u8 + 1,
-        });
-        let (cancels_at, retained_until) = match self.state.billing {
-            Billing::Active => (None, None),
-            Billing::CancelAtPeriodEnd { at } | Billing::BillingStopped { at } => (Some(at), None),
-            Billing::Canceled { retained_until } => (None, Some(retained_until)),
+        let (billing, cancels_at, retained_until, past_due_since) = match &self.state.billing {
+            Billing::Active { .. } => (BillingStatus::Active, None, None, None),
+            Billing::PastDue { since, .. } => (BillingStatus::PastDue, None, None, Some(*since)),
+            Billing::EndsAt { at } if now < *at => (BillingStatus::Ending, Some(*at), None, None),
+            Billing::EndsAt { at } => (
+                BillingStatus::Ended,
+                None,
+                Some(*at + policy.retention),
+                None,
+            ),
+            Billing::Comped { .. } => (BillingStatus::Comped, None, None, None),
         };
+        let live = self.state.is_live();
 
         ComputerStatus {
             id: self.id,
@@ -552,13 +776,15 @@ impl Computer {
             disk_gib: i64::from(self.resources.disk_gib.get()),
             catalog_entry: self.catalog_entry.as_str().to_owned(),
             status,
-            payment: Some(self.state.payment),
-            comp_reason: self.state.comp_reason.clone(),
-            setup,
+            billing: Some(billing),
+            comp_reason: self.comp_reason().map(str::to_owned),
+            setup: setup_step.map(SetupProgress::of),
             powered_on: self.state.power == Power::On,
             cancels_at,
-            can_undo_cancel: matches!(self.state.billing, Billing::CancelAtPeriodEnd { .. }),
-            retained_until,
+            can_undo_cancel: live && billing == BillingStatus::Ending,
+            retained_until: retained_until.filter(|_| live),
+            can_restore: live && billing == BillingStatus::Ended,
+            past_due_since,
             harness_id: self.harness_id,
             created_at: self.created_at,
             purchased_by: self.created_by.to_string(),
@@ -567,13 +793,23 @@ impl Computer {
             agent_count,
         }
     }
+
+    /// The subscription item this computer is billed on, if it is.
+    pub fn subscription_item(&self) -> Option<&SubscriptionItemId> {
+        self.state.billing.subscription_item()
+    }
 }
 
 impl ComputerRecord {
     /// Expose quarantine without inventing metadata from an invalid payload.
-    pub fn status(&self, agent_count: u32) -> ComputerStatus {
+    pub fn status(
+        &self,
+        agent_count: u32,
+        now: DateTime<Utc>,
+        policy: BillingPolicy,
+    ) -> ComputerStatus {
         match self {
-            Self::Healthy(computer) => computer.status(agent_count),
+            Self::Healthy(computer) => computer.status(agent_count, now, policy),
             Self::NeedsAttention { id, display, .. } => ComputerStatus {
                 id: *id,
                 status: ComputerStatusKind::NeedsAttention,
@@ -583,13 +819,15 @@ impl ComputerRecord {
                 memory_gib: display.memory_gib,
                 disk_gib: display.disk_gib,
                 catalog_entry: display.catalog_entry.clone(),
-                payment: None,
+                billing: None,
                 comp_reason: None,
                 setup: None,
                 powered_on: false,
                 cancels_at: None,
                 can_undo_cancel: false,
                 retained_until: None,
+                can_restore: false,
+                past_due_since: None,
                 harness_id: None,
                 created_at: display.created_at,
                 purchased_by: display.purchased_by.clone(),

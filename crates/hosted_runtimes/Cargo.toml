@@ -48,6 +48,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
+tokio-retry = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 url = { workspace = true, features = ["serde"] }

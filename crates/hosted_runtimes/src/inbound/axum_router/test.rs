@@ -175,13 +175,13 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
         };
         let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
         let internal_purchase = serde_json::json!({"billing": {"kind": "stripe"}, "teamId": TEAM,
-            "createdBy": "macro|admin@example.com", "size": "standard"})
+            "createdBy": "macro|admin@example.com", "size": "standard", "purchaseKey": "buy-dialog-1"})
         .to_string();
         for (method, path, body) in [
             (
                 Method::POST,
                 "/team/computers".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
+                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
             ),
             (
                 Method::GET,
@@ -202,7 +202,7 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             (
                 Method::POST,
                 "/team/computers/notify".to_owned(),
-                r#"{"size":"standard"}"#.to_owned(),
+                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
             ),
             (
                 Method::POST,
@@ -292,7 +292,11 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
     };
     let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
     for (method, path, body) in [
-        (Method::POST, "/team/computers", r#"{"size":"standard"}"#),
+        (
+            Method::POST,
+            "/team/computers",
+            r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
+        ),
         (Method::GET, "/team/computers/quote?size=standard", ""),
         (Method::GET, "/team/computers/offers", ""),
     ] {

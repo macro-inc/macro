@@ -2,33 +2,27 @@ use super::*;
 use crate::domain::enrollment::EnrollmentGeneration;
 
 #[test]
-fn create_reserves_the_next_generation_for_first_creation_and_recreation() {
+fn recreation_reserves_the_next_generation() {
     for (phase, event, previous, expected) in [
-        (
-            Phase::PendingPayment {
-                host: HOST,
-                since: now(),
-            },
-            Event::PaymentConfirmed,
-            0,
-            1,
-        ),
-        (Phase::Running { host: HOST }, Event::InstanceLost, 1, 2),
-        (Phase::Stopped { host: HOST }, Event::InstanceLost, 8, 9),
+        (Phase::Running, Event::InstanceLost, 1, 2),
+        (Phase::Stopped, Event::InstanceLost, 8, 9),
     ] {
         let state = ComputerState {
             phase,
-            ..ComputerState::reserved(HOST, now())
+            ..billed(Phase::Stopped)
         };
         let (_, effects) = transition(
             &state,
             &event,
             Context {
+                host: HOST,
+                policy: policy(),
                 now: now(),
                 host_has_room: true,
                 enrollment_generation: EnrollmentGeneration::new(previous),
             },
-        );
+        )
+        .unwrap();
         assert_eq!(
             effects,
             vec![Effect::Create {

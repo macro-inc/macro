@@ -12,9 +12,10 @@ proptest::proptest! {
                 FakeBilling::default(), FixedClock,
                 StaticFleetAttachment(FleetAttachment::Attached),
             );
-            for size in purchases {
+            for (index, size) in purchases.into_iter().enumerate() {
                 let _ = service.purchase(PurchaseRequest {
                     billing: PurchaseBilling::Comped { reason: "capacity test".to_owned() },
+                    purchase_key: key(&format!("buy-dialog-{index}")),
                     team_id: TEAM,
                     created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
                     size: match size { 0 => ComputerSize::Standard, 1 => ComputerSize::Large, _ => ComputerSize::Xl },
@@ -22,7 +23,7 @@ proptest::proptest! {
                 }).await;
                 let computers = service.repo.computers.lock().unwrap();
                 let reserved: u32 = computers.values()
-                    .filter(|c| c.state.holds_units())
+                    .filter(|c| c.state.is_live())
                     .map(|c| c.resources.units()).sum();
                 proptest::prop_assert!(reserved <= 9);
             }

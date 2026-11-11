@@ -3,7 +3,7 @@ use super::*;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool.clone());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     let host = repo
         .register_host(HostRegistration {
             name: "quarantine-test".to_owned(),
@@ -14,13 +14,21 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         .await
         .unwrap();
     for id in [101, 102] {
-        let computer = repo.reserve(standard(id), now()).await.unwrap();
+        let computer = bought(&repo, id).await;
         let mut state = computer.state;
-        state.phase = Phase::Running { host: host.id };
+        state.phase = Phase::Running;
         sqlx::query!(
             "UPDATE hosted_runtime SET state = $2, awake = true WHERE id = $1",
             computer.id.as_uuid(),
             serde_json::to_value(state).unwrap()
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"INSERT INTO hosted_runtime_effect (computer_id, worker, effect, run_after) VALUES ($1, 'billing', '{"effect":"remove_billing_item","subscription_item":"si_quarantine"}', $2)"#,
+            computer.id.as_uuid(),
+            now() + Duration::minutes(1),
         )
         .execute(&pool)
         .await
@@ -62,7 +70,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         ComputerRecord::Healthy(_) => panic!("an invalid name must be quarantined"),
     }
     assert_eq!(
-        bad.status(0).status,
+        bad.status(0, now(), policy()).status,
         crate::domain::models::ComputerStatusKind::NeedsAttention
     );
     assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 2);
