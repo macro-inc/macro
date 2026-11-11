@@ -12,7 +12,7 @@ import {
   mountLocalSessionView,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
-import { NOOP_SPAN } from '@macro-inc/observability';
+import { NOOP_SPAN, Telemetry } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { createNativeComments } from './native-comments';
@@ -231,6 +231,24 @@ test('publication and removal wait for a drained flush, as Source does', async (
       expect(await comments.publish('mark-c', bookmark)).toBe(false);
       expect(await comments.remove('mark-a')).toBe(false);
       expect(commentSpy).toHaveBeenCalledTimes(2);
+
+      // Each refusal is reported with its reason, as Source does.
+      const warn = vi.spyOn(Telemetry, 'warn');
+      expect(await comments.publish('mark-c', bookmark)).toBe(false);
+      expect(warn).toHaveBeenCalledWith('comment.mark.publication_failed', {
+        'comment.mark_id': 'mark-c',
+        'comment.action': 'add',
+        'comment.reason': 'not_flushed',
+      });
+      flushSpy.mockResolvedValue({ kind: 'drained' });
+      commentSpy.mockResolvedValue({ kind: 'not-acked' });
+      expect(await comments.publish('mark-c', bookmark)).toBe(false);
+      expect(warn).toHaveBeenLastCalledWith('comment.mark.publication_failed', {
+        'comment.mark_id': 'mark-c',
+        'comment.action': 'add',
+        'comment.reason': 'not_acked',
+      });
+      warn.mockRestore();
     } finally {
       comments.dispose();
       dispose();

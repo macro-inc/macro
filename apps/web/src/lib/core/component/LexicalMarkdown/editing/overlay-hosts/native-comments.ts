@@ -7,6 +7,7 @@ import type {
   ViewNode,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import { Telemetry } from '@macro-inc/observability';
+import { match } from 'ts-pattern';
 import { type Accessor, createSignal } from 'solid-js';
 import type {
   NativeCommentAnchor,
@@ -230,18 +231,32 @@ export function createNativeComments(view: EditorView): NativeComments {
     const span = Telemetry.span('comment.mark.publish');
     span.setAttr('comment.action', action.kind);
     span.setAttr('comment.mark_id', markId);
+    // Source publishCommentMark reports each refused publication.
+    const refuse = (reason: string) => {
+      Telemetry.warn('comment.mark.publication_failed', {
+        'comment.mark_id': markId,
+        'comment.action': action.kind,
+        'comment.reason': reason,
+      });
+      return false;
+    };
     try {
       // Source flushCollaboration: local edits are delivered before the mark
       // changes; a read-only session has none to deliver.
       const flushed = await port.flush();
       span.setAttr('comment.flush', flushed.kind);
       if (flushed.kind !== 'drained' && flushed.kind !== 'read-only')
-        return false;
+        return refuse(flushed.kind === 'offline' ? 'offline' : 'not_flushed');
       const result = await port.comment(markId, action);
       span.setAttr('comment.reply', result.kind);
-      if (result.kind === 'refused')
-        span.setAttr('comment.refusal', result.reason);
-      return result.kind === 'accepted';
+      return match(result)
+        .with({ kind: 'accepted' }, () => true)
+        .with({ kind: 'not-acked' }, () => refuse('not_acked'))
+        .with({ kind: 'refused' }, ({ reason }) => {
+          span.setAttr('comment.refusal', reason);
+          return refuse(reason);
+        })
+        .exhaustive();
     } finally {
       span.end();
     }
