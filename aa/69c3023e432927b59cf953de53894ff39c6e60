@@ -1,0 +1,33 @@
+crates/channel_sender/src/lib.rs
+  s_c6a08203850d89::t_d5b46e5359c172 135,140
+docs/design/call-guest-chat.md
+  s_c6a08203850d89::t_80d50440d73716 54-61,65-66
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_c6a08203850d89::t_3d8df1b3ea7e90 63-88,317-323
+  s_c6a08203850d89::t_084a6c785d6411 163-169,201-203,206-207,209,216,316,340
+  s_c6a08203850d89::t_bcd22ea700eb52 199
+  s_c6a08203850d89::t_70a2c1525e63b0 62
+crates/messages/src/domain/service/test.rs
+  s_c6a08203850d89::t_98f66e827eae5b 768
+crates/channel_sender/src/test.rs
+  s_c6a08203850d89::t_78c2042e5f668c 21
+crates/messages/src/domain/service/guest_chat.rs
+  s_c6a08203850d89::t_98f66e827eae5b 172-174,262
+  s_c6a08203850d89::t_41041055836039 171
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aa69c3023e432927b59cf953de53894ff39c6e60",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
