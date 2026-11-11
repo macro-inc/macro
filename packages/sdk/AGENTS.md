@@ -89,7 +89,11 @@ enforced by the ordinary backend APIs.
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
   picture; `macro.me.uploadProfilePicture()` stores the image through the auth
-  service, because static file storage does not accept API keys. `team.invite(emails, { agent: true })`
+  service, because static file storage does not accept API keys. `update` takes a
+  `StaticImage` or its file id; `me.profilePicture()`, `User.profilePicture()`
+  and `users.profilePictures()` read `POST /user/profile_pictures`, returning a
+  `StaticImage` for `${static-files}/file/<id>` URLs and an
+  `ExternalProfilePicture` (`{ url }`) for legacy ones (`users/profile-picture.ts`). `team.invite(emails, { agent: true })`
   invites agents; their token only ever appears in the web app's setup modal.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a

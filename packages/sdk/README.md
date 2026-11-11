@@ -69,6 +69,13 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+Switch between earlier uploads with `macro.me.update({ profilePicture: image.id })`,
+and read pictures with `macro.me.profilePicture()`, `user.profilePicture()` or
+`macro.users.profilePictures(users)`. Pictures set through Macro are a
+`StaticImage`; legacy URL pictures are an `ExternalProfilePicture` (`{ url }`).
+Setting a picture is throttled to once a second per user and uploads to 20 an
+hour; both fail with 429 beyond that.
+
 #### Account managers
 
 An agent account can manage a person's account: either side asks in their DM, and

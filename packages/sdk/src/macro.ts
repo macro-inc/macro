@@ -548,6 +548,10 @@ export {
 } from './entities/spreadsheets/spreadsheet';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  ExternalProfilePicture,
+  type ProfilePicture,
+} from './entities/users/profile-picture';
 export type { ActivityReport } from './entities/users/user';
 export type {
   WebFetchOptions,

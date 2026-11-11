@@ -5,6 +5,7 @@ import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { PropertiedEntity } from '../entity';
+import { type ProfilePicture, toProfilePicture } from './profile-picture';
 
 /** A privacy-reviewed summary of a user's professional work over one period. */
 export type ActivityReport = Activity;
@@ -58,6 +59,28 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
     const entry = await this.detail.get();
     const full = [entry.first_name, entry.last_name].filter(Boolean).join(' ');
     return full || undefined;
+  }
+
+  /**
+   * This user's current profile picture. Reads the auth service every time,
+   * so it reflects a recent change.
+   *
+   * A picture set through Macro is a `StaticImage`; an older picture stored as
+   * a bare URL is an `ExternalProfilePicture`. For many users at once use
+   * `macro.users.profilePictures`.
+   *
+   * @returns The picture, or `undefined` if the user has none.
+   */
+  async profilePicture(): Promise<ProfilePicture | undefined> {
+    const { pictures } = unwrap(
+      await this.client.auth.postProfilePictures({
+        body: { user_id_list: [this.id] },
+      }),
+    );
+    return toProfilePicture(
+      this.client,
+      pictures.find((p) => p.id === this.id),
+    );
   }
 
   /**
