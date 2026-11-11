@@ -31,7 +31,7 @@ vi.mock('@core/util/platform', () => ({
   isTauri: () => true,
   isPlatform: (platform: string) => platform === 'android',
 }));
-vi.mock('@queries/auth', () => ({ useUserNamesQuery: vi.fn() }));
+vi.mock('@queries/auth', () => ({ useUserNames: vi.fn() }));
 vi.mock('@queries/call/call', () => ({
   invalidateActiveCallQueries: async () => {},
 }));

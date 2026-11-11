@@ -76,7 +76,11 @@ import {
 export class DatabaseNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Run one SQL statement over the caller's visible databases. Writes execute once. */
+  /**
+   * Run one SQL statement over the caller's visible databases. Writes execute once.
+   *
+   * @destructive
+   */
   query(
     sql: string,
     options?: DatabaseQueryOptions,
@@ -89,12 +93,20 @@ export class DatabaseNamespace {
     return Database.byId(this.client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /**
+   * Create a database owned by the caller.
+   *
+   * @write
+   */
   create(options: { name: string }): Promise<Database> {
     return Database.create(this.client, options);
   }
 
-  /** The databases the caller can see. */
+  /**
+   * The databases the caller can see.
+   *
+   * @readonly
+   */
   list(): Promise<Database[]> {
     return Database.list(this.client);
   }
@@ -103,6 +115,9 @@ export class DatabaseNamespace {
    * What the caller can sync a table from: whether Granola is connected, and
    * the Notion data sources their Notion connection can read. Pass one to
    * {@link createSynced} or {@link Database.addSync}.
+   *
+   * @readonly
+   * @openworld
    */
   async syncSources(): Promise<DatabaseSyncSources> {
     const { granola, notion } = unwrap(
@@ -124,6 +139,10 @@ export class DatabaseNamespace {
    * with it (rows upserted from the source on a schedule, acting as the
    * caller), and run its first sync at once. The sync's `database` is the
    * new database.
+   *
+   * @write
+   * @openworld
+   * @mcp-exclude Takes a source handle built from a listing record, which an MCP call can't reference.
    */
   createSynced(source: DatabaseSyncSource): Promise<DatabaseSync> {
     return Database.createSynced(this.client, source);

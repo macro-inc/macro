@@ -270,7 +270,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
       throw new MacroError(`${part} does not belong to database ${this.id}`);
   }
 
-  /** The database's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The database's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/database/${this.id}`;
   }
@@ -300,6 +304,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Copy the database into a new one the caller owns, with its tables,
    * columns, views and rows. Its sharing, forms, webhooks and history stay
    * with this one. Viewing it is enough.
+   *
+   * @write
    */
   async duplicate(options?: {
     /** The copy's name; by default, "<name> copy". */
@@ -320,7 +326,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return listed.map((entry) => new Database(client, entry.database.id));
   }
 
-  /** Run one SQL statement with this database as the default name scope. */
+  /**
+   * Run one SQL statement with this database as the default name scope.
+   *
+   * @destructive
+   */
   query(
     sql: string,
     options?: Omit<DatabaseQueryOptions, 'database'>,
@@ -339,6 +349,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * the `SELECT` does not return. Put {@link SavedQuery.toBlock} in a
    * document verbatim; it re-runs for whoever views it, with their
    * permissions. Pass `table` when the question is about one table.
+   *
+   * @write
    */
   async saveQuery(
     options: SaveQueryOptions & {
@@ -351,7 +363,12 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return SavedQuery.save(this.client, { database: this, table }, save);
   }
 
-  /** @internal Drop the schema snapshot after a successful SQL write. */
+  /**
+   * @internal Drop the schema snapshot after a successful SQL write.
+   *
+   * @readonly
+   * @mcp-exclude Internal cache control with no server effect.
+   */
   invalidateSchema(): void {
     this.detail.clear();
   }
@@ -359,6 +376,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * The full schema: the database record, the caller's access, and every
    * table with its columns and views. Cached until the next write.
+   *
+   * @readonly
    */
   schema(): Promise<DatabaseDetail> {
     return this.detail.get();
@@ -392,14 +411,22 @@ export class Database extends MacroEntity<DatabaseDetail> {
     tables.map((table) => DatabaseTable.byId(this, table.table.id)),
   );
 
-  /** The table with the given display name, or `undefined` if there is none. */
+  /**
+   * The table with the given display name, or `undefined` if there is none.
+   *
+   * @readonly
+   */
   async table(name: string): Promise<DatabaseTable | undefined> {
     const { tables } = await this.schema();
     const found = tables.find((table) => table.table.name === name);
     return found ? DatabaseTable.byId(this, found.table.id) : undefined;
   }
 
-  /** Create a table in the database, under an id minted here. */
+  /**
+   * Create a table in the database, under an id minted here.
+   *
+   * @write
+   */
   async createTable(options: { name: string }): Promise<DatabaseTable> {
     const { table } = soleResult(
       await this.applyOps([
@@ -424,6 +451,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * mints, as a UUIDv7) can be named by the next. A refused op leaves the
    * whole batch unwritten and throws {@link MacroOpRefusedError}. Returns one
    * result per op, in the order sent.
+   *
+   * @destructive
    */
   async applyOps(
     ops: DatabaseOp[],
@@ -455,6 +484,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * Persist a new tab order. Pass every table of the database exactly once.
    * Returns the tables in their new order.
+   *
+   * @write
+   * @idempotent
    */
   async reorderTables(tables: DatabaseTable[]): Promise<DatabaseTable[]> {
     for (const table of tables)
@@ -474,6 +506,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Delete one of the database's tables with its columns, rows, and views.
    * A database keeps at least one table, and a table another table's
    * relation column points at cannot be deleted.
+   *
+   * @destructive
+   * @idempotent
    */
   async deleteTable(table: DatabaseTable): Promise<void> {
     this.assertOwns(`table ${table.id}`, table.database);
@@ -489,6 +524,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * What changing a column to each type would do to its values. Changes
    * nothing.
+   *
+   * @readonly
    */
   async columnCasts(column: DatabaseColumn): Promise<ColumnCast[]> {
     this.assertOwns(`column ${column.id}`, column.table.database);
@@ -499,7 +536,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
     );
   }
 
-  /** Where a board view's cards sit: each placed card's lane and key. */
+  /**
+   * Where a board view's cards sit: each placed card's lane and key.
+   *
+   * @readonly
+   */
   async viewPositions(view: DatabaseView): Promise<CardPosition[]> {
     this.assertOwns(`view ${view.id}`, view.table.database);
     const { positions } = unwrap(
@@ -513,6 +554,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * A row's history: every committed change that touched it, newest first.
    * See {@link DatabaseRow.history}.
+   *
+   * @readonly
    */
   async rowHistory(row: DatabaseRow): Promise<RowHistoryEntry[]> {
     this.assertOwns(`row ${row.id}`, row.table.database);
@@ -524,7 +567,12 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return changes;
   }
 
-  /** Import text rows atomically. Keep requestId unchanged when retrying. */
+  /**
+   * Import text rows atomically. Keep requestId unchanged when retrying.
+   *
+   * @write
+   * @idempotent
+   */
   async importTable(request: ImportTable): Promise<DatabaseTable> {
     const table = await this.mutate((client) =>
       client.storage.importDatabaseTable({
@@ -543,7 +591,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
     );
   }
 
-  /** The database's webhooks, oldest first. Takes edit access. */
+  /**
+   * The database's webhooks, oldest first. Takes edit access.
+   *
+   * @readonly
+   */
   async webhooks(): Promise<DatabaseWebhook[]> {
     const { webhooks } = unwrap(
       await this.client.storage.listDatabaseWebhooks({ path: { id: this.id } }),
@@ -556,6 +608,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * caller's access. POST a JSON object (one row) or an array of objects to
    * `/databases/webhooks/{token}` on the storage service; keys name columns.
    * The token is the whole credential and is answered only here.
+   *
+   * @write
    */
   async createWebhook(
     table: DatabaseTable,
@@ -570,7 +624,13 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return { webhook: this.webhookOf(created.webhook), token: created.token };
   }
 
-  /** Delete one of the database's webhooks; its URL stops working. */
+  /**
+   * Delete one of the database's webhooks; its URL stops working.
+   *
+   * @destructive
+   * @idempotent
+   * @mcp-exclude Takes a handle built from a listing record, which an MCP call can't reference.
+   */
   async deleteWebhook(webhook: DatabaseWebhook): Promise<void> {
     this.assertOwns('webhook', webhook.table.database);
     unwrap(
@@ -580,7 +640,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
     );
   }
 
-  /** The database's synced tables, oldest first. Takes edit access. */
+  /**
+   * The database's synced tables, oldest first. Takes edit access.
+   *
+   * @readonly
+   */
   async syncs(): Promise<DatabaseSync[]> {
     const { syncs } = unwrap(
       await this.client.cognition.listDatabaseSyncs({ path: { id: this.id } }),
@@ -594,6 +658,10 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Add a table kept in sync with `source`, named after it, and run its
    * first sync at once. Its writes act with the caller's access. Takes edit
    * access; the source must be connected (see `macro.databases.syncSources()`).
+   *
+   * @write
+   * @openworld
+   * @mcp-exclude Takes a source handle built from a listing record, which an MCP call can't reference.
    */
   async addSync(source: DatabaseSyncSource): Promise<DatabaseSync> {
     const record = await this.mutate((client) =>
@@ -625,7 +693,11 @@ export class Database extends MacroEntity<DatabaseDetail> {
     );
   }
 
-  /** Read direct recipients. Only the database owner can manage sharing. */
+  /**
+   * Read direct recipients. Only the database owner can manage sharing.
+   *
+   * @readonly
+   */
   async sharePermissions(): Promise<SharePermissionV2> {
     return unwrap(
       await this.client.storage.getDatabasePermissions({
@@ -634,7 +706,12 @@ export class Database extends MacroEntity<DatabaseDetail> {
     );
   }
 
-  /** Add, replace, or remove recipient grants without transferring ownership. */
+  /**
+   * Add, replace, or remove recipient grants without transferring ownership.
+   *
+   * @write
+   * @idempotent
+   */
   updateSharePermissions(
     request: UpdateSharePermissionRequestV2,
   ): Promise<SharePermissionV2> {
@@ -651,6 +728,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * convert: one that does not refuses the change, naming how many and a few
    * of them, and nothing is written. To keep the original column, see
    * {@link Database.convertColumnIntoNewColumn}.
+   *
+   * @write
+   * @idempotent
    */
   async changeColumnType(
     column: DatabaseColumn,
@@ -679,6 +759,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * What a column's values become under another type: the values that
    * convert, the option labels a new select or tag column of that type needs,
    * and how many values do not convert. Changes nothing.
+   *
+   * @readonly
    */
   async columnConversion(
     column: DatabaseColumn,
@@ -698,6 +780,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * values that convert, in one batch at the table version the conversion
    * was read at. The original column is left as it is; values that do not
    * convert stay only there.
+   *
+   * @write
    */
   async convertColumnIntoNewColumn(
     column: DatabaseColumn,
@@ -752,6 +836,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * Remove a column and its cells at the table version last read. Returns
    * the table's new version.
+   *
+   * @destructive
+   * @idempotent
    */
   async deleteColumn(column: DatabaseColumn): Promise<TableVersion> {
     this.assertOwns(`column ${column.id}`, column.table.database);
@@ -778,6 +865,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Persist a complete column order at the table version last read. Pass
    * every column of the table exactly once.
    * Returns the table's new version.
+   *
+   * @write
+   * @idempotent
    */
   async reorderColumns(
     table: DatabaseTable,
@@ -817,6 +907,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * Rename a table only if its last-read name is still current. Returns the
    * table's new version.
+   *
+   * @write
+   * @idempotent
    */
   async renameTable(table: DatabaseTable, name: string): Promise<TableVersion> {
     this.assertOwns(`table ${table.id}`, table.database);
@@ -841,6 +934,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * Rename this column placement, only if its last-read name is still
    * current, without changing its shared property definition. Returns the
    * table's new version.
+   *
+   * @write
+   * @idempotent
    */
   async renameColumn(
     column: DatabaseColumn,
@@ -863,7 +959,12 @@ export class Database extends MacroEntity<DatabaseDetail> {
     return tableVersion;
   }
 
-  /** Adopt a first-value type only while the owned column is empty and inferable. */
+  /**
+   * Adopt a first-value type only while the owned column is empty and inferable.
+   *
+   * @write
+   * @idempotent
+   */
   async inferColumnType(
     column: DatabaseColumn,
     options: InferColumnTypeOptions,
@@ -886,6 +987,8 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /**
    * Add a column to one of the database's tables, under an id minted here,
    * either creating a property definition for it or binding an existing one.
+   *
+   * @write
    */
   async addColumn(
     table: DatabaseTable,
@@ -934,6 +1037,9 @@ export class Database extends MacroEntity<DatabaseDetail> {
    * minted here. Labels the column already has are skipped, so the call is
    * safe to repeat; the result lists the options it did create. Only select
    * and tag columns accept options.
+   *
+   * @write
+   * @idempotent
    */
   async addColumnOptions(
     column: DatabaseColumn,

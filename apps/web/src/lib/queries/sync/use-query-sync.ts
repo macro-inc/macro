@@ -30,7 +30,7 @@ import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import { invalidateContacts } from '@queries/contacts/contacts';
+import { requestContactRefresh } from '@queries/contacts/refresh';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
 import {
@@ -58,6 +58,7 @@ import { handleRefreshCalendar } from '../calendar/sync';
 // listener. Must be imported somewhere that always loads on app start — this
 // provider is guaranteed to mount alongside the other sync handlers.
 import '@app/features/routines/queries/sync';
+import { handleUserPictureChanged } from '@core/signal/profilePicture';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createConnectionWebsocketEffect,
@@ -116,7 +117,7 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         );
       })
       .with({ type: 'contacts_invalidation' }, () => {
-        fireAndForget(invalidateContacts(), 'websocket-query-sync');
+        requestContactRefresh();
       })
       .with({ type: 'timeline_activity' }, () => {
         withParsedWebsocketPayload(
@@ -137,6 +138,13 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
           data.type,
           data.data,
           handleChannelPictureChanged
+        );
+      })
+      .with({ type: 'user_picture_changed' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleUserPictureChanged
         );
       })
       .with({ type: 'channel_access_request_changed' }, () => {

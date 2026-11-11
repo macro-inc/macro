@@ -99,6 +99,8 @@ function sourceOf(record: DatabaseSyncSourceRecord): DatabaseSyncSource {
  * access of the user who created the sync: Granola meetings every 15
  * minutes and on each import, Notion every 30 minutes. Rows mirror the
  * source, so a row deleted in Macro comes back on the next run.
+ *
+ * @mcp-exclude Built from a listing record; no id-only reference an MCP call can pass.
  */
 export class DatabaseSync {
   private constructor(
@@ -170,6 +172,9 @@ export class DatabaseSync {
   /**
    * Run the sync as soon as a worker is free. Returns once it is queued, not
    * when it finishes; read {@link Database.syncs} later for its status.
+   *
+   * @write
+   * @openworld
    */
   async syncNow(): Promise<void> {
     unwrap(
@@ -179,7 +184,11 @@ export class DatabaseSync {
     );
   }
 
-  /** Stop syncing. The table and its rows stay as they are. */
+  /**
+   * Stop syncing. The table and its rows stay as they are.
+   *
+   * @destructive
+   */
   async stop(): Promise<void> {
     unwrap(
       await this.client.cognition.deleteDatabaseSync({

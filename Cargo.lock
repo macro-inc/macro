@@ -538,6 +538,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pipedream_mcp",
+ "rand 0.9.4",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -676,6 +677,7 @@ dependencies = [
  "mcp_select",
  "memory",
  "messages",
+ "mimalloc",
  "model",
  "model-entity",
  "model-error-response",
@@ -687,6 +689,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "opentelemetry",
  "pipedream_mcp",
  "prompt",
  "properties",
@@ -2328,6 +2331,7 @@ dependencies = [
  "url",
  "urlencoding",
  "user_api_key",
+ "user_events",
  "user_language",
  "user_quota",
  "utoipa",
@@ -3747,16 +3751,20 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",
  "postcard",
  "predicate-index",
  "proptest",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -4690,6 +4698,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "messages",
+ "mimalloc",
  "openssl-sys",
  "ratatui",
  "reqwest 0.13.4",
@@ -4855,6 +4864,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "chrono",
+ "contacts",
  "crm",
  "databases",
  "databases_sql",
@@ -4866,6 +4876,7 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_email",
@@ -4925,6 +4936,18 @@ name = "compression-core"
 version = "0.4.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789"
+
+[[package]]
+name = "computer_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
 
 [[package]]
 name = "concolor"
@@ -5168,22 +5191,31 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "axum-extra",
+ "connection_gateway_client",
  "futures",
  "http-body-util",
+ "kafka_util",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
+ "macro_event_broker",
  "macro_user_id",
+ "model-entity",
+ "non_empty",
  "rate_limit",
+ "rdkafka",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
  "urlencoding",
+ "user_events",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -6696,6 +6728,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_initiative",
@@ -9266,6 +9299,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_contacts"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "contacts",
+ "graphql_common",
+ "macro_user_id",
+ "models_pagination",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_crm"
 version = "0.1.0"
 dependencies = [
@@ -9820,6 +9869,7 @@ dependencies = [
  "bot_id",
  "chrono",
  "constant_time_eq 0.3.1",
+ "entity_access_db_utils",
  "harness_id",
  "harness_token",
  "hex",
@@ -9828,6 +9878,7 @@ dependencies = [
  "macro_user_id",
  "mockall",
  "model-error-response",
+ "models_permissions",
  "rand 0.9.4",
  "serde",
  "sqlx",
@@ -10939,6 +10990,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "incus_client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "rustls",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "indent_write"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11823,6 +11893,15 @@ name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
+name = "libmimalloc-sys"
+version = "0.1.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a45a52f43e1c16f667ccfe4dd8c85b7f7c204fd5e3bf46c5b0db9a5c3c0b8e9"
+dependencies = [
+ "cc",
+]
 
 [[package]]
 name = "libredox"
@@ -13111,6 +13190,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d4139bb28d14ad1facf21d5eb8825051b326e172d216b39f6d31df53cc97862"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]
@@ -14930,6 +15018,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pairing_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15824,6 +15924,21 @@ checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
 dependencies = [
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "progenitor-client"
+version = "0.15.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aa13eb6d9499a851512ec8fa3280f586be059682da4f05d953924be45d736f0"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "percent-encoding",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
 ]
 
 [[package]]
@@ -17524,6 +17639,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "macro_db_migrator",
  "macro_uuid",
  "rootcause",
  "serde",
@@ -19696,6 +19812,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "subsequence_match"
+version = "0.1.0"
+
+[[package]]
 name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21435,6 +21555,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "user_events"
+version = "0.1.0"
+dependencies = [
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "serde",
+ "serde_json",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "user_language"
 version = "0.1.0"
 dependencies = [
@@ -22059,6 +22192,7 @@ dependencies = [
  "tracing",
  "trigger_context",
  "url",
+ "user_events",
  "utoipa",
  "uuid",
  "webhook_signature",

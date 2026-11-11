@@ -6,6 +6,7 @@ import { pressHandlers } from '@ui';
 import { children, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
+import { MachinesRequestBadge } from './machines-request-badge';
 import { SettingsSearchResults } from './settings-search-results';
 
 /**
@@ -103,6 +104,9 @@ export function SettingsSidebar(props: {
                             <Dynamic component={item.icon} class="size-4" />
                           </ViewSidebar.Icon>
                           <span class="truncate">{item.label}</span>
+                          <Show when={item.tab === 'Harness'}>
+                            <MachinesRequestBadge />
+                          </Show>
                         </ViewSidebar.Item>
                       )}
                     </For>
