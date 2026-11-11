@@ -290,11 +290,22 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       return;
     }
     const editing = mdData.nativeRuntime?.editing;
-    if (!editing) return;
+    if (editing) {
+      plugins.use(
+        titleNavigationPlugin(
+          editing.focus,
+          () => inlineMenuOpen() || editing.menus.isOpen()
+        )
+      );
+      return;
+    }
+    const overlays = mdData.nativeRuntime?.overlays;
+    const handoff = overlays?.titleHandoff;
+    if (!handoff) return;
     plugins.use(
       titleNavigationPlugin(
-        editing.focus,
-        () => inlineMenuOpen() || editing.menus.isOpen()
+        handoff,
+        () => inlineMenuOpen() || (overlays.menuOpen?.() ?? false)
       )
     );
   });

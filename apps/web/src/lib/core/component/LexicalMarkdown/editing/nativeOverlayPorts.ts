@@ -1,4 +1,4 @@
-import type { Component } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import type { NativeComments } from './overlay-hosts/native-comments';
 
 /** Capabilities actually installed on the native document body. */
@@ -9,5 +9,12 @@ export interface NativeMarkdownOverlayInstallation {
   readonly focusAtEnd?: () => void;
   /** Present only when the body installs native comment marks. */
   readonly comments?: NativeComments;
+  /** Source title-to-body handoff: document start, or a new first paragraph. */
+  readonly titleHandoff?: {
+    atStart(): void;
+    prependParagraph(): void;
+  };
+  /** Whether a native inline menu (mentions, tags, actions) is open. */
+  readonly menuOpen?: Accessor<boolean>;
   dispose(): void;
 }

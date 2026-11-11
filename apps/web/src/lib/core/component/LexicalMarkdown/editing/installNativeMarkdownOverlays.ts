@@ -62,6 +62,7 @@ export function installNativeMarkdownOverlays(
     actionsAvailable() &&
     view.isMounted;
   const listeners = createNativeListenerScope();
+  const openMenus: Accessor<boolean>[] = [];
   listeners.add(() => {
     setRenderActive(false);
   });
@@ -131,6 +132,7 @@ export function installNativeMarkdownOverlays(
     );
     if (options.mentions) {
       const menu = createMenuOperations();
+      openMenus.push(menu.isOpen);
       const source = options.mentions;
       const unavailable = (error: unknown) => {
         setMentionsAvailable(false);
@@ -159,6 +161,7 @@ export function installNativeMarkdownOverlays(
     // MarkdownEditor's tags plugin sits in the afterMentions slot.
     if (options.tags) {
       const menu = createMenuOperations();
+      openMenus.push(menu.isOpen);
       const source = options.tags;
       const unavailable = (error: unknown) => {
         setTagsAvailable(false);
@@ -188,6 +191,7 @@ export function installNativeMarkdownOverlays(
       const actionsListeners = createNativeListenerScope();
       listeners.add(actionsListeners.dispose);
       const menu = createMenuOperations();
+      openMenus.push(menu.isOpen);
       const source = options.actions;
       const report = (error: unknown) => {
         try {
@@ -274,21 +278,21 @@ export function installNativeMarkdownOverlays(
     view.isMounted &&
     options.canEdit() &&
     view.root.contentEditable === 'true';
+  const focusAfter = (command: string) => {
+    if (!canFocus()) return;
+    dispatchApplicationCommand(view, command, {}, undefined, () => {
+      if (canFocus()) view.focus();
+    });
+  };
   return {
     ...(Overlays ? { Overlays } : {}),
     ...(comments ? { comments } : {}),
-    focusAtEnd() {
-      if (!canFocus()) return;
-      dispatchApplicationCommand(
-        view,
-        'group-b.focus-end',
-        {},
-        undefined,
-        () => {
-          if (canFocus()) view.focus();
-        }
-      );
+    focusAtEnd: () => focusAfter('group-b.focus-end'),
+    titleHandoff: {
+      atStart: () => focusAfter('group-b.focus-start'),
+      prependParagraph: () => focusAfter('group-b.prepend-paragraph'),
     },
+    menuOpen: () => openMenus.some((isOpen) => isOpen()),
     dispose,
   };
 }

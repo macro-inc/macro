@@ -47,6 +47,7 @@ import {
 } from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
+import { registerNativeTitleHandoffKeys } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-title-handoff';
 import {
   BlameTooltip,
   createBlameTooltipStore,
@@ -462,6 +463,12 @@ export default function RustMarkdownEditor(props: {
             }
             setRuntime(mounted);
             bindLocationAndBlame(mounted);
+            overlayLifecycle.add(
+              registerNativeTitleHandoffKeys(mounted.view, {
+                titleEditor: () => state.editor.md.titleEditor,
+                menuOpen: () => mounted.overlays?.menuOpen?.() ?? false,
+              })
+            );
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
