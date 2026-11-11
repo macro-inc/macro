@@ -107,6 +107,10 @@ regression: the first interior-text event after an own range write preserves the
 model range; the next event admits the DOM range. Boundary, element and
 post-delete selections continue through normalization. Clearing selection or
 moving its anchor outside an editor must not consume the pending own-write mark.
+Select all body content with browser endpoints on the editor root, then Copy or
+Cut before and after selectionchange. Both paths must use the resolved text
+endpoints; cutting ordinary paragraph content leaves the surviving empty
+paragraph, including for backward selections.
 Compare plain-text paste with both engines while holding Shift: `**literal**`
 must remain literal, while ordinary paste converts its Markdown. Release Shift
 and repeat. Rich HTML and Lexical clipboard data retain their normal priority,

@@ -10,6 +10,226 @@ import {
 
 beforeAll(initializeNativeSurfaceTests);
 
+test.each([
+  ['copy', false, false],
+  ['copy', false, true],
+  ['copy', true, false],
+  ['copy', true, true],
+  ['cut', false, false],
+  ['cut', false, true],
+  ['cut', true, false],
+  ['cut', true, true],
+] as const)(
+  '%s resolves root DOM endpoints with selectionchange=%s and backward=%s',
+  (kind, selectionChangeFirst, backward) => {
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'before' }],
+              },
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'after' }],
+              },
+            ],
+          },
+        })
+      );
+      const before = fixture.session.serializedState();
+      const first = fixture.view.node(0)?.children[0];
+      const last = fixture.view.node(0)?.children[1];
+      if (first === undefined || last === undefined)
+        throw new Error('Missing actual paragraph keys');
+      const firstText = fixture.view.node(first)?.children[0];
+      const lastText = fixture.view.node(last)?.children[0];
+      if (firstText === undefined || lastText === undefined)
+        throw new Error('Missing actual text keys');
+      fixture.root.focus();
+      const dom = fixture.root.ownerDocument.getSelection();
+      if (!dom) throw new Error('Missing actual DOM selection');
+      const end = fixture.root.childNodes.length;
+      dom.setBaseAndExtent(
+        fixture.root,
+        backward ? end : 0,
+        fixture.root,
+        backward ? 0 : end
+      );
+      if (selectionChangeFirst) {
+        fixture.root.ownerDocument.dispatchEvent(new Event('selectionchange'));
+        // The browser can retain root DOM endpoints after admitting text points.
+        // Preserve that observed DOM position in the synchronous test surface.
+        dom.setBaseAndExtent(
+          fixture.root,
+          backward ? end : 0,
+          fixture.root,
+          backward ? 0 : end
+        );
+      }
+      const clipboard = transfer('');
+      const event = new Event(kind, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: clipboard });
+      fixture.root.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(clipboard.getData('text/plain')).toContain('before');
+      expect(clipboard.getData('text/plain')).toContain('after');
+      if (kind === 'cut') {
+        expect(fixture.root.querySelectorAll(':scope > p')).toHaveLength(1);
+        expect(fixture.root.textContent).toBe('');
+        const state = JSON.parse(fixture.session.serializedState());
+        expect(state.root.children).toEqual([
+          expect.objectContaining({ type: 'paragraph', children: [] }),
+        ]);
+      } else {
+        expect(fixture.session.serializedState()).toBe(before);
+        expect(fixture.view.selection().selection).toMatchObject({
+          kind: 'range',
+          anchor: backward
+            ? { key: lastText, offset: 5, type: 'text' }
+            : { key: firstText, offset: 0, type: 'text' },
+          focus: backward
+            ? { key: firstText, offset: 0, type: 'text' }
+            : { key: lastText, offset: 5, type: 'text' },
+        });
+      }
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
+test.each(['node', 'table'] as const)(
+  'copy preserves an explicit %s selection when the DOM contains a root range',
+  (kind) => {
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'before' }],
+              },
+              {
+                type: 'table',
+                version: 1,
+                children: [
+                  {
+                    type: 'tablerow',
+                    version: 1,
+                    children: [
+                      {
+                        type: 'tablecell',
+                        version: 1,
+                        colSpan: 1,
+                        rowSpan: 1,
+                        headerState: 0,
+                        children: [
+                          {
+                            type: 'paragraph',
+                            version: 1,
+                            children: [{ type: 'text', version: 1, text: 'A' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    type: 'tablerow',
+                    version: 1,
+                    children: [
+                      {
+                        type: 'tablecell',
+                        version: 1,
+                        colSpan: 1,
+                        rowSpan: 1,
+                        headerState: 0,
+                        children: [
+                          {
+                            type: 'paragraph',
+                            version: 1,
+                            children: [{ type: 'text', version: 1, text: 'B' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'after' }],
+              },
+            ],
+          },
+        })
+      );
+      const table = [...fixture.view.mirror.values()].find(
+        (node) => node.type === 'table'
+      );
+      const cells = [...fixture.view.mirror.values()].filter(
+        (node) => node.type === 'tablecell'
+      );
+      const last = fixture.view.node(0)?.children[2];
+      if (!table || cells.length !== 2 || last === undefined)
+        throw new Error('Missing actual selected nodes');
+      fixture.root.focus();
+      fixture.port.selectionFromView(
+        kind === 'node'
+          ? { kind: 'node', keys: [last] }
+          : {
+              kind: 'table',
+              table: table.key,
+              anchorCell: cells[0].key,
+              focusCell: cells[1].key,
+            }
+      );
+      const before = fixture.session.serializedState();
+      const selection = fixture.view.selection().selection;
+      document
+        .getSelection()
+        ?.setBaseAndExtent(
+          fixture.root,
+          0,
+          fixture.root,
+          fixture.root.childNodes.length
+        );
+      const admit = vi.spyOn(fixture.port, 'selectionFromView');
+      const clipboard = transfer('');
+      const event = new Event('copy', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: clipboard });
+      fixture.root.dispatchEvent(event);
+      expect(admit).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(true);
+      expect(fixture.view.selection().selection).toEqual(selection);
+      expect(fixture.session.serializedState()).toBe(before);
+      expect(clipboard.getData('text/plain')).not.toContain('before');
+      if (kind === 'node')
+        expect(clipboard.getData('text/plain')).toBe('after');
+      else {
+        expect(clipboard.getData('text/plain')).toContain('A');
+        expect(clipboard.getData('text/plain')).toContain('B');
+        expect(clipboard.getData('text/plain')).not.toContain('after');
+      }
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
 test('typed file requests arrive before clipboard facts release and do not insert clipboard text', async () => {
   const fixture = nativeSurface();
   const order: string[] = [];

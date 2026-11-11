@@ -828,7 +828,7 @@ export function registerEvents(view: EditorView): {
   for (const name of ['copy', 'cut'] as const)
     listen(name, (event) => {
       if (!event.clipboardData) return;
-      const selected = readSelection(view);
+      const selected = readSelectionFromChange(view);
       const current = view.selection().selection;
       if (
         selected.kind === 'range' &&
@@ -844,7 +844,7 @@ export function registerEvents(view: EditorView): {
       event.clipboardData.setData('text/plain', data.plain);
       event.clipboardData.setData('application/x-lexical-editor', data.lexical);
       event.preventDefault();
-      if (name === 'cut') command(CommandCode.RemoveText);
+      if (name === 'cut') view.port.command(CommandCode.RemoveText);
     });
   listen('paste', (event) => {
     if (view.runViewCommand('Paste', event, 'before')) return;

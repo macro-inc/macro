@@ -126,7 +126,7 @@ It builds its own fixture bundle before serving it; set each browser's
 `PLAYWRIGHT_<BROWSER>_EXECUTABLE_PATH` independently on hosts with wrapped browsers.
 Set `EDITOR_INPUT_PARITY_DIST` and `EDITOR_INPUT_PARITY_REPORT` for isolated output.
 
-Admit the current DOM range before native copy/cut export when selectionchange has not arrived; update the submitted-selection cache, preserve explicit node/table selections and never export from a stale collapsed model range.
+Resolve owned root DOM endpoints with the Source selectionchange rule before copy/cut export, including when selectionchange has not arrived; update the submitted-selection cache, preserve explicit node/table selections and cut with the admitted model selection instead of reading the DOM again.
 
 Use the configured HTML importer for foreign namespaces, malformed JSON or non-array clipboard nodes; preserve matching-namespace JSON priority.
 
