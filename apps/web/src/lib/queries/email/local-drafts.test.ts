@@ -36,6 +36,14 @@ vi.mock('@core/mobile/nativeStagedUpload', () => ({
   getNativeStagedUpload: stagedUpload,
 }));
 let runtime: typeof import('./local-drafts');
+/** A save the working copy accepts; it refuses one only while being discarded. */
+const beginSave = async (
+  draft: Parameters<typeof runtime.beginDraftAttempt>[0]
+) => {
+  const attempt = await runtime.beginDraftAttempt(draft, 'save');
+  if (!attempt) throw new Error('The working copy is being discarded');
+  return attempt;
+};
 const input = (subject = 'Draft') => ({
   draft: { subject },
   clientHandles: { draftId: 'local', threadId: 'thread' },
@@ -564,7 +572,7 @@ describe('draft queue recovery', () => {
   });
   it('defers recovery without a session and reconciles once signed in', async () => {
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     const lifecycle = runtime.localDraftQueueLifecycle(host);
     for (const user of [undefined, { authenticated: false, id: '' }]) {
@@ -595,7 +603,7 @@ describe('draft queue recovery', () => {
   });
   it('marks an abandoned queued intent recoverable after restart', async () => {
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     await runtime.localDraftQueueLifecycle(host).prepareMutationQueue!();
     expect((await runtime.readLocalDraft('local'))?.status).toBe('unconfirmed');
@@ -1029,7 +1037,7 @@ describe('draft queue recovery', () => {
     const lifecycle = runtime.localDraftQueueLifecycle(host);
     await lifecycle.prepareMutationQueue!();
     const draft = await runtime.saveLocalDraft(input());
-    const attempt = await runtime.beginDraftAttempt(draft, 'save');
+    const attempt = await beginSave(draft);
     await runtime.markDraftAttemptQueued(attempt);
     await lifecycle.onMutationAttemptResult!(
       claimed(undefined),
