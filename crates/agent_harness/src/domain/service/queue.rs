@@ -24,18 +24,24 @@ pub(super) enum Dispatch {
 
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
+/// How long a session's command worker waits for its next command before it
+/// releases the quiet session's local state (`idle.rs`) and exits, unless
+/// the host sets another (`AgentHarnessService::with_worker_idle_timeout`).
+/// The next command starts a new worker.
+pub(super) const WORKER_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
 pub(super) struct QueuedCommand {
-    command: HarnessCommand,
-    completed: oneshot::Sender<Result<CommandOutcome>>,
+    pub(super) command: HarnessCommand,
+    pub(super) completed: oneshot::Sender<Result<CommandOutcome>>,
     /// The caller's span, carried across the queue so the work the worker does
     /// on its own task still hangs off whatever triggered it.
-    span: tracing::Span,
+    pub(super) span: tracing::Span,
     /// Whether the worker resolves the session's managing replica before
     /// executing. Commands admitted at an ingress route; a command received
     /// *as* a forward executes here unconditionally, which is what makes
     /// forwarding single-hop - two replicas with momentarily different lease
     /// views cannot bounce a command between each other.
-    route: bool,
+    pub(super) route: bool,
 }
 
 /// [`CommandForwarder`], object-safe.
@@ -102,29 +108,19 @@ where
     pub(super) fn enqueue(
         &self,
         session_id: AgentSessionId,
-        mut command: HarnessCommand,
+        command: HarnessCommand,
         route: bool,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
-        let caller = tracing::Span::current();
-        let result = loop {
-            let commands = self.commands(session_id);
-            let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand {
+        let (completed, result) = oneshot::channel();
+        self.send_to_worker(
+            session_id,
+            QueuedCommand {
                 command,
                 completed,
-                span: caller.clone(),
+                span: tracing::Span::current(),
                 route,
-            };
-
-            match commands.send(queued) {
-                Ok(()) => break result,
-                Err(error) => {
-                    command = error.0.command;
-                    self.workers
-                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
-                }
-            }
-        };
+            },
+        );
 
         async move {
             result
@@ -133,17 +129,36 @@ where
         }
     }
 
-    pub(super) fn commands(
-        &self,
-        session_id: AgentSessionId,
-    ) -> mpsc::UnboundedSender<QueuedCommand> {
-        match self.workers.entry(session_id) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let (commands, receiver) = mpsc::unbounded_channel();
-                entry.insert(commands.clone());
-                self.spawn_worker(session_id, receiver);
-                commands
+    /// Hand `queued` to the session's worker, starting one if it has none.
+    ///
+    /// The send happens while this holds the session's map entry. A worker
+    /// leaves only through [`retire_worker`], which removes its entry under
+    /// the same lock and only while its channel is empty, so every command
+    /// either lands in a channel whose worker will still read it or finds no
+    /// entry and starts a new worker.
+    fn send_to_worker(&self, session_id: AgentSessionId, mut queued: QueuedCommand) {
+        loop {
+            match self.workers.entry(session_id) {
+                Entry::Occupied(entry) => match entry.get().send(queued) {
+                    Ok(()) => return,
+                    // The worker is gone without retiring (its task ended
+                    // some other way): replace it.
+                    Err(error) => {
+                        queued = error.0;
+                        entry.remove();
+                    }
+                },
+                Entry::Vacant(entry) => {
+                    let (commands, receiver) = mpsc::unbounded_channel();
+                    let own = commands.downgrade();
+                    if let Err(error) = commands.send(queued) {
+                        queued = error.0;
+                        continue;
+                    }
+                    entry.insert(commands);
+                    self.spawn_worker(session_id, own, receiver);
+                    return;
+                }
             }
         }
     }
@@ -151,13 +166,37 @@ where
     pub(super) fn spawn_worker(
         &self,
         session_id: AgentSessionId,
+        own: mpsc::WeakUnboundedSender<QueuedCommand>,
         receiver: mpsc::UnboundedReceiver<QueuedCommand>,
     ) {
         // The worker outlives the call that created it, so it has to carry the
         // subscriber forward itself or every command it runs traces nowhere.
         let inner = self.inner.clone();
-        tokio::spawn(run_session_worker(session_id, inner, receiver).with_current_subscriber());
+        let workers = Arc::clone(&self.workers);
+        tokio::spawn(
+            run_session_worker(session_id, inner, workers, own, receiver).with_current_subscriber(),
+        );
     }
+}
+
+/// Remove the worker's own entry, if its channel is still the session's and
+/// holds nothing. Answers whether it did, in which case the worker exits.
+///
+/// Checked and removed under the entry's lock, the one
+/// [`AgentHarnessService::send_to_worker`] sends under: a command sent
+/// before this keeps the worker alive to run it, and one sent after starts a
+/// new worker.
+pub(super) fn retire_worker(
+    workers: &SessionWorkers,
+    session_id: AgentSessionId,
+    own: &mpsc::WeakUnboundedSender<QueuedCommand>,
+    receiver: &mpsc::UnboundedReceiver<QueuedCommand>,
+) -> bool {
+    workers
+        .remove_if(&session_id, |_, current| {
+            receiver.is_empty() && own.upgrade().is_some_and(|own| own.same_channel(current))
+        })
+        .is_some()
 }
 
 impl<
@@ -1827,6 +1866,8 @@ pub(super) async fn run_session_worker<
         Mentions,
         Notifier,
     >,
+    workers: Arc<SessionWorkers>,
+    own: mpsc::WeakUnboundedSender<QueuedCommand>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
@@ -1840,13 +1881,31 @@ pub(super) async fn run_session_worker<
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    while let Some(queued) = receiver.recv().await {
+    let mut deleted = false;
+    loop {
+        let queued = tokio::select! {
+            queued = receiver.recv() => queued,
+            () = tokio::time::sleep(inner.worker_idle_timeout) => {
+                // Before retiring, while commands for the session still queue
+                // behind this worker rather than racing it on a new one.
+                inner.release_idle(session_id).await;
+                if retire_worker(&workers, session_id, &own, &receiver) {
+                    return;
+                }
+                continue;
+            }
+        };
+        // Every sender is gone: the map no longer holds this channel.
+        let Some(queued) = queued else {
+            return;
+        };
         let QueuedCommand {
             command,
             completed,
             span,
             route,
         } = queued;
+        let deletes = matches!(command, HarnessCommand::Delete);
         let conversation_action = match (&command, &inner.conversation_turns) {
             (HarnessCommand::ConversationMessage(open), Some(store)) => {
                 match store
@@ -1877,6 +1936,15 @@ pub(super) async fn run_session_worker<
         {
             tracing::error!(?error, %session_id, "failed to persist conversation command failure");
         }
+        // A deleted session takes no more commands, so its worker goes with
+        // it, before the caller hears the delete finished. Anything already
+        // queued behind the delete (its actor's stopped callback) keeps it
+        // running until that is answered, and it retires right after.
+        deleted |= deletes && result.is_ok();
+        let retired = deleted && retire_worker(&workers, session_id, &own, &receiver);
         let _ = completed.send(result);
+        if retired {
+            return;
+        }
     }
 }
