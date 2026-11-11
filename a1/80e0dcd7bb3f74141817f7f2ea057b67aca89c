@@ -1,0 +1,36 @@
+crates/coding_agent_worker/src/tui/agent_catalog/test.rs
+  s_db89d7a03fd84a::t_c9549742ac021d 217-245
+crates/coding_agent_worker/src/tui/quickstart/test.rs
+  s_db89d7a03fd84a::t_1308799a76743d 229-269
+crates/coding_agent_worker/src/tui/agent_catalog/npm_adapter.rs
+  s_db89d7a03fd84a::t_c9549742ac021d 179,184-186
+  s_db89d7a03fd84a::t_9e319a5b2e4100 132-137,141,154-178,180-183,187
+  s_db89d7a03fd84a::t_ebac388bdbf953 188
+crates/coding_agent_worker/src/tui/ui/quickstart.rs
+  s_a060bcd90a5cca::t_1ab10a0da4899d 37-44
+  s_db89d7a03fd84a::t_433278518fd789 5,13-15,34-36,45-46,91-94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a180e0dcd7bb3f74141817f7f2ea057b67aca89c",
+  "prompts": {},
+  "sessions": {
+    "s_a060bcd90a5cca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38f8202b-190a-453b-9627-e96e1b2c6df8",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_db89d7a03fd84a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ffb96b18-4335-4a41-8c7b-be156213529e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
