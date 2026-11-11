@@ -6,12 +6,21 @@ type Lease = typeof lease;
 const runnerOf = () =>
   (window as unknown as { queueOwners: QueueOwners }).queueOwners;
 
-/** A page running one queue runner, with the real Web Locks and storage. */
+/** Loads one queue runner, with the real Web Locks and storage, into `page`. */
+async function load(page: Page, owner: string) {
+  // The fixture is compiled on demand, and a load can come up empty. A tab in
+  // the background is not painted, so wait for the runner itself.
+  await expect(async () => {
+    await page.goto(`/?queue-lease&owner=${owner}`);
+    await page.waitForFunction(() => 'queueOwners' in window, undefined, {
+      timeout: 5_000,
+    });
+  }).toPass({ timeout: 60_000 });
+}
+
 async function open(context: BrowserContext, owner: string) {
   const page = await context.newPage();
-  await page.goto(`/?queue-lease&owner=${owner}`);
-  // A tab in the background is not painted, so wait for the runner itself.
-  await page.waitForFunction(() => 'queueOwners' in window);
+  await load(page, owner);
   return page;
 }
 
@@ -70,8 +79,7 @@ test('a reload leaves the old page lease to the new page, once its request has t
   await expect.poll(() => recorded(page, 'before-reload')).not.toBeNull();
 
   // Every page load is a new runner.
-  await page.goto('/?queue-lease&owner=after-reload');
-  await page.waitForFunction(() => 'queueOwners' in window);
+  await load(page, 'after-reload');
 
   const early = await abandoned(page, 60_000);
   expect(early.leases).toEqual([]);

@@ -9,8 +9,11 @@ async function open(page: Page) {
     throw error;
   });
   await page.clock.install();
-  await page.goto('/?sync-status');
-  await expect(composer(page)).toContainText('Message body');
+  // The fixture is compiled on demand, and a load can come up empty.
+  await expect(async () => {
+    await page.goto('/?sync-status');
+    await expect(composer(page)).toContainText('Message body');
+  }).toPass({ timeout: 60_000 });
 }
 
 /** The banner states a user can meet, in the order a bad day produces them. */
