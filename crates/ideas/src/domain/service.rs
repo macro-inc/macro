@@ -187,6 +187,40 @@ where
         Ok(())
     }
 
+    /// Move `idea` from one of `from` to `to` if it is still as `accept`
+    /// says the caller saw it; when it changed, the idea as it is now.
+    async fn move_as_shown(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        idea: &Idea,
+        from: &[IdeaState],
+        to: IdeaState,
+        accept: Accept,
+    ) -> Result<(), IdeaError> {
+        if idea.updated_at != accept.shown_updated_at {
+            return Err(IdeaError::Changed(Box::new(idea.clone())));
+        }
+        let moved = self
+            .repo
+            .set_state_as_shown(user, idea.id, from, to, accept.shown_updated_at, Utc::now())
+            .await
+            .map_err(IdeaError::internal)?;
+        if moved {
+            return Ok(());
+        }
+        let now = self
+            .repo
+            .idea(user, idea.id)
+            .await
+            .map_err(IdeaError::internal)?;
+        Err(match now {
+            Some(now) if now.updated_at != accept.shown_updated_at => {
+                IdeaError::Changed(Box::new(now))
+            }
+            _ => IdeaError::NotFound,
+        })
+    }
+
     /// Start a run of background prompt idea `idea`.
     #[tracing::instrument(name = "ideas.run.start", skip_all, fields(
         idea.id = %idea.id,
@@ -220,7 +254,7 @@ where
         // was rewritten is read again first.
         if idea.updated_at != shown_updated_at {
             span.record("idea.run.outcome", "changed");
-            return Err(IdeaError::Changed);
+            return Err(IdeaError::Changed(Box::new(idea.clone())));
         }
         // The row first, so two accepts at once start one session.
         if !self
@@ -236,7 +270,9 @@ where
                 .await
                 .map_err(IdeaError::internal)?;
             return Err(match now {
-                Some(now) if now.updated_at != shown_updated_at => IdeaError::Changed,
+                Some(now) if now.updated_at != shown_updated_at => {
+                    IdeaError::Changed(Box::new(now))
+                }
                 _ => IdeaError::NotFound,
             });
         }
@@ -521,21 +557,14 @@ where
                 if idea.state == IdeaState::Accepted {
                     return Ok(());
                 }
-                let moved = self
-                    .repo
-                    .set_state(
-                        user,
-                        id,
-                        &[IdeaState::Proposed],
-                        IdeaState::Accepted,
-                        None,
-                        Utc::now(),
-                    )
-                    .await
-                    .map_err(IdeaError::internal)?;
-                if !moved {
-                    return Err(IdeaError::NotFound);
-                }
+                self.move_as_shown(
+                    user,
+                    &idea,
+                    &[IdeaState::Proposed],
+                    IdeaState::Accepted,
+                    accept,
+                )
+                .await?;
                 tracing::info!(event = "ideas.accepted", run = false);
                 return Ok(());
             }
@@ -554,16 +583,16 @@ where
         if idea.state == IdeaState::Done {
             return Ok(());
         }
-        let (from, to): (&[IdeaState], IdeaState) =
-            (&[IdeaState::Proposed, IdeaState::Accepted], IdeaState::Done);
-        let moved = self
-            .repo
-            .set_state(user, id, from, to, None, Utc::now())
-            .await
-            .map_err(IdeaError::internal)?;
-        if !moved {
-            return Err(IdeaError::NotFound);
-        }
+        // What the person opens is what they saw: a card read before the
+        // idea was rewritten is read again first.
+        self.move_as_shown(
+            user,
+            &idea,
+            &[IdeaState::Proposed, IdeaState::Accepted],
+            IdeaState::Done,
+            accept,
+        )
+        .await?;
         tracing::info!(event = "ideas.accepted", done = true);
         Ok(())
     }

@@ -100,8 +100,19 @@ impl IntoResponse for IdeaApiError {
             Self::Service(error @ IdeaError::NotGenerating) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
-            Self::Service(error @ IdeaError::Changed) => {
-                (StatusCode::CONFLICT, error.to_string()).into_response()
+            Self::Service(error @ IdeaError::Changed(_)) => {
+                let message = error.to_string();
+                let IdeaError::Changed(idea) = error else {
+                    unreachable!("matched above")
+                };
+                (
+                    StatusCode::CONFLICT,
+                    Json(IdeaChanged {
+                        message,
+                        idea: *idea,
+                    }),
+                )
+                    .into_response()
             }
             Self::Service(IdeaError::Internal(report)) => {
                 tracing::error!(error = ?report, "ideas call failed");
@@ -109,6 +120,15 @@ impl IntoResponse for IdeaApiError {
             }
         }
     }
+}
+
+/// The idea changed since the caller read it.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct IdeaChanged {
+    /// What happened.
+    pub message: String,
+    /// The idea as it is now, to show before acting on it again.
+    pub idea: crate::domain::model::Idea,
 }
 
 /// Acting on an idea, as the caller's copy of it shows it.
@@ -182,7 +202,7 @@ where
         (status = 204, description = "Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing"),
         (status = 400, body = String),
         (status = 401, body = String),
-        (status = 409, body = String, description = "The idea changed since the caller read it: read it again"),
+        (status = 409, body = IdeaChanged, description = "The idea changed since the caller read it: the body has it as it is now"),
         (status = 404, body = String, description = "No open or done idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
