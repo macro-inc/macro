@@ -55,7 +55,16 @@ export type Executed =
  * Runs an agent-written module exporting `async main({ context, log })`
  * with the agent's context, and returns what `main` returned.
  */
-export type Execute = (source: string) => Promise<Executed>;
+/** What a run knows about the wake it belongs to, if any. */
+export type ExecuteOptions = {
+  /** The wake's id, which the script's calls carry for attribution. */
+  readonly wakeId?: string;
+};
+
+export type Execute = (
+  source: string,
+  options?: ExecuteOptions
+) => Promise<Executed>;
 
 /** A script's module, or the type errors that kept it from being loaded. */
 export type Loaded =
@@ -175,12 +184,12 @@ export const inSubprocess =
   }: {
     readonly run: (
       source: string,
-      options: { readonly timeoutMs: number }
+      options: { readonly timeoutMs: number } & ExecuteOptions
     ) => Promise<Exited>;
     readonly timeoutMs: number;
   }): Execute =>
-  async (source) => {
-    const exited = await run(source, { timeoutMs });
+  async (source, options = {}) => {
+    const exited = await run(source, { timeoutMs, ...options });
     const at = exited.stdout.lastIndexOf(resultMarker);
     const stray = (
       at === -1 ? exited.stdout : exited.stdout.slice(0, at)

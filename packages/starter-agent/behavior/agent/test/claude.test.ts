@@ -61,6 +61,7 @@ const agentOptions: Omit<Parameters<typeof agentClaude>[0], 'query'> = {
   after: () => () => undefined,
   guards: [],
   record: async () => undefined,
+  wakeId: () => '0190e3b0-0000-7000-8000-00000000000f',
 };
 
 const agentWith = (query: ReturnType<typeof recording>['query']) =>
@@ -155,4 +156,57 @@ test('with no sandbox, the SDK spawns Claude Code itself', async () => {
   const fake = recording();
   await agentWith(fake.query).wake(wake);
   expect(fake.calls[0]?.spawnClaudeCodeProcess).toBeUndefined();
+});
+
+test('a wake has one id, which its scripts carry, and one span that records how it went', async () => {
+  const fake = recording();
+  const executed: (string | undefined)[] = [];
+  const spans: { name: string; attributes: Record<string, unknown> }[] = [];
+  const agent = agentClaude({
+    ...agentOptions,
+    query: fake.query,
+    wakeId: () => '0190e3b0-0000-7000-8000-000000000001',
+    trace: async (name, run) => {
+      const attributes: Record<string, unknown> = {};
+      spans.push({ name, attributes });
+      return run({
+        set: (key, value) => {
+          attributes[key] = value;
+        },
+        traceparent: () => undefined,
+      });
+    },
+  });
+  await agent.wake({
+    ...wake,
+    state: {
+      code: {
+        ...wake.state.code,
+        execute: async (_source, options) => {
+          executed.push(options?.wakeId);
+          return { kind: 'succeeded' as const, output: 1, logs: '' };
+        },
+      },
+    },
+  });
+  const server = fake.calls[0]?.mcpServers?.[capabilityServer];
+  const tools =
+    server !== undefined && 'instance' in server
+      ? Reflect.get(server.instance, '_registeredTools')
+      : undefined;
+  const run = Reflect.get(tools ?? {}, 'RunCapabilityScript');
+  const handler = Reflect.get(run ?? {}, 'handler');
+  if (typeof handler === 'function')
+    await handler({ source: 'export const main = () => 1' }, {});
+  expect(executed).toEqual(['0190e3b0-0000-7000-8000-000000000001']);
+  expect(spans).toEqual([
+    {
+      name: 'agent.wake',
+      attributes: {
+        'agent.event': 'conversations',
+        'agent.wake_id': '0190e3b0-0000-7000-8000-000000000001',
+        'agent.outcome': 'failed',
+      },
+    },
+  ]);
 });

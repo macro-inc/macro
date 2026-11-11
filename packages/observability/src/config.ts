@@ -42,7 +42,7 @@ interface TelemetryBaseConfig {
   contextManager?: ContextManager;
   /** Browser export transport, independent of authenticated application HTTP. */
   exportFetch?: (
-    input: RequestInfo | URL,
+    input: Parameters<typeof fetch>[0],
     init?: RequestInit
   ) => Promise<Response>;
   tracingProvider?: TelemetryTracingProviderFactory;

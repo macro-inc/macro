@@ -7,12 +7,36 @@ import {
   type SpawnOptions,
   tool,
 } from '@anthropic-ai/claude-agent-sdk';
-import type { Agent, EventContext } from '@macro-inc/muppet/core/agent';
+import type {
+  Agent,
+  EventContext,
+  WakeContext,
+  Woke,
+} from '@macro-inc/muppet/core/agent';
 import { z } from 'zod';
 import { type Guard, refusal } from './guard.ts';
 
 /** The name of the agent's own MCP server, which no server it is given may take. */
 export const capabilityServer = 'agent';
+
+const wakeSpan = 'agent.wake';
+
+/** What code inside a span may record on it: ids, counts and outcomes. */
+export type TraceSpan = {
+  readonly set: (name: string, value: string | number | boolean) => void;
+  /** This span's W3C trace context, for a child process. */
+  readonly traceparent: () => string | undefined;
+};
+
+/** Runs `run` inside a span named `name` (the Telemetry facade, injected). */
+export type Trace = <Value>(
+  name: string,
+  run: (span: TraceSpan) => Promise<Value>
+) => Promise<Value>;
+
+/** A trace that records nothing. */
+export const passthrough: Trace = (_name, run) =>
+  run({ set: () => undefined, traceparent: () => undefined });
 const server = capabilityServer;
 
 /** The SDK's `query`, as much of it as a wake uses. */
@@ -47,6 +71,8 @@ export const agentClaude = ({
   guards,
   record,
   sandbox,
+  wakeId,
+  trace = passthrough,
 }: {
   /** The SDK's `query`, injected. */
   readonly query: Query;
@@ -74,8 +100,16 @@ export const agentClaude = ({
       options: Omit<SpawnOptions, 'command' | 'args'>
     ) => SpawnedProcess;
   };
-}): Agent => ({
-  wake: async ({ request, systemPrompt, event, state }) => {
+  /** A fresh UUIDv7 for each wake: its scripts' calls carry it, and its span records it. */
+  readonly wakeId: () => string;
+  /** Runs `run` inside a span named `name`; spans record ids, counts and outcomes, never content. */
+  readonly trace?: Trace;
+}): Agent => {
+  const wakeOnce = async (
+    { request, systemPrompt, event, state }: WakeContext,
+    id: string,
+    span: TraceSpan
+  ): Promise<Woke> => {
     const capabilities = createSdkMcpServer({
       name: server,
       tools: [
@@ -84,7 +118,7 @@ export const agentClaude = ({
           'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
           { source: z.string() },
           async ({ source }) => {
-            const executed = await state.code.execute(source);
+            const executed = await state.code.execute(source, { wakeId: id });
             return {
               content: [{ type: 'text', text: JSON.stringify(executed) }],
               isError: executed.kind === 'failed',
@@ -191,6 +225,8 @@ export const agentClaude = ({
           });
         }
         if (message.type === 'result') {
+          span.set('agent.cost_usd', message.total_cost_usd);
+          span.set('agent.turns', message.num_turns);
           await record({
             event: event.name,
             session_id: message.session_id,
@@ -217,5 +253,16 @@ export const agentClaude = ({
     } finally {
       cancel();
     }
-  },
-});
+  };
+  return {
+    wake: (wake) =>
+      trace(wakeSpan, async (span) => {
+        const id = wakeId();
+        span.set('agent.event', wake.event.name);
+        span.set('agent.wake_id', id);
+        const woke = await wakeOnce(wake, id, span);
+        span.set('agent.outcome', woke.kind);
+        return woke;
+      }),
+  };
+};

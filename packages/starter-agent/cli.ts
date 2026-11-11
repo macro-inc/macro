@@ -18,6 +18,12 @@
  * without it, it exits 78. `run` exits 0 when stopped.
  */
 // Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
+import { Telemetry } from '@macro-inc/observability/core';
+import {
+  startTelemetry,
+  trace,
+  underParent,
+} from './behavior/context/telemetry.ts';
 import 'temporal-polyfill/global';
 import {
   describe,
@@ -97,7 +103,9 @@ const run = async (): Promise<void> => {
   await configuredOrExit(sandboxProgram);
   const { presence } = await configuredOrExit(wiring.addresses);
   const apiKey = await configuredOrExit(() => base.credentials.get(macroKey));
-  process.on('SIGTERM', () => process.exit(exitCodes.stopped));
+  process.on('SIGTERM', () => {
+    void Telemetry.flush().finally(() => process.exit(exitCodes.stopped));
+  });
   // The agent shows online in Macro for as long as it runs.
   stayOnline({
     open: () => {
@@ -136,6 +144,9 @@ const run = async (): Promise<void> => {
   await running;
 };
 
+// Spans export only when the computer names an OTLP endpoint.
+await startTelemetry({ environment: process.env, agent: base.config.me });
+
 switch (command) {
   case undefined:
     fail(usage);
@@ -157,7 +168,15 @@ switch (command) {
       file === undefined || file === '-'
         ? await Bun.stdin.text()
         : await Bun.file(file).text();
-    const executed = await execute(assistant.decorations, scripts.load)(source);
+    // Under the agent process's script span, so the run is one trace.
+    const executed = await underParent(process.env, () =>
+      trace('agent.capability_script.exec', async (span) => {
+        const ran = await execute(assistant.decorations, scripts.load)(source);
+        span.set('agent.script_outcome', ran.kind);
+        return ran;
+      })
+    );
+    await Telemetry.flush();
     if (marked) process.stdout.write(resultLine(executed));
     else print(executed);
     process.exit(executed.kind === 'succeeded' ? 0 : 1);
