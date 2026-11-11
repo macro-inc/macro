@@ -125,13 +125,20 @@ export class Webhook extends MacroEntity<WebhookRecord> {
    * their team (`team`). Derived from ownership: a personal webhook's owning
    * workspace is the creator's own user id, whereas a team webhook's workspace
    * is a distinct team id.
+   *
+   * @readonly
    */
   async scope(): Promise<WebhookScope> {
     const record = await this.detail.get();
     return record.workspace_id === record.created_by_user_id ? 'user' : 'team';
   }
 
-  /** Update the webhook. */
+  /**
+   * Update the webhook.
+   *
+   * @write
+   * @idempotent
+   */
   public async update(body: PatchWebhookRequest): Promise<void> {
     await this.mutate((client) =>
       client.storage.patchWebhook({
@@ -141,32 +148,62 @@ export class Webhook extends MacroEntity<WebhookRecord> {
     );
   }
 
-  /** Rename the webhook. */
+  /**
+   * Rename the webhook.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.update({ name });
   }
 
-  /** Point the webhook at a new HTTPS endpoint URL. */
+  /**
+   * Point the webhook at a new HTTPS endpoint URL.
+   *
+   * @write
+   * @idempotent
+   */
   async setUrl(url: string): Promise<void> {
     await this.update({ endpoint_url: url });
   }
 
-  /** Replace the webhook's delivery filters (must be non-empty). */
+  /**
+   * Replace the webhook's delivery filters (must be non-empty).
+   *
+   * @write
+   * @idempotent
+   */
   async setFilters(filters: WebhookFilter[]): Promise<void> {
     await this.update({ filters });
   }
 
-  /** Pause deliveries. */
+  /**
+   * Pause deliveries.
+   *
+   * @write
+   * @idempotent
+   */
   async pause(): Promise<void> {
     await this.update({ status: 'paused' });
   }
 
-  /** Resume deliveries. */
+  /**
+   * Resume deliveries.
+   *
+   * @write
+   * @idempotent
+   */
   async resume(): Promise<void> {
     await this.update({ status: 'active' });
   }
 
-  /** Delete the webhook. */
+  /**
+   * Delete the webhook.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((client) =>
       client.storage.deleteWebhook({
@@ -179,6 +216,9 @@ export class Webhook extends MacroEntity<WebhookRecord> {
    * Send a signed validation test delivery to the endpoint and report whether
    * it was accepted. Drops the cached detail so a subsequent {@link isValid}
    * read reflects the new validation state.
+   *
+   * @write
+   * @openworld
    */
   async validate(): Promise<ValidateWebhookResponse> {
     return this.mutate((client) =>

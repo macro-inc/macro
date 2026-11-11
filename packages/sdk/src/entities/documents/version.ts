@@ -33,7 +33,11 @@ export class DocumentVersion {
     return new DocumentVersion(client, document, id);
   }
 
-  /** Version metadata and the caller's access. */
+  /**
+   * Version metadata and the caller's access.
+   *
+   * @readonly
+   */
   read(): Promise<GetDocumentResponseData> {
     return this.detail.get();
   }
