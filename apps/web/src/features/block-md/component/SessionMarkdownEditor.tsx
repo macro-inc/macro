@@ -10,6 +10,7 @@ import RustMarkdownEditor from './RustMarkdownEditor';
 export default function SessionMarkdownEditor(props: {
   context: SyncDocumentOpenContext;
   autoFocus: boolean;
+  loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
   onReady?: () => void;
 }) {
   const { permissions, state } = useMarkdownDocument();
@@ -25,6 +26,7 @@ export default function SessionMarkdownEditor(props: {
       body={
         <RustMarkdownEditor
           context={props.context}
+          loadCachedSnapshot={props.loadCachedSnapshot}
           autoFocus={props.autoFocus}
           onReady={() => {
             setReady(true);

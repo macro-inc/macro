@@ -7,6 +7,7 @@ import {
   ABI_MAJOR,
   type IViewEffectMsg,
   SessionConfigMsg,
+  SessionInputMsg,
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
 import {
@@ -15,6 +16,7 @@ import {
   SessionExecutor,
   type ViewApplier,
 } from '@macro-inc/collaboration/session/executor';
+import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import {
@@ -122,12 +124,14 @@ export function createRustEditorSession(
     root: HTMLElement;
     registry: NodeViewRegistry;
     view: ViewOptions;
+    loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
     installEditing?: (view: EditorView) => NativeMarkdownEditingPort;
     installOverlays?: (view: EditorView) => NativeMarkdownOverlayInstallation;
     /** Construction-time observers of the latest published presentation. */
     latestPublished?: readonly LatestPublishedObserver[];
   }
 ) {
+  const loadCachedSnapshot = options.loadCachedSnapshot;
   const configured = configureSession(
     options,
     (config, now, wall) =>
@@ -162,6 +166,59 @@ export function createRustEditorSession(
     overlays = options.installOverlays?.(runtime.view);
     const editing = options.installEditing?.(runtime.view);
     let closing: Promise<void> | undefined;
+    if (loadCachedSnapshot) {
+      const span = options.span.span('doc.snapshot.ingest');
+      span.setAttr('document.id', options.documentId);
+      span.setAttr('snapshot.source', 's3');
+      fireAndForget(
+        (async () => {
+          try {
+            const snapshot = await span.run(loadCachedSnapshot);
+            if (closing || !runtime.view.isMounted) {
+              span.setAttr('snapshot.outcome', 'cancelled');
+              return;
+            }
+            if (!snapshot?.byteLength) {
+              span.setAttr('snapshot.outcome', 'unavailable');
+              return;
+            }
+            span.setAttr('snapshot.bytes', snapshot.byteLength);
+            const input = SessionInputMsg.encode({
+              ...emptyInput(1),
+              code: 1,
+              bytes: snapshot,
+            });
+            await new Promise<void>((resolve, reject) => {
+              runtime.executor.runSettled(
+                () =>
+                  runtime.executor.session.input(
+                    input,
+                    runtime.executor.now(),
+                    Date.now()
+                  ),
+                (result) => {
+                  if (result.status === 'error') {
+                    reject(result.error);
+                    return;
+                  }
+                  span.setAttr(
+                    'snapshot.outcome',
+                    result.status === 'success' ? 'submitted' : 'cancelled'
+                  );
+                  resolve();
+                }
+              );
+            });
+          } catch (error) {
+            span.setAttr('snapshot.outcome', 'error');
+            throw error;
+          } finally {
+            span.end();
+          }
+        })(),
+        'rust-editor.cached-snapshot'
+      );
+    }
     return {
       ...runtime,
       editing,

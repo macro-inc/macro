@@ -88,6 +88,7 @@ export type RustMarkdownRuntime = Awaited<
 export default function RustMarkdownEditor(props: {
   context: SyncDocumentOpenContext;
   autoFocus: boolean;
+  loadCachedSnapshot?: () => Promise<Uint8Array | undefined>;
   onReady?: () => void;
   onRuntime?: (runtime: RustMarkdownRuntime | undefined) => void;
   onEmptyChange?: (empty: boolean) => void;
@@ -326,6 +327,7 @@ export default function RustMarkdownEditor(props: {
                 onError: showError,
               },
               documentId: documentId(),
+              loadCachedSnapshot: props.loadCachedSnapshot,
               user: authorization.user,
               access: authorization.access,
               authorization: authorization.auth,

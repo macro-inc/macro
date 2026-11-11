@@ -60,6 +60,18 @@ Server-backed sessions always retain their actual access level.
 Construction is synchronous after preload. Closing and failed-construction
 cleanup drain terminal I/O asynchronously.
 
+Document hosts may supply `loadCachedSnapshot` to race the same cached S3
+bytes as the Source document path against native local-storage and socket
+recovery. Capture the loader before installation callbacks. Submit its bytes
+through the ordinary CachedS3 seed input; native owns seed ordering, WAL replay
+and initialization. An unavailable cache leaves other sources running. Discard
+a fetch result that arrives after owning close or view teardown. An already
+accepted entry retains the executor's FIFO order, then Stop and free drain
+normally. The `doc.snapshot.ingest` child span records the source, byte count
+and submitted/unavailable/cancelled/error outcome; submitted is not a claim that
+the seed won its race. No projection or rendered state substitutes for Initialize.
+
+
 Compatibility document factories use `createRustSession` from the same module.
 It requires the real session constructor and a raw `ViewApplier` output sink,
 returns the actual executor, and allocates no DOM or native view. Normal editor

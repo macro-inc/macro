@@ -316,6 +316,7 @@ export function MarkdownDocumentContent(props: MarkdownDocumentContentProps) {
                 body={(options) => (
                   <SessionMarkdownEditor
                     context={source.context}
+                    loadCachedSnapshot={props.loadCachedSnapshot}
                     autoFocus={options.autoFocus}
                     onReady={props.onDataReady}
                   />

@@ -10,7 +10,7 @@ Off uses the existing Notebook, LexicalMarkdown plugins, LoroManager and
 CollabProvider. On lazy-loads RustMarkdownEditor, initializes the session WASM on
 the main thread, and connects EditorView through SessionPort/SessionExecutor.
 Native code owns retries, authorization, WAL and cross-tab adoption. App code
-supplies current-account authority and the configured socket URL.
+supplies current-account authority and the configured socket URL. The document body forwards its existing cached-snapshot loader into the native factory; cached S3 bytes, IDB and the socket race through native recovery rather than SetState.
 Use `EditorSession.createMacro` so persisted Macro nodes and mirror null fields
 match the live sync policy; the generic constructor is for portable clients.
 
