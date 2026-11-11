@@ -99,6 +99,7 @@ members = [
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
   "crates/incus_client",
@@ -221,6 +222,7 @@ members = [
 
 [workspace.dependencies]
 computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
 macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
