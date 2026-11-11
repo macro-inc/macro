@@ -71,13 +71,13 @@ function tag(node: ViewNode): string {
       throw new Error('No built-in element tag: ' + node.type);
   }
 }
-function elementProps(
+/** The reconciler's element direction: explicit, or auto below a root/shadow root. */
+export function applyElementDirection(
   node: ViewNode,
   dom: HTMLElement,
   ctx: RenderContext
 ): void {
-  const props = node.props(),
-    fields = node.elementProps;
+  const fields = node.elementProps;
   const parent = node.parent === null ? null : ctx.view.node(node.parent);
   const automatic =
     parent &&
@@ -87,6 +87,16 @@ function elementProps(
   else if (fields?.direction === 2) dom.dir = 'rtl';
   else if (node.kind !== 'root' && automatic) dom.dir = 'auto';
   else dom.removeAttribute('dir');
+}
+function elementProps(
+  node: ViewNode,
+  dom: HTMLElement,
+  ctx: RenderContext
+): void {
+  const props = node.props(),
+    fields = node.elementProps;
+  const parent = node.parent === null ? null : ctx.view.node(node.parent);
+  applyElementDirection(node, dom, ctx);
   if (node.kind === 'root') {
     dom.style.userSelect = 'text';
     dom.style.whiteSpace = 'pre-wrap';
