@@ -55,7 +55,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
 - Render public metadata without mounting authenticated preview queries.
-- Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
+- Preserve appearance in identity projections and renderers, including inbox cards, project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
 - Keep document header icons editable outside breadcrumb navigation buttons; content titles have no leading icon.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
 - Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.

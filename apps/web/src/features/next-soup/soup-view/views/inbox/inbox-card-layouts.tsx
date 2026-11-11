@@ -1601,6 +1601,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
           targetType={getEntityIconType(props.item.entity)}
+          appearance={props.item.entity.appearance}
           size="fill"
           theme="monochrome"
         />
