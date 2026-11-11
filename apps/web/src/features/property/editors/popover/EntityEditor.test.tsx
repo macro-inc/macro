@@ -227,6 +227,17 @@ describe('assigning an agent through task and project properties', () => {
       fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'ArrowDown',
       });
+      // Confirming an IME candidate must not select the highlighted assignee.
+      expect(
+        fireEvent.keyDown(screen.getByRole('textbox'), {
+          key: 'Enter',
+          isComposing: true,
+        })
+      ).toBe(true);
+      expect(screen.getByRole('textbox')).toHaveProperty(
+        'value',
+        search ? 'research' : ''
+      );
       fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'Enter',
       });

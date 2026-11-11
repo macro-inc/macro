@@ -114,9 +114,7 @@ composer/bulk editor lives in `editor/entity-property-editor.tsx`; both editor c
 `PropertyEntitySelector` handles keyboard navigation on its search input, before
 an enclosing dropdown consumes the event. Do not move that handler to `document`:
 Kobalte can prevent the arrow key's default before a document listener runs.
-The browser regression in `src/lib/core/internal/browser-test/assignee-keyboard.browser.e2e.ts`
-checks dropdown and sheet hosts, single/multiple selection, search, dismissal,
-and isolation from other inputs at desktop and phone widths.
+Ignore IME composition events so confirming text does not select a person.
 
 ## Side-panel collections
 

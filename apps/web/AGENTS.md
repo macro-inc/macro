@@ -1414,7 +1414,7 @@ Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
 people/contact fields.
 Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
 import it directly from Tasks and legacy `next-soup` consumers.
-Keep entity-picker navigation on its search input, before the enclosing menu handles the key; `internal/browser-test/assignee-keyboard.browser.e2e.ts` covers dropdown/sheet hosts and both Assignee filter menus at desktop and phone widths.
+Keep entity-picker navigation on its search input, before the enclosing menu handles the key.
 
 ### Sidebar tag dragging
 
