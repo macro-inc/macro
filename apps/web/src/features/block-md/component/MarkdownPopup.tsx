@@ -63,7 +63,6 @@ import SparkleIcon from '@icon/system/bold/sparkle-bold.svg?component-solid';
 import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg?component-solid';
 import GridIcon from '@icon/system/regular/grid-four.svg';
-import LinkIcon from '@icon/system/regular/link.svg?component-solid';
 import {
   $createDocumentMentionNode,
   buildMentionMarkdownString,
@@ -107,6 +106,7 @@ import {
 } from '../util/insertAtSavedPoint';
 import { CommentButton } from './CommentButton';
 import { FormatTools } from './FormatTools';
+import { SnippetLinkButton } from './SnippetLinkButton';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 
 const MENU_ID = 'markdown-popup';
@@ -734,17 +734,10 @@ export function MarkdownPopup(props: {
             <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>
               <CommentButton onClick={handleInsertComment} />
             </Show>
-            <Toolbar.Button
-              aria-label="Copy link to snippet"
-              size="icon-sm"
-              onClick={() => fireAndForget(handleShare(), 'markdown-editor')}
-              tooltip="Copy link to snippet"
-            >
-              <Dynamic
-                component={locationCopied() ? CheckIcon : LinkIcon}
-                class={locationCopied() ? 'text-success-ink size-4' : 'size-4'}
-              />
-            </Toolbar.Button>
+            <SnippetLinkButton
+              copied={locationCopied()}
+              onCopy={() => fireAndForget(handleShare(), 'markdown-editor')}
+            />
           </Toolbar>
         }
       >

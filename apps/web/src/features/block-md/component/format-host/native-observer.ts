@@ -13,6 +13,7 @@ import {
 } from 'solid-js';
 import { createNativeDocumentFormattingHost } from './native';
 import { createNativeDocumentLinkMenuHost } from './native-link-host';
+import { createNativeSnippetLink } from './native-snippet';
 
 type Controller = ReturnType<typeof createNativeDocumentFormattingHost>;
 
@@ -20,12 +21,16 @@ type Controller = ReturnType<typeof createNativeDocumentFormattingHost>;
 export function createNativeDocumentFormattingObserver(options: {
   canEdit: Accessor<boolean>;
   alive: Accessor<boolean>;
+  /** Copy link to snippet: the document whose URL is shared. */
+  snippetLink?: { readonly documentId: Accessor<string> };
 }) {
   const owner = getOwner();
   if (!owner) throw new Error('Native formatting requires its actual UI owner');
   const [controller, setController] = createSignal<Controller>();
   const [links, setLinks] =
     createSignal<ReturnType<typeof createNativeDocumentLinkMenuHost>>();
+  const [snippetLink, setSnippetLink] =
+    createSignal<ReturnType<typeof createNativeSnippetLink>>();
   let attached: EditorView | undefined;
   let terminal = false;
 
@@ -37,6 +42,8 @@ export function createNativeDocumentFormattingObserver(options: {
     cleanup.add(() => setController(undefined));
     cleanup.add(() => setLinks(undefined));
     cleanup.add(() => links()?.retire());
+    cleanup.add(() => snippetLink()?.dispose());
+    cleanup.add(() => setSnippetLink(undefined));
     cleanup.add(() =>
       reason
         ? controller()?.observer.unavailable(reason)
@@ -61,7 +68,10 @@ export function createNativeDocumentFormattingObserver(options: {
               ...options,
               links: link,
             });
-            return { link, format };
+            const snippet =
+              options.snippetLink &&
+              createNativeSnippetLink(view, options.snippetLink);
+            return { link, format, snippet };
           } catch (error) {
             return cleanup.fail(error);
           }
@@ -73,9 +83,11 @@ export function createNativeDocumentFormattingObserver(options: {
           const cleanup = createNativeListenerScope();
           cleanup.add(() => next.link.dispose());
           cleanup.add(() => next.format.dispose());
+          cleanup.add(() => next.snippet?.dispose());
           return cleanup.fail(error);
         }
         setLinks(next.link);
+        setSnippetLink(next.snippet);
         setController(next.format);
       } else current.observer.published(view);
     },
@@ -91,12 +103,15 @@ export function createNativeDocumentFormattingObserver(options: {
     attached = undefined;
     const currentController = controller();
     const currentLinks = links();
+    const currentSnippet = snippetLink();
     const cleanup = createNativeListenerScope();
     cleanup.add(() => setController(undefined));
     cleanup.add(() => setLinks(undefined));
+    cleanup.add(() => setSnippetLink(undefined));
+    cleanup.add(() => currentSnippet?.dispose());
     cleanup.add(() => currentLinks?.dispose());
     cleanup.add(() => currentController?.dispose());
     cleanup.dispose();
   });
-  return { observer, controller, links };
+  return { observer, controller, links, snippetLink };
 }

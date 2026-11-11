@@ -30,6 +30,11 @@ export function NativeBodyFormatPopup(props: {
     readonly canComment: Accessor<boolean>;
     readonly render: (close: () => void) => JSX.Element;
   };
+  /** Source Copy link to snippet: last, without a divider, never closing. */
+  snippetLinkAction?: {
+    readonly available: Accessor<boolean>;
+    readonly render: () => JSX.Element;
+  };
 }) {
   const [visible, setVisible] = createMenuOpenSignal(
     'markdown-popup',
@@ -89,7 +94,10 @@ export function NativeBodyFormatPopup(props: {
   onCleanup(() => setVisible(false));
   const commentControls = () =>
     props.host.root() !== null && props.commentAction?.canComment();
-  const controls = () => props.host.interactable() || commentControls();
+  const snippetLinkControls = () =>
+    props.host.root() !== null && (props.snippetLinkAction?.available() ?? false);
+  const controls = () =>
+    props.host.interactable() || commentControls() || snippetLinkControls();
   const position = createMemo(() => {
     const rect = rectangle();
     const scope = portalRect();
@@ -134,12 +142,16 @@ export function NativeBodyFormatPopup(props: {
                     formattingHost={props.host}
                     showLinkButton={false}
                   />
-                </Show>
-                <Show when={commentControls()}>
-                  <Show when={props.host.interactable()}>
+                  {/* Source MarkdownPopup: FormatTools then a divider before later actions. */}
+                  <Show when={commentControls() || snippetLinkControls()}>
                     <Toolbar.Divider />
                   </Show>
+                </Show>
+                <Show when={commentControls()}>
                   {props.commentAction?.render(() => setVisible(false))}
+                </Show>
+                <Show when={snippetLinkControls()}>
+                  {props.snippetLinkAction?.render()}
                 </Show>
               </Toolbar>
             </PopupPositioner>

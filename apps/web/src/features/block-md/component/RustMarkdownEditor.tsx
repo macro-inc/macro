@@ -184,6 +184,7 @@ export default function RustMarkdownEditor(props: {
   const formatting = createNativeBodyFormattingOverlay({
     canEdit: canInteractWithMedia,
     alive: () => !abort.signal.aborted,
+    snippetLink: { documentId },
     comment: {
       // Source: <Show when={ENABLE_MARKDOWN_COMMENTS && canComment()}>; the
       // draft capability exists only while the native provider is mounted.
