@@ -1,0 +1,35 @@
+crates/messages/src/domain/service/guest_chat.rs
+  s_c6a08203850d89::t_41490487421137 183,193,195,211-216,230,235,244-245,409
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_c6a08203850d89::t_9c3d054162b53b 287-289
+  s_c6a08203850d89::t_6ef8e3c2c8fd73 276
+  s_c6a08203850d89::t_1696ede6c5a451 307-348
+  s_c6a08203850d89::t_d5fe7e1c61ebd8 244,249-275,277-286,290-304
+  s_e3883ea272cda0::t_94506c8b20c6c6 305-306
+docs/design/call-guest-chat.md
+  s_c6a08203850d89::t_2888720e6fa1aa 63-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9135faf9d8cfc9ae3c6d16c9ff891a1d079bcdd8",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e3883ea272cda0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "51c12313-7b8a-47ce-87ba-30737bc3ee95",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
