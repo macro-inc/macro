@@ -390,7 +390,7 @@ export function NonUserEntityChip(props: {
     <Layer depth={3}>
       <div
         ref={containerRef}
-        class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
+        class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 touch:h-9 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
         <Show
@@ -430,7 +430,9 @@ export function NonUserEntityChip(props: {
             />
           </Show>
           <Show when={props.canEdit && props.onRemove}>
-            <div class="absolute inset-y-0 right-0 flex border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:pointer-events-auto touch:opacity-100">
+            {/* Overlays the name's end on hover; on touch it is always shown, so it
+                takes its own space instead of covering the name. */}
+            <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
               <Button
                 variant="ghost"
                 type="button"
@@ -442,7 +444,7 @@ export function NonUserEntityChip(props: {
                 }}
                 aria-label={`Remove ${name()}`}
               >
-                <DeleteIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
               </Button>
             </div>
           </Show>
