@@ -1,0 +1,23 @@
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_d4df9f60838c14::t_3f58e22a8e5a91 142-150
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_d4df9f60838c14::t_3f58e22a8e5a91 44,49-51
+  s_d4df9f60838c14::t_d5a2f8234c4d84 45-48
+  s_d4df9f60838c14::t_b3b98522f70333 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cc0f9acb264fd7a8c9c1afbfad638bc21a84fbdf",
+  "prompts": {},
+  "sessions": {
+    "s_d4df9f60838c14": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7ee-32ab-7e22-8439-ca7b8997622d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
