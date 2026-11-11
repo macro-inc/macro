@@ -1,0 +1,52 @@
+apps/web/src/features/channel/Message/tests/reactions.test.tsx
+  s_c6a08203850d89::t_bcd22ea700eb52 134-137,140-141
+  s_c6a08203850d89::t_5f737fbdbef7a5 138-139
+  s_c6a08203850d89::t_80d50440d73716 124,129
+  s_c6a08203850d89::t_72d5004d4fd16f 142-143
+apps/web/src/lib/core/messages/browser-test/guest-thread.tsx
+  s_c6a08203850d89::t_80d50440d73716 34,43,58,68,148
+  s_c6a08203850d89::t_7a9f854b770be3 176-177
+  s_c6a08203850d89::t_d5b46e5359c172 25,37,168-171,178-223,225-226
+  s_c6a08203850d89::t_5951dd08396f43 172-175
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_c6a08203850d89::t_f73effce55590c 41,45-49
+apps/web/src/features/channel/Message/ReactionChip.tsx
+  s_c6a08203850d89::t_656badff98e685 12,23,29,35,45,62,68,89,134
+apps/web/src/lib/core/messages/message-transport.tsx
+  s_c6a08203850d89::t_656badff98e685 69-70,72-73,76,78,82-83
+apps/web/src/lib/core/messages/browser-test/guest-thread.browser.e2e.ts
+  s_c6a08203850d89::t_5c557f62d6c26f 54
+apps/web/src/features/channel/Message/Reactions.tsx
+  s_c6a08203850d89::t_656badff98e685 2-5,25,49
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_c6a08203850d89::t_80d50440d73716 7,27,324,508
+  s_c6a08203850d89::t_a970c0e315500a 50-88,134-138,142,182-187,314-315,317,326
+  s_c6a08203850d89::t_5f737fbdbef7a5 327-331
+  s_c6a08203850d89::t_01952924d632d6 332-337
+apps/web/src/lib/core/messages/MessageThread.test.tsx
+  s_c6a08203850d89::t_80d50440d73716 281-284
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_c6a08203850d89::t_80d50440d73716 132,134-135,137
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_c6a08203850d89::t_656badff98e685 14,210-211,215-217,313
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ReplyTarget.tsx
+  s_c6a08203850d89::t_656badff98e685 13,33,44
+docs/agent-guide/calls.md
+  s_c6a08203850d89::t_dab38684d2bbd9 244-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3263a70e696a354979d885661b6ed48044c467ed",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
