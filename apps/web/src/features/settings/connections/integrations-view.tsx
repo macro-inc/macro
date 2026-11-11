@@ -25,6 +25,7 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
   Show,
   Suspense,
 } from 'solid-js';
@@ -106,12 +107,21 @@ function ConnectionsContent(props: IntegrationsViewProps) {
       );
     })
   );
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
   async function connectRequestedApp(appSlug: string) {
     try {
       // A linked account already authorizes GitHub's agent tools, so a
       // request to connect it means they are switched off. Show them instead
       // of linking again, which on the web navigates the whole page away.
-      if (appSlug === GITHUB_APP_SLUG && (await githubAlreadyLinked())) {
+      const alreadyLinked =
+        appSlug === GITHUB_APP_SLUG && (await githubAlreadyLinked());
+      // The user left Connections while the status read was pending; starting
+      // authorization now would navigate away from their newer work.
+      if (disposed) return;
+      if (alreadyLinked) {
         view.openProvider('github');
         return;
       }
