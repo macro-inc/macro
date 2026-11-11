@@ -1,5 +1,5 @@
-//! PostgreSQL store for ideas: the base `idea` row, one child row per kind,
-//! the items in `idea_target`, and every generation session's change in
+//! PostgreSQL store for ideas: the base `suggestion` row, one child row per kind,
+//! the items in `suggestion_target`, and every generation session's change in
 //! `suggestion_change`.
 
 use std::collections::HashMap;
