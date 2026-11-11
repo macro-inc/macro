@@ -17,8 +17,8 @@ import {
   type NativeActionsOptions,
   NativeActionsOverlay,
 } from './NativeActionsOverlay';
-import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
 import { NativeDraggableBlockOverlay } from './NativeDraggableBlockOverlay';
+import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
 import {
   type NativeUserMentionsOptions,
   NativeUserMentionsOverlay,
