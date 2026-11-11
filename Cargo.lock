@@ -6794,6 +6794,7 @@ dependencies = [
  "loro 1.17.1",
  "macro_document_model",
  "scoped-tls-hkt",
+ "serde",
  "serde_json",
  "sync_protocol",
  "thiserror 2.0.18",

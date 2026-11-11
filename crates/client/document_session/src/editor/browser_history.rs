@@ -77,13 +77,19 @@ impl EditorSurface {
                     },
                     HistoryTime(now.mono.0),
                 )
-                .map_err(|error| SessionError::Model(error.error))?;
+                .map_err(|error| {
+                    #[cfg(feature = "application")]
+                    self.checklist.observe(&error.committed);
+                    SessionError::Model(error.error)
+                })?;
             output
                 .effects
                 .retain(|effect| !matches!(effect, Effect::SetViewSelection { .. }));
             Self::output(
                 output,
                 view,
+                #[cfg(feature = "application")]
+                &mut self.checklist,
                 self.reported_errors.as_deref(),
                 self.follow_up_errors.as_deref(),
             );

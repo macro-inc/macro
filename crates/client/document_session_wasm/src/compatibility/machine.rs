@@ -124,6 +124,7 @@ impl Machine {
             initial_telemetry: capture.finish(),
             constructor_clock: None,
             view_commands: None,
+            pending_checklist_output: vec![],
         })
     }
 }

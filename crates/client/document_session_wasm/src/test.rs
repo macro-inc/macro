@@ -918,4 +918,5 @@ mod effective_access;
 
 mod checklist_plan;
 
+mod checklist_updates;
 mod table_facts;

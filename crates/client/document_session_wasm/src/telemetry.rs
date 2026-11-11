@@ -239,10 +239,31 @@ mod wasm {
 }
 #[cfg(target_arch = "wasm32")]
 pub(crate) use wasm::begin;
+#[cfg(test)]
+thread_local! {
+    static FAIL_APPEND: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+pub(crate) struct AppendFailure;
+#[cfg(test)]
+impl Drop for AppendFailure {
+    fn drop(&mut self) {
+        FAIL_APPEND.with(|flag| flag.set(false));
+    }
+}
+#[cfg(test)]
+pub(crate) fn fail_next_append() -> AppendFailure {
+    FAIL_APPEND.with(|flag| flag.set(true));
+    AppendFailure
+}
 pub(crate) fn append(
     messages: Vec<wire::TelemetryMsg>,
     buffer: &mut Vec<u8>,
 ) -> Result<u32, BoundaryError> {
+    #[cfg(test)]
+    if FAIL_APPEND.with(|flag| flag.replace(false)) {
+        return Err(BoundaryError::Invalid("injected telemetry append"));
+    }
     if messages.is_empty() {
         return Ok(0);
     }

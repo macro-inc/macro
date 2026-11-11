@@ -368,3 +368,176 @@ fn relative_full_comparison_preserves_prior_removal_but_initialize_replaces_it()
     observer.expose().unwrap();
     assert_eq!(observer.view.exposed_revision(key), Some(0));
 }
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+struct ObservedEquation(macro_document_model::nodes::EquationNode);
+impl lexical_model::NodeType for ObservedEquation {
+    const TYPE: &'static str = "checklist-observed-equation";
+    type Kind = lexical_model::DecoratorKind;
+    lexical_model::impl_default_node!();
+}
+impl lexical_model::DecoratorNode for ObservedEquation {
+    type Parent = macro_document_model::nodes::EquationNode;
+    fn as_parent(&self) -> &Self::Parent {
+        &self.0
+    }
+    fn as_parent_mut(&mut self) -> Option<&mut Self::Parent> {
+        Some(&mut self.0)
+    }
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, lexical_model::Error> {
+        Ok(Some(DecoratorRenderSignature::new(serde_json::to_string(
+            &self.0.equation,
+        )?)))
+    }
+}
+
+#[test]
+fn injected_append_failure_preserves_the_new_packet_observation_and_plan_receipts(
+) -> Result<(), BoundaryError> {
+    use crate::{bytes, generated, machine, wire};
+    use doc_sync_core::*;
+    use document_session::{
+        application_editor_config, DocumentSession, EditorConfig, SurfaceConfig,
+    };
+    use lexical_model::{Input, TagSet, ViewSelection};
+    use serde_json::json;
+    use std::sync::{atomic::AtomicI64, Arc};
+    let config = wire::SessionConfigMsg {
+        doc: "append-failure-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![71, 72, 73],
+        access: wire::Access::Edit,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut machine =
+        machine::Machine::create_macro(generated::ABI_MAJOR, &bytes(&config)?, 0.0, 0.0)?;
+    let (mut session_config, _, view_host) = crate::codec::config(config)?;
+    let mut editor_config = application_editor_config(
+        EditorConfig {
+            view_host,
+            ..EditorConfig::default()
+        },
+        Arc::new(AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let registered_builder = editor_config.builder.clone();
+    editor_config.builder =
+        Arc::new(move |mode, peer| registered_builder(mode, peer).node::<ObservedEquation>());
+    session_config.surface = SurfaceConfig::Editor(editor_config);
+    machine.session = machine::Session::Editor(Box::new(DocumentSession::new(
+        session_config,
+        crate::codec::now(0.0, 0.0)?,
+    )?));
+    machine.sync(SyncInput::Start, 0.0, None)?;
+    machine.sync(
+        SyncInput::Seed {
+            kind: SeedKind::Optimistic,
+            snapshot: vec![],
+        },
+        1.0,
+        None,
+    )?;
+    machine.editor(Input::SetState { state: serde_json::from_value(json!({"root":{"type":"root","children":[{"type":"list","listType":"check","tag":"ul","start":1,"children":[{"type":"listitem","value":1,"checked":false,"children":[{"type":"text","text":"Work"}]}]},{"type":"paragraph","children":[{"type":"checklist-observed-equation","equation":"x","inline":true}]}]}}))?, tags:TagSet::default() },2.0)?;
+    machine.take_output()?;
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    let state = session.surface().state();
+    let equation = state
+        .view()
+        .descendants(NodeKey::ROOT)
+        .find_map(|(key, _)| state.view().get::<ObservedEquation>(key).map(|_| key))
+        .expect("equation");
+    let generation = state.max_key().generation();
+    let before_revision = machine
+        .decorator_observer
+        .view
+        .exposed_revision(equation)
+        .expect("observed decorator");
+    let mut facts: serde_json::Value = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../lexical/macro_document_model/src/plugins_group_b/checklist_query/request-example.json"
+    )))?;
+    facts.as_object_mut().expect("object").remove("listKey");
+    facts["factsVersion"] = json!("1");
+    let command = macro_document_model::surface::decode_command(
+        "group-b.set-checklist-facts",
+        &facts.to_string(),
+        generation,
+        None,
+    )?
+    .expect("facts");
+    machine.editor(
+        Input::Command {
+            command: command.clone(),
+            selection: ViewSelection::KeepModel,
+        },
+        3.0,
+    )?;
+    assert_eq!(machine.pending_checklist_output.len(), 1);
+    machine.reject_text("invalid DOM text input")?;
+    let superseded = machine.output.clone();
+    assert!(machine.pending_checklist_output.is_empty());
+    let update = macro_document_model::surface::decode_command(
+        "group-b.equation",
+        &json!({"key":equation.index(),"equation":"y^2"}).to_string(),
+        generation,
+        None,
+    )?
+    .expect("update");
+    let _injection = crate::telemetry::fail_next_append();
+    assert!(matches!(
+        machine.editor(
+            Input::Command {
+                command: update,
+                selection: ViewSelection::KeepModel
+            },
+            4.0
+        ),
+        Err(BoundaryError::Invalid("injected telemetry append"))
+    ));
+    assert_ne!(
+        machine.output, superseded,
+        "append failure keeps the successfully encoded new packet"
+    );
+    assert_eq!(machine.pending_checklist_output.len(), 1);
+    assert_eq!(
+        serde_json::to_value(&machine.pending_checklist_output)?[0]["sequence"],
+        "1"
+    );
+    assert_eq!(
+        machine.decorator_observer.view.exposed_revision(equation),
+        Some(before_revision)
+    );
+    let encoded = machine.output.clone();
+    assert_eq!(machine.take_output()?, encoded);
+    assert_eq!(
+        machine.decorator_observer.view.exposed_revision(equation),
+        Some(before_revision + 1)
+    );
+    assert!(machine.take_output()?.is_empty());
+    machine.editor(
+        Input::Command {
+            command,
+            selection: ViewSelection::KeepModel,
+        },
+        5.0,
+    )?;
+    assert!(
+        machine.pending_checklist_output.is_empty(),
+        "the new packet's exact receipt was acknowledged once"
+    );
+    Ok(())
+}

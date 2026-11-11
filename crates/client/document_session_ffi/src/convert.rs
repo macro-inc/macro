@@ -1,9 +1,31 @@
 //! Copies domain output into owned typed native records.
 use crate::*;
+#[cfg(test)]
+thread_local! {
+    static FAIL_OUTPUT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+pub(crate) struct OutputFailure;
+#[cfg(test)]
+impl Drop for OutputFailure {
+    fn drop(&mut self) {
+        FAIL_OUTPUT.with(|flag| flag.set(false));
+    }
+}
+#[cfg(test)]
+pub(crate) fn fail_next_output() -> OutputFailure {
+    FAIL_OUTPUT.with(|flag| flag.set(true));
+    OutputFailure
+}
+
 pub(crate) fn output(
     out: &SessionOutput,
     pending: &mut native_diff::PendingDecorators,
 ) -> Result<FfiOutput, FfiSessionError> {
+    #[cfg(test)]
+    if FAIL_OUTPUT.with(|flag| flag.replace(false)) {
+        return Err(invalid("injected output conversion"));
+    }
     let view = out
         .view
         .iter()
@@ -83,6 +105,10 @@ pub(crate) fn output(
                     selection: selection.clone(),
                     format: *format,
                     style: style.to_string(),
+                },
+                ViewEffect::ChecklistPlans(updates) => FfiViewEffect::PluginEvent {
+                    name: "group-b.checklist-plan-updates".into(),
+                    payload: Some(serde_json::to_value(updates).map_err(invalid)?),
                 },
                 ViewEffect::Editor(effect) => match effect {
                     Effect::SetViewSelection {

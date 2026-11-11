@@ -1,5 +1,5 @@
 //! Explicit read-only transport for one current direct-root checklist plan.
-use super::{checklist_controls::collect_checklist_metadata, checklist_plan as plan};
+use super::{checklist_controls::collect_checklist_metadata_for_list, checklist_plan as plan};
 use crate::nodes::Maybe;
 use lexical_model::{EditorState, Error, NodeKey};
 use serde::Deserialize;
@@ -13,93 +13,9 @@ mod test;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Request {
     list_key: u32,
-    tasks: BTreeMap<String, TaskInfo>,
+    tasks: BTreeMap<String, super::checklist_facts::transport::RawTaskInfo>,
     names: BTreeMap<String, String>,
-    calendar: Calendar,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct TaskInfo {
-    status_option_id: Option<String>,
-    priority_option_id: Option<String>,
-    assignee_ids: Vec<String>,
-    due: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Calendar {
-    today: Observation,
-    due_dates: BTreeMap<String, ParsedDate>,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
-enum ParsedDate {
-    Invalid,
-    Valid { observation: Observation },
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Observation {
-    instant_ms: i64,
-    local: LocalTime,
-    start_of_day: Midnight,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
-enum Midnight {
-    Invalid,
-    Valid {
-        #[serde(rename = "instantMs")]
-        instant_ms: i64,
-        local: LocalTime,
-    },
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct LocalTime {
-    year: i32,
-    month: u8,
-    day: u8,
-    hour: u8,
-    minute: u8,
-    second: u8,
-    millisecond: u16,
-}
-impl LocalTime {
-    fn into_plan(self) -> plan::CivilDateTime {
-        plan::CivilDateTime {
-            date: plan::CivilDate {
-                year: self.year,
-                month: self.month,
-                day: self.day,
-            },
-            hour: self.hour,
-            minute: self.minute,
-            second: self.second,
-            millisecond: self.millisecond,
-        }
-    }
-}
-impl Observation {
-    fn into_plan(self) -> plan::DateObservation {
-        plan::DateObservation {
-            instant_ms: self.instant_ms,
-            local: self.local.into_plan(),
-            start_of_day: match self.start_of_day {
-                Midnight::Invalid => plan::NormalizedMidnight::Invalid,
-                Midnight::Valid { instant_ms, local } => plan::NormalizedMidnight::Valid {
-                    instant_ms,
-                    local: local.into_plan(),
-                },
-            },
-        }
-    }
+    calendar: super::checklist_facts::transport::RawCalendar,
 }
 
 fn key(key: NodeKey) -> Value {
@@ -128,47 +44,20 @@ pub(super) fn query(
         return Err(Error::Invariant("checklist query generation"));
     }
     let request: Request = serde_json::from_value(data.clone())?;
-    let metadata = collect_checklist_metadata(state)?;
-    let meta = metadata
-        .iter()
-        .find(|meta| meta.list_key.index() == request.list_key)
+    let actual_key = state
+        .view()
+        .children(NodeKey::ROOT)
+        .find(|key| key.index() == request.list_key)
         .ok_or(Error::Invariant("checklist query target"))?;
-    let tasks = request
-        .tasks
-        .into_iter()
-        .map(|(id, task)| {
-            (
-                id,
-                plan::TaskInfo {
-                    status_option_id: task.status_option_id,
-                    priority_option_id: task.priority_option_id,
-                    assignee_ids: task.assignee_ids,
-                    due: task.due,
-                },
-            )
-        })
-        .collect();
-    let calendar = plan::ChecklistCalendar {
-        today: request.calendar.today.into_plan(),
-        due_dates: request
-            .calendar
-            .due_dates
-            .into_iter()
-            .map(|(due, value)| {
-                (
-                    due,
-                    match value {
-                        ParsedDate::Invalid => plan::ParsedDueDate::Invalid,
-                        ParsedDate::Valid { observation } => {
-                            plan::ParsedDueDate::Valid(observation.into_plan())
-                        }
-                    },
-                )
-            })
-            .collect(),
-    };
-    let result = plan::plan_checklist(Some(meta), &tasks, &request.names, &calendar);
-    Ok(Some(encode(meta, result)))
+    let meta = collect_checklist_metadata_for_list(state, actual_key)?
+        .ok_or(Error::Invariant("checklist query target"))?;
+    let facts = super::checklist_facts::transport::into_facts(
+        request.tasks,
+        request.names,
+        request.calendar,
+    );
+    let result = plan::plan_checklist(Some(&meta), &facts.tasks, &facts.names, &facts.calendar);
+    Ok(Some(encode(&meta, result)))
 }
 
 fn encode(

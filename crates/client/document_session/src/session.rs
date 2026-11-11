@@ -58,6 +58,21 @@ pub struct SessionOutput {
     /// Fewer than two unused identities remain.
     pub need_peer_ids: bool,
 }
+#[cfg(feature = "application")]
+impl SessionOutput {
+    /// Exact derived-delivery receipts carried by this output; not model authority.
+    pub fn checklist_deliveries(
+        &self,
+    ) -> Vec<macro_document_model::plugins_group_b::checklist_updates::PlanUpdates> {
+        self.view
+            .iter()
+            .filter_map(|effect| match effect {
+                ViewEffect::ChecklistPlans(delivery) => Some(delivery.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+}
 /// Initial paint after the winning seed or a reset.
 pub enum InitialView {
     /// Full editor state and view patch from empty.
@@ -83,6 +98,9 @@ pub struct EditorPeerSelection {
 
 /// Non-I/O effect delivered in the same call as its triggering input.
 pub enum ViewEffect {
+    /// Native derived checklist presentation; no document publication is fabricated.
+    #[cfg(feature = "application")]
+    ChecklistPlans(macro_document_model::plugins_group_b::checklist_updates::PlanUpdates),
     /// First paint or replacement.
     Initialize(InitialView),
     /// Incremental editor view patch.
@@ -206,6 +224,15 @@ pub trait Surface: sealed::Sealed {
     #[doc(hidden)]
     fn drop_binding(&mut self);
     #[doc(hidden)]
+    fn finish_application_output(&mut self, view: &mut Vec<ViewEffect>)
+    -> Result<(), SessionError>;
+    #[cfg(feature = "application")]
+    #[doc(hidden)]
+    fn acknowledge_application_output(
+        &mut self,
+        receipts: &[macro_document_model::plugins_group_b::checklist_updates::PlanUpdates],
+    );
+    #[doc(hidden)]
     fn take_resynced(&mut self) -> bool {
         false
     }
@@ -272,6 +299,14 @@ impl<S: Surface> DocumentSession<S> {
     /// Immutable surface queries; never performs I/O.
     pub fn surface(&self) -> &S {
         &self.surface
+    }
+    /// Infallibly expose only exact derived receipts successfully copied to the host.
+    #[cfg(feature = "application")]
+    pub fn acknowledge_application_output(
+        &mut self,
+        receipts: &[macro_document_model::plugins_group_b::checklist_updates::PlanUpdates],
+    ) {
+        self.surface.acknowledge_application_output(receipts);
     }
     /// Current authorization fact; a later input must still pass normal admission.
     pub fn effective_access(&self) -> doc_sync_core::Access {
@@ -458,6 +493,9 @@ impl<S: Surface> DocumentSession<S> {
         self.out
             .undo_applied
             .extend(self.surface.take_undo_applied());
+        if let Err(error) = self.surface.finish_application_output(&mut self.out.view) {
+            self.out.view.push(ViewEffect::Error(error));
+        }
         &self.out
     }
     fn release_composition(&mut self, now: Now, force: bool) -> Result<(), SessionError> {
@@ -916,3 +954,21 @@ pub mod staging;
 #[cfg(feature = "compatibility")]
 #[path = "compatibility.rs"]
 pub mod compatibility;
+
+#[cfg(feature = "application")]
+impl DocumentSession<EditorSurface> {
+    /// Prepare a remount reset without retiring any pending delivery.
+    pub fn prepare_checklist_reset(
+        &self,
+    ) -> Result<macro_document_model::plugins_group_b::checklist_updates::PlanReset, SessionError>
+    {
+        Ok(self.surface.checklist.prepare_reset(self.surface.state())?)
+    }
+    /// Commit a validated full reset after its Initialize output was exposed.
+    pub fn expose_checklist_reset(
+        &mut self,
+        draft: macro_document_model::plugins_group_b::checklist_updates::PlanReset,
+    ) {
+        self.surface.checklist.expose_reset(draft);
+    }
+}

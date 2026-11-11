@@ -132,3 +132,5 @@ impl crate::EditorSurface {
         macro_document_model::surface::query_editor(name, data, generation, self.core.editor())
     }
 }
+
+mod checklist;

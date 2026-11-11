@@ -71,6 +71,9 @@ pub struct EditorSurface {
     pub(crate) reported_errors: Option<Arc<dyn ReportedModelErrorObserver>>,
     pub(crate) follow_up_errors: Option<Arc<reported_errors::Capture>>,
     pub(crate) core: EditorCore,
+    #[cfg(feature = "application")]
+    pub(crate) checklist:
+        macro_document_model::plugins_group_b::checklist_updates::ChecklistProducer,
     pub(crate) projection: Option<LoroProjection>,
     undo: Option<UndoManager>,
     tracker: MergeTracker,
@@ -104,6 +107,8 @@ impl EditorSurface {
             core: Self::core(editor),
             reported_errors: None,
             follow_up_errors: None,
+            #[cfg(feature = "application")]
+            checklist: Default::default(),
             projection: None,
             undo: None,
             tracker: MergeTracker::new(config.delay_ms, HistoryTime(now.mono.0)),
@@ -155,8 +160,19 @@ impl EditorSurface {
         )
     }
     pub(crate) fn clear_binding(&mut self) {
+        #[cfg(feature = "application")]
+        self.checklist.clear();
         self.projection = None;
         self.undo = None;
+    }
+    #[cfg(feature = "application")]
+    pub(crate) fn accept_checklist_facts(
+        &mut self,
+        revision: &macro_document_model::plugins_group_b::checklist_facts::FactsRevision,
+    ) -> Result<(), SessionError> {
+        self.checklist.accept(revision, self.core.state())?;
+        self.handled = Handled::Yes;
+        Ok(())
     }
     /// The configured internal clipboard namespace, shared by all host exports.
     pub fn namespace(&self) -> &str {
@@ -227,6 +243,8 @@ impl EditorSurface {
             capture.clear();
             self.core.observe_follow_up_errors(capture.clone());
         }
+        #[cfg(feature = "application")]
+        self.checklist.clear();
         self.core.set_editable(access == Access::Edit);
         let initial = self.core.take_initial_output();
         let base = initial
@@ -491,6 +509,8 @@ impl EditorSurface {
             Ok(out) => &out.commits,
             Err(error) => &error.committed,
         };
+        #[cfg(feature = "application")]
+        self.checklist.observe(commits);
         if let Ok(output) = &result
             && let Some(selection) = &output.installed_selection
         {
@@ -551,6 +571,8 @@ impl EditorSurface {
                 Self::output(
                     output,
                     view,
+                    #[cfg(feature = "application")]
+                    &mut self.checklist,
                     self.reported_errors.as_deref(),
                     self.follow_up_errors.as_deref(),
                 );
@@ -683,12 +705,16 @@ impl EditorSurface {
     fn output(
         output: Output,
         view: &mut Vec<ViewEffect>,
+        #[cfg(feature = "application")]
+        checklist: &mut macro_document_model::plugins_group_b::checklist_updates::ChecklistProducer,
         observer: Option<&dyn ReportedModelErrorObserver>,
         capture: Option<&reported_errors::Capture>,
     ) {
         let failures = capture
             .map(reported_errors::Capture::take)
             .unwrap_or_default();
+        #[cfg(feature = "application")]
+        checklist.observe(&output.commits);
         let mut tags = Vec::new();
         for tag in output.commits.iter().flat_map(|commit| commit.tags.iter()) {
             let tag = tag.to_string();
@@ -795,7 +821,11 @@ impl EditorSurface {
         let output = self
             .core
             .apply(input, HistoryTime(now.mono.0))
-            .map_err(|error| SessionError::Model(error.error))?;
+            .map_err(|error| {
+                #[cfg(feature = "application")]
+                self.checklist.observe(&error.committed);
+                SessionError::Model(error.error)
+            })?;
         let created = output
             .effects
             .iter()
@@ -818,6 +848,8 @@ impl EditorSurface {
         Self::output(
             output,
             view,
+            #[cfg(feature = "application")]
+            &mut self.checklist,
             self.reported_errors.as_deref(),
             self.follow_up_errors.as_deref(),
         );
@@ -842,10 +874,16 @@ impl EditorSurface {
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
-                .map_err(|error| SessionError::Model(error.error))?;
+                .map_err(|error| {
+                    #[cfg(feature = "application")]
+                    self.checklist.observe(&error.committed);
+                    SessionError::Model(error.error)
+                })?;
             Self::output(
                 output,
                 view,
+                #[cfg(feature = "application")]
+                &mut self.checklist,
                 self.reported_errors.as_deref(),
                 self.follow_up_errors.as_deref(),
             );
@@ -909,10 +947,16 @@ impl EditorSurface {
             let output = self
                 .core
                 .apply(input, HistoryTime(now.mono.0))
-                .map_err(|error| SessionError::Model(error.error))?;
+                .map_err(|error| {
+                    #[cfg(feature = "application")]
+                    self.checklist.observe(&error.committed);
+                    SessionError::Model(error.error)
+                })?;
             Self::output(
                 output,
                 view,
+                #[cfg(feature = "application")]
+                &mut self.checklist,
                 self.reported_errors.as_deref(),
                 self.follow_up_errors.as_deref(),
             );

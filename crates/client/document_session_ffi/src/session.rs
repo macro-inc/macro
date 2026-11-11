@@ -66,10 +66,11 @@ impl<S: Surface> NativeHost<S> {
         }
         self.last_mono = now.mono_ms;
         self.clock.store(now.wall_ms, Ordering::Relaxed);
-        convert::output(
-            self.session.handle(now.into(), input),
-            &mut self.pending_decorators,
-        )
+        let out = self.session.handle(now.into(), input);
+        let converted = convert::output(out, &mut self.pending_decorators)?;
+        let receipts = out.checklist_deliveries();
+        self.session.acknowledge_application_output(&receipts);
+        Ok(converted)
     }
 }
 /// Native-view editor. Calls are serialized across UI and sync threads.

@@ -49,6 +49,22 @@ impl Surface for EditorSurface {
         if contains_remote(&input) {
             return Err(SessionError::WrongSurface);
         }
+        #[cfg(feature = "application")]
+        {
+            use macro_document_model::plugins_group_b::checklist_facts;
+            if matches!(&input, lexical_model::Input::Batch(_))
+                && checklist_facts::contains_facts(&input)
+            {
+                return Err(SessionError::Model(lexical_model::Error::InputNotBatchable));
+            }
+            if let Some(revision) = checklist_facts::input_revision(&input)? {
+                if !ready {
+                    return Err(SessionError::NotReady);
+                }
+                self.accept_checklist_facts(revision)?;
+                return Ok(false);
+            }
+        }
         if let lexical_model::Input::Batch(inputs) = &input
             && inputs.iter().any(|input| {
                 matches!(
@@ -90,6 +106,25 @@ impl Surface for EditorSurface {
     #[cfg(feature = "conformance")]
     fn take_undo_applied(&mut self) -> Vec<crate::UndoObservation> {
         std::mem::take(&mut self.undo_applied)
+    }
+    fn finish_application_output(
+        &mut self,
+        view: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError> {
+        #[cfg(feature = "application")]
+        self.finish_checklist_output(view)?;
+        #[cfg(not(feature = "application"))]
+        let _ = view;
+        Ok(())
+    }
+    #[cfg(feature = "application")]
+    fn acknowledge_application_output(
+        &mut self,
+        receipts: &[macro_document_model::plugins_group_b::checklist_updates::PlanUpdates],
+    ) {
+        for receipt in receipts {
+            self.checklist.expose(receipt);
+        }
     }
     fn take_resynced(&mut self) -> bool {
         std::mem::take(&mut self.resynced)
@@ -232,6 +267,19 @@ fn local_only(input: &lexical_model::Input, allowed: &[lexical_model::CommandKin
 }
 impl crate::session::sealed::Sealed for GenericSurface {}
 impl Surface for GenericSurface {
+    #[cfg(feature = "application")]
+    fn acknowledge_application_output(
+        &mut self,
+        _receipts: &[macro_document_model::plugins_group_b::checklist_updates::PlanUpdates],
+    ) {
+    }
+    fn finish_application_output(
+        &mut self,
+        _view: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError> {
+        Ok(())
+    }
+
     fn construct(config: SurfaceConfig, _: u64, _: Now) -> Result<Self, SessionError> {
         let SurfaceConfig::Generic(config) = config else {
             return Err(SessionError::WrongSurface);

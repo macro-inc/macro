@@ -57,3 +57,5 @@ Forward application queries through EditorSurface.application_query under the se
 Read group-b.checklist-plan through the existing generation-checked application_query under the session mutex; preserve tagged coverage/calendar failures and keep provider facts explicit.
 
 Forward the shared group-b.table-facts JSON through application_query; preserve all-or-error generation/attached/type checks and never implement table-map placement or resize capture in the adapter.
+
+Convert the actual complete output before acknowledging checklist deliveries; retain pending receipts on conversion failure and request remount reset with counted same-facts rebind:true.

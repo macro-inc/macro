@@ -294,3 +294,7 @@ A selection view effect (kind 6, code 0) sets its flag only for a focused browse
 
 
 The optional final `createMacroWithNamespace` argument enables root search-text storage for the ordinary Macro browser host. Default it to false and rebuild the glue and declaration from the same source as the native artifact.
+
+Replace checklist packet receipt metadata at successful direct-buffer encode before telemetry append; expose it infallibly after decorator exposure, and commit initialize reset drafts only after encoding and exposure succeed.
+
+Use a registered render-signature test decorator for observer failure controls so actual model mutations produce the observation under test.

@@ -2145,3 +2145,6 @@ mod seed_adoption;
 mod decorator_render;
 
 mod effective_access;
+
+#[cfg(feature = "application")]
+mod checklist_updates;

@@ -13,6 +13,8 @@ pub(crate) enum Session {
 pub(crate) struct Machine {
     pub(crate) session: Session,
     pub(crate) output: Vec<u8>,
+    pub(crate) pending_checklist_output:
+        Vec<macro_document_model::plugins_group_b::checklist_updates::PlanUpdates>,
     pub(crate) decorator_observer: crate::decorator_observer::DecoratorObserver,
     pub(crate) wake: Option<Millis>,
     wall_origin: f64,
@@ -24,6 +26,11 @@ pub(crate) struct Machine {
 impl Machine {
     pub(crate) fn take_output(&mut self) -> Result<Vec<u8>, BoundaryError> {
         self.decorator_observer.expose()?;
+        let receipts = std::mem::take(&mut self.pending_checklist_output);
+        match &mut self.session {
+            Session::Editor(session) => session.acknowledge_application_output(&receipts),
+            Session::Doc(session) => session.acknowledge_application_output(&receipts),
+        }
         Ok(std::mem::take(&mut self.output))
     }
     pub(crate) fn initialize_view(&mut self) -> Result<Vec<u8>, BoundaryError> {
@@ -35,18 +42,29 @@ impl Machine {
         let Session::Editor(session) = &self.session else {
             return Err(BoundaryError::Invalid("editor"));
         };
-        let out = SessionOutput {
+        let reset = session.prepare_checklist_reset()?;
+        let mut out = SessionOutput {
             view: vec![ViewEffect::Initialize(InitialView::Editor {
                 diff: session.surface().view_diff()?,
                 state: session.surface().state().to_json()?,
             })],
             ..Default::default()
         };
+        out.view.extend(
+            reset
+                .deliveries()
+                .into_iter()
+                .map(ViewEffect::ChecklistPlans),
+        );
         let mut bytes = vec![];
         self.decorator_observer.with_initialization(|observer| {
             output::encode_observed(&out, false, &mut bytes, None, None, observer)
         })?;
         self.decorator_observer.expose()?;
+        if let Session::Editor(session) = &mut self.session {
+            session.expose_checklist_reset(reset);
+        }
+        self.pending_checklist_output.clear();
         Ok(bytes)
     }
     pub(crate) fn effective_access(&self) -> wire::Access {
@@ -141,6 +159,7 @@ impl Machine {
             session,
             output: vec![],
             decorator_observer: Default::default(),
+            pending_checklist_output: vec![],
             wake: None,
             wall_origin: wall - mono,
             terminal: false,
@@ -409,6 +428,7 @@ impl Machine {
             selection_feedback,
             &mut self.decorator_observer,
         )?;
+        self.pending_checklist_output = out.checklist_deliveries();
         flags |= crate::telemetry::append(messages, &mut self.output)?;
         if let Some(registry) = &self.view_commands {
             registry.bind_output(&out.view);
@@ -444,7 +464,7 @@ impl Machine {
             view: vec![ViewEffect::Error(SessionError::Configuration(reason))],
             ..Default::default()
         };
-        output::encode_observed(
+        let flags = output::encode_observed(
             &output,
             self.terminal,
             &mut self.output,
@@ -454,7 +474,9 @@ impl Machine {
             }),
             None,
             &mut self.decorator_observer,
-        )
+        )?;
+        self.pending_checklist_output.clear();
+        Ok(flags)
     }
     pub(crate) fn editor(&mut self, input: Input, mono: f64) -> Result<u32, BoundaryError> {
         self.call(SessionInput::Editor(input), mono, None)

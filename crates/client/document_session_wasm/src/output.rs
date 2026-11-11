@@ -265,6 +265,12 @@ fn encode_inner(
                 // A focused history restore can write through the main update's skip tag.
                 m.flag = *write_dom;
             }
+            ViewEffect::ChecklistPlans(updates) => {
+                m.kind = 6;
+                m.code = 9;
+                m.text = "group-b.checklist-plan-updates".into();
+                m.style = serde_json::to_string(updates)?;
+            }
             ViewEffect::Editor(e) => {
                 m.kind = 6;
                 match e {

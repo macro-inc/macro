@@ -142,3 +142,5 @@ Construct inserted equations before invoking the shared current/previous/root-en
 Keep GIF insertion on its explicit list-split/select-next path; preserve the lone empty paragraph caret and Source’s NodeSelection false-inserted/orphaned-upload behavior until both engines change together.
 
 Apply Booking display-label updates to the current typed key only; reject stale generations and closed-object payload violations, and add Historic/selection/scroll tags only for truthy changed labels.
+
+Keep checklist facts explicit/versioned and stage key-addressed plan deltas until exact output receipt exposure; preserve raw unsupported/calendar results and document row order.
