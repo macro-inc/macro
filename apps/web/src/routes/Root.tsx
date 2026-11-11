@@ -1,8 +1,8 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
-import { useRecordSuggestionsActivity } from '@app/features/suggestions/queries/use-record-suggestions-activity';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
+import { useRecordSuggestionsActivity } from '@app/features/suggestions/queries/use-record-suggestions-activity';
 import {
   AnalyticsContextProvider,
   useAnalytics,
