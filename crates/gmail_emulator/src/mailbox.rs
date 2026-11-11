@@ -300,7 +300,7 @@ impl Mailbox {
             .iter()
             .take_while(|record| record.at_ms < cutoff)
             .count();
-        if let Some(last) = self.history.drain(..expired).last() {
+        if let Some(last) = self.history.drain(..expired).next_back() {
             self.history_floor = last.id;
         }
     }

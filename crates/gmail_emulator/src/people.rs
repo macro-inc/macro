@@ -16,6 +16,14 @@ struct Person {
     changed_at: u64,
 }
 
+/// One page of a contact listing.
+pub(crate) struct PeoplePage {
+    pub(crate) people: Vec<Value>,
+    pub(crate) next_page_token: Option<String>,
+    /// Present on the last page, when the request asked for one.
+    pub(crate) next_sync_token: Option<String>,
+}
+
 /// Contacts or other contacts. A sync token names a version of the book;
 /// listing with one returns what changed since.
 #[derive(Debug)]
@@ -90,15 +98,14 @@ impl ContactBook {
     }
 
     /// One page of people: all of them, or with a sync token those changed
-    /// since. Returns the people, the next page token and, on the last page
-    /// when asked for, the next sync token.
+    /// since.
     pub(crate) fn list(
         &self,
         sync_token: Option<&str>,
         request_sync_token: bool,
         page_size: usize,
         offset: usize,
-    ) -> Result<(Vec<Value>, Option<String>, Option<String>), ApiError> {
+    ) -> Result<PeoplePage, ApiError> {
         let since = match sync_token {
             None => None,
             Some(token) => Some(self.sync_token_version(token)?),
@@ -112,18 +119,20 @@ impl ContactBook {
             })
             .collect();
 
-        let page = matching
+        let people = matching
             .iter()
             .skip(offset)
             .take(page_size)
             .map(|person| person_json(&person.resource_name, &person.contact, person.deleted))
             .collect();
         let has_more = offset + page_size < matching.len();
-        let next_page = has_more.then(|| (offset + page_size).to_string());
-        let next_sync = (!has_more && request_sync_token)
-            .then(|| format!("{SYNC_TOKEN_PREFIX}{}", self.version));
 
-        Ok((page, next_page, next_sync))
+        Ok(PeoplePage {
+            people,
+            next_page_token: has_more.then(|| (offset + page_size).to_string()),
+            next_sync_token: (!has_more && request_sync_token)
+                .then(|| format!("{SYNC_TOKEN_PREFIX}{}", self.version)),
+        })
     }
 
     fn sync_token_version(&self, token: &str) -> Result<u64, ApiError> {

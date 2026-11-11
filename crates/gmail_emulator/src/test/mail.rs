@@ -232,7 +232,7 @@ async fn labels_can_be_created_applied_and_deleted() {
         .batch_modify_message_labels(
             &ada,
             &[ids[0].clone(), "unknown-message".to_string()],
-            &[travel.clone()],
+            std::slice::from_ref(&travel),
             &["UNREAD".to_string()],
         )
         .await

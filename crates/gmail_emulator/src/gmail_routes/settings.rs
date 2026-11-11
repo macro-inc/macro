@@ -85,10 +85,10 @@ async fn create_filter(
         Route::FiltersCreate,
         |state, email| {
             let (criteria, action) = (body["criteria"].clone(), body["action"].clone());
-            if !criteria
+            let has_criteria = criteria
                 .as_object()
-                .is_some_and(|criteria| !criteria.is_empty())
-            {
+                .is_some_and(|criteria| !criteria.is_empty());
+            if !has_criteria {
                 return Err(ApiError::invalid_argument("Filter must have criteria"));
             }
 

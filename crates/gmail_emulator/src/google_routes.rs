@@ -16,7 +16,7 @@ use crate::error::ApiError;
 use crate::fault::Route;
 use crate::gate::{Params, mailbox_request, open_request};
 use crate::gmail_routes::mailbox;
-use crate::people::person_json;
+use crate::people::{PeoplePage, person_json};
 use crate::seed::SeedContact;
 use crate::state::{ACCESS_TOKEN_LIFETIME_SECONDS, State};
 
@@ -83,18 +83,13 @@ async fn connections(
                 return Err(scope_required(CONTACTS_SCOPE));
             }
 
-            let (people, next_page, next_sync) = mailbox.contacts.list(
+            let page = mailbox.contacts.list(
                 params.get("syncToken"),
                 params.flag("requestSyncToken"),
                 params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
                 params.offset()?,
             )?;
-            Ok(Json(people_page(
-                "connections",
-                people,
-                next_page,
-                next_sync,
-            )))
+            Ok(Json(people_page("connections", page)))
         },
     )
     .await
@@ -117,37 +112,27 @@ async fn other_contacts(
                 return Err(scope_required(OTHER_CONTACTS_SCOPE));
             }
 
-            let (people, next_page, next_sync) = mailbox.other_contacts.list(
+            let page = mailbox.other_contacts.list(
                 params.get("syncToken"),
                 params.flag("requestSyncToken"),
                 params.page_size("pageSize", PEOPLE_PAGE_DEFAULT, PEOPLE_PAGE_MAX),
                 params.offset()?,
             )?;
-            Ok(Json(people_page(
-                "otherContacts",
-                people,
-                next_page,
-                next_sync,
-            )))
+            Ok(Json(people_page("otherContacts", page)))
         },
     )
     .await
 }
 
-fn people_page(
-    key: &str,
-    people: Vec<Value>,
-    next_page: Option<String>,
-    next_sync: Option<String>,
-) -> Value {
+fn people_page(key: &str, page: PeoplePage) -> Value {
     let mut response = json!({});
-    if !people.is_empty() {
-        response[key] = Value::Array(people);
+    if !page.people.is_empty() {
+        response[key] = Value::Array(page.people);
     }
-    if let Some(token) = next_page {
+    if let Some(token) = page.next_page_token {
         response["nextPageToken"] = json!(token);
     }
-    if let Some(token) = next_sync {
+    if let Some(token) = page.next_sync_token {
         response["nextSyncToken"] = json!(token);
     }
     response
