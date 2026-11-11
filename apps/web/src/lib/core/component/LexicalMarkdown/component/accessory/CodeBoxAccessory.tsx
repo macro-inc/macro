@@ -44,6 +44,7 @@ import { Dynamic } from 'solid-js/web';
 import { glueToElement } from '../../directive/glueToElement';
 import { deleteCodeNode } from '../../plugins/code/deleteCodeNode';
 import { autoRegister } from '../../plugins/shared/utils';
+import { prepareSvgPreview, sizeSvgPreview } from './svg-preview';
 
 const LanguageIcons: Record<
   SupportedLanguage,
@@ -308,14 +309,6 @@ export function CodeBoxAccessory(props: {
 function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
   const [error, setError] = createSignal<string | null>(null);
 
-  const sanitizeSvg = (content: string): string => {
-    // Remove potentially dangerous elements/attributes
-    return content
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-      .replace(/javascript:/gi, '');
-  };
-
   const renderSvg = () => {
     const content = props.svgContent();
     if (!content.trim()) {
@@ -327,11 +320,8 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
     }
 
     try {
-      const trimmedContent = content.trim().toLowerCase();
-      if (
-        !trimmedContent.startsWith('<svg') &&
-        !trimmedContent.includes('<svg')
-      ) {
+      const prepared = prepareSvgPreview(content);
+      if (prepared.kind === 'invalid') {
         setError('Content does not appear to be valid SVG');
         return (
           <div class="flex items-center justify-center h-full text-failure text-sm">
@@ -339,7 +329,8 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
           </div>
         );
       }
-      const sanitizedContent = sanitizeSvg(content);
+      if (prepared.kind === 'empty') return;
+      const sanitizedContent = prepared.html;
 
       let containerRef: HTMLDivElement | undefined;
 
@@ -347,15 +338,7 @@ function SvgPreview(props: { svgContent: () => string; overlay?: boolean }) {
         containerRef = el;
         setTimeout(() => {
           if (containerRef) {
-            const svgElements = containerRef.querySelectorAll('svg');
-            svgElements.forEach((svg: SVGElement) => {
-              svg.style.maxWidth = '100%';
-              svg.style.maxHeight = '100%';
-              svg.style.width = 'auto';
-              svg.style.height = 'auto';
-              svg.style.display = 'block';
-              svg.style.margin = 'auto';
-            });
+            sizeSvgPreview(containerRef);
           }
         }, 0);
       };

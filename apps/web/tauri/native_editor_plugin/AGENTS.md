@@ -51,3 +51,5 @@ Android registration exposes bridge commands; it does not select native editing 
 - Check and strictly lint `tauri-plugin-native-editor` in the Tauri Cargo workspace for the Android target.
 
 Consume full-width decorator revision operations exhaustively and refresh cached model facts on native sidecar invalidation keys; a native diff alone does not acknowledge signature consumption.
+
+Reuse the Source `component/accessory/svg-preview.ts` preparation and sizing helpers for SVG presentation; keep sanitizer changes separate from host integration and preserve actual Source preview controls before and after extraction.
