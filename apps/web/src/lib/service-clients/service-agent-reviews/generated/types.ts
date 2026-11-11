@@ -853,8 +853,8 @@ export type ToolCalendarEvent = {
   /**  Conference join URL, when a conference is attached. */
   conferenceUrl: string | null;
   /**
-   *  Join URL of the Macro call created with the event, when
-   *  CreateCalendarEvent was asked for one.
+   *  Join URL of the event's Macro call, when CreateCalendarEvent or
+   *  UpdateCalendarEvent was asked for one.
    */
   macroCallUrl: string | null;
   /**  Whether the user's calendar prohibits modifying this event. */
