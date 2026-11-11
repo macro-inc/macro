@@ -42,12 +42,6 @@ const host: TabLayoutHost = {
   activateSplit: () => {},
 };
 
-// The controller scopes block handles to the active tab.
-const manager = {
-  ...host,
-  getOrchestrator: () => ({ setBlockScope: () => {} }),
-} as unknown as Parameters<typeof DesktopTabsController>[0]['manager'];
-
 async function flush(router: SplitRouter) {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await router.settled();
@@ -67,7 +61,17 @@ async function setupThreeTabs() {
 
   render(() => {
     useHotKeyRoot();
-    return <DesktopTabsController router={router} manager={manager} />;
+    return (
+      <DesktopTabsController
+        router={router}
+        manager={
+          {
+            ...host,
+            getOrchestrator: () => ({ setBlockScope: () => {} }),
+          } as unknown as Parameters<typeof DesktopTabsController>[0]['manager']
+        }
+      />
+    );
   });
 
   const tabManager = globalTabManager()!;
