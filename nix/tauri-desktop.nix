@@ -1008,6 +1008,12 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
+          # Crates `include_str!` their SQL, JSON and Markdown (cache-turso's
+          # contact_search.sql); commonCargoSources keeps only Rust and Cargo
+          # files, so the build died on the first one it could not read. A
+          # flake source holds tracked files only, so these are not build output.
+          ../crates
+          ../apps/web/tauri
           ../static_assets/schema.graphql
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist
