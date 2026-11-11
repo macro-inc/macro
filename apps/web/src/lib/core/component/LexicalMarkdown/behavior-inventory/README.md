@@ -186,6 +186,19 @@ outside-pointer dismissal masking the editability reset. Remote unfurl traffic
 is blocked, so hover uses the real fallback card rather than service metadata.
 Icon-action order does not establish toolbar accessibility. Shared hooks retain
 network isolation, page-error checks and diagnostic captures for every spec.
+The separate `link-clipboard.browser.e2e.ts` control uses trusted textarea
+Copy/Paste around the real link Copy action. It observes the actual asynchronous
+clipboard write completion and restores the method, without supplying clipboard
+data. This keeps portable clipboard proof separate from the original test's
+browser-specific permission grants. `overlay-capture.browser.e2e.ts` attaches raw
+editor JSON and DOM at five slash/link stages; set `OVERLAY_CAPTURE` to also
+write per-project files for an exact before/after host comparison. Neither
+control establishes native binding or full document-app acceptance.
+`table-picker-capture.browser.e2e.ts` similarly attaches raw JSON and DOM at
+open, resized and inserted stages. Set `OVERLAY_TABLE_CAPTURE` to retain the
+same per-project files. Run it alongside the six existing table-picker cases
+when comparing the shared `TablePickerHost` extraction; native binding remains
+a separate acceptance gate.
 The opt-in `/?controls` route mounts the actual checklist collector/store and
 TaskListControlsRenderer with production query and user providers. Its cases
 exercise plain/task progress, task-only filter availability, status selection

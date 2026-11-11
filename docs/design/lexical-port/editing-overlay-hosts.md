@@ -53,12 +53,12 @@ All component paths below are relative to
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
 | Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | Current query identity/range and catalog types, close/collapse, atomic native choice commit | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
 | Drag blocks (`component/misc/DraggableBlockMenu.tsx`, `DragInsertIndicator.tsx`) | Root rect, nearest node, list parent/first-child/group, selected text, drag store, copy/delete/move actions | Owned block target/group query, reactive drag state, DOM rects and native move/copy/delete | Native draggable-block registration and geometry exist. Shared menu must stop reading Lexical list nodes; selection-only commits must not invalidate document-revision drag validity. |
-| Table picker (`component/menu/FloatingTableMenu.tsx`) | Picker plugin callback and insert command, root/selection positioning, editable gate | Subscribe picker request, insert dimensions/headers, root/focus | `group-b.table` picker/insert and `registerNativeTablePicker` exist. |
+| Table picker (`component/menu/FloatingTableMenu.tsx`) | Picker plugin callback and insert command, root/selection positioning, editable gate | `TablePickerHost`: root/focus, insert dimensions, register picker | `group-b.table` picker/insert and `registerNativeTablePicker` exist. Source extraction retains the original shared controller; native binding is separate. |
 | Table insert/delete (`component/misc/TableInsertButton.tsx`, `TableDeleteButtons.tsx`) | DOM cell lookup, table map, selection extent, scroll clipping, hover target, row/column insertion/deletion | Native cell identity, table/selection extents plus DOM measurements, insert/delete | Native insert-row/column, delete and convertible-list query exist. Native extent projection must be verified before replacing Source map reads. |
 | Table action/selection/move (`component/misc/TableSelectionActionBar.tsx`, `TableMoveHandle.tsx`) | Live table/range selection, table map, merge state, insert/delete/unmerge/move, touch long press and focus | Typed selected-cell extent/capabilities, native actions, root/geometry subscriptions | Native table selection and move-cells exist. Audit merge/unmerge and action availability individually; no speculative supported-action list. |
 | Table resize (`component/misc/TableCellResizer.tsx`) | Captured column/row resize snapshot, zoom, measurements, pointer capture, apply/revert, Escape and editable loss | Capture/apply/restore typed resize snapshot; DOM-only measurements and pointer lifecycle | `createNativeTableResizer`, table-resize query and resize/restore actions exist; wire them into the same controller and verify cancellation/history. |
 | GIF (`component/menu/FloatingGifMenu.tsx`) | Picker callback; cloned range, skip-DOM-selection tag; root/update listener; async upload, selection restore, attached checks and insertion | Open subscription, captured insertion target, revision subscription, admitted insert result, root/focus | Existing media actions need an exact GIF payload and stale-request insertion contract. Keep provider/upload/cancellation UI and delete unused uploads on failed admission. |
-| Exterior focus (`component/core/FocusClickTarget.tsx`) | Active range, focused state, last child's paragraph/empty status; append paragraph then select end in one update and focus | `hasSelection`, `editable`, atomic `focusAtEnd` | Shared UI already accepts native capability. Session host currently returns early without editing. No verified dedicated native append-empty-paragraph action at this base. Model owner must supply Source-equivalent atomic policy; DOM appending is invalid. |
+| Exterior focus (`component/core/FocusClickTarget.tsx`) | Active range, focused state, last child's paragraph/empty status; append paragraph then select end in one update and focus | `hasSelection`, `editable`, atomic `focusAtEnd` | The additive overlay installation calls real `group-b.focus-end`, then browser focus after actual completion with lifetime/editability rechecks. Local policy, Machine and shared-component browser controls pass; installed document-app acceptance remains separate. |
 
 ## Integrated checklist and exterior focus
 
@@ -206,3 +206,20 @@ cases green. Include pointer/keyboard, desktop/touch, dynamic read-only, stale
 async answers, selection restoration and disposal. A leaf fixture or model unit
 test alone cannot close app acceptance. Report exact per-area counts and keep
 failed/blocked evidence, including pre-existing Source defects.
+
+## Table picker Source host
+
+`FloatingTableMenu` resolves the original `canEdit` fallback and real Source
+context, then supplies `HostedFloatingTableMenu` with `TablePickerHost`.
+The shared controller retains `createCallback`, deferred timer opening, keyboard
+capture, grid markup, positioning, insertion reset and focus on cancellation.
+It does not add focus after insertion. The Source adapter alone dispatches
+`INSERT_TABLE_COMMAND` with string dimensions and `includeHeaders: false`.
+
+`registerPicker` returns void because the actual Source PluginManager owns the
+`useReactive` registration and its command cleanup. The effect still reads the
+current manager dynamically and registers under the same component owner; no
+synthetic cleanup is supplied. A future native host must own the real cleanup
+returned by `registerNativeTablePicker` and dispose it exactly once with its
+installation. Native table action, selection, move, resize and touch menus are
+separate work and are not established by this extraction.
