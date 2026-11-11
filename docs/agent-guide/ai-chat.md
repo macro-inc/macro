@@ -196,7 +196,7 @@ agree to the request, grant it as the owner, then ask the agent to retry.
 
 ## Phones with new agents enabled
 
-With `enable-chat-v3-agents`, **Agents** opens the new conversation list on phones,
+**Agents** opens the new conversation list on phones,
 including GitHub PR state and links. Tap a row to open a full-screen conversation;
 the header back button returns to the previous screen, or Agents for a direct link.
 Portrait and landscape touch layouts have no conversation side panel. **Changes** opens a full-width,
@@ -244,11 +244,10 @@ controls remain interactive at desktop, phone, and tablet widths.
 Repository and branch pickers keep the composer expanded while their search
 fields are focused, so their anchor stays in place.
 
-With the flag enabled, Home/list composers, search, the create menu, folder AI
-creation, contextual **Chat with AI**, and onboarding prompts all start new agent
-sessions. Existing legacy chat rows still open their original chats. Contextual
-chat actions use agent sessions regardless of the flag; without the flag, the
-legacy list and flag-gated composer flows remain available.
+Home/list composers, search, the create menu, folder AI creation, contextual
+**Chat with AI**, and onboarding prompts all start new agent sessions, with or
+without the flag. Existing legacy chat rows still open their original chats,
+read-only (see [Legacy chats are read-only](#legacy-chats-are-read-only)).
 
 While an agent works, a draft can be sent to its queue; queued messages send in
 order as each turn ends. The busy composer offers **Send** with a draft and
@@ -398,8 +397,8 @@ the shimmer.
   cannot receive their MCP callbacks. Check the runtime error before retrying, and
   start a new session after correcting its gateway network configuration.
 
-- Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
-  (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+- Open **Go to Agents** → `/app/component/agents`. The workspace uses one
+  sidebar for Chat and Code.
   **Agents** in the sidebar opens the same roster as the composer’s
   **Create agent** action. **Connections** manages MCP integrations (including
   app authentication and disconnection), also available under Settings → Integrations.
@@ -832,9 +831,7 @@ the shimmer.
   archived itself, the title dropdown also has **Archive when PRs merge** and
   **Archive when session closes** submenus, each with **Use default (On/Off)**,
   **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.
-- Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
-  Automations / Skills list. With the flag enabled, touch devices use the new
-  conversation list described above. Touch conversation links open standalone
+- Touch devices use the new conversation list described above. Touch conversation links open standalone
   agent sessions or legacy chats. A standalone legacy chat is `/app/chat/<uuid>`;
   doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
 
@@ -933,7 +930,24 @@ disconnected: the row turns **Failed** and a "failed" notification appears in th
 inbox without an alert; reconnect and run again: a "finished" notification
 appears and the row returns to its normal status.
 
-## Start a standalone chat
+## Legacy chats are read-only
+
+Chats from before agent sessions (`/app/chat/<uuid>`) still open and render
+their full history, including tool cards, but nothing can be sent to them. The
+composer is replaced by a notice headed **Macro Chats are now Agents.**, the
+text **This chat is read-only. Continue it in Agents to keep going.**, and a
+**Continue in Agents** button that opens
+the new-conversation composer (or, without `enable-chat-v3-agents`, a new
+agent session) with the unsent draft **Continue this chat:** followed by a
+mention of the chat; no history is copied into it. A response that was
+already streaming when the chat opened shows **Stop** beside it; Ctrl+C also
+stops it. Pending email drafts render read-only with **Email not sent**, and
+pending calendar events as a **Not created** card, with no send, create, or
+cancel controls. Chats cannot be duplicated. Every entry point that used to
+create a chat (Home, the list composers, Command K, the create menu, a
+folder's create menu) starts an agent conversation instead.
+
+## Start a conversation from a composer
 
 While an answer streams, resolved mention pills should keep their names and
 icons instead of flashing back to loading placeholders. Check an answer with
@@ -966,8 +980,8 @@ instead; opening mobile search hides those controls, puts category pills above
 the results, and keeps the query input in the dock. On Agents,
 the AI composer returns with its draft intact when higher-priority controls close.
 Other views have no floating AI fallback. Type a
-prompt, optionally choose a model or
-attach context, and tap **Send** to create the chat and send its first message.
+prompt, optionally choose an agent or model or
+attach context, and tap **Send** to start an agent session with that prompt.
 Enter on the virtual keyboard adds a line to the draft rather than sending it.
 The paperclip (**Attach files**) opens the device file chooser directly, including
 in the native iPhone app; it does not open a Macro file browser. Select supported
@@ -986,11 +1000,10 @@ placeholder updates and disabled-state changes preserve the editor and draft.
 Mobile search uses the dock solely for entity and explicit full-text search;
 it has no Ask AI button.
 
-On desktop, list surfaces (Home, Agents, Files, Tasks, Customers, Email) have a bottom
-composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
-press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
-when `enable-chat-v3-agents` is on (default in dev;
-`VITE_ENABLE_CHAT_V3_AGENTS` overrides), `Create` → `Agent`, or keyboard `c`
+On desktop, list surfaces (Agents, Files, Tasks, Customers, Email) have the
+same compact agent composer at the bottom. Type the message and press Enter —
+the app starts an agent session and opens it in a split (`/app/agent/<id>`).
+`Create` → `Agent`, or keyboard `c`
 then `a`, opens `/app/component/agents` with the new-conversation input focused
 and ready to type. No session is created until you send a prompt. If Agents is
 already open on its roster, the shortcut returns it to the composer; if its
@@ -1013,8 +1026,7 @@ file or a guessed remote revision.
 
 ## Starting from Home
 
-Home's composer follows the existing `enable-chat-v3-agents` flag: disabled keeps
-legacy chat; enabled mounts the same new-conversation composer as the Agents page.
+Home mounts the same new-conversation composer as the Agents page.
 The greeting, agent/model selector, coding repository/branch drawer, and send flow
 are shared. Sending stays on Home and opens the new session in Home's detail
 pane (`/home/agent/<id>`) with the first prompt shown as sent; its row joins the
@@ -1134,7 +1146,7 @@ AI service clients return typed quota errors without opening UI. Foreground
 mutation failures and direct session/edit actions present the shared dialog;
 ordinary HTTP failures and background queries do not. Document AI-edit refusals
 apply no edits and open this dialog instead of the generic `AI edit failed`
-toast. Legacy chat tool errors carrying a recognized quota code also open it.
+toast.
 
 ### Agent API keys
 
@@ -1171,11 +1183,10 @@ and the full matrix. Record both browser behavior and the Network/protocol resul
 recognized foreground quota refusals open the shared dialog when the frontend
 rollout is active (always in dev and local; flag-controlled in production).
 
-1. With the flag absent/false across all hosts, send a legacy chat and a managed
-   session prompt. Confirm ordinary behavior and new uncounted usage rows.
+1. With the flag absent/false across all hosts, send a managed session prompt. Confirm ordinary behavior and new uncounted usage rows.
 2. With enforcement true and an exhausted paid fixture, select a Macro-funded
-   model and send from Home, a legacy chat, and a doc-scoped chat. Confirm 402 with
-   a stable denial code, no new orphaned session/chat/message/stream, no provider
+   model and send from Home and a doc-scoped agent session. Confirm 402 with
+   a stable denial code, no new orphaned session/message/stream, no provider
    work, and usable retry/cancel controls.
    Repeat with unavailable billing: expect 503 `ai_billing_unavailable`, not success
    or repeated automatic sends. Existing permission/model-access errors still win.
@@ -1386,8 +1397,7 @@ a local token for an existing user and passes only the Macro MCP; its
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens an agent session with the
 document already mentioned as context (a link chip in the composer). The mention
-is an unsent draft: add a question, then Send. Legacy Home background sends
-preserve the submitted tool selection.
+is an unsent draft: add a question, then Send.
 
 ## Composer anatomy (a11y)
 
@@ -1486,17 +1496,16 @@ view-only document instead; Cancel adds nothing, and files that fit still
 attach. The sent and saved-draft rows read `with N attachments`, and the
 expanded sent card shows the pills read-only.
 
-The reliable completion signal is the disappearance of the `Stop generating` button — poll
+A legacy chat whose reply was still streaming when it opened shows **Stop** in
+its read-only notice until the stream ends; poll for that button disappearing
 with `evaluate_script`. Do not wait on response text: the page displays
 `Time to first token: N s` and doc content that easily false-matches `wait_for` patterns.
-After completion, each assistant message gets `Edit assistant response in Notes` and
+Each finished assistant message in a legacy chat has `Edit assistant response in Notes` and
 `Copy assistant response` buttons; tool-use turns render as an expandable `N steps` button.
-The chat auto-titles itself after the first exchange (route stays stable, title changes).
 
 The agent has workspace tools (it can list your documents, read channels, create tasks,
 list, create, and update projects (initiatives in the API) and move tasks in or out of them,
-render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
-stream over the app's websocket, not the HTTP response.
+render `displayResults` views).
 
 When explicitly asked, the agent uses `Comment` to start a Discussion comment on an
 item, addressed by `entityType` and `entityId` (a `document`, which includes tasks and
@@ -1614,8 +1623,7 @@ two answers is the rollout's decision, not a second choice in the menu.
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
-`Create` → `Agent`) leaves that composer focused — on mobile that is the same
-Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
+`Create` → `Agent`) leaves that composer focused. Type `/` to
 open sections for **Skills**, **Connections**, **Pull requests**, and **Commands**.
 Skills are available even before the connected agent advertises commands.
 Select a skill to insert its mention, a connection to name it as text, a pull
