@@ -41,6 +41,7 @@ import { NodeAccessoryRenderer } from '../../component/core/NodeAccessoryRendere
 import { MarkdownImage } from '../../component/decorator/MarkdownImage';
 import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
+import { FloatingGifMenu } from '../../component/menu/FloatingGifMenu';
 import { FloatingLinkMenu } from '../../component/menu/FloatingLinkMenu';
 import { FloatingTableMenu } from '../../component/menu/FloatingTableMenu';
 import { TaskListControlsRenderer } from '../../component/task-list/TaskListControls';
@@ -112,6 +113,7 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const TITLE = mount('title');
 singleLinePlugin()(TITLE);
 const BODY = mount('body');
+const GIF_ENABLED = new URLSearchParams(location.search).has('gifs');
 const CONTROLS_ENABLED = new URLSearchParams(location.search).has('controls');
 const CHECKLIST_CONTROLS = createChecklistControls();
 if (CONTROLS_ENABLED) CHECKLIST_CONTROLS.plugin(BODY);
@@ -189,7 +191,7 @@ render(
               'task',
               'document',
               'image',
-              'gif',
+              ...(GIF_ENABLED ? [] : ['gif']),
               'video',
               'latex',
               'hr',
@@ -212,6 +214,9 @@ render(
             </QueryClientProvider>
           )}
           <FloatingMenuGroup>
+            {GIF_ENABLED && (
+              <FloatingGifMenu canEdit={bodyEditable} portalScope="global" />
+            )}
             <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
             <FloatingTableMenu canEdit={bodyEditable} />
           </FloatingMenuGroup>

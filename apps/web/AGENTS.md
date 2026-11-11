@@ -274,6 +274,8 @@ Keep the floating link controller and markup on `LinkMenuHost`; its Source
 adapter retains PluginManager ownership and HIGH Escape/CRITICAL Enter order.
 Keep the table size picker on `TablePickerHost`; its Source adapter retains
 PluginManager ownership, string dimensions and no-header insertion.
+Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
+Source capture, dirty cancellation, root identity and synchronous commit result.
 Run the behavior-inventory link browser checks and compare raw DOM/JSON before
 and after a host extraction; Source preservation alone does not establish native acceptance.
 Register attached Source roots through `createLexicalWrapper`'s actual root

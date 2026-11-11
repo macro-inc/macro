@@ -57,7 +57,7 @@ All component paths below are relative to
 | Table insert/delete (`component/misc/TableInsertButton.tsx`, `TableDeleteButtons.tsx`) | DOM cell lookup, table map, selection extent, scroll clipping, hover target, row/column insertion/deletion | Native cell identity, table/selection extents plus DOM measurements, insert/delete | Native insert-row/column, delete and convertible-list query exist. Native extent projection must be verified before replacing Source map reads. |
 | Table action/selection/move (`component/misc/TableSelectionActionBar.tsx`, `TableMoveHandle.tsx`) | Live table/range selection, table map, merge state, insert/delete/unmerge/move, touch long press and focus | Typed selected-cell extent/capabilities, native actions, root/geometry subscriptions | Native table selection and move-cells exist. Audit merge/unmerge and action availability individually; no speculative supported-action list. |
 | Table resize (`component/misc/TableCellResizer.tsx`) | Captured column/row resize snapshot, zoom, measurements, pointer capture, apply/revert, Escape and editable loss | Capture/apply/restore typed resize snapshot; DOM-only measurements and pointer lifecycle | `createNativeTableResizer`, table-resize query and resize/restore actions exist; wire them into the same controller and verify cancellation/history. |
-| GIF (`component/menu/FloatingGifMenu.tsx`) | Picker callback; cloned range, skip-DOM-selection tag; root/update listener; async upload, selection restore, attached checks and insertion | Open subscription, captured insertion target, revision subscription, admitted insert result, root/focus | Existing media actions need an exact GIF payload and stale-request insertion contract. Keep provider/upload/cancellation UI and delete unused uploads on failed admission. |
+| GIF (`component/menu/FloatingGifMenu.tsx`) | Picker callback; cloned selection, skip-DOM-selection tag; root/update listener; async upload, selection restore, attached checks and insertion | `GifMenuHost<Target, Insertion>`: picker registration, captured target, prepared insertion, dirty subscription, identity checks and actual commit result | Source host preserves the real controller. Native still needs an exact GIF payload, captured target and asynchronous completion contract; no native GIF host is mounted. |
 | Exterior focus (`component/core/FocusClickTarget.tsx`) | Active range, focused state, last child's paragraph/empty status; append paragraph then select end in one update and focus | `hasSelection`, `editable`, atomic `focusAtEnd` | The additive overlay installation calls real `group-b.focus-end`, then browser focus after actual completion with lifetime/editability rechecks. Local policy, Machine and shared-component browser controls pass; installed document-app acceptance remains separate. |
 
 ## Integrated checklist and exterior focus
@@ -223,3 +223,39 @@ synthetic cleanup is supplied. A future native host must own the real cleanup
 returned by `registerNativeTablePicker` and dispose it exactly once with its
 installation. Native table action, selection, move, resize and touch menus are
 separate work and are not established by this extraction.
+
+## GIF Source host
+
+`FloatingGifMenu` retains the original permissions fallback and Source context,
+then supplies the required `HostedFloatingGifMenu` host. Generic target and
+insertion values belong to the real adapter; the shared UI never fabricates an
+editor, node or selection. The actual picker callback captures selection before
+search takes focus, and the Source adapter retains the skip-DOM-selection tag.
+
+`prepareInsertion` reads the current editor, checks UI/editor editability, clones
+the saved selection and captures the root before request/signals are created.
+The shared controller subscribes to actual dirty-element/leaf changes only after
+setting the upload error signal, preserving its abort and finally cleanup order.
+After upload it checks request lifetime, menu state and UI editability; the
+adapter then checks editor editability and exact editor/root identity in the
+original order. Its discrete commit rejects detached captured range endpoints,
+restores the selection or selects root end only when no current selection exists,
+and inserts the real GIF image. There is no general revision rejection.
+
+Source commit returns the actual synchronous insertion result. A future native
+host must obtain actual completion and cannot treat queued `undefined` as failed
+admission and discard an in-flight upload. Native picker requests, authoritative
+bookmarks/current generation and completion remain unimplemented here.
+The adapter also observes successful insertion at the original in-transaction
+checkpoint. This keeps the shared upload marker true if a later Source update
+listener throws after model commit, so cleanup does not discard a referenced
+file. The opaque exception and finally ordering remain unchanged.
+
+The host's actual PluginManager retains reactive picker registration cleanup.
+Panel registration runs under the panel owner and registers upload cancellation
+before the actual editor-root focusout listener cleanup, preserving the original
+portalled-composer behavior. Upload IO, error/retry/search/grid state, orphan-file
+discard and all markup remain in the shared controller. Existing controller
+unit tests supply upload results and observe insertion; the separate GIF plugin
+unit test exercises real image serialization. Browser cases supply catalog and
+failed downloads only and do not establish successful uploads or native binding.
