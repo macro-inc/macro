@@ -414,9 +414,10 @@ fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) 
 async fn shared_bundle_uses_independent_mobile_build_minima() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
         android: 2_050_001,
         ios: 184,
+        desktop: None,
     });
     for (target, build, minimum) in [
         (MobileTarget::Android, 2_050_000, 2_050_001),
@@ -438,6 +439,54 @@ async fn shared_bundle_uses_independent_mobile_build_minima() {
 }
 
 #[tokio::test]
+async fn shared_bundle_uses_its_desktop_build_minimum() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest.schema_version = 3;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+        android: 2_050_001,
+        ios: 184,
+        desktop: Some(202_611_120_000),
+    });
+    for target in [DesktopTarget::Darwin, DesktopTarget::Linux] {
+        assert_matches!(
+            service
+                .get_bundle_update(request(AllTargets::Desktop(target), Arch::Aarch64, 10, 202_611_100_001))
+                .await,
+            Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
+                assert_eq!(required.min_native_build, 202_611_120_000);
+            }
+        );
+        assert_matches!(
+            service
+                .get_bundle_update(request(AllTargets::Desktop(target), Arch::Aarch64, 10, 202_611_120_000))
+                .await,
+            Ok(Some(BundleAction::Update(update))) => {
+                assert_eq!(update.min_native_build, 202_611_120_000);
+            }
+        );
+    }
+
+    // Without a desktop floor, older desktop updaters would download and then
+    // reject the schema 3 bundle on every check.
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+        android: 2_050_001,
+        ios: 184,
+        desktop: None,
+    });
+    assert_matches!(
+        service
+            .get_bundle_update(request(
+                AllTargets::Desktop(DesktopTarget::Darwin),
+                Arch::Aarch64,
+                10,
+                202_611_120_000
+            ))
+            .await,
+        Ok(None)
+    );
+}
+
+#[tokio::test]
 async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     for schema in [3, 4] {
@@ -455,8 +504,11 @@ async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
         );
     }
     service.bundle_fetcher.manifest.schema_version = 2;
-    service.bundle_fetcher.manifest.min_native_builds =
-        Some(domain::models::MobileBuildMinima { android: 9, ios: 2 });
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+        android: 9,
+        ios: 2,
+        desktop: None,
+    });
     assert_matches!(
         service
             .get_bundle_update(request(

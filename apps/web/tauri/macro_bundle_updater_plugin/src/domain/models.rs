@@ -150,7 +150,7 @@ pub struct BundleManifest {
     pub min_native_build: u64,
     /// Independent mobile build minima for schema 3 bundles.
     #[serde(default)]
-    pub min_native_builds: Option<MobileBuildMinima>,
+    pub min_native_builds: Option<NativeBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
@@ -159,11 +159,14 @@ pub struct BundleManifest {
 
 /// Independent native build requirements for a shared bundle.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct MobileBuildMinima {
+pub struct NativeBuildMinima {
     /// Android versionCode.
     pub android: u64,
     /// iOS CFBundleVersion.
     pub ios: u64,
+    /// Desktop release build; absent means the bundle is not for desktop.
+    #[serde(default)]
+    pub desktop: Option<u64>,
 }
 
 impl BundleManifest {
@@ -174,6 +177,7 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), Target::Android) => Some(builds.android),
             (3, Some(builds), Target::Ios) => Some(builds.ios),
+            (3, Some(builds), Target::Darwin | Target::Linux | Target::Windows) => builds.desktop,
             _ => None,
         }
     }

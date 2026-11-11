@@ -31,12 +31,18 @@ function gitSha() {
 
 const androidMinimum = parseBuildNumber('MIN_NATIVE_BUILD_ANDROID', undefined);
 const iosMinimum = parseBuildNumber('MIN_NATIVE_BUILD_IOS', undefined);
+// Optional: a schema 3 bundle without it is never offered to desktop.
+const desktopMinimum = parseBuildNumber('MIN_NATIVE_BUILD_DESKTOP', undefined);
 if ((androidMinimum === undefined) !== (iosMinimum === undefined)) {
   throw new Error('Set both MIN_NATIVE_BUILD_ANDROID and MIN_NATIVE_BUILD_IOS');
+}
+if (desktopMinimum !== undefined && androidMinimum === undefined) {
+  throw new Error('MIN_NATIVE_BUILD_DESKTOP needs MIN_NATIVE_BUILD_ANDROID and MIN_NATIVE_BUILD_IOS');
 }
 const platformMinima = androidMinimum === undefined ? undefined : {
   android: androidMinimum,
   ios: iosMinimum,
+  ...(desktopMinimum === undefined ? {} : { desktop: desktopMinimum }),
 };
 
 const manifest = {

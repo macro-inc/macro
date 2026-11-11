@@ -440,13 +440,20 @@ independent. Production builds (`just build-prod`) read both from
 `apps/web/min-native-build.json`; `just ios-bump` raises the iOS one (see
 `apps/web/docs/ios-releases.md`) and `just android-bump` the Android one (see
 `docs/development/android.md`). The schema 3 manifest carries
-`minNativeBuilds: { android, ios }`;
+`minNativeBuilds: { android, ios, desktop }`;
 the endpoint returns the requesting platform's minimum in its existing response.
 The updater checks that minimum during extraction, restore, and application.
 Old schema 2 updaters reject schema 3 and continue using their existing bundle.
 Android cannot receive legacy schema 2 updates because their shared minimum
 cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
 for iOS/desktop-only schema 2 releases.
+
+The desktop floor (`desktop` in `min-native-build.json`, `MIN_NATIVE_BUILD_DESKTOP`)
+is a desktop release build number from `scripts/desktop-release.mjs`
+(`v2026.11.12.0` → `202611120000`). A schema 3 bundle without it is never
+offered to desktop. Desktop updaters older than this field reject every schema
+3 bundle after downloading it, so the floor must stay at or above the first
+desktop release that reads it; older installs are told to update natively.
 
 Every new native command used by shared JS must raise the corresponding
 platform minimum to a binary that implements it. Optional reachability falls

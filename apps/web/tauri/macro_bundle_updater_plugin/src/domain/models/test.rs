@@ -12,6 +12,11 @@ fn platform_minima_are_independent_and_never_fall_back_to_legacy_zero() {
     assert_eq!(bundle.minimum_for(Target::Android), Some(2_050_001));
     assert_eq!(bundle.minimum_for(Target::Ios), Some(184));
     assert_eq!(bundle.minimum_for(Target::Linux), None);
+    assert_eq!(bundle.minimum_for(Target::Darwin), None);
+    let desktop = manifest(3, r#"{"android":2050001,"ios":184,"desktop":202611120000}"#);
+    assert_eq!(desktop.minimum_for(Target::Darwin), Some(202_611_120_000));
+    assert_eq!(desktop.minimum_for(Target::Linux), Some(202_611_120_000));
+    assert_eq!(desktop.minimum_for(Target::Ios), Some(184));
     assert_eq!(manifest(3, "null").minimum_for(Target::Android), None);
     assert_eq!(manifest(4, "null").minimum_for(Target::Android), None);
     assert_eq!(

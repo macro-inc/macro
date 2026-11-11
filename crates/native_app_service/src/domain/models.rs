@@ -79,20 +79,25 @@ pub struct BundleManifest {
     pub min_native_build: u64,
     /// Platform-specific native minima. Schema 3 requires both mobile platforms.
     #[serde(default)]
-    pub min_native_builds: Option<MobileBuildMinima>,
+    pub min_native_builds: Option<NativeBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
     pub app_version: String,
 }
 
-/// Native build numbers are independent across mobile platforms.
+/// Native build numbers are independent across platforms.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct MobileBuildMinima {
+pub struct NativeBuildMinima {
     /// Minimum Android versionCode.
     pub android: u64,
     /// Minimum iOS CFBundleVersion.
     pub ios: u64,
+    /// Minimum desktop release build. Without it, desktop gets no schema 3
+    /// bundle: desktop updaters older than this field reject schema 3 after
+    /// downloading it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desktop: Option<u64>,
 }
 
 impl BundleManifest {
@@ -103,6 +108,7 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Android)) => Some(builds.android),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Ios)) => Some(builds.ios),
+            (3, Some(builds), AllTargets::Desktop(_)) => builds.desktop,
             _ => None,
         }
     }
