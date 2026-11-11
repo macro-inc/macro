@@ -72,6 +72,12 @@ function tokenRanges(
   return offset;
 }
 /** Call from the host's lazy editor path. Never changes model nodes. */
+/** @lexical/code-prism getDiffedLanguage + isCodeLanguageLoaded over this Prism. */
+export function isCodeLanguageLoaded(language: string): boolean {
+  const id = /^diff-([\w-]+)/i.exec(language)?.[1] ?? language;
+  return id ? Object.hasOwn(Prism.languages, id) : false;
+}
+
 export function installCodeHighlighting(view: EditorView): () => void {
   const browser = view.root.ownerDocument.defaultView;
   if (!browser) throw new Error('Highlighting requires an owning window');

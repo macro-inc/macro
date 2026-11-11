@@ -77,6 +77,7 @@ import {
   createNativeCodeAccessories,
   type NativeCodeAccessories,
 } from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
+import { installNativeCodeHighlightDOM } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { useUrlParams } from '@core/component/ParamsProvider';
@@ -520,6 +521,7 @@ export default function RustMarkdownEditor(props: {
               accessories.dispose();
             });
             setCodeAccessories(accessories);
+            overlayLifecycle.add(installNativeCodeHighlightDOM(mounted.view));
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
