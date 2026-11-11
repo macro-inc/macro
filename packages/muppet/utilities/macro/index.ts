@@ -1,7 +1,7 @@
 /**
  * Macro, as the agent's own account. `macroClient` is a lazy SDK client;
- * `stayOnline` shows the account as online; chat and calls are in their own
- * directories (`./chat`, `./calls`).
+ * `stayOnline` shows the account as online; chat is in its own directory
+ * (`./chat`). A call's share lives in the agent (the starter agent's calls).
  *
  *     const apiKey = () => credentials.get("MACRO_API_KEY");
  *     const macro = macroClient({ apiKey });
