@@ -2,10 +2,11 @@
 //!
 //! A runtime can list hundreds of sessions, and it redials whenever its
 //! socket drops, so a dial must never stampede the replica: dormant sessions
-//! cost it nothing, idle sessions wait for their next prompt, every dial on this replica shares
-//! [`REATTACH_CONCURRENCY`] permits, each held until the session's ACP
-//! restore finishes, and a harness dialing again stops its previous dial
-//! from starting more (restores already running finish under their permit).
+//! cost it nothing, idle sessions wait for their next prompt, every dial on
+//! this replica shares [`REATTACH_CONCURRENCY`] permits, each held until the
+//! session's ACP restore finishes, and a harness dialing again stops its
+//! previous dial from starting more (restores already running finish under
+//! their permit).
 
 use super::deliver::DialReattach;
 use super::*;
