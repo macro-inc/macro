@@ -166,7 +166,6 @@ tracing-core = { version = "0.1" }
 tracing-log = { version = "0.2", default-features = false, features = ["log-tracer", "std"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
-tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }
@@ -338,7 +337,6 @@ tracing-core = { version = "0.1" }
 tracing-log = { version = "0.2", default-features = false, features = ["log-tracer", "std"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 triomphe = { version = "0.1" }
-tungstenite = { version = "0.28", features = ["__rustls-tls", "url"] }
 twox-hash = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 url = { version = "2", features = ["serde"] }

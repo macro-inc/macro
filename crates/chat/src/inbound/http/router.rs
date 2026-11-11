@@ -2,25 +2,23 @@
 
 use std::sync::Arc;
 
-use ai_toolset::tool_object::UserToolResponse;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{delete, get, put},
 };
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
-use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
+use entity_registry::NonUserOwners;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
-use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};
+use crate::domain::models::{GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
 use crate::inbound::http::extractors::UserPermissionsState;
 
@@ -101,24 +99,6 @@ impl<
     }
 }
 
-/// Build the router for the `POST /` create-chat route.
-///
-/// This is separated so that DCS can apply different middleware
-/// (e.g. quota checks) without `ensure_chat_exists`.
-pub fn chat_create_router<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
-    T: Send + Sync + 'static,
->(
-    state: ChatRouterState<S, Svc, Auth, P>,
-) -> Router<T> {
-    Router::new()
-        .route("/", post(create_chat_handler::<S, Svc, Auth, P>))
-        .with_state(state)
-}
-
 /// Build the router for the read-only `GET /{chat_id}` view route.
 ///
 /// Separated from [`chat_id_router`] so callers can apply
@@ -165,10 +145,6 @@ pub fn chat_id_router<
             delete(permanently_delete_chat_handler::<S, Svc, Auth, P>),
         )
         .route(
-            "/{chat_id}/copy",
-            post(copy_chat_handler::<S, Svc, Auth, P>),
-        )
-        .route(
             "/{chat_id}/revert_delete",
             put(revert_delete_handler::<S, Svc, Auth, P>),
         )
@@ -176,71 +152,7 @@ pub fn chat_id_router<
             "/{chat_id}/permissions",
             get(get_chat_permissions_handler::<S, Svc, Auth, P>),
         )
-        .route(
-            "/{chat_id}/tool/update",
-            post(update_tool_call_handler::<S, Svc, Auth, P>),
-        )
-        .route(
-            "/{chat_id}/tool/response/update",
-            post(update_tool_response_handler::<S, Svc, Auth, P>),
-        )
-        .route(
-            "/{chat_id}/tool/call",
-            post(call_tool_handler::<S, Svc, Auth, P>),
-        )
-        .route(
-            "/{chat_id}/tool/reject",
-            post(reject_tool_call_handler::<S, Svc, Auth, P>),
-        )
         .with_state(state)
-}
-
-/// Request body for creating a chat.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateChatRequest {
-    /// Optional name for the chat.
-    pub name: Option<String>,
-    /// Optional project to associate the chat with.
-    pub project_id: Option<String>,
-}
-
-#[utoipa::path(
-    post,
-    path = "/chats",
-    tag = "chats",
-    operation_id = "create_chat",
-    responses(
-        (status = 200, body = StringIDResponse),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Create a new chat.
-#[tracing::instrument(skip(state, req), err(Debug))]
-pub async fn create_chat_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    Json(req): Json<CreateChatRequest>,
-) -> Result<Json<StringIDResponse>> {
-    let id = state
-        .inner
-        .create(
-            principal.owner(),
-            CreateChatArgs {
-                name: req.name.unwrap_or_else(|| "New Chat".to_string()),
-                project_id: req.project_id,
-            },
-        )
-        .await?;
-
-    Ok(Json(StringIDResponse { id }))
 }
 
 #[utoipa::path(
@@ -386,35 +298,6 @@ pub async fn patch_chat_handler<
 }
 
 #[utoipa::path(
-    post,
-    path = "/chats/{chat_id}/copy",
-    tag = "chats",
-    operation_id = "copy_chat",
-    params(("chat_id" = String, Path, description = "ID of the chat to copy")),
-    responses(
-        (status = 200, body = StringIDResponse),
-        (status = 401, body = String),
-        (status = 404, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Copy a chat and its messages into a new chat.
-#[tracing::instrument(skip(state, access), fields(chat_id = %chat_id), err(Debug))]
-pub async fn copy_chat_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    access: ChatAccessLevelExtractor<ViewAccessLevel, Svc, Auth>,
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    Path(chat_id): Path<String>,
-) -> Result<Json<StringIDResponse>> {
-    let id = state.inner.copy_chat(access.entity_access_receipt).await?;
-    Ok(Json(StringIDResponse { id }))
-}
-
-#[utoipa::path(
     put,
     path = "/chats/{chat_id}/revert_delete",
     tag = "chats",
@@ -482,228 +365,4 @@ pub async fn get_chat_permissions_handler<
         .get_permissions(access.entity_access_receipt)
         .await?;
     Ok(Json(GetChatPermissionsResponse { permissions }))
-}
-
-// --- Tool handlers ---
-
-/// Request body for updating a tool call's arguments.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateToolCallRequest {
-    /// The message ID containing the tool call.
-    pub message_id: String,
-    /// The tool call ID to update.
-    pub tool_call_id: String,
-    /// The new arguments for the tool call.
-    pub args: serde_json::Value,
-}
-
-/// Request body for updating a tool response.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct UpdateToolResponseRequest {
-    /// The message ID containing the tool response.
-    pub message_id: String,
-    /// The tool call ID whose response should be updated.
-    pub tool_call_id: String,
-    /// The new user tool response.
-    pub response: UserToolResponse<serde_json::Value>,
-}
-
-/// Request body for executing a pending tool call.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CallToolRequest {
-    /// The message ID containing the tool call.
-    pub message_id: String,
-    /// The tool call ID to execute.
-    pub tool_call_id: String,
-    /// Optional updated arguments. Uses original args if omitted.
-    pub args: Option<serde_json::Value>,
-}
-
-/// Response body for a successful tool call.
-#[derive(Debug, Serialize, ToSchema)]
-pub struct CallToolResponse {
-    /// The tool execution result.
-    pub result: serde_json::Value,
-}
-
-/// Request body for rejecting a pending tool call.
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct RejectToolCallRequest {
-    /// The message ID containing the tool call.
-    pub message_id: String,
-    /// The tool call ID to reject.
-    pub tool_call_id: String,
-}
-
-#[utoipa::path(
-    post,
-    path = "/chats/{chat_id}/tool/update",
-    tag = "chats",
-    operation_id = "update_tool_call",
-    params(("chat_id" = String, Path, description = "ID of the chat")),
-    request_body = UpdateToolCallRequest,
-    responses(
-        (status = 200, description = "Tool call args updated"),
-        (status = 400, body = String, description = "Validation failed"),
-        (status = 404, body = String, description = "Tool call not found"),
-        (status = 500, body = String),
-    )
-)]
-/// Update a tool call's arguments after validation.
-#[tracing::instrument(
-    skip(state, access, req),
-    fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
-    err(Debug)
-)]
-pub async fn update_tool_call_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    Path(chat_id): Path<String>,
-    Json(req): Json<UpdateToolCallRequest>,
-) -> Result<StatusCode> {
-    state
-        .inner
-        .update_tool_call(
-            access.entity_access_receipt,
-            &req.message_id,
-            &req.tool_call_id,
-            req.args,
-        )
-        .await?;
-    Ok(StatusCode::OK)
-}
-
-#[utoipa::path(
-    post,
-    path = "/chats/{chat_id}/tool/response/update",
-    tag = "chats",
-    operation_id = "update_tool_response",
-    params(("chat_id" = String, Path, description = "ID of the chat")),
-    request_body = UpdateToolResponseRequest,
-    responses(
-        (status = 200, description = "Tool response updated"),
-        (status = 404, body = String, description = "Tool call not found"),
-        (status = 500, body = String),
-    )
-)]
-/// Update a tool response.
-#[tracing::instrument(
-    skip(state, access, req),
-    fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
-    err(Debug)
-)]
-pub async fn update_tool_response_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    Path(chat_id): Path<String>,
-    Json(req): Json<UpdateToolResponseRequest>,
-) -> Result<StatusCode> {
-    state
-        .inner
-        .update_tool_response(
-            access.entity_access_receipt,
-            &req.message_id,
-            &req.tool_call_id,
-            req.response,
-        )
-        .await?;
-    Ok(StatusCode::OK)
-}
-
-#[utoipa::path(
-    post,
-    path = "/chats/{chat_id}/tool/call",
-    tag = "chats",
-    operation_id = "call_tool",
-    params(("chat_id" = String, Path, description = "ID of the chat")),
-    request_body = CallToolRequest,
-    responses(
-        (status = 200, body = CallToolResponse, description = "Tool executed successfully"),
-        (status = 400, body = String, description = "Validation or execution failed"),
-        (status = 404, body = String, description = "Tool call not found"),
-        (status = 500, body = String),
-    )
-)]
-/// Execute a pending tool call, optionally with updated arguments.
-#[tracing::instrument(
-    skip(state, access, req),
-    fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
-    err(Debug)
-)]
-pub async fn call_tool_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    Path(chat_id): Path<String>,
-    Json(req): Json<CallToolRequest>,
-) -> Result<Json<CallToolResponse>> {
-    let result = state
-        .inner
-        .call_tool(
-            access.entity_access_receipt,
-            &req.message_id,
-            &req.tool_call_id,
-            req.args,
-        )
-        .await?;
-    Ok(Json(CallToolResponse { result }))
-}
-
-#[utoipa::path(
-    post,
-    path = "/chats/{chat_id}/tool/reject",
-    tag = "chats",
-    operation_id = "reject_tool_call",
-    params(("chat_id" = String, Path, description = "ID of the chat")),
-    request_body = RejectToolCallRequest,
-    responses(
-        (status = 200, description = "Tool call rejected"),
-        (status = 404, body = String, description = "Tool call not found"),
-        (status = 500, body = String),
-    )
-)]
-/// Reject a pending tool call.
-#[tracing::instrument(
-    skip(state, access, req),
-    fields(chat_id = %chat_id, message_id = %req.message_id, tool_call_id = %req.tool_call_id),
-    err(Debug)
-)]
-pub async fn reject_tool_call_handler<
-    S: ChatService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    P: UserRolesAndPermissionsService,
->(
-    access: ChatAccessLevelExtractor<OwnerAccessLevel, Svc, Auth>,
-    State(state): State<ChatRouterState<S, Svc, Auth, P>>,
-    Path(chat_id): Path<String>,
-    Json(req): Json<RejectToolCallRequest>,
-) -> Result<StatusCode> {
-    state
-        .inner
-        .reject_tool_call(
-            access.entity_access_receipt,
-            &req.message_id,
-            &req.tool_call_id,
-        )
-        .await?;
-    Ok(StatusCode::OK)
 }

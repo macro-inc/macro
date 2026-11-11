@@ -590,11 +590,9 @@ dependencies = [
  "ai_usage",
  "analytics_client",
  "anyhow",
- "async-stream",
  "async-trait",
  "attachment",
  "authentication_service_client",
- "aws-sdk-dynamodb",
  "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -612,7 +610,6 @@ dependencies = [
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
- "connection_gateway",
  "connection_gateway_client",
  "contacts",
  "crm",
@@ -652,7 +649,6 @@ dependencies = [
  "kafka_util",
  "lexical_client",
  "lexical_mention_extractor",
- "log",
  "lru 0.16.4",
  "macro_auth",
  "macro_authorization",
@@ -685,7 +681,6 @@ dependencies = [
  "models_ai_projection",
  "models_dcs",
  "models_permissions",
- "non_empty",
  "notification",
  "onboarding",
  "opentelemetry",
@@ -707,7 +702,6 @@ dependencies = [
  "secretsmanager_client",
  "serde",
  "serde_json",
- "share_permission_db_utils",
  "skills",
  "soup",
  "soup_realtime",
@@ -717,7 +711,6 @@ dependencies = [
  "static_file",
  "static_file_service_client",
  "stream",
- "strum 0.27.2",
  "sync_service_client",
  "system_properties",
  "teams",
@@ -729,7 +722,6 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
- "unfurl_service",
  "universal_input",
  "url",
  "utoipa",
@@ -12024,24 +12016,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "load-test"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "http 1.4.0",
- "macro_env_var",
- "reqwest 0.13.4",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite 0.28.0",
- "tracing",
- "tungstenite 0.28.0",
- "workspace-hack",
-]
-
-[[package]]
 name = "local_e2e_integration_tests"
 version = "0.1.0"
 dependencies = [
@@ -21009,7 +20983,6 @@ dependencies = [
  "rustls-pki-types",
  "sha1 0.10.6",
  "thiserror 2.0.18",
- "url",
  "utf-8",
 ]
 
@@ -23305,7 +23278,6 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "triomphe",
- "tungstenite 0.28.0",
  "twox-hash",
  "typenum",
  "url",

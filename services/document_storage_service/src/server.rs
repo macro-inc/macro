@@ -601,11 +601,10 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_management::outbound::PgRepository::new(db.clone()),
         );
 
-    let chat_mutation_service =
-        Arc::new(chat::domain::service::ChatServiceImpl::new_without_tools(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
-            entity_access_management_service.clone(),
-        ));
+    let chat_mutation_service = Arc::new(chat::domain::service::ChatServiceImpl::new(
+        chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
+        entity_access_management_service.clone(),
+    ));
 
     let project_service = Arc::new(ProjectServiceImpl::new(
         PgProjectRepo::new(db.clone(), owned_entity_registrar.clone()),
@@ -2271,7 +2270,7 @@ async fn run_server() -> anyhow::Result<()> {
     let owned_purge_state = DssOwnedPurgeState::new(
         document_purger.clone(),
         Arc::new(
-            chat::domain::service::ChatServiceImpl::new_without_tools(
+            chat::domain::service::ChatServiceImpl::new(
                 chat::outbound::postgres::PgChatRepo::new(
                     db.clone(),
                     owned_entity_registrar.clone(),

@@ -177,7 +177,6 @@ members = [
   "services/dataloss_prevention_handler",
   "services/delete_chat_handler",
   "services/deleted_item_poller",
-  "services/agent_harness_service/load-test",
   "services/document_storage_service",
   "services/document_text_extractor",
   "services/document_upload_finalizer_handler",
@@ -345,7 +344,6 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "webhooks",
 ] }
 livekit-protocol = "0.7.2"
-log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "1.16.2"

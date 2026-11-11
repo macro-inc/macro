@@ -2,15 +2,19 @@
 
 ## What it is
 
-Part of AI chat: chats and chat messages, persistence, HTTP/toolset
+Legacy AI chat: chats and chat messages, persistence, HTTP/toolset
 adapters, and lifecycle events. See `README.md` for the Kafka event schema.
+Chats are read-only: the HTTP API reads, renames, shares and deletes them,
+but nothing creates one, copies one, sends to one, or runs its stored tool
+calls. Duplicating a folder or an item still copies a chat's history.
 
 ## Start here
 
-- `src/domain.rs`: `ChatService`/`MessageService` — chat and message CRUD,
-  copy, revert-delete, and project bookkeeping.
-- `src/domain/events.rs`: `chat.*`/`chat.message_*` events published to
-  `macro.chats` (schema in `README.md`).
+- `src/domain.rs`: `ChatService` — chat reads, metadata patches, deletes,
+  duplication, revert-delete, and project bookkeeping. There is no message
+  write path.
+- `src/domain/events.rs`: `chat.*` events published to `macro.chats` (schema
+  in `README.md`).
 - `src/inbound/attachment.rs`: the `AttachmentService` impl for chat messages.
 - `src/inbound/toolset.rs`: AI tools over chats (feature `ai_tools`).
 - `src/outbound/postgres.rs`: storage (feature `outbound`).
@@ -19,8 +23,8 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 
 ## Scope
 
-- Owns: the `Chat`/`ChatMessage` tables, chat sharing/ownership, and message
-  send/store/delete.
+- Owns: the `Chat`/`ChatMessage` tables (read-only history) and chat
+  sharing/ownership.
 - Not here: channel messages → `crates/channels`; model selection and provider
   calls → `crates/agent`.
 
@@ -32,9 +36,9 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 
 ## Recipes
 
-- Add a chat/message field or mutation: `src/domain.rs` → `src/outbound/postgres.rs`
+- Add a chat metadata field or mutation: `src/domain.rs` → `src/outbound/postgres.rs`
   → `src/inbound/mod.rs` (router) → emit/update the matching event in
-  `src/domain/events.rs`.
+  `src/domain/events.rs`. Never add a message write path: chats are read-only.
 
 ## Checks
 
