@@ -14,7 +14,11 @@ export class WhatsAppNamespace {
   /** Bind existing-account operations to this authenticated client. */
   constructor(private readonly client: MacroClient) {}
 
-  /** Current owner's account, or undefined when no account has been connected. */
+  /**
+   * Current owner's account, or undefined when no account has been connected.
+   *
+   * @readonly
+   */
   async account(): Promise<WhatsAppAccount | undefined> {
     const { account } = unwrap(await this.client.storage.whatsappAccount());
     return account ? WhatsAppAccount.from(this.client, account) : undefined;
@@ -24,6 +28,8 @@ export class WhatsAppNamespace {
    * The caller's WhatsApp chat list (groups and direct chats), newest
    * activity first: each chat says whether it is added, shared with the caller
    * or addable, and `chat.add()` adds it.
+   *
+   * @readonly
    */
   async chats(): Promise<WhatsAppChat[]> {
     return unwrap(await this.client.storage.whatsappChats()).chats.map(

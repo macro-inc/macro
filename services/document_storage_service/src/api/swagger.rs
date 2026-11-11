@@ -3,6 +3,10 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+use crate::api::saved_views::definitions::{
+    CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
+    SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
+};
 use crate::api::saved_views::{
     CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
@@ -386,6 +390,9 @@ use utoipa::OpenApi;
         harnesses::inbound::axum_router::claim_pairing_handler,
         harnesses::inbound::axum_router::list_harnesses_handler,
         harnesses::inbound::axum_router::patch_harness_handler,
+        harnesses::inbound::axum_router::list_directory_handler,
+        harnesses::inbound::axum_router::set_team_access_handler,
+        harnesses::inbound::axum_router::list_residents_handler,
         harnesses::inbound::axum_router::delete_harness_handler,
         harnesses::inbound::axum_router::list_bound_agents_handler,
         harnesses::inbound::axum_router::get_self_harness_handler,
@@ -614,6 +621,12 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+        saved_views::definitions::list_handler,
+        saved_views::definitions::get_handler,
+        saved_views::definitions::create_handler,
+        saved_views::definitions::update_handler,
+        saved_views::definitions::delete_handler,
+        saved_views::definitions::reorder_handler,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -1040,6 +1053,9 @@ use utoipa::OpenApi;
             // Harnesses
             harnesses::domain::models::Harness,
             harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAccess,
+            harnesses::domain::models::HarnessResident,
+            harnesses::domain::models::SetHarnessTeamAccessRequest,
             harnesses::domain::models::HarnessAgent,
             harnesses::domain::models::HarnessSession,
             harnesses::domain::models::CreatePairingRequest,
@@ -1178,6 +1194,12 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            SavedViewDefinition,
+            SavedViewDefinitionPage,
+            CreateSavedViewDefinitionRequest,
+            UpdateSavedViewDefinitionRequest,
+            SavedViewSharingRequest,
+            ReorderSavedViewDefinitionsRequest,
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,

@@ -239,7 +239,7 @@ describe('adding columns and options', () => {
       databaseId: 'db',
       tableId: 'tasks',
       columnId: 'owner',
-      to: { type: 'relation', table: 'people' },
+      to: { type: 'relation', database: 'crm', table: 'people' },
       name: 'Owner (People)',
     });
 
@@ -247,7 +247,7 @@ describe('adding columns and options', () => {
       id: 'db',
       tableId: 'tasks',
       columnId: 'owner',
-      to: { type: 'relation', database: 'db', table: 'people' },
+      to: { type: 'relation', database: 'crm', table: 'people' },
     });
     expect(storage.applyDatabaseOps).toHaveBeenCalledExactlyOnceWith(
       'db',
@@ -261,7 +261,7 @@ describe('adding columns and options', () => {
             definition: {
               source: 'new',
               name: 'Owner (People)',
-              type: { type: 'relation', database: 'db', table: 'people' },
+              type: { type: 'relation', database: 'crm', table: 'people' },
               options: [],
             },
             after: 'owner',

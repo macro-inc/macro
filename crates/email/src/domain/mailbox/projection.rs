@@ -248,6 +248,8 @@ impl<R: MailboxProjectionRepository, E: MailboxProjectionEffects> MailboxProject
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
+            outlook.effect = tracing::field::Empty,
+            outlook.attachment_id = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
         let correlation = lease.event.agent_correlation_id();

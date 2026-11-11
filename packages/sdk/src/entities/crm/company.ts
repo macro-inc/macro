@@ -23,7 +23,11 @@ type CompanyDetail = GetCompanyResponses[200];
 
 /** A CRM company: an organization the team has interacted with. */
 export class Company extends PropertiedEntity<CompanyDetail> {
-  /** A shared message thread scoped to this resource. */
+  /**
+   * A shared message thread scoped to this resource.
+   *
+   * @readonly
+   */
   messageThreadById(id: string): MessageThread {
     return MessageThread.byId(
       this.client,
@@ -32,7 +36,11 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     );
   }
 
-  /** A mixed message and activity timeline page. */
+  /**
+   * A mixed message and activity timeline page.
+   *
+   * @readonly
+   */
   timelinePage(selection?: TimelineOptions<DiscussionComment>) {
     return timeline(
       this.client,
@@ -94,19 +102,31 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   /** When the company was last updated. */
   readonly updatedAt = this.field('updatedAt');
 
-  /** The company's primary domain (e.g. `acme.com`), if any. */
+  /**
+   * The company's primary domain (e.g. `acme.com`), if any.
+   *
+   * @readonly
+   */
   async domain(): Promise<string | undefined> {
     const { domains } = await this.detail.get();
     return domains[0]?.domain;
   }
 
-  /** All domains associated with the company, primary first. */
+  /**
+   * All domains associated with the company, primary first.
+   *
+   * @readonly
+   */
   async domains(): Promise<string[]> {
     const { domains } = await this.detail.get();
     return domains.map((d) => d.domain);
   }
 
-  /** The contacts attached to this company (hidden ones filtered for non-admins). */
+  /**
+   * The contacts attached to this company (hidden ones filtered for non-admins).
+   *
+   * @readonly
+   */
   async contacts(): Promise<Contact[]> {
     const records = unwrap(
       await this.client.storage.listCompanyContacts({
@@ -127,12 +147,20 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   /**
    * Hide the company from CRM listings: disables email sync and soft-hides
    * its contacts. Reversible with {@link unhide}.
+   *
+   * @write
+   * @idempotent
    */
   async hide(): Promise<void> {
     await this.setHidden(true);
   }
 
-  /** Un-hide the company, restoring it and its contacts to CRM listings. */
+  /**
+   * Un-hide the company, restoring it and its contacts to CRM listings.
+   *
+   * @write
+   * @idempotent
+   */
   async unhide(): Promise<void> {
     await this.setHidden(false);
   }
@@ -149,6 +177,9 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   /**
    * Enable or disable team-wide email sync for this company. Rejects with 409
    * when enabling on a hidden company — {@link unhide} first.
+   *
+   * @write
+   * @idempotent
    */
   async setEmailSync(enabled: boolean): Promise<void> {
     await this.mutate((c) =>
@@ -159,7 +190,12 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     );
   }
 
-  /** Rename the company for the caller's current team. */
+  /**
+   * Rename the company for the caller's current team.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.setCrmCompanyName({
@@ -173,6 +209,8 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    * Create a contact under this company. The email is optional and need not
    * match the company's domains, so personal addresses work too; omitting it
    * adds the contact by name alone.
+   *
+   * @write
    */
   async createContact(opts: {
     email?: string;
@@ -192,7 +230,11 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return { type: 'crm_company', id: this.id };
   }
 
-  /** The comment threads on this company, newest thread first. */
+  /**
+   * The comment threads on this company, newest thread first.
+   *
+   * @readonly
+   */
   async comments(): Promise<DiscussionThread[]> {
     return listDiscussionThreads(this.client, this.commentParent);
   }
@@ -202,6 +244,8 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    * `threadId` (the thread's root comment id) is given.
    *
    * @param body - Plain text, or a rich body composed with {@link msg}.
+   *
+   * @write
    */
   async comment(
     body: string | RichMessage,
@@ -210,7 +254,11 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     return postDiscussionComment(this.client, this.commentParent, body, opts);
   }
 
-  /** A handle to one of this company's comments by id. */
+  /**
+   * A handle to one of this company's comments by id.
+   *
+   * @readonly
+   */
   commentById(id: string): DiscussionComment {
     return DiscussionComment.byId(this.client, this.commentParent, id);
   }

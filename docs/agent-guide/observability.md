@@ -54,10 +54,10 @@ trace context — timestamps + service are the only join for those.
 
 ## Known gaps (verified 2026-08-31, local)
 
-- `agent_harness_service` emits logs but **no traces at all**; AI-chat requests
-  (`POST /cognition/stream/chat/message`) produce a trace containing only the browser client
-  span — the cognition HTTP server layer emits no server span, so the entire agent loop
-  (tools, model calls) is invisible in Tempo.
+- `agent_harness_service` emits logs but **no traces at all**; requests to its cognition
+  routes (such as `POST /cognition/structured-completion`) produce a trace containing only the
+  browser client span — the cognition HTTP server layer emits no server span, so the work
+  behind them (tools, model calls) is invisible in Tempo.
 - The cognition surface in `agent_harness_service` emits orphaned single-span traces (`add_subtoolset`) and giant
   "root span not yet received" traces made of repeated 10-second spans (a polling loop traced
   per-iteration under a never-ending root).

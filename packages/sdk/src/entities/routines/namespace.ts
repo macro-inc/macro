@@ -1,4 +1,8 @@
-import type { RoutineCheck } from '../../../generated/scheduled-action/types.gen';
+import type {
+  RoutineCheck,
+  SuggestOutcome,
+  Surface,
+} from '../../../generated/scheduled-action/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
@@ -105,6 +109,8 @@ export class RoutineNamespace {
    *   ],
    *   dangerouslyOperateAsUser: true,
    * });
+   *
+   * @write
    */
   async create(options: RoutineOptions): Promise<Routine> {
     return Routine.from(
@@ -134,6 +140,8 @@ export class RoutineNamespace {
    *   steps: [{ type: 'code', title: 'Post hello', source }],
    * });
    * if (!check.ok) return { problems: check.problems, steps: check.steps };
+   *
+   * @readonly
    */
   async check(
     options: RoutineOptions,
@@ -155,7 +163,74 @@ export class RoutineNamespace {
     );
   }
 
-  /** List routines, optionally including event triggers. */
+  /**
+   * Suggest a routine to the user. Only a routine suggestion session may
+   * call this; any other session gets a 403. Suggest a catalog routine by
+   * `key` with `knobs`, or a `routine` the catalog lacks, written as `check`
+   * takes it and checked the same way. `surfaces` are the parts of the app
+   * whose sidebar shows it, best fit first; `reason` is one line, shown to
+   * the user, naming no one's email address; `keepProbability` is the
+   * chance, from 0 to 1, that the user keeps it on. Returns whether it was
+   * kept (`ok`) and, when not, the `problems` to fix before suggesting it
+   * again.
+   *
+   * @example
+   * const outcome = await macro.routines.suggest({
+   *   kind: 'catalog',
+   *   key: 'inbox',
+   *   knobs: {},
+   *   reason: 'Most of your mail is supplier updates',
+   *   surfaces: ['email'],
+   *   keepProbability: 0.6,
+   * });
+   * if (!outcome.ok) return outcome.problems;
+   *
+   * @write
+   */
+  async suggest(
+    suggestion:
+      | {
+          kind: 'catalog';
+          key: string;
+          knobs?: Record<string, unknown>;
+          reason: string;
+          surfaces: Surface[];
+          keepProbability: number;
+        }
+      | {
+          kind: 'routine';
+          routine: RoutineOptions;
+          created?: CreatedEntity[];
+          reason: string;
+          surfaces: Surface[];
+          keepProbability: number;
+        },
+  ): Promise<SuggestOutcome> {
+    const body =
+      suggestion.kind === 'catalog'
+        ? { ...suggestion, knobs: suggestion.knobs ?? {} }
+        : {
+            kind: suggestion.kind,
+            routine: {
+              ...routineBody(suggestion.routine),
+              enabled: false,
+            },
+            created: (suggestion.created ?? []).map((item) => ({
+              entityType: item.entityType,
+              entityId: item.id,
+            })),
+            reason: suggestion.reason,
+            surfaces: suggestion.surfaces,
+            keepProbability: suggestion.keepProbability,
+          };
+    return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
+  }
+
+  /**
+   * List routines, optionally including event triggers.
+   *
+   * @readonly
+   */
   async list(options?: { includeEvents?: boolean }): Promise<Routine[]> {
     return unwrap(
       await this.client.scheduledAction.listScheduledActions({
