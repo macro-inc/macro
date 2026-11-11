@@ -128,51 +128,75 @@ test('tree queries retain sibling order, top-level identity and crossed ancestor
     backend.call('LexicalNode.append', [x, y], p);
     backend.call('LexicalNode.append', [z], q);
     backend.call('LexicalNode.append', [p, q], root);
+    const currentRoot = backend.call('LexicalNode.getLatest', [], root);
+    const [pHandle, xHandle, yHandle, qHandle, zHandle, rootHandle] = [
+      p,
+      x,
+      y,
+      q,
+      z,
+      currentRoot,
+    ].map((node) => {
+      if (
+        node === null ||
+        typeof node !== 'object' ||
+        !('$h' in node) ||
+        typeof node.$h !== 'number'
+      )
+        throw new Error('Expected an actual issued node handle');
+      return node.$h;
+    });
     expect(backend.call('LexicalNode.getChildrenKeys', [], p)).toEqual([
-      { $key: 2, raw: '2' },
-      { $key: 3, raw: '3' },
+      { $key: xHandle, raw: '2' },
+      { $key: yHandle, raw: '3' },
     ]);
     const parents = backend.call('LexicalNode.getParents', [], x);
     if (!Array.isArray(parents)) throw new Error('expected parent array');
     expect(
       parents.map((node) => backend.call('LexicalNode.getKey', [], node))
     ).toEqual([
-      { $key: 1, raw: '1' },
-      { $key: 6, raw: 'root' },
+      { $key: pHandle, raw: '1' },
+      { $key: rootHandle, raw: 'root' },
     ]);
     const previous = backend.call('LexicalNode.getPreviousSiblings', [], y);
     if (!Array.isArray(previous)) throw new Error('expected sibling array');
     expect(
       previous.map((node) => backend.call('LexicalNode.getKey', [], node))
-    ).toEqual([{ $key: 2, raw: '2' }]);
+    ).toEqual([{ $key: xHandle, raw: '2' }]);
     const next = backend.call('LexicalNode.getNextSiblings', [], x);
     if (!Array.isArray(next)) throw new Error('expected sibling array');
     expect(
       next.map((node) => backend.call('LexicalNode.getKey', [], node))
-    ).toEqual([{ $key: 3, raw: '3' }]);
+    ).toEqual([{ $key: yHandle, raw: '3' }]);
     const between = backend.call('LexicalNode.getNodesBetween', [z], x);
     if (!Array.isArray(between)) throw new Error('expected node array');
     expect(
       between.map((node) => backend.call('LexicalNode.getKey', [], node))
-    ).toEqual([2, 3, 1, 4, 5].map((key) => ({ $key: key, raw: String(key) })));
+    ).toEqual([
+      { $key: xHandle, raw: '2' },
+      { $key: yHandle, raw: '3' },
+      { $key: pHandle, raw: '1' },
+      { $key: qHandle, raw: '4' },
+      { $key: zHandle, raw: '5' },
+    ]);
     expect(backend.call('LexicalNode.getTopLevelElement', [], x)).toEqual({
-      $h: 1,
+      $h: pHandle,
     });
     expect(
       backend.call('LexicalNode.getTopLevelElementOrThrow', [], x)
-    ).toEqual({ $h: 1 });
+    ).toEqual({ $h: pHandle });
     expect(backend.call('LexicalNode.getTopLevelElement', [], root)).toBeNull();
     expect(backend.call('LexicalNode.getDescendantByIndex', [0], p)).toEqual({
-      $h: 2,
+      $h: xHandle,
     });
     expect(backend.call('LexicalNode.getDescendantByIndex', [99], p)).toEqual({
-      $h: 3,
+      $h: yHandle,
     });
     expect(backend.call('LexicalNode.getCommonAncestor', [y], x)).toEqual({
-      $h: 1,
+      $h: pHandle,
     });
     expect(backend.call('LexicalNode.getCommonAncestor', [x], p)).toEqual({
-      $h: 1,
+      $h: pHandle,
     });
     expect(backend.call('LexicalNode.isLastChild', [], p)).toBe(false);
     expect(backend.call('LexicalNode.isLastChild', [], q)).toBe(true);

@@ -57,6 +57,8 @@ Use NodeHandleBackend for the sole NodeHandles version finalizer: state pins own
 
 Use selection.test.ts to check captured selection fields across suspension, replacement and rollback against the real backend.
 
+Assert development wire identities against actual issued handles and literal raw node keys; snapshot bootstrap may allocate internal handle indices before node construction, so do not treat those opaque indices as source keys.
+
 Keep mutations.test.ts literals tied to the pinned upstream observations; assert D-6/D-7 differences as specified errors, not upstream success cases.
 
 Use backend foreignHookIndex for override-bit order; the model trait and independent upstream inventory must agree. `bun run check` verifies committed hook evidence as well as TypeScript. Regenerate with `bun run derive-hooks` after a source or contract change; per-hook hosting tests remain a separate requirement.
