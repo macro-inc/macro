@@ -177,6 +177,13 @@ export function registerMacroDecoratorViews(
     registry.register(type, {
       decorator: component,
       createDecoratorHost(mount, context) {
+        if (type === 'html-render') {
+          const selection = context.document.defaultView?.getSelection();
+          if (selection) {
+            selection.anchorNode;
+            selection.focusNode;
+          }
+        }
         if (type === 'html-render') mount.style.display = 'block';
         mount.classList.add('__decorator-mount-ref');
         return context.document.createElement('div');
@@ -196,6 +203,7 @@ export function registerMacroDecoratorViews(
       }),
       createDOM(node, ctx) {
         const dom = ctx.document.createElement(decoratorTag(node));
+        if (type === 'html-render') dom.style.display = 'block';
         decoratorProperties(node, dom);
         return dom;
       },

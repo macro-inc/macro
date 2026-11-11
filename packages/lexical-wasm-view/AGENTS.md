@@ -116,3 +116,5 @@ Admit the current DOM range before native copy/cut export when selectionchange h
 Use the configured HTML importer for foreign namespaces, malformed JSON or non-array clipboard nodes; preserve matching-namespace JSON priority.
 
 Pair submitted DOM selections with their acknowledged model selection when deduplicating events; a programmatic model move must not suppress a returning DOM caret.
+
+Set HTML display at DOM creation and observe its actual owner-window selection anchors before the retained host display/class writes; preserve the approved publication order without changing other decorator paths.
