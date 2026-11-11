@@ -1,0 +1,19 @@
+packages/sdk/src/entities/me/namespace.ts
+  s_5a9724f6042d2f::t_7ded44748d0a2e 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7009c17befd32e17c0f2917b2f10a43f58797211",
+  "prompts": {},
+  "sessions": {
+    "s_5a9724f6042d2f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c77b-5cba-7730-a268-688ade4ca1da",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
