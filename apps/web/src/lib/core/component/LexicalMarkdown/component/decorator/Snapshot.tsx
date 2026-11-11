@@ -25,6 +25,10 @@ import { autoRegister } from '../../plugins';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 
+export type SnapshotUIProps = Omit<SnapshotDecoratorProps, 'mentionUuid'> & {
+  mentionUuid?: string | null;
+};
+
 function MentionContainer(props: { icon: JSX.Element; text: JSX.Element }) {
   return (
     <span class="pointer-events-auto">
@@ -50,7 +54,7 @@ function Loading() {
   return <MentionContainer icon={<Spinner />} text="Loading" />;
 }
 
-export function Snapshot(props: SnapshotDecoratorProps) {
+export function Snapshot(props: SnapshotUIProps) {
   return (
     <Suspense>
       <SnapshotInner {...props} />
@@ -58,7 +62,7 @@ export function Snapshot(props: SnapshotDecoratorProps) {
   );
 }
 
-function SnapshotInner(props: SnapshotDecoratorProps) {
+function SnapshotInner(props: SnapshotUIProps) {
   const currentBlockId = useMaybeBlockId();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);

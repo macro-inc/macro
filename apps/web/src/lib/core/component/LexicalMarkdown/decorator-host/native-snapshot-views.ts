@@ -1,10 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  type SnapshotDecoratorProps,
-  SnapshotNode,
-} from '@macro-inc/lexical-core';
+import { SnapshotNode } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view';
 import type { EditorThemeClasses } from 'lexical';
+import type { SnapshotUIProps } from '../component/decorator/Snapshot';
 import { dispatchApplicationCommandSettled } from '../plugins/group-b/command';
 import { createNativeDecoratorAdapter } from './native-adapter';
 import { createNativeContactContext } from './native-contact-host';
@@ -65,7 +63,7 @@ export function createNativeSnapshotViews(
 ): Pick<MacroDecorators, 'snapshot'> {
   const bind = createNativeDecoratorAdapter(context);
   return {
-    snapshot: bind<SnapshotDecoratorProps>(SnapshotNode, (node) => {
+    snapshot: bind<SnapshotUIProps>(SnapshotNode, (node) => {
       const {
         documentId,
         documentName,
@@ -80,7 +78,7 @@ export function createNativeSnapshotViews(
         typeof blockName !== 'string' ||
         typeof content !== 'string' ||
         (snapshotDate !== undefined && typeof snapshotDate !== 'string') ||
-        (mentionUuid !== undefined && typeof mentionUuid !== 'string')
+        (mentionUuid != null && typeof mentionUuid !== 'string')
       )
         throw new Error('Invalid native Snapshot payload');
       return {

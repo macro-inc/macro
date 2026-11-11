@@ -1,18 +1,13 @@
-import {
-  type PullRequestMentionDecoratorProps,
-  PullRequestMentionNode,
-} from '@macro-inc/lexical-core';
+import { PullRequestMentionNode } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
 import type { EditorThemeClasses } from 'lexical';
 import { onCleanup } from 'solid-js';
+import type { PullRequestMentionUIProps } from '../component/decorator/PullRequestMention';
 import { dispatchApplicationCommandIfSessionEdit } from '../plugins/group-b/command';
 import { createNativeDecoratorAdapter } from './native-adapter';
 import { createNativeContactContext } from './native-contact-host';
-import type {
-  PullRequestMentionHost,
-  PullRequestMentionHostProp,
-} from './pr-mention-host';
+import type { PullRequestMentionHost } from './pr-mention-host';
 
 export function createNativePullRequestMentionContext(
   theme: EditorThemeClasses
@@ -33,8 +28,8 @@ export function createNativePullRequestMentionContext(
       snapshot: ViewNode,
       expected: {
         id: string;
-        label?: string;
-        mentionUuid?: string;
+        label?: string | null;
+        mentionUuid?: string | null;
         url?: string;
       }
     ): PullRequestMentionHost {
@@ -87,24 +82,25 @@ export function createNativePullRequestMentionViews(
 ): Pick<MacroDecorators, 'pr-mention'> {
   const bind = createNativeDecoratorAdapter(context);
   return {
-    'pr-mention': bind<
-      PullRequestMentionDecoratorProps & PullRequestMentionHostProp
-    >(PullRequestMentionNode, (node) => {
-      const { id, label, url, mentionUuid } = node.props();
-      if (
-        typeof id !== 'string' ||
-        (label !== undefined && typeof label !== 'string') ||
-        (url !== undefined && typeof url !== 'string') ||
-        (mentionUuid !== undefined && typeof mentionUuid !== 'string')
-      )
-        throw new Error('Invalid native PR mention payload');
-      const captured = { id, label, url, mentionUuid };
-      return {
-        ...captured,
-        key: String(node.key),
-        theme: context.theme,
-        host: context.mentionHost(node, captured),
-      };
-    }),
+    'pr-mention': bind<PullRequestMentionUIProps>(
+      PullRequestMentionNode,
+      (node) => {
+        const { id, label, url, mentionUuid } = node.props();
+        if (
+          typeof id !== 'string' ||
+          (label != null && typeof label !== 'string') ||
+          (url !== undefined && typeof url !== 'string') ||
+          (mentionUuid != null && typeof mentionUuid !== 'string')
+        )
+          throw new Error('Invalid native PR mention payload');
+        const captured = { id, label, url, mentionUuid };
+        return {
+          ...captured,
+          key: String(node.key),
+          theme: context.theme,
+          host: context.mentionHost(node, captured),
+        };
+      }
+    ),
   };
 }

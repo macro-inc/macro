@@ -90,134 +90,162 @@ test.beforeAll(async ({ browser }) => {
   }
 });
 
+const variants =
+  process.env.REFERENCE_NULLABLE_ONLY === '1'
+    ? [true]
+    : process.env.REFERENCE_STANDARD_ONLY === '1'
+      ? [false]
+      : [false, true];
+
 for (const kind of ['pr-mention', 'snapshot']) {
-  test(`${kind} raw model, selection, Normal Enter and content actions`, async ({
-    context,
-  }, info) => {
-    const factory = await context.newPage();
-    const source = await context.newPage();
-    const native = sourceOnly ? undefined : await context.newPage();
-    const pages = native ? [factory, source, native] : [factory, source];
-    const proofs = pages.map(watchCompiledSourceDeps);
-    const servicesByPage = await Promise.all(pages.map(services));
-    const records = [];
-    const errors: string[] = [];
-    const unavailable: string[] = [];
-    for (const page of pages) {
-      page.on('pageerror', (error) => errors.push(error.message));
-      page.on('console', (message) => {
-        if (message.text() === 'No split manager found')
-          unavailable.push(page === source ? 'lexical' : 'native');
-      });
-    }
-    let dependencyProofs: PromiseSettledResult<unknown>[] = [];
-    let cleanup: PromiseSettledResult<void>[] = [];
-    try {
-      await factory.bringToFront();
-      await factory.goto(`${path}?engine=factory&kind=${kind}`);
-      const rootFactory = factory.getByRole('textbox', {
-        name: 'Reference proof',
-      });
-      await expect(rootFactory).toContainText(
-        kind === 'snapshot' ? 'Snapshot fixture' : 'Original PR'
-      );
-      const input = (await capture(factory)).model;
-      for (const [engine, page] of [
-        ['lexical', source],
-        ['native', native],
-      ] as const) {
-        if (!page) continue;
-        await page.addInitScript((model) => {
-          window.referenceProofInput = model;
-        }, input);
-        await page.bringToFront();
-        await page.goto(`${path}?engine=${engine}&kind=${kind}`);
-        const root = page.getByRole('textbox', { name: 'Reference proof' });
-        await expect(root).toContainText(
+  for (const nullable of variants) {
+    test(`${kind} ${nullable ? 'nullable' : 'standard'} raw model, selection, Normal Enter and content actions`, async ({
+      context,
+    }, info) => {
+      const factory = await context.newPage();
+      const source = await context.newPage();
+      const native = sourceOnly ? undefined : await context.newPage();
+      const pages = native ? [factory, source, native] : [factory, source];
+      const proofs = pages.map(watchCompiledSourceDeps);
+      const servicesByPage = await Promise.all(pages.map(services));
+      const records = [];
+      const errors: string[] = [];
+      const unavailable: string[] = [];
+      for (const page of pages) {
+        page.on('pageerror', (error) => errors.push(error.message));
+        page.on('console', (message) => {
+          if (message.text() === 'No split manager found')
+            unavailable.push(page === source ? 'lexical' : 'native');
+        });
+      }
+      let dependencyProofs: PromiseSettledResult<unknown>[] = [];
+      let cleanup: PromiseSettledResult<void>[] = [];
+      try {
+        await factory.bringToFront();
+        await factory.goto(`${path}?engine=factory&kind=${kind}`);
+        const rootFactory = factory.getByRole('textbox', {
+          name: 'Reference proof',
+        });
+        await expect(rootFactory).toContainText(
           kind === 'snapshot' ? 'Snapshot fixture' : 'Original PR'
         );
-        await expect
-          .poll(() => page.evaluate(() => !!window.referenceProofFixture))
-          .toBe(true);
-        const stages = [await capture(page)];
-        records.push({ engine, stages });
-        await page.evaluate(() => window.referenceProofFixture?.select());
-        await expect(root.locator('.bg-active.text-ink')).toHaveCount(1);
-        stages.push(await capture(page));
-        expect(
-          await page.evaluate(() => window.referenceProofFixture?.enter())
-        ).toBe(true);
-        await expect
-          .poll(() => unavailable.filter((arm) => arm === engine).length)
-          .toBe(1);
-        stages.push(await capture(page));
-        if (kind === 'pr-mention') {
-          await servicesByPage[pages.indexOf(page)]?.();
-          await expect(root).toContainText('Resolved PR');
+        let input = (await capture(factory)).model;
+        if (nullable) {
+          const uuid =
+            kind === 'snapshot'
+              ? '"mentionUuid":"reference-snapshot"'
+              : '"mentionUuid":"reference-instance"';
+          expect(input.split(uuid)).toHaveLength(2);
+          input = input.replace(uuid, '"mentionUuid":null');
+          if (kind === 'pr-mention') {
+            expect(input.split('"label":"Original PR"')).toHaveLength(2);
+            input = input.replace('"label":"Original PR"', '"label":null');
+          }
+        }
+        for (const [engine, page] of [
+          ['lexical', source],
+          ['native', native],
+        ] as const) {
+          if (!page) continue;
+          await page.addInitScript((model) => {
+            window.referenceProofInput = model;
+          }, input);
+          await page.bringToFront();
+          await page.goto(`${path}?engine=${engine}&kind=${kind}`);
+          const root = page.getByRole('textbox', { name: 'Reference proof' });
+          await expect(root).toContainText(
+            kind === 'snapshot'
+              ? 'Snapshot fixture'
+              : nullable
+                ? 'Pull request'
+                : 'Original PR'
+          );
           await expect
-            .poll(async () => (await capture(page)).model)
-            .toContain('owner/repo#7 Resolved PR');
+            .poll(() => page.evaluate(() => !!window.referenceProofFixture))
+            .toBe(true);
+          const stages = [await capture(page)];
+          records.push({ engine, stages });
+          await page.evaluate(() => window.referenceProofFixture?.select());
+          await expect(root.locator('.bg-active.text-ink')).toHaveCount(1);
+          stages.push(await capture(page));
+          expect(
+            await page.evaluate(() => window.referenceProofFixture?.enter())
+          ).toBe(true);
           await expect
-            .poll(async () => (await capture(page)).model)
-            .toContain('https://github.com/owner/repo/pull/7');
+            .poll(() => unavailable.filter((arm) => arm === engine).length)
+            .toBe(1);
           stages.push(await capture(page));
-          await root.locator('[data-pr-id="reference-pr"]').hover();
-          await expect(
-            page.getByText('Resolved PR', { exact: true })
-          ).toHaveCount(2);
-          stages.push(await capture(page));
-        } else {
-          await root.locator('[data-snapshot-node]').hover();
-          const actions = page.getByRole('button', {
-            name: 'Reference actions',
+          if (kind === 'pr-mention') {
+            await servicesByPage[pages.indexOf(page)]?.();
+            await expect(root).toContainText('Resolved PR');
+            await expect
+              .poll(async () => (await capture(page)).model)
+              .toContain('owner/repo#7 Resolved PR');
+            await expect
+              .poll(async () => (await capture(page)).model)
+              .toContain('https://github.com/owner/repo/pull/7');
+            stages.push(await capture(page));
+            await root.locator('[data-pr-id="reference-pr"]').hover();
+            await expect(
+              page.getByText('Resolved PR', { exact: true })
+            ).toHaveCount(2);
+            stages.push(await capture(page));
+          } else {
+            await root.locator('[data-snapshot-node]').hover();
+            const actions = page.getByRole('button', {
+              name: 'Reference actions',
+            });
+            await expect(actions).toBeVisible();
+            stages.push(await capture(page));
+            await actions.click();
+            await page
+              .getByRole('menuitem', { name: 'Delete', exact: true })
+              .click();
+            await expect(root.locator('[data-snapshot-node]')).toHaveCount(0);
+            stages.push(await capture(page));
+          }
+        }
+        if (native) expect(records[1]?.stages).toEqual(records[0]?.stages);
+        expect(errors).toEqual([]);
+      } finally {
+        try {
+          dependencyProofs = await Promise.allSettled(
+            proofs.map((finish) => finish())
+          );
+          await info.attach('reference-raw.json', {
+            contentType: 'application/json',
+            body: JSON.stringify({
+              kind,
+              nullable,
+              records,
+              errors,
+              unavailable,
+              compiledProofs: dependencyProofs.map((result) =>
+                result.status === 'fulfilled'
+                  ? result.value
+                  : { error: String(result.reason) }
+              ),
+            }),
           });
-          await expect(actions).toBeVisible();
-          stages.push(await capture(page));
-          await actions.click();
-          await page
-            .getByRole('menuitem', { name: 'Delete', exact: true })
-            .click();
-          await expect(root.locator('[data-snapshot-node]')).toHaveCount(0);
-          stages.push(await capture(page));
+        } finally {
+          cleanup = await Promise.allSettled(
+            pages.map(async (page, index) => {
+              try {
+                await page.evaluate(() => window.referenceProofClose?.());
+                await servicesByPage[index]?.();
+              } finally {
+                await page.close();
+              }
+            })
+          );
         }
       }
-      if (native) expect(records[1]?.stages).toEqual(records[0]?.stages);
-      expect(errors).toEqual([]);
-    } finally {
-      try {
-        dependencyProofs = await Promise.allSettled(
-          proofs.map((finish) => finish())
-        );
-        await info.attach('reference-raw.json', {
-          contentType: 'application/json',
-          body: JSON.stringify({
-            kind,
-            records,
-            errors,
-            unavailable,
-            compiledProofs: dependencyProofs.map((result) =>
-              result.status === 'fulfilled'
-                ? result.value
-                : { error: String(result.reason) }
-            ),
-          }),
-        });
-      } finally {
-        cleanup = await Promise.allSettled(
-          pages.map(async (page, index) => {
-            try {
-              await page.evaluate(() => window.referenceProofClose?.());
-              await servicesByPage[index]?.();
-            } finally {
-              await page.close();
-            }
-          })
-        );
-      }
-    }
-    expect(dependencyProofs.map((result) => result.status)).toEqual(
-      pages.map(() => 'fulfilled')
-    );
-    expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
-  });
+      expect(dependencyProofs.map((result) => result.status)).toEqual(
+        pages.map(() => 'fulfilled')
+      );
+      expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(
+        true
+      );
+    });
+  }
 }

@@ -47,8 +47,13 @@ import {
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
-export type PullRequestMentionUIProps = PullRequestMentionDecoratorProps &
-  PullRequestMentionHostProp;
+export type PullRequestMentionUIProps = Omit<
+  PullRequestMentionDecoratorProps,
+  'label' | 'mentionUuid'
+> & {
+  label?: string | null;
+  mentionUuid?: string | null;
+} & PullRequestMentionHostProp;
 
 const GITHUB_PULL_REQUEST_SOURCE = 'github_pull_request';
 const STATUS_ICON_CLASS: Record<string, string> = {
@@ -416,7 +421,7 @@ function githubKeyFromUrl(url: string | undefined): string | undefined {
 
 /** The label to show before a mention's entity resolves. */
 function mentionFallbackLabel(
-  props: Pick<PullRequestMentionDecoratorProps, 'label' | 'url'>
+  props: Pick<PullRequestMentionUIProps, 'label' | 'url'>
 ): string | undefined {
   if (props.label) return props.label;
   const ref = props.url ? parseGithubPrUrl(props.url) : null;
