@@ -8,23 +8,21 @@ import {
 } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { calendarSelectionToEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import { RecurringEventScopeDialog } from '@app/features/calendar/components/RecurringEventScopeDialog';
 import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
+import { createEventTimeChange } from '@app/features/calendar/primitives/create-event-time-change';
 import {
   type CalendarEvent,
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
-import {
-  type CalendarEventTimeChange,
-  calendarEventTimeFromFullCalendar,
-  canEditCalendarEventTime,
-} from '@app/features/calendar/utils/event-interaction';
+import type { CalendarEventTimeChange } from '@app/features/calendar/utils/event-interaction';
 import { consumeSuppressedCalendarDateSelection } from '@app/features/calendar/utils/open-event-outside-press';
 import {
   scrollEventChipIntoView,
@@ -254,6 +252,19 @@ export function Page(props: {
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );
   const updateEventTime = useUpdateCalendarEventMutation();
+  const timeChange = createEventTimeChange({
+    active: isActive,
+    save: (args) => updateEventTime.mutateAsync(args),
+    onError: (error) => {
+      if (isGuestEditRefused(error)) {
+        toast.failure(GUEST_EDITS_RESTRICTED);
+        return;
+      }
+      toast.failure('Failed to update event', {
+        subtext: error instanceof Error ? error.message : undefined,
+      });
+    },
+  });
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
     // The press that closes open event details also hits the grid. FullCalendar
@@ -300,37 +311,7 @@ export function Page(props: {
     change: CalendarEventTimeChange,
     event: CalendarEvent | undefined
   ) => {
-    if (
-      !isActive() ||
-      updateEventTime.isPending ||
-      !event ||
-      !canEditCalendarEventTime(event)
-    ) {
-      change.revert();
-      return;
-    }
-
-    const time = calendarEventTimeFromFullCalendar(change.event, event);
-    if (!time) {
-      change.revert();
-      return;
-    }
-
-    updateEventTime.mutate(
-      { eventId: event.eventId, calendarId: event.calendarId, patch: { time } },
-      {
-        onError: (error) => {
-          change.revert();
-          if (isGuestEditRefused(error)) {
-            toast.failure(GUEST_EDITS_RESTRICTED);
-            return;
-          }
-          toast.failure('Failed to update event', {
-            subtext: error.message,
-          });
-        },
-      }
-    );
+    fireAndForget(timeChange.handle(change, event), 'calendar-time-change');
   };
 
   return (
@@ -365,7 +346,7 @@ export function Page(props: {
             if (isActive()) calendarView.reanchorSelectedEvent(event, element);
           },
         }}
-        eventTimeChangePending={updateEventTime.isPending}
+        eventTimeChangePending={timeChange.pending()}
         onDatesSet={handleDatesSet}
         onEventTimeChange={handleEventTimeChange}
       >
@@ -380,6 +361,27 @@ export function Page(props: {
           />
         )}
       </CalendarGrid>
+      <RecurringEventScopeDialog
+        open={timeChange.choosing()}
+        title="Save repeating event"
+        scope={timeChange.scope()}
+        options={[
+          { scope: 'this_event', label: 'This event' },
+          ...(timeChange.allEventsUnavailableReason()
+            ? []
+            : [{ scope: 'all' as const, label: 'All events' }]),
+        ]}
+        onScopeChange={timeChange.setScope}
+        onClose={timeChange.cancel}
+        onConfirm={() =>
+          fireAndForget(timeChange.confirm(), 'calendar-time-change')
+        }
+        confirmLabel="Save"
+      >
+        <Show when={timeChange.allEventsUnavailableReason()}>
+          {(reason) => <p class="text-sm text-ink-muted">{reason()}</p>}
+        </Show>
+      </RecurringEventScopeDialog>
     </div>
   );
 }

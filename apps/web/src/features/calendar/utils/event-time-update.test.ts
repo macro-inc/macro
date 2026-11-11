@@ -164,6 +164,56 @@ describe('calendar time update requests', () => {
       'own time'
     );
   });
+  it('rejects a new ambiguous master time instead of choosing the wrong fall-back hour', () => {
+    const event = {
+      ...RECURRING_EVENT,
+      occurrenceKey: '2026-11-08T05:30:00Z',
+      start: '2026-11-08T05:30:00Z',
+      end: '2026-11-08T06:00:00Z',
+      seriesTime: {
+        kind: 'timed' as const,
+        startsAt: '2026-11-01T04:30:00Z',
+        endsAt: '2026-11-01T05:00:00Z',
+        timeZone: 'America/New_York',
+      },
+    };
+    const time = {
+      ...MOVED_TIME,
+      startsAt: '2026-11-08T06:30:00Z',
+      endsAt: '2026-11-08T07:00:00Z',
+    };
+    expect(() => calendarEventTimeUpdate(event, time, 'all')).toThrow(
+      'daylight-saving'
+    );
+    expect(
+      calendarEventTimeUpdate(event, time, 'this_event').patch.time
+    ).toEqual(time);
+  });
+  it('preserves an unchanged master in the second fall-back hour when resizing its end', () => {
+    const event = {
+      ...RECURRING_EVENT,
+      occurrenceKey: '2026-11-08T06:30:00Z',
+      start: '2026-11-08T06:30:00Z',
+      end: '2026-11-08T07:30:00Z',
+      seriesTime: {
+        kind: 'timed' as const,
+        startsAt: '2026-11-01T06:30:00Z',
+        endsAt: '2026-11-01T07:30:00Z',
+        timeZone: 'America/New_York',
+      },
+    };
+    const time = {
+      ...MOVED_TIME,
+      startsAt: event.start,
+      endsAt: '2026-11-08T08:00:00Z',
+    };
+    expect(
+      calendarEventTimeUpdate(event, time, 'all').patch.time
+    ).toMatchObject({
+      startsAt: '2026-11-01T06:30:00.000Z',
+      endsAt: '2026-11-01T08:00:00.000Z',
+    });
+  });
   it('keeps one-off writes absolute and rejects missing series metadata', () => {
     expect(
       calendarEventTimeUpdate(

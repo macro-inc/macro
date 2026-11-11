@@ -502,6 +502,29 @@ On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
 does not start a new event; the next press creates one. Clicking another event
 switches the open details.
+
+Editable recurring events can also be dragged and resized in the grid. The
+`Save repeating event` dialog keeps the dropped position visible until Save or
+Cancel. `This event` changes only the selected occurrence; Cancel, Escape, and
+failed saves restore the original position. `All events`, when available, applies
+the start and duration changes relative to the series master, not the selected
+occurrence's date. Daily and weekly rules keep their weekdays and week boundaries
+in step with date moves. Existing time exceptions and repeat patterns that cannot
+be shifted safely offer only `This event`, with an explanation. A duration-only
+change can still apply to more complex series. The provider retains other
+individually edited exceptions; this operation does not rewrite them.
+
+The update API does not support `This and following events` or a guest-notification
+choice. Neither control is offered. Read-only events, snapshots, restricted guests,
+and timed points remain fixed. Verify both Week and Day with a weekly event you
+created: drag and resize with each offered scope, cancel with both Cancel and
+Escape, and inspect the next occurrence. Do not move another person's event.
+The move trace is `calendar.event_time_change`, with event/calendar IDs, operation
+kind, selected scope, and `calendar.time_change.outcome`. The backend-free
+`time-change.browser.e2e.ts` suite in `features/calendar-view/browser-test`
+exercises the real grid and dialog in Week and Day; it does not validate provider
+writes or notification delivery.
+
 Desktop event details stay inside the visible calendar grid, including Home
 previews and narrow splits. They overlap wide Day-view events when needed and
 shrink to fit the pane; long details scroll while the RSVP row stays visible.

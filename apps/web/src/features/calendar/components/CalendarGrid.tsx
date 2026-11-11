@@ -187,7 +187,10 @@ export function CalendarGrid(props: CalendarGridProps) {
   const [eventInteractionActive, setEventInteractionActive] =
     createSignal(false);
   const renderedEvents = createMemo<EventInput[]>(
-    (current) => (eventInteractionActive() ? current : mappedEvents()),
+    (current) =>
+      eventInteractionActive() || props.eventTimeChangePending
+        ? current
+        : mappedEvents(),
     mappedEvents()
   );
   let interactionEventsById: Map<string, CalendarEvent> | undefined;
@@ -266,7 +269,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       eventDragStop={handleEventInteractionStop}
       eventDrop={(change) =>
         props.onEventTimeChange?.(
-          change,
+          { ...change, kind: 'move' },
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }
@@ -274,7 +277,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       eventResizeStop={handleEventInteractionStop}
       eventResize={(change) =>
         props.onEventTimeChange?.(
-          change,
+          { ...change, kind: 'resize' },
           eventByRenderId(calendarEventRenderId(change.event))
         )
       }

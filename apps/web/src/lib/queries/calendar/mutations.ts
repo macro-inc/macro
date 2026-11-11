@@ -1,7 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CalendarEvent as CalendarEventEntity } from '@service-calendar/generated/schemas/calendarEvent';
@@ -696,6 +696,8 @@ export interface UpdateCalendarEventArgs {
   recurrenceId?: string;
   /** Cache key of the occurrence a scoped update targets, for the optimistic update. */
   occurrenceKey?: string;
+  /** UI-owned move span; never serialized into the request. */
+  parentSpan?: Span;
   patch: Omit<
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
@@ -778,7 +780,7 @@ function applyEventPatch(
 async function updateCalendarEvent(
   args: UpdateCalendarEventArgs
 ): Promise<CalendarEventEntity | undefined> {
-  return Telemetry.span('calendar.update_event', async (span) => {
+  const operation = async (span: Span) => {
     const host = answeringGraphqlCalendarHost();
     span.setAttr('calendar.event_id', args.eventId);
     span.setAttr('calendar.update.scope', args.scope ?? 'all');
@@ -798,7 +800,10 @@ async function updateCalendarEvent(
       span.error('Calendar event update failed');
       throw error;
     }
-  });
+  };
+  return args.parentSpan
+    ? args.parentSpan.span('calendar.update_event', operation)
+    : Telemetry.span('calendar.update_event', operation);
 }
 
 /**

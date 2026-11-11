@@ -6,6 +6,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
 import {
@@ -380,6 +381,7 @@ export async function executeGraphqlUpdate(
   client: Client = getGraphqlSoupClient()
 ): Promise<CalendarMutationOutcome> {
   assertCreated(args.eventId);
+  const traceContext = Telemetry.captureContext();
   const { patch } = args;
   const oneOccurrence =
     args.scope === 'this_event' && args.occurrenceKey !== undefined;
@@ -414,86 +416,88 @@ export async function executeGraphqlUpdate(
     !oneOccurrence &&
     recurring &&
     (patch.time != null || patch.recurrenceLines != null);
-  const result = await executeOptimisticMutation(
-    client,
-    UpdateCalendarEventDocument,
-    {
-      input: {
-        eventId: args.eventId,
-        ...(args.calendarId ? { calendarId: args.calendarId } : {}),
-        ...(args.scope
-          ? { scope: graphqlEnum<GraphqlCalendarUpdateScope>(args.scope) }
-          : {}),
-        ...(args.recurrenceId ? { recurrenceId: args.recurrenceId } : {}),
-        ...(patch.title != null ? { title: patch.title } : {}),
-        ...(patch.description !== undefined
-          ? { description: patch.description }
-          : {}),
-        ...(patch.location !== undefined ? { location: patch.location } : {}),
-        ...(patch.time ? { time: graphqlTimeInput(patch.time) } : {}),
-        ...(patch.attendees
-          ? {
-              attendees: patch.attendees.map((attendee) => ({
-                email: attendee.email,
-                isOptional: attendee.isOptional ?? false,
-              })),
-            }
-          : {}),
-        ...(patch.recurrenceLines != null
-          ? { recurrenceLines: patch.recurrenceLines }
-          : {}),
-        ...(patch.visibility
-          ? {
-              visibility: graphqlEnum<GraphqlCalendarEventVisibility>(
-                patch.visibility
-              ),
-            }
-          : {}),
-        ...(patch.transparency
-          ? {
-              transparency: graphqlEnum<GraphqlCalendarEventTransparency>(
-                patch.transparency
-              ),
-            }
-          : {}),
-        ...(patch.reminders
-          ? { reminders: graphqlReminders(patch.reminders) }
-          : {}),
-        ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
-        ...(patch.conference
-          ? {
-              conference: graphqlEnum<GraphqlCalendarConferenceChange>(
-                patch.conference
-              ),
-            }
-          : {}),
-        ...(patch.outOfOffice
-          ? {
-              outOfOffice: {
-                ...(patch.outOfOffice.autoDeclineMode
-                  ? {
-                      autoDeclineMode:
-                        graphqlEnum<GraphqlCalendarOutOfOfficeAutoDeclineMode>(
-                          patch.outOfOffice.autoDeclineMode
-                        ),
-                    }
-                  : {}),
-                declineMessage: patch.outOfOffice.declineMessage ?? null,
-              },
-            }
-          : {}),
+  const result = await traceContext.run(() =>
+    executeOptimisticMutation(
+      client,
+      UpdateCalendarEventDocument,
+      {
+        input: {
+          eventId: args.eventId,
+          ...(args.calendarId ? { calendarId: args.calendarId } : {}),
+          ...(args.scope
+            ? { scope: graphqlEnum<GraphqlCalendarUpdateScope>(args.scope) }
+            : {}),
+          ...(args.recurrenceId ? { recurrenceId: args.recurrenceId } : {}),
+          ...(patch.title != null ? { title: patch.title } : {}),
+          ...(patch.description !== undefined
+            ? { description: patch.description }
+            : {}),
+          ...(patch.location !== undefined ? { location: patch.location } : {}),
+          ...(patch.time ? { time: graphqlTimeInput(patch.time) } : {}),
+          ...(patch.attendees
+            ? {
+                attendees: patch.attendees.map((attendee) => ({
+                  email: attendee.email,
+                  isOptional: attendee.isOptional ?? false,
+                })),
+              }
+            : {}),
+          ...(patch.recurrenceLines != null
+            ? { recurrenceLines: patch.recurrenceLines }
+            : {}),
+          ...(patch.visibility
+            ? {
+                visibility: graphqlEnum<GraphqlCalendarEventVisibility>(
+                  patch.visibility
+                ),
+              }
+            : {}),
+          ...(patch.transparency
+            ? {
+                transparency: graphqlEnum<GraphqlCalendarEventTransparency>(
+                  patch.transparency
+                ),
+              }
+            : {}),
+          ...(patch.reminders
+            ? { reminders: graphqlReminders(patch.reminders) }
+            : {}),
+          ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
+          ...(patch.conference
+            ? {
+                conference: graphqlEnum<GraphqlCalendarConferenceChange>(
+                  patch.conference
+                ),
+              }
+            : {}),
+          ...(patch.outOfOffice
+            ? {
+                outOfOffice: {
+                  ...(patch.outOfOffice.autoDeclineMode
+                    ? {
+                        autoDeclineMode:
+                          graphqlEnum<GraphqlCalendarOutOfOfficeAutoDeclineMode>(
+                            patch.outOfOffice.autoDeclineMode
+                          ),
+                      }
+                    : {}),
+                  declineMessage: patch.outOfOffice.declineMessage ?? null,
+                },
+              }
+            : {}),
+        },
       },
-    },
-    {
-      updateCalendarEvent: payloadOf(optimisticEvent, optimisticOccurrences),
-    } as OptimisticResponse<UpdateCalendarEventMutation>,
-    {
-      uuid: uuidv4(),
-      ...(uncertain
-        ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
-        : {}),
-    }
-  ).toPromise();
+      {
+        updateCalendarEvent: payloadOf(optimisticEvent, optimisticOccurrences),
+      } as OptimisticResponse<UpdateCalendarEventMutation>,
+      {
+        uuid: uuidv4(),
+        ...(uncertain
+          ? { uncertainCalendarEventKeys: [eventKey(args.eventId)] }
+          : {}),
+      }
+    ).toPromise()
+  );
   return settle(host, result, result.data?.updateCalendarEvent ?? undefined);
 }
 

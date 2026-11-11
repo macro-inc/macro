@@ -46,10 +46,18 @@ export function EventContent(props: EventContentProps) {
   const selfResponseStatus = () =>
     props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
   const everyoneElseDeclined = () => hasEveryoneElseDeclined(props.event);
+  // Multi-day timed events use an all-day footprint, not midnight event times.
+  const isProjectedRange = () => isRenderedAllDay() && !props.event.allDay;
+  const displayedStart = () =>
+    isProjectedRange()
+      ? new Date(props.event.start)
+      : (props.renderProps.event.start ?? new Date(props.event.start));
+  const displayedEnd = () =>
+    isProjectedRange()
+      ? new Date(props.event.end)
+      : (props.renderProps.event.end ?? new Date(props.event.end));
   const usesSingleLineLayout = () => {
-    const duration =
-      new Date(props.event.end).getTime() -
-      new Date(props.event.start).getTime();
+    const duration = displayedEnd().getTime() - displayedStart().getTime();
 
     return (
       !props.event.allDay &&
@@ -60,8 +68,8 @@ export function EventContent(props: EventContentProps) {
   const timeText = () => {
     if (props.isNarrow || props.event.allDay) return undefined;
 
-    const start = new Date(props.event.start);
-    const end = new Date(props.event.end);
+    const start = displayedStart();
+    const end = displayedEnd();
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return props.renderProps.timeText;
     }

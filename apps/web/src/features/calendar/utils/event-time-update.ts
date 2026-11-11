@@ -36,7 +36,14 @@ function wallTime(instant: string, timeZone: string) {
   );
 }
 
-function instantFromWallTime(value: number, timeZone: string) {
+function instantFromWallTime(
+  value: number,
+  timeZone: string,
+  originalInstant?: string
+) {
+  if (originalInstant && wallTime(originalInstant, timeZone) === value) {
+    return new Date(originalInstant).toISOString();
+  }
   const date = new Date(value);
   const zoned = new TZDate(
     date.getUTCFullYear(),
@@ -48,7 +55,27 @@ function instantFromWallTime(value: number, timeZone: string) {
     date.getUTCMilliseconds(),
     timeZone
   );
-  return new Date(zoned.getTime()).toISOString();
+  const instant = new Date(zoned.getTime()).toISOString();
+  // A gap has no instant; a fold has two. Do not silently choose a different
+  // series time than the one the user dropped. The single-occurrence API keeps
+  // the exact instant and remains available in either case.
+  const ambiguous = [-1, 1].some((day) => {
+    const offset = new TZDate(
+      zoned.getTime() + day * 86_400_000,
+      timeZone
+    ).getTimezoneOffset();
+    const alternative = value + offset * 60_000;
+    return (
+      alternative !== zoned.getTime() &&
+      wallTime(new Date(alternative).toISOString(), timeZone) === value
+    );
+  });
+  if (wallTime(instant, timeZone) !== value || ambiguous) {
+    throw new Error(
+      'The series time crosses a daylight-saving transition. Choose This event.'
+    );
+  }
+  return instant;
 }
 function wallRange(time: EventTime, fallbackZone: string) {
   if (time.kind === 'allDay') {
@@ -109,8 +136,16 @@ export function calendarEventTimeUpdate(
         }
       : {
           kind: 'timed',
-          startsAt: instantFromWallTime(start, time.timeZone ?? zone),
-          endsAt: instantFromWallTime(end, time.timeZone ?? zone),
+          startsAt: instantFromWallTime(
+            start,
+            time.timeZone ?? zone,
+            master.kind === 'timed' ? master.startsAt : undefined
+          ),
+          endsAt: instantFromWallTime(
+            end,
+            time.timeZone ?? zone,
+            master.kind === 'timed' ? master.endsAt : undefined
+          ),
           timeZone: time.timeZone ?? zone,
         };
   const days =
