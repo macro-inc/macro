@@ -11,11 +11,9 @@
 //! end here.
 
 mod call_tool_result;
-mod mangle;
 mod toolset;
 
 pub use call_tool_result::CallToolResultExt;
-pub use mangle::unmangle;
 pub use toolset::{ConnectedServer, Error, ListedServer, RemoteMcpToolSet};
 
 use rmcp::RoleClient;

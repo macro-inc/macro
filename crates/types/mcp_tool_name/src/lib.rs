@@ -3,10 +3,14 @@
 //! Every tool is exposed as `mcp__<server>__<tool>` so names stay unique
 //! across servers and can be routed back without a lookup table.
 
+#![deny(missing_docs)]
+
 #[cfg(test)]
 mod test;
 
-const MANGLED_PREFIX: &str = "mcp__";
+/// The prefix of every mangled MCP tool name, which tells MCP tools apart
+/// from first-party ones.
+pub const MANGLED_PREFIX: &str = "mcp__";
 const MANGLED_SEPARATOR: &str = "__";
 /// Model providers reject tool names that do not match
 /// `^[a-zA-Z0-9_-]{1,128}$`, and they validate the whole tool array: a single
@@ -31,7 +35,7 @@ fn is_allowed(c: char) -> bool {
 /// leading and trailing underscores.
 ///
 /// `collapse_underscores` additionally collapses runs of underscores into one.
-/// The server segment needs that: [`MangledName::parse`] splits on the first
+/// The server segment needs that: [`unmangle`] splits on the first
 /// `__`, so a server segment containing `__` would make the split report the
 /// wrong server name.
 fn sanitize_segment(raw: &str, collapse_underscores: bool) -> String {
@@ -72,17 +76,17 @@ fn fit_segment(segment: &mut String, max: usize, placeholder: &str) {
 }
 
 /// A mangled tool name plus whether sanitizing had to change it.
-pub(crate) struct Mangled {
+pub struct Mangled {
     /// The sanitized name, always matching `^[a-zA-Z0-9_-]{1,128}$`.
-    pub(crate) name: MangledName,
+    pub name: MangledName,
     /// Set when the sanitized name differs from the raw `server__tool` join,
     /// i.e. the raw names would have been rejected by the provider.
-    pub(crate) sanitized: bool,
+    pub sanitized: bool,
 }
 
 /// A mangled tool name in the format `mcp__<server>__<tool>`.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct MangledName(pub(crate) String);
+pub struct MangledName(String);
 
 impl Mangled {
     /// Builds `mcp__<server>__<tool>`, sanitizing both segments so the result
@@ -95,7 +99,7 @@ impl Mangled {
     ///
     /// Truncation is safe for dispatch: the unmangled tool name is kept on
     /// the registered tool and is what gets sent to the peer.
-    pub(crate) fn new(server_name: &str, tool_name: &str) -> Self {
+    pub fn new(server_name: &str, tool_name: &str) -> Self {
         let mut server = sanitize_segment(server_name, true);
         let mut tool = sanitize_segment(tool_name, false);
 
@@ -127,16 +131,20 @@ impl Mangled {
 /// segments, as routing does; `None` for a name that is not mangled.
 #[must_use]
 pub fn unmangle(name: &str) -> Option<(&str, &str)> {
-    MangledName::parse(name)
+    name.strip_prefix(MANGLED_PREFIX)?
+        .split_once(MANGLED_SEPARATOR)
 }
 
 impl MangledName {
-    pub(crate) fn parse(s: &str) -> Option<(&str, &str)> {
-        s.strip_prefix(MANGLED_PREFIX)?
-            .split_once(MANGLED_SEPARATOR)
+    /// A tool name as a model sent it back in a tool call, to look up the
+    /// tool registered under it. It is not sanitized: a name that was never
+    /// mangled finds no tool.
+    pub fn from_tool_call(name: &str) -> Self {
+        Self(name.to_owned())
     }
 
-    pub(crate) fn as_str(&self) -> &str {
+    /// The mangled name, as sent to model providers.
+    pub fn as_str(&self) -> &str {
         &self.0
     }
 }

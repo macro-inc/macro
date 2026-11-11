@@ -31,6 +31,7 @@ futures = { workspace = true }
 feature_flags = { workspace = true }
 genai_telemetry = { workspace = true }
 macro_user_id = { workspace = true }
+mcp_tool_name = { workspace = true }
 model_owner = { workspace = true }
 roles_and_permissions = { workspace = true, features = ["ports"] }
 http = { workspace = true }

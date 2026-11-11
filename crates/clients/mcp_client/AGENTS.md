@@ -48,7 +48,7 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 
 - Depends on: `agent`, `ai_toolset`, `authentication_service_client`,
   `macro_authorization` (feature `axum`),
-  `macro_user_id`, `rmcp`.
+  `macro_user_id`, `mcp_tool_name`, `rmcp`.
 - Used by: `agent_egress`, `agent_harness`, `agent_tools`, `mcp_select`,
   `onboarding`.
 

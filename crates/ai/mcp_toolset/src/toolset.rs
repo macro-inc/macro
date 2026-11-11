@@ -4,11 +4,11 @@ use tracing::Instrument as _;
 
 use crate::McpServer;
 use crate::call_tool_result::CallToolResultExt;
-use crate::mangle::{Mangled, MangledName};
 use ai_toolset::{
     RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo, ToolResult, ToolSet,
     ToolSetError,
 };
+use mcp_tool_name::{Mangled, MangledName, unmangle};
 use rmcp::RoleClient;
 use rmcp::model::{CallToolRequestParams, CallToolResult, Tool};
 use rmcp::service::Peer;
@@ -189,7 +189,7 @@ impl RemoteMcpToolSet {
             .0
             .tools
             .keys()
-            .filter_map(|mangled| MangledName::parse(mangled.as_str()))
+            .filter_map(|mangled| unmangle(mangled.as_str()))
             .map(|(server, _tool)| server.to_string())
             .collect();
         names.sort();
@@ -203,7 +203,7 @@ impl RemoteMcpToolSet {
         name: &str,
         arguments: serde_json::Map<String, serde_json::Value>,
     ) -> Result<CallToolResult, Error> {
-        let key = MangledName(name.to_owned());
+        let key = MangledName::from_tool_call(name);
         let entry = self
             .0
             .tools
@@ -341,8 +341,8 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
     }
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
-        let (server_name, original_name) = MangledName::parse(tool_name)?;
-        let key = MangledName(tool_name.to_owned());
+        let (server_name, original_name) = unmangle(tool_name)?;
+        let key = MangledName::from_tool_call(tool_name);
         let display_name = self
             .0
             .tools

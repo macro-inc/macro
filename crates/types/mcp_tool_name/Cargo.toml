@@ -1,0 +1,8 @@
+[package]
+edition = "2024"
+name = "mcp_tool_name"
+publish = false
+version = "0.1.0"
+
+[dev-dependencies]
+regex = { workspace = true }

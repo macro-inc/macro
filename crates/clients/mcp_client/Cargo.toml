@@ -14,6 +14,7 @@ ai_toolset = { workspace = true }
 anyhow.workspace = true
 authentication_service_client = { workspace = true }
 async-trait.workspace = true
+mcp_tool_name = { workspace = true }
 oauth2 = { version = "5.0", default-features = false }
 base64.workspace = true
 axum.workspace = true
@@ -38,5 +39,4 @@ utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-regex.workspace = true
 tokio.workspace = true

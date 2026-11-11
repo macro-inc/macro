@@ -111,7 +111,7 @@ DecideReview are eager internal tools in both standard and code modes.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
   An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the
-  live agent recorded (split by `mcp_toolset::unmangle`, the title as its
+  live agent recorded (split by `mcp_tool_name::unmangle`, the title as its
   display name when it differs), and its result keeps the mangled name. A
   failed turn's last text chunk is the failure reply the live history never
   held; replay strips it and keeps the turn.

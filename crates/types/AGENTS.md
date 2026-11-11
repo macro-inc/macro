@@ -30,6 +30,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`macro_user_id`](macro_user_id/AGENTS.md) | Shared infrastructure: the identity type used across the whole backend. |
 | `macro_uuid` |  |
 | `maybe_send` |  |
+| [`mcp_tool_name`](mcp_tool_name/AGENTS.md) | Part of agent sessions / AI tooling: the provider-safe `mcp__<server>__<tool>` name an MCP tool is exposed under, and its split back for routing. |
 | [`message_parent`](message_parent/AGENTS.md) |  |
 | [`pairing_id`](pairing_id/AGENTS.md) | Shared pairing UUID identity, independent of the runtime and harness domains. |
 | [`shared_types`](shared_types/AGENTS.md) | Shared infrastructure underlying Documents, chat, and authentication. |

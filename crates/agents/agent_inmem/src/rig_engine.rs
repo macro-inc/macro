@@ -173,7 +173,7 @@ where
         Box::pin(async move {
             let mut request_context = request_context;
             let native = !UNGATED_NATIVE_TOOLS.contains(&tool_name)
-                && !tool_name.starts_with(mcp_select::MANGLED_PREFIX)
+                && !tool_name.starts_with(mcp_tool_name::MANGLED_PREFIX)
                 && agent_egress::domain::approval::spends_owner_access("macro", tool_name);
             let arguments = if native {
                 let _waiting = self.awaiting.begin();
@@ -238,7 +238,7 @@ where
 
 fn add_native_actor_schema(name: &str, schema: &mut schemars::Schema) {
     if !UNGATED_NATIVE_TOOLS.contains(&name)
-        && !name.starts_with(mcp_select::MANGLED_PREFIX)
+        && !name.starts_with(mcp_tool_name::MANGLED_PREFIX)
         && agent_egress::domain::approval::spends_owner_access("macro", name)
         && let Some(schema) = schema.as_object_mut()
     {

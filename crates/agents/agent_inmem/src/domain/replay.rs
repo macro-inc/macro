@@ -290,7 +290,7 @@ fn tool_call_part(
     json: serde_json::Value,
     id: String,
 ) -> AssistantMessagePart {
-    match mcp_toolset::unmangle(&tool_name) {
+    match mcp_tool_name::unmangle(&tool_name) {
         Some((service, tool)) => AssistantMessagePart::McpToolCall {
             name: tool.to_owned(),
             service: service.to_owned(),

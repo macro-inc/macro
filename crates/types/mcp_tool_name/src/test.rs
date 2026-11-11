@@ -33,7 +33,7 @@ fn clean_names_are_left_byte_identical() {
         let (name, sanitized) = mangle(server, tool);
         assert_eq!(name.as_str(), format!("mcp__{server}__{tool}"));
         assert!(!sanitized, "`{server}`/`{tool}` should not need sanitizing");
-        assert_eq!(MangledName::parse(name.as_str()), Some((server, tool)));
+        assert_eq!(unmangle(name.as_str()), Some((server, tool)));
     }
 }
 
@@ -44,7 +44,7 @@ fn spaces_in_the_server_name_become_underscores() {
     assert_eq!(name.as_str(), "mcp__Google_Sheets__list_worksheets");
     assert!(sanitized);
     assert_eq!(
-        MangledName::parse(name.as_str()),
+        unmangle(name.as_str()),
         Some(("Google_Sheets", "list_worksheets"))
     );
 }
@@ -67,7 +67,7 @@ fn punctuation_and_non_ascii_are_replaced() {
 
         assert!(sanitized, "`{server}`/`{tool}` should have been sanitized");
         assert_eq!(
-            MangledName::parse(name.as_str()),
+            unmangle(name.as_str()),
             Some((expected_server, expected_tool)),
             "unexpected mangling of `{server}`/`{tool}`: {name}"
         );
@@ -77,7 +77,7 @@ fn punctuation_and_non_ascii_are_replaced() {
 #[test]
 fn the_server_segment_never_contains_a_double_underscore() {
     // Each of these would produce `__` inside the server segment under a naive
-    // one-for-one character replacement, which would make `parse` split in the
+    // one-for-one character replacement, which would make `unmangle` split in the
     // wrong place and report the wrong server.
     for (server, expected_server) in [
         ("A  B", "A_B"),
@@ -89,8 +89,7 @@ fn the_server_segment_never_contains_a_double_underscore() {
     ] {
         let (name, _) = mangle(server, "do_thing");
 
-        let (parsed_server, parsed_tool) =
-            MangledName::parse(name.as_str()).expect("mangled name parses");
+        let (parsed_server, parsed_tool) = unmangle(name.as_str()).expect("mangled name parses");
         assert_eq!(parsed_server, expected_server, "for server `{server}`");
         assert_eq!(parsed_tool, "do_thing", "for server `{server}`");
         assert!(!parsed_server.contains("__"));
@@ -99,15 +98,12 @@ fn the_server_segment_never_contains_a_double_underscore() {
 
 #[test]
 fn the_tool_segment_keeps_its_own_double_underscores() {
-    // Only the server segment has to avoid `__`; `parse` splits on the first
+    // Only the server segment has to avoid `__`; `unmangle` splits on the first
     // one, so the tool segment can keep the name the server reported.
     let (name, sanitized) = mangle("Linear", "list__issues");
 
     assert!(!sanitized);
-    assert_eq!(
-        MangledName::parse(name.as_str()),
-        Some(("Linear", "list__issues"))
-    );
+    assert_eq!(unmangle(name.as_str()), Some(("Linear", "list__issues")));
 }
 
 #[test]
@@ -117,8 +113,7 @@ fn a_long_server_name_is_truncated() {
 
     assert!(sanitized);
     assert!(name.as_str().len() <= 128);
-    let (parsed_server, parsed_tool) =
-        MangledName::parse(name.as_str()).expect("mangled name parses");
+    let (parsed_server, parsed_tool) = unmangle(name.as_str()).expect("mangled name parses");
     assert!(parsed_server.starts_with("Very_Long_Connector_Name"));
     assert!(!parsed_server.ends_with('_'));
     assert_eq!(parsed_tool, "list_worksheets");
@@ -131,8 +126,7 @@ fn a_long_tool_name_truncates_both_segments() {
 
     assert!(sanitized);
     assert_eq!(name.as_str().len(), 128);
-    let (parsed_server, parsed_tool) =
-        MangledName::parse(name.as_str()).expect("mangled name parses");
+    let (parsed_server, parsed_tool) = unmangle(name.as_str()).expect("mangled name parses");
     assert_eq!(parsed_server, "Some_Con");
     assert_eq!(parsed_tool, "a".repeat(113));
 }
@@ -144,7 +138,7 @@ fn truncation_never_leaves_a_dangling_underscore() {
 
     assert_eq!(name.as_str().len(), 5 + 7 + 2 + 114);
     assert_eq!(
-        MangledName::parse(name.as_str()),
+        unmangle(name.as_str()),
         Some(("abcdefg", "b".repeat(114).as_str()))
     );
 }
@@ -156,10 +150,7 @@ fn a_server_name_that_sanitizes_to_nothing_gets_a_placeholder() {
 
         assert!(sanitized, "`{server}` should have been sanitized");
         assert_eq!(name.as_str(), "mcp__server__do_thing");
-        assert_eq!(
-            MangledName::parse(name.as_str()),
-            Some(("server", "do_thing"))
-        );
+        assert_eq!(unmangle(name.as_str()), Some(("server", "do_thing")));
     }
 }
 
@@ -169,7 +160,7 @@ fn a_tool_name_that_sanitizes_to_nothing_gets_a_placeholder() {
 
     assert!(sanitized);
     assert_eq!(name.as_str(), "mcp__Linear__tool");
-    assert_eq!(MangledName::parse(name.as_str()), Some(("Linear", "tool")));
+    assert_eq!(unmangle(name.as_str()), Some(("Linear", "tool")));
 }
 
 #[test]

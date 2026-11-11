@@ -10,6 +10,7 @@ ai_toolset = { workspace = true }
 anyhow.workspace = true
 macro_user_id = { workspace = true }
 mcp_client = { workspace = true }
+mcp_tool_name = { workspace = true }
 pipedream_mcp = { workspace = true }
 serde_json.workspace = true
 tracing.workspace = true

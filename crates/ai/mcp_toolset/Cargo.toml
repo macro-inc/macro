@@ -8,6 +8,7 @@ publish = false
 ai_toolset = { workspace = true }
 anyhow.workspace = true
 futures.workspace = true
+mcp_tool_name = { workspace = true }
 rmcp = { workspace = true, features = ["client"] }
 schemars.workspace = true
 serde_json.workspace = true
@@ -16,4 +17,3 @@ tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-regex.workspace = true

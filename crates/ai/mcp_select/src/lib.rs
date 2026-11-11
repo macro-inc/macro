@@ -26,9 +26,6 @@ use std::sync::Arc;
 #[cfg(test)]
 mod test;
 
-/// Mangled MCP tool names start with this prefix on both stacks.
-pub const MANGLED_PREFIX: &str = "mcp__";
-
 /// A connector identified in both stacks: the Pipedream app slugs and the
 /// native server URL that back the same product (e.g. `linear` /
 /// `https://mcp.linear.app/mcp`).
@@ -389,7 +386,7 @@ impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T
     ) -> Pin<
         Box<dyn Future<Output = Result<ToolResult<serde_json::Value>, ToolSetError>> + 'a + Send>,
     > {
-        if tool_name.starts_with(MANGLED_PREFIX) {
+        if tool_name.starts_with(mcp_tool_name::MANGLED_PREFIX) {
             self.mcp_tools
                 .dispatch_tool_call(context, request_context, tool_name, json)
         } else {
@@ -431,7 +428,7 @@ impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T
     }
 
     fn routing_description<'a>(&'a self, tool_name: &'a str) -> Option<ToolInfo> {
-        if tool_name.starts_with(MANGLED_PREFIX) {
+        if tool_name.starts_with(mcp_tool_name::MANGLED_PREFIX) {
             ToolSet::<T>::routing_description(&self.mcp_tools, tool_name)
         } else {
             self.static_tools.routing_description(tool_name)
