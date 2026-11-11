@@ -10168,6 +10168,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/user_events",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
