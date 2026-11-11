@@ -74,7 +74,7 @@ describe('imports', () => {
         planWorkspaceHandler: async () => ({
           error: {
             code: 'sharing_required',
-            error: 'who should see the Notion import was not chosen',
+            error: 'who should see this import was not chosen',
           },
           response: new Response(null, { status: 409 }),
         }),

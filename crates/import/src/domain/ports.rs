@@ -51,9 +51,11 @@ pub enum ImportError {
     /// The user has not connected Notion, or turned it off.
     #[error("Notion is not connected")]
     NotionNotConnected,
-    /// The user is on a team and has not said who should see what a Notion
-    /// import writes.
-    #[error("who should see the Notion import was not chosen")]
+    /// The user is on a team and has not said who should see what a
+    /// workspace import (Notion, Linear or Jira) writes.
+    #[error(
+        "who should see this import was not chosen: ask whether to share it with the team, keep it personal, or let AI decide"
+    )]
     NotionSharingRequired,
     /// The import is not in a state that allows this; the message says why.
     #[error("{0}")]

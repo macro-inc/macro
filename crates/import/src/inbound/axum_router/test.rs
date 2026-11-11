@@ -326,10 +326,13 @@ impl WorkspaceImporter for FakeImportService {
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
-        _: Option<NotionSharing>,
+        sharing: Option<NotionSharing>,
         _: std::time::Duration,
     ) -> Result<NotionImportReport> {
         self.calls.lock().unwrap().push((user.clone(), source));
+        if sharing.is_none() {
+            return Err(ImportError::NotionSharingRequired);
+        }
         Ok(NotionImportReport {
             status: Some(crate::domain::models::RunStatus::Ready),
             issues: 4,
@@ -642,6 +645,24 @@ async fn planning_rejects_roots_that_are_not_notion_pages() {
         assert!(service.notion_plans.lock().unwrap().is_empty());
         assert!(service.calls.lock().unwrap().is_empty());
     }
+}
+
+#[tokio::test]
+async fn a_tracker_plan_without_a_sharing_choice_does_not_name_notion() {
+    let (router, _) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/linear/plan",
+        Some(serde_json::json!({})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = json_body(response).await;
+    assert_eq!(body["code"], "sharing_required");
+    let error = body["error"].as_str().unwrap();
+    assert!(!error.contains("Notion"), "{error}");
 }
 
 #[tokio::test]
