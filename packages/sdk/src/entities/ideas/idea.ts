@@ -71,6 +71,8 @@ export function outcome(
  * One of the user's ideas: a prompt to run, a note about specific items, or a
  * routine suggestion. List-sourced only, from `macro.ideas.review()`, so this
  * wraps the record the caller already has.
+ *
+ * @mcp-exclude Ideas are written by hidden generation sessions and acted on in the app, not over MCP.
  */
 export class Idea {
   private constructor(

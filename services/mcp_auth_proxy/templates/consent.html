@@ -44,6 +44,9 @@
         {% if let Some(scope) = request.scope %}
         <input type="hidden" name="scope" value="{{ scope }}" />
         {% endif %}
+        {% if let Some(resource) = request.resource %}
+        <input type="hidden" name="resource" value="{{ resource }}" />
+        {% endif %}
         {% if let Some(sign_in) = request.sign_in %}
         <input type="hidden" name="sign_in" value="{{ sign_in }}" />
         {% endif %}

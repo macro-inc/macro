@@ -75,6 +75,9 @@ export class Connector {
   /**
    * Read the actions this app advertises and whether the execution's account
    * has it connected. Inspection never calls the app or changes a connection.
+   *
+   * @readonly
+   * @mcp-exclude Needs the CodeExecution of a running program.
    */
   async inspect(): Promise<ConnectorInspection> {
     const response = await discover(this.client, this.execution, {
