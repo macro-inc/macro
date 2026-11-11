@@ -219,3 +219,6 @@ pub mod checklist_controls;
 pub mod checklist_plan;
 
 mod checklist_query;
+
+#[cfg(test)]
+mod pr_mention_actions_test;
