@@ -407,7 +407,8 @@ the shimmer.
 - Ask the agent to connect an MCP server by URL (for example "connect the MCP
   server at https://mcp.example.com/mcp"). It calls **ConnectMcpServer**, which
   adds a public `https` server to Connections and renders a **Connected MCP
-  server** card; when the server needs a sign-in, the agent asks the user to
+  server** card; when the server needs a sign-in, an agent session in code mode
+  presents a connect card for the URL, and otherwise the agent asks the user to
   click Connect next to it in Connections.
 
   In a secondary desktop split, the new-conversation page and existing chats show
@@ -1802,7 +1803,16 @@ spreadsheet, an email thread, an event, a project, a channel, a routine, a form
 or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live
 from the viewer's calendars and groups them by day. A tags widget nests tags
-to any depth as coloured pills. A list holds a fixed height and says how many
+to any depth as coloured pills. A connect card names an app (by Pipedream app
+slug) or an MCP server (by URL) the agent needs, with one **Connect** button
+that starts its sign-in directly; once connected it reads **Connected**. In
+the session that presented it, connecting an app continues the session through
+`app.connected`, as the `Connect <app>` chip does. Elsewhere (a DM reply, a
+custom MCP server) a toast asks the reader to reply when ready. A server whose
+sign-in cannot start opens the Add MCP Server dialog filled in with its name
+and URL. In code mode the Macro agent presents connect cards instead of the
+`m-connect-app` chip, which stays for AI chat, external agents and older
+replies. A list holds a fixed height and says how many
 items are below it. The dynamic UI gallery (`/app/component/dynamic-ui`) shows
 each widget. Task list titles wrap above their live properties and timestamps;
 side-by-side project groups stack below 672px of available container width,
