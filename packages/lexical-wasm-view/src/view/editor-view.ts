@@ -957,9 +957,15 @@ export class EditorView implements ViewSink {
     listener: (payload: P, view: EditorView) => boolean,
     priority: ViewCommandPriority
   ): () => void {
-    if (command.name === 'Key(Enter)' && this.port.nativeEnter) {
+    const keyPort =
+      command.name === 'Key(Enter)'
+        ? this.port.nativeEnter
+        : command.name === 'Key(Escape)'
+          ? this.port.nativeEscape
+          : undefined;
+    if (keyPort) {
       if (!this.isMounted) throw new Error('Native editor view is closing');
-      return this.port.nativeEnter.register(
+      return keyPort.register(
         (payload) => {
           if (!command.accepts(payload))
             throw new Error('Invalid view command payload: ' + command.name);
@@ -1113,6 +1119,7 @@ export class EditorView implements ViewSink {
       cleanup(() => decorator.dispose());
     this.decorators.clear();
     cleanup(() => this.port.nativeEnter?.dispose());
+    cleanup(() => this.port.nativeEscape?.dispose());
     for (const table of this.tables.values()) cleanup(() => table.dispose());
     this.tables.clear();
     roots.delete(this.root);

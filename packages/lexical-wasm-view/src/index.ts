@@ -33,6 +33,7 @@ export type {
   ConformancePort,
   EditorPort,
   NativeEnterPort,
+  NativeEscapePort,
   ProgrammaticApplicationInput,
   ProgrammaticApplicationOptions,
   TextFromView,

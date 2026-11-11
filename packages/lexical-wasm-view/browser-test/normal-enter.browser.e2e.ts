@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
 import type {} from './normal-enter-fixture';
+import { expect, test } from './ordered-key-source-proof';
 
 test('trusted Enter interleaves Normal listeners and publishes after pending reads', async ({
   page,

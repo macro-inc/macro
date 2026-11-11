@@ -39,6 +39,8 @@ export interface NativeEnterPort {
   dispose(): void;
 }
 
+export type NativeEscapePort = NativeEnterPort;
+
 export interface TextFromView {
   readonly key: NodeKey;
   readonly text: string;
@@ -66,6 +68,7 @@ export type InputSettlement =
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
   readonly nativeEnter?: NativeEnterPort;
+  readonly nativeEscape?: NativeEscapePort;
   types(): readonly TypeRow[];
   listeners(): ReadonlyMap<string, number>;
   textFromView(input: TextFromView): void;

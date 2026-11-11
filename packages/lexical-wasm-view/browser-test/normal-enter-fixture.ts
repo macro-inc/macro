@@ -12,6 +12,7 @@ import {
   $isRangeSelection,
   createEditor,
   KEY_ENTER_COMMAND,
+  KEY_ESCAPE_COMMAND,
 } from 'lexical';
 import init, * as native from '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { $setId } from '../../lexical-core/plugins/nodeIdPlugin';
@@ -24,6 +25,9 @@ function editorRoot(id: string): HTMLElement {
   if (!root) throw new Error('Missing actual editor root');
   return root;
 }
+const isEscape = new URLSearchParams(location.search).get('key') === 'Escape';
+const sourceCommand = isEscape ? KEY_ESCAPE_COMMAND : KEY_ENTER_COMMAND;
+const priority = isEscape ? 3 : 2;
 const sourceRoot = editorRoot('source');
 const nativeRoot = editorRoot('native');
 for (const root of [sourceRoot, nativeRoot]) {
@@ -86,12 +90,12 @@ const mounted = mountLocalSessionView(
 );
 mounted.port.setState(initial);
 const enter = createViewCommand(
-  'Key(Enter)',
+  isEscape ? 'Key(Escape)' : 'Key(Enter)',
   (value): value is KeyboardEvent | null =>
     value === null || value instanceof KeyboardEvent
 );
 source.registerCommand(
-  KEY_ENTER_COMMAND,
+  sourceCommand,
   (event) => {
     sourceTrace.push(event === null ? 'first:null' : `first:${event.key}`);
     const selection = $getSelection();
@@ -99,10 +103,10 @@ source.registerCommand(
     selection.insertText('!');
     return false;
   },
-  2
+  priority
 );
 source.registerCommand(
-  KEY_ENTER_COMMAND,
+  sourceCommand,
   () => {
     sourceTrace.push(`pending:${$getRoot().getTextContent()}`);
     sourceTrace.push(
@@ -110,22 +114,24 @@ source.registerCommand(
     );
     return false;
   },
-  2
+  priority
 );
 source.registerCommand(
-  KEY_ENTER_COMMAND,
+  sourceCommand,
   (event) => {
     sourceTrace.push('last');
     event?.preventDefault();
     return true;
   },
-  2
+  priority
 );
 mounted.view.registerViewCommand(
   enter,
   (event) => {
     nativeTrace.push(event === null ? 'first:null' : `first:${event.key}`);
-    const commands = mounted.port.nativeEnter;
+    const commands = isEscape
+      ? mounted.port.nativeEscape
+      : mounted.port.nativeEnter;
     if (!commands) throw new Error('Explicit native Enter binding missing');
     commands.dispatchScoped(
       EditorInputMsg.fromEditorCommand({
@@ -159,7 +165,7 @@ mounted.view.registerViewCommand(
     );
     return false;
   },
-  2
+  priority
 );
 mounted.view.registerViewCommand(
   enter,
@@ -167,13 +173,16 @@ mounted.view.registerViewCommand(
     const key = [...mounted.view.mirror.values()].find(
       (node) => node.kind === 'text'
     )?.key;
-    if (key === undefined || !mounted.port.nativeEnter)
+    const commands = isEscape
+      ? mounted.port.nativeEscape
+      : mounted.port.nativeEnter;
+    if (key === undefined || !commands)
       throw new Error('Native pending text missing');
-    nativeTrace.push(`pending:${mounted.port.nativeEnter.pendingText(key)}`);
+    nativeTrace.push(`pending:${commands.pendingText(key)}`);
     nativeTrace.push(`published:${mounted.view.text(key)}`);
     return false;
   },
-  2
+  priority
 );
 mounted.view.registerViewCommand(
   enter,
@@ -182,7 +191,7 @@ mounted.view.registerViewCommand(
     event?.preventDefault();
     return true;
   },
-  2
+  priority
 );
 
 function reset() {
@@ -223,11 +232,18 @@ window.normalEnter = {
     if (engine === 'source')
       source.update(
         () => {
-          source.dispatchCommand(KEY_ENTER_COMMAND, null);
+          if (isEscape) {
+            // @ts-expect-error The actual runtime admits null; Source's public Escape type stays narrower.
+            source.dispatchCommand(KEY_ESCAPE_COMMAND, null);
+          } else source.dispatchCommand(KEY_ENTER_COMMAND, null);
         },
         { discrete: true }
       );
-    else mounted.port.nativeEnter?.dispatch();
+    else
+      (isEscape
+        ? mounted.port.nativeEscape
+        : mounted.port.nativeEnter
+      )?.dispatch();
   },
 };
 reset();

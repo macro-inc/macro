@@ -22,7 +22,16 @@ export type NativeEnterModule = Pick<
   | 'viewCommandScopeSetSelection'
   | 'viewCommandScopeText'
   | 'viewCommandScopeUnregisterEnter'
->;
+> &
+  Partial<
+    Pick<
+      typeof Native,
+      | 'viewCommandScopeEscape'
+      | 'viewCommandScopeRegisterEscape'
+      | 'viewCommandScopeUnregisterEscape'
+    >
+  >;
+export type NativeCommandKey = 'Enter' | 'Escape';
 
 export interface NativeEnterScope {
   readonly owner: bigint;
@@ -33,6 +42,7 @@ export interface NativeEnterScope {
 }
 
 interface Callback {
+  readonly key: NativeCommandKey;
   readonly owner: bigint;
   readonly invoke: (event: KeyboardEvent | null) => boolean;
 }
@@ -45,6 +55,7 @@ interface KeyboardAdmission {
   invocation?: bigint;
 }
 interface Registration {
+  readonly key: NativeCommandKey;
   readonly id: bigint;
   readonly handle: bigint;
 }
@@ -69,6 +80,9 @@ const moduleFunctions: readonly (keyof NativeEnterModule)[] = [
   'viewCommandScopeSetSelection',
   'viewCommandScopeText',
   'viewCommandScopeUnregisterEnter',
+  'viewCommandScopeEscape',
+  'viewCommandScopeRegisterEscape',
+  'viewCommandScopeUnregisterEscape',
 ];
 
 /** Module-wide invocation state; output/lease consumption belongs to its owner. */
@@ -80,10 +94,14 @@ export class NativeEnterDispatcher {
   private readonly failures = new Map<bigint, Failure>();
   private readonly sessions = new WeakMap<Native.EditorSession, bigint>();
   private readonly owners = new Map<bigint, Native.EditorSession>();
-  private readonly listeners = new Map<bigint, OwnerListeners>();
+  private readonly listeners = new Map<
+    bigint,
+    Map<NativeCommandKey, OwnerListeners>
+  >();
   private nextCallback = 1n;
   private teardowns: (() => void)[] = [];
   readonly guard;
+  readonly supportsEscape: boolean;
 
   private readonly active = () => this.scopes.length !== 0;
   private readonly afterReturn = () => {
@@ -114,6 +132,20 @@ export class NativeEnterDispatcher {
           throw new Error('Native receiver descriptor cannot be guarded');
       }
     }
+    const escapeFunctions = [
+      native.viewCommandScopeEscape,
+      native.viewCommandScopeRegisterEscape,
+      native.viewCommandScopeUnregisterEscape,
+      native.EditorSession.prototype.registerViewEscape,
+      native.EditorSession.prototype.unregisterViewEscape,
+      native.EditorSession.prototype.viewCommandEscape,
+    ];
+    const present = escapeFunctions.filter(
+      (value) => typeof value === 'function'
+    ).length;
+    if (present !== 0 && present !== escapeFunctions.length)
+      throw new Error('Native Escape capability is incomplete');
+    this.supportsEscape = present === escapeFunctions.length;
     native.installViewCommandHost(this.dispatch, this.lookup);
     this.guard = installNativeSessionReceiverGuard(native.EditorSession, {
       active: this.active,
@@ -159,14 +191,17 @@ export class NativeEnterDispatcher {
       throw new Error(
         'Native Enter owner already has an actual session binding'
       );
-    let listeners: OwnerListeners | undefined;
+    let listeners: Map<NativeCommandKey, OwnerListeners> | undefined;
     if (!this.listeners.has(owner)) {
       const table = ListenerTableMsg.decode(session.listenerTable());
-      listeners = {
-        native: table.rows.some(
-          (row) => row.command === 'Key(Enter)' && row.priority !== 0
-        ),
-      };
+      listeners = new Map();
+      for (const key of ['Enter', 'Escape'] satisfies NativeCommandKey[]) {
+        listeners.set(key, {
+          native: table.rows.some(
+            (row) => row.command === 'Key(' + key + ')' && row.priority !== 0
+          ),
+        });
+      }
     }
     this.sessions.set(session, owner);
     this.owners.set(owner, session);
@@ -245,6 +280,12 @@ export class NativeEnterDispatcher {
     return this.native.viewCommandScopeEnter(this.requireScope(owner).scope);
   }
 
+  escapeScoped(owner: bigint): boolean {
+    const invoke = this.native.viewCommandScopeEscape;
+    if (!invoke) throw new Error('Native Escape scope is unavailable');
+    return invoke(this.requireScope(owner).scope);
+  }
+
   requestRetirement(owner: bigint): void {
     const current = this.requireScope(owner);
     this.native.requestRetireViewObservation(
@@ -272,11 +313,12 @@ export class NativeEnterDispatcher {
     owner: bigint,
     invoke: Callback['invoke'],
     priority: ViewCommandPriority,
-    identity: object = invoke
+    identity: object = invoke,
+    key: NativeCommandKey = 'Enter'
   ): () => void {
     if (this.sessions.get(session) !== owner)
       throw new Error('Native Enter registration lacks its bound session');
-    const listeners = this.listeners.get(owner);
+    const listeners = this.listeners.get(owner)?.get(key);
     if (!listeners)
       throw new Error('Native Enter owner has no listener collection');
     const collection = listeners.collection ?? { buckets: new Map() };
@@ -288,13 +330,23 @@ export class NativeEnterDispatcher {
       if (this.nextCallback > 0xffffffffffffffffn)
         throw new Error('Native Enter callback identity exhausted');
       const id = this.nextCallback++;
-      this.callbacks.set(id, { owner, invoke });
+      this.callbacks.set(id, { owner, invoke, key });
       try {
         const scope = this.current(owner);
+        const scopedRegister =
+          key === 'Enter'
+            ? this.native.viewCommandScopeRegisterEnter
+            : this.native.viewCommandScopeRegisterEscape;
+        if (!scopedRegister)
+          throw new Error('Native key registration is unavailable');
+        const register =
+          key === 'Enter'
+            ? session.registerViewEnter
+            : session.registerViewEscape;
         const handle = scope
-          ? this.native.viewCommandScopeRegisterEnter(scope.scope, id, priority)
-          : session.registerViewEnter(id, priority);
-        bucket.set(identity, { id, handle });
+          ? scopedRegister(scope.scope, id, priority)
+          : register.call(session, id, priority);
+        bucket.set(identity, { id, handle, key });
       } catch (error) {
         this.callbacks.delete(id);
         throw error;
@@ -325,10 +377,16 @@ export class NativeEnterDispatcher {
   ): void {
     const scope = this.current(owner);
     if (scope) {
-      this.native.viewCommandScopeUnregisterEnter(scope.scope, entry.handle);
+      const unregister =
+        entry.key === 'Enter'
+          ? this.native.viewCommandScopeUnregisterEnter
+          : this.native.viewCommandScopeUnregisterEscape;
+      if (!unregister) throw new Error('Native key cleanup is unavailable');
+      unregister(scope.scope, entry.handle);
       this.retiredCallbacks.add(entry.id);
     } else {
-      session.unregisterViewEnter(entry.handle);
+      if (entry.key === 'Enter') session.unregisterViewEnter(entry.handle);
+      else session.unregisterViewEscape(entry.handle);
       this.callbacks.delete(entry.id);
     }
   }
@@ -344,18 +402,26 @@ export class NativeEnterDispatcher {
     }
   }
 
-  hasListeners(owner: bigint): boolean {
-    const collection = this.listeners.get(owner)?.collection;
+  hasListeners(owner: bigint, key: NativeCommandKey = 'Enter'): boolean {
+    const collection = this.listeners.get(owner)?.get(key)?.collection;
     return (
       collection !== undefined &&
       [...collection.buckets.values()].some((bucket) => bucket.size !== 0)
     );
   }
 
-  unregisterOwner(session: Native.EditorSession, owner: bigint): void {
+  unregisterOwner(
+    session: Native.EditorSession,
+    owner: bigint,
+    key?: NativeCommandKey
+  ): void {
     const listeners = this.listeners.get(owner);
-    if (listeners?.collection)
-      this.removeCollection(session, owner, listeners.collection);
+    if (!listeners) return;
+    for (const [command, entry] of listeners) {
+      if (key !== undefined && key !== command) continue;
+      if (entry.collection)
+        this.removeCollection(session, owner, entry.collection);
+    }
   }
 
   releaseOwner(session: Native.EditorSession, owner: bigint): void {
@@ -439,6 +505,10 @@ export class NativeEnterDispatcher {
         else if (admission.invocation !== invocation)
           throw new Error(
             'Native keyboard event belongs to another invocation'
+          );
+        if (admission.event.key !== entry.key)
+          throw new Error(
+            'Native key callback does not match its admitted event'
           );
         event = admission.event;
       }

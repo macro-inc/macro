@@ -67,6 +67,7 @@ Keep table pointer selection tied to its pointer id; cancel it on pointercancel 
 
 Keep drag source validity tied to documentRevision; selection-only commits do not invalidate a drag. Lazy clipboard imports retain the broader revision guard.
 
+- Opt into ordered Escape only with all six actual exports, preserve per-command listener identity/snapshots and nullable scoped event lifetime, and retain ordinary/scoped permission policy.
 - Opt into ordered Enter only with the actual generated native module; preserve Source Set registration and per-priority snapshots, reject ordinary receivers before bindgen and Port queue admission during callbacks, and use issued scoped operations without querying published caches.
 - Drain exact failure-ordinal output and I/O before rethrowing the original callback value; detach immediately on callback close, retain current snapshot functions through the enclosing native return, and defer ordinary cleanup to its post-call fence.
 - Capture acknowledged targets in the factory overload’s optional synchronous after callback before later FIFO entries; await its Promise for final drain/error settlement.

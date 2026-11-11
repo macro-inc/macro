@@ -17,12 +17,14 @@ import type { SessionExecutor } from '@macro-inc/collaboration/session/executor'
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
+import type { NativeCommandKey } from './native-enter';
 import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
 import type {
   EditorPort,
   InputSettlement,
   NativeEnterPort,
+  NativeEscapePort,
   ProgrammaticApplicationInput,
   ProgrammaticApplicationOptions,
   TextFromView,
@@ -71,6 +73,7 @@ export function selectionMessage(selection: ViewSelection): ISelectionMsg {
 /** Executes inputs through the existing serialized host-I/O executor. */
 export class SessionPort implements EditorPort {
   readonly nativeEnter: NativeEnterPort | undefined;
+  readonly nativeEscape: NativeEscapePort | undefined;
   constructor(
     private readonly executor: Pick<
       SessionExecutor<EditorSession>,
@@ -85,7 +88,7 @@ export class SessionPort implements EditorPort {
       if (!executor.runSync)
         throw new Error('Native Enter requires synchronous executor admission');
       const { dispatcher, owner } = commands;
-      this.nativeEnter = {
+      const createKeyPort = (key: NativeCommandKey): NativeEnterPort => ({
         register: (listener, priority, identity) => {
           commands.output.assertAttached();
           return dispatcher.register(
@@ -93,10 +96,11 @@ export class SessionPort implements EditorPort {
             owner,
             listener,
             priority,
-            identity
+            identity,
+            key
           );
         },
-        hasListeners: () => dispatcher.hasListeners(owner),
+        hasListeners: () => dispatcher.hasListeners(owner, key),
         scope: () => dispatcher.current(owner),
         pendingSelection: () => dispatcher.pendingSelection(owner),
         pendingText: (key) => dispatcher.pendingText(owner, key),
@@ -106,10 +110,13 @@ export class SessionPort implements EditorPort {
           commands.output.assertAttached();
           return dispatcher.dispatchScoped(owner, input);
         },
-        dispose: () => dispatcher.unregisterOwner(executor.session, owner),
+        dispose: () => dispatcher.unregisterOwner(executor.session, owner, key),
         dispatch: () => {
           commands.output.assertAttached();
-          if (dispatcher.current(owner)) return dispatcher.enterScoped(owner);
+          if (dispatcher.current(owner))
+            return key === 'Enter'
+              ? dispatcher.enterScoped(owner)
+              : dispatcher.escapeScoped(owner);
           commands.output.assertLocalAdmission();
           let handled: boolean | undefined;
           const run = executor.runSync;
@@ -117,7 +124,13 @@ export class SessionPort implements EditorPort {
             throw new Error('Synchronous executor admission is unavailable');
           run.call(
             executor,
-            () => executor.session.viewCommandEnter(executor.now(), Date.now()),
+            () =>
+              key === 'Enter'
+                ? executor.session.viewCommandEnter(executor.now(), Date.now())
+                : executor.session.viewCommandEscape(
+                    executor.now(),
+                    Date.now()
+                  ),
             (flags) => {
               handled = Boolean(flags & FLAG_HANDLED);
             }
@@ -126,7 +139,10 @@ export class SessionPort implements EditorPort {
             throw new Error('Synchronous Enter completed without native flags');
           return handled;
         },
-      };
+      });
+      this.nativeEnter = createKeyPort('Enter');
+      if (dispatcher.supportsEscape)
+        this.nativeEscape = createKeyPort('Escape');
     }
   }
   private assertRootAdmission(): void {
@@ -324,9 +340,12 @@ export class SessionPort implements EditorPort {
     const after = (flags: number) => {
       handled = Boolean(flags & FLAG_HANDLED);
     };
-    if (key === 'Enter' && this.commands) {
+    if (
+      (key === 'Enter' || (key === 'Escape' && this.nativeEscape)) &&
+      this.commands
+    ) {
       if (!event)
-        throw new Error('Native keyboard Enter requires its actual event');
+        throw new Error('Native keyboard command requires its actual event');
       const run = this.executor.runSync;
       if (!run)
         throw new Error('Synchronous executor admission is unavailable');
@@ -346,7 +365,11 @@ export class SessionPort implements EditorPort {
         this.executor.now(),
         Date.now()
       );
-    if (event?.key === 'Enter' && this.commands) {
+    if (
+      (event?.key === 'Enter' ||
+        (event?.key === 'Escape' && this.nativeEscape)) &&
+      this.commands
+    ) {
       const { dispatcher, owner } = this.commands;
       return {
         call: () => dispatcher.withKeyboardEvent(owner, event, call),

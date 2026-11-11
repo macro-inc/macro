@@ -523,7 +523,10 @@ export function registerEvents(view: EditorView): {
       (!keyCommand ||
         (!rustListeners.has(keyCommand) &&
           !(
-            keyCommand === 'Key(Enter)' && view.port.nativeEnter?.hasListeners()
+            (keyCommand === 'Key(Enter)' &&
+              view.port.nativeEnter?.hasListeners()) ||
+            (keyCommand === 'Key(Escape)' &&
+              view.port.nativeEscape?.hasListeners())
           ))) &&
       (keepRange ||
         sameSelection(selection, published) ||

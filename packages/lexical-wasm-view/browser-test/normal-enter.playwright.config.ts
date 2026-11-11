@@ -3,7 +3,7 @@ import { defineConfig } from '@playwright/test';
 const port = Number(process.env.LEXICAL_WASM_VIEW_TEST_PORT ?? 40731);
 export default defineConfig({
   testDir: import.meta.dirname,
-  testMatch: 'normal-enter.browser.e2e.ts',
+  testMatch: ['normal-enter.browser.e2e.ts', 'native-escape.browser.e2e.ts'],
   workers: 1,
   reporter: [
     ['list'],

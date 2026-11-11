@@ -200,11 +200,9 @@ test('rejects deferred DOM events before queue admission or factory execution', 
   };
   try {
     expect(() => {
+      const event = new KeyboardEvent('keydown', { key: 'Enter' });
       // @ts-expect-error The closed factory overload has no DOM-event argument.
-      runtime.port.inputSettled(
-        factory,
-        new KeyboardEvent('keydown', { key: 'Enter' })
-      );
+      runtime.port.inputSettled(factory, event);
     }).toThrow('Deferred application inputs cannot carry DOM events');
     expect(calls).toBe(0);
   } finally {
