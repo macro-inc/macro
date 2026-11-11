@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { PassThrough } from 'node:stream';
 import type { Options, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { agentClaude, capabilityServer } from '../claude.ts';
 
@@ -42,27 +43,40 @@ const computer = {
   env: { DISPLAY: ':1' },
 };
 
+const agentOptions: Omit<Parameters<typeof agentClaude>[0], 'query'> = {
+  claude: () => '/run/current-system/sw/bin/claude',
+  mcpServers: { computer },
+  model: 'claude-test',
+  profile: () => ({
+    budgetUsd: 1,
+    timeoutMs: 60_000,
+    cwd: '/w',
+    directories: [],
+  }),
+  environment: async () => ({
+    PATH: '/bin',
+    ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
+    GH_TOKEN: undefined,
+  }),
+  after: () => () => undefined,
+  guards: [],
+  record: async () => undefined,
+};
+
 const agentWith = (query: ReturnType<typeof recording>['query']) =>
-  agentClaude({
-    query,
-    claude: () => '/run/current-system/sw/bin/claude',
-    mcpServers: { computer },
-    model: 'claude-test',
-    profile: () => ({
-      budgetUsd: 1,
-      timeoutMs: 60_000,
-      cwd: '/w',
-      directories: [],
-    }),
-    environment: async () => ({
-      PATH: '/bin',
-      ANTHROPIC_BASE_URL: 'https://egress/brain/anthropic',
-      GH_TOKEN: undefined,
-    }),
-    after: () => () => undefined,
-    guards: [],
-    record: async () => undefined,
-  });
+  agentClaude({ ...agentOptions, query });
+
+/** A process that never says anything: the test only looks at how it was spawned. */
+const fakeProcess = {
+  stdin: new PassThrough(),
+  stdout: new PassThrough(),
+  killed: false,
+  exitCode: null,
+  kill: () => true,
+  on: () => undefined,
+  once: () => undefined,
+  off: () => undefined,
+};
 
 test('every wake has its capability tools beside the MCP servers it was given, and runs claude from PATH', async () => {
   const fake = recording();
@@ -99,4 +113,46 @@ test("its tools are named so they never collide with Macro's own MCP tools", asy
   expect(names).toContain('DescribeCapabilities');
   for (const taken of ['ExecuteCode', 'DescribeCodeTools', 'ReadCodeDocs'])
     expect(names).not.toContain(taken);
+});
+
+test('on a computer, Claude Code is spawned through the sandbox the agent was started with', async () => {
+  const fake = recording();
+  const spawned: { command: string; args: readonly string[] }[] = [];
+  const agent = agentClaude({
+    ...agentOptions,
+    query: fake.query,
+    sandbox: {
+      argv: ['bwrap', '--tmpfs', '/run/credentials/x', '--'],
+      spawn: (argv) => {
+        spawned.push({ command: argv[0] ?? '', args: argv.slice(1) });
+        return fakeProcess;
+      },
+    },
+  });
+  await agent.wake(wake);
+  const spawn = fake.calls[0]?.spawnClaudeCodeProcess;
+  spawn?.({
+    command: '/run/current-system/sw/bin/claude',
+    args: ['--print'],
+    env: {},
+    signal: new AbortController().signal,
+  });
+  expect(spawned).toEqual([
+    {
+      command: 'bwrap',
+      args: [
+        '--tmpfs',
+        '/run/credentials/x',
+        '--',
+        '/run/current-system/sw/bin/claude',
+        '--print',
+      ],
+    },
+  ]);
+});
+
+test('with no sandbox, the SDK spawns Claude Code itself', async () => {
+  const fake = recording();
+  await agentWith(fake.query).wake(wake);
+  expect(fake.calls[0]?.spawnClaudeCodeProcess).toBeUndefined();
 });

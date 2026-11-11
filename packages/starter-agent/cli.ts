@@ -41,6 +41,7 @@ import {
   claude,
   launcherFiles,
   resultFlag,
+  sandboxProgram,
   scripts,
   wiring,
 } from './index.ts';
@@ -93,6 +94,7 @@ const run = async (): Promise<void> => {
   // healthy boot, or a restart onto code it landed.
   const files = launcherFiles();
   await configuredOrExit(claude);
+  await configuredOrExit(sandboxProgram);
   const { presence } = await configuredOrExit(wiring.addresses);
   const apiKey = await configuredOrExit(() => base.credentials.get(macroKey));
   process.on('SIGTERM', () => process.exit(exitCodes.stopped));

@@ -6,6 +6,7 @@
  */
 // Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
 import 'temporal-polyfill/global';
+import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { inSubprocess } from '@macro-inc/muppet/core/code';
@@ -74,6 +75,15 @@ const restart =
         exit: () => undefined,
       });
 
+/** Bubblewrap, which the image provides when children run sandboxed. */
+export const sandboxProgram = (): string | undefined => {
+  const [program] = started.sandbox;
+  if (program === undefined) return undefined;
+  const found = Bun.which(program);
+  if (found === null) throw new Error(`${program} is not on PATH`);
+  return found;
+};
+
 /** The `claude` on PATH, which the image provides. */
 export const claude = (): string => {
   const found = Bun.which(claudeProgram);
@@ -110,7 +120,14 @@ export const scripts: Scripts = {
     timeoutMs: base.config.scriptTimeoutMs,
     run: async (source, { timeoutMs }) => {
       const ran = await base.shell.run(
-        [process.execPath, base.config.cli, 'exec', resultFlag, '-'],
+        [
+          ...started.sandbox,
+          process.execPath,
+          base.config.cli,
+          'exec',
+          resultFlag,
+          '-',
+        ],
         {
           cwd: base.config.root,
           stdin: source,
@@ -156,6 +173,16 @@ const claudeAgent = agentClaude({
     return () => clearTimeout(timer);
   },
   guards,
+  sandbox: {
+    argv: started.sandbox,
+    spawn: ([command = '', ...args], { cwd, env, signal }) =>
+      spawn(command, args, {
+        cwd,
+        env,
+        signal,
+        stdio: ['pipe', 'pipe', 'inherit'],
+      }),
+  },
   record: async (entry) => {
     await base.log.event(wakesLog, entry);
     await spend(entry);

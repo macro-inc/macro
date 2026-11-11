@@ -3,6 +3,8 @@ import {
   type McpStdioServerConfig,
   type Options,
   type SDKMessage,
+  type SpawnedProcess,
+  type SpawnOptions,
   tool,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { Agent, EventContext } from '@macro-inc/muppet/core/agent';
@@ -44,6 +46,7 @@ export const agentClaude = ({
   after,
   guards,
   record,
+  sandbox,
 }: {
   /** The SDK's `query`, injected. */
   readonly query: Query;
@@ -63,6 +66,14 @@ export const agentClaude = ({
   readonly guards: readonly Guard[];
   /** Receives a line when a wake starts and one when it ends, for the log. */
   readonly record: (entry: object) => Promise<void>;
+  /** On a computer: the argv prefix Claude Code is started under (`Startup.sandbox`), and how to start a process. */
+  readonly sandbox?: {
+    readonly argv: readonly string[];
+    readonly spawn: (
+      argv: readonly string[],
+      options: Omit<SpawnOptions, 'command' | 'args'>
+    ) => SpawnedProcess;
+  };
 }): Agent => ({
   wake: async ({ request, systemPrompt, event, state }) => {
     const capabilities = createSdkMcpServer({
@@ -122,6 +133,14 @@ export const agentClaude = ({
           abortController: abort,
           env,
           pathToClaudeCodeExecutable: claude(),
+          // On a computer the enrollment's credentials are hidden from Claude
+          // Code: it runs inside the sandbox, and only this process sees them.
+          ...(sandbox === undefined || sandbox.argv.length === 0
+            ? {}
+            : {
+                spawnClaudeCodeProcess: ({ command, args, ...options }) =>
+                  sandbox.spawn([...sandbox.argv, command, ...args], options),
+              }),
           mcpServers: { ...mcpServers, [server]: capabilities },
           systemPrompt: {
             type: 'preset',
