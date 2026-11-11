@@ -1,0 +1,31 @@
+apps/web/tests/native/fixtures/bootstrap.ts
+  s_1ab0a6f0497411::t_980b226578c68c 1,23-42,52-54,67,74-75,95-105,107
+  s_1ab0a6f0497411::t_7e8c4c11ad7ff5 106
+apps/web/tests/native/runner.ts
+  s_1ab0a6f0497411::t_ddfc429633d4f8 175-188
+apps/web/tests/native/driver.ts
+  s_1ab0a6f0497411::t_56493059ce510e 145
+  s_1ab0a6f0497411::t_416b1b991bc540 137,139-144,146-148,150,154-157
+apps/web/tests/native/filter-matrix.ts
+  s_1ab0a6f0497411::t_38f1901793c9ca 218
+apps/web/tests/native/README.md
+  s_1ab0a6f0497411::t_100cb91acd1e88 53-59,77-79,238
+apps/web/tests/native/fixtures/server.ts
+  s_1ab0a6f0497411::t_980b226578c68c 134-135,207-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "92372bf7b7edfc102e2b96c12a5d1dfa94cd877f",
+  "prompts": {},
+  "sessions": {
+    "s_1ab0a6f0497411": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e553066e-0033-4f90-8906-2dfa443757c8",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
