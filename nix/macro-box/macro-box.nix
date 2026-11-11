@@ -27,7 +27,10 @@ let
         modules = [
           module
           herdr
-          { macro.box.macrod = self'.packages.macrod; }
+          {
+            macro.box.macrod = self'.packages.macrod;
+            macro.box.harnessd = self'.packages.harnessd;
+          }
         ];
       }
     );
@@ -93,8 +96,9 @@ in
               herdr
             ];
           };
-          inherit (self'.packages) macrod;
+          inherit (self'.packages) macrod harnessd;
         };
+        macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
       };
     };
 }
