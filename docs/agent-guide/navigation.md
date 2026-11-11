@@ -723,8 +723,8 @@ undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
 
-Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
-inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+Email, Tasks, and Agents use the same sidebar rows for inboxes, favorites,
+and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
 Entity rows and navigation use Phosphor icons. Entity icons share one mapping
