@@ -1,21 +1,16 @@
 import type { NotificationType } from '@core/types';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
+import * as notificationSchemas from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import { getNotificationIcon } from '../../entity/extractors-notification/notification-icon';
 import { NOTIFICATION_LABEL_BY_TYPE } from '../notification-preview';
 
-/**
- * Every `NotifEvent` tag, read from the generated notification-service
- * schemas rather than copied by hand: each variant's tag is its own
- * generated `NotifEventOneOf…Tag` constant.
- */
-const tagModules = import.meta.glob<Record<string, Record<string, string>>>(
-  '../../../lib/service-clients/service-notification/generated/schemas/notifEventOneOf*Tag.ts',
-  { eager: true }
+// The generated index changes with the schema; a cached glob transform can
+// retain paths for tag files that no longer exist after regeneration.
+const tagModules = Object.entries(notificationSchemas).filter(([name]) =>
+  /^NotifEventOneOf.*Tag$/.test(name)
 );
-const generatedTags = Object.values(tagModules).flatMap((module) =>
-  Object.values(module).flatMap((tag) => Object.values(tag))
-);
+const generatedTags = tagModules.flatMap(([, tag]) => Object.values(tag));
 // `call_started` is added to the generated tags by `NotificationType` itself.
 const tags = [...new Set([...generatedTags, 'call_started'])];
 
