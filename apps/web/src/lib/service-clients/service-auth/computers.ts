@@ -9,9 +9,7 @@ import {
 } from './generated/client';
 
 import type {
-  ComputerSize,
   ComputerStatus,
-  NotifyBody,
   PowerBody,
   PurchaseBody,
   Purchased,
@@ -185,9 +183,4 @@ export const computersClient = {
       `${SERVER_HOSTS['auth-service']}${getCompleteTeamComputerSetupUrl(encodeURIComponent(id))}`,
       { method: 'POST' }
     ),
-  notify: (size: ComputerSize) =>
-    fetchWithToken(`${base}/notify`, {
-      method: 'POST',
-      body: JSON.stringify({ size } satisfies NotifyBody),
-    }),
 };

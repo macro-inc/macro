@@ -2,7 +2,6 @@
 
 pub use crate::domain::lifecycle::InstanceStatus;
 
-use macro_user_id::user_id::MacroUserIdStr;
 
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -337,21 +336,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
         now: DateTime<Utc>,
-    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
-
-    /// Ask to hear when `size` can be bought again.
-    fn request_notify(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-        size: ComputerSize,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// List sizes the caller asked to be notified about.
-    fn notify_requests(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 }
 

@@ -36,7 +36,6 @@ it('preserves provider charges separately from catalog prices and the next invoi
           memoryGb: 16,
           diskGb: 200,
           soldOut: false,
-          notifyRequested: false,
           quote: {
             size: 'large',
             amount: 6000,

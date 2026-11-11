@@ -77,7 +77,6 @@ pub struct FakeRepo {
     pub reserve_calls: Mutex<usize>,
     pub reservations: Mutex<HashMap<ComputerId, Reservation>>,
     pub purchase_keys: Mutex<HashMap<PurchaseKey, ComputerId>>,
-    pub notify_writes: Mutex<usize>,
     pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
@@ -676,26 +675,6 @@ impl ComputerRepo for FakeRepo {
             .filter(|entry| entry.resources.units() > self.sold_units.saturating_sub(sold))
             .map(|entry| entry.size)
             .collect())
-    }
-
-    async fn request_notify(
-        &self,
-        _team_id: Uuid,
-        _user_id: MacroUserIdStr<'static>,
-        _size: ComputerSize,
-    ) -> Result<(), FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        *self.notify_writes.lock().unwrap() += 1;
-        Ok(())
-    }
-
-    async fn notify_requests(
-        &self,
-        _team_id: Uuid,
-        _user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<ComputerSize>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(vec![])
     }
 }
 

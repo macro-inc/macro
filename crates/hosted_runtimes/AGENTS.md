@@ -87,8 +87,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
   Gate purchase, purchase_for_team (including comps), quote, quote_for_team,
-  offers, status, set_power, retry, cancel, undo_cancel, release_now and
-  notify_me before reads, billing or writes; preserve existing rollout denial
+  offers, status, set_power, retry, cancel, undo_cancel and release_now
+  before reads, billing or writes; preserve existing rollout denial
   first. Internal purchase/quote/status authenticate through `InternalOnly`
   before entering the same gate. Missing rows on a detached fleet return 503.
   Do not gate catalog(), size_spec(), observe_subscription, confirm_reservations,
@@ -126,8 +126,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   harness index); a row with both or neither of a price and a comp reason is
   quarantined.
   `created_by` keeps the purchaser's id without a foreign key, so deleting the
-  account is never blocked; harness deletion clears its reference, and user
-  deletion cascades waitlist requests.
+  account is never blocked; harness deletion clears its reference.
 - **Control-plane redeploys**: A missing macrod never reboots a fleet-observed
   Running guest. Persist consecutive misses; after three grace periods, page
   the operator and restart only macrod once per outage. Reconnection resets the
@@ -370,7 +369,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Scope
 
-- Owns: computer rows, hosts, outbox, timers, waitlist, lifecycle, size catalog.
+- Owns: computer rows, hosts, outbox, timers, lifecycle, size catalog.
 - Not here: harness rows and pairing → `crates/harnesses`; the subscription's
   seat logic → `crates/teams`; macrod enrollment → `crates/coding_agent_worker`.
 - Sizes are this crate's own; do not reuse `agent_harness`'s `SandboxSize`.

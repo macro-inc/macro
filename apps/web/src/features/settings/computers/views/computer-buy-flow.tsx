@@ -6,15 +6,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import {
   useComputerOffersQuery,
-  useNotifyComputerSizeMutation,
   usePurchaseComputerMutation,
 } from '@queries/computers/computers';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
-import type {
-  ComputerSize,
-  ComputerStatus,
-  SizeOffer,
-} from '@service-auth/computers';
+import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Dialog } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
@@ -67,7 +62,6 @@ export function ComputerBuyFlow(props: {
   const { computers } = useTeamComputers();
   const harnesses = useHarnessesQuery();
   const purchase = usePurchaseComputerMutation();
-  const notify = useNotifyComputerSizeMutation();
   const [error, setError] = createSignal<string>();
   // One key per Buy dialog, sent again on every retry, so a retried Buy
   // never charges twice. An error means nothing was charged.
@@ -172,14 +166,6 @@ export function ComputerBuyFlow(props: {
     }
   };
 
-  const requestNotify = async (size: ComputerSize) => {
-    try {
-      await notify.mutateAsync(size);
-    } catch (failure) {
-      toast.failure(failureMessage(failure, t('computers.notifyFailed')));
-    }
-  };
-
   return (
     <Show when={visible()}>
       <Dialog
@@ -203,14 +189,8 @@ export function ComputerBuyFlow(props: {
                     offers={offerList()}
                     defaultName={defaultComputerName(firstName())}
                     pending={purchase.isPending}
-                    notifyPending={
-                      notify.isPending ? notify.variables : undefined
-                    }
                     error={error()}
                     onClose={close}
-                    onNotify={(size) =>
-                      fireAndForget(requestNotify(size), 'macro-computers')
-                    }
                     onConfirm={(offer, computerName) =>
                       fireAndForget(buy(offer, computerName), 'macro-computers')
                     }
