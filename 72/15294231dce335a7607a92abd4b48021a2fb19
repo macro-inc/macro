@@ -1,0 +1,39 @@
+apps/web/src/components/app/tab-layout/browser-test/open-in-new-tab.browser.e2e.ts
+  s_d7eb44e61bc22b::t_e0a49a0300a34e 11-13,24-25,29-34,40-54
+  s_d7eb44e61bc22b::t_d3f3453335ab3f 55
+apps/web/src/components/app/split-layout/layoutManager.ts
+  s_d7eb44e61bc22b::t_91ef115afb4a9e 16,1725-1752,1779
+  s_d7eb44e61bc22b::t_e03cbda27f83fc 17
+  s_d7eb44e61bc22b::t_100dda4936fccb 1780-1781
+apps/web/src/components/app/tab-layout/browser-test/fixture.tsx
+  s_d7eb44e61bc22b::t_e0a49a0300a34e 94-96
+apps/web/src/components/app/tab-layout/open-in-tab-intent.ts
+  s_d7eb44e61bc22b::t_91ef115afb4a9e 70-72,75-79
+  s_d7eb44e61bc22b::t_59cf4bf47b9409 74
+apps/web/src/components/app/tab-layout/open-in-new-tab.ts
+  s_d7eb44e61bc22b::t_91ef115afb4a9e 2-3,11-15,19-40
+apps/web/src/components/app/tab-layout/tests/open-in-new-tab.test.ts
+  s_d7eb44e61bc22b::t_e0a49a0300a34e 10,33,36-51,53
+apps/web/src/features/command/CommandMenu.tsx
+  s_d7eb44e61bc22b::t_e03cbda27f83fc 594-600,775,1073
+apps/web/AGENTS.md
+  s_d7eb44e61bc22b::t_3e8191a8be153e 842
+docs/agent-guide/navigation.md
+  s_d7eb44e61bc22b::t_882cbd36cf7a8e 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7215294231dce335a7607a92abd4b48021a2fb19",
+  "prompts": {},
+  "sessions": {
+    "s_d7eb44e61bc22b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e2b3840-78c2-4f19-b7c3-2a2256414da3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
