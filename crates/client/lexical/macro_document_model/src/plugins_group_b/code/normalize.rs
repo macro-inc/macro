@@ -1,4 +1,5 @@
-//! Structural half of Source's code transform; syntax tokens belong to the view.
+//! Structural half of Source's code transform; syntax tokens come from the host tokenizer
+//! (tokens.rs) on view-attached surfaces.
 use super::*;
 use lexical_rich_nodes::code::plainify_code_content;
 
@@ -27,29 +28,7 @@ pub(super) fn normalize(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<
         return Ok(());
     }
 
-    // Source retains the anchor's sibling-relative text offset even when an
-    // inserted rich child currently owns the caret. Capture before splicing.
-    let caret = tx
-        .selection()
-        .and_then(Selection::as_range)
-        .map(|range| range.anchor);
-    let line_boundary = caret.and_then(|point| match point {
-        Point::Element { offset, .. } if offset.0 > 0 => tx
-            .child_at_index(code, ChildIndex(offset.0 - 1))
-            .filter(|child| tx.is_line_break(*child))
-            .map(|_| (point.key(), offset)),
-        _ => None,
-    });
-    let mut text_offset = caret.map(|point| i64::from(point.offset())).unwrap_or(0);
-    if line_boundary.is_none()
-        && let Some(point) = caret
-    {
-        let mut previous = tx.prev_sibling(point.key());
-        while let Some(key) = previous {
-            text_offset += i64::from(tx.text_content_size(key).0);
-            previous = tx.prev_sibling(key);
-        }
-    }
+    let caret = capture_caret(tx, code);
 
     let content = tx.text_content(code).into_owned();
     let previous = tx.children_keys(code)?;
@@ -76,6 +55,64 @@ pub(super) fn normalize(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<
         &next[leading..next.len() - trailing],
     )?;
 
+    restore_caret(tx, code, caret)
+}
+
+fn same_run(tx: &Transaction<'_>, left: NodeKey, right: NodeKey) -> bool {
+    tx.type_name(left).ok() == tx.type_name(right).ok()
+        && tx.text_content(left) == tx.text_content(right)
+}
+
+/// The selection facts Source `$updateAndRetainSelection` captures before a code splice.
+pub(super) struct Caret {
+    caret: Option<Point>,
+    line_boundary: Option<(NodeKey, ChildIndex)>,
+    text_offset: i64,
+}
+
+pub(super) fn capture_caret(tx: &Transaction<'_>, code: NodeKey) -> Caret {
+    // Source retains the anchor's sibling-relative text offset even when an
+    // inserted rich child currently owns the caret. Capture before splicing.
+    let caret = tx
+        .selection()
+        .and_then(Selection::as_range)
+        .map(|range| range.anchor);
+    let line_boundary = caret.and_then(|point| match point {
+        Point::Element { offset, .. } if offset.0 > 0 => tx
+            .child_at_index(code, ChildIndex(offset.0 - 1))
+            .filter(|child| tx.is_line_break(*child))
+            .map(|_| (point.key(), offset)),
+        _ => None,
+    });
+    let mut text_offset = caret.map(|point| i64::from(point.offset())).unwrap_or(0);
+    if line_boundary.is_none()
+        && let Some(point) = caret
+    {
+        let mut previous = tx.prev_sibling(point.key());
+        while let Some(key) = previous {
+            text_offset += i64::from(tx.text_content_size(key).0);
+            previous = tx.prev_sibling(key);
+        }
+    }
+
+    Caret {
+        caret,
+        line_boundary,
+        text_offset,
+    }
+}
+
+/// Restore the captured caret after a splice, as Source `$updateAndRetainSelection`.
+pub(super) fn restore_caret(
+    tx: &mut Transaction<'_>,
+    code: NodeKey,
+    caret: Caret,
+) -> Result<(), Error> {
+    let Caret {
+        caret,
+        line_boundary,
+        mut text_offset,
+    } = caret;
     if let Some((original, offset)) = line_boundary {
         tx.element(original)?.select(Some(offset), Some(offset))?;
     } else if caret.is_some() {
@@ -101,9 +138,4 @@ pub(super) fn normalize(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> Result<
         }
     }
     Ok(())
-}
-
-fn same_run(tx: &Transaction<'_>, left: NodeKey, right: NodeKey) -> bool {
-    tx.type_name(left).ok() == tx.type_name(right).ok()
-        && tx.text_content(left) == tx.text_content(right)
 }

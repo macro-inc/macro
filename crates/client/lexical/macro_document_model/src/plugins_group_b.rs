@@ -87,6 +87,10 @@ pub(crate) fn register_checklist_controls(builder: EditorBuilder) -> EditorBuild
     checklist::register_controls(builder)
 }
 
+pub use code::tokens::{
+    CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokenResult, CodeTokens,
+};
+
 /// Source code-highlighting model effects for editors that attach a view.
 pub fn register_code_highlighting(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder {
     if matches!(ty, crate::EditorType::Title | crate::EditorType::PlainText) {

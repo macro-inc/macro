@@ -1,7 +1,9 @@
-//! Code commands and scoped selection; token painting remains exclusively in the view.
+//! Code commands, scoped selection and the view-attached highlighter transform; tokens come from
+//! the host tokenizer (code/tokens.rs), painting stays in the view.
 use super::*;
 mod navigation;
 mod normalize;
+pub(super) mod tokens;
 use crate::nodes::{CustomCodeNode, create_custom_code_node, set_custom_code};
 use lexical_rich_nodes::code::{CodeNode, indent::*};
 
@@ -247,6 +249,12 @@ fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> R
             HIGHLIGHT_DEFAULT_LANGUAGE.to_owned()
         }
     };
+    let text = tx.text_content(code).into_owned();
+    if tx.is_attached(code)
+        && let Some(descriptors) = tokens::request(tx, &language, &text)?
+    {
+        tokens::apply(tx, code.key(), &descriptors)?;
+    }
     tx.emit(
         &CODE_HIGHLIGHT,
         CodeHighlight {

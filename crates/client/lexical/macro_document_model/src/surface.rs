@@ -4,7 +4,16 @@ use lexical_model::{EditorBuilder, EditorMode};
 
 /// Build surface policy; imported-list controls belong to the attached synced body.
 pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuilder {
-    let builder = crate::preset_builder_with_mode(ty, mode);
+    preset_builder_with_mode_and_tokens(ty, mode, crate::plugins_group_b::CodeTokens::none())
+}
+
+/// Preset with the session's host code tokenizer, installed exactly once.
+pub fn preset_builder_with_mode_and_tokens(
+    ty: EditorType,
+    mode: EditorMode,
+    tokens: crate::plugins_group_b::CodeTokens,
+) -> EditorBuilder {
+    let builder = crate::preset_builder_with_mode(ty, mode).extension_state(tokens);
 
     // WP-58 Group B: structure, lists, tables, media, paste and links.
     let builder = crate::plugins_group_b::register(builder, ty);
