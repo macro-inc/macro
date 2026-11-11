@@ -52,6 +52,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
 - Check the captured DSS source ID and URL at native URL-upgrade admission. Preserve Historic and keep the mounted media component.
+- Complete uploads only on attached local media matching the captured kind, source ID, URL and generation. Preserve the mounted component and tag successful completion Historic.
 - Admit Group A menu answers only against the exact current UTF-16 search span and collapsed caret; preserve typed mention payloads and source snippet placement while rejecting stale, composing and code-block targets.
 - Resolve asynchronous snippet content only for its issued generation-aware token and matching AwaitNode; preserve source extractor cache behavior, diagnostic cleanup, placeholder placement and merged history.
 - Export PasteFacts and its MIME constant for file-admission facts; read paste modifiers only from ClipboardPayload.intent and never from MIME entries.

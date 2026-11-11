@@ -1,7 +1,10 @@
 //! Media insertion, resize, durable upload adoption and deletion policy.
-use super::{media_properties::DssUrlIdentity, *};
+use super::{
+    media_properties::{DssUrlIdentity, matches_media_source},
+    *,
+};
 use crate::nodes::{
-    CreateMedia, ImageNode, JsNumber, Maybe, MediaData, VideoNode, create_image_node,
+    CreateMedia, ImageNode, JsNumber, Maybe, MediaData, MediaType, VideoNode, create_image_node,
     create_video_node,
 };
 use lexical_rich_nodes::list::ListItemNode;
@@ -24,6 +27,8 @@ enum MediaAction {
         scale: f64,
     },
     Complete {
+        kind: MediaType,
+        source_id: String,
         local_url: String,
         id: String,
         url: String,
@@ -184,17 +189,32 @@ fn apply(tx: &mut Transaction<'_>, command: &MediaCommand) -> Result<Handled, Er
             };
             insert(tx, node)?;
         }
-        MediaAction::Complete { local_url, id, url } => {
+        MediaAction::Complete {
+            kind,
+            source_id,
+            local_url,
+            id,
+            url,
+        } => {
             let keys: Vec<_> = tx
                 .descendants(NodeKey::ROOT)
                 .map(|(key, _)| key)
-                .filter(|key| {
-                    media(tx, *key).is_some_and(|data| {
-                        data.src_type.as_deref() == Some("local")
-                            && data.url.as_deref() == Some(local_url)
+                .filter(|&key| {
+                    if key.generation() != command.generation {
+                        return false;
+                    }
+                    let data = match kind {
+                        MediaType::Image => tx.get::<ImageNode>(key).map(|node| &node.media),
+                        MediaType::Video => tx.get::<VideoNode>(key).map(|node| &node.media),
+                    };
+                    data.is_some_and(|data| {
+                        matches_media_source(data, "local", source_id, local_url)
                     })
                 })
                 .collect();
+            if keys.is_empty() {
+                return Ok(Handled::No);
+            }
             for key in keys {
                 update(tx, key, |data| {
                     data.src_type = Maybe::Value("sfs".into());

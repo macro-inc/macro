@@ -57,10 +57,19 @@ pub(super) struct DssUrlIdentity {
 
 impl DssUrlIdentity {
     pub(super) fn matches(&self, media: &MediaData) -> bool {
-        media.src_type.as_deref() == Some("dss")
-            && media.id.as_deref() == Some(self.source_id.as_str())
-            && media.url.as_deref() == Some(self.expected_url.as_str())
+        matches_media_source(media, "dss", &self.source_id, &self.expected_url)
     }
+}
+
+pub(super) fn matches_media_source(
+    media: &MediaData,
+    source_type: &str,
+    source_id: &str,
+    expected_url: &str,
+) -> bool {
+    media.src_type.as_deref() == Some(source_type)
+        && media.id.as_deref() == Some(source_id)
+        && media.url.as_deref() == Some(expected_url)
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
