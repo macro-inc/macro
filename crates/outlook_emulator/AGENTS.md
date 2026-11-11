@@ -3,9 +3,11 @@
 ## What it is
 
 Test support for the Email feature: a stateful fake of the Microsoft Graph
-mail API our email code calls. The real `email_api_client` Outlook adapter,
-`email_service` and its workers run against it, in a `cargo test` or as a
-standalone process, without Microsoft accounts.
+mail API and the Microsoft identity platform our email and sign-in code call.
+The real `email_api_client` Outlook adapter, `email_service` and its workers,
+FusionAuth's `microsoft` identity provider and the authentication service's
+Outlook link run against it, in a `cargo test`, as a standalone process or as
+part of a local stack, without Microsoft accounts.
 
 ## How it works
 
@@ -29,6 +31,21 @@ standalone process, without Microsoft accounts.
   `reauthorizationRequired`, `subscriptionRemoved` or `missed`.
 - Sending moves the draft to Sent Items under the same id and delivers a copy
   to every recipient that is a mailbox here.
+- Every mailbox is also a Microsoft user. `/{tenant}/oauth2/v2.0/authorize`
+  is a page that lists them in place of Microsoft's account picker and
+  consent screen; picking one redirects back with an authorization code,
+  which `/{tenant}/oauth2/v2.0/token` exchanges for an access token, a
+  refresh token and an ID token. The ID token carries Microsoft's issuer
+  (`https://login.microsoftonline.com/{tid}/v2.0`) and is signed by a key the
+  emulator generates and serves at `/{tenant}/discovery/v2.0/keys`, named by
+  `/{tenant}/v2.0/.well-known/openid-configuration`. `/oidc/userinfo` names
+  the token's user, and `/{tenant}/v2.0/adminconsent` is the admin-consent
+  page.
+- Refreshing answers a new access token and a further refresh token; the
+  earlier refresh tokens keep working until the grant is revoked.
+- A local stack with no real Microsoft client runs it as the
+  `outlook_emulator` sidecar (`xtask_local`'s `microsoft_emulator.rs`), seeded
+  from `seed.example.yaml`.
 - `/_emulator/…` is the control API; each route calls the `OutlookEmulator`
   method of the same purpose.
 
@@ -48,12 +65,16 @@ standalone process, without Microsoft accounts.
 - `src/notify.rs`: subscription validation and notification delivery.
 - `src/oauth.rs`: Microsoft's token endpoint and the authentication-service
   stand-in. `src/control.rs`: `/_emulator/`.
+- `src/sign_in.rs` and `templates/`: the sign-in and admin-consent pages,
+  authorization codes, ID tokens, the discovery document, keys and userinfo.
+  `src/signing_key.rs`: the key ID tokens are signed with.
 - `src/test/`: the real client against the emulator.
 
 ## Scope
 
 - Owns: the Graph mail endpoints the email code calls, plus `$batch` and the
-  send-at-once reply and forward actions, which it does not call yet.
+  send-at-once reply and forward actions, which it does not call yet; and what
+  the sign-in and Outlook link code use of the Microsoft identity platform.
 - Not here: Graph calendar; Gmail; SQS, Postgres and
   the other Macro services a local `email_service` needs.
 
@@ -70,6 +91,19 @@ standalone process, without Microsoft accounts.
   `POST /_emulator/mailboxes/{email}/links/{id}` (or `link_id` in the seed).
   Set `OUTLOOK_CONNECTIONS_ENABLED`, `OUTLOOK_SYNC_ENABLED` and
   `OUTLOOK_WRITES_ENABLED`.
+- Point sign-in and Outlook linking at it:
+  `OVERRIDE_MICROSOFT_LOGIN_URL=<base>/` for the authentication service's
+  calls and, as the browser reaches it,
+  `OVERRIDE_MICROSOFT_LOGIN_PAGE_URL=<base>/`; give FusionAuth's `microsoft`
+  provider the issuer `<base>/common/v2.0`. When services and the browser
+  reach the emulator at different addresses, start it with `--public-url`
+  (services) and `--browser-url` (browser): the discovery document names the
+  page on the second and everything else on the first. A local stack does all
+  of this by itself.
+- Sign in without a browser: `POST /{tenant}/oauth2/v2.0/authorize` with the
+  authorization request's parameters as a form, plus `user=<email>`; the
+  `Location` header carries the code. `cancel=1` or `admin_approval=1` in
+  place of `user` answers a declined consent or "Need admin approval".
 - Subscriptions need HTTPS, as with Graph: the watch worker only subscribes
   for an `https://` `OVERRIDE_EMAIL_SERVICE_URL`, and the emulator refuses
   other notification URLs unless started with
@@ -109,9 +143,23 @@ standalone process, without Microsoft accounts.
 - The authentication-service stand-in is not a Microsoft API. It exists so the
   service can run without FusionAuth, and answers like the real routes: 404
   for an unknown link, 401 for a revoked grant.
-- Nothing of ours calls Microsoft's token endpoint through an overridable
-  URL yet (`fusionauth` hardcodes the login host), so `token_url` is only
-  exercised by this crate's tests.
+- ID tokens name Microsoft's issuer, not the emulator's address, because
+  `fusionauth` only accepts Microsoft's. The discovery document says the same,
+  as Microsoft's does for `common`. Tokens are dated by the real clock, the
+  one their verifier reads; everything else follows the emulator's clock.
+- The signing key is generated on first use (a few seconds in a debug build)
+  and differs per emulator. Don't commit a key: the secret scan refuses it.
+- The emulator accepts any client id and secret. A code is bound to the
+  client id, redirect URI and PKCE challenge it was issued for, and is
+  redeemed once.
+- Microsoft's consent is all or nothing, so the page has no checkboxes:
+  picking a user grants every scope asked for, added to what the mailbox's
+  grant already covers. A seeded mailbox starts with the mail scopes granted.
+- A mailbox has one grant. A consent after a revocation starts a new one with
+  new refresh tokens; the revoked ones stay dead. That includes a plain
+  sign-in, which Microsoft would keep apart from the mail grant.
+- A user seeded with `unverified_email_domain: true` gets ID tokens without
+  `xms_edov`, which the `microsoft` provider's reconcile lambda refuses.
 
 ## Related
 

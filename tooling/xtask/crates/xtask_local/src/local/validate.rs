@@ -14,9 +14,9 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::google_emulator;
 use super::instance::Port;
-use super::microsoft_emulator;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
+use super::microsoft_emulator;
 use super::{Mode, arch, env_layer, gen_compose, instance::Instance, proxy, workspace_root};
 
 /// Required non-Rust services that must be present in the rendered local

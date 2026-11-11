@@ -268,7 +268,9 @@ async fn declining_and_needing_an_administrator_return_what_entra_returns() {
 
     // A request the emulator cannot answer shows an error and goes nowhere.
     let mut implicit = page.clone();
-    implicit.set_query(Some("client_id=c&redirect_uri=http://localhost/&scope=openid&response_type=token"));
+    implicit.set_query(Some(
+        "client_id=c&redirect_uri=http://localhost/&scope=openid&response_type=token",
+    ));
     let shown = browser().get(implicit).send().await.unwrap();
     assert_eq!(shown.status().as_u16(), 400);
 }
@@ -289,7 +291,15 @@ async fn an_openid_connect_client_signs_in_from_the_discovery_document() {
     let http = browser();
     let json = |url: String| {
         let http = http.clone();
-        async move { http.get(url).send().await.unwrap().json::<Value>().await.unwrap() }
+        async move {
+            http.get(url)
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
     };
 
     let discovery = json(format!(

@@ -332,7 +332,10 @@ impl Mailbox {
             email,
             revoked: false,
             grants: 1,
-            scopes: SEEDED_SCOPES.iter().map(|scope| scope.to_string()).collect(),
+            scopes: SEEDED_SCOPES
+                .iter()
+                .map(|scope| scope.to_string())
+                .collect(),
             email_domain_verified: !seed.unverified_email_domain,
             seq: 0,
             delta_epoch: 0,

@@ -136,7 +136,8 @@ struct PageRequest {
 
 impl PageRequest {
     fn parse(pairs: &Pairs) -> Result<Self, AuthorizationError> {
-        let required = |name: &'static str| first(pairs, name).ok_or(AuthorizationError::Missing(name));
+        let required =
+            |name: &'static str| first(pairs, name).ok_or(AuthorizationError::Missing(name));
 
         let client_id = required("client_id")?.to_string();
         let redirect_uri = required("redirect_uri")?;
@@ -374,10 +375,7 @@ async fn admin_consent_page(Query(pairs): Query<Pairs>) -> Response {
 /// `POST /{tenant}/v2.0/adminconsent`: the page's form. Sends the browser
 /// back with `admin_consent=True` and the directory's id, or with
 /// `access_denied`.
-async fn admin_consent_decide(
-    AxumState(emulator): Emulator,
-    Form(pairs): Form<Pairs>,
-) -> Response {
+async fn admin_consent_decide(AxumState(emulator): Emulator, Form(pairs): Form<Pairs>) -> Response {
     let answered = match PageRequest::parse(&pairs) {
         Ok(request) if first(&pairs, ACCEPT_FIELD).is_some() => {
             let tenant = emulator.with_state(|state| {
@@ -427,7 +425,11 @@ async fn discovery(AxumState(emulator): Emulator, Path(tenant): Path<String>) ->
         "tenant_region_scope": null,
         "cloud_instance_name": "microsoftonline.com",
     });
-    logged(Json(document).into_response(), Some(Route::OauthDiscovery), None)
+    logged(
+        Json(document).into_response(),
+        Some(Route::OauthDiscovery),
+        None,
+    )
 }
 
 /// `GET /{tenant}/discovery/v2.0/keys`: the key ID tokens are signed with.

@@ -66,7 +66,7 @@ impl FusionAuthClient {
             .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
         let endpoint =
             super::oauth::endpoint_url(&credentials.login_url, &credentials.tenant_id, "token")
-            .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
+                .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
         refresh(
             &client()?,
             endpoint,

@@ -396,7 +396,11 @@ fn the_microsoft_idp_discovers_its_endpoints_and_refuses_unverified_domains() {
         issuer: "http://outlook-emulator:8080/common/v2.0".into(),
     };
 
-    add_microsoft_idp(&mut doc, &microsoft, "function reconcile() { /* microsoft */ }");
+    add_microsoft_idp(
+        &mut doc,
+        &microsoft,
+        "function reconcile() { /* microsoft */ }",
+    );
 
     let requests = doc["requests"].as_array().unwrap();
     assert_eq!(requests.len(), before + 2);
@@ -412,5 +416,8 @@ fn the_microsoft_idp_discovers_its_endpoints_and_refuses_unverified_domains() {
     assert!(oauth2.get("authorization_endpoint").is_none());
     assert_eq!(oauth2["emailVerifiedClaim"], "xms_edov");
     // The issuer is the same for every instance, so the snapshot key keeps it.
-    assert_eq!(without_redirect_urls(doc.clone()), without_redirect_urls(doc));
+    assert_eq!(
+        without_redirect_urls(doc.clone()),
+        without_redirect_urls(doc)
+    );
 }

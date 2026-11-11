@@ -4,14 +4,14 @@
 
 use axum::extract::{Query, State as AxumState};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
-use base64::Engine;
-use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use sha2::{Digest, Sha256};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Form, Json, Router};
+use base64::Engine;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use serde::Deserialize;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 
 use crate::OutlookEmulator;
 use crate::fault::Route;
@@ -95,7 +95,13 @@ fn refresh(state: &mut State, request: &TokenRequest) -> (Option<String>, Respon
         .refresh_token
         .as_deref()
         .and_then(|token| state.refresh_token_owner(token))
-        .map(|mailbox| (mailbox.email.clone(), mailbox.revoked, mailbox.scopes.clone()));
+        .map(|mailbox| {
+            (
+                mailbox.email.clone(),
+                mailbox.revoked,
+                mailbox.scopes.clone(),
+            )
+        });
     let Some((email, revoked, scopes)) = owner else {
         let answered = refused(
             state,
@@ -236,7 +242,10 @@ async fn token(
             return logged(unavailable, Some(Route::OauthToken), None);
         }
     };
-    let client_id = request.client_id.clone().or_else(|| basic_client_id(&headers));
+    let client_id = request
+        .client_id
+        .clone()
+        .or_else(|| basic_client_id(&headers));
 
     let (mailbox, answered) = emulator.with_state(|state| match request.grant_type.as_str() {
         "refresh_token" => refresh(state, &request),

@@ -91,6 +91,18 @@ pub fn env(instance: &Instance) -> BTreeMap<String, String> {
     .collect()
 }
 
+/// The Compose service of the authentication service.
+pub const AUTHENTICATION_SERVICE: &str = "authentication-service";
+
+/// What the authentication service's container gets besides the shared
+/// env: no PostHog project key. With one, a new Outlook connection also
+/// needs the user's `enable-outlook` flag, which no seeded user of the
+/// emulator has and which the stack's placeholder key cannot even load;
+/// without one, `OUTLOOK_CONNECTIONS_ENABLED` alone decides.
+pub fn authentication_service_env() -> [(&'static str, &'static str); 1] {
+    [("POSTHOG_API_KEY", "")]
+}
+
 /// The emulator's command line inside the runtime image. Links in its
 /// answers are on the address services reach it at; the sign-in page is
 /// advertised where this instance's browser reaches it.

@@ -116,10 +116,16 @@ pub fn generate(
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
+        let mut environment = vec![("PORT", "8080")];
+        if sidecars.outlook_emulator
+            && svc.compose_name == microsoft_emulator::AUTHENTICATION_SERVICE
+        {
+            environment.extend(microsoft_emulator::authentication_service_env());
+        }
         let mut s = dct::Service {
             image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
-            environment: kv(&[("PORT", "8080")]),
+            environment: kv(&environment),
             ..Default::default()
         };
         let ports = published_ports(mode, instance, svc);

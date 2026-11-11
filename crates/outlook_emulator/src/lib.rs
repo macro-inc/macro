@@ -341,9 +341,7 @@ impl OutlookEmulator {
     pub(crate) async fn signing_key(&self) -> Result<&SigningKey, SigningKeyError> {
         self.inner
             .signing_key
-            .get_or_try_init(|| async {
-                tokio::task::spawn_blocking(SigningKey::generate).await?
-            })
+            .get_or_try_init(|| async { tokio::task::spawn_blocking(SigningKey::generate).await? })
             .await
     }
 

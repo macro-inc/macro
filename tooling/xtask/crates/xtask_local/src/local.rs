@@ -1163,7 +1163,15 @@ fn bring_up_infra(
     // of the infra instead of after it: its JVM start is the longest wait here.
     let fusionauth_start = spec.runs_local_infra.then(|| {
         let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
+        fa.arg("up").arg("-d");
+        // FusionAuth refuses to create the `microsoft` identity provider
+        // unless it can read the discovery document at its issuer, so the
+        // emulator that serves it starts first. It listens within a second;
+        // the kickstart runs after FusionAuth's JVM has booted.
+        if microsoft_emulator::stands_in(mode, &env.merged) {
+            fa.arg(microsoft_emulator::SERVICE);
+        }
+        fa.arg("fusionauth");
         let stage = stage.background();
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
