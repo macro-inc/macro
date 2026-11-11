@@ -327,7 +327,7 @@ where
         };
         // Its sessions' tool calls arrive without this trace's context: they
         // record its id, kept with the generation, to be joined to it.
-        if let Some(trace) = run_span.in_scope(current_trace_id)
+        if let Some(trace) = run_span.in_scope(macro_tower_layers::current_trace_id)
             && let Err(error) = repo.traced(generation, &trace).await
         {
             tracing::warn!(?error, "could not keep a generation's trace id");
@@ -903,15 +903,6 @@ where
             tracing::warn!(error = ?error, "could not close a generation session");
         }
     }
-}
-
-/// The current span's trace id, as W3C trace context writes it.
-fn current_trace_id() -> Option<String> {
-    let mut headers = http::HeaderMap::new();
-    macro_tower_layers::inject_trace_headers(&mut headers);
-    let parent = headers.get("traceparent")?.to_str().ok()?;
-    let trace = parent.split('-').nth(1)?;
-    (trace.len() == 32 && trace.bytes().any(|byte| byte != b'0')).then(|| trace.to_owned())
 }
 
 fn action_for(session: &StaleSession) -> RoutineSessionAction {

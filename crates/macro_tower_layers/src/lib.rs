@@ -61,6 +61,14 @@ pub fn inject_trace_headers(headers: &mut http::HeaderMap) {
     });
 }
 
+/// The current span's trace id, as W3C trace context writes it; `None`
+/// outside a trace.
+pub fn current_trace_id() -> Option<String> {
+    let context = Span::current().context();
+    let trace = context.span().span_context().trace_id();
+    (trace != opentelemetry::trace::TraceId::INVALID).then(|| trace.to_string())
+}
+
 /// A very simple builder for x-request-ids
 #[derive(Default, Clone)]
 pub struct RequestIdBuilder(Arc<AtomicU64>);
