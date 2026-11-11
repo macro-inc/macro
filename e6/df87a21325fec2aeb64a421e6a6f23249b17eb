@@ -1,0 +1,19 @@
+apps/web/src/features/block-psd/views/psd-editor.tsx
+  s_7751889d4bfab0::t_a0e65a61b4484b 306-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e6df87a21325fec2aeb64a421e6a6f23249b17eb",
+  "prompts": {},
+  "sessions": {
+    "s_7751889d4bfab0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e9f35743-e64a-4e39-829f-fb0ddcf04a32",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
