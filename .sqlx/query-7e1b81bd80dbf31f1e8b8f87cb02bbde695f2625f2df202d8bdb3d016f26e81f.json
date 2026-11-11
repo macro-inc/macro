@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.sends FROM suggestion_run r JOIN suggestion_prompt p ON p.suggestion_id = r.suggestion_id\n               WHERE r.session_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sends",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "7e1b81bd80dbf31f1e8b8f87cb02bbde695f2625f2df202d8bdb3d016f26e81f"
+}

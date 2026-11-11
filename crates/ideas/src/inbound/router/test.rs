@@ -62,7 +62,7 @@ async fn the_person_themself_cannot_attach_a_draft(pool: PgPool) {
     });
     let response = app
         .oneshot(
-            Request::put(format!("/ideas/{}/draft", idea.id))
+            Request::put(format!("/suggestions/{}/draft", idea.id))
                 .header("authorization", "Bearer owner")
                 .header("content-type", "application/json")
                 .body(Body::from(
@@ -79,7 +79,7 @@ async fn the_person_themself_cannot_attach_a_draft(pool: PgPool) {
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
-const USER_ID: &str = "macro|ideas-router@macro.com";
+const USER_ID: &str = "macro|suggestions-router@macro.com";
 /// The person's own session in the app.
 const SESSION_JWT: &str = "session";
 /// A code-mode credential: a Macro API token carrying the agent.
@@ -293,15 +293,15 @@ async fn the_persons_own_agent_reaches_their_feed_and_ideas_as_an_agent() {
     let service = Arc::new(FakeIdeas::default());
     let idea = Uuid::now_v7();
     let invocation = Uuid::now_v7();
-    let accept = format!("/ideas/{idea}/accept");
-    let dismiss = format!("/ideas/{idea}/dismiss");
+    let accept = format!("/suggestions/{idea}/accept");
+    let dismiss = format!("/suggestions/{idea}/dismiss");
     let cases = [
         // The person in the app.
         ("POST", &accept, SESSION_JWT, false, None),
         // Their chat agent's program: a code-mode credential.
         (
             "GET",
-            &"/ideas".to_owned(),
+            &"/suggestions".to_owned(),
             AGENT_JWT,
             true,
             Some(invocation),
@@ -349,9 +349,9 @@ async fn a_refused_generation_session_gets_a_403() {
     });
     let idea = Uuid::now_v7();
     for (method, uri) in [
-        ("GET", "/ideas".to_owned()),
-        ("POST", format!("/ideas/{idea}/accept")),
-        ("POST", format!("/ideas/{idea}/dismiss")),
+        ("GET", "/suggestions".to_owned()),
+        ("POST", format!("/suggestions/{idea}/accept")),
+        ("POST", format!("/suggestions/{idea}/dismiss")),
     ] {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");
@@ -364,7 +364,7 @@ async fn a_refused_generation_session_gets_a_403() {
 #[tokio::test]
 async fn only_the_persons_own_session_accepts_as_the_person() {
     let service = Arc::new(FakeIdeas::default());
-    let accept = format!("/ideas/{}/accept", Uuid::now_v7());
+    let accept = format!("/suggestions/{}/accept", Uuid::now_v7());
     for (jwt, program, correlation) in [
         (SESSION_JWT, false, None),
         (SESSION_JWT, true, None),

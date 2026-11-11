@@ -7,7 +7,7 @@
  */
 
 /**
- * What an entity idea suggests doing about its items.
+ * What an entity suggestion suggests doing about its items.
  */
 export type EntityAction = (typeof EntityAction)[keyof typeof EntityAction];
 

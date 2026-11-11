@@ -24,7 +24,7 @@ pub(crate) async fn insert_user(pool: &PgPool, id: &str) {
     .unwrap();
 }
 
-const OWNER: &str = "macro|ideas-repo@macro.com";
+const OWNER: &str = "macro|suggestions-repo@macro.com";
 
 async fn generation(pool: &PgPool) -> Uuid {
     let id = Uuid::now_v7();
@@ -116,7 +116,7 @@ async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
     .unwrap();
     let idea = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
                              categories, state, session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'routine', 'routine:inbox', 'Inbox digest', 'Busy inbox.', 50,
                    '{}', 'proposed', $3, now(), now(), now())"#,
@@ -128,7 +128,7 @@ async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO idea_routine (idea_id, routine_suggestion_id) VALUES ($1, $2)",
+        "INSERT INTO suggestion_routine (suggestion_id, routine_suggestion_id) VALUES ($1, $2)",
         idea,
         suggestion,
     )
@@ -148,10 +148,13 @@ async fn deleting_a_routine_suggestion_deletes_its_idea(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    let left = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM idea WHERE id = $1"#, idea)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let left = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM suggestion WHERE id = $1"#,
+        idea
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(left, 0);
 }
 
@@ -163,7 +166,7 @@ async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
     let (idea, _) = routine_idea(&pool).await;
     let broken = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
                              categories, state, session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'prompt', 'prompt:broken', 'Broken', 'No prompt row.', 50,
                    '{}', 'proposed', $3, now(), now(), now())"#,
@@ -267,7 +270,7 @@ async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
 async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
     let idea = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+        r#"INSERT INTO suggestion (id, user_id, kind, dedup_key, title, summary, importance,
                              categories, state, session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'entity', 'doc:review', 'Review the plan', 'It changed.', 50,
                    '{}', 'proposed', $3, now(), now(), now())"#,
@@ -279,14 +282,14 @@ async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid 
     .await
     .unwrap();
     sqlx::query!(
-        "INSERT INTO idea_entity (idea_id, action) VALUES ($1, 'review')",
+        "INSERT INTO suggestion_entity (suggestion_id, action) VALUES ($1, 'review')",
         idea
     )
     .execute(pool)
     .await
     .unwrap();
     sqlx::query!(
-        r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id)
+        r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
            VALUES ($1, 'about', 0, 'document', $2)"#,
         idea,
         document,

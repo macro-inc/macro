@@ -11,8 +11,8 @@ use super::*;
 use crate::domain::model::{Category, EntityAction, RunMode};
 use crate::outbound::pg_idea_repo::PgIdeaRepo;
 
-pub(crate) const OWNER: &str = "macro|ideas-owner@macro.com";
-const OTHER: &str = "macro|ideas-other@macro.com";
+pub(crate) const OWNER: &str = "macro|suggestions-owner@macro.com";
+const OTHER: &str = "macro|suggestions-other@macro.com";
 
 fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
@@ -672,7 +672,7 @@ async fn a_generation_adds_at_most_its_limit_and_a_person_has_at_most_thirty_ope
                 let limit = if n == per_night && room > per_night {
                     "most for one night"
                 } else {
-                    "30 open ideas"
+                    "30 open suggestions"
                 };
                 assert!(
                     outcome.problems[0].contains(limit),
@@ -1510,7 +1510,7 @@ async fn a_run_left_waiting_is_given_up_and_runs_again(pool: PgPool) {
 /// Age every run of the test's ideas by `by`, as if started that long ago.
 async fn age_runs(pool: &PgPool, by: chrono::Duration) {
     sqlx::query!(
-        "UPDATE idea_run SET started_at = started_at - $1::interval",
+        "UPDATE suggestion_run SET started_at = started_at - $1::interval",
         sqlx::postgres::types::PgInterval::try_from(by).unwrap(),
     )
     .execute(pool)
@@ -1720,7 +1720,7 @@ async fn a_draft_is_attached_only_to_an_open_reply_idea_in_its_thread(pool: PgPo
             .attach(session, idea, attach(mine, "Drafted the reply"))
             .await;
         assert!(
-            problems(&refused).contains("only for an entity idea with action `reply`"),
+            problems(&refused).contains("only for an entity suggestion with action `reply`"),
             "{refused:?}"
         );
     }
@@ -1733,7 +1733,10 @@ async fn a_draft_is_attached_only_to_an_open_reply_idea_in_its_thread(pool: PgPo
     for (draft, problem) in [
         (theirs, "no unsent draft in the user's own inboxes"),
         (Uuid::now_v7(), "no unsent draft in the user's own inboxes"),
-        (elsewhere, "another thread than the one this idea is about"),
+        (
+            elsewhere,
+            "another thread than the one this suggestion is about",
+        ),
     ] {
         let refused = h
             .attach(session, reply.id, attach(draft, "Drafted it"))
@@ -1778,7 +1781,7 @@ async fn a_draft_is_attached_only_to_an_open_reply_idea_in_its_thread(pool: PgPo
         .unwrap();
     assert!(retired.ok, "{:?}", retired.problems);
     let refused = h.attach(session, reply.id, attach(mine, "Again")).await;
-    assert!(problems(&refused).contains("only attached to an open idea"));
+    assert!(problems(&refused).contains("only attached to an open suggestion"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1834,7 +1837,7 @@ async fn a_new_draft_replaces_the_old_one_and_the_log_keeps_both(pool: PgPool) {
         ]
     );
     let drafts = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM idea_target WHERE idea_id = $1 AND role = 'draft'"#,
+        r#"SELECT count(*) AS "count!" FROM suggestion_target WHERE suggestion_id = $1 AND role = 'draft'"#,
         reply.id,
     )
     .fetch_one(&h.pool)
@@ -1861,11 +1864,11 @@ async fn a_new_draft_replaces_the_old_one_and_the_log_keeps_both(pool: PgPool) {
         )
         .await
         .unwrap();
-    assert!(problems(&refused).contains("this idea's draft is in email_thread"));
+    assert!(problems(&refused).contains("this suggestion's draft is in email_thread"));
     let refused = h
         .suggest(session, reply_idea("thread:reply", Uuid::now_v7()))
         .await;
-    assert!(problems(&refused).contains("this idea's draft is in email_thread"));
+    assert!(problems(&refused).contains("this suggestion's draft is in email_thread"));
     let reworded = h
         .service
         .rewrite(
@@ -1980,7 +1983,7 @@ async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
         .unwrap();
     }
     sqlx::query!(
-        "UPDATE idea SET state_changed_at = now() - interval '25 hours' WHERE id = $1",
+        "UPDATE suggestion SET state_changed_at = now() - interval '25 hours' WHERE id = $1",
         ids[1]
     )
     .execute(&h.pool)
@@ -2019,7 +2022,7 @@ async fn a_background_idea_says_what_it_sends_and_running_it_approves_that(pool:
     composer.sends = Some("Posts it in #ops".to_owned());
     let refused = h.suggest(session, composer).await;
     assert!(!refused.ok);
-    assert!(refused.problems[0].contains("only for background prompt ideas"));
+    assert!(refused.problems[0].contains("only for background prompt suggestions"));
     let rewritten = h
         .service
         .rewrite(

@@ -655,7 +655,7 @@ where
             .kept(run.generation, session.as_uuid())
             .await
             .inspect_err(|error| {
-                tracing::warn!(?error, "could not count an ideas session's changes")
+                tracing::warn!(?error, "could not count a suggestions session's changes")
             })
             .unwrap_or(0);
         Ended { ending, kept }

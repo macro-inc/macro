@@ -2,11 +2,20 @@
 
 ## What it is
 
-Ideas: each person's feed of proactive suggestions (a prompt to run, a note
-about specific items, or a routine suggestion), written and managed by hidden
-generation sessions through `macro.ideas.*` tools, and read and acted on by the
-person. Served by the harness under the scheduler's gateway prefix
-(`/scheduled-action/ideas`); its OpenAPI is merged into the scheduler's spec.
+Suggestions: each person's feed of proactive suggestions (a prompt to run, a
+note about specific items, or a routine suggestion), written and managed by
+hidden generation sessions through `macro.suggestions.*` tools, and read and
+acted on by the person. Served by the harness under the scheduler's gateway
+prefix (`/scheduled-action/suggestions`); its OpenAPI is merged into the
+scheduler's spec.
+
+Naming: the feature was first called Ideas. Everything outside this crate's
+code says suggestion: the tables (`suggestion`, `suggestion_prompt`,
+`suggestion_entity`, `suggestion_routine` pointing at `routine_suggestion`,
+`suggestion_target`), the routes and their schemas, the SDK
+(`macro.suggestions`, `Suggestion`) and the `enable-suggestions` flag. The
+crate and its Rust types keep the `idea` name; a routine suggestion is still
+its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## How it works
 
@@ -53,16 +62,16 @@ person. Served by the harness under the scheduler's gateway prefix
   row (that log is for sessions), and a record that keeps failing is skipped.
 - Every accepted write adds a `suggestion_change` row (old and new values and
   the session's reason). Changes are silent to the person.
-- Reply drafts: an ideas session may write a reply as the person
+- Reply drafts: a suggestions session may write a reply as the person
   (`macro.email.createDraft`, never sent) and attach it to an open entity
-  idea with action `reply` (`PUT /ideas/{id}/draft`, `idea.attachDraft`). The
+  suggestion with action `reply` (`PUT /suggestions/{id}/draft`, `suggestion.attachDraft`). The
   draft must be an unsent draft in one of the person's own inboxes (not a
   delegated one; `IdeaDrafts`, read through the email domain's `EmailRepo`),
-  in an email thread the idea is about. It is stored as the `idea_target` of
+  in an email thread the suggestion is about. It is stored as the `suggestion_target` of
   role `draft` (the thread, with the draft as the part); a new one replaces
-  it, logged as `rewritten` with `{"draft": ...}` before and after. While an
-  idea has a draft, its `about` keeps the draft's thread. A sent draft
-  resolves the idea through `email.message_sent` on that thread, like any
+  it, logged as `rewritten` with `{"draft": ...}` before and after. While a
+  suggestion has a draft, its `about` keeps the draft's thread. A sent draft
+  resolves the suggestion through `email.message_sent` on that thread, like any
   reply. Deleting a draft publishes no event (`email.message_deleted` comes
   only from provider sync), so the link stays until a session replaces it.
 
@@ -75,8 +84,8 @@ person. Served by the harness under the scheduler's gateway prefix
 
 ## Scope
 
-- Owns: `idea`, `idea_prompt`, `idea_entity`, `idea_routine`, `idea_target`,
-  and its `suggestion_change` rows.
+- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+  `suggestion_routine`, `suggestion_target`, `suggestion_run`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
   `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
   `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
@@ -88,7 +97,7 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - `cargo test -p ideas` (live DB, `SQLX_OFFLINE` unset).
 - After an API change: regenerate the scheduler's spec and clients (see the
-  `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/ideas`.
+  `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/suggestions`.
 
 - Routine ideas: every drafted ("smart") routine suggestion has exactly one,
   written with it by `macro.routines.suggest` through `crates/ideas_db_utils`
@@ -102,7 +111,7 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - Background runs: the person accepting a `prompt` idea with `runMode`
   `background` in the app (their own session, not a program: `Accept`'s
-  `by_person`) starts an `idea_run` (`RunSessions`, wired in the harness): a
+  `by_person`) starts an `suggestion_run` (`RunSessions`, wired in the harness): a
   hidden session of the person's, billed as their agent usage. Anyone acting
   for them (an agent) only takes the idea on (`accepted`, no run) for them to
   run. Accept carries the `updatedAt` the card showed; a run starts only if
@@ -131,10 +140,10 @@ person. Served by the harness under the scheduler's gateway prefix
 
 ## Gotchas
 
-- Gate every entry point on `enable-ideas` (`IDEAS_FLAG`). Event resolution
+- Gate every entry point on `enable-suggestions` (`IDEAS_FLAG`). Event resolution
   isn't gated: it only closes ideas that already exist.
 - Deleting a kind's row (for instance a routine suggestion cascading into
-  `idea_routine`) deletes its idea by trigger; reads skip and log a row that
+  `suggestion_routine`) deletes its suggestion by trigger; reads skip and log a row that
   doesn't decode instead of failing the person's whole feed.
 - Texts are checked with `crates/shown_text`: items are named by target, never
   copied into words.
