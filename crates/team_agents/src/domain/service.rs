@@ -251,7 +251,7 @@ where
             .into_owned();
         tracing::Span::current().record(
             "agent_user_id",
-            tracing::field::display(macro_user_id::telemetry_id(user_id.as_ref())),
+            tracing::field::display(agent_credentials::telemetry_id(user_id.as_ref())),
         );
         let seed = PersonaSeed {
             creator_id: Some(created_by.clone()),
@@ -402,7 +402,7 @@ where
     #[tracing::instrument(
         name = "team_agents.delete",
         skip_all,
-        fields(team_id = %receipt.entity().entity_id, agent_user_id = %macro_user_id::telemetry_id(agent.as_ref())),
+        fields(team_id = %receipt.entity().entity_id, agent_user_id = %agent_credentials::telemetry_id(agent.as_ref())),
         err
     )]
     async fn delete(
@@ -462,7 +462,7 @@ where
         };
         tracing::Span::current().record(
             "agent_user_id",
-            tracing::field::display(macro_user_id::telemetry_id(agent.as_ref())),
+            tracing::field::display(agent_credentials::telemetry_id(agent.as_ref())),
         );
         let record = self
             .repository

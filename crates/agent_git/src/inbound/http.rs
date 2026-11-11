@@ -249,7 +249,7 @@ struct InfoRefsQuery {
     service: Option<String>,
 }
 
-#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
+#[tracing::instrument(skip_all, fields(repo_id = %agent_credentials::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn info_refs<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -275,7 +275,7 @@ async fn info_refs<Service: AgentGitService, Auth: MacroAuthorizationService>(
     .await
 }
 
-#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
+#[tracing::instrument(skip_all, fields(repo_id = %agent_credentials::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn upload_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -294,7 +294,7 @@ async fn upload_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     .await
 }
 
-#[tracing::instrument(skip_all, fields(repo_id = %macro_user_id::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
+#[tracing::instrument(skip_all, fields(repo_id = %agent_credentials::telemetry_id(repository.trim_end_matches(REPO_SUFFIX)), git.rejected_reason, otel.status_code))]
 async fn receive_pack<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     Path(repository): Path<String>,
@@ -374,7 +374,7 @@ async fn ensure_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     }))
 }
 
-#[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref())), err)]
+#[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref())), err)]
 async fn delete_repo<Service: AgentGitService, Auth: MacroAuthorizationService>(
     State(state): State<AgentGitRouterState<Service, Auth>>,
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,

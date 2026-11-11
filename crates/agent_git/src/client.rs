@@ -113,7 +113,7 @@ impl AgentGitClient {
     }
 
     /// Recover the repo without replacing its live token.
-    #[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
     pub async fn ensure_repo(
         &self,
         agent_user_id: MacroUserIdStr<'static>,

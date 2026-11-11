@@ -12,3 +12,10 @@ pub use repo_token::{RepoToken, RepoTokenHash};
 #[derive(Debug, Clone, Copy, thiserror::Error)]
 #[error("invalid agent credential")]
 pub struct InvalidAgentCredential;
+
+/// SHA-256 of an agent's user id (lowercase hex), for telemetry and repository
+/// directory names, where the email-bearing `macro|<email>` id must not appear.
+pub fn telemetry_id(user_id: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(user_id.as_bytes()))
+}

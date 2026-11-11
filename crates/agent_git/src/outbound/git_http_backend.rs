@@ -92,7 +92,7 @@ fn parse_cgi_headers(block: &[u8]) -> Result<(u16, Vec<(String, String)>), GitHt
 impl GitBackend for GitHttpBackend {
     type Err = GitHttpBackendError;
 
-    #[tracing::instrument(name = "agent_git.transfer", skip_all, fields(repo_id = %macro_user_id::telemetry_id(repo.agent_user_id().as_ref()), endpoint = ?request.endpoint, git.request.bytes = 0_i64, git.response.bytes = 0_i64, git.rejected_reason, otel.status_code), err)]
+    #[tracing::instrument(name = "agent_git.transfer", skip_all, fields(repo_id = %agent_credentials::telemetry_id(repo.agent_user_id().as_ref()), endpoint = ?request.endpoint, git.request.bytes = 0_i64, git.response.bytes = 0_i64, git.rejected_reason, otel.status_code), err)]
     async fn serve(
         &self,
         repo: &AuthorizedRepo,

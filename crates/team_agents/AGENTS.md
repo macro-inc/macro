@@ -47,7 +47,7 @@ An agent's status comes from its computer (`provisioning`, `running`,
 - The flag is a rollout gate, never authorization; team roles come from the
   receipt.
 - Never log or trace the agent's user id: it carries an email. Use
-  `macro_user_id::telemetry_id`.
+  `agent_credentials::telemetry_id`.
 - Each enrollment rotates the agent's API key and repo token, so a lost
   earlier guest can no longer act as the agent.
 

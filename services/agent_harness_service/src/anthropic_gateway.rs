@@ -296,7 +296,7 @@ async fn forward<Sessions: AgentSessionRepo>(
         let brain = authenticate_brain(state.brains.as_deref(), &parts.headers).await?;
         span.record(
             "agent.user.id",
-            macro_user_id::telemetry_id(brain.user_id.as_ref()),
+            agent_credentials::telemetry_id(brain.user_id.as_ref()),
         );
         span.record("agent.team.id", tracing::field::display(brain.team_id));
         Caller::Brain(brain)

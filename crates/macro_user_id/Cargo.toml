@@ -9,7 +9,6 @@ schema = ["dep:utoipa"]
 sqlx = ["dep:sqlx"]
 
 [dependencies]
-sha2 = { workspace = true }
 cowlike = { path = "../cowlike" }
 doppleganger = { workspace = true }
 nom = { workspace = true }

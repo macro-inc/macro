@@ -1013,6 +1013,7 @@
       "crates/agent_changes",
       "crates/agent_code_mode",
       "crates/agent_correlation",
+      "crates/agent_credentials",
       "crates/agent_egress",
       "crates/agent_harness",
       "crates/agent_inmem",

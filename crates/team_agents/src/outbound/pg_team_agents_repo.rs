@@ -70,7 +70,7 @@ impl TryFrom<AgentRow> for TeamAgentRecord {
 impl TeamAgentRepository for PgTeamAgentsRepo {
     type Err = PgTeamAgentsError;
 
-    #[tracing::instrument(skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(account.user_id.as_ref())), err)]
+    #[tracing::instrument(skip_all, fields(agent_user_id = %agent_credentials::telemetry_id(account.user_id.as_ref())), err)]
     async fn create_account(&self, account: &NewAgentAccount) -> Result<(), Self::Err> {
         let macro_user_id = Uuid::now_v7();
         // Agents never pay or sign in; the placeholder keeps the column unique.
