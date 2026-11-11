@@ -10,6 +10,7 @@ mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
 mod database_query_actions;
+mod date_mention_actions;
 mod decorator_actions;
 mod decorator_content_actions;
 mod diff;
@@ -110,6 +111,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = decorator_content_actions::register(builder);
     let builder = pr_mention_actions::register(builder);
     let builder = booking_mention_actions::register(builder);
+    let builder = date_mention_actions::register(builder);
     let builder = equation_insert::register(builder);
     gif_insert::register(builder)
 }
@@ -202,6 +204,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = booking_mention_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = date_mention_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = equation_insert::decode(name, json)? {

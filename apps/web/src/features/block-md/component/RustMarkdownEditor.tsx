@@ -12,6 +12,8 @@ import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkd
 import { createNativeFastSelectionDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-selection-views';
 import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-static-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
+import { createNativeDateMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-host';
+import { createNativeDateMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-date-mention-views';
 import { createNativeDiffInsertContext } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-host';
 import { createNativeDiffInsertViews } from '@core/component/LexicalMarkdown/decorator-host/native-diff-insert-views';
 import { createNativeDiffElementView } from '@core/component/LexicalMarkdown/decorator-host/native-diff-view';
@@ -122,6 +124,8 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => contactContext.dispose());
   const tagMentionContext = createNativeTagMentionContext(theme);
   overlayLifecycle.add(() => tagMentionContext.dispose());
+  const dateMentionContext = createNativeDateMentionContext(theme);
+  overlayLifecycle.add(() => dateMentionContext.dispose());
   const pullRequestMentionContext =
     createNativePullRequestMentionContext(theme);
   overlayLifecycle.add(() => pullRequestMentionContext.dispose());
@@ -262,6 +266,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeTagMentionViews(tagMentionContext),
+                  ...createNativeDateMentionViews(dateMentionContext),
                   ...createNativePullRequestMentionViews(
                     pullRequestMentionContext
                   ),
