@@ -92,9 +92,21 @@ with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, 
 open when the session disconnected, from `agent_session.turn_interrupted`), a
 durable queue, or activity in the last hour (`modified_at`, or the listing's
 `updatedAt`); idle ones bind on their next prompt or delivery
-(`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
-permits, each held until the session's `session/load` or `session/resume`
-finishes; a harness dialing again stops its previous dial from starting more.
+(`service/reattach.rs`). Every attach to an external runtime on a replica (a
+dial's restore, a prompt or delivery reconnecting a detached session,
+notification recovery) takes a permit from one `AttachBudget`
+(`domain/attach_budget.rs`) in `reconnect`, on the session's worker, so no permit
+is held while waiting in a worker queue. It is held until the session's
+`session/load` or `session/resume` finishes or `ATTACH_PERMIT_HOLD` (the actor's
+`HANDSHAKE_TIMEOUT` plus a margin) runs out. User prompts draw on
+a reserved share background attaches cannot take, and background attaches queue
+per harness first, so one runtime's storm cannot starve another's. Managed
+container resumes are not budgeted. The `agent.runtime.attach_permit` span
+records path, harness, wait time and a hold timeout. A harness dialing again,
+or its dialing connection closing (`LiveRuntimeSessions::closed`), stops that
+dial: `HarnessCommand::Reattach` carries a `DialTicket`, and the worker drops a
+restore whose dial is no longer current before or while it waits for a permit
+(`agent.runtime.reattach_stale`).
 Permanent errors are not retried; others are, with jittered backoff, while the
 runtime stays connected. A session whose load keeps failing stays disconnected
 with its turn unfinished, so every dial tries it again (three attempts, under a

@@ -41,8 +41,9 @@ use super::{
     StopReason,
 };
 
-/// How long the ACP handshake has to finish before the session is declared dead.
-const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
+/// How long the ACP handshake (including `session/load` or `session/resume`)
+/// has to finish before the session is declared dead.
+pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long one caller's action has to reach the runtime.
 const COMMAND_DELIVERY_TIMEOUT: Duration = Duration::from_secs(60);
 /// How long the session's MCP servers have to list their tools for telemetry

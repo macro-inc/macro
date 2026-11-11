@@ -2,6 +2,9 @@
 //! channel, compose it with channel context, and prompt the runtime.
 
 use super::*;
+use crate::domain::attach_budget::{AttachPath, AttachPermit};
+use crate::domain::model::DialTicket;
+use tokio_util::sync::CancellationToken;
 
 /// How long a session goes without user-visible activity before a runtime's
 /// dial stops restoring it.
@@ -32,6 +35,20 @@ pub(super) enum DialReattach {
     Lazy,
     /// Archived, or not an external session.
     Skip,
+}
+
+/// The attach path a delivery's reconnect is counted under: a prompt someone
+/// sent, or work nobody is waiting on.
+pub(super) fn delivery_path(
+    action: &AgentAction,
+    actor: Option<&MacroUserIdStr<'static>>,
+) -> AttachPath {
+    let user_prompt = matches!(action, AgentAction::Prompt(prompt) if !prompt.notifications.as_ref().is_some_and(|input| input.system_turn));
+    if user_prompt && actor.is_some() {
+        AttachPath::Prompt
+    } else {
+        AttachPath::Delivery
+    }
 }
 
 enum NotificationRecovery {
@@ -77,7 +94,18 @@ where
     Notifier: AgentSessionNotifier,
 {
     /// Restore the runtime transport without starting a new invocation.
-    async fn reconnect(&self, session_id: AgentSessionId) -> Result<AgentSession> {
+    ///
+    /// Binding an external session takes a permit from the attach budget
+    /// under `path`, held until the runtime has restored it. Only called on
+    /// the session's worker, so a permit is never held while waiting in a
+    /// worker's queue. A restore a dial asked for names that `dial`, and is
+    /// dropped without a permit once the dial is no longer current.
+    async fn reconnect(
+        &self,
+        session_id: AgentSessionId,
+        path: AttachPath,
+        dial: Option<DialTicket>,
+    ) -> Result<AgentSession> {
         let session = self.sessions.get_session(session_id).await?;
         let permission_policy = self
             .permission_policy_for_session(session_id, session.bot_id)
@@ -112,6 +140,7 @@ where
             // yet. That is the ordinary case: sessions bind when they
             // are prompted, not when the runtime dials, so the first
             // prompt after a reconnect is what restores the session.
+            let permit = self.attach_permit(path, &session, dial).await?;
             let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await else {
                 // Kept in the session vocabulary so transports report
                 // it as a disconnect, not an internal error.
@@ -138,8 +167,66 @@ where
                 )
                 .await?;
             self.restore_queue(session_id).await?;
+            // Whether it opened is the caller's to report.
+            let _opened = permit
+                .hold_until(self.sessions.wait_opened(session_id))
+                .await;
         }
         Ok(session)
+    }
+
+    /// A permit to attach `session` onto its bot's harness for `path`.
+    ///
+    /// A dial's restore takes no permit once its dial is superseded or its
+    /// connection closed, whether that happened before the restore reached
+    /// the worker or while it waited for the permit. Recorded as
+    /// `agent.runtime.reattach_stale` on the reattach span.
+    async fn attach_permit(
+        &self,
+        path: AttachPath,
+        session: &AgentSession,
+        dial: Option<DialTicket>,
+    ) -> Result<AttachPermit<'_>> {
+        let disconnected = || HarnessError::Session(AgentSessionError::Disconnected(session.id));
+        let stale = || {
+            tracing::Span::current().record("agent.runtime.reattach_stale", true);
+            disconnected()
+        };
+        let harness = self
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .ok_or_else(disconnected)?;
+        let acquire = self.attach_budget.acquire(path, harness, session.id);
+        let Some(dial) = dial else {
+            return acquire.await.map_err(|_| disconnected());
+        };
+        let Some(ended) = self.current_dial(dial) else {
+            return Err(stale());
+        };
+        tokio::select! {
+            biased;
+            () = ended.cancelled() => Err(stale()),
+            permit = acquire => permit.map_err(|_| disconnected()),
+        }
+    }
+
+    /// The cancellation of `dial` while it is this harness's current dial
+    /// and its connection is up, else `None`.
+    ///
+    /// Local-only by design: a dial runs on the replica holding its socket,
+    /// and a Reattach forwarded elsewhere is stale there (a manager replica
+    /// has no socket to bind; a replica the harness redialed into runs its
+    /// own dial for the same listing).
+    fn current_dial(&self, dial: DialTicket) -> Option<CancellationToken> {
+        if !self.runtimes.is_connected(dial.harness) {
+            return None;
+        }
+        self.dials
+            .get(&dial.harness)
+            .filter(|current| current.id == dial.dial && !current.cancelled.is_cancelled())
+            .map(|current| current.cancelled.clone())
     }
 
     /// Load a live external session onto its runtime's new connection.
@@ -150,8 +237,21 @@ where
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = false))]
-    pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
+    #[tracing::instrument(
+        err,
+        skip(self),
+        fields(
+            agent.session.id = %session_id,
+            harness = %dial.harness,
+            agent.session.reattached = false,
+            agent.runtime.reattach_stale = false,
+        )
+    )]
+    pub(super) async fn reattach(
+        &self,
+        session_id: AgentSessionId,
+        dial: DialTicket,
+    ) -> Result<bool> {
         let session = self.sessions.get_session(session_id).await?;
         if session.is_archived()
             || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
@@ -162,7 +262,8 @@ where
             self.ensure_hydrated(session_id).await?;
             return Ok(true);
         }
-        self.reconnect(session_id).await?;
+        self.reconnect(session_id, AttachPath::Dial, Some(dial))
+            .await?;
         tracing::Span::current().record("agent.session.reattached", true);
         Ok(true)
     }
@@ -278,7 +379,8 @@ where
                 if !matches!(
                     self.sessions.management(session_id).await?,
                     SessionManagement::Ours
-                ) && let Err(error) = self.reconnect(session_id).await
+                ) && let Err(error) =
+                    self.reconnect(session_id, AttachPath::Recovery, None).await
                 {
                     self.notification_batches.remove(&session_id);
                     self.busy.clear(session_id);
@@ -436,7 +538,8 @@ where
                 return Err(error.into());
             }
             Err(AgentSessionError::Disconnected(_)) => {
-                let session = self.reconnect(session_id).await?;
+                let path = delivery_path(&action, actor.as_ref());
+                let session = self.reconnect(session_id, path, None).await?;
                 if action.occupies_turn() {
                     self.admit_session(&session).await?;
                 }

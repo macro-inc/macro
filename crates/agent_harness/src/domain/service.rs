@@ -169,9 +169,9 @@ struct AgentHarnessInner<
     /// in this process. A restart starts empty; resume and the first local
     /// command restore from the session store.
     hydrated: DashSet<AgentSessionId>,
-    /// Shared by every dial this replica serves: how many sessions may be
-    /// attaching and restoring at once.
-    reattach_permits: tokio::sync::Semaphore,
+    /// Shared by every attach this replica runs, dial or otherwise: how many
+    /// sessions may be attaching and restoring at once.
+    attach_budget: crate::domain::attach_budget::AttachBudget,
     /// Each harness's latest dial, cancelled when the harness dials again.
     dials: DashMap<harness_id::HarnessId, reattach::Dial>,
     /// The sessions with a command admitted and not yet resolved, and which
@@ -399,7 +399,7 @@ where
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 hydrated: DashSet::new(),
-                reattach_permits: tokio::sync::Semaphore::new(reattach::REATTACH_CONCURRENCY),
+                attach_budget: crate::domain::attach_budget::AttachBudget::default(),
                 dials: DashMap::new(),
                 busy: pending,
                 lifecycle_publisher,
