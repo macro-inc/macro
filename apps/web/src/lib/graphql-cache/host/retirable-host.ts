@@ -1,3 +1,5 @@
+import type { PeopleCache } from '../people/host';
+import { PEOPLE_UNSUPPORTED } from '../people/protocol';
 import { createNoopCacheHost } from './noop-host';
 import type { CacheHost } from './types';
 
@@ -25,8 +27,44 @@ export function retainCacheHost(
 export function createRetirableCacheHost(inner: CacheHost): CacheHost {
   let current = inner;
   let retained = 0;
+  // Resolve the current host at dispatch, including for methods captured before
+  // retirement. A retired publisher must never acknowledge a dropped write.
+  const people: PeopleCache | undefined = inner.people
+    ? {
+        async snapshot(request) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.snapshot(request);
+        },
+        async reconcile(request) {
+          if (!current.people)
+            throw new Error('Contact reconciliation is unsupported');
+          return current.people.reconcile(request);
+        },
+        async readSql(request) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.readSql(request);
+        },
+        async resolveReferences(request) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.resolveReferences(request);
+        },
+        async context(scope) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.context(scope);
+        },
+        async update(update) {
+          if (!current.people) throw new Error(PEOPLE_UNSUPPORTED);
+          return current.people.update(update);
+        },
+        async search(request) {
+          if (!current.people) return { kind: 'unsupported' };
+          return current.people.search(request);
+        },
+      }
+    : undefined;
   const wrapper: CacheHost = {
     clientId: inner.clientId,
+    people,
     get liveQueries() {
       return current.liveQueries;
     },

@@ -59,6 +59,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
     private var lastAudioEngineOutputAvailable: Bool?
     private let audioEngineLogger = CallKitAudioEngineLogger()
     private let audioRouteController = CallAudioRouteController()
+    private let microphoneAccessAlert = MicrophoneAccessAlert()
 
     init(
         onSnapshotChanged: @escaping (ActiveCallSnapshot?) -> Void,
@@ -937,6 +938,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
         case .denied:
             setOutputOnlyAvailabilityIfNeeded(uuid: uuid)
             callKitLog("Microphone permission denied uuid=\(uuid.uuidString); keeping native room connected muted")
+            microphoneAccessAlert.show()
             return false
         case .undetermined:
             callKitLog("Microphone permission undetermined uuid=\(uuid.uuidString); requesting permission")
@@ -1256,6 +1258,7 @@ final class NativeLiveKitCallSession: NSObject, RoomDelegate, @unchecked Sendabl
             emitSnapshot()
         }
         videoOverlay.reset()
+        microphoneAccessAlert.dismiss()
         return r
     }
 

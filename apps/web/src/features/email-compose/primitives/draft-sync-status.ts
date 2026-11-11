@@ -39,11 +39,8 @@ export function createDraftSyncStatus(options: {
     saved.state === 'ready' || saved.state === 'refreshing'
       ? saved.latest?.local
       : undefined;
-  const deletePending = () =>
-    local()?.status === 'delete-failed' ||
-    (local()?.status === 'deleting' &&
-      (!local()?.queuedAttemptId ||
-        local()?.queuedAttemptId !== local()?.latestAttemptId));
+  // A discard still on its way to the server is not a failure.
+  const discardFailed = () => local()?.status === 'delete-failed';
   // Saving is silent online. Offline, edits wait on this device.
   const offlineState = (): DraftSyncViewState | undefined => {
     const draft = local();
@@ -70,10 +67,7 @@ export function createDraftSyncStatus(options: {
       };
     const failed =
       disk === 'failed' ||
-      ['failed', 'unconfirmed', 'delete-failed'].includes(
-        draft?.status ?? ''
-      ) ||
-      deletePending();
+      ['failed', 'unconfirmed', 'delete-failed'].includes(draft?.status ?? '');
     const availability = options.drafts.syncAvailability?.() ?? 'ready';
     if (disk !== 'failed' && availability !== 'ready') {
       return {
@@ -104,7 +98,7 @@ export function createDraftSyncStatus(options: {
       detail:
         disk === 'failed'
           ? 'Keep this editor open until saving succeeds.'
-          : deletePending()
+          : discardFailed()
             ? 'Discard could not be confirmed.'
             : draft?.status === 'unconfirmed'
               ? 'The last save could not be confirmed.'
@@ -112,8 +106,8 @@ export function createDraftSyncStatus(options: {
                 ? 'The server could not save this draft.'
                 : undefined,
       failed,
-      action: deletePending() ? 'retry-discard' : 'retry',
-      canKeepEditing: deletePending(),
+      action: discardFailed() ? 'retry-discard' : 'retry',
+      canKeepEditing: discardFailed(),
     };
   });
   const run = async (action: () => Promise<unknown>) => {
@@ -145,7 +139,7 @@ export function createDraftSyncStatus(options: {
             ? async () => {
                 await refetch();
               }
-            : deletePending()
+            : discardFailed()
               ? options.discard
               : options.retry
         ),
