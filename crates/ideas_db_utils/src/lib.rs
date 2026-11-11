@@ -1,7 +1,7 @@
 #![deny(missing_docs)]
-//! Transactional helpers for the `idea` tables, for writes that must commit
-//! with another crate's: a routine suggestion and its routine idea are kept,
-//! dismissed, retired and saved together. The `ideas` crate's repository
+//! Transactional helpers for the `suggestion` tables, for writes that must
+//! commit with another crate's: a routine suggestion and its `routine`
+//! suggestion are kept, dismissed, retired and saved together. The `ideas` crate's repository
 //! builds on the same helpers.
 
 use chrono::{DateTime, Utc};
