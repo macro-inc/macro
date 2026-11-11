@@ -395,3 +395,37 @@ fn an_orphan_code_highlight_becomes_plain_text_where_highlighting_is_installed()
     );
     Ok(())
 }
+
+#[test]
+fn an_orphan_code_highlight_resets_style_and_keeps_the_caret_like_the_source_factory()
+-> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    let (paragraph, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let highlight = tx.create(CodeHighlightNode {
+            highlight_type: Some("keyword".into()),
+        })?;
+        tx.text(highlight)?
+            .set_text_content("let")?
+            .set_style("color: red")?;
+        tx.append(paragraph, &[highlight.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.text(highlight)?
+            .select(Some(Utf16Offset(2)), Some(Utf16Offset(2)))?;
+        Ok(paragraph.key())
+    })?;
+    let view = editor.state().view();
+    let child = view.children_keys(paragraph)?[0];
+    // Source `$createTextNode(node.__text)`: plain text, no copied style or format.
+    assert_eq!(
+        serde_json::to_value(view.export_json(child)?)?,
+        serde_json::json!({"detail": 0, "format": 0, "mode": "normal", "style": "",
+            "text": "let", "type": "text", "version": 1})
+    );
+    let Some(Selection::Range(range)) = view.selection() else {
+        panic!("range selection")
+    };
+    assert_eq!((range.anchor.key(), range.anchor.offset()), (child, 2));
+    Ok(())
+}

@@ -291,9 +291,11 @@ fn highlight_leaf(tx: &mut Transaction<'_>, leaf: Id<CodeHighlightNode>) -> Resu
 /// TextNode and CodeHighlightNode transforms). Source registers them only where an editor
 /// installs code highlighting, so headless editors leave this out.
 ///
-/// Known frontier: Source tokenizes each code node at most once per update
-/// (`nodesCurrentlyHighlighting`); here a rerun in the same update calls the provider again and
-/// its diff is empty, so stored results match while provider call counts may differ.
+/// Not activation-qualified: Source tokenizes each code node at most once per pending update
+/// (`nodesCurrentlyHighlighting`, cleared at commit), so text changed after the first pass in that
+/// update keeps stale stored tokens until the next update. This retokenizes on every rerun, so
+/// stored tokens can differ from Source in that case (and provider calls always may). Mirroring
+/// the per-update dedupe is ruled required and pending its design review.
 pub(super) fn register_highlighting(builder: EditorBuilder) -> EditorBuilder {
     builder
         .transform::<CodeNode>(default_highlight_language)

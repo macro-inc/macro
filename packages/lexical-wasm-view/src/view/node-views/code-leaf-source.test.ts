@@ -14,6 +14,8 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   createEditor,
   type LexicalNode,
 } from 'lexical';
@@ -127,6 +129,107 @@ test('Source: an orphaned code-highlight becomes plain text', () => {
       { type: 'paragraph', children: [['text', 'let', null]] },
     ]);
     expect(calls).toEqual([]);
+  } finally {
+    unregister();
+  }
+});
+
+test('Source: orphan replacement resets style and format and keeps the caret offset', () => {
+  const { editor, tokenizer } = sourceEditor();
+  const unregister = registerCodeHighlighting(editor, tokenizer);
+  try {
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        const highlight = $createCodeHighlightNode('let', 'keyword');
+        highlight.setStyle('color: red');
+        paragraph.append(highlight);
+        $getRoot().append(paragraph);
+        highlight.select(2, 2);
+      },
+      { discrete: true }
+    );
+    editor.getEditorState().read(() => {
+      const text = $getRoot()
+        .getFirstChildOrThrow<CodeNode>()
+        .getFirstChildOrThrow();
+      expect(text.exportJSON()).toEqual({
+        detail: 0,
+        format: 0,
+        mode: 'normal',
+        style: '',
+        text: 'let',
+        type: 'text',
+        version: 1,
+      });
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) throw new Error('Missing range');
+      expect([selection.anchor.key, selection.anchor.offset]).toEqual([
+        text.getKey(),
+        2,
+      ]);
+    });
+  } finally {
+    unregister();
+  }
+});
+
+// Raw control (activation frontier): within one pending update Source tokenizes each code node once,
+// so an edit merged after the first pass keeps stale stored tokens until the next update. Native
+// does not mirror this yet (code.rs register_highlighting).
+test('Source raw control: an edit merged into the same pending update keeps stale tokens', () => {
+  const { editor, calls, tokenizer } = sourceEditor();
+  editor.update(
+    () => {
+      const code = $createCodeNode('plaintext');
+      code.append($createTextNode('let a'));
+      $getRoot().append(code);
+    },
+    { discrete: true }
+  );
+  const unregister = registerCodeHighlighting(editor, tokenizer);
+  try {
+    // Registration's pass is pending (not committed); this edit joins the same pending state.
+    editor.update(
+      () => {
+        $getRoot()
+          .getFirstChildOrThrow<CodeNode>()
+          .getLastChildOrThrow()
+          .selectEnd()
+          .insertText(' b');
+      },
+      { discrete: true }
+    );
+    expect(calls).toEqual([['plaintext', 'let a']]);
+    expect(shape(editor)).toEqual([
+      {
+        type: 'code',
+        children: [
+          ['code-highlight', 'let', 'word'],
+          ['code-highlight', ' ', null],
+          ['code-highlight', 'a b', 'word'],
+        ],
+      },
+    ]);
+    // The next committed update corrects it.
+    editor.update(
+      () => {
+        $getRoot()
+          .getFirstChildOrThrow<CodeNode>()
+          .getLastChildOrThrow()
+          .selectEnd()
+          .insertText('c');
+      },
+      { discrete: true }
+    );
+    expect(calls.at(-1)).toEqual(['plaintext', 'let a bc']);
+    expect(shape(editor)[0]?.children.map((child) => child[1])).toEqual([
+      'let',
+      ' ',
+      'a',
+      ' ',
+      'bc',
+    ]);
   } finally {
     unregister();
   }
