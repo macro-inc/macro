@@ -52,6 +52,7 @@ All component paths below are relative to
 | Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` already exists but is unmounted. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
 | Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | `MentionMenuHost` supplies root, close and selection to the actual mention controller; query/range and other search controllers remain separate | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No consumable general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
+| Emoji (`component/menu/EmojiMenu.tsx`) | Actual root subscription, search removal before text insertion, CLOSE and an editor-owned InlineSearchNode text transform | `EmojiMenuHost` supplies root/subscription, compound insert, close and raw search-text registration | The Source controller is shared. Native click/keyboard menu commits still need actual query/ordered events; enclosed-shortcode transform/resolution remains a separate unavailable policy/callback contract. |
 | Drag blocks (`component/misc/DraggableBlockMenu.tsx`, `DragInsertIndicator.tsx`) | Root rect, nearest node, list parent/first-child/group, selected text, drag store, copy/delete/move actions | Owned block target/group query, reactive drag state, DOM rects and native move/copy/delete | Native draggable-block registration and geometry exist. Shared menu must stop reading Lexical list nodes; selection-only commits must not invalidate document-revision drag validity. |
 | Table picker (`component/menu/FloatingTableMenu.tsx`) | Picker plugin callback and insert command, root/selection positioning, editable gate | `TablePickerHost`: root/focus, insert dimensions, register picker | `group-b.table` picker/insert and `registerNativeTablePicker` exist. Source extraction retains the original shared controller; native binding is separate. |
 | Table insert/delete (`component/misc/TableInsertButton.tsx`, `TableDeleteButtons.tsx`) | DOM cell lookup, table map, selection extent, scroll clipping, hover target, row/column insertion/deletion | Native cell identity, table/selection extents plus DOM measurements, insert/delete | Native insert-row/column, delete and convertible-list query exist. Native extent projection must be verified before replacing Source map reads. |
@@ -287,3 +288,26 @@ filtering unsupported buckets. The source browser fixture supplies users through
 the existing custom-list props and mounts real app providers, Source model and
 user decorator. It verifies that scoped Source surface, not remote catalogs or
 native installation.
+
+## Emoji Source host
+
+The public Source `EmojiMenu` supplies a required `EmojiMenuHost` to
+`HostedEmojiMenu`. The actual catalog/filter, usage recording, virtualized list,
+keyboard controller, positioning and markup remain shared. Usage recording runs
+first, then the Source adapter dispatches REMOVE_EMOJI_SEARCH followed by
+INSERT_TEXT at the current selection. CLOSE remains a distinct command. Root
+subscription retains the actual immediate root-listener callback and dynamic
+Source editor reads, followed by its original cleanup.
+
+On mount, the host registers a raw-text observer for actual InlineSearchNode
+transforms. The shared controller resolves an enclosed `:name:` only through the
+loaded production emoji catalog and calls the same global insert operation.
+It does not retarget insertion to the transformed node or expose a fake node.
+The Source component originally ignored the transform cleanup; the adapter
+retains that editor lifetime rather than silently adding menu-unmount cleanup.
+
+The resolver starts lazy catalog loading but returns undefined until loaded;
+this extraction adds no automatic replay when loading finishes. Native needs
+its own actual policy and scoped callback contract for enclosed shortcodes.
+The existing strict native text menu-select action alone does not establish
+that capability. No native emoji host or picker is installed by this change.

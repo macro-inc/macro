@@ -278,6 +278,8 @@ Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
 Source capture, dirty cancellation, root identity and synchronous commit result.
 Assemble mention hosts at the shared controller's original initialization point;
 capture Source selection handlers once while root/close reads stay dynamic.
+Keep emoji insertion as Source REMOVE then INSERT_TEXT after usage recording;
+preserve the existing enclosed-shortcode transform's editor lifetime.
 Run the behavior-inventory link browser checks and compare raw DOM/JSON before
 and after a host extraction; Source preservation alone does not establish native acceptance.
 Register attached Source roots through `createLexicalWrapper`'s actual root
