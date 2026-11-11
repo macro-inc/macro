@@ -67,7 +67,7 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 - Gate every entry point on `enable-suggestions` (`IDEAS_FLAG`).
 - Deleting a kind's row (for instance a routine suggestion cascading into
-  `idea_routine`) deletes its idea by trigger; reads skip and log a row that
+  `suggestion_routine`) deletes its suggestion by trigger; reads skip and log a row that
   doesn't decode instead of failing the person's whole feed.
 - Texts are checked with `crates/shown_text`: items are named by target, never
   copied into words.
