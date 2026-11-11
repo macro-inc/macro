@@ -1,5 +1,6 @@
 import {
   ChannelInput,
+  GUEST_INPUT_FEATURES,
   type InputHandle,
   type InputPersistenceKey,
   type InputSnapshot,
@@ -157,15 +158,6 @@ function GuestCallChatContent(props: CallChatProps) {
   );
 }
 
-const guestFeatures = {
-  mentions: false,
-  createItems: false,
-  gifs: false,
-  richBlocks: false,
-  attachments: false,
-  dictation: false,
-};
-
 function CallChatView(props: ChatViewProps) {
   const chat = props.chat;
   const [sendFailed, setSendFailed] = createSignal(false);
@@ -237,7 +229,7 @@ function CallChatView(props: ChatViewProps) {
                   parent={chat.parent()}
                   input={{ mode: 'channel', placeholder: 'Message this call…' }}
                   persistenceKey={props.persistenceKey}
-                  features={props.guest ? guestFeatures : undefined}
+                  features={props.guest ? GUEST_INPUT_FEATURES : undefined}
                   autofocus={false}
                   onReady={setInput}
                   onSend={sendMessage}

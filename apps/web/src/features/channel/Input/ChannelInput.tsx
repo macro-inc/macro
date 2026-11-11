@@ -105,7 +105,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
  * What the composer offers beyond text, formatting and file attachments.
  * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
  */
-type ChannelInputFeatures = {
+export type ChannelInputFeatures = {
   /**
    * `@` mentions of people, agents and Macro items, including Ask Macro.
    * `'participants'` offers only the `participants` prop: no agents, items,
@@ -128,6 +128,15 @@ const ALL_FEATURES: ChannelInputFeatures = {
   richBlocks: true,
   attachments: true,
   dictation: true,
+};
+
+export const GUEST_INPUT_FEATURES: ChannelInputFeatures = {
+  mentions: false,
+  createItems: false,
+  gifs: false,
+  richBlocks: false,
+  attachments: false,
+  dictation: false,
 };
 
 /** Slash actions behind each switchable feature. */

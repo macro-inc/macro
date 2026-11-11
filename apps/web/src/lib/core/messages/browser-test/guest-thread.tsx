@@ -1,7 +1,10 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelInput } from '@channel/Input/ChannelInput';
+import {
+  ChannelInput,
+  GUEST_INPUT_FEATURES,
+} from '@channel/Input/ChannelInput';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
@@ -197,14 +200,7 @@ function Fixture() {
                                   mode: 'channel',
                                   placeholder: 'Message call',
                                 }}
-                                features={{
-                                  mentions: false,
-                                  createItems: false,
-                                  gifs: false,
-                                  richBlocks: false,
-                                  attachments: false,
-                                  dictation: false,
-                                }}
+                                features={GUEST_INPUT_FEATURES}
                                 onSend={async (snapshot) => {
                                   updateReplies((items) => [
                                     ...items,

@@ -32,7 +32,8 @@ vi.mock('@queries/messages/mutations', () => ({
   useSendMessageMutation: () => ({ mutateAsync: mocks.send }),
   newMessageId: () => 'new-message',
 }));
-vi.mock('@channel/Input', () => ({
+vi.mock('@channel/Input', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@channel/Input')>()),
   ChannelInput: (props: ChannelInputProps) => {
     mocks.composer = props;
     const handle: InputHandle = {
