@@ -1,0 +1,19 @@
+crates/scheduled_action/src/domain/event_runs/admission/test.rs
+  s_60bbe192a6a060::t_81ea68a5fd4b1a 324
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "03fa645dd976a98ab02980d9376bf172cf2e4763",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
