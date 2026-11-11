@@ -612,6 +612,7 @@ fn native_selection_context_and_ordered_maps_cross_the_typed_boundary() {
 
 mod application;
 mod decorator_actions;
+mod decorators;
 
 #[test]
 fn raw_alignment_uses_the_source_empty_native_name_without_mutating_model_bits() {

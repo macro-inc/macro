@@ -2,6 +2,8 @@
 use crate::*;
 mod list;
 pub use list::*;
+mod decorator;
+pub use decorator::*;
 /// Markdown export policy, shared with the portable boundary.
 pub type FfiMarkdownFlavor = MarkdownFlavor;
 #[uniffi::remote(Enum)]
@@ -186,18 +188,6 @@ pub enum FfiQueryReply {
         markers: Vec<FfiListMarker>,
     },
 }
-/// Immutable model facts for native decorator presentation.
-#[derive(uniffi::Record)]
-pub struct FfiDecorator {
-    /// Generation-aware model key.
-    pub key: NodeKey,
-    /// Model text content; application display lookups remain host-owned.
-    pub text: String,
-    /// Instance-specific inline layout.
-    pub is_inline: bool,
-    /// Instance-specific keyboard selection behavior.
-    pub is_keyboard_selectable: bool,
-}
 /// Registered native node type metadata.
 #[derive(uniffi::Record)]
 pub struct FfiTypeRow {
@@ -247,23 +237,9 @@ pub(crate) fn query(
         FfiQuery::ListMarkers { keys } => FfiQueryReply::ListMarkers {
             markers: list::markers(state, keys)?,
         },
-        FfiQuery::Decorators { keys } => {
-            let mut nodes = Vec::with_capacity(keys.len());
-            for key in keys {
-                if view.kind(key) != Some(NodeKind::Decorator) || !view.is_attached(key) {
-                    return Err(invalid(
-                        "decorator query requires a current attached decorator",
-                    ));
-                }
-                nodes.push(FfiDecorator {
-                    key,
-                    text: view.text_content(key).into_owned(),
-                    is_inline: view.is_inline(key),
-                    is_keyboard_selectable: view.is_keyboard_selectable(key),
-                });
-            }
-            FfiQueryReply::Decorators { nodes }
-        }
+        FfiQuery::Decorators { keys } => FfiQueryReply::Decorators {
+            nodes: decorator::facts(state, keys)?,
+        },
         FfiQuery::ShouldInsertText { text } => FfiQueryReply::Boolean {
             value: match state.selection().and_then(Selection::as_range) {
                 Some(selection) => state

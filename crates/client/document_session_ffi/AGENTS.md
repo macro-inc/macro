@@ -50,7 +50,7 @@ Project every core Diff field exhaustively; omit native decorator policies and s
 
 Read list markers through shared numbering, nesting and parent-aware checked helpers; never derive document policy in platform drawing.
 
-Read decorator model text and instance layout facts in bulk through generation-aware queries; keep application display lookups outside the FFI.
+Read decorator model text and instance layout facts in bulk through generation-aware queries; reuse actual media node constraint helpers and keep application display lookups outside the FFI.
 
 Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich MIME order, file flags and HTML nodes independently, and initialize ordinary native clipboard reads explicitly to false.
 
