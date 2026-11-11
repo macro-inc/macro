@@ -3,6 +3,8 @@
 
 /// Contact listing across accessible inboxes.
 pub mod list;
+/// URL-backed contact-photo uploads and self-contact refresh policy.
+pub mod sfs_upload;
 
 use super::*;
 use email_api_client::domain::models::{

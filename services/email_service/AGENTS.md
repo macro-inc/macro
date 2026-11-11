@@ -53,6 +53,10 @@ the gateway `/email` prefix.
   `outbound/sfs_deletion.rs`; its listener only decodes and acknowledges the
   domain disposition. The domain deletes the file before its database row and
   accepts a file-service 404 as an already completed file deletion.
+  SFS uploads compose `email::domain::mailbox::contacts::sfs_upload` with
+  `outbound/sfs_upload.rs`; mapping fallback, best-effort writes, and self-contact
+  refresh decisions live in the domain. Adapters reuse the existing image
+  fetch/upload and gateway helpers with their original spans and failures.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.

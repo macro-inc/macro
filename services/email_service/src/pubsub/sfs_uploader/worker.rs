@@ -1,10 +1,15 @@
+use crate::outbound::sfs_upload::{
+    PgSfsPhotoContacts, PgSfsPhotoMappings, PhotoSyncedGateway, SfsPhotoUploadClient,
+};
 use crate::pubsub::sfs_uploader::context::SFSUploaderContext;
 use crate::pubsub::sfs_uploader::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use email::domain::mailbox::contacts::sfs_upload::SfsPhotoUploadService;
 use futures::StreamExt;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
@@ -32,10 +37,13 @@ pub(crate) fn context(
     connection_gateway_client: ConnectionGatewayClient,
 ) -> SFSUploaderContext {
     SFSUploaderContext {
-        db,
-        sfs_client,
+        service: Arc::new(SfsPhotoUploadService {
+            mappings: PgSfsPhotoMappings(db.clone()),
+            contacts: PgSfsPhotoContacts(db),
+            uploader: SfsPhotoUploadClient(sfs_client),
+            notifier: PhotoSyncedGateway(connection_gateway_client),
+        }),
         sqs_worker: worker.clone(),
-        connection_gateway_client,
     }
 }
 
