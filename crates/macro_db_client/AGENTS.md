@@ -77,6 +77,8 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+Task-template rows cascade with personal users or teams; nullable creator attribution clears on account deletion while team-owned content remains.
+
 ## Gotchas
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.

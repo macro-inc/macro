@@ -85,6 +85,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     removed: 'removeQueuedAction unregisterAgentSessionWork',
     submitted: 'answerAgentSessionToolApproval',
     approved: 'decideSessionReview',
+    requested: 'openInApp',
     shared: 'presentSessionView',
     registered: 'registerAgentSessionWork',
   },
@@ -229,6 +230,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
+      getTaskTemplate
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -242,6 +244,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
+      listTaskTemplates
     `,
     searched: `
       searchContacts taskSimilaritySearchHandler
@@ -265,6 +268,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
       createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createTaskTemplate
     `,
     edited: `
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
@@ -278,6 +282,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      updateTaskTemplate
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -287,6 +292,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
       deleteSavedViewDefinition
+      deleteTaskTemplate
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler

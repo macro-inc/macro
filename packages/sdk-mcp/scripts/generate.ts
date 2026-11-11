@@ -639,6 +639,9 @@ function lowerFirst(name: string) {
 function groupOf(declaration: ts.ClassDeclaration) {
   const path = relative(`${sdkRoot}src`, declaration.getSourceFile().fileName);
   const [top, directory] = path.split('/');
+  // Templates share the tasks routing topic instead of the core plumbing group.
+  if (top === 'entities' && directory === 'task-templates') return 'tasks';
+
   // The same entities code mode routes on; the rest is shared plumbing.
   return top === 'entities' &&
     directory &&

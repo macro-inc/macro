@@ -640,6 +640,7 @@ not to account-wide paired machine count; a user can pair several computers.
 
 ### General
 
+- Reuse `InlineTitleEditor` for borderless entity renames; use a bare shared `Input` with focus styling for borderless draft names.
 - Keep contact removal and restoration beside Copy contact link in both record
   headers; keep company actions on Overview. Reuse the hidden mutations and
   confirm company contact/email-sync effects.
@@ -934,6 +935,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   move between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Capture the composer's visible property definitions with its values at submission; pass them as initial pins so empty custom fields remain editable below the new task title.
 - Task composer submissions retain an account/context-scoped local copy until
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
@@ -941,6 +943,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Prefill task Source through the originating action's composer preset under
   `enable-task-source-property`; keep the shared composer flag-agnostic and retain
   exact message IDs through property edits. See the Tasks walkthrough.
+- Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;

@@ -58,7 +58,10 @@ impl SurfaceInitializer for LexicalSyncSurfaceInitializer {
             MARKDOWN_GOLDEN_SNAPSHOT.to_vec()
         } else {
             self.lexical_client
-                .markdown_to_loro_snapshot(markdown)
+                .markdown_to_loro_snapshot(
+                    markdown,
+                    lexical_client::parse_markdown::MarkdownSnapshotOptions::default(),
+                )
                 .await
                 .map_err(|e| {
                     CollabSurfaceError::Internal(

@@ -608,6 +608,9 @@ pub struct CreateTaskRequest {
     pub team_id: Option<uuid::Uuid>,
     /// Optional property values to set on the task.
     pub property_values: Option<Vec<PropertyInput>>,
+    /// Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.
+    #[serde(default)]
+    pub pinned_property_definition_ids: Option<Vec<String>>,
     /// Whether to share the task with your team or not
     /// Defaults to true
     #[serde(default = "default_true")]

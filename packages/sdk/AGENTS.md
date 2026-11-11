@@ -56,6 +56,10 @@ enforced by the ordinary backend APIs.
   saving's checks and saves nothing; code mode's catalog lists it as a read.
   `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
   with a routine draft for its review.
+- `src/entities/task-templates/`: personal/team template handles, replay-safe
+  creation keys, optional default task titles and task-sharing defaults, selected
+  fields with optional defaults, and revision-guarded writes. Team membership and
+  creator/admin management stay server-authorized.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -172,12 +176,13 @@ the existing gateway prefixes.
   by them and fails on an untagged method. A new or changed public method
   signature or hint tag updates that package's tool snapshots (`bunx vitest
   run -u` there); doc text alone does not.
-- Every entity's namespace class carries one `@routing` sentence ("Use when …;
-  not …") that agents route on, and may carry an `@agent` block: how that area
-  of Macro works, for agents only. Both are stripped from the public
-  reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/prompt`; cross-namespace search
-  guidance lives on `SearchNamespace` in `search/namespace.ts`.
+- Give each code-mode documentation topic exactly one `@routing` sentence
+  ("Use when …; not …") on a participating namespace class; tasks and task
+  templates share that sentence. An `@agent` block describes the area for agents
+  only. Both tags are stripped from the public reference, and code-mode
+  generation fails without the routing sentence. Put area rules there, never
+  in `crates/prompt`; cross-namespace search guidance lives on
+  `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
   characters. Anything else reaches an agent only through `ReadCodeDocs`, which

@@ -35,6 +35,7 @@ import { ReferralNamespace } from './entities/referrals/namespace';
 import { RoutineNamespace } from './entities/routines/namespace';
 import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
+import { TaskTemplateNamespace } from './entities/task-templates/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
 import { UiNamespace } from './entities/ui/namespace';
@@ -238,6 +239,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Search every kind of item at once: documents, email, channels, calls, events, sessions and chats. */
   readonly search: SearchNamespace;
 
+  /** Reusable personal and team task fields, defaults, and description Markdown. */
+  readonly taskTemplates: TaskTemplateNamespace;
+
   readonly teams: TeamNamespace;
 
   readonly users: UserNamespace;
@@ -302,6 +306,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.savedViews = new SavedViewsNamespace(client);
     this.search = new SearchNamespace(client);
     this.tasks = new TaskNamespace(client);
+    this.taskTemplates = new TaskTemplateNamespace(client);
     this.teams = new TeamNamespace(client);
     this.users = new UserNamespace(client);
     this.webhooks = new WebhooksNamespace(client);
@@ -564,6 +569,12 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/spreadsheets/spreadsheet';
+export {
+  type CreateTaskTemplateOptions,
+  TaskTemplate,
+  type TaskTemplateProperty,
+  type UpdateTaskTemplateOptions,
+} from './entities/task-templates/task-template';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
 export {

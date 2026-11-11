@@ -1,4 +1,9 @@
+import {
+  TaskTemplateControls,
+  TaskTemplateNameStrip,
+} from '@app/features/task-templates/views/task-template-controls';
 import { EntityComposer } from '@ui';
+import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
@@ -9,19 +14,28 @@ export function DesktopTaskComposer(props: {
   return (
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
-        <div class="flex-1 flex items-center">
-          <TaskComposer.ContinueInSplit />
-        </div>
+        <Show
+          when={props.composer.templatesEnabled()}
+          fallback={<div class="flex-1" />}
+        >
+          <TaskTemplateControls composer={props.composer} />
+        </Show>
         <TaskComposer.ClearDraft />
+        <TaskComposer.ContinueInSplit />
         <TaskComposer.Close />
       </EntityComposer.Header>
       <TaskComposer.Recovery />
-      <EntityComposer.Main>
+      <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
+        <Show when={props.composer.templatesEnabled()}>
+          <TaskTemplateNameStrip composer={props.composer} />
+        </Show>
         <TaskComposer.Title />
         <TaskComposer.Body />
-        <div class="shrink-0 flex items-center py-2">
-          <TaskComposer.Attach />
-        </div>
+        <Show when={!props.composer.isTemplateMode()}>
+          <div class="shrink-0 flex items-center py-2">
+            <TaskComposer.Attach />
+          </div>
+        </Show>
         <TaskComposer.Properties />
       </EntityComposer.Main>
       <TaskComposer.ErrorMessage />
@@ -29,13 +43,16 @@ export function DesktopTaskComposer(props: {
           narrow split wraps the actions to their own row. */}
       <EntityComposer.Footer class="flex-wrap items-center">
         <TaskComposer.ShareToggle />
-        <div class="ml-auto flex items-center gap-3">
+        <div class="min-w-0 ml-auto flex flex-wrap items-center justify-end gap-3">
           <TaskComposer.LinkInSourceToggle />
           <TaskComposer.CreateMoreToggle />
+          <TaskComposer.CancelTemplate />
           <TaskComposer.Submit />
         </div>
       </EntityComposer.Footer>
-      <TaskComposer.SimilarTasks />
+      <Show when={!props.composer.isTemplateMode()}>
+        <TaskComposer.SimilarTasks />
+      </Show>
     </TaskComposer.Root>
   );
 }

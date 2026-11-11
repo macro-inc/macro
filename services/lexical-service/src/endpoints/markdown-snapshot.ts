@@ -1,12 +1,13 @@
+import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { ConversionError, handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
-import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 
 const markdownSnapshotRequest = z.object({
   markdown: z.string(),
+  initialPins: z.array(z.string()).optional(),
 });
 
 export class MarkdownSnapshotEndpoint extends OpenAPIRoute {
@@ -39,7 +40,10 @@ export class MarkdownSnapshotEndpoint extends OpenAPIRoute {
   async handle(c: Context) {
     try {
       const { body } = await this.getValidatedData<typeof this.schema>();
-      const snapshot = await markdownToLoroSnapshot(body.markdown);
+      const snapshot = await markdownToLoroSnapshot(
+        body.markdown,
+        body.initialPins
+      );
 
       if (!snapshot) {
         throw new ConversionError(

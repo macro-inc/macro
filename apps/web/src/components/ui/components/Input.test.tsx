@@ -1,7 +1,9 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { type InputClassOptions, inputClasses } from './Input';
 import { InputGroup } from './InputGroup';
+import { ToggleSwitch } from './ToggleSwitch';
 
 const device = vi.hoisted(() => ({ touch: false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -10,6 +12,7 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   device.touch = false;
 });
 
@@ -90,4 +93,41 @@ it.each([
   const group = tokens(screen.getByRole('group', { name: 'Search' }).className);
   expect(group).toContain(row.has);
   expect(group).not.toContain(row.lacks);
+});
+
+it('keeps an addon switch interactive without returning focus to the name', () => {
+  const [checked, setChecked] = createSignal(false);
+  render(() => (
+    <InputGroup>
+      <InputGroup.Input aria-label="Name" />
+      <InputGroup.Addon align="inline-end">
+        <ToggleSwitch
+          label="Share with team"
+          checked={checked()}
+          onChange={setChecked}
+        />
+      </InputGroup.Addon>
+    </InputGroup>
+  ));
+  const input = screen.getByRole('switch', { name: 'Share with team' });
+  if (!(input instanceof HTMLInputElement) || !input.nextElementSibling)
+    throw new Error('Missing native switch');
+  const name = screen.getByRole('textbox', { name: 'Name' });
+  name.focus();
+  const focusName = vi.spyOn(name, 'focus');
+  fireEvent.click(input.nextElementSibling);
+  expect(input.checked).toBe(true);
+  expect(document.activeElement).toBe(input);
+  expect(focusName).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Share with team'));
+  expect(input.checked).toBe(false);
+  expect(document.activeElement).toBe(input);
+  expect(focusName).not.toHaveBeenCalled();
+  name.focus();
+  focusName.mockClear();
+  if (!input.parentElement) throw new Error('Missing switch root');
+  fireEvent.click(input.parentElement);
+  expect(input.checked).toBe(true);
+  expect(document.activeElement).toBe(input);
+  expect(focusName).not.toHaveBeenCalled();
 });

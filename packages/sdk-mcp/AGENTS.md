@@ -55,6 +55,7 @@ method signature or hint tag changes the snapshots: review the diff, then
   (`document.access`) are paths to that object's operations.
 - Results serialize handles through `toJSON`; any other class instance is
   reduced to its class name so no authenticated client leaks.
-- Groups are code mode's entity directories
-  (`packages/code-mode-sdk/scripts/catalog.ts`); a tool's description starts
-  with its entity's `@routing` sentence.
+- Groups are code mode's entity topics
+  (`packages/code-mode-sdk/scripts/catalog.ts`); task templates share `tasks`,
+  not the core plumbing group. A tool's description starts with its topic's
+  `@routing` sentence.

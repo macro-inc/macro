@@ -1,8 +1,12 @@
+import {
+  TaskTemplateControls,
+  TaskTemplateNameStrip,
+} from '@app/features/task-templates/views/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
 import { TaskComposer } from './task-composer-parts';
 
@@ -53,9 +57,13 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <div class="flex-1 flex items-center">
-          <TaskComposer.ContinueInSplit />
-        </div>
+        <Show
+          when={props.composer.templatesEnabled()}
+          fallback={<div class="flex-1" />}
+        >
+          <TaskTemplateControls composer={props.composer} compact />
+        </Show>
+        <TaskComposer.ContinueInSplit />
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
         <div class="flex items-center gap-8">
@@ -69,14 +77,20 @@ export function MobileTaskComposer(props: {
           to the sheet's edges. */}
       <EntityComposer.Main
         class="overflow-visible"
+        inert={props.composer.isSavingTemplate()}
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
+        <Show when={props.composer.templatesEnabled()}>
+          <TaskTemplateNameStrip composer={props.composer} />
+        </Show>
         <TaskComposer.Title />
         <TaskComposer.Body />
-        <div class="shrink-0 flex items-center py-2">
-          <TaskComposer.Attach />
-        </div>
+        <Show when={!props.composer.isTemplateMode()}>
+          <div class="shrink-0 flex items-center py-2">
+            <TaskComposer.Attach />
+          </div>
+        </Show>
         <div class="-mx-4 shrink-0 overflow-x-auto overscroll-x-contain scrollbar-hidden">
           <TaskComposer.Properties class="w-max flex-nowrap px-4" />
         </div>
@@ -86,6 +100,7 @@ export function MobileTaskComposer(props: {
       <EntityComposer.Footer class="items-center empty:hidden">
         <TaskComposer.ShareToggle />
         <TaskComposer.LinkInSourceToggle />
+        <TaskComposer.CancelTemplate />
       </EntityComposer.Footer>
     </TaskComposer.Root>
   );

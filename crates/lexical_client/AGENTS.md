@@ -11,7 +11,8 @@ to read or render document content.
 - `src/lib.rs`: `LexicalClient::new` — builds the `reqwest::Client`, sets the
   internal-access header, and trusts the checked-in local CA for local HTTPS.
 - `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): markdown → Lexical
-  node tree parsing.
+  node tree parsing and `MarkdownSnapshotOptions` for snapshot requests; serialize
+  pins as `initialPins`, omit them to keep implicit defaults, and send `[]` to clear them.
 - `src/types.rs`: the Lexical node/document types shared with the service.
 - `src/notion.rs`: `notion_to_loro_snapshot` (`POST /snapshot/notion`) and its
   hand-copied request types; keep them in step with

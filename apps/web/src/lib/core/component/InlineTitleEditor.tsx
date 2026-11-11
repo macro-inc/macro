@@ -1,3 +1,4 @@
+import { inputOutlineFocusClasses } from '@ui/components/Input';
 import { cn } from '@ui/utils/classname';
 import { createSignal, onMount } from 'solid-js';
 
@@ -50,6 +51,7 @@ export function InlineTitleEditor(props: {
       data-1p-ignore
       class={cn(
         'field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none',
+        inputOutlineFocusClasses,
         props.class
       )}
       placeholder={props.placeholder}
@@ -65,6 +67,8 @@ export function InlineTitleEditor(props: {
           e.preventDefault();
           e.currentTarget.blur();
         } else if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
           setDraft(null);
           e.currentTarget.blur();
         }

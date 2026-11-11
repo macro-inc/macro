@@ -253,6 +253,9 @@ stay unchanged. Unpinning a default preserves the other pins, and clearing all p
 stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
+At creation, the first shared task snapshot pins the visible composer fields and default task pins,
+including custom fields with no value. Empty selected fields persist as task-owned assignments,
+so every authorized task viewer sees and can edit them according to their task permissions.
 
 Property edits should update the visible task before the save finishes. To verify,
 delay the GraphQL mutation and change Status, an existing Priority, and an unset
@@ -851,6 +854,95 @@ keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
+
+Task templates require `enable-task-templates` (on by default in development;
+local override `VITE_ENABLE_TASK_TEMPLATES`). With the flag disabled or loading,
+verify desktop and phone composers still create ordinary tasks and pin selected
+properties, without template controls or template requests. Saved template edits
+must remain separate from the task draft. Disable the flag during an edit or save:
+the task draft returns unchanged, and late responses must not apply template
+fields. Re-enable after readiness to recover the template edit and retry with the
+same creation identity. Create More must not reapply saved defaults while off.
+
+Desktop places the secondary template selector at the left of the header, then
+Clear Draft, expansion, and Close on the right. Without a selection the trigger
+reads No template with the menu's blank-page icon; selecting one shows its name.
+The anchored searchable dropdown lists No template with a blank-page icon,
+then templates grouped under Personal and the current team name, then New
+template at the bottom. A check marks the
+selected row. Managers get an edit action on hover or keyboard focus; touch
+keeps it visible. Empty collections and unmatched searches show a brief empty
+state. ArrowDown from search enters the menu; Escape dismisses it. On touch,
+keep the existing picker sheet.
+
+Browse saved templates without edits: each selection replaces the previous
+fields, defaults, default task title, and description instead of combining
+templates. No template restores the starting fields and task text. Contextual
+Source values and explicit launch property presets stay intact. After editing
+properties, title, or description, switching asks for confirmation; Cancel
+preserves the current draft. Existing
+prefilled task text also requires confirmation before a template replaces it;
+No template restores that text. Clearing a field or removing a property also
+counts as an edit. Reopening a saved draft preserves this distinction. The
+Customer / Contact row participates in defaults without duplicate property pills.
+
+New template opens template mode over the preserved task draft, without a
+replacement confirmation. The New template or Edit template back button returns
+to that unchanged draft. An unframed row above the task title contains the
+template icon and a borderless name input with a visible keyboard-focus treatment.
+New templates start empty with Template name focused; editing does not focus the
+name. Long names truncate. Name edits persist as you type, including clearing the
+name, which disables Save. A new
+template's Share with team switch chooses personal or current-team ownership;
+the switch is hidden without a team. Editing a team template shows the fixed
+team avatar and name, while a personal template shows no ownership label.
+This visibility is separate from the footer's task
+sharing switch. New template captures that switch, and editing changes the stored
+task-sharing default. The ordinary task title, description, and fields remain below
+the strip. Both hide Attach and Create More. Save template
+saves only the template, then returns with its fields applied. Existing task
+title, prose, and attachments stay intact; blank title or description takes
+the corresponding saved default. Later template switches still confirm before
+replacing that text.
+Cancel restores the task draft, including rich text and attachments. Closing
+and reopening must not replace the task draft with template edits. Source links
+are never reusable defaults.
+Use a personal template's Edit action with saved Assignee or Project defaults.
+It must open the saved defaults without applying them to the task draft; Cancel
+must restore that draft unchanged.
+
+Changing an applied template's fields or task-sharing switch adds an accent dot
+to its button and selected picker row. Task title and description changes alone do not add the
+dot. Keep the existing property pills without per-field dots. Managers get Reset
+and Update template at the bottom of the picker, following saved-view actions.
+Reset restores fields and task sharing without replacing the task title or
+description. Update template saves fields and task sharing immediately but keeps
+the template's saved title and description. Conflicts leave the current task draft available. Delete template
+appears as a small secondary text action beside Close in template mode, or the
+shared icon-only action on touch. Its existing confirmation must leave existing
+tasks and the preserved draft unchanged; deleting the selected template only
+detaches its selection.
+
+Create More uses Create another and reapplies the selected saved defaults,
+including task title, description, and sharing, to each fresh task, discarding
+task-specific edits while retaining launch presets. Change the sharing switch
+before submission: that task uses the override, while the next draft restores
+the saved default without a changed-field dot. A template without a sharing value
+leaves the switch alone. Test both shared and private defaults, including a team
+template with sharing off and a personal template with sharing on. Confirm the switch is hidden without a
+team and stored sharing is ignored. Reopen task and template-editor drafts to
+check each switch value; Cancel restores the underlying draft's switch. Verify personal/team creation, draft
+preservation, field-only update
+and reset, no-template selection, repeated Create More, editing, cancellation,
+conflicts, and deletion. Touch retains the tall composer, with Save in its
+reachable header and Cancel in the footer. On phones visibility stacks below
+the name within the strip; Delete remains icon-only. Check that the new-template
+name receives focus, the task title edits the saved default rather than the
+template name, and Back or Cancel restores the draft.
+At narrow desktop widths, the dropdown stays within the viewport.
+With and without a selected template, Create another must not show an
+unconfirmed-draft recovery banner during submission. Failed unconfirmed attempts
+remain recoverable; successful attempts never enter the recovery list.
 
 After creation, the `Task created` toast shows primary `Open` and, on desktop,
 secondary `Open split` to its left, with a close icon instead of Dismiss.

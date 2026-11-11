@@ -1,7 +1,10 @@
+import { initialTaskPinDefinitionIds } from '@app/features/task-composer/property-defaults';
+import { captureTaskTemplate } from '@app/features/task-templates/core/template';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertySelection } from '@property/hooks/usePropertySelection';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
 import { createRoot, createSignal } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 
 const mock = vi.hoisted(() => ({
@@ -180,6 +183,66 @@ it('keeps entity-reference targets while excluding metadata, tags, and database 
   ).toEqual(['assignees', 'companies', 'contacts', 'project']);
 });
 
+it('captures and pins host-controlled fields without adding duplicate property pills', () => {
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [
+      definition('status'),
+      definition('companies', { data_type: 'ENTITY' }),
+      definition('contacts', { data_type: 'ENTITY' }),
+    ],
+    refetch: mock.refetch,
+  });
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({
+      initialValues: {
+        companies: {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'company', entity_type: 'COMPANY' }],
+        },
+      },
+      initialVisiblePropertyIds: ['status'],
+      hiddenPropertyIds: ['companies', 'contacts'],
+      allDefinitions: true,
+    }),
+    dispose,
+  }));
+  try {
+    expect(
+      composer.availableProperties().map((property) => property.id)
+    ).toEqual(['status']);
+    const available = new Set(
+      composer.writableProperties().map((property) => property.id)
+    );
+    composer.setPropertyValues('contacts', { valueType: 'ENTITY', refs: null });
+    const ids = composer.selectedPropertyIds();
+    const captured = captureTaskTemplate(
+      {
+        propertyIds: ids,
+        propertyDefaults: structuredClone(unwrap(composer.propertyValues)),
+        descriptionMarkdown: '',
+      },
+      available
+    );
+    expect(captured.propertyIds).toEqual(['status', 'companies', 'contacts']);
+    expect(captured.propertyDefaults.companies).toEqual({
+      valueType: 'ENTITY',
+      refs: [{ entity_id: 'company', entity_type: 'COMPANY' }],
+    });
+    expect(initialTaskPinDefinitionIds(ids, available, ['status'])).toEqual([
+      'status',
+      'companies',
+      'contacts',
+    ]);
+    expect(composer.visiblePropertyIds()).toEqual(['status']);
+    expect(
+      composer.properties().map((property) => property.propertyDefinitionId)
+    ).toEqual(['status']);
+  } finally {
+    dispose();
+  }
+});
+
 it('keeps context order, ignores unavailable ids and deduplicates selected properties', () => {
   const definitions = [definition('a'), definition('b')];
   expect(
@@ -337,6 +400,19 @@ it('lets the composer own failed-create feedback without silencing other callers
   expect(mock.failure).not.toHaveBeenCalled();
   expect(await create()).toBeNull();
   expect(mock.failure).toHaveBeenCalledExactlyOnceWith('Failed to create Task');
+});
+
+it('sends creation-time pin definitions without assigning empty properties', async () => {
+  mock.create.mockResolvedValue({ documentId: 'task' });
+  await createTaskWithProperties('Blank field', '', [], new Map(), vi.fn(), {
+    pinnedPropertyDefinitionIds: ['empty-custom-definition'],
+  });
+  expect(mock.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      pinnedPropertyDefinitionIds: ['empty-custom-definition'],
+      propertyValues: undefined,
+    })
+  );
 });
 
 it('keeps a message source through composer edits and the task create payload', async () => {

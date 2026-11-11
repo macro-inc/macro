@@ -1773,6 +1773,7 @@ impl ToolEntityCreator {
         let (team_id, roster) = self.team_roster(user).await;
         let subtype = documents::domain::create::MarkdownSubtype::Task {
             property_values: None,
+            pinned_property_definition_ids: None,
             share_with_team: share_with_team && team_id.is_some(),
             team_id,
         };

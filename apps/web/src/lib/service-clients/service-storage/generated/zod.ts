@@ -21185,6 +21185,12 @@ export const createTaskHandlerBody = zod
       .string()
       .nullish()
       .describe('Markdown source text. Defaults to an empty task document.'),
+    pinnedPropertyDefinitionIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Property definition IDs to pin in the first task snapshot. Omission keeps implicit defaults.'
+      ),
     projectId: zod
       .uuid()
       .nullish()
@@ -77009,6 +77015,1140 @@ export const completeSlackImportUploadsResponse = zod
 
 export const bulkWakeupSyncServiceDocumentsBody = zod.object({
   document_ids: zod.array(zod.string()),
+});
+
+export const listTaskTemplatesQueryParams = zod.object({
+  teamId: zod.uuid().optional(),
+});
+
+export const listTaskTemplatesResponseItem = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+export const listTaskTemplatesResponse = zod.array(
+  listTaskTemplatesResponseItem
+);
+
+export const createTaskTemplateBody = zod
+  .object({
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Client-generated creation identity; reuse the same ID and input when retrying.'
+      ),
+    name: zod.string().describe('Template name.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; omission creates a personal template.'),
+  })
+  .describe('Create a personal template or one owned by a current team.');
+
+export const getTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getTaskTemplateResponse = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+
+export const updateTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateTaskTemplateBody = zod
+  .object({
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    name: zod.string().describe('Replacement name.'),
+    revision: zod.number().describe('Revision observed when editing began.'),
+  })
+  .describe('Replace content without changing ownership.');
+
+export const updateTaskTemplateResponse = zod
+  .object({
+    canManage: zod
+      .boolean()
+      .describe(
+        'Whether the current viewer can update or delete the template.'
+      ),
+    configuration: zod
+      .object({
+        defaults: zod
+          .array(
+            zod
+              .object({
+                propertyId: zod
+                  .uuid()
+                  .describe('Definition that receives the default.'),
+                value: zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['boolean']),
+                        value: zod.boolean(),
+                      })
+                      .describe('Boolean true\/false value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}),
+                      })
+                      .describe('Date and time value'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .object({
+                            end: zod.iso
+                              .datetime({})
+                              .describe(
+                                'Where it ends; never before the start.'
+                              ),
+                            start: zod.iso
+                              .datetime({})
+                              .describe('Where it starts.'),
+                          })
+                          .describe(
+                            'A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.'
+                          ),
+                      })
+                      .describe('Date range value'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number(),
+                      })
+                      .describe('Numeric value'),
+                    zod
+                      .object({
+                        type: zod.enum(['string']),
+                        value: zod.string(),
+                      })
+                      .describe('String\/text value'),
+                    zod
+                      .object({
+                        option_id: zod.uuid(),
+                        type: zod.enum(['select_option']),
+                      })
+                      .describe(
+                        'Select option by ID (for select-type properties)'
+                      ),
+                    zod
+                      .object({
+                        option_ids: zod.array(zod.uuid()),
+                        type: zod.enum(['multi_select_option']),
+                      })
+                      .describe(
+                        'Multiple select options by ID (for multi-select properties)'
+                      ),
+                    zod
+                      .object({
+                        reference: zod
+                          .object({
+                            entity_id: zod.string(),
+                            entity_type: zod
+                              .enum([
+                                'CALENDAR_EVENT',
+                                'CALL_RECORD',
+                                'CHANNEL',
+                                'CHAT',
+                                'COMPANY',
+                                'DATABASE_ROW',
+                                'CONTACT',
+                                'DOCUMENT',
+                                'INITIATIVE',
+                                'PROJECT',
+                                'TASK',
+                                'THREAD',
+                                'USER',
+                              ])
+                              .describe(
+                                'Type of entity that can be referenced by entity properties.'
+                              ),
+                            specific_message_id: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                              ),
+                          })
+                          .describe(
+                            'Entity reference for entity-type property values.'
+                          ),
+                        type: zod.enum(['entity_reference']),
+                      })
+                      .describe('Entity reference'),
+                    zod
+                      .object({
+                        references: zod.array(
+                          zod
+                            .object({
+                              entity_id: zod.string(),
+                              entity_type: zod
+                                .enum([
+                                  'CALENDAR_EVENT',
+                                  'CALL_RECORD',
+                                  'CHANNEL',
+                                  'CHAT',
+                                  'COMPANY',
+                                  'DATABASE_ROW',
+                                  'CONTACT',
+                                  'DOCUMENT',
+                                  'INITIATIVE',
+                                  'PROJECT',
+                                  'TASK',
+                                  'THREAD',
+                                  'USER',
+                                ])
+                                .describe(
+                                  'Type of entity that can be referenced by entity properties.'
+                                ),
+                              specific_message_id: zod
+                                .uuid()
+                                .nullish()
+                                .describe(
+                                  'For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread\/channel\/chat.'
+                                ),
+                            })
+                            .describe(
+                              'Entity reference for entity-type property values.'
+                            )
+                        ),
+                        type: zod.enum(['multi_entity_reference']),
+                      })
+                      .describe(
+                        'Multiple entity references (for multi-select entity properties)'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['link']),
+                        url: zod.string(),
+                      })
+                      .describe('Link value'),
+                    zod
+                      .object({
+                        type: zod.enum(['multi_link']),
+                        urls: zod.array(zod.string()),
+                      })
+                      .describe(
+                        'Multiple link values (for multi-select link properties)'
+                      ),
+                  ])
+                  .describe(
+                    'Type-safe enum for setting entity property values - provides compile-time validation.'
+                  ),
+              })
+              .describe(
+                "A reusable default using the task creation property's existing value contract."
+              )
+          )
+          .optional()
+          .describe('Defaults for selected fields only.'),
+        descriptionMarkdown: zod
+          .string()
+          .describe(
+            'Markdown inserted only when the current description is blank.'
+          ),
+        propertyIds: zod
+          .array(zod.uuid())
+          .describe(
+            'Visible definition IDs, including fields without a default value.'
+          ),
+        shareWithTeam: zod
+          .boolean()
+          .nullish()
+          .describe(
+            'Default task sharing, independent of template ownership; absence preserves the current choice.'
+          ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
+      })
+      .describe(
+        'Selected fields, optional task title and sharing defaults, and description Markdown.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    creatorId: zod
+      .string()
+      .nullish()
+      .describe('Original creator; cleared when that account is deleted.'),
+    id: zod.uuid().describe('Stable template ID.'),
+    name: zod.string().describe('User-supplied template name.'),
+    revision: zod
+      .number()
+      .describe('Positive revision used for conditional updates and deletes.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team; absent for personal templates.'),
+    updatedAt: zod.iso.datetime({}).describe('Last content update time.'),
+    userId: zod
+      .string()
+      .nullish()
+      .describe('Personal owner; absent for team-owned templates.'),
+  })
+  .describe(
+    'A personal or team-owned template with viewer-specific management capability.'
+  );
+
+export const deleteTaskTemplateParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const deleteTaskTemplateQueryParams = zod.object({
+  revision: zod.number(),
 });
 
 /**

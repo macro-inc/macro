@@ -1,8 +1,22 @@
+import {
+  isConfirmedTemplateUpdate,
+  taskTemplateConfiguration,
+  taskTemplateContents,
+} from '@app/features/task-templates/queries/template-mapping';
+import {
+  useCreateTaskTemplate,
+  useUpdateTaskTemplate,
+} from '@app/features/task-templates/queries/templates';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { enableTaskTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { throwOnErr } from '@core/util/result';
+import { getTaskTemplate } from '@service-storage/task-templates';
+import { useQueryClient } from '@tanstack/solid-query';
 import { Show } from 'solid-js';
 import type { ComposeTaskProps } from './core/types';
 import {
@@ -14,6 +28,16 @@ import { MobileTaskComposer } from './views/mobile-task-composer';
 
 function createSplitTaskComposerHost(): TaskComposerHost {
   const splitPanel = useSplitPanelOrThrow();
+  const queryClient = useQueryClient();
+  const userId = useUserId();
+  const templates = useFeatureFlag(enableTaskTemplates);
+  const templatesEnabled = () => !templates().loading && templates().enabled;
+  const requireTemplates = (viewerId: string) => {
+    if (!templatesEnabled()) throw new Error('Task templates unavailable');
+    if (userId() !== viewerId) throw new Error('Task template account changed');
+  };
+  const createTemplate = useCreateTaskTemplate();
+  const updateTemplate = useUpdateTaskTemplate();
   const { popoverSplit, openWithSplit } = useSplitLayout();
   const taskContent = (task: {
     id: string;
@@ -28,7 +52,71 @@ function createSplitTaskComposerHost(): TaskComposerHost {
     return { type: 'task' as const, id: task.id, ...snapshotParams };
   };
   return {
-    userId: useUserId(),
+    userId,
+    templatesEnabled,
+    createTemplate: async (viewerId, selection, contents, definitions) => {
+      requireTemplates(viewerId);
+      const created = await createTemplate.mutateAsync({
+        viewerId,
+        body: {
+          id: selection.creationId,
+          name: selection.name,
+          teamId: selection.teamId,
+          configuration: taskTemplateConfiguration(contents, definitions),
+        },
+      });
+      requireTemplates(viewerId);
+      return {
+        id: created.id,
+        revision: created.revision,
+        name: created.name,
+        teamId: created.teamId ?? null,
+        contents: taskTemplateContents(created.configuration, definitions),
+      };
+    },
+    updateTemplate: async (viewerId, selection, contents, definitions) => {
+      requireTemplates(viewerId);
+      const previous = await throwOnErr(() =>
+        getTaskTemplate(selection.template.id)
+      );
+      requireTemplates(viewerId);
+      const configuration = taskTemplateConfiguration(
+        contents,
+        definitions,
+        previous.configuration
+      );
+      const name = selection.name.trim();
+      let updated = previous;
+      if (previous.revision !== selection.template.revision) {
+        if (
+          !isConfirmedTemplateUpdate(
+            previous,
+            selection.template,
+            viewerId,
+            name,
+            configuration
+          )
+        )
+          throw new Error('Task template update conflict');
+        await queryClient.invalidateQueries({
+          queryKey: ['task-templates', viewerId],
+        });
+      } else {
+        updated = await updateTemplate.mutateAsync({
+          viewerId,
+          id: selection.template.id,
+          body: { name, revision: selection.template.revision, configuration },
+        });
+      }
+      requireTemplates(viewerId);
+      return {
+        id: updated.id,
+        revision: updated.revision,
+        name: updated.name,
+        teamId: updated.teamId ?? null,
+        contents: taskTemplateContents(updated.configuration, definitions),
+      };
+    },
     resolveAppLink: useMacroMentionLinkResolver(),
     isPopover: () => splitPanel.handle.isPopover(),
     fillSheet: () => splitPanel.fillDrawer?.(),

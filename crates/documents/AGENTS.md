@@ -115,6 +115,8 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
+- Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`
   (`src/domain/create.rs`) with a `NotionMarkdown` (`src/domain/notion_markdown.rs`);
   lexical-service converts it through `MarkdownInitializationPort::initialize_existing_notion`

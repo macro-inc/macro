@@ -95,6 +95,7 @@ type CreateTaskArgs = {
   content?: string;
   projectId?: string;
   propertyValues?: PropertyInput[];
+  pinnedPropertyDefinitionIds?: string[];
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 };
@@ -167,6 +168,7 @@ async function createTaskResponse(
     markdown: args?.content ?? '',
     projectId: args?.projectId,
     propertyValues,
+    pinnedPropertyDefinitionIds: args?.pinnedPropertyDefinitionIds,
   });
   if (account) assertQueryAccount(account);
 

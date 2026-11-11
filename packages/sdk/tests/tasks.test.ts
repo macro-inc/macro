@@ -329,3 +329,197 @@ describe('InitiativeNamespace.summaries', () => {
     expect(new URL(requests[0].url).pathname).toBe('/initiatives');
   });
 });
+
+describe('TaskTemplate default titles', () => {
+  test('creates a task title independently of the template name', async () => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      return Response.json({
+        id: '0198a4cc-e138-7670-a308-a6b766602740',
+        name: 'Weekly review',
+        revision: 1,
+        configuration: {
+          title: 'Review outstanding work',
+          propertyIds: [],
+          defaults: [],
+          descriptionMarkdown: 'Review checklist',
+        },
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = await macro.taskTemplates.create({
+      name: 'Weekly review',
+      title: 'Review outstanding work',
+      descriptionMarkdown: 'Review checklist',
+    });
+    expect(await template.name()).toBe('Weekly review');
+    expect(await template.title()).toBe('Review outstanding work');
+    expect(requests).toHaveLength(1);
+    expect(await requests[0].json()).toMatchObject({
+      name: 'Weekly review',
+      configuration: { title: 'Review outstanding work' },
+    });
+  });
+
+  test('retains the saved title during property updates and supports clearing it', async () => {
+    const requests: Request[] = [];
+    let record = {
+      id: '0198a4cc-e138-7670-a308-a6b766602740',
+      name: 'Weekly review',
+      revision: 1,
+      configuration: {
+        title: 'Review outstanding work',
+        propertyIds: ['priority'],
+        defaults: [],
+        descriptionMarkdown: 'Review checklist',
+      },
+    };
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      if (request.method === 'PUT') {
+        const body = await request.json();
+        record = { ...record, ...body, revision: record.revision + 1 };
+      }
+      return Response.json(record);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = macro.taskTemplates.byId(record.id);
+    await template.update({ properties: [] });
+    expect(await template.title()).toBe('Review outstanding work');
+    await template.update({ title: '' });
+    expect(await template.title()).toBe('');
+    const writes = requests.filter((request) => request.method === 'PUT');
+    expect(await writes[0].json()).toMatchObject({
+      revision: 1,
+      configuration: { title: 'Review outstanding work', propertyIds: [] },
+    });
+    expect(await writes[1].json()).toMatchObject({
+      revision: 2,
+      configuration: {
+        title: '',
+        propertyIds: [],
+        descriptionMarkdown: 'Review checklist',
+      },
+    });
+  });
+
+  test('reads an existing template without a task title', async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        Response.json({
+          id: '0198a4cc-e138-7670-a308-a6b766602740',
+          name: 'Untitled tasks',
+          revision: 1,
+          configuration: { propertyIds: [], descriptionMarkdown: '' },
+        }),
+      { preconnect: originalFetch.preconnect },
+    );
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    expect(
+      await macro.taskTemplates
+        .byId('0198a4cc-e138-7670-a308-a6b766602740')
+        .title(),
+    ).toBeUndefined();
+  });
+});
+
+describe('TaskTemplate task sharing', () => {
+  test.each([
+    true,
+    false,
+    undefined,
+  ])('creates and reads sharing %s independently of template ownership', async (sharing) => {
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      const body = await request.json();
+      return Response.json({
+        id: '0198a4cc-e138-7670-a308-a6b766602740',
+        ...body,
+        revision: 1,
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = await macro.taskTemplates.create({
+      name: 'Reusable task',
+      shareWithTeam: sharing,
+    });
+    expect(await template.shareWithTeam()).toBe(sharing);
+    const body = await requests[0].json();
+    expect(body.teamId).toBeUndefined();
+    expect(body.configuration.shareWithTeam).toBe(sharing);
+    expect(Object.hasOwn(body.configuration, 'shareWithTeam')).toBe(
+      sharing !== undefined,
+    );
+  });
+
+  test.each([
+    true,
+    false,
+    undefined,
+  ])('retains sharing %s on property updates and accepts an explicit replacement', async (sharing) => {
+    const requests: Request[] = [];
+    let record = {
+      id: '0198a4cc-e138-7670-a308-a6b766602740',
+      name: 'Reusable task',
+      teamId: '0198a4cc-e138-7670-a308-a6b766602741',
+      revision: 1,
+      configuration: {
+        shareWithTeam: sharing,
+        propertyIds: ['priority'],
+        defaults: [],
+        descriptionMarkdown: '',
+      },
+    };
+    globalThis.fetch = (async (input, init) => {
+      const request =
+        input instanceof Request ? input : new Request(input, init);
+      requests.push(request.clone());
+      if (request.method === 'PUT') {
+        const body = await request.json();
+        record = { ...record, ...body, revision: record.revision + 1 };
+      }
+      return Response.json(record);
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const template = macro.taskTemplates.byId(record.id);
+    await template.update({ properties: [] });
+    expect(await template.shareWithTeam()).toBe(sharing);
+    const replacement = sharing === false;
+    await template.update({ shareWithTeam: replacement });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    await template.update({ properties: [] });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    await template.update({ name: 'Renamed template' });
+    expect(await template.shareWithTeam()).toBe(replacement);
+    const writes = requests.filter((request) => request.method === 'PUT');
+    expect((await writes[0].json()).configuration.shareWithTeam).toBe(sharing);
+    for (const request of writes.slice(1))
+      expect((await request.json()).configuration.shareWithTeam).toBe(
+        replacement,
+      );
+    expect(record.teamId).toBe('0198a4cc-e138-7670-a308-a6b766602741');
+  });
+});
