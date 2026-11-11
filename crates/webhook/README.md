@@ -99,8 +99,9 @@ The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
   `agent_session.deleted`.
 - Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
   are the user id; `file_id` and `url` are both null when the picture was
-  removed). Only the changed user's own personal and team webhook workspaces
-  receive it, not their contacts.
+  removed). Persisted webhooks go only to the changed user's own personal and
+  team workspaces. The live SSE stream also reaches the user's contacts (user
+  scope only) and the team-scoped streams of the user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
