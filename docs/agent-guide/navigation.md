@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides that alert on this device, across reloads, remembered by the alert's id in localStorage; a new alert shows again and clears the stored id |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -244,6 +244,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 | `/app/debug/ui?ui=invert-util` | UI gallery, including the inverted Markdown demo on the InvertUtil page |
 | `/app/debug/create-menu-demo` | Inline create-menu comparison: classic list, minimal carousel, and details on the left. Each has independent search and selection; choosing an item only updates the preview status and creates no data. |
+| `/app/debug/data` | Contact snapshot inspector: search or browse one 50-row window, Next page replaces rather than appends, and Restart fetches from the server. Empty server pages can still have a continuation; offline/partial cache results are not authoritative absence. JSON export includes only the visible window. Desktop and phone coverage: `src/lib/core/internal/browser-test/playwright.config.ts` (stand-in data, not live-stack verification). |
 | `/app/debug/<component>` | Registered debug views (for example `icon-gallery`, `md`, or `agent-ui`); existing environment gates apply. `/app/component/<component>` remains a compatibility alias for these views |
 
 Each `~`-separated part of an app URL is a split (`/app/home/~/drive`). The
@@ -823,13 +824,27 @@ status, assignees, project, and other supported task properties populate their
 pills rather than remaining as metadata lines in the description. For example,
 “notification click not going to target … priority urgent” displays **Urgent**.
 Unresolved or ambiguous values require a choice; manual property edits survive
-later predictions. Task fields stay in sync as typing continues.
+later predictions. Task assignees resolve against the directory independently of
+the visible suggestion page. A name matching multiple people remains
+unresolved, including a full name that is another person's first name. Incomplete
+offline evidence cannot select an assignee; reconnecting can resolve the same draft.
+A manual selection or clearing the assignee overrides that inference. Task fields
+stay in sync as typing continues; submission retains the resolved identities while
+creation metadata loads and rechecks the account before starting task creation.
 Select **Auto** to resume detection; manually edited fields remain yours.
 
 **Enter** inserts a newline. **Cmd/Ctrl+Enter** or the labeled action button
 submits only the currently displayed, complete action. There is no queued send
 while inference is pending. Email and message modes show their outgoing body
-and resolved recipients. Email uses the Email Composer's inbox picker, recipient
+and resolved recipients. Recipient, guest and search names resolve against complete
+per-label directory evidence, not just the first suggestion page. They prefer an
+exact full name before a unique first name; a comma-bearing model name remains
+one person rather than turning into multiple recipients. Ambiguous or incomplete
+offline names require a specific choice; reconnecting can resolve the same draft. A complete
+email address never resolves through another person's display-name alias. Email,
+message and guest pickers have independent bounded windows, and chosen labels stay
+visible while explicit identity lookup finishes. Changing a field invalidates its
+previous choice snapshot; unresolved search constraints cannot broaden a search. Email uses the Email Composer's inbox picker, recipient
 chips with address completion, separate Cc/Bcc controls, subject control, rich Markdown editor, and HTML
 preparation for delivery. Task creation uses the task composer's rich title,
 Markdown description, and editable property pills, including Due date, and the
@@ -1067,6 +1082,11 @@ and actions reachable. Fullscreen takeovers retain their fullscreen layout.
 Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
+In Soup-based list toolbars, Assignee and Created by menus and filter chips load
+suggestions only while open. Next options replaces the page; selected and unavailable
+saved IDs remain selected across searches. Me remains available, Assignee also has
+Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
+restores the Owned constraint. Chip labels resolve separately while menus are closed.
 Calendar settings and the month picker use the same translucent groups and
 rounded selection highlights. Calendar visibility and Show weekends are checkbox
 rows; period, week start, time format, and month choices show trailing checkmarks.
@@ -1519,11 +1539,20 @@ recency-led; existing People preview slots and phone pinning remain. Name-match
 tuning is shared with Cmd+K in `NAME_MATCH_RANKING` (`@core/util/freshSort`);
 recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
-Broader cache/server matches remain reachable even when the local fuzzy matcher
-would omit them. To verify, type `@task` with a project named `Task planning`
+Broader entity matches remain reachable even when the local fuzzy matcher would
+omit them. Personal contacts preserve their local exact/word-prefix/contains and
+recent-first window order among equally good name matches; mixed menu scoring never
+drops reverse-word matches. In menus, further pages of people are listed below the
+earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
 preview rows and stay near the top in **View all**. Select it with Enter or a
 phone tap and confirm a project mention is inserted.
+
+Document, project and call discussion composers (including replies and edits)
+use the same paged personal directory. Channel people remain participant-scoped,
+and CRM discussions remain team-scoped; an empty or loading roster never opens
+personal-directory search. Available agents are added to the current window or
+scope with the existing rollout rules. Group mentions remain channel-only.
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -1535,10 +1564,11 @@ outside its recent page. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;
-email mentions keep their separate search-service path. Text search loads only
-its requested cache buckets, so a document-only category must not read the email
-catalog. Switching categories still discovers previously unopened buckets;
-renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
+email mentions keep their separate search-service path. Text search filters in
+Turso and streams matches from only the requested buckets into a bounded ranker;
+a document-only category must not read the email bucket. Searches do not retain
+a full bucket in memory. Switching categories, renames, subtype moves, DM priority,
+and stable tie ordering remain unchanged.
 
 With CRM enabled, normal `@` menus include companies and contacts under
 **Contacts & Companies** in documents, channels, discussions, and composers.

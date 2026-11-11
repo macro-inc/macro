@@ -33,7 +33,9 @@ change rebuilds only that URL's users.
 - Cognition, scheduling, preview control, and public MCP share the agent
   harness process. `McpPublicUrl` and `CognitionPublicUrl` keep the registered
   public OAuth identities; do not substitute the internal API routes when
-  building callbacks.
+  building callbacks. `McpChatgptServiceUrl` is the ChatGPT MCP Worker, a
+  separate process; the harness's OAuth broker accepts its `/mcp` URL as a
+  token resource.
 
 ## Related
 

@@ -73,8 +73,8 @@ From `infra/`:
   field contract. Its failure monitor does not page while suggestions are
   behind their flag.
 - `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
-  in `crates/agent_harness/src/domain/service.rs` and matches the text of the
-  `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
+  in `crates/agents/agent_harness/src/domain/service.rs` and matches the text of the
+  `tokio runtime starvation detected` warning in `crates/platform/macro_tower_layers`;
   its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notifications/notification/src/domain/service/voip.rs` and the

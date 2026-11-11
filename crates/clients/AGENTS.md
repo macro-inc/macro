@@ -20,6 +20,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`email_service_client`](email_service_client/AGENTS.md) | Part of the Email feature: a Rust HTTP client for `email_service` — message/thread lookups by id, thread owner lookup, a user's newest inbox messages read live from the … |
 | [`fusionauth`](fusionauth/AGENTS.md) | Backs the Authentication feature: a FusionAuth API client for OAuth/identity-provider login, user management, JWTs, and passwordless/password flows against the … |
 | [`gmail_client`](gmail_client/AGENTS.md) | Backs the Email feature's Gmail sync: a thin Gmail API client, `GmailClient`, wrapping per-area modules (messages, threads, labels, filters, history, contacts, watch) … |
+| [`incus_client`](incus_client/AGENTS.md) | Rust client for the Incus REST API, for the Macro computers fleet adapter that creates, powers, and inspects box VMs on Incus hosts. |
 | [`lexical_client`](lexical_client/AGENTS.md) | Belongs to Documents: the Rust-side HTTP client for `lexical_service`, plus a parser for Lexical's markdown subset, used by any backend crate that needs to read or … |
 | `loops_client` |  |
 | [`macro_cache_client`](macro_cache_client/AGENTS.md) | Belongs to shared infrastructure (authentication): Redis-backed rate limiters for auth-adjacent flows, one module per limited action, each gated behind its own Cargo … |

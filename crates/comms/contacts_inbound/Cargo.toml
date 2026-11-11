@@ -14,6 +14,13 @@ axum = [
   "dep:rate_limit",
   "dep:utoipa",
 ]
+# The Kafka consumer that fans a user's picture change out to their contacts.
+picture-fanout = [
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:rdkafka",
+  "dep:user_events",
+]
 # The SQS worker that ingests contact-affecting events.
 worker = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker"]
 
@@ -25,14 +32,20 @@ contacts_core = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
+kafka_util = { workspace = true, optional = true }
+macro_event_broker = { workspace = true, features = [
+  "outbound",
+], optional = true }
 macro_user_id = { workspace = true }
 rate_limit = { workspace = true, features = ["axum"], optional = true }
+rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqs_worker = { workspace = true, optional = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+user_events = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 

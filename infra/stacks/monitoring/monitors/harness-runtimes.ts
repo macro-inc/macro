@@ -5,13 +5,13 @@
 // one silently empties a metric and turns its monitor into missing data:
 //
 // - The `agent.runtime.reattach` span (`reattach_live_sessions` in
-//   `crates/agent_harness/src/domain/service.rs`), one per dial of a runtime
+//   `crates/agents/agent_harness/src/domain/service.rs`), one per dial of a runtime
 //   that lists live sessions: `harness` (opaque harness uuid) and
 //   `agent.runtime.reattach_sessions` (sessions bound to it),
 //   `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped` and
 //   `.reattach_failures` (how each was handled).
 // - The `tokio runtime starvation detected` warning from
-//   `spawn_starvation_detector` in `crates/macro_tower_layers/src/lib.rs`,
+//   `spawn_starvation_detector` in `crates/platform/macro_tower_layers/src/lib.rs`,
 //   logged when a 250 ms tick runs late.
 //
 // Thresholds come from the seven days to 2026-11-10 (see each monitor).

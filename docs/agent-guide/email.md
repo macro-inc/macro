@@ -20,6 +20,17 @@ An email snooze returns its original conversation to the inbox and adds a
 notification to that email row in Home. It has no separate reminder toast or
 detail view. See [Email reminders](reminders.md#delivery-and-undo).
 
+## Account changes
+
+Channel and connected-inbox metadata belongs to the signed-in viewer. During a
+replacement login the shell may retain its previous identity, but these source
+lists wait for fresh authentication. A delayed list response, signature save, or
+inbox-removal rollback must not populate the replacement account. Check this on
+desktop and phone; the backend-free settings signature suite includes controlled
+old channel/link responses in `account-sources.browser.e2e.ts`. That fixture also
+runs the real context publisher over a stand-in cache: published DM labels and
+inbox exclusions must stay with the new account after old responses arrive.
+
 ## Email — `/app/component/mail`
 
 Newly fetched mail, including calendar invitations, stays visible while local
@@ -842,13 +853,23 @@ written message and these controls on desktop and mobile, where sending inserts
 the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
-as `teo+123456@macro.com`, whether or not it is a saved contact. That holds
+as `person+tag@example.com`, whether or not it is a saved contact. That holds
 when contacts or their names load after typing starts and reorder the list,
 including under a resting pointer, and when the address was typed or pasted
-before suggestions loaded. A name or address word that starts with the query
-ranks above recent substring matches (`gab` finds Gab Rowan). Opened empty,
-the list puts colleagues on the sending inbox's domain first. A chip shows the
-name followed by the address in muted ink.
+before suggestions loaded. Name-word prefixes outrank substring matches;
+`jo sm` and `sm jo` both find John Smith. Within each name tier, and on empty
+input, personal suggestions are recent-first rather than domain/brevity-weighted.
+A chip shows the name followed by the address in muted ink.
+Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
+local windows rather than retaining the address book or searching the server.
+Partial synchronization remains visibly incomplete. Each field owns its query; use
+**Next options** or PageDown for another window. Scoped thread addresses remain
+available, but the same address must not appear twice when the directory also
+finds it. Paging, closing, changing sender and searching must preserve selected
+custom/off-page chips. After selecting a custom address, search for a different
+person and wait for asynchronous results: Enter selects the matching person, never
+toggles the unrelated custom chip. On touch, Next keeps input focus. Automated mailboxes are
+excluded before native limiting, except for complete explicitly typed addresses.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
@@ -889,7 +910,8 @@ and in its reply thread. Saving is silent on desktop and mobile while online: no
 saved or syncing text appears. Offline, once an edit is saved only on this
 device, the composer shows **Saved on this device; waiting to sync** above the
 recipients until the server acknowledges it. A failure shows a banner in the same
-place with **Retry** (or **Retry discard**); while the local cache waits for
+place with **Retry** (or **Retry discard**); a discard still on its way to the
+server shows none, however long the queue takes. While the local cache waits for
 another owner the banner keeps **Retry** and retries by itself, and once local
 storage needs recovery it offers **Reload** instead. Neither appears in the
 toolbar or the mobile header actions. Verify the banner on mobile
@@ -953,13 +975,19 @@ legacy `retryable: true` metadata), then perform an unrelated queued action: the
 failed save must release the queue. Reload and reopen the draft; verify subject,
 recipients, body, and pending file contents. Retry and check that exactly one
 server draft exists. If per-mutation recovery preparation fails or times out,
-the mutation must fail and release the queue too, including legacy drafts that
+the queue asks again a second later, twice, and sends the mutation once
+preparation succeeds: a stalled or reopening local store must not fail a save
+or a discard. Preparation that fails a third time fails the mutation and
+releases the queue, including legacy drafts that
 have not been copied into recovery storage. Existing local working copies remain;
 an unmigrated legacy edit can be lost if the queue held its only durable copy.
 Verify that an unrelated queued action still completes in both cases. With
-browser OTel enabled, the failure appears once per draft as
+browser OTel enabled, a retried preparation appears once per draft as
+`graphql.mutation_queue.retry_scheduled` with `mutation_queue.failure: local`,
+and the final failure as
 `graphql.mutation_queue.recovery_failed` (or `graphql.mutation_queue.skipped` with a
-`mutation_queue.skip_reason`), never as a line per poll.
+`mutation_queue.skip_reason`), never as a line per poll. A working copy that
+then needs **Retry** logs `email_draft.sync_failed` with its status and cause.
 Repeat with two tabs, a save response arriving after a newer
 edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older
@@ -1070,6 +1098,10 @@ with either thread read transport, including when normalized-cache
 initialization has failed. Recipients, inbox, sender alias, body, displayed
 signature, and attachment references are frozen under one attempt ID. Completed
 uploads are required; adding files offline is unavailable.
+Send a reply, then reply again in the same thread at once, before the first is
+delivered, and send that too. The second waits on this device and goes out
+after the first; neither composer shows a sync failure or **Failed to save
+draft**, including when a save was still in flight as you pressed Send.
 
 **Send Later** schedules the saved draft through the schedule endpoint instead
 of the outbox. It shows **Email scheduled** with the send time, **Undo**, and

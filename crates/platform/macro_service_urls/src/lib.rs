@@ -28,6 +28,7 @@ pub use document_storage_service_url::DocumentStorageServiceUrl;
 pub use email_service_url::EmailServiceUrl;
 pub use image_proxy_service_url::ImageProxyServiceUrl;
 pub use lexical_service_url::LexicalServiceUrl;
+pub use mcp_chatgpt_service_url::McpChatgptServiceUrl;
 pub use mcp_public_url::McpPublicUrl;
 pub use mcp_service_url::McpServiceUrl;
 pub use notification_service_url::NotificationServiceUrl;
@@ -76,6 +77,10 @@ pub struct ServiceUrls {
     pub mcp_service_url: McpServiceUrl,
     /// Public MCP OAuth issuer and callback base, distinct from gateway transport routing.
     pub mcp_public_url: McpPublicUrl,
+    /// ChatGPT MCP server base URL (a Cloudflare Worker). Append `/mcp` for
+    /// its transport endpoint, which is also its RFC 8707 resource: the
+    /// `McpPublicUrl` broker issues it Macro API tokens.
+    pub mcp_chatgpt_service_url: McpChatgptServiceUrl,
     /// Public integration callback base, preserving registered OAuth redirect URIs.
     pub cognition_public_url: CognitionPublicUrl,
     /// Macro Connect API base URL: Macro's OAuth broker for MCP connectors.
@@ -140,6 +145,7 @@ impl ServiceUrls {
             agent_harness_egress_url: AgentHarnessEgressUrl::new_for_environment(environment)?,
             mcp_service_url: McpServiceUrl::new_for_environment(environment)?,
             mcp_public_url: McpPublicUrl::new_for_environment(environment)?,
+            mcp_chatgpt_service_url: McpChatgptServiceUrl::new_for_environment(environment)?,
             cognition_public_url: CognitionPublicUrl::new_for_environment(environment)?,
             connect_api_url: ConnectApiUrl::new_for_environment(environment)?,
             unfurl_service_url: UnfurlServiceUrl::new_for_environment(environment)?,
@@ -181,6 +187,7 @@ impl ServiceUrls {
             agent_harness_egress_url: AgentHarnessEgressUrl::default_for_environment(environment),
             mcp_service_url: McpServiceUrl::default_for_environment(environment),
             mcp_public_url: McpPublicUrl::default_for_environment(environment),
+            mcp_chatgpt_service_url: McpChatgptServiceUrl::default_for_environment(environment),
             cognition_public_url: CognitionPublicUrl::default_for_environment(environment),
             connect_api_url: ConnectApiUrl::default_for_environment(environment),
             unfurl_service_url: UnfurlServiceUrl::default_for_environment(environment),

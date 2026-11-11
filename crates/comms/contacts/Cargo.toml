@@ -8,6 +8,13 @@ version = "0.1.0"
 axum = ["dep:contacts_inbound", "contacts_inbound/axum"]
 directory-names = ["dep:contacts_outbound", "contacts_outbound/directory-names", "ports"]
 default = ["axum", "inbound", "outbound", "ports"]
+picture-fanout = [
+  "dep:contacts_inbound",
+  "contacts_inbound/picture-fanout",
+  "dep:contacts_outbound",
+  "contacts_outbound/picture-fanout",
+  "ports",
+]
 inbound = ["axum", "contacts_inbound/worker", "ports"]
 outbound = ["dep:contacts_outbound", "ports"]
 ports = []

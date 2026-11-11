@@ -29,7 +29,7 @@ use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
 use std::collections::{HashMap, HashSet};
 
-use crate::domain::agent::{META_NAMESPACE, close_dangling_tool_calls};
+use crate::domain::agent::{META_NAMESPACE, TURN_FAILED_REPLY, close_dangling_tool_calls};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, UserPrompt, end_of_turn, splice_summary};
 use agent_runtime_protocol::domain::context::ContextSummaryNotification;
@@ -69,9 +69,10 @@ struct OpenTurn {
 /// in, naming the last turn it covers, so it replaces the same turns.
 ///
 /// The rebuilt entries are not always the live ones, which is why a summary
-/// goes by turn rather than by count. A prompt stopped before it ran is in
-/// the log but never entered the live history; a turn that failed before
-/// any output carries the error the agent said; reasoning is not replayed.
+/// goes by turn rather than by count: a prompt stopped before it ran is in
+/// the log but never entered the live history, and reasoning is not replayed
+/// (the model is never sent it). A failed turn rebuilds as the live agent kept
+/// it, without the failure reply it sent its reader.
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
@@ -104,11 +105,19 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 if let Some(id) = acp.0.response_id()
                     && open.as_ref().is_some_and(|turn| &turn.id == id)
                 {
+                    let failed =
+                        matches!(acp.0, RawJsonRpcMessage::Response(Response::Error { .. }));
+                    // A turn that failed after it ran told its reader so in a
+                    // last text chunk the live agent never kept; it kept the
+                    // prompt and whatever the turn said before.
+                    let ran = failed
+                        && open
+                            .as_mut()
+                            .is_some_and(|turn| strip_failure_reply(&mut turn.parts));
                     // The live agent answers a prompt it will not run - over
                     // its owner's budget, too long - before keeping it.
                     let refused =
-                        matches!(acp.0, RawJsonRpcMessage::Response(Response::Error { .. }))
-                            && open.as_ref().is_some_and(|turn| turn.parts.is_empty());
+                        failed && !ran && open.as_ref().is_some_and(|turn| turn.parts.is_empty());
                     if refused {
                         open = None;
                     } else {
@@ -231,13 +240,71 @@ fn replay_config<T: Default>(frames: &[Message], read: impl Fn(&[SessionConfigOp
     current
 }
 
+/// Take the failure reply off the end of a failed turn's parts, the way the
+/// live agent's history never had it. Answers whether there was one: only a
+/// turn that ran sends it.
+fn strip_failure_reply(parts: &mut Vec<AssistantMessagePart>) -> bool {
+    let Some(AssistantMessagePart::Text { text }) = parts.last_mut() else {
+        return false;
+    };
+    let Some(said) = text.strip_suffix(TURN_FAILED_REPLY) else {
+        return false;
+    };
+    // Set apart with a blank line when the turn had said something.
+    let kept = said.strip_suffix("\n\n").unwrap_or(said).to_owned();
+    if kept.is_empty() {
+        parts.pop();
+    } else {
+        *text = kept;
+    }
+    true
+}
+
 /// Calls the turn opened `pending` - the model was still writing them - by
-/// id, with the title they opened under. The live agent only adds a call to
-/// its history once it is finished, so replay holds these back until the
-/// update that starts them, and a call the turn ended in the middle of never
-/// enters the history at all.
+/// id, with the tool name and title they opened under. The live agent only
+/// adds a call to its history once it is finished, so replay holds these back
+/// until the update that starts them, and a call the turn ended in the middle
+/// of never enters the history at all.
 #[derive(Default)]
-struct WritingCalls(HashMap<String, String>);
+struct WritingCalls(HashMap<String, (String, String)>);
+
+/// The tool name a logged call ran under: `_meta.macro.toolName`, else (for
+/// frames from before it) the title.
+fn logged_tool_name(meta: Option<&agent_client_protocol::schema::v1::Meta>, title: &str) -> String {
+    meta.and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|meta| meta.get("toolName"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(title)
+        .to_owned()
+}
+
+/// The history part the live agent recorded for a call to `tool_name`.
+///
+/// An MCP tool runs under its mangled name (`mcp__<server>__<tool>`), and the
+/// live agent records it as an [`AssistantMessagePart::McpToolCall`] split the
+/// way routing splits that name, with the server's display title when it gave
+/// one (the title is the mangled name otherwise).
+fn tool_call_part(
+    tool_name: String,
+    title: &str,
+    json: serde_json::Value,
+    id: String,
+) -> AssistantMessagePart {
+    match mcp_toolset::unmangle(&tool_name) {
+        Some((service, tool)) => AssistantMessagePart::McpToolCall {
+            name: tool.to_owned(),
+            service: service.to_owned(),
+            display_name: (title != tool_name).then(|| title.to_owned()),
+            json,
+            id,
+        },
+        None => AssistantMessagePart::ToolCall {
+            name: tool_name,
+            json,
+            id,
+        },
+    }
+}
 
 /// Fold one `session/update` back into the open turn's parts.
 fn apply_update(
@@ -249,13 +316,10 @@ fn apply_update(
         SessionUpdate::ToolCall(call) if call.status == ToolCallStatus::Pending => {
             writing.0.insert(
                 call.tool_call_id.0.to_string(),
-                call.meta
-                    .as_ref()
-                    .and_then(|meta| meta.get(META_NAMESPACE))
-                    .and_then(|meta| meta.get("toolName"))
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or(&call.title)
-                    .to_owned(),
+                (
+                    logged_tool_name(call.meta.as_ref(), &call.title),
+                    call.title.clone(),
+                ),
             );
         }
         SessionUpdate::ToolCallUpdate(update)
@@ -266,12 +330,13 @@ fn apply_update(
                 // A peek at the arguments so far.
                 Some(ToolCallStatus::Pending) | None => {}
                 Some(ToolCallStatus::InProgress) => {
-                    let name = writing.0.remove(&id).unwrap_or_default();
-                    parts.push(AssistantMessagePart::ToolCall {
+                    let (name, title) = writing.0.remove(&id).unwrap_or_default();
+                    parts.push(tool_call_part(
                         name,
-                        json: update.fields.raw_input.unwrap_or(serde_json::Value::Null),
+                        &title,
+                        update.fields.raw_input.unwrap_or(serde_json::Value::Null),
                         id,
-                    });
+                    ));
                 }
                 // Closed before the model finished writing it: it never ran.
                 Some(_) => {
@@ -291,18 +356,12 @@ fn apply_update(
             }
         }
         SessionUpdate::ToolCall(call) => {
-            parts.push(AssistantMessagePart::ToolCall {
-                name: call
-                    .meta
-                    .as_ref()
-                    .and_then(|meta| meta.get(META_NAMESPACE))
-                    .and_then(|meta| meta.get("toolName"))
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or(&call.title)
-                    .to_owned(),
-                json: call.raw_input.clone().unwrap_or(serde_json::Value::Null),
-                id: call.tool_call_id.0.to_string(),
-            });
+            parts.push(tool_call_part(
+                logged_tool_name(call.meta.as_ref(), &call.title),
+                &call.title,
+                call.raw_input.clone().unwrap_or(serde_json::Value::Null),
+                call.tool_call_id.0.to_string(),
+            ));
         }
         SessionUpdate::ToolCallUpdate(update) => {
             let id = update.tool_call_id.0.to_string();
@@ -324,17 +383,22 @@ fn apply_update(
                     });
                 }
                 Some(ToolCallStatus::Failed) => {
-                    let description = update
+                    // A failure with no error is the live agent closing a call
+                    // its turn ended under. It recorded that close under the
+                    // call's own name when the turn ended, which is where
+                    // `close_turn` closes it here too.
+                    let Some(description) = update
                         .fields
                         .raw_output
                         .as_ref()
                         .and_then(|output| output.get("error"))
                         .and_then(|error| error.as_str())
-                        .unwrap_or("cancelled")
-                        .to_owned();
+                    else {
+                        return;
+                    };
                     parts.push(AssistantMessagePart::ToolCallErr {
                         name,
-                        description,
+                        description: description.to_owned(),
                         id,
                     });
                 }
@@ -347,7 +411,8 @@ fn apply_update(
     }
 }
 
-/// The name of the turn's tool call `id`, when it exists and has no response
+/// The name the turn's tool call `id` ran under - an MCP tool's mangled name,
+/// as the live agent records its result - when it exists and has no response
 /// yet.
 fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<String> {
     let responded = parts.iter().any(|part| match part {
@@ -359,12 +424,13 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
         return None;
     }
     parts.iter().find_map(|part| match part {
-        AssistantMessagePart::ToolCall { name, id: call, .. }
-        | AssistantMessagePart::McpToolCall { name, id: call, .. }
-            if call == id =>
-        {
-            Some(name.clone())
-        }
+        AssistantMessagePart::ToolCall { name, id: call, .. } if call == id => Some(name.clone()),
+        AssistantMessagePart::McpToolCall {
+            name,
+            service,
+            id: call,
+            ..
+        } if call == id => Some(format!("mcp__{service}__{name}")),
         _ => None,
     })
 }

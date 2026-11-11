@@ -13,7 +13,8 @@ model.
 - `src/document.rs`, `src/chat.rs`, `src/comms.rs` (channels), `src/crm_company.rs`,
   `src/crm_contact.rs`, `src/database_row.rs`, `src/email_thread.rs`,
   `src/initiative.rs`, `src/project.rs`, `src/call_record.rs`,
-  `src/calendar_event.rs`, `src/agent_session.rs`, `src/foreign_entity.rs`:
+  `src/calendar_event.rs`, `src/agent_session.rs`, `src/foreign_entity.rs`,
+  `src/harness.rs` (runtimes, listed only by attention feeds):
   per-entity-kind Soup response models.
 - `src/properties.rs`: `SoupProperty` — properties attached to a Soup item.
 

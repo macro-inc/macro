@@ -14,7 +14,7 @@ bounded, enriched pages under `GraphqlUser`; these are not CRM contacts.
 ## Scope
 
 - Owns: GraphQL shapes, argument/cursor conversion, and transport error codes.
-- Not here: graph membership, name enrichment, or database queries → `crates/contacts`.
+- Not here: graph membership, name enrichment, or database queries → `crates/comms/contacts_core`.
 
 ## Boundaries
 

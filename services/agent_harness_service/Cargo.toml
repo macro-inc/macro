@@ -30,6 +30,8 @@ universal_input = { workspace = true }
 ai_projection_types = { workspace = true }
 activity = { workspace = true, features = ["axum", "outbound", "schema"] }
 agent_loop = { workspace = true, features = ["debug-messages"] }
+# The global allocator (`src/main.rs`).
+mimalloc = { workspace = true }
 agent-client-protocol = { workspace = true }
 agent_changes = { workspace = true, default-features = true }
 agent_code_mode = { workspace = true }
@@ -151,6 +153,7 @@ onboarding = { workspace = true }
 pipedream_mcp = { workspace = true }
 agent_prompts = { workspace = true }
 properties = { workspace = true, features = ["outbound"] }
+opentelemetry = { workspace = true, features = ["metrics"] }
 rdkafka = { workspace = true }
 readonly_pool = { workspace = true }
 rate_limit = { workspace = true }
@@ -210,6 +213,7 @@ connection_gateway_url = { workspace = true }
 document_storage_service_url = { workspace = true }
 email_service_url = { workspace = true }
 lexical_service_url = { workspace = true }
+mcp_chatgpt_service_url = { workspace = true }
 mcp_public_url = { workspace = true }
 mcp_service_url = { workspace = true }
 preview_gateway_url = { workspace = true }

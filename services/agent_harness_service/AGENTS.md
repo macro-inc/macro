@@ -20,6 +20,11 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
+- `src/runtime_gauges.rs`: one task recording, every minute, what the process
+  holds per session as OTel gauges (`ahs.harness.workers`,
+  `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
+  `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
+  `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
@@ -183,6 +188,15 @@ In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
 
+The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
+glibc malloc kept freed memory resident as fragmentation under this
+workload. Tests and the library keep the system allocator.
+
+`AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
+a session's command worker waits before it releases a quiet session from
+memory and exits; lower it only to exercise the release end to end. Values
+below 30 fail startup.
+
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
@@ -210,7 +224,10 @@ listener failure shuts down the process so ECS can replace the task.
   (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
   builds its context per call from the caller and signs the same attribution
   into its SDK token: the agent, or the Macro bot plus the client name as
-  `agent_via`. Never read a bot id or client name from the request itself.
+  `agent_via`. The OAuth broker signs the same Macro bot attribution into the
+  tokens it issues for the ChatGPT MCP Worker's resource
+  (`McpChatgptServiceUrl`; `public_mcp/macro_api_tokens.rs`). Never read a bot
+  id or client name from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.

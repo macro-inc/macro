@@ -158,6 +158,11 @@ to = "ai_usage"
 reason = "`toolset` feature records usage through ai_usage; move the toolset adapter out of the client"
 
 [[allow]]
+from = "cache-core"
+to = "database_sql_engine"
+reason = "browser people SQL runs the database_sql engine locally; split the wasm-safe engine core out of the domain layer"
+
+[[allow]]
 from = "document_storage_service_client"
 to = "shared_entity_registry"
 reason = "uses RegisteredEntityType; move it to a types crate"

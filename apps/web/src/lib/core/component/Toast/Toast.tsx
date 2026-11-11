@@ -375,7 +375,6 @@ export function ToastContent(props: {
                               ? { color: props.custom.color }
                               : undefined
                           }
-                          data-icon-motion="none"
                         >
                           <Dynamic
                             component={Icon()}

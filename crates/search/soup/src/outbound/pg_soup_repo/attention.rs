@@ -35,6 +35,7 @@
 use activity::Action;
 use cowlike::CowLike;
 use entity_kind::EntityType;
+use item_filters::ast::properties::properties_filter_matches_propertyless;
 use sqlx::{PgPool, Row};
 use std::str::FromStr;
 
@@ -45,6 +46,7 @@ use crate::outbound::pg_soup_repo::candidate_gates::{
     channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, initiative_gate,
     project_gate, uuid_guarded,
 };
+use crate::outbound::pg_soup_repo::harness::harness_gate;
 use crate::outbound::pg_soup_repo::notified::{
     ID_SQL, agent_session_gate, calendar_event_gate, foreign_entity_gate, included_types,
 };
@@ -52,7 +54,8 @@ use crate::outbound::pg_soup_repo::touched::view_tags_sql;
 use crate::outbound::pg_soup_repo::type_err;
 
 /// Every type an attention feed can surface, in the order the notified-at
-/// feed decides them, then the CRM records only attention feeds list.
+/// feed decides them, then the CRM records and runtimes only attention feeds
+/// list. Runtimes carry no properties, so a properties filter rules them out.
 fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str> {
     let notified = NotifiedSoupRequest {
         user_id: req.user_id.copied(),
@@ -69,9 +72,19 @@ fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str>
     } else {
         &[]
     };
+    let propertyless_ok = req
+        .filter
+        .and_then(|filter| filter.properties_filter.as_deref())
+        .is_none_or(properties_filter_matches_propertyless);
+    let harness: &[&'static str] = if propertyless_ok {
+        &[EntityType::Harness.into()]
+    } else {
+        &[]
+    };
     included_types(&notified)
         .into_iter()
         .chain(crm.iter().copied())
+        .chain(harness.iter().copied())
         .filter(|entity_type| requested.contains(entity_type))
         .collect()
 }
@@ -182,6 +195,7 @@ fn build_query(req: &AttentionCandidateRequest<'_>) -> String {
         agent_session_gate = agent_session_gate(filter),
         crm_company_gate = crm_company_gate(),
         crm_contact_gate = crm_contact_gate(),
+        harness_gate = harness_gate(),
     )
 }
 

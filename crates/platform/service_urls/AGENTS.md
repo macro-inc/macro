@@ -43,6 +43,7 @@ re-exports all of them and keeps the `ServiceUrls` collection.
 | `agent_harness_egress_url` | `AgentHarnessEgressUrl` |
 | `mcp_service_url` | `McpServiceUrl` |
 | `mcp_public_url` | `McpPublicUrl` |
+| `mcp_chatgpt_service_url` | `McpChatgptServiceUrl` |
 | `cognition_public_url` | `CognitionPublicUrl` |
 | `connect_api_url` | `ConnectApiUrl` |
 | `unfurl_service_url` | `UnfurlServiceUrl` |

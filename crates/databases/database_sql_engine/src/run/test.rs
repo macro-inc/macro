@@ -1,3 +1,5 @@
+mod description;
+
 use databases_types::{ColumnId, DatabaseId, RowId};
 use std::collections::HashMap;
 use std::sync::Mutex;

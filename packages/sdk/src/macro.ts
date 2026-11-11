@@ -301,6 +301,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /**
    * The authenticated caller's mentionable principal — `bot|<uuid>` for bot
    * auth, `macro|<email>` for user auth — fetched once and cached.
+   *
+   * @readonly
    */
   myPrincipalId(): Promise<string> {
     return this._client.myPrincipalId();
@@ -308,7 +310,11 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Clone of this SDK acting on behalf of `user` (sent as
    * `x-macro-bot-for-macro-user-id`). Bot auth only — throws for user auth,
-   * since a user token always acts as its own user. */
+   * since a user token always acts as its own user.
+   *
+   * @readonly
+   * @mcp-exclude Returns a new SDK client, which an MCP result cannot carry.
+   */
   requestedAs(user: User): Macro<T> {
     return new Macro({ ...this.opts, requestedAs: user.id });
   }
@@ -548,6 +554,10 @@ export {
 } from './entities/spreadsheets/spreadsheet';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export {
+  ExternalProfilePicture,
+  type ProfilePicture,
+} from './entities/users/profile-picture';
 export type { ActivityReport } from './entities/users/user';
 export type {
   WebFetchOptions,

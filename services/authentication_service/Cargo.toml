@@ -157,6 +157,7 @@ notification_outbound = { workspace = true }
 onboarding = { workspace = true }
 rand = { workspace = true }
 rate_limit = { workspace = true }
+user_events = { workspace = true }
 redis = { workspace = true }
 referral = { workspace = true }
 remote_env_var = { workspace = true }

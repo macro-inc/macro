@@ -8,7 +8,7 @@
 
 use database_sql_engine::catalog::Schema;
 use database_sql_engine::formula::FormulaReading;
-use database_sql_engine::{Bin, Board, Catalog, EngineError, Outcome, Page, Step};
+use database_sql_engine::{Bin, Board, Catalog, EngineError, Outcome, Page, ReadDescription, Step};
 use databases_types::views::{CardPosition, DatabaseView};
 use databases_types::{Formula, OpResult};
 use specta::Types;
@@ -29,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<Schema>()
         .register::<Catalog>()
         .register::<Step>()
+        .register::<ReadDescription>()
         .register::<Page>()
         .register::<Bin>()
         .register::<OpResult>()

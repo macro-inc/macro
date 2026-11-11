@@ -74,6 +74,7 @@ messages = { workspace = true, features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rand = { workspace = true }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }

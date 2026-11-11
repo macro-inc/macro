@@ -90,12 +90,12 @@ impl InMemModelAccess for FreeModels {
 
 fn in_process_runtime(repo: InMemoryAgentSessionRepo) -> InMemRuntime {
     InMemRuntime {
-        manager: InMemAgentManager::new(
+        manager: Arc::new(InMemAgentManager::new(
             Arc::new(IdleEngine),
             Arc::new(LogFrameSource::new(repo)),
             Arc::new(NoMcpServers),
             Arc::new(FreeModels),
-        ),
+        )),
     }
 }
 
@@ -285,5 +285,72 @@ fn the_in_process_runtime_and_the_harness_agree_on_macros_server_name() {
     assert_eq!(
         agent_inmem::domain::mcp::MACRO_MCP_NAME,
         agent_harness::domain::model::MACRO_MCP_NAME
+    );
+}
+
+/// The idle release's lossless check through the deployment's router and the
+/// real in-process manager: a session it holds nothing for, or whose
+/// conversation its log rebuilds, may go; one whose log has moved past what
+/// it holds may not, and once released it holds nothing again.
+#[tokio::test]
+async fn an_in_process_session_releases_only_while_its_log_rebuilds_it() {
+    let (id, repo) = repo_with_session(bot_id::MACRO_NEW_BOT_ID, "opencode");
+    let containers = in_process_containers(&repo);
+    assert!(
+        containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check runs"),
+        "nothing held here"
+    );
+
+    let _attachment = containers.resume(id).await.expect("resumes");
+    assert!(
+        containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check runs"),
+        "an empty conversation is what the empty log rebuilds"
+    );
+
+    // Another writer logs a prompt this process never ran.
+    let prompt: agent_client_protocol::RawJsonRpcMessage =
+        serde_json::from_value(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": "elsewhere-1",
+            "method": "session/prompt",
+            "params": {
+                "sessionId": "acp-elsewhere",
+                "prompt": [{"type": "text", "text": "asked elsewhere"}],
+            },
+        }))
+        .expect("a prompt frame");
+    agent_session::domain::ports::AgentSessionLogRepo::create(
+        &repo,
+        agent_session::domain::model::AgentSessionLog {
+            agent_session_id: id,
+            user_id: None,
+            content: agent_session::domain::model::Message::ToRuntime(ToRuntimeMessage::Acp(
+                agent_runtime_protocol::domain::schema::v0::AcpMessage(prompt),
+            )),
+            logged_at: None,
+        },
+    )
+    .await
+    .expect("the frame is logged");
+    assert!(
+        !containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check runs"),
+        "the log no longer rebuilds what this process holds"
+    );
+
+    containers.release_idle(id).await.expect("releases");
+    assert!(
+        containers
+            .idle_release_is_lossless(id)
+            .await
+            .expect("the check runs")
     );
 }

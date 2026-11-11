@@ -13,6 +13,7 @@ import type {
   FormulaReading,
   Outcome,
   Page,
+  ReadDescription,
   Schema,
   Step,
 } from './generated/types';
@@ -38,6 +39,9 @@ interface DatabaseSqlWasmModule {
   ) => DatabaseSqlQuery;
   /** The catalog a statement run from `scope` sees. Throws an `EngineError`. */
   buildCatalog: (schema: Schema, scope: string | undefined) => Catalog;
+  /** Read-only metadata from the same compiler used to execute the statement. */
+  describeRead: (catalog: Catalog, sql: string) => ReadDescription;
+  describeView: (catalog: Catalog, view: DatabaseView) => ReadDescription;
   /** The rows a view shows, as a query to drive. Throws an `EngineError`. */
   runView: (catalog: Catalog, view: DatabaseView) => DatabaseSqlQuery;
   /** A board view's lanes and cards. Throws an `EngineError`. */
@@ -104,6 +108,17 @@ export async function openDatabaseViewQuery(
 ): Promise<DatabaseSqlQuery> {
   const { runView } = await loadDatabaseSqlWasm();
   return runView(catalog, view);
+}
+
+/** Resolve actual table dependencies without fetching any rows. Writes fail closed. */
+export async function describeDatabaseRead(
+  catalog: Catalog,
+  input: { sql: string } | { view: DatabaseView }
+): Promise<ReadDescription> {
+  const wasm = await loadDatabaseSqlWasm();
+  return 'sql' in input
+    ? wasm.describeRead(catalog, input.sql)
+    : wasm.describeView(catalog, input.view);
 }
 
 /** The catalog a statement run from `scope` sees, built by the engine. */

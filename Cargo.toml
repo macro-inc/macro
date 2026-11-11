@@ -66,6 +66,7 @@ members = [
   "crates/client/turso-opfs",
   "crates/clients/connect_client",
   "crates/clients/gmail_client",
+  "crates/clients/incus_client",
   "crates/clients/loops_client",
   "crates/comms/channel_bots",
   "crates/comms/channel_labels",
@@ -170,6 +171,7 @@ members = [
   "crates/platform/service_urls/email_service_url",
   "crates/platform/service_urls/image_proxy_service_url",
   "crates/platform/service_urls/lexical_service_url",
+  "crates/platform/service_urls/mcp_chatgpt_service_url",
   "crates/platform/service_urls/mcp_public_url",
   "crates/platform/service_urls/mcp_service_url",
   "crates/platform/service_urls/notification_service_url",
@@ -182,6 +184,7 @@ members = [
   "crates/platform/service_urls/sync_service_url",
   "crates/platform/service_urls/unfurl_service_url",
   "crates/platform/upstream_error",
+  "crates/platform/user_events",
   "crates/platform/worker_rs_otel",
   "crates/predicate_index",
   "crates/projects/initiative_description",
@@ -205,6 +208,7 @@ members = [
   "crates/types/channel_id",
   "crates/types/chat_id",
   "crates/types/chat_message",
+  "crates/types/computer_id",
   "crates/types/cowlike",
   "crates/types/database_id",
   "crates/types/databases_types",
@@ -223,6 +227,7 @@ members = [
   "crates/types/model_owner",
   "crates/types/natural_time",
   "crates/types/notification_state",
+  "crates/types/pairing_id",
   "crates/types/project_id",
   "crates/types/soup_property",
   "crates/types/subsequence_match",
@@ -423,6 +428,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
@@ -450,6 +456,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
@@ -849,6 +856,7 @@ macro_user_id = { path = "crates/types/macro_user_id" }
 macro_uuid = { path = "crates/types/macro_uuid" }
 maybe_send = { path = "crates/types/maybe_send" }
 mcp_auth_proxy = { path = "services/mcp_auth_proxy" }
+mcp_chatgpt_service_url = { path = "crates/platform/service_urls/mcp_chatgpt_service_url" }
 mcp_client = { path = "crates/clients/mcp_client" }
 mcp_public_url = { path = "crates/platform/service_urls/mcp_public_url" }
 mcp_select = { path = "crates/ai/mcp_select" }
@@ -957,6 +965,7 @@ unfurl_service_url = { path = "crates/platform/service_urls/unfurl_service_url" 
 universal_input = { path = "crates/ai/universal_input" }
 upstream_error = { path = "crates/platform/upstream_error", default-features = false }
 user_api_key = { path = "crates/accounts/user_api_key" }
+user_events = { path = "crates/platform/user_events" }
 user_language = { path = "crates/accounts/user_language" }
 user_quota = { path = "crates/types/user_quota" }
 web_search = { path = "crates/ai/web_search" }

@@ -35,12 +35,21 @@ export type DatabaseSqlFailure =
   | { kind: 'fetch'; message: string }
   /** The caller replaced or disposed this read. */
   | { kind: 'cancelled' }
+  /** A source refused the query; this is not an offline result. */
+  | { kind: 'rejected'; message: string }
+  /** Account or access authority changed. Old answers must clear. */
+  | { kind: 'scope-changed'; message: string }
   /** The statement writes, and only reads run here. */
   | { kind: 'read-only' };
 
 export type DatabaseSqlFetchFailure = Extract<
   DatabaseSqlFailure,
   { kind: 'fetch' }
+>;
+
+export type DatabaseSqlSourceFailure = Extract<
+  DatabaseSqlFailure,
+  { kind: 'fetch' | 'rejected' | 'scope-changed' }
 >;
 
 /** Where rows come from. Mirrors `database_sql_engine::run::RowSource`. */
@@ -57,12 +66,12 @@ export interface RowSource {
     cursor: string | null,
     limit: number,
     step: DatabaseSqlStepTrace
-  ) => ResultAsync<Page, DatabaseSqlFetchFailure>;
+  ) => ResultAsync<Page, DatabaseSqlSourceFailure>;
   /** The bins of a `groupSoup` query. */
   bins: (
     query: GqlQuery,
     step: DatabaseSqlStepTrace
-  ) => ResultAsync<Bin[], DatabaseSqlFetchFailure>;
+  ) => ResultAsync<Bin[], DatabaseSqlSourceFailure>;
 }
 
 /** Opens the engine for one statement; the wasm module unless a test says otherwise. */
@@ -89,8 +98,10 @@ function isEngineError(thrown: unknown): thrown is EngineError {
 
 /** The engine throws an `EngineError`; anything else is a crash. */
 export function engineFailure(thrown: unknown): DatabaseSqlFailure {
-  if (isEngineError(thrown))
+  if (isEngineError(thrown)) {
+    if (thrown.error.stage === 'readOnly') return { kind: 'read-only' };
     return { kind: 'engine', error: thrown.error, message: thrown.message };
+  }
   return {
     kind: 'crash',
     message: thrown instanceof Error ? thrown.message : String(thrown),

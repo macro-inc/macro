@@ -23,6 +23,7 @@ scheduled_action_service_url = { workspace = true }
 agent_harness_egress_url = { workspace = true }
 mcp_service_url = { workspace = true }
 mcp_public_url = { workspace = true }
+mcp_chatgpt_service_url = { workspace = true }
 cognition_public_url = { workspace = true }
 connect_api_url = { workspace = true }
 unfurl_service_url = { workspace = true }

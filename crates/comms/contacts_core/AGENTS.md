@@ -15,7 +15,9 @@ adapters are `crates/comms/contacts_outbound`.
 - `src/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface. `contact/identity-fixtures.json` freezes the UUIDv5 contract for viewer-scoped point reads; keep it stable for clients.
 - `src/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
 - `src/models/query.rs`: 512-byte normalized subsequence searches (including the local-part label fallback plus email), exact/first-name reference predicates applied before limiting and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
+- `lookup_contact_ids` also backs the webhook SSE contact audience (`document_storage_service` `stream_contacts` adapter): one exact `(viewer, id)` lookup per subscriber per event.
 - `src/ports.rs`: the traits the inbound/outbound crates implement.
+- `src/service/picture_fanout.rs`, `contacts_inbound/src/user_picture_consumer.rs`, `contacts_outbound/src/picture_gateway.rs` (`picture-fanout` feature): `macro.users` `user.picture_changed` → pages the user's contacts (≤500/page via `contact_id_page`, never the full list) and sends gateway message `user_picture_changed` `{"user_id"}` to each page (self included). The consumer (group `contacts-user-picture`) batches records for 250ms/100 records and fans out once per user per batch; failures retry 3× then are logged and skipped (realtime is best-effort). Hosted in `document_storage_service`; Kafka IAM is cluster-wide, so no infra change.
 - `src/models/`: contact graphs, users and the queue messages.
 
 ## Scope

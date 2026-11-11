@@ -20,6 +20,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`chat_id`](chat_id/AGENTS.md) | Shared type for AI chat: `ChatId`, the `TEXT` id of a chat, as a `nutype` String newtype (CS-10). |
 | [`chat_message`](chat_message/AGENTS.md) | Part of AI: the role (`Role`) and content (`ChatMessageContent`, `AssistantMessagePart`) of a stored AI chat message, shared by the agent loop, the chat domain, and the … |
 | `connection_gateway_models` |  |
+| [`computer_id`](computer_id/AGENTS.md) | Shared computer UUID identity, independent of the runtime and harness domains. |
 | `cowlike` |  |
 | `document_sub_type` |  |
 | [`entity_basic_types`](entity_basic_types/AGENTS.md) | Shared types: the `DocumentBasic`, `ChatBasic` and `BasicProject` rows that db queries load and `entity_access`'s axum extractors read from request extensions. |
@@ -32,6 +33,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `macro_uuid` |  |
 | `maybe_send` |  |
 | [`message_parent`](message_parent/AGENTS.md) |  |
+| [`pairing_id`](pairing_id/AGENTS.md) | Shared pairing UUID identity, independent of the runtime and harness domains. |
 | [`shared_types`](shared_types/AGENTS.md) | Shared infrastructure underlying Documents, chat, and authentication. |
 | `entity_kind` |  |
 | `model_error_response` |  |
