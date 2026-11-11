@@ -6,13 +6,8 @@ import { Button, Card, Tabs } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { DismissedIdea, DoneIdeaRow, IdeaCard } from '../components/idea-card';
 import type { IdeaActions, IdeaItemParts } from '../context/ideas-source';
-import type { FeedFilter, Idea } from '../core/idea';
+import type { FeedFilter } from '../core/idea';
 import type { FeedEntry, IdeasFeed } from '../primitives/feed';
-
-/** A finished run has something to preview; other finished ideas are one line. */
-function hasResult(idea: Idea) {
-  return idea.kind === 'prompt' && idea.runMode === 'background';
-}
 
 function SectionLabel(props: { children: JSX.Element }) {
   return (
@@ -27,7 +22,7 @@ function FeedSkeleton() {
     <ListSkeleton.Root label={t('ideas.loading')} class="flex flex-col gap-3">
       <For each={[0, 1, 2]}>
         {() => (
-          <Card variant="filled" depth={1} class="gap-3 p-3.5">
+          <Card variant="filled" depth={3} class="gap-3 p-3">
             <ListSkeleton.Bar class="h-3 w-2/5" />
             <ListSkeleton.Bar class="w-4/5" />
             <ListSkeleton.Bar class="w-3/5" />
@@ -94,7 +89,7 @@ export function ForYouView(props: {
       }}
     >
       <Show
-        when={entry.status !== 'done' || hasResult(entry.idea)}
+        when={entry.status !== 'done'}
         fallback={
           <DoneIdeaRow
             idea={entry.idea}

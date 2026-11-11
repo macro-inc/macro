@@ -56,13 +56,23 @@ only, behind `enable-ideas`.
   is now: the source puts that in the feed and answers `changed`, and the
   card shows the new text with a note, so nothing is taken up or run on text
   the person didn't see.
-- The page follows the chosen design frames: one column; a card is a tile,
-  title, state badge and time, one sentence, one block for its kind (prompt
-  quote, drafted reply, routine sentence, a finished run's result), then
-  source chips and actions. Done ideas sit under "Done today", dismissed ones
-  under "Dismissed". The parts that read the app's items (`IdeaItemParts`:
-  source chip, draft text, waiting time, result) are supplied by
-  `idea-items.tsx`.
+- The page follows the chosen design frames: one column of cards, then
+  "Done today" and "Dismissed". Every card is the app's `Card` from `@ui`
+  (`variant="filled" depth={3}`, as the routine cards) built from its own
+  parts: `Card.Header` with an `Item` (`Item.Media` tile, `Card.Title`,
+  `Card.Description`), an optional `Card.Body` holding a nested
+  `Card variant="filled" offset={1}`, and `Card.Footer` with `Card.Metadata`
+  and `Card.Actions`. Don't restyle these with local surface, border or type
+  classes.
+- A card shows only what the person needs to act: the title, one sentence,
+  and one quiet line of facts beside one main action. A block appears only
+  when it must be read first: the prompt a background run will follow (with
+  what it sends) and a drafted reply. A composer idea shows no prompt (the
+  composer does), a running one no prompt, and every finished idea is one
+  row. The parts that read the app's items (`IdeaItemParts`: source link,
+  draft text, waiting time) are supplied by `idea-items.tsx`.
+- User-visible text says "suggestion", not "idea"; the code keeps `idea`
+  until the backend's rename lands.
 - The API has no due or waiting times. A reply idea's "waiting 2 days" and
   the sender on its chip come from the email thread itself
   (`queries/idea-thread.ts`, `core/thread.ts`): the last message, when the

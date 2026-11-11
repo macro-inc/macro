@@ -57,11 +57,6 @@ const PARTS: IdeaItemParts = {
   ),
   Draft: (props) => <p>Draft {props.draft.partId}</p>,
   Waiting: (props) => <span data-idea-waiting>{props.lead}waiting 2 days</span>,
-  Result: (props) => (
-    <p data-idea-result>
-      {props.target.entityType} {props.target.entityId}: {props.line}
-    </p>
-  ),
 };
 
 const REWRITTEN_AT = '2026-11-09T09:30:00Z';

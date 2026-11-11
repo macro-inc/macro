@@ -17,7 +17,8 @@ for (const theme of ['dark', 'light']) {
       'failed'
     );
     await expect(card(page, 'idea-running')).toContainText('Running');
-    await expect(card(page, 'idea-done')).toContainText('Done');
+    // A finished idea is one quiet row under Done today.
+    await expect(card(page, 'idea-done')).toContainText('Open result');
     // What a run will post is on the card before Run.
     await expect(
       card(page, 'idea-background').locator('[data-idea-sends]')
@@ -142,13 +143,15 @@ test('a dismissed idea can be undone, and is sent only on leaving', async ({
 
 test('tabs filter by where an idea stands', async ({ page }) => {
   await page.goto('/');
-  const tabs = page.getByRole('radiogroup', { name: 'Filter your ideas' });
+  const tabs = page.getByRole('radiogroup', {
+    name: 'Filter your suggestions',
+  });
 
   await tabs.getByText('Running', { exact: true }).click();
   await expect(page.locator('[data-idea]')).toHaveCount(2);
   await tabs.getByText('Done', { exact: true }).click();
   await expect(page.locator('[data-idea]')).toHaveCount(1);
-  await tabs.getByText('Ideas', { exact: true }).click();
+  await tabs.getByText('Suggestions', { exact: true }).click();
   await expect(page.locator('[data-idea]')).toHaveCount(6);
 });
 
@@ -215,7 +218,7 @@ test('loading, failure with retry, and empty', async ({ page }) => {
 
   await page.goto('/?scenario=error');
   await expect(page.getByRole('alert')).toContainText(
-    'Your ideas couldn’t be loaded.'
+    'Your suggestions couldn’t be loaded.'
   );
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.locator('[data-idea]')).toHaveCount(9);

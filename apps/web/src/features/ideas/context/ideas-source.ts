@@ -59,9 +59,4 @@ export type IdeaItemParts = {
    * after `lead`; `fallback` when nobody waits or it isn't known.
    */
   Waiting: Component<{ thread: IdeaTarget; lead?: string; fallback?: string }>;
-  /**
-   * What a finished idea made: its icon and name, over a line about it. A run
-   * that made nothing but its session goes by `title`.
-   */
-  Result: Component<{ target: IdeaTarget; title: string; line: string }>;
 };

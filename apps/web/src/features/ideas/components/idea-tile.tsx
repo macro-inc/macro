@@ -5,6 +5,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileTextIcon from '@icon/system/regular/file-text.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { Item } from '@ui';
 import { type Component, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
@@ -42,23 +43,20 @@ function ideaLook(idea: Idea): Look {
 }
 
 /**
- * The routine step tile, for an idea: a quiet square with the kind's glyph,
- * or a check once the idea is a finished row.
+ * An idea's tile: the kind's glyph on the app's item media square, or a check
+ * once the idea is a finished row.
  */
 export function IdeaTile(props: { idea: Idea; finished?: boolean }) {
   const look = () => ideaLook(props.idea);
 
   return (
-    <span
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/5"
-      aria-hidden="true"
-    >
+    <Item.Media class="size-7 self-start" aria-hidden="true">
       <Show
         when={!props.finished}
         fallback={<CheckIcon class="size-4 text-success" />}
       >
         <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
       </Show>
-    </span>
+    </Item.Media>
   );
 }

@@ -63,7 +63,7 @@ function Source(props: { target: IdeaTarget; onOpen(): void }) {
       {(name) => (
         <button
           type="button"
-          class="flex max-w-64 min-w-0 items-center gap-1.5 rounded-full bg-button-secondary-bg px-2.5 py-1 text-[13px] text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus"
+          class="flex min-w-0 items-center gap-1.5 rounded-sm outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-edge-focus"
           data-idea-source
           onClick={() => props.onOpen()}
         >
@@ -85,33 +85,6 @@ function Source(props: { target: IdeaTarget; onOpen(): void }) {
   );
 }
 
-function Result(props: { target: IdeaTarget; title: string; line: string }) {
-  const item = useItem(() => props.target);
-  // A session has no name of its own; the idea's title says what it was for.
-  const name = () =>
-    props.target.entityType === 'agent_session'
-      ? props.title
-      : (item.name() ?? props.title);
-
-  return (
-    <div class="flex min-w-0 items-center gap-3" data-idea-result>
-      <Show when={item.icon()} keyed>
-        {(icon) => (
-          <span class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/5">
-            <EntityIcon targetType={icon} size="sm" />
-          </span>
-        )}
-      </Show>
-      <div class="min-w-0">
-        <p class="truncate font-medium text-ink">{name()}</p>
-        <p class="truncate text-[13px] leading-5 text-ink-muted">
-          {props.line}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function Draft(props: { draft: IdeaTarget }) {
   const thread = useIdeaThread(
     () => props.draft.entityId,
@@ -119,7 +92,7 @@ function Draft(props: { draft: IdeaTarget }) {
   );
 
   return (
-    <p class="line-clamp-3">{thread()?.draftText ?? t('ideas.draftReady')}</p>
+    <p class="line-clamp-2">{thread()?.draftText ?? t('ideas.draftReady')}</p>
   );
 }
 
@@ -168,5 +141,4 @@ export const IDEA_ITEM_PARTS: IdeaItemParts = {
   Source,
   Draft,
   Waiting,
-  Result,
 };

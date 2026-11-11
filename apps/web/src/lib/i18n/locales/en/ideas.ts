@@ -1,9 +1,9 @@
 export default {
-  subtitle: 'Ideas to explore. Things to move forward.',
-  filters: 'Filter your ideas',
+  subtitle: 'Suggestions to explore. Things to move forward.',
+  filters: 'Filter your suggestions',
   all: 'All',
   running: 'Running',
-  open: 'Ideas',
+  open: 'Suggestions',
   done: 'Done',
   badgeRunning: 'Running',
   badgeDone: 'Done',
@@ -48,13 +48,14 @@ export default {
   runFailed:
     'The run didn’t finish. Nothing more will happen unless you run it again.',
   actionFailed: 'That didn’t work. Try again.',
-  ideaChanged: 'This idea was updated just now. Check it, then try again.',
-  loading: 'Loading your ideas',
-  loadError: 'Your ideas couldn’t be loaded.',
+  ideaChanged:
+    'This suggestion was updated just now. Check it, then try again.',
+  loading: 'Loading your suggestions',
+  loadError: 'Your suggestions couldn’t be loaded.',
   retry: 'Try again',
   emptyTitle: 'You’re all caught up',
   emptyBody:
-    'Nothing is waiting and nothing is running. New ideas arrive overnight from your inbox, chats and docs.',
+    'Nothing is waiting and nothing is running. New suggestions arrive overnight from your inbox, chats and docs.',
   emptyFilter: 'Nothing here right now.',
   topPriorities: 'Your top priorities',
   allInForYou: 'All in For you',
