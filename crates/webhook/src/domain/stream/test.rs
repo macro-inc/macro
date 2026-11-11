@@ -563,3 +563,55 @@ async fn agent_session_events_fall_back_to_access_level() {
     assert_eq!(delivered[0].entity_id, SESSION_ID);
     assert_eq!(*access_level_calls.lock().unwrap(), 1);
 }
+
+#[tokio::test]
+async fn wildcard_stream_delivers_future_event_types_only_with_current_access() {
+    let (service, sender) = service(FakeAccessService::allowing(&[DOCUMENT_ID]));
+    let stream = service
+        .open_stream(subscriber(), WebhookScope::Team, filter(&["*"]))
+        .await
+        .expect("wildcard stream opens");
+    sender
+        .send(document_candidate("future.event", OTHER_DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(workspace_candidate("future.event", FOREIGN_WORKSPACE_ID))
+        .expect("subscriber exists");
+    sender
+        .send(document_candidate("future.event", DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(workspace_candidate("another.event", TEAM_WORKSPACE_ID))
+        .expect("subscriber exists");
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(2).collect().await;
+    assert_eq!(delivered[0].entity_id, DOCUMENT_ID);
+    assert_eq!(delivered[0].event_name, "future.event");
+    assert_eq!(delivered[1].event_name, "another.event");
+}
+
+#[tokio::test]
+async fn wildcard_stream_preserves_entity_id_filters() {
+    let (service, sender) = service(FakeAccessService::allowing(&[
+        DOCUMENT_ID,
+        OTHER_DOCUMENT_ID,
+    ]));
+    let stream = service
+        .open_stream(
+            subscriber(),
+            WebhookScope::User,
+            vec![WebhookFilter {
+                events: vec!["*".to_string()],
+                ids: Some(vec![DOCUMENT_ID.to_string()]),
+            }],
+        )
+        .await
+        .expect("wildcard stream opens");
+    sender
+        .send(document_candidate("document.updated", OTHER_DOCUMENT_ID))
+        .expect("subscriber exists");
+    sender
+        .send(document_candidate("future.event", DOCUMENT_ID))
+        .expect("subscriber exists");
+    let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
+    assert_eq!(delivered[0].entity_id, DOCUMENT_ID);
+}
