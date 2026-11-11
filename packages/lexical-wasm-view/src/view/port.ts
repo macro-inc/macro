@@ -18,6 +18,10 @@ export type ProgrammaticApplicationInput = Readonly<
   Pick<IEditorApplication, 'name' | 'json' | 'generation' | 'selection'>
 >;
 
+export interface ProgrammaticApplicationOptions {
+  readonly after: (handled: boolean) => void;
+}
+
 export interface NativeEnterPort {
   register(
     listener: (event: KeyboardEvent | null) => boolean,
@@ -96,7 +100,8 @@ export interface EditorPort {
     event?: KeyboardEvent
   ): void;
   inputSettled?(
-    factory: () => ProgrammaticApplicationInput
+    factory: () => ProgrammaticApplicationInput,
+    options?: ProgrammaticApplicationOptions
   ): Promise<InputSettlement>;
   inputSettled?(
     input: EditorInputMsg,

@@ -34,6 +34,7 @@ export type {
   EditorPort,
   NativeEnterPort,
   ProgrammaticApplicationInput,
+  ProgrammaticApplicationOptions,
   TextFromView,
   ViewSink,
 } from './view/port';

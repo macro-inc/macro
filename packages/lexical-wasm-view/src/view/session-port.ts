@@ -24,6 +24,7 @@ import type {
   InputSettlement,
   NativeEnterPort,
   ProgrammaticApplicationInput,
+  ProgrammaticApplicationOptions,
   TextFromView,
   ViewSink,
 } from './port';
@@ -371,7 +372,8 @@ export class SessionPort implements EditorPort {
   }
   /** Root admission only; a native dispatcher callback must use its issued scope. */
   inputSettled(
-    factory: () => ProgrammaticApplicationInput
+    factory: () => ProgrammaticApplicationInput,
+    options?: ProgrammaticApplicationOptions
   ): Promise<InputSettlement>;
   inputSettled(
     editor: EditorInputMsg,
@@ -379,13 +381,29 @@ export class SessionPort implements EditorPort {
   ): Promise<InputSettlement>;
   inputSettled(
     editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
-    event?: KeyboardEvent
+    eventOrOptions?: KeyboardEvent | ProgrammaticApplicationOptions
   ): Promise<InputSettlement> {
     this.assertRootAdmission();
     const run = this.executor.runSettled;
     if (!run) throw new Error('Per-input executor settlement is unavailable');
-    if (typeof editor === 'function' && event !== undefined)
-      throw new Error('Deferred application inputs cannot carry DOM events');
+    let after: ((handled: boolean) => void) | undefined;
+    let event: KeyboardEvent | undefined;
+    if (typeof editor === 'function') {
+      if (eventOrOptions !== undefined) {
+        if (
+          !('after' in eventOrOptions) ||
+          typeof eventOrOptions.after !== 'function'
+        )
+          throw new Error(
+            'Deferred application inputs cannot carry DOM events'
+          );
+        after = eventOrOptions.after;
+      }
+    } else if (eventOrOptions !== undefined) {
+      if ('after' in eventOrOptions)
+        throw new Error('Completion options require an application factory');
+      event = eventOrOptions;
+    }
     const operation =
       typeof editor === 'function'
         ? {
@@ -424,7 +442,12 @@ export class SessionPort implements EditorPort {
             : result
         );
       },
-      { synchronous: operation.synchronous }
+      {
+        synchronous: operation.synchronous,
+        after: after
+          ? (flags) => after(Boolean(flags & FLAG_HANDLED))
+          : undefined,
+      }
     );
     return pending;
   }

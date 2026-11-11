@@ -200,8 +200,8 @@ test('rejects deferred DOM events before queue admission or factory execution', 
   };
   try {
     expect(() => {
+      // @ts-expect-error The closed factory overload has no DOM-event argument.
       runtime.port.inputSettled(
-        // @ts-expect-error The closed factory overload has no DOM-event argument.
         factory,
         new KeyboardEvent('keydown', { key: 'Enter' })
       );
@@ -270,6 +270,166 @@ test('wraps only closed programmatic fields and preserves the actual handled res
     const result = await runtime.port.inputSettled(() => application);
     expect(result).toEqual({ status: 'success', handled: true });
     expect(keyboardReads).toBe(0);
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('factory completion captures the acknowledged selection before later queued inputs', async () => {
+  const runtime = mount();
+  const order: string[] = [];
+  let pending: ReturnType<typeof runtime.port.inputSettled> | undefined;
+  let captured: ReturnType<typeof runtime.view.selection> | undefined;
+  try {
+    runtime.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'prepared target' }],
+            },
+          ],
+        },
+      })
+    );
+    const leaf = [...runtime.view.mirror.values()].find(
+      (node) => node.kind === 'text'
+    );
+    if (!leaf) throw new Error('Missing actual text leaf');
+    runtime.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: leaf.key, offset: 2, type: 'text' },
+      focus: { key: leaf.key, offset: 8, type: 'text' },
+    });
+    runtime.executor.run(() => {
+      pending = runtime.port.inputSettled(
+        () => ({
+          ...missingEquation(runtime),
+          name: 'group-b.link',
+          json: '{"action":"toggle","url":"https://example.com"}',
+        }),
+        {
+          after(handled) {
+            order.push(String(handled));
+            captured = runtime.view.selection();
+            expect(runtime.root.textContent).toBe('prepared target');
+            order.push('captured');
+          },
+        }
+      );
+      runtime.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'later input' }],
+              },
+            ],
+          },
+        })
+      );
+      runtime.executor.run(() => {
+        expect(order).toEqual(['true', 'captured']);
+        order.push('later');
+        return runtime.executor.session.tick(
+          runtime.executor.now(),
+          Date.now()
+        );
+      });
+      return runtime.executor.session.tick(runtime.executor.now(), Date.now());
+    });
+    expect(await pending).toEqual({ status: 'success', handled: true });
+    expect(order).toEqual(['true', 'captured', 'later']);
+    expect(captured?.selection.kind).toBe('range');
+    if (captured?.selection.kind !== 'range')
+      throw new Error('Missing acknowledged link selection');
+    expect(captured.selection.anchor.key).not.toBe(leaf.key);
+    expect(captured.selection.anchor.offset).toBe(0);
+    expect(captured.selection.focus.offset).toBe(6);
+    expect(runtime.root.textContent).toBe('later input');
+  } finally {
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+for (const cause of [undefined, null, { kind: 'completion failure' }]) {
+  test(`factory completion retains opaque ${String(cause)} failure on its own entry`, async () => {
+    const runtime = mount();
+    let pending: ReturnType<typeof runtime.port.inputSettled> | undefined;
+    let later: ReturnType<typeof runtime.port.inputSettled> | undefined;
+    let thrown: { error: unknown } | undefined;
+    let calls = 0;
+    try {
+      try {
+        runtime.executor.run(() => {
+          pending = runtime.port.inputSettled(() => missingEquation(runtime), {
+            after(handled) {
+              expect(handled).toBe(false);
+              calls++;
+              throw cause;
+            },
+          });
+          later = runtime.port.inputSettled(() => missingEquation(runtime));
+          return runtime.executor.session.tick(
+            runtime.executor.now(),
+            Date.now()
+          );
+        });
+      } catch (error) {
+        thrown = { error };
+      }
+      expect(thrown).toEqual({ error: cause });
+      expect(await pending).toEqual({ status: 'error', error: cause });
+      expect(calls).toBe(1);
+      runtime.executor.run(() =>
+        runtime.executor.session.tick(runtime.executor.now(), Date.now())
+      );
+      expect(await later).toEqual({ status: 'success', handled: false });
+    } finally {
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+}
+
+test('factory failure and closed admission refusal do not invoke the completion hook', async () => {
+  const runtime = mount();
+  let calls = 0;
+  const options = {
+    after() {
+      calls++;
+    },
+  };
+  let failed: ReturnType<typeof runtime.port.inputSettled> | undefined;
+  let thrown: { error: unknown } | undefined;
+  try {
+    runtime.executor.run(() => {
+      failed = runtime.port.inputSettled(() => {
+        throw null;
+      }, options);
+      return runtime.executor.session.tick(runtime.executor.now(), Date.now());
+    });
+  } catch (error) {
+    thrown = { error };
+  }
+  try {
+    expect(thrown).toEqual({ error: null });
+    expect(await failed).toEqual({ status: 'error', error: null });
+    await runtime.close();
+    expect(() =>
+      runtime.port.inputSettled(() => missingEquation(runtime), options)
+    ).toThrow('closing');
+    expect(calls).toBe(0);
   } finally {
     await runtime.close();
     runtime.root.remove();
