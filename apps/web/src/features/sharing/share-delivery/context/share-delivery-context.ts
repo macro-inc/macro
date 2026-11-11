@@ -1,6 +1,6 @@
 import type { Span } from '@macro-inc/observability';
 import type { Result } from 'neverthrow';
-import type { ShareEvent } from '../core/delivery-plan';
+import type { ShareEvent, ShareMention } from '../core/delivery-plan';
 import type {
   ChannelAccessChange,
   ChannelAccessError,
@@ -12,6 +12,7 @@ export type OutgoingMessage = {
   readonly messageId: string;
   readonly items: readonly ShareItemRef[];
   readonly text: string;
+  readonly mentions: readonly ShareMention[];
 };
 
 export type SentMessage = {

@@ -189,7 +189,8 @@ describe('useShareForm', () => {
       'bulk_share'
     );
     form.setRecipients([channel('channel-1')]);
-    form.setText('FYI');
+    form.setText('FYI @Bob');
+    form.setMentions([{ entity_type: 'user', entity_id: 'user-bob' }]);
 
     const result = await form.submit();
 
@@ -197,8 +198,8 @@ describe('useShareForm', () => {
       [
         {
           channelId: 'channel-1',
-          content: 'FYI',
-          mentions: [],
+          content: 'FYI @Bob',
+          mentions: [{ entity_type: 'user', entity_id: 'user-bob' }],
           attachments: [
             { entity_type: 'thread', entity_id: 'thread-1' },
             { entity_type: 'agent_session', entity_id: 'session-1' },

@@ -80,10 +80,17 @@ export function prefillChannel(
   return only?.kind === 'channel' && rest.length === 0 ? only.id : undefined;
 }
 
+/** Someone or something the sender @mentioned in the message text. */
+export type ShareMention = {
+  readonly entity_type: string;
+  readonly entity_id: string;
+};
+
 export type ShareRequest = {
   readonly items: readonly ShareItem[];
   readonly targets: readonly ShareTarget[];
   readonly text: string;
+  readonly mentions: readonly ShareMention[];
   readonly level: ChannelAccessLevel;
 };
 
@@ -96,6 +103,7 @@ export type PlannedMessage = {
   readonly id: string;
   readonly items: readonly ShareItem[];
   readonly text: string;
+  readonly mentions: readonly ShareMention[];
   readonly grantFirst: readonly GrantStep[];
   readonly grantAfter: readonly GrantStep[];
 };
@@ -140,6 +148,7 @@ export function planShare(
         id: mintMessageId(),
         items,
         text: index === 0 ? request.text : '',
+        mentions: index === 0 ? request.mentions : [],
         grantFirst: grants(items, 'before-send'),
         grantAfter: grants(items, 'after-send'),
       })),

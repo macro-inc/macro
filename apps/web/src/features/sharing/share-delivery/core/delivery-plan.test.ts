@@ -46,6 +46,7 @@ const request = (overrides: Partial<ShareRequest> = {}): ShareRequest => ({
   items: docs(2),
   targets: [channel('channel-1')],
   text: 'Have a look',
+  mentions: [],
   level: 'view',
   ...overrides,
 });
@@ -96,25 +97,32 @@ const grant = (
   );
 
 describe('planShare', () => {
-  it('splits a large batch into messages of at most ten, with the text on the first', () => {
+  it('splits a large batch into messages of at most ten, with the text and mentions on the first', () => {
+    const mention = { entity_type: 'user', entity_id: 'user-bob' };
     const { targets } = plan({
       items: docs(23),
       targets: [channel('channel-1'), channel('channel-2')],
+      mentions: [mention],
     });
     expect(
       targets.map(({ messages }) =>
-        messages.map(({ id, items, text }) => [id, items.length, text])
+        messages.map(({ id, items, text, mentions }) => [
+          id,
+          items.length,
+          text,
+          mentions,
+        ])
       )
     ).toEqual([
       [
-        ['message-1', 10, 'Have a look'],
-        ['message-2', 10, ''],
-        ['message-3', 3, ''],
+        ['message-1', 10, 'Have a look', [mention]],
+        ['message-2', 10, '', []],
+        ['message-3', 3, '', []],
       ],
       [
-        ['message-4', 10, 'Have a look'],
-        ['message-5', 10, ''],
-        ['message-6', 3, ''],
+        ['message-4', 10, 'Have a look', [mention]],
+        ['message-5', 10, '', []],
+        ['message-6', 3, '', []],
       ],
     ]);
   });
@@ -143,6 +151,7 @@ describe('planShare', () => {
         id: 'message-1',
         items: [project, item('doc-1'), thread, call],
         text: 'Have a look',
+        mentions: [],
         grantFirst: [{ item: project, level: 'edit' }],
         grantAfter: [
           { item: item('doc-1'), level: 'edit' },
@@ -216,6 +225,7 @@ describe('remainingWork', () => {
             id: 'message-1',
             items: [project],
             text: 'Have a look',
+            mentions: [],
             grantFirst: [],
             grantAfter: [],
           },

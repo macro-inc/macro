@@ -15,6 +15,7 @@ import {
   planShare,
   prefillChannel,
   remainingWork,
+  type ShareMention,
   type ShareNotice,
   type ShareOutcome,
   type SharePlan,
@@ -87,6 +88,7 @@ export type ShareForm<Recipient extends PickedRecipient> = {
   readonly level: Accessor<LevelField | undefined>;
   readonly setLevel: (level: ChannelAccessLevel) => void;
   readonly setText: (text: string) => void;
+  readonly setMentions: (mentions: readonly ShareMention[]) => void;
   readonly sendable: Accessor<boolean>;
   readonly notices: Accessor<readonly ShareNotice[]>;
   readonly triedToSubmit: Accessor<boolean>;
@@ -102,6 +104,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
   const [groupOn, setGroupOn] = createSignal(true);
   const [pickedLevel, setPickedLevel] = createSignal<ChannelAccessLevel>();
   const [text, setTextValue] = createSignal('');
+  const [mentions, setMentionList] = createSignal<readonly ShareMention[]>([]);
   const [triedToSubmit, setTriedToSubmit] = createSignal(false);
   const [status, setStatus] = createSignal<ShareFormStatus>({ t: 'editing' });
   const locked = () => status().t !== 'editing';
@@ -216,6 +219,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
           messageId: message.id,
           items: message.items,
           text: message.text,
+          mentions: message.mentions,
         },
         span
       );
@@ -244,6 +248,7 @@ export function createShareForm<Recipient extends PickedRecipient>(
         items: options.items(),
         targets,
         text: text(),
+        mentions: mentions(),
         level: level()?.value ?? 'view',
       },
       options.mintMessageId
@@ -332,6 +337,9 @@ export function createShareForm<Recipient extends PickedRecipient>(
     },
     setText: (next) => {
       if (!locked()) setTextValue(next);
+    },
+    setMentions: (next) => {
+      if (!locked()) setMentionList(next);
     },
     sendable,
     notices,

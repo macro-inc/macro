@@ -107,11 +107,14 @@ function useAppShareDeliveryContext(
       const channelId = await resolvePeopleChannel(userIds, span);
       return channelId === undefined ? err({ kind: 'failed' }) : ok(channelId);
     },
-    send: async ({ channelId, messageId, items: attached, text }, span) => {
+    send: async (
+      { channelId, messageId, items: attached, text, mentions },
+      span
+    ) => {
       const sent = await sendToChannel({
         channelId,
         content: text,
-        mentions: [],
+        mentions: [...mentions],
         attachments: attached.map(toAttachment),
         messageId,
         parentSpan: span,

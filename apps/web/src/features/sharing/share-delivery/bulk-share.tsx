@@ -1,8 +1,11 @@
 import { EntityActionSelection } from '@app/features/entity/bulk-edit/components/EntityActionSelection';
 import { isShareableEntity } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
+import { createMentionsTracker } from '@channel/Input/mentions-tracker';
+import { authoredMentions } from '@channel/Input/message-payload';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { ShareRecipientField } from '@core/component/ShareRecipientField';
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { itemToBlockName } from '@core/constant/allBlocks';
@@ -38,11 +41,19 @@ export function BulkShare(props: {
     )
   );
   const form = useShareForm(items, { location: 'bulk_share' });
+  const mentions = createMentionsTracker();
+  const trackMentions =
+    (change: (mention: ItemMention) => void) => (mention: ItemMention) => {
+      change(mention);
+      form.setMentions(authoredMentions(mentions.mentions()));
+    };
   const editor = createConfiguredChannelMarkdownEditor({
     namespace: 'bulk-share-markdown',
     resolveAppLink: useMacroMentionLinkResolver(),
     enableMentions: true,
     onChange: form.setText,
+    onMentionCreate: trackMentions(mentions.onMentionCreate),
+    onMentionRemove: trackMentions(mentions.onMentionRemove),
   });
 
   return (
