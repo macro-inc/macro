@@ -23,15 +23,9 @@ import Sparkle from '@icon/system/regular/sparkle.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
 import {
-  $convertCardToMention,
-  $getId,
-  $isDocumentCardNode,
   DEFAULT_PREVIEW_BOX,
   type DocumentCardDecoratorProps,
-  HISTORY_MERGE_TAG,
   type PreviewBox,
-  setDocumentCardPreviewComponent,
-  unsetDocumentCardPreviewCache,
 } from '@macro-inc/lexical-core';
 import {
   type AccessiblePreviewItem,
@@ -42,12 +36,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { Card, cn, Dropdown, Item } from '@ui';
-import {
-  $addUpdateTag,
-  $createNodeSelection,
-  $getNodeByKey,
-  $setSelection,
-} from 'lexical';
 import type { JSX } from 'solid-js';
 import {
   createEffect,
@@ -71,10 +59,9 @@ import {
 } from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { useMarkdownHost } from '../../context/MarkdownHostContext';
+import type { DocumentCardHost } from '../../decorator-host/document-card-host';
+import { createLexicalDocumentCardHost } from '../../decorator-host/lexical-document-card';
 import { floatWithElement } from '../../directive/floatWithElement';
-import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
-import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
-import { dispatchInternalLayoutShift } from '../../plugins/shared/utils';
 import { BlockLink, openDocument } from '../core/BlockLink';
 import { DatabaseCard } from './DatabaseCard';
 
@@ -91,7 +78,11 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
   return [widthStr, heightStr];
 };
 
-export function DocumentCard(props: DocumentCardDecoratorProps) {
+export type DocumentCardProps = DocumentCardDecoratorProps & {
+  readonly host?: DocumentCardHost;
+};
+
+export function DocumentCard(props: DocumentCardProps) {
   if (props.blockName === 'database') return <DatabaseCard {...props} />;
   return (
     <Suspense
@@ -122,18 +113,14 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
   );
 }
 
-function DocumentCardInner(props: DocumentCardDecoratorProps) {
+function DocumentCardInner(props: DocumentCardProps) {
   const wrapper = useContext(LexicalWrapperContext);
-  const editor = () => wrapper?.editor;
-  const [editable, setEditable] = createSignal(editor()?.isEditable() ?? false);
-  if (wrapper) {
-    onCleanup(
-      wrapper.editor.registerEditableListener((value) => {
-        setEditable(value);
-      })
-    );
-  }
-  const selection = () => wrapper?.selection;
+  const host = props.host ?? createLexicalDocumentCardHost(wrapper);
+  const [editable, setEditable] = createSignal(host.isEditable());
+  const releaseEditable = host.registerEditableListener((value) => {
+    setEditable(value);
+  });
+  if (releaseEditable) onCleanup(releaseEditable);
   const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
   // Outside the legacy block system the markdown's host names the parent.
@@ -158,37 +145,17 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   const [hasLoadedPreview, setHasLoadedPreview] = createSignal(false);
 
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
-
+  const isSelectedAsNode = () => host.isSelected(props.key);
   const clickCardHandler = () => {
-    const e = editor();
-    if (!e) return;
-    if (!e.isEditable()) return;
-    if (isSelectedAsNode()) return;
-    e.update(() => {
-      const sel = $createNodeSelection();
-      sel.add(props.key);
-      $setSelection(sel);
-    });
+    if (!host.available() || !host.isEditable() || isSelectedAsNode()) return;
+    host.select(props.key);
   };
 
   const [dropdownOpen, setDropdownOpen] = createSignal(false);
   const [, setContainerRef] = createSignal<HTMLDivElement>();
 
-  const resizePreview = (height: string) => {
-    editor()?.update(() => {
-      $addUpdateTag(HISTORY_MERGE_TAG);
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentCardNode(node)) return;
-      const [width] = node.getPreviewBox();
-      node.setPreviewBox([width, height]);
-      dispatchInternalLayoutShift(editor()!);
-    });
-  };
+  const resizePreview = (height: string) =>
+    host.setPreviewHeight(props.key, height);
 
   const previewContext = createMemo<
     Partial<PreviewState & { showDraftSelectorButton: boolean }>
@@ -197,34 +164,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       onChangePreviewHeight: (h: string) => resizePreview(h),
       showDraftSelectorButton: true,
       canvas: {
-        onLocationChange: (location) => {
-          const currentEditor = editor();
-          if (!currentEditor) return;
-          const focused = document.activeElement;
-          const restoreFocus =
-            focused instanceof HTMLElement &&
-            currentEditor.getElementByKey(props.key)?.contains(focused);
-          currentEditor.update(
-            () => {
-              $addUpdateTag(HISTORY_MERGE_TAG);
-              const node = $getNodeByKey(props.key);
-              if (!$isDocumentCardNode(node)) return;
-              node.setPreviewData({
-                view: location,
-              });
-            },
-            {
-              onUpdate: () => {
-                if (
-                  restoreFocus &&
-                  focused instanceof HTMLElement &&
-                  focused.isConnected
-                )
-                  focused.focus({ preventScroll: true });
-              },
-            }
-          );
-        },
+        onLocationChange: (location) =>
+          host.setCanvasLocation(props.key, location),
       },
     };
   });
@@ -253,7 +194,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
   // Cached previews outlive individual Lexical decorator instances, so attach
   // them to the editor lifecycle rather than the decorator lifecycle.
-  const previewOwner = wrapper?.owner ?? getOwner();
+  const previewOwner = host.previewOwner;
   const cardOwner = getOwner();
   let disposeStaticPreview: (() => void) | undefined;
   onCleanup(() => disposeStaticPreview?.());
@@ -268,8 +209,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
 
       return createRoot((dispose) => {
         const element = createMemo(getElement);
-        setDocumentCardPreviewComponent(nodeId, element, dispose);
-        disposeOnOwnerCleanup = () => unsetDocumentCardPreviewCache(nodeId);
+        host.cachePreview(nodeId, element, dispose);
+        disposeOnOwnerCleanup = () => host.clearPreview(nodeId);
         return element;
       }, previewOwner);
     });
@@ -318,8 +259,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       );
     }
 
-    const currentEditor = editor();
-    if (!currentEditor) {
+    if (!host.available()) {
       // A static render (a sent message) has no editor to cache previews
       // on: the card owns its preview and disposes it with itself.
       const element = createRoot((dispose) => {
@@ -330,11 +270,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       setPreviewComponent(() => element);
       return;
     }
-    const nodeId = currentEditor.read(() => {
-      const node = $getNodeByKey(props.key);
-      if (!node) return;
-      return $getId(node);
-    });
+    const nodeId = host.nodeId(props.key);
     if (!nodeId) return;
 
     const noDispose = registerPreviewElement(nodeId, getElement);
@@ -343,24 +279,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     setPreviewComponent(() => noDispose);
   });
 
-  const deleteCard = () => {
-    const currentEditor = editor();
-    if (!currentEditor) return;
-    removeNodeAndRestoreSelection(
-      currentEditor,
-      props.key,
-      $isDocumentCardNode
-    );
-  };
-
-  const convertToMention = () => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentCardNode(node)) return false;
-      $convertCardToMention(node);
-      return true;
-    });
-  };
+  const deleteCard = () => host.remove(props.key);
+  const convertToMention = () => host.convertToMention(props.key);
 
   const canOpenInChat = () =>
     currentBlockName !== 'chat' &&
@@ -415,15 +335,15 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     const i = item();
     if (!i || i.loading) return;
     if (i.access === 'access') {
-      editor()?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+      host.updateDocumentNames({
         [props.documentId]: i.name,
       });
     } else if (i.access === 'no_access') {
-      editor()?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+      host.updateDocumentNames({
         [props.documentId]: 'No Access',
       });
     } else if (i.access === 'does_not_exist') {
-      editor()?.dispatchCommand(UPDATE_DOCUMENT_NAME_COMMAND, {
+      host.updateDocumentNames({
         [props.documentId]: 'Deleted',
       });
     }
@@ -456,12 +376,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   );
 
   const debouncedUpdatePreviewBox = debounce((size: [number, number]) => {
-    editor()?.update(() => {
-      const node = $getNodeByKey(props.key);
-      if (!$isDocumentCardNode(node)) return false;
-      node.setPreviewBox(size);
-      return true;
-    });
+    host.setPreviewBox(props.key, size);
   }, 1000);
 
   // Native resizing changes the inline style. Keep that height in Solid before
@@ -473,9 +388,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       if (!resizable() || el.style.height === previewBoxHeight()) return;
       const { width, height } = el.getBoundingClientRect();
       setPreviewBoxHeight(el.style.height);
-      if (editor()) {
-        dispatchInternalLayoutShift(editor()!);
-      }
+      host.layoutChanged?.();
       debouncedUpdatePreviewBox([width, height]);
     });
     observer.observe(el, { attributes: true, attributeFilter: ['style'] });

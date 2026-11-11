@@ -1,12 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
 import {
-  $convertCardToMention,
-  $isDocumentCardNode,
-  type DocumentCardDecoratorProps,
-} from '@macro-inc/lexical-core';
-import { $getNodeByKey, SKIP_DOM_SELECTION_TAG } from 'lexical';
-import {
   createSignal,
   lazy,
   onCleanup,
@@ -15,7 +9,9 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { createLexicalDocumentCardHost } from '../../decorator-host/lexical-document-card';
 import { LexicalInteractiveBoundary } from '../core/LexicalInteractiveBoundary';
+import type { DocumentCardProps } from './DocumentCard';
 
 const DocumentDatabase = lazy(async () => ({
   default: (await import('@app/features/block-database/document-database'))
@@ -23,46 +19,31 @@ const DocumentDatabase = lazy(async () => ({
 }));
 
 /** Database cards use their own metadata and editor, never document previews. */
-export function DatabaseCard(props: DocumentCardDecoratorProps) {
+export function DatabaseCard(props: DocumentCardProps) {
   const enabled = useFeatureFlag(enableDatabases);
   const wrapper = useContext(LexicalWrapperContext);
+  const host = props.host ?? createLexicalDocumentCardHost(wrapper);
   const [collapsed, setCollapsed] = createSignal(false);
   const [params, setParams] = createSignal(props.blockParams ?? {});
   let savedParams = props.blockParams;
-  if (wrapper)
-    onCleanup(
-      wrapper.editor.registerUpdateListener(({ editorState }) => {
-        editorState.read(() => {
-          const node = $getNodeByKey(props.key);
-          if (!$isDocumentCardNode(node)) return;
-          const next = node.getBlockParams();
-          if (next !== savedParams) {
-            savedParams = next;
-            setParams(next);
-          }
-        });
-      })
-    );
+  const releaseParams = host.observeBlockParams(props.key, (next) => {
+    if (next !== savedParams) {
+      savedParams = next;
+      setParams(next);
+    }
+  });
+  if (releaseParams) onCleanup(releaseParams);
   const changeLocation = (params: Record<string, string>) => {
     setParams(params);
-    if (!wrapper?.editor.isEditable() || !wrapper.isInteractable()) return;
-    wrapper.editor.update(
-      () => {
-        const node = $getNodeByKey(props.key);
-        if ($isDocumentCardNode(node)) node.setBlockParams(params);
-      },
-      { tag: SKIP_DOM_SELECTION_TAG }
-    );
+    if (!host.isEditable() || !host.isInteractable()) return;
+    host.setBlockParams(props.key, params);
   };
   const toggle = () => {
-    if (!wrapper?.editor.isEditable() || !wrapper.isInteractable()) {
+    if (!host.isEditable() || !host.isInteractable()) {
       setCollapsed(!collapsed());
       return;
     }
-    wrapper.editor.update(() => {
-      const node = $getNodeByKey(props.key);
-      if ($isDocumentCardNode(node)) $convertCardToMention(node).selectEnd();
-    });
+    host.convertToMention(props.key, true);
   };
   const placeholder = () => (
     <div class="my-2 rounded-lg border border-edge-muted px-3 py-2 text-sm text-ink-muted">
@@ -71,7 +52,7 @@ export function DatabaseCard(props: DocumentCardDecoratorProps) {
   );
   return (
     <Show
-      when={enabled().enabled && !wrapper?.skipPreviewFetch}
+      when={enabled().enabled && !host.skipPreviewFetch}
       fallback={placeholder()}
     >
       <Suspense fallback={placeholder()}>
