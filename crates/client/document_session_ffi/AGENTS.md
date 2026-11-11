@@ -48,6 +48,8 @@ Observe live authorization through effective_access on either session object; ne
 
 Project every core Diff field exhaustively; omit native decorator policies and signatures explicitly, transport only invalidation keys, and append full-u64 SetDecoratorRevision after existing UniFFI tags. A projection or mutation return does not grant consuming-view observation authority.
 
+Read list markers through shared numbering, nesting and parent-aware checked helpers; never derive document policy in platform drawing.
+
 Read decorator model text and instance layout facts in bulk through generation-aware queries; keep application display lookups outside the FFI.
 
 Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich MIME order, file flags and HTML nodes independently, and initialize ordinary native clipboard reads explicitly to false.

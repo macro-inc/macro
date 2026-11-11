@@ -712,3 +712,169 @@ fn native_clipboard_namespace_matches_its_application_and_portable_paste_profile
         assert_eq!(payload["namespace"], namespace);
     }
 }
+
+#[test]
+fn native_list_markers_use_shared_numbering_nesting_and_checked_state() {
+    let session = NativeEditorSession::new(
+        application_config(),
+        None,
+        FfiNow {
+            mono_ms: 0,
+            wall_ms: 1_000_000,
+        },
+    )
+    .unwrap();
+    let root = json!({"type":"root","children":[
+        {"type":"list","listType":"number","start":4,"children":[
+            {"type":"listitem","value":4,"$":{"id":"fixture-number-first"},"children":[{"type":"text","text":"😀 first"}]},
+            {"type":"listitem","value":5,"$":{"id":"fixture-nested-wrapper"},"children":[
+                {"type":"list","listType":"check","start":1,"children":[
+                    {"type":"listitem","value":1,"checked":true,"$":{"id":"fixture-check"},"children":[{"type":"text","text":"nested"}]}
+                ]}
+            ]},
+            {"type":"listitem","value":5,"$":{"id":"fixture-number-last"},"children":[{"type":"text","text":"last"}]}
+        ]},
+        {"type":"list","listType":"bullet","start":1,"children":[
+            {"type":"listitem","value":1,"$":{"id":"fixture-bullet"},"children":[{"type":"text","text":"bullet"}]}
+        ]}
+    ]});
+    for (step, input) in [
+        FfiInput::Start,
+        FfiInput::Seed {
+            kind: SeedKind::Optimistic,
+            snapshot: vec![],
+        },
+        FfiInput::SetState {
+            root: serde_json::from_value(root).unwrap(),
+        },
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let output = session
+            .handle(
+                FfiNow {
+                    mono_ms: step as u64,
+                    wall_ms: 1_000_000 + step as i64,
+                },
+                input,
+            )
+            .unwrap();
+        assert!(
+            !output
+                .view
+                .iter()
+                .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+        );
+    }
+    let mut keys = Vec::new();
+    for id in [
+        "fixture-bullet",
+        "fixture-check",
+        "fixture-number-first",
+        "fixture-nested-wrapper",
+        "fixture-number-last",
+    ] {
+        let FfiQueryReply::Nodes { keys: found, .. } =
+            session.query(FfiQuery::NodeById { id: id.into() }).unwrap()
+        else {
+            panic!("node identity")
+        };
+        assert_eq!(found.len(), 1, "{id}");
+        keys.push(found[0]);
+    }
+    let FfiQueryReply::State { root: before } = session.query(FfiQuery::State).unwrap() else {
+        panic!("state")
+    };
+    let FfiQueryReply::ListMarkers { markers } = session
+        .query(FfiQuery::ListMarkers { keys: keys.clone() })
+        .unwrap()
+    else {
+        panic!("markers")
+    };
+    assert_eq!(
+        markers.iter().map(|marker| marker.key).collect::<Vec<_>>(),
+        keys
+    );
+    assert!(matches!(markers[0].kind, FfiListMarkerKind::Bullet));
+    assert_eq!(markers[0].depth, 1);
+    assert!(matches!(
+        markers[1].kind,
+        FfiListMarkerKind::Check { checked: true }
+    ));
+    assert_eq!(markers[1].depth, 2);
+    assert!(matches!(
+        markers[2].kind,
+        FfiListMarkerKind::Number { value: 4 }
+    ));
+    assert_eq!(markers[2].depth, 1);
+    assert!(matches!(markers[3].kind, FfiListMarkerKind::Nested));
+    assert_eq!(markers[3].depth, 1);
+    assert!(matches!(
+        markers[4].kind,
+        FfiListMarkerKind::Number { value: 5 }
+    ));
+    let FfiQueryReply::State { root: after } = session.query(FfiQuery::State).unwrap() else {
+        panic!("state")
+    };
+    assert_eq!(before, after);
+    let output = session
+        .application_command(
+            FfiNow {
+                mono_ms: 3,
+                wall_ms: 1_000_003,
+            },
+            "group-b.checklist".into(),
+            json!({"action":"toggle","key":keys[1].index()}),
+            keys[1].generation(),
+            ViewSelection::KeepModel,
+        )
+        .unwrap();
+    assert!(
+        !output
+            .view
+            .iter()
+            .any(|effect| matches!(effect, FfiViewEffect::Error { .. }))
+    );
+    let FfiQueryReply::ListMarkers { markers } = session
+        .query(FfiQuery::ListMarkers {
+            keys: vec![keys[1]],
+        })
+        .unwrap()
+    else {
+        panic!("markers")
+    };
+    assert!(matches!(
+        markers[0].kind,
+        FfiListMarkerKind::Check { checked: false }
+    ));
+    assert!(
+        session
+            .query(FfiQuery::ListMarkers {
+                keys: vec![NodeKey::ROOT]
+            })
+            .is_err()
+    );
+    let FfiQueryReply::ListMarkers { markers } = session
+        .query(FfiQuery::ListMarkers { keys: vec![] })
+        .unwrap()
+    else {
+        panic!("empty markers")
+    };
+    assert!(markers.is_empty());
+    session
+        .handle(
+            FfiNow {
+                mono_ms: 4,
+                wall_ms: 1_000_004,
+            },
+            FfiInput::SetState {
+                root: serde_json::from_value(
+                    json!({"type":"root","children":[{"type":"paragraph","children":[]}]}),
+                )
+                .unwrap(),
+            },
+        )
+        .unwrap();
+    assert!(session.query(FfiQuery::ListMarkers { keys }).is_err());
+}

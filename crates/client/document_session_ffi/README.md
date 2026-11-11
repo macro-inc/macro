@@ -91,3 +91,9 @@ the compiler's host triple for both library and generator, so inherited
 `ModifyTarget::ModelSegmentation` is an explicit model-only Unicode policy. It
 is available consistently in native bindings; a missing required view target
 still reports LayoutRequired and never chooses segmentation automatically.
+
+`ListMarkers` reads attached generation-aware list-item keys in caller order.
+The shared list helpers provide numbering, parent-aware checkbox state and
+nesting depth; nested-list wrappers have no independent marker. The query does
+not mutate document/history state and supplies no platform geometry. Invalid,
+detached and wrong-kind keys reject the query rather than returning stale facts.

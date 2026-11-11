@@ -1,5 +1,7 @@
 //! Typed bulk native queries without an editor snapshot crossing on every keystroke.
 use crate::*;
+mod list;
+pub use list::*;
 /// Markdown export policy, shared with the portable boundary.
 pub type FfiMarkdownFlavor = MarkdownFlavor;
 #[uniffi::remote(Enum)]
@@ -98,6 +100,11 @@ pub enum FfiQuery {
         /// Generation-aware keys from the current structured view patch.
         keys: Vec<NodeKey>,
     },
+    /// Read shared list markers and nesting in requested key order.
+    ListMarkers {
+        /// Current attached list-item identities from the view patch.
+        keys: Vec<NodeKey>,
+    },
 }
 /// A native query result, with only the requested payload.
 #[derive(uniffi::Enum)]
@@ -173,6 +180,11 @@ pub enum FfiQueryReply {
         /// Current attached decorators.
         nodes: Vec<FfiDecorator>,
     },
+    /// Model-owned markers for the requested attached list items.
+    ListMarkers {
+        /// Ordered marker facts, without platform geometry.
+        markers: Vec<FfiListMarker>,
+    },
 }
 /// Immutable model facts for native decorator presentation.
 #[derive(uniffi::Record)]
@@ -231,6 +243,9 @@ pub(crate) fn query(
         FfiQuery::Node { key } => FfiQueryReply::Nodes {
             keys: vec![key],
             nodes: vec![view.export_json(key).map_err(invalid)?],
+        },
+        FfiQuery::ListMarkers { keys } => FfiQueryReply::ListMarkers {
+            markers: list::markers(state, keys)?,
         },
         FfiQuery::Decorators { keys } => {
             let mut nodes = Vec::with_capacity(keys.len());
