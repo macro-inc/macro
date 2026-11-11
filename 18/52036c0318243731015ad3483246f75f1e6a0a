@@ -1,0 +1,27 @@
+crates/scheduled_action/src/domain/event_runs/admission/test.rs
+  s_45e02213934692::t_12675d1cd7f989 324
+apps/web/src/lib/service-clients/service-agent-reviews/generated/types.ts
+  s_45e02213934692::t_1c04a2bc71ae24 856-857
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_45e02213934692::t_b19ce61bead747 19
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_45e02213934692::t_504a365ac5f741 118
+packages/sdk/generated/agent-reviews/index.ts
+  s_45e02213934692::t_f3489f752eb828 811-812
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1852036c0318243731015ad3483246f75f1e6a0a",
+  "prompts": {},
+  "sessions": {
+    "s_45e02213934692": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f8d27815-6322-4700-80df-638571b17855",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+apps/docs/AI/mcp/tools/update-calendar-event.mdx
+  s_45e02213934692::t_ec6a28b05cc295 21-22,40-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f9a7b8767fa6466db0abdba5ac1a157309bfd409",
+  "prompts": {},
+  "sessions": {
+    "s_45e02213934692": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f8d27815-6322-4700-80df-638571b17855",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
