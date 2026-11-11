@@ -7,12 +7,17 @@
 //           holds the PR head, set pending
 //   finish  the run ends: success when every job passed or was path-skipped
 //   label   the label goes on a PR: fail when it can't start PR CI, because the
-//           PR conflicts with main or its merge commit predates PR CI
+//           PR targets another branch, conflicts with main, or its merge commit
+//           predates PR CI
+//   run-end a run ends: fail a request it opened and never closed, because
+//           GitHub ended the run without its gate job, or it was cancelled
 //   fork-request  the label goes on a fork PR: what start does with a write
 //                 token, from a trusted run of `main`'s workflow
 //   fork    after a fork PR's run, whose read-only token could not set the status
 //
-// Statuses go on the PR head commit, so a later push starts without one.
+// Statuses go on the PR head commit, so a later push starts without one. Every
+// pending `Running on` request ends in a result: finish or fork sets it, and
+// run-end or fork closes one the run left open.
 //
 // A fork PR's run uses the workflow files of its merge commit, so a fork that
 // edits them decides its own verdict. Both fork steps fail closed instead: the
@@ -27,6 +32,8 @@ const RUNNING = 'Running on';
 // Job names in `PR CI`; the fork step reads them back from the finished run.
 export const START_JOB = 'Start';
 export const GATE_JOB = 'CI gate';
+// The only base branch PR CI runs on.
+export const BASE = 'main';
 // The workflow whose jobs the fork step trusts, and the trees that define it:
 // the generated workflows and the Rust that generates them.
 export const PR_CI_PATH = '.github/workflows/pr-ci.yml';
@@ -35,13 +42,30 @@ export const STALE_MERGE =
   "PR CI can't start: this PR's merge commit predates PR CI. Merge main in, push, and add the run-ci label again.";
 export const CONFLICTS =
   "PR CI can't start: this PR conflicts with main. Merge main in, push, and add the run-ci label again.";
+export const WRONG_BASE =
+  "PR CI can't start: it runs only on PRs into main, and this PR targets another branch. Add the run-ci label once it targets main.";
+// A run-end or fork step found the request a run left open.
+export const NO_VERDICT = 'no-verdict';
 export const FORK_CHANGES_CI =
   'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
 type State = 'pending' | 'success' | 'failure' | 'error';
 export type Needs = Record<string, { result: string }>;
 export type RunJob = { name: string; conclusion: string | null };
-type Outcome = { state: State; description: string } | null;
+type Verdict = { state: State; description: string };
+type Outcome = Verdict | null;
+export type GateStatus = { state: string; description: string; targetUrl: string };
+/// The fields of a `workflow_run` the run-end and fork steps read.
+type FinishedRun = {
+  id: number;
+  workflow_id: number;
+  head_sha: string;
+  conclusion: string | null;
+  html_url: string;
+  path: string;
+  run_attempt: number;
+  pull_requests?: { number: number }[];
+};
 /// Git tree SHA of each CI source at a commit; null where the path is missing.
 export type CiTrees = Record<string, string | null>;
 
@@ -121,16 +145,23 @@ export function gateOutcome(needs: Needs, head: string): Outcome {
 }
 
 /// A fork run's verdict from its jobs. Null when the run was not a request
-/// (unrelated label) or did not finish (cancelled).
-export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Outcome {
+/// (unrelated label); `NO_VERDICT` when it was one that ended without a gate
+/// verdict: cancelled, or GitHub never ran the gate job.
+export function forkOutcome(
+  jobs: RunJob[],
+  head: string,
+  labelName: string,
+): Verdict | typeof NO_VERDICT | null {
   const start = jobs.find((job) => job.name === START_JOB);
   const gate = jobs.find((job) => job.name === GATE_JOB);
 
-  if (!start || start.conclusion === 'skipped' || start.conclusion === 'cancelled') {
+  // Every run has a Start job; a run for another label skips it.
+  if (start?.conclusion === 'skipped') {
     return null;
   }
 
-  if (start.conclusion !== 'success') {
+  // A cancelled or missing start falls through to `NO_VERDICT`.
+  if (start && start.conclusion !== 'success' && start.conclusion !== 'cancelled') {
     return {
       state: 'failure',
       description: `Could not start on ${head.slice(0, 7)}. Add the ${labelName} label again.`,
@@ -145,7 +176,23 @@ export function forkOutcome(jobs: RunJob[], head: string, labelName: string): Ou
     return { state: 'failure', description: 'Failed: see the PR CI run' };
   }
 
-  return null;
+  return NO_VERDICT;
+}
+
+/// The result for a request whose run ended without a verdict. `retry` says
+/// how to run CI again.
+export function noVerdict(conclusion: string | null, retry: string): Verdict {
+  const what =
+    conclusion === 'cancelled'
+      ? 'PR CI was cancelled before its verdict'
+      : 'PR CI ended without a verdict';
+  return { state: 'failure', description: `${what}. ${retry}` };
+}
+
+/// Whether another run on the same head is still going. A newer request
+/// cancels the older run, and its start step takes the status over.
+export function anotherRunGoing(runs: { id: number; status: string }[], runId: number): boolean {
+  return runs.some((other) => other.id !== runId && other.status !== 'completed');
 }
 
 /// The CI sources whose tree differs between a fork head and the commit it
@@ -167,10 +214,18 @@ export function forkRunDistrust(runPath: string, changes: string[]): string | nu
   return null;
 }
 
-/// Why the label can't start PR CI, or null. GitHub runs no `pull_request`
-/// workflow on a conflicting PR, and takes the workflow files from the PR's
-/// merge commit, which it refreshes on a push but not when main moves on.
-export function labelBlocker(mergeable: boolean | null, mergeHasPrCi: boolean): string | null {
+/// Why the label can't start PR CI, or null. PR CI runs only on PRs into
+/// main. GitHub runs no `pull_request` workflow on a conflicting PR, and takes
+/// the workflow files from the PR's merge commit, which it refreshes on a push
+/// but not when main moves on.
+export function labelBlocker(
+  base: string,
+  mergeable: boolean | null,
+  mergeHasPrCi: boolean,
+): string | null {
+  if (base !== BASE) {
+    return WRONG_BASE;
+  }
   if (mergeable === false) {
     return CONFLICTS;
   }
@@ -191,19 +246,33 @@ async function setStatus(sha: string, state: State, description: string, targetU
 }
 
 /// The newest gate status on a commit (GitHub lists statuses newest first).
-async function gateStatus(sha: string): Promise<{ state: string; description: string } | undefined> {
-  const statuses: { context: string; state: string; description: string | null }[] = await github(
-    'GET',
-    `/repos/${repo()}/commits/${sha}/statuses?per_page=100`,
-  );
+async function gateStatus(sha: string): Promise<GateStatus | undefined> {
+  const statuses: {
+    context: string;
+    state: string;
+    description: string | null;
+    target_url: string | null;
+  }[] = await github('GET', `/repos/${repo()}/commits/${sha}/statuses?per_page=100`);
   const status = statuses.find((each) => each.context === context());
-  return status && { state: status.state, description: status.description ?? '' };
+  return (
+    status && {
+      state: status.state,
+      description: status.description ?? '',
+      targetUrl: status.target_url ?? '',
+    }
+  );
 }
 
 /// Whether a trusted step opened a request on this commit that no result has
 /// closed yet.
-export function isOpenRequest(status: { state: string; description: string } | undefined): boolean {
+export function isOpenRequest(status: Omit<GateStatus, 'targetUrl'> | undefined): boolean {
   return status?.state === 'pending' && status.description.startsWith(RUNNING);
+}
+
+/// Whether the open request on a commit is this run's: start links it to the
+/// run it opened it from.
+export function ownsRequest(status: GateStatus | undefined, runId: number): boolean {
+  return isOpenRequest(status) && status!.targetUrl.endsWith(`/actions/runs/${runId}`);
 }
 
 /// The tree SHA at `path` in a commit, walking one directory at a time.
@@ -255,7 +324,7 @@ async function labelProblem(pr: string): Promise<string | null> {
   }
   const merge: string | null = pull.merge_commit_sha;
   const hasPrCi = merge !== null && (await exists(PR_CI_PATH, merge));
-  return labelBlocker(pull.mergeable, hasPrCi);
+  return labelBlocker(pull.base.ref, pull.mergeable, hasPrCi);
 }
 
 async function labelCheck() {
@@ -347,6 +416,40 @@ async function finish() {
   }
 }
 
+/// Fail a request the run left open, unless a newer run on the head took it
+/// over.
+async function closeWithoutVerdict(run: FinishedRun, retry: string) {
+  const query = `head_sha=${run.head_sha}&per_page=100`;
+  const { workflow_runs: runs } = await github(
+    'GET',
+    `/repos/${repo()}/actions/workflows/${run.workflow_id}/runs?${query}`,
+  );
+  if (anotherRunGoing(runs, run.id)) {
+    console.log(`Another run on ${run.head_sha.slice(0, 10)} is going; it owns the request.`);
+    return;
+  }
+  const verdict = noVerdict(run.conclusion, retry);
+  await setStatus(run.head_sha, verdict.state, verdict.description, run.html_url);
+}
+
+async function runEnd() {
+  const run: FinishedRun = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
+
+  // The gate job replaces start's request with a result. A request this run
+  // still owns means the gate job never set one.
+  if (!ownsRequest(await gateStatus(run.head_sha), run.id)) {
+    console.log(`${run.head_sha.slice(0, 10)} has no open request from this run.`);
+    return;
+  }
+
+  const pr = run.pull_requests?.[0]?.number;
+  const retry =
+    pr === undefined
+      ? `Add the ${label()} label again.`
+      : `Run again: ${runCommand(repo(), String(pr), label())}`;
+  await closeWithoutVerdict(run, retry);
+}
+
 async function forkRequest() {
   const head = env('HEAD_SHA');
   const pr = env('PR_NUMBER');
@@ -369,9 +472,8 @@ async function forkRequest() {
 }
 
 async function fork() {
-  const event = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8'));
-  const run = event.workflow_run;
-  const head: string = run.head_sha;
+  const run: FinishedRun = JSON.parse(readFileSync(env('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
+  const head = run.head_sha;
 
   // The request step opened this on the head the label was added at. A run on
   // any other commit, such as one the fork pushed with a rewritten workflow,
@@ -402,7 +504,9 @@ async function fork() {
   }
 
   const outcome = forkOutcome(jobs, head, label());
-  if (outcome) {
+  if (outcome === NO_VERDICT) {
+    await closeWithoutVerdict(run, `Add the ${label()} label again.`);
+  } else if (outcome) {
     await setStatus(head, outcome.state, outcome.description, run.html_url);
   }
 }
@@ -413,6 +517,7 @@ export async function main() {
     label: labelCheck,
     start,
     finish,
+    'run-end': runEnd,
     'fork-request': forkRequest,
     fork,
   };

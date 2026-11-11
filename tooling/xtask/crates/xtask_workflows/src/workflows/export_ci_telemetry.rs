@@ -26,6 +26,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "CI Gate Reminder",
     "CI Gate for Forks",
     "CI Gate Label Check",
+    "CI Gate Run End",
     "CLA",
     "Cancel Stuck Cloud Storage Deploys",
     "Cleanup Preview",

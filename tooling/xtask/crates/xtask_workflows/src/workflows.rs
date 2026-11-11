@@ -30,6 +30,7 @@ mod check_tauri_lockfiles;
 mod ci_gate_fork;
 mod ci_gate_label;
 mod ci_gate_reminder;
+mod ci_gate_run_end;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -341,6 +342,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ci_gate_label",
         file_name: "ci-gate-label.yml",
         render_yaml: || render_gh_workflow(ci_gate_label::ci_gate_label)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_run_end",
+        file_name: "ci-gate-run-end.yml",
+        render_yaml: || render_gh_workflow(ci_gate_run_end::ci_gate_run_end)(),
     },
     WorkflowFile {
         slug: "ci_gate_fork",

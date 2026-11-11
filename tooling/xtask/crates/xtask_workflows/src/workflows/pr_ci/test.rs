@@ -65,6 +65,47 @@ fn only_the_run_label_starts_anything() {
     assert!(group.contains("github.event.label.name == 'run-ci' && 'requested' || github.run_id"));
 }
 
+fn rendered_plain(build: fn() -> gh_workflow::Workflow) -> serde_yaml::Value {
+    let yaml = crate::workflows::render_gh_workflow(build)().expect("workflow should render");
+    serde_yaml::from_str(&yaml).expect("workflow should parse")
+}
+
+/// `PR CI` runs only on PRs into main. The label checks must still answer a
+/// request on any other base, or `CI gate` keeps whatever it said.
+#[test]
+fn the_label_checks_answer_on_every_base() {
+    for build in [
+        crate::workflows::ci_gate_label::ci_gate_label,
+        crate::workflows::ci_gate_fork::ci_gate_fork,
+    ] {
+        let workflow = rendered_plain(build);
+        let trigger = &workflow["on"]["pull_request_target"];
+
+        assert!(
+            trigger.is_mapping(),
+            "{:?} has no label trigger",
+            workflow["name"]
+        );
+        assert!(
+            trigger.get("branches").is_none(),
+            "{:?} must see labels on every base",
+            workflow["name"]
+        );
+    }
+}
+
+/// `workflow_run` names the workflow it follows; a rename of `PR CI` would
+/// silently stop closing requests its runs leave open.
+#[test]
+fn run_end_follows_pr_ci() {
+    let run_end = rendered_plain(crate::workflows::ci_gate_run_end::ci_gate_run_end);
+
+    assert_eq!(
+        run_end["on"]["workflow_run"]["workflows"][0],
+        rendered()["name"]
+    );
+}
+
 /// Actions would expand this in the embedded source before the shell ever saw it.
 #[test]
 fn the_gate_script_contains_no_actions_expressions() {

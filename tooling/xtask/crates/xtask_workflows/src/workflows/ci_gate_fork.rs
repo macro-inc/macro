@@ -6,7 +6,8 @@
 //! a pending `CI gate` request on the head it was added at. When the fork's run
 //! ends, `report` copies its verdict, but only onto a commit with an open
 //! request: a fork token can't set statuses, so a run on any other commit
-//! reports nothing.
+//! reports nothing. A request whose run ended without a verdict fails, as
+//! `CI Gate Run End` does for same-repo runs.
 //!
 //! The fork's run uses the fork's workflow files, so both jobs fail closed when
 //! the fork changed `.github` or the workflow generator, and `report` trusts
@@ -26,11 +27,8 @@ const FORK_PULL_REQUEST: &str =
 pub fn ci_gate_fork() -> Workflow {
     Workflow::new("CI Gate for Forks")
         .on(Event::default()
-            .pull_request_target(
-                PullRequestTarget::default()
-                    .add_branch("main")
-                    .add_type(PullRequestType::Labeled),
-            )
+            // Every base, so a request on a PR into another branch fails with why.
+            .pull_request_target(PullRequestTarget::default().add_type(PullRequestType::Labeled))
             .workflow_run(
                 WorkflowRun::default()
                     .add_type(WorkflowRunType::Completed)

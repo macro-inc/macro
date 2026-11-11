@@ -2,10 +2,12 @@
 //! can start [`pr_ci`](crate::workflows::pr_ci), and says why not in `CI gate`.
 //! Generated into `ci-gate-label.yml`.
 //!
-//! `pull_request` runs take their workflow files from the PR's merge commit with
-//! `main`. GitHub refreshes that commit on a push, not when `main` moves, and
-//! makes none while the PR conflicts. So the label on a PR last pushed before
-//! `PR CI` existed, or on a conflicting one, starts nothing. This workflow uses
+//! `PR CI` runs only on PRs into `main`, so the label on a PR into any other
+//! branch starts nothing; this check runs on every base to say so. `pull_request`
+//! runs take their workflow files from the PR's merge commit with `main`.
+//! GitHub refreshes that commit on a push, not when `main` moves, and makes none
+//! while the PR conflicts. So the label on a PR last pushed before `PR CI`
+//! existed, or on a conflicting one, starts nothing. This workflow uses
 //! `pull_request_target`, which runs `main`'s copy whatever the merge commit
 //! holds, and checks out nothing.
 
@@ -18,11 +20,8 @@ use crate::workflows::pr_ci;
 /// Build the workflow.
 pub fn ci_gate_label() -> Workflow {
     Workflow::new("CI Gate Label Check")
-        .on(Event::default().pull_request_target(
-            PullRequestTarget::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Labeled),
-        ))
+        .on(Event::default()
+            .pull_request_target(PullRequestTarget::default().add_type(PullRequestType::Labeled)))
         .add_job("check", check())
 }
 

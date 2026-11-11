@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  anotherRunGoing,
   ciSourceChanges,
   CONFLICTS,
   labelBlocker,
@@ -13,8 +14,13 @@ import {
   GATE_JOB,
   gateOutcome,
   isOpenRequest,
+  NO_VERDICT,
+  noVerdict,
+  ownsRequest,
   PR_CI_PATH,
+  runCommand,
   START_JOB,
+  WRONG_BASE,
 } from './ci_gate.ts';
 
 const HEAD = '0123456789abcdef0123456789abcdef01234567';
@@ -80,8 +86,8 @@ describe('forkOutcome', () => {
     assert.equal(outcome, null);
   });
 
-  test('a cancelled run reports nothing', () => {
-    const outcome = forkOutcome(
+  test('a cancelled request has no verdict, so it is closed unless a newer run took over', () => {
+    const cancelledGate = forkOutcome(
       [
         { name: START_JOB, conclusion: 'success' },
         { name: GATE_JOB, conclusion: 'cancelled' },
@@ -89,8 +95,30 @@ describe('forkOutcome', () => {
       HEAD,
       'run-ci',
     );
+    const cancelledStart = forkOutcome(
+      [
+        { name: START_JOB, conclusion: 'cancelled' },
+        { name: GATE_JOB, conclusion: 'skipped' },
+      ],
+      HEAD,
+      'run-ci',
+    );
 
-    assert.equal(outcome, null);
+    assert.equal(cancelledGate, NO_VERDICT);
+    assert.equal(cancelledStart, NO_VERDICT);
+  });
+
+  test('a request GitHub ended without its gate job has no verdict', () => {
+    const outcome = forkOutcome(
+      [
+        { name: START_JOB, conclusion: 'success' },
+        { name: 'Web App / path-check', conclusion: 'success' },
+      ],
+      HEAD,
+      'run-ci',
+    );
+
+    assert.equal(outcome, NO_VERDICT);
   });
 
   test('copies the gate job verdict', () => {
@@ -145,6 +173,81 @@ describe('isOpenRequest', () => {
   });
 });
 
+describe('ownsRequest', () => {
+  const RUN = 42672631112;
+  const targetUrl = `https://github.com/macro-inc/macro/actions/runs/${RUN}`;
+  const request = { state: 'pending', description: 'Running on 0123456', targetUrl };
+
+  test('the open request start opened from this run', () => {
+    assert.equal(ownsRequest(request, RUN), true);
+  });
+
+  test('not a request another run opened, nor a result', () => {
+    assert.equal(ownsRequest(request, 2672631112), false);
+    assert.equal(
+      ownsRequest({ state: 'failure', description: 'Failed: web-app', targetUrl }, RUN),
+      false,
+    );
+    assert.equal(
+      ownsRequest({ state: 'pending', description: 'Not run on this commit. Run: ...', targetUrl }, RUN),
+      false,
+    );
+    assert.equal(ownsRequest(undefined, RUN), false);
+  });
+});
+
+describe('noVerdict', () => {
+  const retry = `Run again: ${runCommand('macro-inc/macro', '10147', 'run-ci')}`;
+
+  test('a run GitHub ended without its gate job fails with the command to run again', () => {
+    assert.deepEqual(noVerdict('failure', retry), {
+      state: 'failure',
+      description: `PR CI ended without a verdict. ${retry}`,
+    });
+  });
+
+  test('a cancelled run says so', () => {
+    assert.deepEqual(noVerdict('cancelled', 'Add the run-ci label again.'), {
+      state: 'failure',
+      description: 'PR CI was cancelled before its verdict. Add the run-ci label again.',
+    });
+  });
+
+  test('fits a commit status', () => {
+    const longest = runCommand('macro-inc/macro', '999999', 'run-ci');
+    assert.ok(noVerdict('cancelled', `Run again: ${longest}`).description.length <= 140);
+  });
+});
+
+describe('anotherRunGoing', () => {
+  test('a newer request still queued or running owns the status', () => {
+    const queued = [
+      { id: 1, status: 'completed' },
+      { id: 2, status: 'queued' },
+    ];
+    const running = [
+      { id: 1, status: 'completed' },
+      { id: 2, status: 'in_progress' },
+    ];
+    assert.equal(anotherRunGoing(queued, 1), true);
+    assert.equal(anotherRunGoing(running, 1), true);
+  });
+
+  test('the run itself, or runs that finished, own nothing', () => {
+    assert.equal(anotherRunGoing([{ id: 1, status: 'in_progress' }], 1), false);
+    assert.equal(
+      anotherRunGoing(
+        [
+          { id: 1, status: 'completed' },
+          { id: 2, status: 'completed' },
+        ],
+        1,
+      ),
+      false,
+    );
+  });
+});
+
 describe('ciSourceChanges', () => {
   const base = { '.github': 'aaa', 'tooling/xtask/crates/xtask_workflows': 'bbb' };
 
@@ -189,21 +292,27 @@ describe('forkRunDistrust', () => {
 
 describe('labelBlocker', () => {
   test('a mergeable PR whose merge commit holds PR CI can start it', () => {
-    assert.equal(labelBlocker(true, true), null);
-    assert.equal(labelBlocker(null, true), null);
+    assert.equal(labelBlocker('main', true, true), null);
+    assert.equal(labelBlocker('main', null, true), null);
+  });
+
+  test('a PR into another branch never runs PR CI', () => {
+    assert.equal(labelBlocker('feature/base', true, true), WRONG_BASE);
+    assert.equal(labelBlocker('feature/base', false, false), WRONG_BASE);
   });
 
   test('a conflicting PR runs no pull_request workflow', () => {
-    assert.equal(labelBlocker(false, false), CONFLICTS);
+    assert.equal(labelBlocker('main', false, false), CONFLICTS);
   });
 
   test('a merge commit from before PR CI, or none, starts nothing', () => {
-    assert.equal(labelBlocker(true, false), STALE_MERGE);
-    assert.equal(labelBlocker(null, false), STALE_MERGE);
+    assert.equal(labelBlocker('main', true, false), STALE_MERGE);
+    assert.equal(labelBlocker('main', null, false), STALE_MERGE);
   });
 
-  test('both explanations fit a commit status', () => {
+  test('every explanation fits a commit status', () => {
     assert.ok(STALE_MERGE.length <= 140);
     assert.ok(CONFLICTS.length <= 140);
+    assert.ok(WRONG_BASE.length <= 140);
   });
 });
