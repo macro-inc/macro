@@ -4,9 +4,13 @@ use crate::EditorType;
 #[test]
 fn format_merge_retains_the_table_selection_but_removed_cells_are_not_query_targets()
 -> Result<(), Error> {
-    let mut editor = crate::preset_builder(EditorType::MarkdownSync)
-        .initial_state(serde_json::from_str(include_str!("fixtures/before.json"))?)
-        .build()?;
+    let mut editor = crate::surface::preset_builder_with_mode(
+        EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .initial_state(serde_json::from_str(include_str!("fixtures/before.json"))?)
+    .build()
+    .expect("actual Macro registry");
     let view = editor.state().view();
     let table = view.first_child(NodeKey::ROOT).expect("table");
     let row = view.first_child(table).expect("row");
@@ -43,11 +47,15 @@ fn format_merge_retains_the_table_selection_but_removed_cells_are_not_query_targ
 #[test]
 fn format_split_retains_the_exact_range_and_touch_split_clears_it() -> Result<(), Error> {
     for (action, keep) in [("format-selection-split", true), ("selection-split", false)] {
-        let mut editor = crate::preset_builder(EditorType::MarkdownSync)
-            .initial_state(serde_json::from_str(include_str!(
-                "fixtures/after-merge.json"
-            ))?)
-            .build()?;
+        let mut editor = crate::surface::preset_builder_with_mode(
+            EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .initial_state(serde_json::from_str(include_str!(
+            "fixtures/after-merge.json"
+        ))?)
+        .build()
+        .expect("actual Macro registry");
         let view = editor.state().view();
         let table = view.first_child(NodeKey::ROOT).expect("table");
         let row = view.first_child(table).expect("row");
