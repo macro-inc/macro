@@ -11,6 +11,7 @@ mod decorator_content_actions;
 mod diff;
 mod equation_insert;
 mod focus;
+mod format_facts;
 mod formatting;
 mod horizontal_rule;
 #[cfg(test)]
@@ -238,6 +239,9 @@ pub fn query(
     generation: u32,
     state: &EditorState,
 ) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(reply) = format_facts::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
     if let Some(reply) = checklist_query::query(name, data, generation, state)? {
         return Ok(Some(reply));
     }

@@ -10,6 +10,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Read toolbar range format, link presence and ordered top-level kinds through group-b.format-facts; preserve Source endpoint, shadow-root and raw list-kind rules, and leave table facts with group-b.table-facts.
+
 - Prepare expanded link editing with the existing empty-URL toggle policy and preserve the range; match Source cancel retaining the empty link until a paired product fix changes both engines.
 - Reject non-object payloads before derived struct decoding in object-only commands and queries, because Serde also accepts positional sequences.
 
