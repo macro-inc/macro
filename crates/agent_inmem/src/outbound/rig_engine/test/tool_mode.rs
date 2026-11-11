@@ -87,3 +87,33 @@ async fn conversation_turns_run_code_mode_whenever_every_code_tool_is_listed() {
     assert_eq!(tool_mode(&turn), ToolMode::Code);
     server.cancel().await.unwrap();
 }
+
+#[tokio::test]
+async fn a_direct_tool_turn_names_why_it_could_not_run_code_mode() {
+    assert_eq!(
+        standard_mode_reason(&request(None)),
+        Some(StandardModeReason::NoMcpTools)
+    );
+    let (server, tools) = remote(&["ExecuteCode"]).await;
+    assert_eq!(
+        standard_mode_reason(&request(Some(tools))),
+        Some(StandardModeReason::MissingCodeTool)
+    );
+    server.cancel().await.unwrap();
+
+    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
+    let mut turn = request(Some(tools));
+    assert_eq!(standard_mode_reason(&turn), None);
+    turn.purpose = TurnPurpose::Summary;
+    assert_eq!(
+        standard_mode_reason(&turn),
+        Some(StandardModeReason::Summary)
+    );
+    turn.purpose = TurnPurpose::Conversation;
+    turn.owner = Owner::Bot(bot_id::BotId::TEST_A);
+    assert_eq!(
+        standard_mode_reason(&turn),
+        Some(StandardModeReason::NonUserOwner)
+    );
+    server.cancel().await.unwrap();
+}
