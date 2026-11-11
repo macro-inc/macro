@@ -237,3 +237,9 @@ The shared codec and simulator independently validate complete bounded chunks.
 `services/sync-service/tests/retained_large_update.test.ts` is an opt-in,
 hash-pinned retained-WAL receipt/cold-restart literal; opaque source binaries
 stay outside the repository. It does not claim browser editor hydration.
+
+The activated corpus includes all 158 default scenarios plus the two activated-only
+resolved-dependency cases (160 total). The three application comment-root modes
+have unchanged normalized wire substreams and listed receipt storage changes in
+`../transcripts-activated/STORAGE_DIFF.json`; the original 155 entries stay intact.
+This inventory addition does not expand the explicit native replay allowlist.

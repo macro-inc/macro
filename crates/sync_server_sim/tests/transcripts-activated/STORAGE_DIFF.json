@@ -1,6 +1,6 @@
 {
-  "baseline": "c11b60c31907fa39fe9cb6d1fca5efc29c296b00",
-  "count": 155,
+  "baseline": "375078f4849907343e7f7898a7e597d3b747fad1",
+  "count": 158,
   "equal": true,
   "fixtures": [
     {
@@ -5155,6 +5155,111 @@
               "keys": [
                 "a/operation[3c4f76eefa0173b04d1fcb5ba2d7d031b99711540fffa392d6b9682e97a04ef3:0:7].00000000",
                 "o/operation[3c4f76eefa0173b04d1fcb5ba2d7d031b99711540fffa392d6b9682e97a04ef3:0:7].00000000"
+              ]
+            },
+            {
+              "return": "storage.put",
+              "value": {
+                "undefined": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "comment_marks.test/real_comment_roots_are_accepted_and_content_edits_refused_in_http_mode.jsonl",
+      "wireSha256": "903cb648c979287a3f463eabeaf3829cd80e0d4ed1539a74930176b48eee4a73",
+      "equal": true,
+      "oldCount": 113,
+      "newCount": 113,
+      "ledger": [
+        {
+          "room": "f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590",
+          "callback": 3,
+          "key": "o/operation[f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590:0:3].00000000",
+          "reason": "embedded-complete-inline",
+          "updateSha256": "3553f5bef53a935795a9ad7b7c64e447e00741c0ea2e217fdf76715b68c93b6a",
+          "physicalWrites": [
+            "a/operation[f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590:0:3].00000000",
+            "o/operation[f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590:0:3].00000000"
+          ],
+          "events": [
+            {
+              "port": "storage.put",
+              "keys": [
+                "a/operation[f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590:0:3].00000000",
+                "o/operation[f8269819f79376ac5ec396341d65ff4a24469fde236761075b68711fe21d1590:0:3].00000000"
+              ]
+            },
+            {
+              "return": "storage.put",
+              "value": {
+                "undefined": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "comment_marks.test/real_comment_roots_are_accepted_and_content_edits_refused_in_in_process_mode.jsonl",
+      "wireSha256": "1258b6ebf58549989da3ea4801f95e26fcba01c0739b8d76abaf83e86a4f029a",
+      "equal": true,
+      "oldCount": 109,
+      "newCount": 109,
+      "ledger": [
+        {
+          "room": "8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f",
+          "callback": 3,
+          "key": "o/operation[8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f:0:3].00000000",
+          "reason": "embedded-complete-inline",
+          "updateSha256": "450bbde73baf8cefb28f30437893bd704f34b8d2af10667ad979e387cd562478",
+          "physicalWrites": [
+            "a/operation[8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f:0:3].00000000",
+            "o/operation[8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f:0:3].00000000"
+          ],
+          "events": [
+            {
+              "port": "storage.put",
+              "keys": [
+                "a/operation[8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f:0:3].00000000",
+                "o/operation[8dec44991bf8a4611c51389eec75cb22d18c4e5b070a074ea08ff085fe6e062f:0:3].00000000"
+              ]
+            },
+            {
+              "return": "storage.put",
+              "value": {
+                "undefined": true
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "comment_marks.test/real_comment_roots_are_accepted_and_content_edits_refused_in_shadow_mode.jsonl",
+      "wireSha256": "578ddaa28656456d4fcee7db70e958e31cd7682bc6bca90047ac9c7590937bea",
+      "equal": true,
+      "oldCount": 113,
+      "newCount": 113,
+      "ledger": [
+        {
+          "room": "b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf",
+          "callback": 3,
+          "key": "o/operation[b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf:0:3].00000000",
+          "reason": "embedded-complete-inline",
+          "updateSha256": "d98470b2b14333be326e9e1e1ee9a3f86538f88e12a6e808f284f92d3167d908",
+          "physicalWrites": [
+            "a/operation[b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf:0:3].00000000",
+            "o/operation[b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf:0:3].00000000"
+          ],
+          "events": [
+            {
+              "port": "storage.put",
+              "keys": [
+                "a/operation[b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf:0:3].00000000",
+                "o/operation[b2657e80ac0158860b434cb320696dcd443dd4d165d6f48d199bc638cac289bf:0:3].00000000"
               ]
             },
             {
