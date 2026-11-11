@@ -105,7 +105,7 @@ impl SessionToken {
     /// entropy, so there is nothing for a rainbow table to precompute and
     /// nothing a salt would add.
     pub fn hash(&self) -> String {
-        Sha256::digest(self.0.as_bytes())
+        bearer_token::hash_token(&self.0)
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect()

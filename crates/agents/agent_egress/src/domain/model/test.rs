@@ -168,6 +168,16 @@ fn echoed_scoping_headers_never_reach_the_sandbox() {
 }
 
 #[test]
+fn a_session_token_hashes_to_the_lowercase_hex_sha256_stored_for_it() {
+    // Sessions store this hash; a different encoding would orphan every
+    // stored token.
+    assert_eq!(
+        SessionToken::new("session-secret").hash(),
+        "135fa7d67146ca540f17e51e101d45de5b1edde8ea8a13f9c7b93b71aa21f8a4"
+    );
+}
+
+#[test]
 fn secrets_do_not_print() {
     let session = SessionToken::new("header.payload.signature");
     let bearer = BearerToken::new("dd-oauth-token");
