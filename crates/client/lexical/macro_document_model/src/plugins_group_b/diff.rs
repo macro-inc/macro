@@ -1,7 +1,6 @@
 //! Source diff-delete unwrapping at a collapsed block start, and the Source
 //! DiffNode accept/reject actions behind its header buttons.
 use super::*;
-use crate::NodeHost;
 use crate::nodes::{DiffDeleteNode, DiffInsertNode, DiffNode, Maybe};
 
 #[derive(Clone, Debug, serde::Deserialize)]
@@ -98,28 +97,7 @@ fn accept(tx: &mut Transaction<'_>, diff: NodeKey) -> Result<(), Error> {
     for child in tx.children_keys(diff)? {
         tx.remove(child, false)?;
     }
-    let options = crate::transformers::MacroMarkdownOptions {
-        app_hostname: tx
-            .try_extension::<NodeHost>()
-            .and_then(|host| host.0.clone()),
-    };
-    let transformers = crate::transformers::transformers("all", &options)
-        .map_err(|error| Error::invariant(format!("Macro transformer list: {error}")))?;
-    // $convertFromMarkdownString(markdown, ALL_TRANSFORMERS, diff, false).
-    lexical_markdown::convert_from_markdown_string(
-        tx,
-        &markdown,
-        &transformers,
-        Some(diff),
-        &lexical_markdown::MarkdownOptions::default(),
-    )
-    .map_err(|error| Error::invariant(format!("Diff accept markdown: {error}")))?;
-    let last = tx.last_child(diff);
-    lexical_rich_nodes::utils::unwrap_node(tx, diff)?;
-    if let Some(last) = last {
-        tx.select_end(last)?;
-    }
-    Ok(())
+    super::markdown_unwrap::import_unwrap_select(tx, diff, &markdown)
 }
 
 /// Source DiffNode.handleReject.
