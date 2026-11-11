@@ -16,6 +16,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Match ListItemNode's parent-check/first-child-list checkbox predicate; nested wrappers have no role/tabIndex/aria-checked, while nested theme classes depend on any list child. Verify literal item attributes against actual Source with `browser-test/list-item-wrapper.playwright.config.ts`.
 
 - Set the decorator marker before contentEditable, preserving Source DOM attribute order.
+- Set document-card display at DOM creation before its data marker and observe owner-window selection anchors before its Portal class, preserving the Source block wrapper and literal browser attribute order.
 
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
