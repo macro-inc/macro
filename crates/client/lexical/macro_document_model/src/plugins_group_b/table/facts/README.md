@@ -25,6 +25,16 @@ The reply is `{generation, tables}`. Each table contains:
   `{kind:"value",value:[number|null]}`. Empty arrays and null slots remain
   distinct from missing/null properties.
 - `frozenRowCount`, `frozenColumnCount`, `rowStriping`.
+- `selection`: null without a TableSelection on this table; otherwise
+  `{deleteExtent:{minRow,maxRow,minColumn,maxColumn},selectedCellKeys}`. Inclusive
+  delete bounds use the shared Source anchor/focus span policy. Selected keys
+  independently use the actual TableSelection node traversal filtered to cells,
+  preserving its order and merged-cell closure; they are not derived from the
+  delete rectangle.
+- Each cell's `selectionDelete` is null without that same-table TableSelection;
+  otherwise `{expandRows,expandColumns}` says whether its actual map origin lies
+  inside the shared delete bounds. A selected merged cell can lie outside one
+  hover axis. Hosts must not replace selectedCellKeys with these flags.
 
 Stored numbers use the existing JsNumber/exportJSON semantics, including its
 nonfinite-to-null behavior; these are presentation observations, not an archival

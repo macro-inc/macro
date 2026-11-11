@@ -8,6 +8,8 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 #[cfg(test)]
+mod selection_test;
+#[cfg(test)]
 mod test;
 
 #[derive(Deserialize)]
@@ -45,6 +47,20 @@ pub(super) fn query(
             ))?;
         let node = view.get_or_err::<TableNode>(table_key)?;
         let (map, _, _) = compute_table_map_skip_cell_check(view, table, None, None)?;
+        let extent = super::controls::selection_delete_extent(state, table)?;
+        let selection = if let Some(extent) = extent {
+            let selected = state
+                .selection()
+                .ok_or(Error::Invariant("table selection absent"))?
+                .nodes(view)?
+                .into_iter()
+                .filter(|cell| view.is::<TableCellNode>(*cell))
+                .map(key)
+                .collect::<Vec<_>>();
+            json!({"deleteExtent":extent,"selectedCellKeys":selected})
+        } else {
+            Value::Null
+        };
         let mut origins = BTreeMap::new();
         let slots = map
             .rows
@@ -76,6 +92,10 @@ pub(super) fn query(
                     "rowSpan":origin.row_span(view),"colSpan":origin.col_span(view),
                     "headerState":origin.header_state(view).bits(),"width":cell.width,
                     "backgroundColor":cell.background_color,"verticalAlign":cell.vertical_align,
+                    "selectionDelete":extent.map(|extent| json!({
+                        "expandRows":extent.covers_row(origin.start_row),
+                        "expandColumns":extent.covers_column(origin.start_column),
+                    })),
                 }));
             }
             rows.push(json!({"key":key(row_key),"height":row.height,"cellKeys":cell_keys}));
@@ -88,6 +108,7 @@ pub(super) fn query(
         tables.push(json!({
             "key":key(table_key),"rowCount":map.row_count(),"columnCount":map.column_count(),
             "rows":rows,"slots":slots,"cells":cells,"colWidths":col_widths,
+            "selection":selection,
             "frozenRowCount":node.frozen_row_count,"frozenColumnCount":node.frozen_column_count,
             "rowStriping":node.row_striping,
         }));
