@@ -10,6 +10,8 @@ tools — hexagonal, heavily feature-gated.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
+- `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
+  reads, access filtering, pagination, and summary-inbox selection.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
@@ -55,6 +57,10 @@ tools — hexagonal, heavily feature-gated.
   feature's tests need a local MacroDB — `just setup_macrodb`).
 
 ## Gotchas
+
+- Keep the legacy read policies in `MessageReadService`: public reads union
+  owned and delegated inboxes, internal summaries use only the newest owned
+  inbox, and public/internal pagination have different invalid-bound behavior.
 
 - `Subject` is a message-level filter literal. With a top-level subject term,
   each owned inbox gets a bound (not `unnest`) two-step subscan: threads in

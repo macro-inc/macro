@@ -34,3 +34,5 @@ pub mod recent_inbox;
 
 /// Atomic message-label batch persistence and undo.
 pub mod message_labels;
+/// Stored facts for the legacy message and thread read use cases.
+pub mod message_reads;

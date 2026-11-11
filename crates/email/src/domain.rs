@@ -22,6 +22,9 @@ pub mod mailbox;
 /// Optimistic message-label batches and provider-write compensation.
 #[cfg(feature = "ports")]
 pub mod message_labels;
+/// Synced message and thread reads with their legacy access and pagination policies.
+#[cfg(feature = "mailbox")]
+pub mod message_reads;
 pub mod models;
 #[cfg(feature = "ports")]
 pub mod read_receipts;
