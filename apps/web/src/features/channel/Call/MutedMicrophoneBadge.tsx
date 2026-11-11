@@ -17,7 +17,7 @@ export function MutedMicrophoneBadge(
     <Show when={props.muted}>
       <Tooltip
         label={t('calls.microphoneOff')}
-        class={cn(props.avatar && 'absolute bottom-0 left-0 z-40')}
+        class={cn(props.avatar && 'absolute bottom-0 right-0 z-40')}
       >
         <span
           data-call-microphone-off

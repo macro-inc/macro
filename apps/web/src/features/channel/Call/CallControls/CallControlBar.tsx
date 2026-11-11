@@ -30,7 +30,7 @@ export function BlockedMediaBadge(props: { blocked: boolean; class?: string }) {
         aria-hidden="true"
         data-call-permission-badge
         class={cn(
-          'pointer-events-none absolute top-1 right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink',
+          'pointer-events-none absolute top-1 right-0 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink',
           props.class
         )}
       >
@@ -198,7 +198,7 @@ function MediaSplitButton(props: SplitProps) {
             blocked={!!props.blocked}
             class={cn(
               showMenu() && '-top-1',
-              showMenu() && (bar.props.compact ? 'right-px' : 'right-1.25')
+              showMenu() && (bar.props.compact ? '-right-0.75' : 'right-px')
             )}
           />
         </div>

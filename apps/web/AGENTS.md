@@ -303,7 +303,8 @@ verify wrapped-thread reading gaps, drafts, fullscreen navigation, and local-vol
 indicators across call surfaces. Verify call-panel changes in the full call host
 with screenshots; list signed-in call checks separately instead of blocking on
 authentication.
-Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; verify both in the full call host.
+Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; place avatar microphone-mute badges at bottom-right and personal-volume mute badges at bottom-left so both stay visible. Verify these in the full call host.
+Keep participant-volume popovers limited to the slider and volume readout, and render inline mute statuses as bare icons so tile labels retain their height.
 New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
