@@ -4,7 +4,8 @@
  *
  * Build the package with:
  *   just build-ai-engine-wasm
- * which runs wasm-pack over crates/engines/illustrator_engine into
+ * which runs wasm-pack over crates/engines/ai_engine_wasm (a wrapper over
+ * illustrator_engine) into
  * src/lib/core/ai-engine/wasm/ (gitignored).
  */
 

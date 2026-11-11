@@ -354,7 +354,7 @@ build-database-sql-wasm:
 
 # Dev fast path: build the database-sql wasm pkg only when it is missing or
 # any source it is compiled from is newer than the built artifact: the
-# engine's own and every workspace crate it depends on (the ops come from
+# wasm wrapper's own and every workspace crate it depends on (the ops come from
 # databases_types), so a changed export is never served stale.
 ensure-database-sql-wasm:
     #!/usr/bin/env bash
@@ -365,7 +365,7 @@ ensure-database-sql-wasm:
         just --justfile "{{justfile()}}" build-database-sql-wasm
         exit 0
     fi
-    CRATES=$(cd "$ROOT" && cargo tree -p database_sql_engine --target wasm32-unknown-unknown -e normal --prefix none --format '{p}' | sed -n 's/.*(\(\/[^)]*\)).*/\1/p' | sort -u)
+    CRATES=$(cd "$ROOT" && cargo tree -p database_sql_wasm --target wasm32-unknown-unknown -e normal --prefix none --format '{p}' | sed -n 's/.*(\(\/[^)]*\)).*/\1/p' | sort -u)
     SOURCES=()
     for crate in $CRATES; do
         SOURCES+=("$crate/Cargo.toml")
@@ -438,7 +438,8 @@ ensure-fig-engine-wasm:
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/fig-engine/wasm/fig_engine_bg.wasm"
     CRATE="{{justfile_directory()}}/../../crates/engines/fig_engine"
-    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+    WRAPPER="{{justfile_directory()}}/../../crates/engines/fig_engine_wasm"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$WRAPPER/src" "$WRAPPER/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-fig-engine-wasm
     fi
 
@@ -455,8 +456,9 @@ ensure-psd-engine-wasm:
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/psd-engine/wasm/psd_engine_bg.wasm"
     CRATE="{{justfile_directory()}}/../../crates/engines/psd_engine"
+    WRAPPER="{{justfile_directory()}}/../../crates/engines/psd_engine_wasm"
     FIG="{{justfile_directory()}}/../../crates/engines/fig_engine"
-    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$WRAPPER/src" "$WRAPPER/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-psd-engine-wasm
     fi
 
@@ -473,8 +475,9 @@ ensure-ai-engine-wasm:
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/ai-engine/wasm/ai_engine_bg.wasm"
     CRATE="{{justfile_directory()}}/../../crates/engines/illustrator_engine"
+    WRAPPER="{{justfile_directory()}}/../../crates/engines/ai_engine_wasm"
     FIG="{{justfile_directory()}}/../../crates/engines/fig_engine"
-    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$WRAPPER/src" "$WRAPPER/Cargo.toml" "$FIG/src" "$FIG/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-ai-engine-wasm
     fi
 

@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-docx-engine-wasm
- * which runs wasm-pack over crates/engines/docx_engine into
+ * which runs wasm-pack over crates/engines/docx_engine_wasm into
  * src/lib/core/docx-engine/wasm/ (gitignored).
  */
 

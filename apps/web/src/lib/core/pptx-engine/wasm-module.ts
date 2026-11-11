@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-pptx-engine-wasm
- * which runs wasm-pack over crates/engines/pptx_engine into
+ * which runs wasm-pack over crates/engines/pptx_engine_wasm into
  * src/lib/core/pptx-engine/wasm/ (gitignored).
  */
 
