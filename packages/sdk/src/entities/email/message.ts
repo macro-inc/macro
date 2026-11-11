@@ -284,7 +284,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * quotes this message and carries its attachments; it takes effect at once
    * and is never retried.
    *
-   * @destructive
+   * @send
    * @openworld
    */
   async forwardConfirmed(

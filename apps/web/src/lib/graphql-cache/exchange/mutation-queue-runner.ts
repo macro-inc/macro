@@ -933,7 +933,10 @@ export function createMutationQueueRunner(
         let retry = false;
         if (result.error && options.shouldRetryMutation) {
           try {
-            retry = await options.shouldRetryMutation(result.error);
+            retry = await options.shouldRetryMutation(
+              result.error,
+              attempt.mutation
+            );
           } catch (error) {
             options.onCacheError?.(error, op);
           }
