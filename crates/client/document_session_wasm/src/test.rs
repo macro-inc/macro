@@ -483,6 +483,7 @@ fn bulk_queries_export_markup_and_selected_clipboard_from_the_native_model() {
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     assert_eq!(
         query::markdown_for_session(&session, 0, false).unwrap(),

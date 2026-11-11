@@ -28,6 +28,7 @@ fn macro_code_persisted_ids_survive_a_fresh_session_reload() {
         1000.0,
         "source-editor-instance_17",
         false,
+        macro_document_model::plugins_group_b::CodeTokens::none(),
     )
     .expect("production Macro factory");
     writer.sync(SyncInput::Start, 0.0, None).expect("start");

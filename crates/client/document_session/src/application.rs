@@ -19,9 +19,24 @@ use std::sync::{
 /// The supplied wall clock is refreshed by the host before every admission; peer
 /// entropy streams continue across cold repaints and same-peer rebuilds.
 pub fn application_editor_config(
+    config: EditorConfig,
+    clock: Arc<AtomicI64>,
+    editor_type: macro_document_model::EditorType,
+) -> EditorConfig {
+    application_editor_config_with_tokens(
+        config,
+        clock,
+        editor_type,
+        macro_document_model::plugins_group_b::CodeTokens::none(),
+    )
+}
+
+/// Same composition with the session's host code tokenizer, installed once per built editor.
+pub fn application_editor_config_with_tokens(
     mut config: EditorConfig,
     clock: Arc<AtomicI64>,
     editor_type: macro_document_model::EditorType,
+    tokens: macro_document_model::plugins_group_b::CodeTokens,
 ) -> EditorConfig {
     if editor_type == macro_document_model::EditorType::MarkdownSync {
         config.namespace = "block-md-main".into();
@@ -55,19 +70,23 @@ pub fn application_editor_config(
             })
             .clone();
         let clock = clock.clone();
-        let builder = macro_document_model::surface::preset_builder_with_mode(editor_type, mode)
-            .extension_state(NodeClock(Arc::new(move || {
-                u64::try_from(clock.load(Ordering::Relaxed)).unwrap_or(0)
-            })))
-            .extension_state(NodeRandom(Arc::new(move |length| {
-                let mut bytes = vec![0; length];
-                entropy
-                    .lock()
-                    .unwrap_or_else(|poison| poison.into_inner())
-                    .fill_bytes(&mut bytes);
-                bytes
-            })))
-            .extension_state(NodeHost::default());
+        let builder = macro_document_model::surface::preset_builder_with_mode_and_tokens(
+            editor_type,
+            mode,
+            tokens.clone(),
+        )
+        .extension_state(NodeClock(Arc::new(move || {
+            u64::try_from(clock.load(Ordering::Relaxed)).unwrap_or(0)
+        })))
+        .extension_state(NodeRandom(Arc::new(move |length| {
+            let mut bytes = vec![0; length];
+            entropy
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner())
+                .fill_bytes(&mut bytes);
+            bytes
+        })))
+        .extension_state(NodeHost::default());
         let builder = if editor_type == macro_document_model::EditorType::MarkdownSync {
             PeerIdPlugin::register(
                 builder,

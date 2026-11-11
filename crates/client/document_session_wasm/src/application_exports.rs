@@ -67,6 +67,7 @@ mod tests {
             compatibility: None,
             machine,
             hostname: Some("app.example.com".into()),
+            code_tokens: None,
         };
         let before = session.surface().state().to_json()?;
         assert_eq!(

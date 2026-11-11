@@ -2,6 +2,7 @@ use crate::*;
 use doc_sync_core::*;
 use document_session::*;
 use lexical_model::{EditorMode, Input};
+use macro_document_model::plugins_group_b::CodeTokens;
 use std::sync::{
     atomic::{AtomicI64, Ordering},
     Arc,
@@ -135,6 +136,7 @@ impl Machine {
         wall: f64,
         namespace: &str,
         write_root_search_text: bool,
+        code_tokens: CodeTokens,
     ) -> Result<Self, BoundaryError> {
         Self::create_with(
             abi,
@@ -143,7 +145,7 @@ impl Machine {
             wall,
             true,
             true,
-            Some((namespace, write_root_search_text)),
+            Some((namespace, write_root_search_text, code_tokens)),
         )
     }
     fn create_with(
@@ -153,7 +155,7 @@ impl Machine {
         wall: f64,
         editor: bool,
         application: bool,
-        namespace: Option<(&str, bool)>,
+        namespace: Option<(&str, bool, CodeTokens)>,
     ) -> Result<Self, BoundaryError> {
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
@@ -173,8 +175,18 @@ impl Machine {
                 },
                 ..EditorConfig::default()
             };
+            let (namespace, code_tokens) = match namespace {
+                Some((namespace, write_root_search_text, code_tokens)) => {
+                    (Some((namespace, write_root_search_text)), code_tokens)
+                }
+                None => (None, CodeTokens::none()),
+            };
             if let Some(clock) = &constructor_clock {
-                editor_config = crate::macro_editor::config(editor_config, clock.clone());
+                editor_config = crate::macro_editor::config_with_tokens(
+                    editor_config,
+                    clock.clone(),
+                    code_tokens,
+                );
             }
             if let Some((namespace, write_root_search_text)) = namespace {
                 editor_config.namespace = namespace.into();

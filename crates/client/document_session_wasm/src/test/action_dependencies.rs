@@ -37,6 +37,7 @@ fn action_dependencies_use_the_actual_readonly_registry_and_query_generation(
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let before = session.surface().state().to_json()?;
     for (types, available) in [

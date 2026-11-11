@@ -10,6 +10,7 @@ pub mod foreign_host_generated;
 #[rustfmt::skip]
 pub mod foreign_native_fields_generated;
 mod application_exports;
+mod code_tokens;
 mod codec;
 mod decorator_observer;
 mod document;

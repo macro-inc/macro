@@ -1,12 +1,25 @@
 //! WASM composition delegates to the same application registry used by native hosts.
 use document_session::EditorConfig;
+use macro_document_model::plugins_group_b::CodeTokens;
 use std::sync::{atomic::AtomicI64, Arc};
 
+/// Application composition without a host code tokenizer (tests).
+#[cfg(test)]
 pub(crate) fn config(config: EditorConfig, clock: Arc<AtomicI64>) -> EditorConfig {
-    document_session::application_editor_config(
+    config_with_tokens(config, clock, CodeTokens::none())
+}
+
+/// The same composition with the session's host code tokenizer.
+pub(crate) fn config_with_tokens(
+    config: EditorConfig,
+    clock: Arc<AtomicI64>,
+    tokens: CodeTokens,
+) -> EditorConfig {
+    document_session::application_editor_config_with_tokens(
         config,
         clock,
         macro_document_model::EditorType::MarkdownSync,
+        tokens,
     )
 }
 
@@ -20,7 +33,7 @@ mod tests {
     #[test]
     fn same_peer_rebuild_keeps_constructor_entropy_and_observes_current_clock() {
         let clock = Arc::new(AtomicI64::new(1000));
-        let config = config(EditorConfig::default(), clock.clone());
+        let config = config_with_tokens(EditorConfig::default(), clock.clone(), CodeTokens::none());
         let mut editor = (config.builder)(EditorMode::ViewAttached, 7)
             .build()
             .unwrap();

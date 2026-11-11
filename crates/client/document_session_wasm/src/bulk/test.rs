@@ -54,6 +54,7 @@ fn raw_string_and_cold_query_share_canonical_bytes_without_mutating_state(
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let before = session.surface().state().to_json()?;
     let expected = r#"{"root":{"children":[{"children":[{"detail":0,"format":0,"mode":"normal","style":"","text":"line\n😀","type":"text","version":1,"$":{"id":"text"}}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"$":{"id":"paragraph"},"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"root","version":1,"$":{"0":0,"id":"root"}}}"#;

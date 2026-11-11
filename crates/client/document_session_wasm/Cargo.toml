@@ -14,6 +14,8 @@ dev-probes = ["document_session/dev-probes"]
 compat-web = ["bebop-owned-all", "compatibility"]
 bebop-owned-all = []
 compatibility = ["document_session/compatibility"]
+# Test-only probes; never in shipping artifacts.
+dev-probes = ["document_session/dev-probes"]
 
 [dependencies]
 document_session = { workspace = true, features = ["application"] }

@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [features]
+# Preview/test probes; the production feature graph excludes this opt-in.
 dev-probes = []
 
 [dependencies]

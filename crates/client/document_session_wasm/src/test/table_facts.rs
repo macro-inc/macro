@@ -63,6 +63,7 @@ fn table_facts_query_uses_the_shared_bulk_dto_under_read_and_current_generation(
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let request = wire::QueryMsg {
         kind: 9,

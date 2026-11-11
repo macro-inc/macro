@@ -220,6 +220,7 @@ fn search_uses_actual_application_generation_admission_and_readonly_cache_query(
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let request = wire::QueryMsg {
         kind: 9,

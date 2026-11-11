@@ -34,7 +34,11 @@ export function initializeNativeSurfaceTests() {
 /** A real Macro session with synchronous execution and a mounted Diff-driven view. */
 export function nativeSurface(
   access = Access.Edit,
-  theme: EditorThemeClasses = {}
+  theme: EditorThemeClasses = {},
+  codeTokens?: {
+    provider: (language: string, text: string, profile: string) => unknown;
+    profile: string;
+  }
 ) {
   const session = EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
@@ -58,7 +62,11 @@ export function nativeSurface(
     }),
     0,
     0,
-    'group-b-view'
+    'group-b-view',
+    undefined,
+    undefined,
+    codeTokens?.provider,
+    codeTokens?.profile
   );
   let view: EditorView | undefined;
   const counters = { admissions: 0 };

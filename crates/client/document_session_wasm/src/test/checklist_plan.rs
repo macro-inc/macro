@@ -62,6 +62,7 @@ fn checklist_plan_query_uses_current_generation_and_actual_list_state() -> Resul
         compatibility: None,
         machine,
         hostname: None,
+        code_tokens: None,
     };
     let request = wire::QueryMsg {
         kind: 9,

@@ -9,6 +9,12 @@ pub struct EditorSession {
     pub(crate) hostname: Option<String>,
     #[cfg(feature = "compatibility")]
     pub(crate) compatibility: Option<crate::compatibility::Host>,
+    /// The session's JS code tokenizer; dropped (and retired) with the session.
+    #[expect(
+        dead_code,
+        reason = "held only for its Drop, which retires the JS tokenizer"
+    )]
+    pub(crate) code_tokens: Option<crate::code_tokens::CodeTokenRegistration>,
 }
 impl EditorSession {
     fn reject_compat_view_commands(&self) -> Result<(), BoundaryError> {
@@ -37,10 +43,15 @@ impl EditorSession {
             hostname,
             #[cfg(feature = "compatibility")]
             compatibility: None,
+            code_tokens: None,
         })
     }
     /// Construct the application editor with the host's actual instance namespace.
     #[wasm_bindgen(js_name=createMacroWithNamespace)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "append-only wasm constructor ABI with optional trailing parameters"
+    )]
     pub fn create_macro_with_namespace(
         abi_major: u32,
         config: &[u8],
@@ -49,7 +60,26 @@ impl EditorSession {
         namespace: &str,
         hostname: Option<String>,
         write_root_search_text: Option<bool>,
+        code_token_provider: Option<js_sys::Function>,
+        code_token_profile: Option<String>,
     ) -> Result<Self, JsError> {
+        // Registered before the machine so a failed construction retires it on return.
+        let (code_tokens, tokens) = match (code_token_provider, code_token_profile) {
+            (Some(provider), Some(profile)) => {
+                let (registration, tokens) = crate::code_tokens::register(provider, &profile)
+                    .ok_or_else(|| js(BoundaryError::Invalid("code tokenizer token space")))?;
+                (Some(registration), tokens)
+            }
+            (None, None) => (
+                None,
+                macro_document_model::plugins_group_b::CodeTokens::none(),
+            ),
+            _ => {
+                return Err(js(BoundaryError::Invalid(
+                    "code tokenizer and profile must be supplied together",
+                )))
+            }
+        };
         Ok(Self {
             machine: machine::Machine::create_macro_with_namespace(
                 abi_major,
@@ -58,11 +88,13 @@ impl EditorSession {
                 wall,
                 namespace,
                 write_root_search_text.unwrap_or(false),
+                tokens,
             )
             .map_err(js)?,
             hostname,
             #[cfg(feature = "compatibility")]
             compatibility: None,
+            code_tokens,
         })
     }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
@@ -72,6 +104,7 @@ impl EditorSession {
             hostname: None,
             #[cfg(feature = "compatibility")]
             compatibility: None,
+            code_tokens: None,
         })
     }
     /// Observe current authorization using the generated Access enum values.
