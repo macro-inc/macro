@@ -44,10 +44,10 @@ import {
   type SidePanelSectionEntry,
 } from './context';
 import { registerSidePanelInstance } from './registry';
+import { DEFAULT_SIDE_PANEL_WIDTH } from './sizing';
 
 const NARROW_THRESHOLD_PX = 1224;
 const SIDE_MIN_PX = 320;
-const SIDE_MAX_PX = 380;
 const MAIN_MIN_PX = 320;
 // The floating card's width, and its inset from the pane's top and right.
 const FLOATING_WIDTH_PX = 320;
@@ -327,7 +327,7 @@ function SidePanelLayoutInner(
         <Resize.Panel
           id="side-panel-side"
           minSize={SIDE_MIN_PX}
-          maxSize={SIDE_MAX_PX}
+          maxSize={DEFAULT_SIDE_PANEL_WIDTH}
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">

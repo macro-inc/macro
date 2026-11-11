@@ -95,6 +95,7 @@ export function MeetingRouteContent(props: {
   return (
     <MeetingPage
       source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
       participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}

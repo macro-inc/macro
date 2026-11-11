@@ -26,10 +26,18 @@ export const labeledControlSizes = {
   xl: `${labeledControlFrames.xl} ${labeledControlContents.xl}`,
 } as const;
 
+export const buttonControlFrames = {
+  ...labeledControlFrames,
+  'icon-xs': 'h-6',
+  'icon-sm': 'h-7',
+  'icon-md': 'h-8',
+  'icon-lg': 'h-10',
+  'icon-xl': 'h-12',
+} as const;
 export const iconControlSizes = {
-  xs: 'size-6 min-h-0 shrink-0 aspect-square p-0 text-xs',
-  sm: 'size-7 min-h-0 shrink-0 aspect-square p-0 text-sm',
-  md: 'size-8 min-h-0 shrink-0 aspect-square p-0 text-sm',
-  lg: 'size-10 min-h-0 shrink-0 aspect-square p-0 text-base',
-  xl: 'size-12 min-h-0 shrink-0 aspect-square p-0 text-xl',
+  xs: `${buttonControlFrames['icon-xs']} w-6 min-h-0 shrink-0 aspect-square p-0 text-xs`,
+  sm: `${buttonControlFrames['icon-sm']} w-7 min-h-0 shrink-0 aspect-square p-0 text-sm`,
+  md: `${buttonControlFrames['icon-md']} w-8 min-h-0 shrink-0 aspect-square p-0 text-sm`,
+  lg: `${buttonControlFrames['icon-lg']} w-10 min-h-0 shrink-0 aspect-square p-0 text-base`,
+  xl: `${buttonControlFrames['icon-xl']} w-12 min-h-0 shrink-0 aspect-square p-0 text-xl`,
 } as const;
