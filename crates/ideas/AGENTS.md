@@ -73,8 +73,8 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## Scope
 
-- Owns: `idea`, `idea_prompt`, `idea_entity`, `idea_routine`, `idea_target`,
-  and its `suggestion_change` rows.
+- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+  `suggestion_routine`, `suggestion_target`, `suggestion_run`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
   `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
   `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
@@ -100,7 +100,7 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 - Background runs: the person accepting a `prompt` idea with `runMode`
   `background` in the app (their own session, not a program: `Accept`'s
-  `by_person`) starts an `idea_run` (`RunSessions`, wired in the harness): a
+  `by_person`) starts an `suggestion_run` (`RunSessions`, wired in the harness): a
   hidden session of the person's, billed as their agent usage. Anyone acting
   for them (an agent) only takes the idea on (`accepted`, no run) for them to
   run. Accept carries the `updatedAt` the card showed; a run starts only if
@@ -132,7 +132,7 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 - Gate every entry point on `enable-suggestions` (`IDEAS_FLAG`). Event resolution
   isn't gated: it only closes ideas that already exist.
 - Deleting a kind's row (for instance a routine suggestion cascading into
-  `idea_routine`) deletes its idea by trigger; reads skip and log a row that
+  `suggestion_routine`) deletes its suggestion by trigger; reads skip and log a row that
   doesn't decode instead of failing the person's whole feed.
 - Texts are checked with `crates/shown_text`: items are named by target, never
   copied into words.
