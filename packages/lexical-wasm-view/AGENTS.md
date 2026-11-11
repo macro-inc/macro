@@ -160,3 +160,5 @@ Mark whole-owner terminal unregistration before its first native cleanup attempt
 Preserve existing executor fallback attribution for deferred key cleanup errors, including opaque undefined; an error settlement does not imply the native action rolled back, and another owner must remain usable.
 
 Call the preview/test-only `view/dev-stored-comparison` helper through actual `EditorView.port.query` admission; require a matching `dev-probes` seal and never equate this policy comparison with raw Loro or ordinary JSON.
+
+Route Undo, Redo and Select All with pinned Source modifier masks from navigator.platform and exact key/code fallback; preserve generic KeyDown interception and admitted selection.

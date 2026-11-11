@@ -12,6 +12,7 @@ import { textLeaf } from './dom';
 import { DragAccess } from './drag';
 import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
+import { keyboardShortcut } from './keyboard-shortcuts';
 import {
   isSelectionCapturedInDecoratorInput,
   isSelectionWithinEditor,
@@ -480,12 +481,7 @@ export function registerEvents(view: EditorView): {
       );
       return;
     }
-    let routed = 0;
-    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-      if (event.key.toLowerCase() === 'z')
-        routed = event.shiftKey ? CommandCode.Redo : CommandCode.Undo;
-      else if (event.key.toLowerCase() === 'y') routed = CommandCode.Redo;
-    }
+    let routed = keyboardShortcut(event, navigator.platform);
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
     const published = view.selection().selection;

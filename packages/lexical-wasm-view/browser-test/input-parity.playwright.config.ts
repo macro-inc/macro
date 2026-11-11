@@ -6,6 +6,7 @@ export default defineConfig({
   testMatch: [
     'heading-enter.browser.e2e.ts',
     'history-keyboard.browser.e2e.ts',
+    'keyboard-shortcuts.browser.e2e.ts',
     'keydown-owned-range.browser.e2e.ts',
     'large-paste.browser.e2e.ts',
   ],
