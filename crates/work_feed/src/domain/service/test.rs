@@ -565,3 +565,30 @@ async fn undo_reverses_exactly_one_done() {
             .all(|change| matches!(change, WorkFeedChange::Upserted(_)))
     );
 }
+
+#[tokio::test]
+async fn admitting_a_new_notification_probes_home_without_snippets() {
+    let listed = entity(EntityType::Document, 1);
+    let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
+
+    assert!(
+        admits_new_notification(&source, &viewer(), listed.clone())
+            .await
+            .unwrap()
+    );
+
+    let requests = source.requests.lock().unwrap();
+    let scope = WorkFeedScope {
+        mode: WorkFeedMode::Attention,
+        types: Vec::new(),
+        include_snippets: false,
+    };
+    assert_eq!(requests[0].only, Some(vec![listed]));
+    assert!(requests[0].assume_attention);
+    assert!(!requests[0].own_work);
+    assert_eq!(requests[0].types, policy::candidate_types(&[]));
+    assert_eq!(
+        format!("{:?}", requests[0].filter),
+        format!("{:?}", policy::signal_filter(&viewer().user, &scope))
+    );
+}

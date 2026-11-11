@@ -88,6 +88,7 @@ where
                         entity_id: after.entity_id,
                     }),
                     only: request.only,
+                    assume_attention: request.assume_attention,
                 },
                 request.viewer.team,
             )

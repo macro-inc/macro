@@ -53,6 +53,11 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 
 ## Gotchas
 
+- `reader::would_list` asks a candidate source whether a new notification
+  about one entity would be listed (Soup's `assume_attention` probe); the
+  inbox and work feed wrap it as `admits_new_notification` with their own
+  candidate request.
+
 - Revision, cursor and undo token JSON is a wire format clients hold across
   deploys; `models/test.rs` pins it.
 - Under `ThreadScoped`, a `channel_message` candidate reads its channel's
