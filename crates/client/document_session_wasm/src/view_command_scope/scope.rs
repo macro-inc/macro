@@ -6,7 +6,9 @@ pub(super) enum Operation {
     SetSelection(wire::SelectionMsg),
     Dispatch(wire::EditorInputMsg),
     Enter,
+    Escape,
     Register(u64, u8),
+    RegisterEscape(u64, u8),
     Unregister(u64),
 }
 #[derive(Debug)]
@@ -148,6 +150,14 @@ fn execute(
             registry::priority(priority)?,
             |registration, listener| tx.register_command_listener(registration, listener),
         )?),
+        Operation::RegisterEscape(callback, priority) => {
+            Value::Handle(invocation.registry.insert_key(
+                KeyCommand::Escape,
+                callback,
+                registry::priority(priority)?,
+                |registration, listener| tx.register_command_listener(registration, listener),
+            )?)
+        }
         Operation::Unregister(handle) => {
             invocation
                 .registry
@@ -159,6 +169,15 @@ fn execute(
             Value::Handled(
                 tx.dispatch(&Command::Key {
                     command: KeyCommand::Enter,
+                    event: None,
+                })? == Handled::Yes,
+            )
+        }
+        Operation::Escape => {
+            require_edit(invocation)?;
+            Value::Handled(
+                tx.dispatch(&Command::Key {
+                    command: KeyCommand::Escape,
                     event: None,
                 })? == Handled::Yes,
             )

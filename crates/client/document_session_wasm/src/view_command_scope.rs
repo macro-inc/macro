@@ -1,4 +1,4 @@
-//! Ordinary Enter listeners borrow the dispatching transaction, never the session.
+//! Ordinary Enter and Escape listeners borrow the dispatching transaction, never the session.
 use crate::*;
 use lexical_model::*;
 use std::cell::{Cell, RefCell};
@@ -70,6 +70,7 @@ struct RegistryState {
     fault: Option<&'static str>,
 }
 struct Entry {
+    command: KeyCommand,
     handle: Id,
     callback: NonZeroU64,
     priority: CommandPriority,
@@ -77,6 +78,7 @@ struct Entry {
     actual: CommandListenerId,
 }
 struct Listener {
+    command: KeyCommand,
     registry: Weak<Registry>,
     callback: NonZeroU64,
 }
@@ -93,15 +95,8 @@ scoped_tls_hkt::scoped_thread_local!(static INVOCATION: for<'a> &'a Invocation);
 impl CommandListener for Listener {
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         let programmatic = match command {
-            Command::Key {
-                command: KeyCommand::Enter,
-                event,
-            } => event.is_none(),
-            _ => {
-                return Err(Error::Invariant(
-                    "view Enter listener received another command",
-                ))
-            }
+            Command::Key { command, event } if *command == self.command => event.is_none(),
+            _ => return Err(Error::Invariant("view listener received another command")),
         };
         let registry = self
             .registry

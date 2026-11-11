@@ -133,6 +133,41 @@ impl EditorSession {
             )
             .map_err(js)
     }
+    /// Register Escape after existing listeners at the same native priority.
+    #[wasm_bindgen(js_name=registerViewEscape)]
+    pub fn register_view_escape(&mut self, callback: u64, priority: u8) -> Result<u64, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        let registry = self.machine.view_commands().map_err(js)?;
+        let machine::Session::Editor(session) = &mut self.machine.session else {
+            return Err(js(BoundaryError::Invalid("editor required")));
+        };
+        registry
+            .register_key(session, KeyCommand::Escape, callback, priority)
+            .map_err(|error| js(error.into()))
+    }
+    /// Remove a stable Escape registration; repeated cleanup is harmless.
+    #[wasm_bindgen(js_name=unregisterViewEscape)]
+    pub fn unregister_view_escape(&mut self, handle: u64) -> Result<(), JsError> {
+        self.unregister_view_enter(handle)
+    }
+    /// Admit a programmatic Escape with an explicit null JS event payload.
+    #[wasm_bindgen(js_name=viewCommandEscape)]
+    pub fn view_command_escape(&mut self, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        self.machine
+            .call(
+                document_session::SessionInput::Editor(Input::Command {
+                    command: Command::Key {
+                        command: KeyCommand::Escape,
+                        event: None,
+                    },
+                    selection: ViewSelection::KeepModel,
+                }),
+                now,
+                Some(wall),
+            )
+            .map_err(js)
+    }
     /// Deliver a cold Bebop input.
     pub fn input(&mut self, msg: &[u8], now: f64, wall: f64) -> Result<u32, JsError> {
         self.machine.input(msg, now, wall).map_err(js)

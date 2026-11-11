@@ -65,6 +65,33 @@ pub fn unregister(scope: u64, handle: u64) -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Dispatch a nested programmatic Escape with an explicit null JS payload.
+#[wasm_bindgen(js_name=viewCommandScopeEscape)]
+pub fn escape(scope: u64) -> Result<bool, JsValue> {
+    match run(scope, Operation::Escape)? {
+        Value::Handled(value) => Ok(value),
+        _ => Err(host::error(BoundaryError::Invalid(
+            "view command scope result",
+        ))),
+    }
+}
+/// Append or deduplicate an Escape listener in the current transaction.
+#[wasm_bindgen(js_name=viewCommandScopeRegisterEscape)]
+pub fn register_escape(scope: u64, callback: u64, priority: u8) -> Result<u64, JsValue> {
+    match run(scope, Operation::RegisterEscape(callback, priority))? {
+        Value::Handle(value) => Ok(value),
+        _ => Err(host::error(BoundaryError::Invalid(
+            "view command scope result",
+        ))),
+    }
+}
+/// Remove an Escape registration while retaining current bucket snapshots.
+#[wasm_bindgen(js_name=viewCommandScopeUnregisterEscape)]
+pub fn unregister_escape(scope: u64, handle: u64) -> Result<(), JsValue> {
+    run(scope, Operation::Unregister(handle))?;
+    Ok(())
+}
+
 /// Request observation retirement from the exact current callback metadata scope.
 /// The native epilogue performs retirement after callback/model borrows end.
 #[wasm_bindgen(js_name=requestRetireViewObservation)]

@@ -1,7 +1,7 @@
 use super::*;
-fn registration(priority: CommandPriority) -> CommandRegistration {
+fn registration(command: KeyCommand, priority: CommandPriority) -> CommandRegistration {
     CommandRegistration {
-        command: CommandKind::Key(KeyCommand::Enter),
+        command: CommandKind::Key(command),
         priority,
         placement: Placement::After,
     }
@@ -62,7 +62,7 @@ impl Registry {
         for entry in &mut state.entries {
             if !session.has_command_listener(&entry.actual) {
                 entry.actual = session.register_command_listener(
-                    registration(entry.priority),
+                    registration(entry.command, entry.priority),
                     entry.listener.clone(),
                 );
             }
@@ -89,11 +89,23 @@ impl Registry {
         callback: u64,
         value: u8,
     ) -> Result<u64, Error> {
+        self.register_key(session, KeyCommand::Enter, callback, value)
+    }
+    pub(crate) fn register_key(
+        self: &Arc<Self>,
+        session: &mut document_session::DocumentSession<document_session::EditorSurface>,
+        command: KeyCommand,
+        callback: u64,
+        value: u8,
+    ) -> Result<u64, Error> {
         self.ensure_local()?;
         self.rebind(session)?;
-        self.insert(callback, priority(value)?, |registration, listener| {
-            session.register_command_listener(registration, listener)
-        })
+        self.insert_key(
+            command,
+            callback,
+            priority(value)?,
+            |registration, listener| session.register_command_listener(registration, listener),
+        )
     }
     pub(super) fn insert(
         self: &Arc<Self>,
@@ -101,23 +113,32 @@ impl Registry {
         priority: CommandPriority,
         register: impl FnOnce(CommandRegistration, Arc<dyn CommandListener>) -> CommandListenerId,
     ) -> Result<u64, Error> {
+        self.insert_key(KeyCommand::Enter, callback, priority, register)
+    }
+    pub(super) fn insert_key(
+        self: &Arc<Self>,
+        command: KeyCommand,
+        callback: u64,
+        priority: CommandPriority,
+        register: impl FnOnce(CommandRegistration, Arc<dyn CommandListener>) -> CommandListenerId,
+    ) -> Result<u64, Error> {
         let callback =
             NonZeroU64::new(callback).ok_or(Error::Invariant("view callback identity zero"))?;
         let mut state = self.lock()?;
-        if let Some(entry) = state
-            .entries
-            .iter()
-            .find(|entry| entry.callback == callback && entry.priority == priority)
-        {
+        if let Some(entry) = state.entries.iter().find(|entry| {
+            entry.command == command && entry.callback == callback && entry.priority == priority
+        }) {
             return Ok(entry.handle.raw());
         }
         let handle = Id::issue()?;
         let listener: Arc<dyn CommandListener> = Arc::new(Listener {
+            command,
             registry: Arc::downgrade(self),
             callback,
         });
-        let actual = register(registration(priority), listener.clone());
+        let actual = register(registration(command, priority), listener.clone());
         state.entries.push(Entry {
+            command,
             handle,
             callback,
             priority,

@@ -256,13 +256,14 @@ carry PasteIntentMsg.plainOnly explicitly. Legacy paste/drop maps to the real
 model default false; never infer intent from unknown branches or private MIME.
 Keep HTML/Lexical precedence and use this flag only for Markdown policy.
 
-Ordinary Enter listeners use view_command_scope and the model's actual ordered
-command list, without compatibility/foreign-node capability inference. Keep DOM
-events in the caller's synchronous JS stack; borrowed pending reads and writes
+Ordinary Enter and Escape listeners use view_command_scope and the model's
+actual ordered command list, without compatibility/foreign-node capability
+inference. Keep DOM events in the caller's synchronous JS stack; borrowed pending reads and writes
 require the exact current issued scope. Native programmatic=true comes only from
 Command::Key.event=None and establishes an explicit null payload, including
-nested/follow-up Enter. Rebind stable logical registrations from actual core
-presence, and preserve current-bucket callback leases through the outer call.
+nested/follow-up Enter or Escape. Key registrations by command, callback and
+priority. Rebind stable logical registrations from actual core presence, and
+preserve current-bucket callback leases through the outer call.
 
 When the JS dispatcher retained failure slots, collect takeViewCommandFailure()
 leases FIFO until undefined before consuming the same output. Every lease binds
