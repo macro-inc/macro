@@ -1,0 +1,19 @@
+apps/web/tests/macos/qa.mjs
+  s_52c4561d9841c7::t_b9b7f2cff8068e 129,140-155,157-170,177-184,187,205-209,211,216-221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "26fee986fe8843864605de2722c2ceb29492d604",
+  "prompts": {},
+  "sessions": {
+    "s_52c4561d9841c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38d2bb22-d81d-4f68-8258-7475843cc20c",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
