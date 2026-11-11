@@ -13,6 +13,7 @@ import { DragAccess } from './drag';
 import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
 import {
+  isSelectionCapturedInDecoratorInput,
   isSelectionWithinEditor,
   readSelection,
   readSelectionFromChange,
@@ -693,6 +694,24 @@ export function registerEvents(view: EditorView): {
         clearComposition
       );
   });
+  // Source beforeinput from an input inside a decorator re-resolves the DOM
+  // caret, which belongs to no editor point, and clears the selection; the
+  // native view otherwise ignores these events.
+  const decoratorInput = (event: InputEvent) => {
+    if (!view.isEditable || view.selection().selection.kind === 'none') return;
+    const target = event.target;
+    if (
+      !(target instanceof Node) ||
+      target === root ||
+      !root.contains(target) ||
+      view.ownsEvent(target, false) ||
+      !isSelectionCapturedInDecoratorInput(view, target)
+    )
+      return;
+    view.port.selectionFromView({ kind: 'none' });
+  };
+  root.addEventListener('beforeinput', decoratorInput);
+  listeners.push(() => root.removeEventListener('beforeinput', decoratorInput));
   listen('input', () => {
     if (endingComposition) return;
     const selection = readSelection(view);
