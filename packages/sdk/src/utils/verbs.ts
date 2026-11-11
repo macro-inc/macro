@@ -103,7 +103,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   },
   unfurl: { read: 'getUnfurl getUnfurlBulk' },
   auth: {
-    read: 'macroApiToken getReferralCode getTeam getUserInfo',
+    read: 'macroApiToken getReferralCode getTeam getUserInfo postProfilePictures',
     listed:
       'emailConnectionProviders getTeamInvites getUserTeams getUserNamesWithEmail',
     sent: 'sendReferralCode',
