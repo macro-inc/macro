@@ -31,6 +31,8 @@ model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML
 import must cancel if the view becomes read-only before admission.
 
+On desktop, selecting native body text opens the compact formatting toolbar. Check bold, italic, More inline formats and block changes against the selected body text, including backward selections. Link is hidden until the native link editor is qualified; this mount does not change the header toolbar or the Lexical title. The toolbar is optional: a presentation failure retires it while the document and sibling menus remain available.
+
 While the native body loads, its root remains non-editable and its public runtime is unavailable until the actual initial projection. Check readiness using a non-null view generation and root node; disappearing skeletons can also mean an open error. An attach failure must show the existing could-not-open warning rather than leave an endless loading editor. If no initial projection arrives within 15 seconds of beginning the initial-projection wait, the native body reports that warning and closes the pending session without retrying. The routed flow records `editor.initial-projection` with the document id, reached phase, latest sync status, projection wait, and total open wait.
 
 The native registry includes document mentions and document cards. With a

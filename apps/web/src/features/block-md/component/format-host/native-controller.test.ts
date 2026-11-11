@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
+import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
 import { createRoot } from 'solid-js';
 import { expect, test, vi } from 'vitest';
+import { createMarkdownDocumentState } from '../../context/markdown-document-state';
 import { createNativeDocumentFormattingHost } from './native';
 import { createNativeFormattingActions } from './native-actions';
 import { createNativeDocumentLinkMenuHost } from './native-link-host';
@@ -393,3 +395,75 @@ test('real key cleanup attempts both registrations after the first unregister fa
     runtime.root.remove();
   }
 });
+
+test.each(['generating', 'waiting', 'error'])(
+  'document %s lock hides formatting and refuses a previously queued action',
+  async (lock) => {
+    let stop = () => {};
+    const documentState = createRoot((dispose) => {
+      stop = dispose;
+      return createMarkdownDocumentState();
+    });
+    const canInteract = () =>
+      !documentState.generation.isGenerating() &&
+      !documentState.generation.generatedAndWaiting() &&
+      !documentState.editor.error();
+    const runtime = mount();
+    const links = createNativeDocumentLinkMenuHost(runtime.view, {
+      canEdit: canInteract,
+      alive: () => true,
+    });
+    const controller = createNativeDocumentFormattingHost(runtime.view, {
+      canEdit: canInteract,
+      alive: () => true,
+      links,
+    });
+    try {
+      runtime.port.setState(state('Locked text'));
+      select(runtime, 'Locked text');
+      expect(controller.host.interactable()).toBe(true);
+      const actions = createNativeFormattingActions(
+        runtime.view,
+        canInteract,
+        () => true
+      );
+      let pending: ReturnType<typeof actions.text> | undefined;
+      let reported: { error: unknown } | undefined;
+      try {
+        runtime.executor.run(() => {
+          pending = actions.text('bold');
+          if (lock === 'generating')
+            documentState.generation.setIsGenerating(true);
+          if (lock === 'waiting')
+            documentState.generation.setGeneratedAndWaiting(true);
+          if (lock === 'error')
+            documentState.editor.setError(
+              MarkdownEditorErrors.JSON_PARSE_ERROR
+            );
+          expect(controller.host.interactable()).toBe(false);
+          return runtime.executor.session.tick(
+            runtime.executor.now(),
+            Date.now()
+          );
+        });
+      } catch (error) {
+        reported = { error };
+      }
+      const result = await pending;
+      if (result?.status !== 'error')
+        throw new Error('Expected queued formatting refusal');
+      expect(result.error).toEqual(
+        new Error('Native formatting requires an editable document')
+      );
+      expect(reported?.error).toBe(result.error);
+      expect(runtime.root.querySelector('strong')).toBeNull();
+      expect(runtime.root.textContent).toBe('Locked text');
+    } finally {
+      controller.dispose();
+      links.dispose();
+      stop();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  }
+);

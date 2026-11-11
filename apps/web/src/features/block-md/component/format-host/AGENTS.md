@@ -25,3 +25,5 @@ Install the actual Source restoreFocusPlugin in app-equivalent fixtures before q
 Capture all native formatting query results inside the construction-time latestPublished observer and expose only those data snapshots to reactive UI. Retire presentation without native receivers; terminal key handles stay with the actual view owner until its existing close fence. Ordinary component cleanup still unregisters its actual listeners while admission permits.
 
 Keep native FormatTools in the selected-body withinPopup path; its full-header title/body focus routing is not qualified by this component checkpoint and must retain Source behavior before any broader host wiring.
+
+Mount the native body floating menu through its construction-time publication observer and an independent optional overlay lifetime; reuse the document interaction accessor including generation, waiting and editor-error locks. Keep its Link button hidden until the native link editor is qualified; do not expose requestLink to Actions from this mount.

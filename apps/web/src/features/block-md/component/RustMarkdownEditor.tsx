@@ -78,6 +78,7 @@ import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createRustEditorSession } from '../primitives/create-rust-editor-session';
 import { createEditorAuthorization } from '../queries/editor-authorization';
+import { createNativeBodyFormattingOverlay } from './format-host/native-overlay';
 
 export type RustMarkdownRuntime = Awaited<
   ReturnType<typeof createRustEditorSession>
@@ -130,6 +131,11 @@ export default function RustMarkdownEditor(props: {
     !state.generation.isGenerating() &&
     !state.generation.generatedAndWaiting() &&
     !state.editor.error();
+  const formatting = createNativeBodyFormattingOverlay({
+    canEdit: canInteractWithMedia,
+    alive: () => !abort.signal.aborted,
+  });
+  overlayLifecycle.add(formatting.dispose);
   const documentMentionContext = createNativeDocumentMentionContext(theme, {
     isInteractable: canInteractWithMedia,
   });
@@ -227,6 +233,7 @@ export default function RustMarkdownEditor(props: {
             const mounted = await createRustEditorSession({
               module,
               root: element,
+              latestPublished: [formatting.observer],
               registry: registerMacroDecoratorViews(
                 registerMacroElementViews(createBuiltinRegistry()).replace(
                   'diff',
@@ -268,6 +275,7 @@ export default function RustMarkdownEditor(props: {
                     throw new Error('Editor open cancelled');
                   const installed = installNativeMarkdownOverlays(view, {
                     canEdit,
+                    formatting: formatting.Overlay,
                     mentions: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,

@@ -6,6 +6,7 @@ import {
   createComponent,
   createSignal,
   ErrorBoundary,
+  Show,
 } from 'solid-js';
 import { registerNativeChecklist } from '../plugins/checklist/native';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
@@ -36,6 +37,7 @@ export function installNativeMarkdownOverlays(
     readonly mentions?: NativeUserMentionsOptions;
     readonly actions?: NativeActionsOptions;
     readonly tags?: NativeTagsOptions;
+    readonly formatting?: Component;
   }
 ): NativeMarkdownOverlayInstallation {
   let disposed = false;
@@ -235,6 +237,20 @@ export function installNativeMarkdownOverlays(
       } catch (error) {
         unavailable(error);
       }
+    }
+    if (options.formatting) {
+      const Formatting = options.formatting;
+      overlays.push(() =>
+        createComponent(Show, {
+          keyed: true,
+          get when() {
+            return renderActive();
+          },
+          get children() {
+            return createComponent(Formatting, {});
+          },
+        })
+      );
     }
     if (overlays.length)
       Overlays = () => overlays.map((Overlay) => createComponent(Overlay, {}));
