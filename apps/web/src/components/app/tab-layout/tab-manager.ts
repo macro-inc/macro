@@ -508,6 +508,12 @@ export function createTabManager(options: TabManagerOptions) {
       }
     },
 
+    /** The tab Cmd+`number` opens: the Nth, except 9, which is always the last. */
+    tabByNumber(number: number): DesktopTab | undefined {
+      const list = tabs();
+      return number === 9 ? list.at(-1) : list[number - 1];
+    },
+
     activateNextTab(step: 1 | -1): void {
       const list = untrack(tabs);
       if (list.length <= 1) return;
