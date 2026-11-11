@@ -1,5 +1,7 @@
 //! Per-delivery link maintenance, using the existing health and lifecycle services.
 
+/// Physical link deletion and its capability ports.
+pub mod deletion;
 mod ports;
 /// Incremental physical mailbox purge and its persistence contracts.
 pub mod purge;
@@ -40,7 +42,7 @@ pub struct LinkManagerService<R, H, L, N, B, D> {
     pub notifications: N,
     /// Existing non-blocking event publication.
     pub broker: B,
-    /// Physical deletion, retained temporarily while its workflow is extracted.
+    /// Physical-deletion domain service.
     pub deletion: D,
 }
 
@@ -51,7 +53,7 @@ where
     L: LinkManagerLifecycle,
     N: LinkManagerNotifications,
     B: MacroEventBroker,
-    D: LegacyLinkDeletion,
+    D: LinkDeletion,
 {
     /// Decide acknowledgement after decoding and processing one delivery.
     pub async fn process(

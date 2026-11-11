@@ -16,7 +16,7 @@ struct Captured {
 }
 
 #[derive(Clone, Default)]
-struct Output(Arc<Mutex<Vec<Captured>>>);
+pub(in crate::domain::mailbox::link_manager) struct Output(Arc<Mutex<Vec<Captured>>>);
 
 #[derive(Default)]
 struct Fields(BTreeMap<String, String>);
@@ -57,14 +57,25 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
 }
 
 impl Output {
-    fn subscriber(&self) -> impl tracing::Subscriber + Send + Sync + 'static {
+    pub(in crate::domain::mailbox::link_manager) fn count(&self, message: &str) -> usize {
+        self.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| event.message == message)
+            .count()
+    }
+
+    pub(in crate::domain::mailbox::link_manager) fn subscriber(
+        &self,
+    ) -> impl tracing::Subscriber + Send + Sync + 'static {
         tracing_subscriber::registry()
             .with(tracing_subscriber::filter::LevelFilter::TRACE)
             .with(Capture(self.clone()))
     }
 }
 
-fn assert_event(
+pub(in crate::domain::mailbox::link_manager) fn assert_event(
     output: &Output,
     level: tracing::Level,
     message: &str,

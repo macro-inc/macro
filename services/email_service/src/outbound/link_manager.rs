@@ -1,13 +1,13 @@
 //! Existing link-maintenance effects behind the email domain's ports.
 
-mod legacy;
-pub(crate) use legacy::LegacyLinkDeletionAdapter;
+mod deletion;
+pub(crate) use deletion::{DeletionAuth, DeletionGmail, DeletionRefresh, PgLinkDeletion};
 
 use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use crate::outbound::persistence_error::InboxPersistenceError;
-use crate::pubsub::context::{NotificationIngressType, PubSubEventBroker};
+use crate::pubsub::context::NotificationIngressType;
 use email::domain::mailbox::link_manager::{
-    LinkManagerNotifications, LinkManagerRepository, LinkManagerService, ReauthNotification,
+    LinkManagerNotifications, LinkManagerRepository, ReauthNotification,
 };
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
@@ -15,15 +15,6 @@ use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use std::sync::Arc;
 use uuid::Uuid;
-
-pub(crate) type LinkManager = LinkManagerService<
-    PgGmailOps,
-    Arc<crate::composition::InboxHealth>,
-    Arc<crate::composition::InboxLifecycle>,
-    ReauthNotifier,
-    PubSubEventBroker,
-    LegacyLinkDeletionAdapter,
->;
 
 impl LinkManagerRepository for PgGmailOps {
     async fn primaries(&self, owner: &str, link: Uuid) -> Result<Vec<String>, Self::Err> {

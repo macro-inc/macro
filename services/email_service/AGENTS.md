@@ -44,9 +44,9 @@ the gateway `/email` prefix.
   orchestration also live in the domain; these adapters retain the existing
   journal, invitation, upload, notification and persistence implementations.
   Link manager composes `email::domain::mailbox::link_manager` for delivery
-  disposition, probes, and reconnect notifications; its context holds only the
-  service and receiver. `outbound/link_manager/legacy.rs` temporarily retains
-  physical deletion until the purge workflow is extracted.
+  disposition, probes, reconnect notifications and physical deletion; its
+  context holds only the service and receiver. `outbound/link_manager/deletion.rs`
+  implements the cleanup capabilities without owning deletion policy.
   Both workers reuse the domain's catalog, contact, notification and pending-label
   rules; their adapters retain the existing atomic writes and savepoints.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's

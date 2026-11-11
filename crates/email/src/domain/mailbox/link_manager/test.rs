@@ -3,7 +3,7 @@ use super::*;
 use fakes::*;
 use models_email::service::pubsub::DeletionReason;
 
-mod events;
+pub(super) mod events;
 mod fakes;
 
 fn failure(outcome: LinkManagerDisposition) -> anyhow::Error {

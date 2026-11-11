@@ -167,7 +167,7 @@ impl MacroEventBroker for Fake {
         Ok(tokio::spawn(async { Ok(()) }))
     }
 }
-impl LegacyLinkDeletion for Fake {
+impl LinkDeletion for Fake {
     async fn delete(&self, link: &Link, reason: &DeletionReason) -> anyhow::Result<()> {
         self.step("delete", Call::Delete(link.id, reason.as_str().into()))
             .map_err(ConnectionSourceError::into_original)

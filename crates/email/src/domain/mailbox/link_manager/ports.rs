@@ -93,9 +93,9 @@ pub trait LinkManagerNotifications: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Interim boundary for physical deletion; replaced by individual ports in stage C.
-pub trait LegacyLinkDeletion: Send + Sync + 'static {
-    /// Run the existing physical-deletion workflow without translating its error.
+/// Physical-deletion domain use case, called only after lifecycle preparation.
+pub trait LinkDeletion: Send + Sync + 'static {
+    /// Run physical deletion without translating its error.
     fn delete(
         &self,
         link: &Link,

@@ -21,6 +21,26 @@ use tracing::Instrument;
 #[cfg(test)]
 mod test;
 
+/// Production composition; concrete adapters stay at the worker boundary.
+pub(crate) type LinkManager = email::domain::mailbox::link_manager::LinkManagerService<
+    crate::outbound::message_labels::gmail_ops::PgGmailOps,
+    Arc<crate::composition::InboxHealth>,
+    Arc<crate::composition::InboxLifecycle>,
+    crate::outbound::link_manager::ReauthNotifier,
+    PubSubEventBroker,
+    email::domain::mailbox::link_manager::deletion::LinkDeletionService<
+        crate::outbound::link_manager::PgLinkDeletion,
+        crate::outbound::link_manager::DeletionGmail,
+        crate::outbound::link_manager::DeletionAuth,
+        CrmServiceType,
+        email::domain::mailbox::link_manager::purge::LinkPurgeService<
+            email::outbound::mailbox_pg::PgMailboxSync,
+        >,
+        crate::outbound::link_manager::DeletionRefresh,
+        PubSubEventBroker,
+    >,
+>;
+
 /// How long each renewal hides a message being processed from other workers.
 const VISIBILITY_EXTENSION_SECONDS: i32 = 300;
 /// How often a message being processed renews its visibility. Several renewals fit in one
@@ -141,17 +161,19 @@ pub(crate) async fn context(
                 notification_ingress_service,
             ),
             broker: macro_event_broker.clone(),
-            deletion: crate::outbound::link_manager::LegacyLinkDeletionAdapter {
+            deletion: email::domain::mailbox::link_manager::deletion::LinkDeletionService {
                 purge: email::domain::mailbox::link_manager::purge::LinkPurgeService {
                     repository: email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
                 },
-                db,
-                email_api,
-                auth_service_client,
-                redis_client,
-                crm_service,
-                connection_gateway_client,
-                macro_event_broker,
+                repository: crate::outbound::link_manager::PgLinkDeletion(db),
+                gmail: crate::outbound::link_manager::DeletionGmail {
+                    api: email_api,
+                    cache: redis_client,
+                },
+                auth: crate::outbound::link_manager::DeletionAuth(auth_service_client),
+                crm: crm_service,
+                refresh: crate::outbound::link_manager::DeletionRefresh(connection_gateway_client),
+                broker: macro_event_broker,
             },
         }),
     };

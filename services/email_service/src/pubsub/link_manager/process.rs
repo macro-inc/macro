@@ -7,8 +7,6 @@ use sqs_worker::cleanup_message;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-use crate::outbound::inbox_lifecycle::retry_teardown;
-#[cfg(test)]
 use email_api_client::domain::models::{AccessToken, EmailApiError};
 
 /// Decode one delivery and perform the acknowledgement selected by the domain.
