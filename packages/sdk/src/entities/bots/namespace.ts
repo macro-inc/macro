@@ -21,7 +21,11 @@ export class BotsNamespace {
     return Bot.byId(this.client, id);
   }
 
-  /** The bots the user can manage: their own and their teams'. */
+  /**
+   * The bots the user can manage: their own and their teams'.
+   *
+   * @readonly
+   */
   async list(): Promise<Bot[]> {
     return Bot.list(this.client);
   }
@@ -29,6 +33,8 @@ export class BotsNamespace {
   /**
    * Create a bot. It can post nowhere until `bot.grantChannel(channel)`; then
    * `bot.webhooks()` and `bot.createToken()` give an integration what it needs.
+   *
+   * @write
    */
   async create(options: CreateBotOptions): Promise<Bot> {
     return Bot.create(this.client, options);
@@ -37,6 +43,8 @@ export class BotsNamespace {
   /**
    * The authenticated bot's own record. Requires bot auth; with a user API
    * key this throws (a user token has no bot identity).
+   *
+   * @readonly
    */
   async me(): Promise<BotRecord> {
     if (this.client.authConfig.type !== 'bot') {
@@ -49,6 +57,8 @@ export class BotsNamespace {
 
   /**
    * Channels containing the authenticated bot. Requires bot auth.
+   *
+   * @readonly
    */
   async channels(): Promise<BotChannel[]> {
     if (this.client.authConfig.type !== 'bot') {
@@ -68,6 +78,8 @@ export class BotsNamespace {
    * The authenticated bot's canonical principal id (`bot|<uuid>`) — the form
    * used for bot mentions, senders, and webhook `ids` filters. Cached on the
    * client; see {@link MacroClient.myPrincipalId}.
+   *
+   * @readonly
    */
   async myPrincipalId(): Promise<string> {
     if (this.client.authConfig.type !== 'bot') {

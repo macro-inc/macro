@@ -15,7 +15,11 @@ export class GithubPullRequestNamespace {
     return GithubPullRequest.byId(this.client, id);
   }
 
-  /** Resolve a foreign entity as a pull request. */
+  /**
+   * Resolve a foreign entity as a pull request.
+   *
+   * @readonly
+   */
   forEntity(entity: ForeignEntity): GithubPullRequest {
     return GithubPullRequest.byId(this.client, entity.id);
   }

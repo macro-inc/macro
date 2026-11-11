@@ -100,7 +100,6 @@ function Glyph(props: { name: string; size: number; weight?: IconWeight }) {
       class="inline-flex shrink-0 items-center justify-center"
       style={{ width: `${props.size}px`, height: `${props.size}px` }}
       aria-hidden="true"
-      data-icon-motion-target
     >
       <Show when={icon()}>
         {(entry) => <Dynamic component={entry().component} />}
@@ -189,9 +188,7 @@ export default function IconSystemGallery() {
           </div>
           <p class="max-w-xl text-sm text-ink-muted">
             Icon specimen at actual interface sizes. Compare weight, spacing,
-            and selected states on both Macro themes. Press the navigation and
-            toolbar icons to preview motion; search and settings also respond to
-            a brief hover. Reduced motion keeps the icons still.
+            and selected states on both Macro themes.
           </p>
         </header>
 
