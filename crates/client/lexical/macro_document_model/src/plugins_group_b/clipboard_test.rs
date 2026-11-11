@@ -213,3 +213,73 @@ fn captured_plain_paste_intent_leaves_html_for_rich_text_insertion() -> Result<(
     assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
+
+#[test]
+fn source_rich_clipboard_into_code_preserves_flat_content_and_caret() -> Result<(), Error> {
+    use crate::nodes::CustomCodeNode;
+    use lexical_rich_nodes::clipboard::{
+        ClipboardEntry, MIME_LEXICAL, insert_data_transfer_for_rich_text,
+    };
+
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (code, _) = editor.update(|tx| {
+        let code = tx.create(CustomCodeNode::default())?;
+        let linebreak = tx.create(LineBreak {})?;
+        let text = tx.create_text("const installCheck = \"durable\";")?;
+        let trailing = tx.create(Paragraph::default())?;
+        tx.append(code, &[linebreak.key(), text.key()])?;
+        tx.append(NodeKey::ROOT, &[code.key(), trailing.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::element(code.key(), ChildIndex(1)),
+        ))))?;
+        Ok(code.key())
+    })?;
+    let (handled, _) = editor.update(|tx| {
+        insert_data_transfer_for_rich_text(
+            tx,
+            "block-md-main_2",
+            &[ClipboardEntry {
+                mime: MIME_LEXICAL,
+                data: include_str!("clipboard/code-paste-source.json"),
+            }],
+            None,
+            SelectionSlot::Active,
+        )
+    })?;
+    assert!(handled);
+
+    // Trusted Source click, Ctrl+End, Enter, then a rich-only clipboard event.
+    let state = editor.state().view();
+    let root = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(root.len(), 2);
+    assert_eq!(root[0], code);
+    assert!(state.is::<Paragraph>(root[1]));
+    assert!(state.is_empty(root[1]));
+    let children = state.children_keys(code)?;
+    assert!(
+        children
+            .iter()
+            .all(|key| state.is_line_break(*key) || matches!(state.type_name(*key), Ok("text"))),
+        "rich clipboard children must flatten into code runs"
+    );
+    assert_eq!(
+        state.text_content(code),
+        concat!(
+            "\nInstall heading\n\nInstall list item\n\nInstall checked item\n\n",
+            "const persistedValue = \"durable 😀\";\n\nInstall cell 1\n\nInstall cell 2\n\n",
+            "Install cell 3\n\nInstall cell 4\n\nInstall quote\n\nInstall link\n\n",
+            "Install end\n\nconst installCheck = \"durable\";"
+        )
+    );
+    let caret = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    let point = Point::text(children[1], Utf16Offset(10));
+    assert_eq!(caret.anchor, point);
+    assert_eq!(caret.focus, point);
+    Ok(())
+}

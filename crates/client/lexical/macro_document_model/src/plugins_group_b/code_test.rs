@@ -241,3 +241,124 @@ fn fresh_code_text_uses_edge_navigation_without_model_highlight_nodes() -> Resul
     assert_eq!(editor.state().view().type_name(text)?, "text");
     Ok(())
 }
+
+#[test]
+fn code_transform_normalizes_programmatic_nested_insertions_and_keeps_source_caret_policy()
+-> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let ((first, second, outside), _) = editor.update(|tx| {
+        let first = create_custom_code_node(tx, Some("plaintext"))?;
+        let second = create_custom_code_node(tx, Some("plaintext"))?;
+        let paragraph = tx.create(Paragraph::default())?;
+        let outside = tx.create_text("outside")?;
+        tx.append(paragraph, &[outside.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), second.key(), paragraph.key()])?;
+        tx.text(outside)?
+            .select(Some(Utf16Offset(2)), Some(Utf16Offset(2)))?;
+        Ok((first.key(), second.key(), outside.key()))
+    })?;
+    editor.update(|tx| {
+        for (code, value) in [(first, "one\n\tvalue"), (second, "second")] {
+            let paragraph = tx.create(Paragraph::default())?;
+            let text = tx.create_text(value)?;
+            tx.append(paragraph, &[text.key()])?;
+            tx.append(code, &[paragraph.key()])?;
+        }
+        tx.text(outside)?
+            .select(Some(Utf16Offset(2)), Some(Utf16Offset(2)))
+    })?;
+    let state = editor.state().view();
+    assert_eq!(state.text_content(first), "one\n\tvalue");
+    assert_eq!(state.text_content(second), "second");
+    for code in [first, second] {
+        assert!(
+            state
+                .children(code)
+                .all(|child| { state.is_text(child) || state.is_line_break(child) })
+        );
+    }
+    // Source's normalizer also moves an unrelated caret into the last dirty code.
+    let caret = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    let selected = state.first_child(second).expect("normalized code text");
+    assert_eq!(caret.anchor, Point::text(selected, Utf16Offset(2)));
+    assert_eq!(caret.focus, caret.anchor);
+
+    let before = editor.state().to_json()?;
+    let (_, commit) = editor.update(|tx| tx.mark_dirty(first))?;
+    assert!(
+        commit.changes.mutations.is_empty(),
+        "a second normalization pass must not write"
+    );
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}
+
+#[test]
+fn code_transform_keeps_the_original_element_after_linebreak_and_valid_negative_edge_caret()
+-> Result<(), Error> {
+    for caret_kind in ["outside text", "outside element", "replaced text"] {
+        let mut editor =
+            surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+                .build()
+                .expect("surface");
+        let ((code, paragraph, outside), _) = editor.update(|tx| {
+            let code = create_custom_code_node(tx, Some("plaintext"))?;
+            let linebreak = tx.create(LineBreak {})?;
+            let text = tx.create_text("base")?;
+            tx.append(code, &[linebreak.key(), text.key()])?;
+            let paragraph = tx.create(Paragraph::default())?;
+            let outside = tx.create_text("outside")?;
+            tx.append(paragraph, &[outside.key()])?;
+            tx.append(NodeKey::ROOT, &[code.key(), paragraph.key()])?;
+            tx.select_start(outside)?;
+            Ok((code.key(), paragraph.key(), outside.key()))
+        })?;
+        editor.update(|tx| {
+            let nested = tx.create(Paragraph::default())?;
+            let text = tx.create_text("nested")?;
+            tx.append(nested, &[text.key()])?;
+            tx.append(code, &[nested.key()])?;
+            match caret_kind {
+                "outside element" => tx
+                    .element(paragraph)?
+                    .select(Some(ChildIndex(1)), Some(ChildIndex(1))),
+                "replaced text" => tx.select_start(text),
+                _ => tx.select_start(outside),
+            }
+        })?;
+        let state = editor.state().view();
+        assert_eq!(state.text_content(code), "\nbasenested");
+        assert_eq!(state.children_size(code), 2);
+        let caret = state
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range");
+        // Source's element arm restores the original element, even outside code.
+        // Its text arm produces invalid offset -1 here. Native keeps the valid
+        // existing caret while still applying the same content normalization.
+        if caret_kind == "replaced text" {
+            for point in [caret.anchor, caret.focus] {
+                assert!(state.is_attached(point.key()));
+                match point {
+                    Point::Text { key, offset } => assert!(offset <= state.text_content_size(key)),
+                    Point::Element { key, offset } => assert!(offset.0 <= state.children_size(key)),
+                }
+            }
+        } else {
+            let expected = if caret_kind == "outside element" {
+                Point::element(paragraph, ChildIndex(1))
+            } else {
+                Point::text(outside, Utf16Offset::ZERO)
+            };
+            assert_eq!(caret.anchor, expected);
+            assert_eq!(caret.focus, expected);
+        }
+    }
+    Ok(())
+}
