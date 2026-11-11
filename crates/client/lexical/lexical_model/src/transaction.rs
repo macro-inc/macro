@@ -43,6 +43,7 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
     pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) update_local: crate::update_local::UpdateLocal,
     pub(crate) events: Vec<PluginEvent>,
     pub(crate) default_prevented: bool,
     pub(crate) editor: &'editor mut Editor,
@@ -111,6 +112,7 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             extensions: editor.extensions.clone(),
+            update_local: Default::default(),
             events: vec![],
             default_prevented: false,
             editor,

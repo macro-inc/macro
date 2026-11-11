@@ -88,6 +88,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Hooks share one follow-up transaction per round; conditional hooks then run isolated transactions and discard false results, including early flushes. Keep the shared 99-round guard and roll back extension state with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
+- `Transaction::update_local_mut` holds typed per-update values (Source pending-state lifetime): they move with suspend/resume/adoption, survive `restore_editor_state`, flush passes and nested updates, and clear on every successful publication (including empty, tag-only and `set_editor_state`'s prefix) and on rollback; never store them in EditorState, Commit or extension state.
 - Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - Keep sibling-position ranks local to an immutable diff state; share next-state ranks across creation and child-list ordering, never across snapshots or commits.

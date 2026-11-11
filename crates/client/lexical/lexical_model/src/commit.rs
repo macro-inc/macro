@@ -256,6 +256,9 @@ impl Transaction<'_> {
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
         self.editor.suspend_version = next_id;
+        // Every successful publication ends the pending update's local values, including empty,
+        // tag-only and event-only ones; drop them after the publication callbacks.
+        let retired = std::mem::take(&mut self.update_local);
         if let Some(receipt) = receipt {
             receipt.publish();
         }
@@ -263,6 +266,7 @@ impl Transaction<'_> {
         if let Some(observer) = &self.editor.foreign_publication_observer {
             observer.published(&commit);
         }
+        drop(retired);
         Ok((commit, artifact))
     }
 

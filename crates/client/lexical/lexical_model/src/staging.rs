@@ -27,6 +27,7 @@ pub struct PendingUpdate {
     owner: Arc<()>,
     version: CommitId,
     extensions: crate::extension::Extensions,
+    pub(crate) update_local: crate::update_local::UpdateLocal,
     events: Vec<PluginEvent>,
     default_prevented: bool,
     pending: EditorState,
@@ -124,6 +125,7 @@ impl Transaction<'_> {
             owner: self.editor.staging_owner().clone(),
             version: self.editor.suspend_version,
             extensions: self.extensions,
+            update_local: self.update_local,
             events: self.events,
             default_prevented: self.default_prevented,
             pending: self.pending,
@@ -191,6 +193,7 @@ impl Editor {
             native_projection: update.native_projection,
             editor: self,
             extensions: update.extensions,
+            update_local: update.update_local,
             events: update.events,
             default_prevented: update.default_prevented,
             pending: update.pending,
@@ -259,6 +262,7 @@ impl Transaction<'_> {
             return Err(Error::StaleSuspendedUpdate);
         }
         if self.has_staged_effects()
+            || !self.update_local.is_empty()
             || self.preceding.is_some()
             || self.options
                 != (UpdateOptions {
@@ -322,6 +326,7 @@ impl Transaction<'_> {
             self.staging_update = std::sync::OnceLock::from(update.update);
         }
         self.extensions = update.extensions;
+        self.update_local = update.update_local;
         self.events = update.events;
         self.default_prevented = update.default_prevented;
         self.pending = update.pending;

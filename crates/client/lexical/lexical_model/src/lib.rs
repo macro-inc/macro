@@ -23,6 +23,7 @@ pub use prepared::{PreparationFailure, PreparedReceipt, PreparedRefusal, Prepare
 mod state;
 pub use staging::PendingUpdate;
 mod transaction;
+mod update_local;
 pub use editor::*;
 pub use node::*;
 pub use node_state::*;
