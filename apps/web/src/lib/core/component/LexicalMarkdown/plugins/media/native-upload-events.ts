@@ -1,3 +1,5 @@
+import type { MediaType } from './io';
+
 export interface NativeUploadResult {
   id: string;
   url: string;
@@ -16,8 +18,8 @@ export function createNativeMediaUploadEvents() {
   const listeners = new Map<string, Set<NativeUploadCallbacks>>();
   let disposed = false;
 
-  const keyFor = (generation: number, localUrl: string) =>
-    `${generation}:${localUrl}`;
+  const keyFor = (kind: MediaType, generation: number, localUrl: string) =>
+    `${kind}:${generation}:${localUrl}`;
 
   function notify(
     key: string,
@@ -27,14 +29,15 @@ export function createNativeMediaUploadEvents() {
   }
 
   return {
-    pending: (generation: number, localUrl: string) =>
-      pending.has(keyFor(generation, localUrl)),
+    pending: (kind: MediaType, generation: number, localUrl: string) =>
+      pending.has(keyFor(kind, generation, localUrl)),
     subscribe(
+      kind: MediaType,
       generation: number,
       localUrl: string,
       callbacks: NativeUploadCallbacks
     ) {
-      const key = keyFor(generation, localUrl);
+      const key = keyFor(kind, generation, localUrl);
       if (disposed) throw new Error('Native media uploads are disposed');
       const current = listeners.get(key) ?? new Set();
       current.add(callbacks);
@@ -46,11 +49,12 @@ export function createNativeMediaUploadEvents() {
       };
     },
     async track(
+      kind: MediaType,
       generation: number,
       localUrl: string,
       upload: () => Promise<NativeUploadResult | undefined>
     ): Promise<void> {
-      const key = keyFor(generation, localUrl);
+      const key = keyFor(kind, generation, localUrl);
       if (disposed) throw new Error('Native media uploads are disposed');
       if (pending.has(key))
         throw new Error('Native media upload already tracked');

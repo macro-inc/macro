@@ -73,12 +73,12 @@ export function createNativeImageUploadController() {
     const upload = uploadsByLocalUrl.get(localUrl);
     if (
       !upload ||
-      events.pending(generation, localUrl) ||
+      events.pending('image', generation, localUrl) ||
       !current(view, generation)
     )
       return;
     fireAndForget(
-      events.track(generation, localUrl, async () => {
+      events.track('image', generation, localUrl, async () => {
         const result = await upload;
         if (!current(view, generation) || !editable(view)) return;
         if (!result.ok) throw result.error;

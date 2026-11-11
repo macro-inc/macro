@@ -9,7 +9,12 @@ import { handleFileFolderDrop } from '@core/util/upload';
 import { CodeNode } from '@lexical/code-core';
 import { $dfs } from '@lexical/utils';
 import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
-import { $createImageNode, $isImageNode } from '@macro-inc/lexical-core';
+import {
+  $createImageNode,
+  $createVideoNode,
+  $isImageNode,
+  $isVideoNode,
+} from '@macro-inc/lexical-core';
 import { $setId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { mountLocalSessionView } from '@macro-inc/lexical-wasm-view';
 import { createBuiltinRegistry } from '@macro-inc/lexical-wasm-view/view/node-views/builtins';
@@ -44,6 +49,10 @@ import { trailingParagraphPlugin } from '../../plugins/trailing-paragraph/traili
 import { theme } from '../../theme';
 import { createNativeImageContext } from '../native-image-host';
 import { createNativeImageDecoratorViews } from '../native-image-views';
+import {
+  createNativeVideoContext,
+  createNativeVideoDecoratorViews,
+} from '../native-video-views';
 import initialize, { EditorSession } from './wasm/document_session_wasm.js';
 
 initializeLexical();
@@ -80,6 +89,9 @@ function Fixture() {
   const params = new URLSearchParams(location.search);
   const engine = params.get('engine');
   const uploadMode = params.has('upload');
+  const videoMode = params.has('video');
+  const kind = videoMode ? 'video' : 'image';
+  const namespace = videoMode ? 'video-fixture' : 'image-fixture';
   if (uploadMode && CodeNode.getType() !== 'code')
     throw new Error('Missing pinned Source code module');
   const owner = getOwner();
@@ -88,7 +100,7 @@ function Fixture() {
       ? undefined
       : createLexicalWrapper({
           type: 'markdown-sync',
-          namespace: 'image-fixture',
+          namespace,
           isInteractable: () => true,
           withIds: true,
           theme,
@@ -119,8 +131,12 @@ function Fixture() {
       : undefined;
   const uploads = controller?.events ?? createNativeMediaUploadEvents();
   const nativeContext =
-    engine === 'native'
+    engine === 'native' && !videoMode
       ? createNativeImageContext(theme, () => true, uploads)
+      : undefined;
+  const videoContext =
+    engine === 'native' && videoMode
+      ? createNativeVideoContext(theme, () => true, uploads)
       : undefined;
   let root: HTMLDivElement | undefined;
   let close: (() => Promise<void>) | undefined;
@@ -131,6 +147,7 @@ function Fixture() {
         await close?.();
       } finally {
         nativeContext?.dispose();
+        videoContext?.dispose();
         if (controller) controller.dispose();
         else uploads.dispose();
       }
@@ -149,17 +166,25 @@ function Fixture() {
         throw new Error('Missing frozen import input');
       await initialize();
       if (closing) return;
-      if (!nativeContext) throw new Error('Missing actual image context');
       const registry = registerMacroElementViews(createBuiltinRegistry());
-      registerMacroDecoratorViews(
-        registry,
-        createNativeImageDecoratorViews(nativeContext)
-      );
+      if (videoContext) {
+        registerMacroDecoratorViews(
+          registry,
+          createNativeVideoDecoratorViews(videoContext)
+        );
+      } else if (nativeContext) {
+        registerMacroDecoratorViews(
+          registry,
+          createNativeImageDecoratorViews(nativeContext)
+        );
+      } else {
+        throw new Error('Missing actual media context');
+      }
       const surface = mountLocalSessionView(
         element,
         registry,
         {
-          namespace: 'image-fixture',
+          namespace,
           theme,
           editable: true,
           preset: 'rich',
@@ -182,13 +207,14 @@ function Fixture() {
               config,
               now,
               wall,
-              'image-fixture'
+              namespace
             ),
         }
       );
       close = async () => {
         controller?.dispose();
-        nativeContext.dispose();
+        nativeContext?.dispose();
+        videoContext?.dispose();
         await surface.close();
       };
       if (element.querySelector('[data-lexical-decorator]'))
@@ -209,16 +235,16 @@ function Fixture() {
       };
       model = () => surface.executor.session.serializedState();
       setUrl = async (url, rerender) => {
-        const image = [...surface.view.mirror.values()].find(
-          (node) => node.type === 'image'
+        const media = [...surface.view.mirror.values()].find(
+          (node) => node.type === kind
         );
-        if (!image) throw new Error('Missing actual native image');
+        if (!media) throw new Error('Missing actual native media');
         const outcome = await dispatchApplicationCommandSettled(
           surface.view,
           'group-b.media-set-property',
           {
-            key: image.key,
-            kind: 'image',
+            key: media.key,
+            kind,
             property: 'url',
             value: url,
             rerender,
@@ -242,7 +268,20 @@ function Fixture() {
           () => {
             const node = $getRoot();
             $setId(node, 'image-proof-root');
-            if (!uploadMode)
+            if (videoMode) {
+              node.append(
+                $createVideoNode({
+                  srcType: 'url',
+                  url: new URL(
+                    '/src/features/block-pptx/browser-test/fixtures/clip.webm',
+                    location.origin
+                  ).href,
+                  width: 320,
+                  height: 180,
+                  controls: false,
+                })
+              );
+            } else if (!uploadMode)
               node.append(
                 $createImageNode({
                   srcType: 'url',
@@ -270,10 +309,14 @@ function Fixture() {
       setUrl = async (url, rerender) => {
         wrapper.editor.update(
           () => {
-            const image = $getRoot().getFirstChild();
-            if (!image || !$isImageNode(image))
-              throw new Error('Missing actual Source image');
-            image.setUrl(url, rerender);
+            const node = $getRoot().getFirstChild();
+            if (
+              !node ||
+              !($isImageNode(node) || $isVideoNode(node)) ||
+              node.getType() !== kind
+            )
+              throw new Error('Missing actual Source media');
+            node.setUrl(url, rerender);
           },
           { discrete: true }
         );
@@ -304,7 +347,7 @@ function Fixture() {
       <div
         ref={root}
         role="textbox"
-        aria-label="Image proof"
+        aria-label={videoMode ? 'Video proof' : 'Image proof'}
         contentEditable
         class="md w-[640px] min-h-80 p-4 outline-none"
       />

@@ -462,3 +462,145 @@ for (const outcome of ['success', 'failure']) {
     expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
   });
 }
+
+test('native video selection, cached setters and removal match Source', async ({
+  context,
+  baseURL,
+}, info) => {
+  await routeFixtures(context);
+  const mediaUrl = new URL(
+    '/src/features/block-pptx/browser-test/fixtures/clip.webm',
+    baseURL
+  ).href;
+  const factory = await context.newPage();
+  const source = await context.newPage();
+  const native = sourceOnly ? undefined : await context.newPage();
+  const pages = native ? [factory, source, native] : [factory, source];
+  const proofs = pages.map(watchCompiledSourceDeps);
+  const errors: string[] = [];
+  for (const page of pages)
+    page.on('pageerror', (error) => errors.push(error.message));
+  const records = [];
+  let cleanup: PromiseSettledResult<void>[] = [];
+  let compiledProofs: PromiseSettledResult<unknown>[] = [];
+  const root = (page: Page) =>
+    page.getByRole('textbox', { name: 'Video proof' });
+  const video = (page: Page) => root(page).locator('video').first();
+  const loaded = async (page: Page) => {
+    await expect(video(page)).toBeVisible();
+    await expect
+      .poll(() =>
+        video(page).evaluate(
+          (element) =>
+            element instanceof HTMLVideoElement && element.videoWidth > 0
+        )
+      )
+      .toBe(true);
+    await expect(video(page)).toHaveAttribute('controls', '');
+  };
+  try {
+    await factory.bringToFront();
+    await factory.goto(`${path}?engine=factory&video`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(root(factory)).toBeVisible();
+    await expect(video(factory)).toHaveAttribute('src', mediaUrl);
+    const input = (await capture(factory)).model;
+    for (const [engine, page] of [
+      ['lexical', source],
+      ['native', native],
+    ] as const) {
+      if (!page) continue;
+      await page.addInitScript((model) => {
+        window.imageProofInput = model;
+      }, input);
+      await page.bringToFront();
+      await page.goto(`${path}?engine=${engine}&video`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await loaded(page);
+      const stages = [await capture(page)];
+      records.push({ engine, stages });
+      const settlePointer = async () => {
+        await page.mouse.move(999, 799);
+        await expect(
+          root(page).locator('.transition-all.duration-200').first()
+        ).toHaveCSS('opacity', '0');
+      };
+      // Browser playback widgets can consume trusted video clicks. Exercise the
+      // shared decorator click handler without invoking the engine's player UI.
+      await video(page).dispatchEvent('click', {}, { timeout: 5_000 });
+      await expect(root(page).locator('.ring-3')).toHaveCount(1);
+      await settlePointer();
+      stages.push(await capture(page));
+      const original = await video(page).elementHandle();
+      const portal = await original.evaluateHandle(
+        (element) =>
+          element.closest('[data-lexical-decorator]')?.firstElementChild
+      );
+      const nextUrl = `${mediaUrl}?revision=1`;
+      await page.evaluate(
+        (value) => window.imageProofFixture?.setUrl(value, false),
+        nextUrl
+      );
+      await expect(video(page)).toHaveAttribute('src', mediaUrl);
+      expect(await original.evaluate((element) => element.isConnected)).toBe(
+        true
+      );
+      stages.push(await capture(page));
+      await page.evaluate(
+        (value) => window.imageProofFixture?.setUrl(value, true),
+        nextUrl
+      );
+      await expect(video(page)).toHaveAttribute('src', nextUrl);
+      await loaded(page);
+      await settlePointer();
+      expect(await original.evaluate((element) => element.isConnected)).toBe(
+        false
+      );
+      expect(await portal.evaluate((element) => element?.isConnected)).toBe(
+        true
+      );
+      stages.push(await capture(page));
+      const actions = root(page).locator('.top-2.right-2 button');
+      await expect(actions).toHaveCount(3);
+      await actions.last().click();
+      await expect(video(page)).toHaveCount(0);
+      stages.push(await capture(page));
+    }
+    if (native) expect(records[1]?.stages).toEqual(records[0]?.stages);
+    expect(errors).toEqual([]);
+  } finally {
+    try {
+      compiledProofs = await Promise.allSettled(
+        proofs.map((finish) => finish())
+      );
+      await info.attach('video-raw.json', {
+        contentType: 'application/json',
+        body: JSON.stringify({
+          records,
+          errors,
+          compiledProofs: compiledProofs.map((result) =>
+            result.status === 'rejected'
+              ? { error: String(result.reason) }
+              : result.value
+          ),
+        }),
+      });
+    } finally {
+      cleanup = await Promise.allSettled(
+        pages.map(async (page) => {
+          try {
+            await page.evaluate(() => window.imageProofClose?.());
+          } finally {
+            await page.close();
+          }
+        })
+      );
+    }
+  }
+  expect(compiledProofs.map((result) => result.status)).toEqual(
+    pages.map(() => 'fulfilled')
+  );
+  expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
+});

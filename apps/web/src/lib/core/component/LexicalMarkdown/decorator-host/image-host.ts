@@ -2,22 +2,17 @@ import { useContext } from 'solid-js';
 import {
   type DecoratorHost,
   DecoratorHostContext,
-  type DecoratorUploadCallbacks,
 } from '../context/DecoratorHostContext';
 import { LexicalWrapperContext } from '../context/LexicalWrapperContext';
 import { createLexicalDecoratorHost } from './lexical';
 
-export type ImageUploadCallbacks = DecoratorUploadCallbacks & {
-  cancelled?(): void;
-};
+import type { MediaDecoratorActions } from './media-actions';
 
 export type ImageHost = Pick<
   DecoratorHost,
   'isSelected' | 'isEditable' | 'isInteractable'
 > & {
-  image: Omit<DecoratorHost['image'], 'subscribeUploads'> & {
-    subscribeUploads(key: string, callbacks: ImageUploadCallbacks): () => void;
-  };
+  image: MediaDecoratorActions;
 };
 
 export function useImageHost(supplied?: ImageHost): ImageHost {

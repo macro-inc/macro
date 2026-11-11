@@ -1,4 +1,4 @@
-# Image decorator parity
+# Media decorator parity
 
 The fixture loads the real Source and native editor surfaces from the same
 Source export. It compares literal model JSON, editor markup and shadow
@@ -22,3 +22,10 @@ rewriting either trace.
 
 The image host observes upload events from the surface's IO owner. A stored
 local URL alone does not signal an in-flight upload.
+
+The video case uses the same-origin WebM fixture and waits for actual decode
+and playback controls. A Linux WebKit runner needs GStreamer WebM demux and
+VP8 decode plugins. It dispatches a DOM click to the shared decorator
+handler because browser playback widgets can consume pointer clicks. The
+toolbar removal still uses a pointer click. Both engines must retain the
+same Portal host through the cached URL setter and subsequent remount.
