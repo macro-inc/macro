@@ -93,6 +93,18 @@
       "post": {
         "tags": ["scheduled actions"],
         "operationId": "create_scheduled_action",
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "query",
+            "description": "The routine suggestion it is saved from, recorded on the routine.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -145,6 +157,58 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/catalog": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "routine_catalog",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Macro's routines, with schedules in the given zone; code steps only where code can be saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a time zone",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "",
             "content": {
               "text/plain": {
@@ -236,37 +300,6 @@
         }
       }
     },
-    "/scheduled-actions/code/starters": {
-      "get": {
-        "tags": ["scheduled actions"],
-        "operationId": "routine_code_starters",
-        "responses": {
-          "200": {
-            "description": "Starter routines whose step is code; empty where code steps aren't available",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/StarterRoutine"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/scheduled-actions/drafts": {
       "post": {
         "tags": ["scheduled actions"],
@@ -338,6 +371,243 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiAdmissionErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_routine_suggestions",
+        "parameters": [
+          {
+            "name": "surface",
+            "in": "query",
+            "description": "Only this surface's; every surface's when absent.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Surface"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per surface, the routines AI suggested for the caller, then Macro's templates; reading never generates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Hand back one routine suggestion from a routine suggestion session, the\nway a draft's session checks its routine: a catalog routine with knob\nvalues, or a drafted routine, checked as saving checks it.",
+        "operationId": "suggest_routine",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was kept, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a routine suggestion session may suggest",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/generate": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "generate_routine_suggestions",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineSuggestions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Routine suggestions are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/{id}/dismiss": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "dismiss_routine_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion, AI's or a template's",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Never suggested again, on any surface"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such suggestion for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1424,6 +1694,99 @@
           }
         }
       },
+      "CatalogEntry": {
+        "type": "object",
+        "description": "One of Macro's routines, ready to start a new routine from.",
+        "required": [
+          "key",
+          "surfaces",
+          "title",
+          "description",
+          "request",
+          "action",
+          "trigger",
+          "namedKnobs",
+          "instructions",
+          "affectsOthers",
+          "safeDefault",
+          "template",
+          "suggest"
+        ],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What it does, in a few words, for the line beside its trigger."
+          },
+          "affectsOthers": {
+            "type": "boolean",
+            "description": "It changes or sends what other people see."
+          },
+          "code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineStep",
+                "description": "Its code step, in the shape a routine's task holds it; absent where\ncode can't be saved, or when it is an Ask AI routine."
+              }
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "What it does, in a short line."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The Ask AI step's instructions: its only step without code, and the\nstep to use where code can't be saved."
+          },
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "namedKnobs": {
+            "type": "object",
+            "description": "The code step's text knobs whose value names one of the owner's\nitems (a tag, channel or label), by knob name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NamedItemKind"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "safeDefault": {
+            "type": "boolean",
+            "description": "It may be switched on before its owner changes anything."
+          },
+          "suggest": {
+            "type": "boolean",
+            "description": "Offered unpicked as a suggestion from Macro."
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Surface"
+            },
+            "description": "Where it is offered, first the part of the app it belongs to most."
+          },
+          "template": {
+            "type": "boolean",
+            "description": "Offered among the templates when someone creates a routine."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its name once saved."
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/ActionTrigger",
+            "description": "When it runs; schedules are in the zone the catalog was asked for."
+          }
+        }
+      },
       "CheckRoutineRequest": {
         "type": "object",
         "description": "A routine to check, as the create body takes it.",
@@ -1631,6 +1994,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -1764,6 +2128,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -2098,6 +2463,11 @@
           }
         }
       },
+      "GenerationStatus": {
+        "type": "string",
+        "description": "Where a person's suggestions are in being generated.",
+        "enum": ["none", "generating", "ready", "failed"]
+      },
       "GithubSelector": {
         "type": "object",
         "description": "Which GitHub deliveries match.",
@@ -2157,6 +2527,11 @@
       "KnobName": {
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
+      },
+      "NamedItemKind": {
+        "type": "string",
+        "description": "What a text knob's value names: one of its owner's items, which a client\nmatches by name or lets them pick.",
+        "enum": ["tag", "channel", "label"]
       },
       "PayloadCondition": {
         "type": "object",
@@ -2514,6 +2889,66 @@
         ],
         "description": "One step of a routine."
       },
+      "RoutineSuggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestedPick"
+          },
+          {
+            "type": "object",
+            "required": ["id", "from", "surfaces", "onByDefault"],
+            "properties": {
+              "from": {
+                "$ref": "#/components/schemas/SuggestionFrom",
+                "description": "Who suggests it: AI, for this person, or Macro, as a template."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Saving a routine from it passes this as `suggestion_id`; dismissing\nit uses it too."
+              },
+              "keepProbability": {
+                "type": ["number", "null"],
+                "format": "float",
+                "description": "AI's estimate, from 0 to 1, that the person keeps it on; absent on\nMacro's templates."
+              },
+              "onByDefault": {
+                "type": "boolean",
+                "description": "Onboarding shows it switched on: one of at most two catalog\nroutines AI picked that are safe by default and likely kept. Never a\ndrafted routine or a template."
+              },
+              "reason": {
+                "type": ["string", "null"],
+                "description": "Why it fits this person, in a line; absent on Macro's templates."
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                },
+                "description": "The sidebars it shows in, first the one it belongs to most.\nDismissing it in one dismisses it everywhere."
+              }
+            }
+          }
+        ],
+        "description": "A routine offered to one person: one AI suggested for them, or one of\nMacro's catalog routines filling a surface."
+      },
+      "RoutineSuggestions": {
+        "type": "object",
+        "description": "A person's suggestions, and whether more are on the way.",
+        "required": ["status", "suggestions"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/GenerationStatus"
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineSuggestion"
+            },
+            "description": "Per surface, AI's first, best first, then Macro's templates, so each\nsurface has at least one and ideally three. A suggestion with\nseveral surfaces appears once."
+          }
+        }
+      },
       "RoutineTask": {
         "oneOf": [
           {
@@ -2808,6 +3243,11 @@
             "$ref": "#/components/schemas/RunVisibility",
             "description": "Whether the action's runs are listed in Home and the Agents list."
           },
+          "suggestion_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The routine suggestion it was saved from, if any: a plain pointer\nthat stays after the suggestion is replaced."
+          },
           "task": {
             "$ref": "#/components/schemas/RoutineTask"
           },
@@ -2958,28 +3398,6 @@
         },
         "additionalProperties": false
       },
-      "StarterRoutine": {
-        "type": "object",
-        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
-        "required": ["key", "request", "steps"],
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "Names it, e.g. `inbox`."
-          },
-          "request": {
-            "type": "string",
-            "description": "What someone asks for, with when it runs."
-          },
-          "steps": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RoutineStep"
-            },
-            "description": "Its steps, in the shape a routine's task holds them."
-          }
-        }
-      },
       "StepId": {
         "type": "string",
         "description": "Names a step's output: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores."
@@ -3006,6 +3424,179 @@
             }
           }
         }
+      },
+      "SuggestOutcome": {
+        "type": "object",
+        "description": "What became of a suggestion handed back.",
+        "required": ["ok", "problems"],
+        "properties": {
+          "check": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineCheck",
+                "description": "A drafted routine's check, as `macro.routines.check` returns it."
+              }
+            ]
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The kept suggestion's id."
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it was kept."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why it wasn't, to fix and suggest again."
+          }
+        }
+      },
+      "SuggestRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog routine, with knob values.",
+            "required": [
+              "key",
+              "reason",
+              "surfaces",
+              "keepProbability",
+              "kind"
+            ],
+            "properties": {
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "key": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["catalog"]
+              },
+              "knobs": {
+                "type": "object"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine the catalog lacks, checked as saving checks it.",
+            "required": [
+              "routine",
+              "reason",
+              "surfaces",
+              "keepProbability",
+              "kind"
+            ],
+            "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CreatedItem"
+                },
+                "description": "What the session created for it, as `macro.routines.check` takes."
+              },
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "routine": {
+                "$ref": "#/components/schemas/ActionConfiguration"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          }
+        ],
+        "description": "What a suggestion session hands back through `macro.routines.suggest`."
+      },
+      "SuggestedPick": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A catalog routine (`GET /scheduled-actions/catalog`), with the knob\nvalues AI filled in. Its trigger and steps come from the catalog.",
+            "required": ["key", "knobs", "kind"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The catalog routine, e.g. `inbox`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["catalog"]
+              },
+              "knobs": {
+                "type": "object",
+                "description": "Knob values by knob name; knobs left out keep the catalog's."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine AI drafted that passed saving's checks, as it would be\nsaved (switched off), for the person to review first.",
+            "required": ["routine", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routine": {
+                "$ref": "#/components/schemas/ActionConfiguration"
+              }
+            }
+          }
+        ],
+        "description": "What is suggested: a catalog routine with its knobs, or a routine AI\ndrafted and checked."
+      },
+      "SuggestionFrom": {
+        "type": "string",
+        "description": "Who suggests a routine.",
+        "enum": ["for_you", "macro"]
+      },
+      "Surface": {
+        "type": "string",
+        "description": "The part of the app a routine is about, where it is offered.",
+        "enum": [
+          "email",
+          "calendar",
+          "tasks",
+          "files",
+          "crm",
+          "chat",
+          "calls",
+          "reviews",
+          "agents"
+        ]
       },
       "TemplateVariable": {
         "oneOf": [

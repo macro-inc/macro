@@ -28,6 +28,10 @@ export type AccessRequest = {
      */
     id: string;
     /**
+     * The agent that asked on the requester's behalf, when one did.
+     */
+    requestedByAgent?: string | null;
+    /**
      * Requested upgrade.
      */
     requestedLevel: AccessLevel;
@@ -282,7 +286,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -351,6 +355,7 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    stopped_reason?: null | AgentStoppedReason;
 };
 
 /**
@@ -572,6 +577,11 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
  * `agent_session.visibility` column's.
  */
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
+ * Why an agent cannot run right now.
+ */
+export type AgentStoppedReason = 'no_runtime_access';
 
 /**
  * An agent session typing through its bot.
@@ -1375,7 +1385,7 @@ export type ApprovePairingRequest = {
      */
     name?: string | null;
     /**
-     * Owning team. Omit for a private, user-owned harness.
+     * Team to open the harness to. Omit to keep it to the approving user.
      */
     team_id?: string | null;
 };
@@ -4353,7 +4363,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -5741,6 +5751,27 @@ export type CreateProjectResponse = {
      * Indicates if an error occurred
      */
     error: boolean;
+};
+
+export type CreateSavedViewDefinitionRequest = {
+    /**
+     * Consumer configuration with its `kind` and `version`, at most 32 KiB.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    /**
+     * Client-chosen ID, reused to retry the same creation; generated when absent.
+     */
+    id?: string | null;
+    /**
+     * Nonempty display name, at most 120 characters.
+     */
+    name: string;
+    /**
+     * Team to share with, which the creator must belong to.
+     */
+    sharedTeamId?: string | null;
 };
 
 /**
@@ -9434,7 +9465,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -10349,10 +10380,6 @@ export type ExternalChatProvider = 'whatsapp';
  */
 export type ExternalChatReaction = {
     /**
-     * Number of reacting people.
-     */
-    count: number;
-    /**
      * Emoji.
      */
     emoji: string;
@@ -10360,6 +10387,10 @@ export type ExternalChatReaction = {
      * Caller has this reaction.
      */
     mine: boolean;
+    /**
+     * The people who reacted with it, earliest first.
+     */
+    reactors: Array<ExternalChatPersonRef>;
 };
 
 /**
@@ -10640,7 +10671,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -10662,7 +10693,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -12605,6 +12636,11 @@ export type GuideSpec = {
  */
 export type Harness = {
     /**
+     * What the caller may do with it. Reported as `none` where no caller is
+     * in question, such as to the daemon itself.
+     */
+    access?: HarnessAccess;
+    /**
      * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
@@ -12641,10 +12677,19 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
+     * Teams it is a team machine for: their every member is a user of it.
+     */
+    shared_team_ids?: Array<string>;
+    /**
      * Update timestamp.
      */
     updated_at: string;
 };
+
+/**
+ * What one caller may do with a machine.
+ */
+export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
@@ -12667,10 +12712,7 @@ export type HarnessAgent = {
 export type HarnessId = string;
 
 /**
- * Harness owner.
- *
- * Exactly one of a user or a team, mirroring the bots owner pattern. There
- * are no system harnesses.
+ * The person whose machine this is.
  */
 export type HarnessOwner = {
     type: 'user';
@@ -12678,12 +12720,30 @@ export type HarnessOwner = {
      * Owner user id.
      */
     user_id: string;
-} | {
+};
+
+/**
+ * An agent that lives on a machine, as opposed to a coding agent directed
+ * there turn by turn. Anyone who can reach it can talk to it; it stays up only
+ * while its own owner can use the machine.
+ */
+export type HarnessResident = {
     /**
-     * Owner team id.
+     * Bot id.
      */
-    team_id: string;
-    type: 'team';
+    bot_id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The user owning the agent, when a person does.
+     */
+    owner_user_id?: string | null;
+    /**
+     * The team owning the agent, when a team does.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -16651,6 +16711,18 @@ export type ReorderPinRequest = {
     pinnedItemType: string;
 };
 
+export type ReorderSavedViewDefinitionsRequest = {
+    /**
+     * Visible definitions of that kind in their new order, at most 200;
+     * definitions left out follow them by creation time.
+     */
+    ids: Array<string>;
+    /**
+     * Consumer kind whose order is replaced, such as `email`.
+     */
+    kind: string;
+};
+
 /**
  * The event that ends a repeating animation.
  */
@@ -17209,6 +17281,62 @@ export type SavedQuery = {
 };
 
 /**
+ * A saved filter definition, not a snapshot of matching entities.
+ */
+export type SavedViewDefinition = {
+    /**
+     * Versioned configuration interpreted by the consuming feature, with its
+     * `kind` (such as `email` or `task`) and `version`.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+    /**
+     * Stable identity of this definition.
+     */
+    id: string;
+    /**
+     * Display name chosen by the owner.
+     */
+    name: string;
+    /**
+     * User who owns and can edit this definition.
+     */
+    ownerId: string;
+    /**
+     * Current revision, required by updates and deletion.
+     */
+    revision: number;
+    /**
+     * Team with access, or absent when the definition is private.
+     */
+    sharedTeamId?: string | null;
+    updatedAt: string;
+};
+
+/**
+ * A page in the viewer's own order, then by creation time and ID.
+ */
+export type SavedViewDefinitionPage = {
+    /**
+     * Opaque cursor for the next page, absent when the listing is complete.
+     */
+    nextCursor?: string | null;
+    /**
+     * Definitions the viewer can currently access.
+     */
+    views: Array<SavedViewDefinition>;
+};
+
+/**
+ * An explicit sharing change: a team, or `null` to make the definition private.
+ */
+export type SavedViewSharingRequest = {
+    teamId?: string | null;
+};
+
+/**
  * A named page of a version.
  */
 export type SceneBody = {
@@ -17533,6 +17661,20 @@ export type SetEmailSyncRequest = {
 };
 
 /**
+ * Request to open or close a machine to one of the owner's teams.
+ */
+export type SetHarnessTeamAccessRequest = {
+    /**
+     * Whether every member of the team may use the machine.
+     */
+    enabled: boolean;
+    /**
+     * The team, which the owner must belong to.
+     */
+    team_id: string;
+};
+
+/**
  * How a cell's options or references relate to a set of them. The first
  * two fit a column holding one value, the last three one holding several.
  */
@@ -17609,7 +17751,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness';
 
 export type SharePermissionV2 = {
     /**
@@ -18930,6 +19072,34 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * A paired runtime (a macrod machine), listed only by attention feeds: its
+ * access requests and removals are notifications filed under it, and it has
+ * no page of its own, so Settings → Machines opens it.
+ */
+export type SoupHarness = {
+    /**
+     * When the machine was paired.
+     */
+    createdAt: string;
+    /**
+     * The harness uuid.
+     */
+    id: string;
+    /**
+     * The machine's display name.
+     */
+    name: string;
+    /**
+     * The person or team that owns the machine.
+     */
+    ownerId: string;
+    /**
+     * When the machine was last changed.
+     */
+    updatedAt: string;
+};
+
+/**
  * An initiative (called a project in the frontend) in the Soup feed.
  */
 export type SoupInitiativeSoupPropertiesField = {
@@ -19051,6 +19221,12 @@ export type SoupItem = {
      */
     data: SoupDatabaseRowSoupPropertiesField;
     tag: 'databaseRow';
+} | {
+    /**
+     * Paired runtime, listed only by attention feeds.
+     */
+    data: SoupHarness;
+    tag: 'harness';
 };
 
 /**
@@ -21805,6 +21981,24 @@ export type UpdateMeetingRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
+export type UpdateSavedViewDefinitionRequest = {
+    /**
+     * Complete replacement configuration; absent keeps the current one.
+     */
+    config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Revision that must still be current when the update commits.
+     */
+    expectedRevision: number;
+    /**
+     * Replacement name; absent keeps the current one.
+     */
+    name?: string | null;
+    sharing?: null | SavedViewSharingRequest;
+};
+
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
@@ -22026,11 +22220,41 @@ export type UserDocumentsResponse = {
     total: number;
 };
 
+/**
+ * Metadata for [`UserTopicEvent::PictureChanged`].
+ */
+export type UserPictureChangedMetadata = {
+    /**
+     * Static file id of the new picture; `None` when it is not a static file
+     * (set by URL) or the picture was removed.
+     */
+    file_id?: string | null;
+    /**
+     * URL of the new picture; `None` when the picture was removed.
+     */
+    url?: string | null;
+    /**
+     * User whose profile picture changed.
+     */
+    user_id: MacroUserIdStr;
+};
+
 export type UserPinsResponse = {
     /**
      * The pins returned from the query
      */
     recent: Array<PinnedItem>;
+};
+
+/**
+ * A user's profile picture changed or was removed.
+ */
+export type UserTopicEvent = {
+    event_type: 'user.picture_changed';
+    /**
+     * A user's profile picture changed or was removed.
+     */
+    metadata: UserPictureChangedMetadata;
 };
 
 export type UserViewsResponse = {
@@ -22432,7 +22656,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -30838,7 +31062,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -30907,7 +31131,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
         /**
          * The id of the favorited entity.
          */
@@ -31609,6 +31833,26 @@ export type ListHarnessesResponses = {
 
 export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
 
+export type ListHarnessDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/directory';
+};
+
+export type ListHarnessDirectoryErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessDirectoryError = ListHarnessDirectoryErrors[keyof ListHarnessDirectoryErrors];
+
+export type ListHarnessDirectoryResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessDirectoryResponse = ListHarnessDirectoryResponses[keyof ListHarnessDirectoryResponses];
+
 export type DeleteSelfHarnessData = {
     body?: never;
     path?: never;
@@ -31743,6 +31987,56 @@ export type PatchHarnessResponses = {
 };
 
 export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
+
+export type ListHarnessResidentsData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/residents';
+};
+
+export type ListHarnessResidentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessResidentsError = ListHarnessResidentsErrors[keyof ListHarnessResidentsErrors];
+
+export type ListHarnessResidentsResponses = {
+    200: Array<HarnessResident>;
+};
+
+export type ListHarnessResidentsResponse = ListHarnessResidentsResponses[keyof ListHarnessResidentsResponses];
+
+export type SetHarnessTeamAccessData = {
+    body: SetHarnessTeamAccessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/team-access';
+};
+
+export type SetHarnessTeamAccessErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetHarnessTeamAccessError = SetHarnessTeamAccessErrors[keyof SetHarnessTeamAccessErrors];
+
+export type SetHarnessTeamAccessResponses = {
+    204: void;
+};
+
+export type SetHarnessTeamAccessResponse = SetHarnessTeamAccessResponses[keyof SetHarnessTeamAccessResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -33172,6 +33466,173 @@ export type CreateViewHandlerResponses = {
 };
 
 export type CreateViewHandlerResponse = CreateViewHandlerResponses[keyof CreateViewHandlerResponses];
+
+export type ListSavedViewDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only definitions of this consumer kind, such as `email`.
+         */
+        kind?: string;
+        /**
+         * Page size, 1 to 50; defaults to 25.
+         */
+        first?: number;
+        /**
+         * `nextCursor` from the previous page.
+         */
+        after?: string;
+    };
+    url: '/saved_views/definitions';
+};
+
+export type ListSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSavedViewDefinitionsError = ListSavedViewDefinitionsErrors[keyof ListSavedViewDefinitionsErrors];
+
+export type ListSavedViewDefinitionsResponses = {
+    200: SavedViewDefinitionPage;
+};
+
+export type ListSavedViewDefinitionsResponse = ListSavedViewDefinitionsResponses[keyof ListSavedViewDefinitionsResponses];
+
+export type CreateSavedViewDefinitionData = {
+    body: CreateSavedViewDefinitionRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions';
+};
+
+export type CreateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSavedViewDefinitionError = CreateSavedViewDefinitionErrors[keyof CreateSavedViewDefinitionErrors];
+
+export type CreateSavedViewDefinitionResponses = {
+    201: SavedViewDefinition;
+};
+
+export type CreateSavedViewDefinitionResponse = CreateSavedViewDefinitionResponses[keyof CreateSavedViewDefinitionResponses];
+
+export type ReorderSavedViewDefinitionsData = {
+    body: ReorderSavedViewDefinitionsRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions/order';
+};
+
+export type ReorderSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderSavedViewDefinitionsError = ReorderSavedViewDefinitionsErrors[keyof ReorderSavedViewDefinitionsErrors];
+
+export type ReorderSavedViewDefinitionsResponses = {
+    200: Array<SavedViewDefinition>;
+};
+
+export type ReorderSavedViewDefinitionsResponse = ReorderSavedViewDefinitionsResponses[keyof ReorderSavedViewDefinitionsResponses];
+
+export type DeleteSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to delete
+         */
+        saved_view_id: string;
+    };
+    query: {
+        /**
+         * Revision that must still be current when the deletion commits.
+         */
+        expectedRevision: number;
+    };
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type DeleteSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSavedViewDefinitionError = DeleteSavedViewDefinitionErrors[keyof DeleteSavedViewDefinitionErrors];
+
+export type DeleteSavedViewDefinitionResponses = {
+    204: void;
+};
+
+export type DeleteSavedViewDefinitionResponse = DeleteSavedViewDefinitionResponses[keyof DeleteSavedViewDefinitionResponses];
+
+export type GetSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to read
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type GetSavedViewDefinitionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSavedViewDefinitionError = GetSavedViewDefinitionErrors[keyof GetSavedViewDefinitionErrors];
+
+export type GetSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type GetSavedViewDefinitionResponse = GetSavedViewDefinitionResponses[keyof GetSavedViewDefinitionResponses];
+
+export type UpdateSavedViewDefinitionData = {
+    body: UpdateSavedViewDefinitionRequest;
+    path: {
+        /**
+         * The saved view to update
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type UpdateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSavedViewDefinitionError = UpdateSavedViewDefinitionErrors[keyof UpdateSavedViewDefinitionErrors];
+
+export type UpdateSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;

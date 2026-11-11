@@ -878,6 +878,12 @@ where
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
     }
 
+    /// Authenticated personal directory fields supplied by `graphql_contacts`.
+    #[graphql(flatten)]
+    async fn contact_directory(&self) -> graphql_contacts::GraphqlContactsQuery {
+        graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
+    }
+
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {

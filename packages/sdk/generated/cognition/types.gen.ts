@@ -54,7 +54,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus' | 'web_search' | 'non_billable_agent_session';
 
 /**
  * A structured part within an assistant message.
@@ -651,7 +651,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -4528,6 +4528,10 @@ export type FetchWebPageErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web fetch is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * The page could not be read
      */
     422: WebErrorBody;
@@ -4540,7 +4544,7 @@ export type FetchWebPageErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web fetch unconfigured, busy, or usage validation unavailable
+     * Web fetch busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };
@@ -4577,6 +4581,10 @@ export type SearchWebErrors = {
      */
     402: WebErrorBody;
     /**
+     * Web search is not configured in this deployment
+     */
+    404: WebErrorBody;
+    /**
      * Per-user hourly rate limit exceeded
      */
     429: unknown;
@@ -4585,7 +4593,7 @@ export type SearchWebErrors = {
      */
     502: WebErrorBody;
     /**
-     * Web search unconfigured, busy, or usage validation unavailable
+     * Web search busy, or usage validation unavailable
      */
     503: WebErrorBody;
 };

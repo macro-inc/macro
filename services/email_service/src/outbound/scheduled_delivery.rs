@@ -534,7 +534,8 @@ async fn process_sent_message(
     )
     .await?;
 
-    email_db_client::threads::update::sync_thread_calendar_flag(tx.as_mut(), thread_db_id).await?;
+    email_db_client::threads::update::sync_thread_attachment_flags(tx.as_mut(), thread_db_id)
+        .await?;
 
     Ok(())
 }

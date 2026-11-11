@@ -27,7 +27,11 @@ export class HarnessPairing extends MacroEntity<PairingDetails> {
   /** Expiration time. */
   readonly expiresAt = this.field('expires_at');
 
-  /** Approve this pairing. */
+  /**
+   * Approve this pairing.
+   *
+   * @write
+   */
   async approve(options?: {
     name?: string;
     team?: Team;
@@ -60,7 +64,13 @@ export class DevicePairing {
     return new DevicePairing(client, id);
   }
 
-  /** Attempt to claim an approved pairing. Pending claims return undefined. */
+  /**
+   * Attempt to claim an approved pairing. Pending claims return undefined.
+   *
+   * @write
+   * @mcp-exclude Device-side pairing step
+   * returns a host token meant for the host process.
+   */
   async claim(
     deviceSecret: string,
   ): Promise<{ harness: Harness; token: string } | undefined> {

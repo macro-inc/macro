@@ -27,6 +27,9 @@ vi.mock('@app/lib/analytics/posthog', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/analytics/posthog')>()),
   useFeatureFlag: () => () => ({ enabled: sidebarState.agentUpdates }),
 }));
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => sidebarState.touch,
 }));

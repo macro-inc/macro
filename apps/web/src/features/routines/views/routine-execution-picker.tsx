@@ -90,7 +90,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       return 'Loading agents. Your selection is unchanged.';
     if (!selected())
       return 'Warning: the saved selection is missing or no longer accessible.';
-    if (props.availabilityLoading) return 'Checking runtime availability…';
+    if (props.availabilityLoading) return 'Checking machine availability…';
     if (selected()?.unavailableReason)
       return `Warning: ${selected()?.unavailableReason}.`;
     const id = model();
@@ -99,7 +99,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
     if (models.some((option) => option.id === id)) return;
     if (models.length === 0)
       return `Cannot verify model "${id}". ${catalog.message()}`;
-    return `Warning: model "${id}" is not available from this runtime. Your selection is unchanged.`;
+    return `Warning: model "${id}" is not available from this machine. Your selection is unchanged.`;
   };
 
   function select(agent: RosterAgent, override?: string): void {

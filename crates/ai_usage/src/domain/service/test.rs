@@ -11,6 +11,7 @@ fn completion(feature: AiFeature, total: Option<f32>) -> CompletionUsage {
         user: user(),
         entity: None,
         agent_api_key_id: None,
+        agent_session_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input: 1000,

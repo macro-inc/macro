@@ -260,6 +260,21 @@ fn mcp_service_url_honors_the_standard_override() {
 }
 
 #[test]
+fn mcp_chatgpt_service_url_defaults_are_bases_without_a_trailing_slash() {
+    with_mock_override_env(missing_override, || {
+        for (environment, expected) in [
+            (Environment::Local, "http://localhost:8103"),
+            (Environment::Develop, "https://mcp-chatgpt.dev.macro.com"),
+            (Environment::Production, "https://mcp-chatgpt.macro.com"),
+        ] {
+            let url = McpChatgptServiceUrl::new_for_environment(environment).unwrap();
+            assert_eq!(url.as_str(), expected);
+            url.as_str().parse::<Url>().unwrap();
+        }
+    });
+}
+
+#[test]
 fn unfurl_service_url_parses() {
     assert_parses_for_all_environments(UnfurlServiceUrl::default_for_environment);
 }
