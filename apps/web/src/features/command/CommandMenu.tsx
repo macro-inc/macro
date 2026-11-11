@@ -28,6 +28,7 @@ import { useUserId } from '@core/context/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
@@ -59,7 +60,6 @@ import {
   Switch,
 } from 'solid-js';
 import { commandSearchResultKey } from './contact-items';
-import { createSelectionAnchor } from './selection-anchor';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
 import { defaultCommandResultIndex } from './core/default-result-index';

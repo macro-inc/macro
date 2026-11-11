@@ -25,6 +25,7 @@ import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
@@ -416,6 +417,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const setSelectedIndexFromMouse = (index: number) => {
     if (isKeypressActive()) return;
     controller.selectItem(index);
+    selectionAnchor.hold();
   };
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
@@ -428,6 +430,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
+  // A new page replaces the people window. Start it from the top unless the
+  // row the user chose is still listed.
   let previousPeopleWindow: string | undefined;
   let previousPeopleQuery = '';
   createEffect(
@@ -436,9 +440,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       if (
         previousPeopleWindow !== undefined &&
         key !== previousPeopleWindow &&
-        previousPeopleQuery === searchTerm()
-      )
+        previousPeopleQuery === searchTerm() &&
+        !selectionAnchor.present()
+      ) {
+        selectionAnchor.release();
         controller.selectItem(0);
+      }
       previousPeopleWindow = key;
       previousPeopleQuery = searchTerm();
     })
@@ -622,6 +629,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     targetItems: TARGET_ITEMS,
   });
 
+  // Rows keep arriving from several sources after typing stops. The highlight
+  // follows the row the user moved to; a new search term starts from the top.
+  const selectionAnchor = createSelectionAnchor({
+    items: controller.combinedItems,
+    key: (item) => `${item.kind}:${item.id}`,
+    scope: () => `${controller.viewAllMode() ?? ''}\n${activeSearchTerm()}`,
+    selectedIndex: controller.selectedIndex,
+    setSelectedIndex: (index) => controller.selectItem(index),
+  });
+  createEffect(
+    on(activeSearchTerm, () => controller.selectItem(0), { defer: true })
+  );
+
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<
     'start' | 'single' | null
   >('start');
@@ -686,9 +706,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     isActive: menuOpen,
     onUp: () => {
       controller.selectPrev();
+      selectionAnchor.hold();
     },
     onDown: () => {
       controller.selectNext();
+      selectionAnchor.hold();
     },
     onLeft: () => {
       if (canExitViewAll()) {
