@@ -1,6 +1,9 @@
 //! Request and response bodies of the pipeline workflow routes: entries by
 //! the record they track, fields by name, options by label.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
@@ -652,6 +655,30 @@ pub struct OptionRemoval {
     pub field: String,
     /// The label.
     pub label: String,
+}
+
+/// A pipeline to create with its stages and fields, the way the
+/// `CreatePipeline` tool creates one.
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreatePipelineRequest {
+    /// Its name.
+    pub name: String,
+    /// Company or contact entries; omitted, a generic pipeline of free-form
+    /// rows.
+    #[serde(default)]
+    pub record_type: Option<PipelineRecordType>,
+    /// Defaults to private.
+    #[serde(default)]
+    pub sharing: PipelineSharing,
+    /// Its stages, first to last, replacing the team's default stages. A
+    /// generic pipeline gets a Stage field only when these are given.
+    #[serde(default)]
+    pub stages: Vec<String>,
+    /// Fields to add after the standard ones, or after a generic pipeline's
+    /// Name.
+    #[serde(default)]
+    pub fields: Vec<NewFieldRequest>,
 }
 
 /// Changes to a pipeline's name, sharing, fields and options, applied

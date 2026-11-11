@@ -7837,6 +7837,94 @@
         }
       }
     },
+    "/crm/companies/list": {
+      "get": {
+        "tags": ["crm::inbound::company_listing"],
+        "summary": "The team's CRM companies, most recent interaction first, with each\ncompany's own Stage, Owner and Revenue.",
+        "operationId": "list_crm_companies",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Text matched, ignoring case, against company names and domains.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stage",
+            "in": "query",
+            "description": "The company's own Stage, not a pipeline entry's: a label, ignoring\ncase, or an option id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ownerUserId",
+            "in": "query",
+            "description": "Macro user id of the company's owner.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "includeHidden",
+            "in": "query",
+            "description": "Also list hidden companies; team admins and owners only.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "At most this many, 1 to 200; 50 when omitted.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyListing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_company"],
@@ -8960,6 +9048,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessiblePipeline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/create": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Create a pipeline with its stages and fields in one call: the team's\ndefault stages unless `stages` gives others, then `fields` after the\nstandard ones.",
+        "operationId": "create_crm_pipeline_with_fields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -32728,6 +32855,41 @@
           }
         }
       },
+      "CompanyListing": {
+        "type": "object",
+        "description": "A page of listed companies, most recent interaction first.",
+        "required": ["companies", "totalMatching"],
+        "properties": {
+          "companies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListedCompany"
+            },
+            "description": "The companies, at most the query's limit."
+          },
+          "totalMatching": {
+            "type": "integer",
+            "description": "How many companies matched before the limit.",
+            "minimum": 0
+          }
+        }
+      },
+      "CompanyStage": {
+        "type": "object",
+        "description": "A company's own Stage property: the option set and its label.",
+        "required": ["optionId", "label"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "The stage's label, such as \"Lead\" or \"Customer\"."
+          },
+          "optionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The stage option id."
+          }
+        }
+      },
       "CompleteUploads": {
         "type": "object",
         "description": "Explicit upload completion; a seal can be submitted separately with an empty list.",
@@ -33837,6 +33999,47 @@
           "sharing": {
             "$ref": "#/components/schemas/PipelineSharing",
             "description": "Defaults to private."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CreatePipelineRequest": {
+        "type": "object",
+        "description": "A pipeline to create with its stages and fields, the way the\n`CreatePipeline` tool creates one.",
+        "required": ["name"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewFieldRequest"
+            },
+            "description": "Fields to add after the standard ones, or after a generic pipeline's\nName."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "recordType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form\nrows."
+              }
+            ]
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/PipelineSharing",
+            "description": "Defaults to private."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its stages, first to last, replacing the team's default stages. A\ngeneric pipeline gets a Stage field only when these are given."
           }
         },
         "additionalProperties": false
@@ -46593,6 +46796,58 @@
               "$ref": "#/components/schemas/Webhook"
             },
             "description": "The caller's webhooks, newest first. Signing secrets are omitted."
+          }
+        }
+      },
+      "ListedCompany": {
+        "type": "object",
+        "description": "One listed company.",
+        "required": ["id", "domains", "hidden", "lastInteraction"],
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its email domains, primary first."
+          },
+          "hidden": {
+            "type": "boolean",
+            "description": "Whether it is hidden from the team's CRM listings."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The company id."
+          },
+          "lastInteraction": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The most recent known email interaction with it."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Its display name, when resolved."
+          },
+          "ownerUserId": {
+            "type": ["string", "null"],
+            "description": "Macro user id of its owner."
+          },
+          "revenue": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "Its revenue in dollars."
+          },
+          "stage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CompanyStage",
+                "description": "Its own Stage, separate from any pipeline entry's."
+              }
+            ]
           }
         }
       },
