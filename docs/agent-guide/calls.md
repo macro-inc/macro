@@ -36,20 +36,114 @@ Opening a recording uses `/app/calls/call/<callId>` inside the Calls view,
 with one breadcrumbed header (`Calls > <recording name>`). Choose `Calls` to
 return to the list with its search, filters, focus, and scroll position preserved.
 The desktop sidebar remains available; choosing a view or filter, or focusing
-search, returns to the list. Phones show the same detail and return breadcrumb
-instead of switching to Drive. Shift+Enter and Open in new split open
-the recording in a second Calls view.
-Old copied `/app/call/<callId>` links redirect to the Calls detail without losing
-the transcript target. Existing `/app/drive/call/<callId>` links still work.
-The detail shows a loading state, recording/transcript/summary, Share, and a call
-side panel below the breadcrumb header; a failed load shows Retry.
-While the call is in progress, a `Join call` button under the title joins it
-(desktop and phone); it is hidden once you are in that call.
-`call_transcript_id=<segmentId>` seeks the matching video segment after loading.
-Check a direct link, both old link formats, a Calls-list click, a second split,
-the breadcrumb return, browser Back/Forward, and clicking the same transcript
-search hit twice after playing elsewhere. On phones, recorded call headers omit
-**Call Again**.
+search, returns to the list. Shift+Enter and Open in new split open the recording
+in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Calls
+detail without losing the transcript target. Existing `/app/drive/call/<callId>`
+links still work. A failed load shows Retry.
+
+### Saved call detail
+
+On desktop the header keeps the breadcrumb, the call's More menu, Call again before Ask Macro,
+combined Share/copy-link control, and the details toggle. Calls and Drive use the
+same More menu for call actions, including rename, recording download and delete.
+The channel appears above the title, with the
+participant avatars before the start/end time range. Call again keeps its existing
+availability checks in the header; active calls retain Join call below the title.
+The existing tag picker sits below the title metadata and uses the call's property tags. The recording
+precedes the stored summary and read-only Call chat. Summary headings are the
+stored Markdown, not generated client-side sections.
+
+The full-width top bar stays above the content, with the standard details toggle.
+Details opens in the existing floating popover below the header, without
+Transcript/Details tabs. On touch it uses the standard details drawer.
+At call-column widths of 1108px or more, a 480px Transcript card sits beside
+an at-most-720px player, with the existing 28px section gap. The centered group
+caps at 1308px including 80px of page insets, preserving the original 800px
+content wrapper's player width. The threshold leaves at least 520px for the
+player; split panes switch independently of the window. Identity spans the
+group, aligned to the video's left edge. The left column scrolls through
+the player, Summary and Call chat while the transcript stays in view and scrolls
+internally. The card uses the next Layer surface depth, the player's corner radius,
+a light-theme inset edge and shadow (dark stays unchanged), and an inset Sync surface in both themes. Details floats over
+the card without changing its scroll position or follow state. There is no separate
+Transcript header button. The card fades and slides into wide layouts while the player animates from its
+previous width and position over the same 240ms curve, rather than jumping to its
+narrower width first. Reduced motion disables both entry animations.
+Fullscreen opens the recording workspace with the same video and transcript.
+The player's Transcript toggle hides or shows the right panel until fullscreen
+exits; narrow HTML fullscreen uses a right overlay. Native iOS video fullscreen
+remains video-only. Playback, seeking, manual follow and Sync retain their state.
+
+Transcript rows show a flush-right recording time, with the active waveform to its left; long speaker names truncate and reveal the full name in a
+tooltip on hover or row focus. Click or press Enter on a row to seek.
+The active line reuses the live-call waveform and its bar timing on desktop,
+driven by recording playback. It stays still when paused, on phones, or when
+reduced motion is enabled. Playback follows the transcript until the user
+scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
+playback and returns to the current line. Authorized chat messages
+appear inline at their recorded moment. Details keeps owner, dates, duration,
+status, channel, team sharing, properties, activity and references on their
+existing permission-scoped readers. Only team sharing has a card, always visible below metadata with no collapsible
+Sharing section; other sections use the shared floating-detail rows and standard
+dividers, matching other entity detail popovers.
+After a call ends, only its starter can change team sharing. Other viewers see
+the current state and an explanation naming the starter, not a disabled switch.
+Until a display name is available, the explanation says only the person who
+started the call can change sharing; it never substitutes their email.
+An editable switch stays disabled while its change is pending.
+
+Below that threshold, medium-size Summary/Transcript tabs sit below the recording.
+The inline transcript list has no horizontal padding, aligning its row edges with
+the tabs and Summary. The tab selection and one mounted video/transcript survive resizing in either
+direction. Summary has an AI icon before its tab label and wide-pane heading;
+hovering or focusing either shows “Written by Macro after the call” in a tooltip, rather than
+a separate credit line. The credit remains the Summary tab's accessible description
+on touch, where tooltips stay disabled. Details starts closed and
+floats over content without moving it. Playback remains reachable in a pinned bar
+after the recording scrolls above the viewport. Its width follows the left column
+on wide panes and the centered content column on narrow panes. Show video returns
+to the recording; all controls drive one media
+element. Chat jump chips use message time relative to recording start and appear
+only within the known recording duration. Attachments retain their usual cards.
+There is no caption control without a caption track or synthetic speaker video
+layer over the recorded composite. After 2.5 seconds of idle playback, controls
+slide down by their own height and fade out over 240ms, and the cursor hides,
+including in fullscreen. Only transform and opacity animate; the page stays still.
+Movement, focus or touch brings them back; pause, control hover, control focus and
+open menus keep them visible. Reduced motion uses only the fade. Speed uses a dropdown, and volume opens a vertical slider above the mute
+button on hover or focus. Clicking the icon still toggles mute. Both sliders keep
+white thumbs across themes. Dragging the volume thumb, clicking its track, and
+arrow keys update native volume immediately without closing the popover.
+Clicking the picture toggles playback without intercepting controls or overlays.
+On touch, the first tap reveals hidden controls; a tap with controls visible toggles playback.
+
+Phones use separate Back, title-menu, and Details header islands. The player
+comes before identity, then Summary/Transcript/Chat tabs with the real chat count.
+Ask Macro floats above the dock on Summary and Chat. The avatar chevron opens the
+participant list. Details opens the same content in the standard bottom sheet. In the scrolled Transcript tab, manual downward
+scrolling replaces the navigation dock with the mini player; scrolling upward
+restores navigation below it. Search, the keyboard, and leaving the view release
+that chrome. No Call again action appears in the phone header.
+
+While a call is in progress, Join call below the title remains available on both
+desktop and phone, except when already connected. This is separate from the live
+call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
+`call_message_id=<messageId>` opens the phone Chat tab and highlights the message.
+
+Check a saved call with recording, transcript, summary, chat and attachments at
+1920x1080, 1440x900, 1280x800 and 1024x768, in splits on both sides of the 1108px
+call-column threshold, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
+Details over the Transcript card, both themes, independent scrolling, retained tab
+and playback state after resizing, pause/seek/skip/speed/fullscreen, scroll-follow
+and Sync to video, pinned playback, phone scroll direction, Details dismissal,
+and switching away while playback chrome is mounted. Also check calls without a
+recording, standalone guests, private channel access, owner/non-owner sharing,
+a direct link, both old link formats, repeated transcript targets, Calls-list
+return, a second split, and Back/Forward.
+
+Saved call route loading records `call.record` and `call.discussion` phases on the
+existing view trace. Reading-tab selections record `call.detail.tab`; attributes
+contain only the call ID and tab kind, never transcript or message contents.
 
 ### Imported Granola meetings
 
@@ -98,8 +192,8 @@ call still connected. On the meeting page it navigates to the channel.
 
 People connected to the call get no notification from its thread, mentions included; they stay
 followers, so later replies reach them after they leave. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only with **Open in channel**,
-and absent for anyone who can't read the channel. Deleting a record leaves the thread in the channel.
+else: no edit, delete or reactions. On a call's record the chat is read-only;
+its contents require channel read access. Deleting a record leaves the thread in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
@@ -428,8 +522,9 @@ as instant and scheduled calls. Clicking it creates the share link and copies it
 opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
-A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. Its side panel has a `Sharing` section with one `Share with team` checkbox.
+A channel call's **Share** dialog has a `Team access` control (None or View) for the
+same canonical team share. Saved-call Details keeps an always-visible **Share
+with team** card below metadata.
 While a call is live, the controls bar instead has a **Call sharing** dropdown with
 **Team sharing** and **Private** options. Each option explains the resulting team
 access under its name; choosing the current option does not save again. Controls
@@ -440,7 +535,7 @@ participants see it update live. When the call ends, **Team sharing** lets the
 creator's team open the recorded call, read the transcript and AI summary, and find
 it under Calls and in search; **Private** grants no automatic team access.
 Afterwards only the call's **creator** can change it; everyone else sees the
-side-panel checkbox read-only with a note saying so.
+current sharing state and an explanation naming the starter, without a switch.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no

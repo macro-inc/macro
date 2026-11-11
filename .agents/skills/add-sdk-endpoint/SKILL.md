@@ -20,6 +20,12 @@ root with `bun run --cwd apps/web gen-api <service-name>` before running
 
 `just coverage` lists `UNCOVERED <service>.<endpoint>`.
 
+A wrapped endpoint also needs a verb in `src/utils/verbs.ts`, from the closed
+`SdkVerb` set: what it does to a resource (`edited`), or `read`, `listed`,
+`searched`, `queried` or `checked` when it changes nothing, including a POST that
+only reads. `just coverage` fails on a wrapped method with no verb or a verb for a
+method that no longer exists. Don't grow the set; pick the closest.
+
 ## 1. Skip or wrap?
 
 With the `skip` arg, skip. Otherwise **ask the user**, one line per endpoint, with a
@@ -55,7 +61,7 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    - cursor lists → `paginate()` → `AsyncGenerator`; search → `entitySearch(...)`
    - camelCase + `undefined` on the SDK side even when the wire is snake_case/nullable
    - TSDoc every public member. No `any`. End each public method's TSDoc with its
-     MCP hint tag (`@readonly`, `@write`, `@destructive`; `packages/sdk-mcp/AGENTS.md`)
+     MCP hint tag (`@readonly`, `@write`, `@send`, `@destructive`; `packages/sdk-mcp/AGENTS.md`)
      and update that package's tool snapshots (`bunx vitest run -u` there).
    - an entity with its own page in the app gets `webUrl()`, built from
      `this.client.webAppUrl` and the route the web app's copy-link action uses
