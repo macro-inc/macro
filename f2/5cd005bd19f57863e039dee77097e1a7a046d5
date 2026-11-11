@@ -1,0 +1,19 @@
+docs/agent-guide/navigation.md
+  s_0bc536230c6714::t_71ab7d2d5f23af 1773-1776
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f25cd005bd19f57863e039dee77097e1a7a046d5",
+  "prompts": {},
+  "sessions": {
+    "s_0bc536230c6714": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1aa86a4b-85d9-4589-87b4-36d1553c1ada",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
