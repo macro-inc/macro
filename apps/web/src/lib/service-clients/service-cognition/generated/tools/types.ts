@@ -7024,11 +7024,11 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
- * Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
+ * Start a new session with a coding or chat agent from ListAgents (or macro.agents.list() in ExecuteCode). Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
  */
 export interface CreateAgentSession {
   /**
-   * Agent persona botId from ListAgents.
+   * Agent persona botId from ListAgents, or the id of an agent from macro.agents.list().
    */
   agentId: string;
   /**
@@ -12011,7 +12011,7 @@ export interface CodingAgent {
   model?: string | null;
 }
 /**
- * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them.
+ * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them. Where those tools are absent, do the same through ExecuteCode: macro.crm.companyById() and the macro.crm.pipelines handles.
  */
 export interface ListCompanies {
   /**
