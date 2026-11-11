@@ -435,11 +435,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const stillSearching = () =>
     searchTerm() !== props.menu.searchTerm() ||
     (sourceEnabled('users') && userMention.isLoading()) ||
+    (sourceEnabled('emails') && isLoadingMoreEmails()) ||
     (contactsEnabled() &&
       !!contactMention &&
       'isLoading' in contactMention &&
       contactMention.isLoading());
-  const emptyLabel = () => (stillSearching() ? 'Searching…' : 'No results');
+  const emptyLabel = () =>
+    stillSearching() ? t('commandMenu.searching') : t('commandMenu.noResults');
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
