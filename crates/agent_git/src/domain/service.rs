@@ -107,7 +107,10 @@ where
             .store
             .create_repo(
                 &agent_user_id,
-                &self.template.render(seed).map_err(internal)?,
+                &self
+                    .template
+                    .render(&agent_user_id, seed)
+                    .map_err(internal)?,
             )
             .await
             .map_err(internal)?;
@@ -163,7 +166,10 @@ where
             .store
             .create_repo(
                 &agent_user_id,
-                &self.template.render(seed).map_err(internal)?,
+                &self
+                    .template
+                    .render(&agent_user_id, seed)
+                    .map_err(internal)?,
             )
             .await
             .map_err(internal)?;

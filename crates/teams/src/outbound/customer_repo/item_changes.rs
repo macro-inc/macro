@@ -10,7 +10,7 @@ mod test;
     type_name = "subscription_item_change_outcome",
     rename_all = "snake_case"
 )]
-enum ItemChangeOutcome {
+pub(super) enum ItemChangeOutcome {
     Pending,
     Succeeded,
     PaymentFailed,
@@ -143,48 +143,97 @@ impl CustomerRepositoryImpl {
 
     /// End an item change whose outcome stayed unknown. Under the
     /// subscription guard, a pending change is applied iff the provider
-    /// object carries its marker; otherwise it is abandoned for good.
+    /// object carries its marker; otherwise it is abandoned for good. With no
+    /// receipt, an abandoned one is written on `fence`, so a send that has
+    /// not taken the guard yet finds it and never charges.
     #[tracing::instrument(skip(self), err)]
     pub(super) async fn settle_item_change(
         &self,
         key: &str,
+        fence: Option<&stripe::SubscriptionId>,
     ) -> Result<ItemChangeSettlement, CustomerError> {
-        let Some(change) = self.item_change(key).await? else {
-            // The receipt is written before the first attempt: none was made.
-            return Ok(ItemChangeSettlement::NotApplied);
-        };
-        if change.outcome == ItemChangeOutcome::Pending {
-            let subscription = change
+        let subscription = match self.item_change(key).await? {
+            Some(change) if change.outcome != ItemChangeOutcome::Pending => {
+                return Ok(settlement(change.outcome));
+            }
+            Some(change) => change
                 .subscription_id
                 .parse()
-                .map_err(|error| CustomerError::StorageLayerError(anyhow::Error::from(error)))?;
-            let _billing = self.subscription_guard(&subscription, Some(key)).await?;
-            let change = self
-                .item_change(key)
-                .await?
-                .context("item change receipt disappeared")?;
-            if change.outcome == ItemChangeOutcome::Pending {
-                let current = self
-                    .client
-                    .get::<serde_json::Value>(&change.path)
-                    .await
-                    .map_err(storage)?;
-                let applied = current
-                    .get("metadata")
-                    .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))
-                    .and_then(serde_json::Value::as_str)
-                    == Some(key);
-                let outcome = if applied {
-                    ItemChangeOutcome::Succeeded
-                } else {
-                    ItemChangeOutcome::Abandoned
-                };
-                self.finish_item_change(key, outcome).await?;
-                return Ok(settlement(outcome));
+                .map_err(|error| CustomerError::StorageLayerError(anyhow::Error::from(error)))?,
+            None => match fence {
+                Some(subscription) => subscription.clone(),
+                // The receipt is written before the first attempt: none was made.
+                None => return Ok(ItemChangeSettlement::NotApplied),
+            },
+        };
+        let _billing = self.subscription_guard(&subscription, Some(key)).await?;
+        match self.item_change(key).await? {
+            Some(change) => Ok(settlement(self.settle_pending_locked(key, change).await?)),
+            None => {
+                sqlx::query!(
+                    "INSERT INTO subscription_item_change (idempotency_key, subscription_id, path, request, outcome) VALUES ($1, $2, $3, '{}', 'abandoned')",
+                    key,
+                    subscription.as_str(),
+                    format!("/subscriptions/{subscription}"),
+                )
+                .execute(&self.pool)
+                .await
+                .map_err(|error| CustomerError::StorageLayerError(error.into()))?;
+                Ok(ItemChangeSettlement::NotApplied)
             }
-            return Ok(settlement(change.outcome));
         }
-        Ok(settlement(change.outcome))
+    }
+
+    /// Called while holding the subscription guard, so nothing of ours is
+    /// still sending `change`: a pending change is applied iff the provider
+    /// object carries its marker, and abandoned otherwise.
+    pub(super) async fn settle_pending_locked(
+        &self,
+        key: &str,
+        change: ItemChange,
+    ) -> Result<ItemChangeOutcome, CustomerError> {
+        if change.outcome != ItemChangeOutcome::Pending {
+            return Ok(change.outcome);
+        }
+        let current = self
+            .client
+            .get::<serde_json::Value>(&change.path)
+            .await
+            .map_err(storage)?;
+        let applied = current
+            .get("metadata")
+            .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))
+            .and_then(serde_json::Value::as_str)
+            == Some(key);
+        let outcome = if applied {
+            ItemChangeOutcome::Succeeded
+        } else {
+            ItemChangeOutcome::Abandoned
+        };
+        tracing::info!(
+            idempotency_key = key,
+            applied,
+            "settled an unresolved item change"
+        );
+        self.finish_item_change(key, outcome).await?;
+        Ok(outcome)
+    }
+
+    /// Where the change keyed `key` stands; `None` when it was never sent.
+    pub(super) async fn item_change_status(
+        &self,
+        key: &str,
+    ) -> Result<Option<ItemChangeStatus>, CustomerError> {
+        Ok(self
+            .item_change(key)
+            .await?
+            .map(|change| match change.outcome {
+                ItemChangeOutcome::Pending => ItemChangeStatus::Pending,
+                ItemChangeOutcome::Succeeded => ItemChangeStatus::Applied,
+                ItemChangeOutcome::PaymentFailed | ItemChangeOutcome::Abandoned => {
+                    ItemChangeStatus::NotApplied
+                }
+            }))
     }
 
     #[tracing::instrument(skip(self), err)]

@@ -707,7 +707,13 @@ async fn a_computer_harness_cannot_be_removed_like_a_paired_machine() {
         .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
         .await;
     assert!(
-        matches!(&result, Err(HarnessError::BadRequest(message)) if message.contains("Release")),
+        matches!(&result, Err(HarnessError::ComputerHarness)),
+        "{result:?}"
+    );
+    // Nor can its own daemon retire it: agents stay bound to it until release.
+    let result = service(repo.clone()).delete_self(HarnessId::TEST_A).await;
+    assert!(
+        matches!(&result, Err(HarnessError::ComputerHarness)),
         "{result:?}"
     );
     assert!(repo.calls.lock().unwrap().deleted.is_empty());

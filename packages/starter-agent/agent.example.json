@@ -1,0 +1,8 @@
+{
+  "owner": "macro|you@example.com",
+  "me": "macro|your-agent@example.com",
+  "name": "Agent",
+  "email": "your-agent@example.com",
+  "timeZone": "America/New_York",
+  "model": "claude-opus-5-5"
+}

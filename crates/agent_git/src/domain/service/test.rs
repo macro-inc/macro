@@ -526,75 +526,71 @@ fn seed() -> PersonaSeed {
     }
 }
 
-#[test]
-fn the_charter_carries_the_persona() {
-    let files = WORKSPACE_TEMPLATE.render(&seed()).unwrap();
-    let charter = files
-        .iter()
-        .find(|file| file.path == "OPERATING.md")
-        .unwrap();
-
-    assert!(charter.contents.starts_with("# Sam\n"));
-    assert!(charter.contents.contains("- Job: Books venues."));
-    assert!(charter.contents.contains("- Personality: Warm and direct."));
-    assert!(charter.contents.contains("macro|admin@example.com"));
-    assert!(!charter.contents.contains("{{"));
-    assert_eq!(files.len(), WORKSPACE_TEMPLATE.files.len());
+fn agent() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|sam@agents.example.com")
+        .expect("agent id")
+        .into_owned()
 }
 
 #[test]
-fn older_seeds_use_the_team_owner_without_unresolved_placeholders() {
-    let mut persona = seed();
-    persona.creator_id = None;
-    let files = WORKSPACE_TEMPLATE.render(&persona).unwrap();
-    let charter = files
+fn the_settings_name_the_agent_and_its_owner() {
+    let files = WORKSPACE_TEMPLATE.render(&agent(), &seed()).unwrap();
+    let settings = files
         .iter()
-        .find(|file| file.path == "OPERATING.md")
-        .unwrap();
+        .find(|file| file.path == "agent.json")
+        .expect("agent.json is rendered");
+    let settings: serde_json::Value = serde_json::from_str(&settings.contents).unwrap();
+
+    assert_eq!(settings["owner"], "macro|admin@example.com");
+    assert_eq!(settings["me"], "macro|sam@agents.example.com");
+    assert_eq!(settings["name"], "Sam");
+    assert_eq!(settings["email"], "sam@agents.example.com");
+    assert_eq!(settings["timeZone"], "UTC");
+    assert!(
+        settings["model"]
+            .as_str()
+            .is_some_and(|model| !model.is_empty())
+    );
+    assert!(!files.iter().any(|file| file.path == "agent.example.json"));
+}
+
+#[test]
+fn the_identity_is_seeded_from_the_invite() {
+    let files = WORKSPACE_TEMPLATE.render(&agent(), &seed()).unwrap();
+    let identity = files
+        .iter()
+        .find(|file| file.path == "state/memory/identity/identity.md")
+        .expect("identity is seeded");
+
+    assert_eq!(
+        identity.contents,
+        "# Sam\n\nMy owner described me when they invited me.\n\n## What I do\n\nBooks venues.\n\n## How I work and talk\n\nWarm and direct.\n"
+    );
+}
+
+#[test]
+fn an_invite_without_a_description_leaves_the_identity_to_the_owner() {
+    let mut persona = seed();
+    persona.job_description = " ".to_owned();
+    persona.personality = String::new();
+    let files = WORKSPACE_TEMPLATE.render(&agent(), &persona).unwrap();
 
     assert!(
-        charter
-            .contents
-            .contains("Only the team owner changes my rules")
+        !files
+            .iter()
+            .any(|file| file.path == "state/memory/identity/identity.md")
     );
-    assert!(!charter.contents.contains("{{"));
 }
 
 #[test]
-fn relevance_questions_render_json_text_and_bound_long_personas() {
+fn a_seed_without_an_owner_is_refused() {
     let mut persona = seed();
-    persona.name = "Sam \"S\"\n😀".to_owned();
-    persona.job_description = "Review \"quoted\" code\nand paths\\files".to_owned();
-    for long in [false, true] {
-        if long {
-            persona.name = persona.name.repeat(100);
-            persona.job_description = persona.job_description.repeat(100);
-        }
-        let template = WorkspaceTemplate {
-            files: &[crate::domain::template::TemplateFile {
-                path: "config/jev.json",
-                contents: include_str!("test/jev.json"),
-            }],
-        };
-        let files = template.render(&persona).unwrap();
-        let config = files
-            .iter()
-            .find(|file| file.path == "config/jev.json")
-            .unwrap();
-        let config: serde_json::Value = serde_json::from_str(&config.contents).unwrap();
-        let questions = config["questions"].as_object().unwrap();
-        for question in questions.values() {
-            let question = question.as_str().unwrap();
-            assert!(!question.contains("{{"));
-            assert!(question.encode_utf16().count() <= 500);
-        }
-        let job = questions["about_my_job"].as_str().unwrap();
-        assert!(job.ends_with('?'));
-        if !long {
-            assert!(job.contains(&persona.name));
-            assert!(job.contains(&persona.job_description));
-        }
-    }
+    persona.creator_id = None;
+
+    assert!(matches!(
+        WORKSPACE_TEMPLATE.render(&agent(), &persona),
+        Err(crate::domain::template::RenderError::MissingCreator)
+    ));
 }
 
 #[tokio::test]

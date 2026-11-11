@@ -86,7 +86,10 @@
 			"services/lexical-service",
 			"packages/spreadsheet",
 			"vendor/ironcalc/pkg",
-			"packages/sdk-docs"
+			"packages/sdk-docs",
+			"packages/sdk",
+			"packages/muppet",
+			"packages/starter-agent"
 		],
 		"catalog": {
 			"loro-crdt": "1.16.3"

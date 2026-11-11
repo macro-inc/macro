@@ -20,6 +20,12 @@ root with `bun run --cwd apps/web gen-api <service-name>` before running
 
 `just coverage` lists `UNCOVERED <service>.<endpoint>`.
 
+A wrapped endpoint also needs a verb in `src/utils/verbs.ts`, from the closed
+`SdkVerb` set: what it does to a resource (`edited`), or `read`, `listed`,
+`searched`, `queried` or `checked` when it changes nothing, including a POST that
+only reads. `just coverage` fails on a wrapped method with no verb or a verb for a
+method that no longer exists. Don't grow the set; pick the closest.
+
 ## 1. Skip or wrap?
 
 With the `skip` arg, skip. Otherwise **ask the user**, one line per endpoint, with a

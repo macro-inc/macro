@@ -2,8 +2,8 @@
 //! price of its own, per computer.
 
 use crate::domain::model::{
-    CustomerError, ItemChangeSettlement, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
-    SubscriptionItemView, SubscriptionTerms, TeamError,
+    CustomerError, ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange,
+    ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms, TeamError,
 };
 
 /// Errors from changing or reading a team subscription's items.
@@ -77,11 +77,19 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         team_id: &uuid::Uuid,
     ) -> impl Future<Output = Result<Vec<SubscriptionItemView>, TeamSubscriptionItemsError>> + Send;
 
-    /// End an item change whose outcome stayed unknown, for good.
+    /// End an item change whose outcome stayed unknown, for good. A change
+    /// never sent is fenced on the team's subscription, so it never will be.
     fn settle_subscription_item_change(
         &self,
+        team_id: &uuid::Uuid,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<ItemChangeSettlement, TeamSubscriptionItemsError>> + Send;
+
+    /// Where the change keyed `idempotency_key` stands; `None` when it was never sent.
+    fn subscription_item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<Option<ItemChangeStatus>, TeamSubscriptionItemsError>> + Send;
 
     /// The team subscription's period end, interval and currency.
     fn team_subscription_terms(

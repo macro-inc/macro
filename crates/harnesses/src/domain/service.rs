@@ -427,10 +427,7 @@ where
 
         self.ensure_may_manage(&caller, &harness).await?;
         if harness.computer_id.is_some() {
-            return Err(HarnessError::BadRequest(
-                "This machine is a Macro computer. Release it from Macro computers instead."
-                    .to_owned(),
-            ));
+            return Err(HarnessError::ComputerHarness);
         }
 
         if !self
@@ -468,7 +465,18 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn delete_self(&self, harness_id: HarnessId) -> Result<(), HarnessError> {
         // The valid credential that authenticated this call is the whole
-        // authorization: a daemon may always retire itself.
+        // authorization: a daemon may retire itself, except a computer's,
+        // which only releasing the computer retires (agents stay bound to a
+        // computer harness until then).
+        if self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .is_some_and(|harness| harness.computer_id.is_some())
+        {
+            return Err(HarnessError::ComputerHarness);
+        }
         if !self
             .repo
             .delete_harness(harness_id)

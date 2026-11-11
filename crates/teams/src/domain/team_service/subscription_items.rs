@@ -12,8 +12,8 @@ use crate::domain::{
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
     model::{
-        ItemChangeSettlement, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
-        SubscriptionItemView, SubscriptionTerms,
+        ItemChangeSettlement, ItemChangeStatus, ItemProration, ItemQuantityChange, ItemRemoval,
+        PriceInfo, SubscriptionItemView, SubscriptionTerms,
     },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
@@ -43,10 +43,14 @@ where
         &self,
         team_id: &uuid::Uuid,
     ) -> Result<stripe::SubscriptionId, TeamSubscriptionItemsError> {
-        self.team_repository
-            .get_team_subscription_id(team_id)
-            .await?
-            .ok_or(TeamSubscriptionItemsError::NoSubscription)
+        match self.team_repository.get_team_subscription_id(team_id).await {
+            Ok(Some(subscription)) => Ok(subscription),
+            // A deleted team's subscription was canceled with it.
+            Ok(None) | Err(crate::domain::model::TeamError::TeamDoesNotExist) => {
+                Err(TeamSubscriptionItemsError::NoSubscription)
+            }
+            Err(error) => Err(error.into()),
+        }
     }
 }
 
@@ -161,11 +165,28 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn settle_subscription_item_change(
         &self,
+        team_id: &uuid::Uuid,
         idempotency_key: &str,
     ) -> Result<ItemChangeSettlement, TeamSubscriptionItemsError> {
+        let fence = match self.team_subscription(team_id).await {
+            Ok(subscription) => Some(subscription),
+            Err(TeamSubscriptionItemsError::NoSubscription) => None,
+            Err(error) => return Err(error),
+        };
         Ok(self
             .customer_repository
-            .settle_item_change(idempotency_key)
+            .settle_item_change(idempotency_key, fence.as_ref())
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn subscription_item_change_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ItemChangeStatus>, TeamSubscriptionItemsError> {
+        Ok(self
+            .customer_repository
+            .item_change_status(idempotency_key)
             .await?)
     }
 

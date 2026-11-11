@@ -15,7 +15,7 @@ use crate::domain::models::{
     BillingStatus, ComputerStatusKind, FleetAttachment, Funding, Purchase, PurchaseKey,
     PurchaseRequest, SubscriptionItem,
 };
-use crate::domain::ports::{ItemCharge, StaticFleetAttachment};
+use crate::domain::ports::{ChargeStatus, ItemCharge, StaticFleetAttachment};
 
 mod comped;
 mod quarantine;
@@ -171,6 +171,32 @@ impl Billing for FakeBilling {
             .map(|(item, _)| item.clone()))
     }
 
+    async fn charge_status(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<Option<ChargeStatus>, BillingError> {
+        if self
+            .charged_keys
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(key, _)| key == idempotency_key)
+        {
+            return Ok(Some(ChargeStatus::Applied));
+        }
+        Ok(self
+            .adds
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|add| add.key == idempotency_key)
+            .then_some(if self.decline {
+                ChargeStatus::NotApplied
+            } else {
+                ChargeStatus::Pending
+            }))
+    }
+
     async fn computer_item(
         &self,
         _team_id: Uuid,
@@ -208,6 +234,10 @@ impl Billing for FakeBilling {
             .lock()
             .unwrap()
             .push((subscription_item.clone(), idempotency_key.to_owned()));
+        Ok(())
+    }
+
+    async fn require_paid_plan(&self, _team_id: Uuid) -> Result<(), BillingError> {
         Ok(())
     }
 

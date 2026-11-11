@@ -2,30 +2,32 @@
 
 ## What it is
 
-Agent brains (`docs/design/agent-brains.md`, "The workspace repo"): exactly
+Agent teammates (`docs/design/agent-teammates.md`, "The repo"): exactly
 one bare git repo per agent user, served over smart HTTP behind Macro auth,
 plus the internal create/delete API and its client.
 
 ## How it works
 
-`POST /internal/repos` creates the bare repo from the canonical
-`packages/brain/template/`, including its `.gitignore`, with the
-request's persona seed substituted into `OPERATING.md` (one initial commit on
-`main`) and upserts the `agent_repos` row with the SHA-256 of a new
-`mrt_` token, returned once. Git requests (`/{agent_user_id}.git/...`, id
-percent-encoded) go through `AgentGitService::serve_git`, which authorizes,
-enforces limits, and hands the request to `git http-backend` (CGI, both bodies
-streamed).
+`POST /internal/repos` creates the bare repo from the starter agent
+(`packages/starter-agent/`), with one initial commit on `main`: the
+template's files, `agent.json` rendered from `agent.example.json` (owner =
+the seed's `creator_id`, `me` = the agent's user id, its name and email), and
+`state/memory/identity/identity.md` when the invite gave a job or a
+personality (none means the agent asks its owner). It upserts the
+`agent_repos` row with the SHA-256 of a new `mrt_` token, returned once. Git
+requests (`/{agent_user_id}.git/...`, id percent-encoded) go through
+`AgentGitService::serve_git`, which authorizes, enforces limits, and hands the
+request to `git http-backend` (CGI, both bodies streamed).
 
-`build.rs` recursively embeds every file under the canonical template, watching
-directories so additions and removals rebuild it; no file manifest is maintained.
-The HTTP clone test verifies every rendered file is seeded with its contents.
-Embed every file the brain reads before starting: its charter, prompts, JSON
-configuration, exact library lock, composition (`brain.ts`), API reference and initial self memory. `creator_id` records the creating
-admin's Macro user ID; older saved seeds may omit it and use the team owner.
-Render relevance questions through JSON values, bounding persona substitutions
-to the brain's 500 UTF-16-unit question limit. Keep the canonical template in
-both full and per-service filtered Nix sources, including `brain.lock`.
+`build.rs` recursively embeds every file under the template, watching
+directories so additions and removals rebuild it, and skips what only the
+monorepo checkout has (`node_modules`, `.scripts*`, `.worktrees`, the
+workspace `biome.jsonc`); symlinks (`CLAUDE.md`) are embedded as their
+target's contents, and executable bits are kept. The HTTP clone test verifies
+every rendered file is seeded with its contents. A seed without a
+`creator_id` is refused: an agent without an owner obeys nobody. Keep the
+template in both full and per-service filtered Nix sources, including its
+standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 
 ## Start here
 
@@ -49,7 +51,8 @@ both full and per-service filtered Nix sources, including `brain.lock`.
 - `TMPDIR=/home/wolf/tmp cargo test -p agent_git` (`SQLX_OFFLINE` unset; needs
   `git` on `PATH`). `tests/smart_http.rs` runs real `git clone`/`push`.
 - `nix build .#checks.x86_64-linux.pruned-deploy-src-brain-template` verifies
-  that full and pruned service sources preserve every canonical template file.
+  that full and pruned service sources preserve every template file (the check
+  is renamed with the Nix move to `packages/starter-agent`).
 
 ## Gotchas
 

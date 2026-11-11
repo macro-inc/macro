@@ -12,6 +12,8 @@ import { MacroComputers } from './MacroComputers';
 const mocks = vi.hoisted(() => ({
   rollout: true,
   offers: [] as SizeOffer[],
+  offersError: undefined as unknown,
+  openSettings: vi.fn(),
   computers: [] as ComputerStatus[],
   release: vi.fn(),
   restore: vi.fn(),
@@ -25,10 +27,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@queries/computers/computers', () => ({
   useComputerOffersQuery: () => ({
     isPending: false,
-    isError: false,
-    isSuccess: true,
+    get isError() {
+      return mocks.offersError !== undefined;
+    },
+    get isSuccess() {
+      return mocks.offersError === undefined;
+    },
+    get error() {
+      return mocks.offersError;
+    },
     get data() {
-      return mocks.offers;
+      return mocks.offersError === undefined ? mocks.offers : undefined;
     },
   }),
   usePurchaseComputerMutation: () => ({
@@ -51,6 +60,10 @@ vi.mock('@queries/computers/computers', () => ({
     isPending: false,
     mutateAsync: mocks.release,
   }),
+}));
+
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({ openSettings: mocks.openSettings }),
 }));
 
 vi.mock('@queries/agents/agents', () => ({
@@ -137,6 +150,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.rollout = true;
+  mocks.offersError = undefined;
   mocks.computers = [];
   mocks.offers = [
     {
@@ -419,4 +433,24 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
   ).toBeNull();
   expect(screen.queryByRole('button', { name: 'Finish setup' })).toBeNull();
   expect(screen.getByText(/Claude: Macro credits/)).toBeTruthy();
+});
+
+it('tells a trialing team computers are for paid plans and links to Billing', async () => {
+  mocks.offersError = new ThrownResultError([
+    {
+      code: 'TEAM_ON_TRIAL',
+      message:
+        'Computers are available on paid plans. Your team is on a trial.',
+    },
+  ]);
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+
+  expect(
+    await screen.findByText(
+      'Computers are available on paid plans. Your team is on a trial.'
+    )
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Go to Billing' }));
+  expect(mocks.openSettings).toHaveBeenCalledWith('Billing');
 });

@@ -37,6 +37,7 @@ import { SavedViewsNamespace } from './entities/saved-views/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
@@ -108,6 +109,13 @@ export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
 export type { CreatedEntity } from './entities/routines/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -187,6 +195,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   /** Call the user's connected apps and MCP servers from a code execution. */
   readonly connectedApps: ConnectedAppNamespace;
+
+  /** Open items in the Macro app tab the user prompted from. */
+  readonly ui: UiNamespace;
 
   readonly favorites: FavoritesNamespace;
 
@@ -275,6 +286,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.connectedApps = new ConnectedAppNamespace(client);
+    this.ui = new UiNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);

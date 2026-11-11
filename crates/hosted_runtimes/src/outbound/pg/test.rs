@@ -3,6 +3,7 @@ mod quarantine;
 mod redeploy;
 
 mod agents;
+mod billing_races;
 mod boot;
 
 use chrono::{Duration, TimeZone};
@@ -164,7 +165,8 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
             ComputerSize::Xl
         ]
     );
-    // Expired reservations no longer hold capacity.
+    // Expired reservations still hold capacity: one may yet settle as
+    // charged and become a computer.
     assert_eq!(
         repo.sold_out_sizes(
             &crate::domain::size::current_catalog(),
@@ -172,8 +174,21 @@ async fn reserve_holds_sold_units_until_the_host_is_sold_out(pool: PgPool) {
         )
         .await
         .unwrap(),
-        vec![]
+        vec![
+            ComputerSize::Standard,
+            ComputerSize::Large,
+            ComputerSize::Xl
+        ]
     );
+    assert!(matches!(
+        repo.reserve(
+            standard(10),
+            now() + Duration::minutes(16),
+            now() + Duration::minutes(31)
+        )
+        .await,
+        Err(ReserveError::SoldOut)
+    ));
 }
 
 /// Edge case (a), storage side: a purchase key finds its reservation while
@@ -607,24 +622,66 @@ async fn capacity_counts_recorded_resources_independently_of_size(pool: PgPool) 
     ));
 }
 
+/// Should-fix S4: a buyer can delete their account. The computer and the
+/// reservation keep the buyer's id for attribution, with no foreign key.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn reservation_rejects_a_missing_purchaser(pool: PgPool) {
+async fn deleting_the_buyer_keeps_computers_and_reservations(pool: PgPool) {
     insert_team(&pool).await;
-    let repo = PgComputerRepo::new(pool, policy());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     host(&repo, "reference-host", 24, 0, 1).await;
-    let mut purchase = standard(70);
-    purchase.created_by = MacroUserIdStr::try_from("macro|missing@example.com".to_owned()).unwrap();
-    let error = repo
-        .reserve(purchase, now(), now() + Duration::minutes(15))
+    let buyer_macro_user = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0022);
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'buyer@example.com', 'buyer@example.com', 'stripe_buyer')",
+        buyer_macro_user,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ('macro|buyer@example.com', 'buyer@example.com', $1)"#,
+        buyer_macro_user,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let buyer = MacroUserIdStr::try_from("macro|buyer@example.com".to_owned()).unwrap();
+    let reservation = reserve(
+        &repo,
+        NewReservation {
+            created_by: buyer.clone(),
+            ..standard(70)
+        },
+    )
+    .await;
+    let computer = repo
+        .convert_reservation(reservation.id, active(70), now())
         .await
-        .unwrap_err();
-    let ReserveError::Storage(PgComputerError::Sqlx(sqlx::Error::Database(error))) = error else {
-        panic!("expected a database foreign key error, got {error:?}");
-    };
-    assert_eq!(error.code().as_deref(), Some("23503"));
+        .unwrap()
+        .unwrap();
+    let pending = reserve(
+        &repo,
+        NewReservation {
+            created_by: buyer,
+            ..standard(71)
+        },
+    )
+    .await;
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = 'macro|buyer@example.com'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
     assert_eq!(
-        error.constraint(),
-        Some("computer_reservation_created_by_fkey")
+        repo.get(computer.id).await.unwrap().unwrap().id(),
+        computer.id
+    );
+    assert_eq!(
+        repo.reservation(pending.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .created_by
+            .as_ref(),
+        "macro|buyer@example.com"
     );
 }
 

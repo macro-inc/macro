@@ -82,6 +82,7 @@ pub struct FakeRepo {
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
     pub enrollment_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
+    pub billing_locks: Mutex<HashMap<ComputerId, Arc<tokio::sync::Mutex<()>>>>,
     pub effect_run_after: Mutex<HashMap<i64, DateTime<Utc>>>,
     pub computers: Mutex<HashMap<ComputerId, Computer>>,
     pub corrupt_ids: Mutex<Vec<ComputerId>>,
@@ -105,7 +106,7 @@ impl FakeRepo {
         }
     }
 
-    fn live_units(&self, now: DateTime<Utc>) -> u32 {
+    fn live_units(&self) -> u32 {
         let computers: u32 = self
             .computers
             .lock()
@@ -119,7 +120,6 @@ impl FakeRepo {
             .lock()
             .unwrap()
             .values()
-            .filter(|reservation| reservation.expires_at > now)
             .map(|reservation| reservation.resources.units())
             .sum();
         computers + held
@@ -146,9 +146,21 @@ impl FakeRepo {
 impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type EnrollmentGuard = tokio::sync::OwnedMutexGuard<()>;
+    type BillingGuard = tokio::sync::OwnedMutexGuard<()>;
 
     fn policy(&self) -> BillingPolicy {
         policy()
+    }
+
+    async fn lock_billing(&self, computer_id: ComputerId) -> Result<Self::BillingGuard, FakeError> {
+        let lock = self
+            .billing_locks
+            .lock()
+            .unwrap()
+            .entry(computer_id)
+            .or_default()
+            .clone();
+        Ok(lock.lock_owned().await)
     }
 
     async fn lock_enrollment(
@@ -187,7 +199,7 @@ impl ComputerRepo for FakeRepo {
                 return Ok(Reserved::Pending(pending.clone()));
             }
         }
-        if self.live_units(now) + reservation.resources.units() > self.sold_units {
+        if self.live_units() + reservation.resources.units() > self.sold_units {
             return Err(ReserveError::SoldOut);
         }
         let held = Reservation {
@@ -656,10 +668,10 @@ impl ComputerRepo for FakeRepo {
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
-        now: DateTime<Utc>,
+        _now: DateTime<Utc>,
     ) -> Result<Vec<ComputerSize>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        let sold = self.live_units(now);
+        let sold = self.live_units();
         Ok(catalog
             .iter()
             .filter(|entry| entry.resources.units() > self.sold_units.saturating_sub(sold))
