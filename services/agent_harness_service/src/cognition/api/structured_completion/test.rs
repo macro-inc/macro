@@ -135,7 +135,9 @@ async fn a_generation_sessions_completion_is_its_own_and_never_billed(pool: sqlx
     for scope in [SessionScope::Generation, SessionScope::NoSend] {
         let response = scope_attribution(
             scoped(scope),
-            router.clone().oneshot(authorized_request("/", with_tools.clone())),
+            router
+                .clone()
+                .oneshot(authorized_request("/", with_tools.clone())),
         )
         .await
         .unwrap();
