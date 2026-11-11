@@ -17,6 +17,13 @@ export interface DecoratorHost {
     select(key: string): void;
     remove(key: string): void;
   };
+  readonly diffInsert: {
+    /**
+     * The parent diff's raw user id, read once like the Source memo; null when
+     * the node is missing or has no diff parent.
+     */
+    owner(key: string): { readonly userId: string | undefined } | null;
+  };
   readonly equation: {
     requestEdit(key: string): void;
     current(key: string): { equation: string; inline: boolean } | null;

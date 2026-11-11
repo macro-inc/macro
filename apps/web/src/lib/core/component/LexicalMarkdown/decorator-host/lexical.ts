@@ -1,5 +1,9 @@
 import { mergeRegister } from '@lexical/utils';
-import { $isEquationNode, $isImageNode } from '@macro-inc/lexical-core';
+import {
+  $isDiffNode,
+  $isEquationNode,
+  $isImageNode,
+} from '@macro-inc/lexical-core';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -52,6 +56,19 @@ export function createLexicalDecoratorHost(
       },
       remove(key) {
         if (wrapper?.editor) removeNodeAndRestoreSelection(wrapper.editor, key);
+      },
+    },
+    diffInsert: {
+      owner(key) {
+        const editor = wrapper?.editor;
+        if (!editor) return null;
+        return editor.getEditorState().read(() => {
+          const node = $getNodeByKey(key);
+          if (!node) return null;
+          const parent = node.getParent();
+          if (!parent || !$isDiffNode(parent)) return null;
+          return { userId: parent.getUserId() };
+        });
       },
     },
     equation: {

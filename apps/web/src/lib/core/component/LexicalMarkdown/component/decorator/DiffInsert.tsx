@@ -1,28 +1,19 @@
 import { useUserId } from '@core/context/user';
 import type { DiffInsertDecoratorProps } from '@macro-inc/lexical-core';
-import { $isDiffNode } from '@macro-inc/lexical-core';
-import { $getNodeByKey } from 'lexical';
 import { createMemo, Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { useDiffInsertHost } from '../../decorator-host/diff-insert-host';
 import { StaticMarkdown } from '../core/StaticMarkdown';
 
 export function DiffInsert(props: DiffInsertDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
+  const host = useDiffInsertHost();
   const userId = useUserId();
 
   const shouldShow = createMemo(() => {
-    return editor()
-      ?.getEditorState()
-      .read(() => {
-        const node = $getNodeByKey(props.key);
-        if (!node) return false;
-
-        const parent = node.getParent();
-        if (!parent || !$isDiffNode(parent)) return false;
-
-        return parent.getUserId() === userId();
-      });
+    const owner = host.diffInsert.owner(props.key);
+    return owner !== null && owner.userId === userId();
   });
 
   return (
