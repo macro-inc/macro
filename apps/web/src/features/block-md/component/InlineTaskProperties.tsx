@@ -29,7 +29,10 @@ import {
   Suspense,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { createPinnedProperties } from '../primitives/create-pinned-properties';
+import {
+  createDocumentPinnedPropertyStore,
+  createPinnedProperties,
+} from '../primitives/create-pinned-properties';
 import { InlinePropertyValue } from './InlinePropertyValue';
 import { useMarkdownName } from './MarkdownNameProvider';
 
@@ -55,7 +58,10 @@ export function InlineTaskProperties() {
         ]
       : [];
   const pins = createPinnedProperties(
-    () => state.editor.md.editor,
+    createDocumentPinnedPropertyStore({
+      editor: () => state.editor.md.editor,
+      nativeView: () => state.editor.md.nativeRuntime?.view,
+    }),
     defaultDefinitionIds
   );
   const titleProperties = () => {

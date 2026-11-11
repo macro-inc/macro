@@ -49,7 +49,10 @@ import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
-import { createPinnedProperties } from '../../primitives/create-pinned-properties';
+import {
+  createDocumentPinnedPropertyStore,
+  createPinnedProperties,
+} from '../../primitives/create-pinned-properties';
 import { DispatchAgentButton } from '../DispatchAgentMenu';
 import { useMarkdownName } from '../MarkdownNameProvider';
 import { TaskDuplicateMatchesSidePanelSection } from '../TaskDuplicateMatches';
@@ -216,7 +219,10 @@ function PropertiesSectionContent(props: {
         ]
       : [];
   const pins = createPinnedProperties(
-    () => mdData.editor,
+    createDocumentPinnedPropertyStore({
+      editor: () => mdData.editor,
+      nativeView: () => mdData.nativeRuntime?.view,
+    }),
     defaultTitlePropertyDefinitionIds
   );
 

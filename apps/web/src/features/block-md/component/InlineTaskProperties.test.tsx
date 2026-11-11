@@ -1,3 +1,4 @@
+import { lexicalPinnedPropertyStore } from '@core/component/LexicalMarkdown/plugins/pinned-properties/native';
 import {
   $getPinnedProperties,
   $getStoredPinnedProperties,
@@ -289,7 +290,7 @@ function setupPins(
   return createRoot((dispose) => {
     disposers.push(dispose);
     return createPinnedProperties(
-      () => editor,
+      () => lexicalPinnedPropertyStore(editor),
       () => defaults
     );
   });
