@@ -46,7 +46,11 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
       presentView(this.client, this.parent, view, this),
   };
 
-  /** The session this execution belongs to. */
+  /**
+   * The session this execution belongs to.
+   *
+   * @readonly
+   */
   session(): AgentSession {
     return this.parent;
   }
@@ -63,12 +67,20 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
   /** Execution failure text, when present. */
   readonly error = this.field('error');
 
-  /** The program's returned JSON; preserves an explicit null result. */
+  /**
+   * The program's returned JSON; preserves an explicit null result.
+   *
+   * @readonly
+   */
   async result(): Promise<unknown> {
     return (await this.detail.get()).result;
   }
 
-  /** Reload the saved state, for example after a running execution completes. */
+  /**
+   * Reload the saved state, for example after a running execution completes.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();
