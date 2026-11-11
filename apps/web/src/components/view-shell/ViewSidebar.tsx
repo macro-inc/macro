@@ -317,7 +317,7 @@ function TreeItem(props: {
         active={props.active}
         title={props.label}
         onClick={props.onClick}
-        class="pr-9"
+        class="pr-9 touch:pr-12"
       >
         {props.children}
       </Item>
@@ -331,7 +331,7 @@ function TreeItem(props: {
           >
             <CaretDownIcon
               class={cn(
-                'size-3 transition-transform -rotate-90',
+                'size-3 touch:size-4 transition-transform -rotate-90',
                 props.expanded && 'rotate-0'
               )}
             />

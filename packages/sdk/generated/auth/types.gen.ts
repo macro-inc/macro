@@ -470,6 +470,11 @@ export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_require
  */
 export type CurrentSystemStatus = SystemStatus & {
     /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
+    /**
      * When it was set; absent when no status was ever set. Clients keep the
      * newest status they have seen, whether fetched or pushed.
      */
@@ -1368,40 +1373,35 @@ export type PasswordlessStartedResponse = {
  */
 export type PatchTeamCrmSettingsRequest = {
     /**
-     * On a disabled → enabled transition, whether to backfill the CRM
-     * from members' existing email history. Ignored when disabling.
+     * Retained for compatibility and ignored. Email backfill requires
+     * each member's explicit consent through CRM email privacy settings.
      */
     backfill?: boolean;
     /**
-     * The desired CRM state for the team.
+     * Legacy compatibility flag. True is a no-op; false is rejected.
      */
     enabled: boolean;
 };
 
 /**
- * Response for `PATCH /team/crm`. Reports both the resulting state
- * and whether this call changed it; for the enable-flip case it also
- * reports the backfill fan-out tallies.
+ * Compatibility response for `PATCH /team/crm`. CRM records are always
+ * available; this endpoint does not enroll mailboxes or backfill emails.
  */
 export type PatchTeamCrmSettingsResponse = {
     /**
-     * Number of members for whom a `PopulateCrmForUser` message was
-     * enqueued. Non-zero only on a disabled → enabled transition;
-     * per-user enqueue failures are logged and swallowed.
+     * Always zero: mailbox contributions require individual consent.
      */
     backfill_enqueued: number;
     /**
-     * Number of members whose enqueue failed (and was swallowed).
-     * Non-zero only on a disabled → enabled transition.
+     * Always zero: this endpoint does not enqueue backfills.
      */
     backfill_failed: number;
     /**
-     * True if this call flipped the value (false → true or true →
-     * false). False if the team was already at the requested state.
+     * Always false: the legacy command does not change availability.
      */
     changed: boolean;
     /**
-     * The resulting `crm_enabled` value after the call.
+     * Always true: CRM records are available to team members.
      */
     enabled: boolean;
 };
@@ -1900,8 +1900,8 @@ export type Team = {
      */
     auto_join_domain?: string | null;
     /**
-     * Whether the CRM is enabled for this team (from `team_crm_settings`;
-     * `false` when no row exists).
+     * CRM record availability, always true for teams. This compatibility
+     * field does not indicate whether any mailbox contributes emails.
      */
     crm_enabled: boolean;
     default_link_share?: null | LinkShare;
@@ -4773,6 +4773,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4833,6 +4837,10 @@ export type PutProfilePictureFileErrors = {
      * The caller has no such file
      */
     404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

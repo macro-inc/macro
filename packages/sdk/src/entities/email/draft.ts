@@ -72,7 +72,13 @@ export class EmailDraft extends EmailMessage {
   /** Edit generation to capture with content before saving or transferring it. */
   readonly draftGeneration = this.field('draft_generation');
 
-  /** Replace draft content without changing its identity or sending it. */
+  /**
+   * Replace draft content without changing its identity or sending it.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async update(options: DraftOptions): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -89,7 +95,13 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Delete the draft. */
+  /**
+   * Delete the draft.
+   *
+   * @destructive
+   * @openworld
+   * @idempotent
+   */
   async delete(): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -103,6 +115,9 @@ export class EmailDraft extends EmailMessage {
    * The draft goes out as saved, attachments included, at `sendTime` (ISO
    * 8601, in the future). Write the draft out for the user and ask before
    * scheduling it; the request that asked for the email is not the approval.
+   *
+   * @destructive
+   * @openworld
    */
   async schedule(sendTime: string, options?: DraftSendOptions): Promise<void> {
     const { headers, query } = await this.draftContext();
@@ -126,6 +141,9 @@ export class EmailDraft extends EmailMessage {
    * The draft is handed to the scheduled sender, which delivers it within
    * about a minute; until then {@link unschedule} still stops it. Write the
    * draft out for the user and ask before sending it.
+   *
+   * @destructive
+   * @openworld
    */
   async send(options?: DraftSendOptions): Promise<void> {
     await this.schedule(
@@ -134,7 +152,13 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Remove a scheduled send. */
+  /**
+   * Remove a scheduled send.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async unschedule(): Promise<void> {
     const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
@@ -146,7 +170,11 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Reserve an attachment upload. Upload to the returned URL, then call complete(). */
+  /**
+   * Reserve an attachment upload. Upload to the returned URL, then call complete().
+   *
+   * @write
+   */
   async addAttachment(options: {
     fileName: string;
     sha: string;
@@ -181,7 +209,11 @@ export class EmailDraft extends EmailMessage {
     };
   }
 
-  /** Forward an existing attachment into this draft. */
+  /**
+   * Forward an existing attachment into this draft.
+   *
+   * @write
+   */
   async forwardAttachment(
     attachment: EmailAttachment,
   ): Promise<DraftAttachment> {
@@ -203,7 +235,12 @@ export class EmailDraft extends EmailMessage {
     );
   }
 
-  /** Remove a draft attachment. */
+  /**
+   * Remove a draft attachment.
+   *
+   * @destructive
+   * @idempotent
+   */
   async removeAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id)
       throw new Error('Attachment belongs to another draft');
@@ -227,7 +264,12 @@ export class EmailDraft extends EmailMessage {
       );
   }
 
-  /** Complete verification of an uploaded attachment. */
+  /**
+   * Complete verification of an uploaded attachment.
+   *
+   * @write
+   * @idempotent
+   */
   async verifyAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id || attachment.forwarded)
       throw new Error('Expected an uploaded attachment on this draft');
@@ -262,12 +304,22 @@ export class DraftAttachment {
     return new DraftAttachment(draft, id, forwarded, draftGeneration);
   }
 
-  /** Complete verification after uploading the file. */
+  /**
+   * Complete verification after uploading the file.
+   *
+   * @write
+   * @idempotent
+   */
   complete(): Promise<void> {
     return this.draft.verifyAttachment(this);
   }
 
-  /** Remove this attachment from its draft. */
+  /**
+   * Remove this attachment from its draft.
+   *
+   * @destructive
+   * @idempotent
+   */
   remove(): Promise<void> {
     return this.draft.removeAttachment(this);
   }

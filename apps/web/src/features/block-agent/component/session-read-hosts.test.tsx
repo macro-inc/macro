@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
 
 // Keep both real session hosts and the real read marker. Replace unrelated
 // editor/chrome surfaces and provide the session/notification boundary data.
+vi.mock('@app/features/runtime-sharing/views/SessionAgentRuntime', () => ({
+  SessionAgentRuntime: () => null,
+}));
+
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));

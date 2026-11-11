@@ -32,10 +32,54 @@ export function isPromotionHiddenLocally(
   );
 }
 
-/** Dismiss everywhere. Used by the close button and by fulfilled prompts. */
-export function hidePromotion(userId: string | undefined, id: string): void {
-  if (!userId || isPromotionHiddenLocally(userId, id)) return;
+/** Hide on this browser; false when it already was. */
+function hideLocally(userId: string | undefined, id: string): boolean {
+  if (!userId || isPromotionHiddenLocally(userId, id)) return false;
   storage(id).write(userId, 'hidden');
   setHiddenScopes((previous) => new Set(previous).add(scope(userId, id)));
-  dismissPromptEverywhere(id);
+  return true;
+}
+
+function showLocally(userId: string, id: string): void {
+  storage(id).write(userId, 'shown');
+  setHiddenScopes((previous) => {
+    const next = new Set(previous);
+    next.delete(scope(userId, id));
+    return next;
+  });
+}
+
+/** Dismiss everywhere. Used by the close button and by fulfilled prompts. */
+export function hidePromotion(userId: string | undefined, id: string): void {
+  if (hideLocally(userId, id)) dismissPromptEverywhere(id);
+}
+
+/** A dismissal still open to Undo. */
+export type PendingDismissal = {
+  /** Dismiss everywhere. */
+  commit(): void;
+  /** Show it again; the server never hears of it. */
+  undo(): void;
+};
+
+/**
+ * Hide at once on this browser, and dismiss everywhere only on `commit`, or
+ * when the page goes away first, since nothing could undo it then. The first
+ * of `commit` and `undo` decides; later calls do nothing.
+ */
+export function hidePromotionUntilCommitted(
+  userId: string | undefined,
+  id: string
+): PendingDismissal {
+  if (!userId || !hideLocally(userId, id)) return { commit() {}, undo() {} };
+  let settled = false;
+  const settle = (then: () => void) => () => {
+    if (settled) return;
+    settled = true;
+    window.removeEventListener('pagehide', commit);
+    then();
+  };
+  const commit = settle(() => dismissPromptEverywhere(id));
+  window.addEventListener('pagehide', commit);
+  return { commit, undo: settle(() => showLocally(userId, id)) };
 }

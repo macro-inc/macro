@@ -4793,15 +4793,10 @@ export const toggleTeamAutoJoinDomain = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable with `backfill`
-(the default), kicks off a best-effort backfill that enqueues a
-`PopulateCrmForUser` message per team member (no-op if CRM is
-already enabled); without `backfill` the CRM starts empty and fills
-from new activity only. On disable,
-flips the flag and purges the team's CRM data (cascading through
-`crm_companies` → `crm_domains` / `crm_contacts` /
-`crm_contact_sources`). Requires the caller to be an Admin or
-Owner of the team.
+ * @summary Legacy compatibility endpoint for team admins and owners. Enabling
+is a no-op; disabling is rejected. CRM records remain available.
+Each member manages mailbox contribution through `/crm/email-privacy`;
+this endpoint does not enroll mailboxes, backfill emails, or purge records.
  */
 export type patchTeamCrmSettingsResponse200 = {
   data: PatchTeamCrmSettingsResponse;
@@ -6845,6 +6840,11 @@ export type putProfilePictureResponse401 = {
   status: 401;
 };
 
+export type putProfilePictureResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6855,6 +6855,7 @@ export type putProfilePictureResponseSuccess = putProfilePictureResponse200 & {
 };
 export type putProfilePictureResponseError = (
   | putProfilePictureResponse401
+  | putProfilePictureResponse429
   | putProfilePictureResponse500
 ) & {
   headers: Headers;
@@ -6922,6 +6923,11 @@ export type putProfilePictureFileResponse404 = {
   status: 404;
 };
 
+export type putProfilePictureFileResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureFileResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6935,6 +6941,7 @@ export type putProfilePictureFileResponseError = (
   | putProfilePictureFileResponse400
   | putProfilePictureFileResponse401
   | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse429
   | putProfilePictureFileResponse500
 ) & {
   headers: Headers;

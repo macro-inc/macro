@@ -23,6 +23,8 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
+import { currentQueryAccount } from '../../auth/account-scope';
+import { authKeys } from '../../auth/keys';
 import {
   getChannelJoinLinkMutationOptions,
   joinChannelByCodeMutationOptions,
@@ -31,7 +33,7 @@ import { channelKeys } from '../keys';
 
 const mutationContext = () => ({
   client: testQueryClient,
-  meta: undefined,
+  meta: { queryAccount: currentQueryAccount() },
   mutationKey: undefined,
 });
 
@@ -43,6 +45,10 @@ describe('channel join-link mutations', () => {
         queries: { retry: false },
         mutations: { retry: false },
       },
+    });
+    testQueryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
     });
   });
 
@@ -71,14 +77,16 @@ describe('channel join-link mutations', () => {
     const options = joinChannelByCodeMutationOptions();
     const args = { joinCode: 'join-code' };
 
-    await expect(options.mutationFn(args)).resolves.toBeUndefined();
+    await expect(
+      options.mutationFn(args, mutationContext())
+    ).resolves.toBeUndefined();
     expect(storageServiceClient.joinChannelByCode).toHaveBeenCalledWith({
       join_code: 'join-code',
     });
 
     await options.onSuccess?.(undefined, args, undefined, mutationContext());
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: channelKeys.listChannels.queryKey,
+      queryKey: channelKeys.listChannels('viewer').queryKey,
     });
   });
 
@@ -109,7 +117,7 @@ describe('channel join-link mutations', () => {
     const options = joinChannelByCodeMutationOptions();
     const args = { joinCode: 'invalid-code' };
 
-    await expect(options.mutationFn(args)).rejects.toThrow();
+    await expect(options.mutationFn(args, mutationContext())).rejects.toThrow();
     await options.onError?.(
       new Error('unavailable'),
       args,

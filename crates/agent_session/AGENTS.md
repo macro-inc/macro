@@ -23,7 +23,12 @@ consumer talks to.
   discovery and dispatch; `GET /coding-agents` serves the signed-in user's
   listing to the SDK, the `/internal/coding-agents` commands serve tools.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
-  capped to 25 sessions before folding their logs.
+  capped to 25 sessions before folding their logs. Served to the caller by
+  `GET /agent-sessions/updates` (`inbound/axum_router/updates.rs`) and to the
+  `ListAgentUpdates` tool by `/internal/coding-agents/updates`.
+- `src/domain/session_task.rs`: a session's task. The `link_task` MCP tool and
+  `PUT /agent-sessions/{id}/task` (`inbound/axum_router/task.rs`, owner only)
+  share `SessionTasks::link_task`.
 - `src/outbound/postgres.rs`: the session repository.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
@@ -57,6 +62,14 @@ consumer talks to.
 ## Tool contracts
 
 - `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
+
+`release_session` stops an idle actor silently (`CloseReason::Released`): the
+actor refuses with `SessionRelease::Busy` unless its machine is live with no
+turn, permission request, elicitation or queued action; otherwise it flushes
+buffered frames and stops without the `disconnected` frame, telemetry close or
+`session_stopped` callback that every other stop has, and its claim is
+released under its fence. Use it only to free memory; a stop anyone should
+see goes through `close_session`.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
@@ -133,12 +146,25 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened for its owner, a routine's run (source
+  `routine`) or a draft's background session, and refuses any other;
+  `activity` returns content-free counts (tool calls, turns).
+- A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
+  is work the owner asked for that runs out of sight: source `user`, origin
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no
+  notifications about it, and it is never named or retitled
+  (`AdmittedAgentSessionNameGenerator`).
+
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
   `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
   an unclaimed warm session, or an older runtime. It describes a session; `source`
-  and `visibility` decide what happens to it, and a runtime's claim never sets them.
+  and `visibility` decide what happens to it (only `is_background` also reads the
+  origin), and a runtime's claim never sets them.
   Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
   `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,
@@ -150,6 +176,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
+- Whether an in-process session's turns are billed is
+  `agent_session.billing` (`SessionBilling`: `billable`, the default, or
+  `non_billable`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_billing`). A
+  non-billable session never claims a warm row, which is billable.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.

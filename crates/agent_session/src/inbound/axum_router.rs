@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::coding_preferences::CodingPreferences;
-use crate::domain::error::AgentSessionError;
+use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
     SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
@@ -74,6 +74,12 @@ pub mod pull_requests;
 
 /// Auto-archive defaults and per-session choices.
 pub mod auto_archive;
+
+/// Linking a session to the Macro task it works on.
+pub mod task;
+
+/// The caller's coding sessions waiting for them or stalled.
+pub mod updates;
 
 /// Registering sessions as an account's work.
 pub mod work_registration;
@@ -379,6 +385,13 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
+            // Its own code, so a client can tell a stopped agent from a
+            // session it may not touch, and show why.
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+            )
+                .into_response(),
             Self::Domain(
                 AgentSessionError::InvalidSharing(message)
                 | AgentSessionError::InvalidActivityQuery(message),
@@ -2096,6 +2109,13 @@ impl IntoResponse for CreateSessionApiError {
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+                )
+                    .into_response();
+            }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
@@ -2376,6 +2396,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request

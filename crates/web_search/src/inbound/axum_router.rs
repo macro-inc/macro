@@ -168,14 +168,20 @@ impl From<WebSearchError> for WebFailure {
         let status = match &error {
             WebSearchError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
             WebSearchError::Admission(admission) => admission_status(*admission),
-            WebSearchError::NotConfigured(_) | WebSearchError::Throttled => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            // A deployment without the provider key is missing a feature, not
+            // failing: a 5xx here would page on every call.
+            WebSearchError::NotConfigured(_) => StatusCode::NOT_FOUND,
+            WebSearchError::Throttled => StatusCode::SERVICE_UNAVAILABLE,
             WebSearchError::PageUnavailable(_) => StatusCode::UNPROCESSABLE_ENTITY,
             WebSearchError::Provider(_) => StatusCode::BAD_GATEWAY,
         };
         if status.is_server_error() {
             tracing::error!(error = ?error, code = error.code(), "web request failed");
+        } else if matches!(error, WebSearchError::NotConfigured(_)) {
+            tracing::warn!(
+                code = error.code(),
+                "web request refused: provider not configured"
+            );
         }
         Self {
             status,
@@ -215,9 +221,10 @@ fn invalid_body(rejection: JsonRejection) -> WebFailure {
         (status = 400, description = "Invalid query or filters", body = WebErrorBody),
         (status = 401, description = "Unauthorized"),
         (status = 402, description = "AI allowance exhausted", body = WebErrorBody),
+        (status = 404, description = "Web search is not configured in this deployment", body = WebErrorBody),
         (status = 429, description = "Per-user hourly rate limit exceeded"),
         (status = 502, description = "The search provider failed", body = WebErrorBody),
-        (status = 503, description = "Web search unconfigured, busy, or usage validation unavailable", body = WebErrorBody),
+        (status = 503, description = "Web search busy, or usage validation unavailable", body = WebErrorBody),
     )
 )]
 pub async fn search_handler<R, Auth>(
@@ -253,10 +260,11 @@ where
         (status = 400, description = "Invalid URL or length", body = WebErrorBody),
         (status = 401, description = "Unauthorized"),
         (status = 402, description = "AI allowance exhausted", body = WebErrorBody),
+        (status = 404, description = "Web fetch is not configured in this deployment", body = WebErrorBody),
         (status = 422, description = "The page could not be read", body = WebErrorBody),
         (status = 429, description = "Per-user hourly rate limit exceeded"),
         (status = 502, description = "The fetch provider failed", body = WebErrorBody),
-        (status = 503, description = "Web fetch unconfigured, busy, or usage validation unavailable", body = WebErrorBody),
+        (status = 503, description = "Web fetch busy, or usage validation unavailable", body = WebErrorBody),
     )
 )]
 pub async fn fetch_handler<R, Auth>(

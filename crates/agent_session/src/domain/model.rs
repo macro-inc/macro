@@ -115,6 +115,18 @@ pub struct LeaseView {
     pub asking_replica_draining: bool,
 }
 
+/// What asking a session's actor to release itself silently did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionRelease {
+    /// The actor stopped without writing or announcing anything.
+    Released,
+    /// The actor has work open (a turn, a permission request, a queued
+    /// command, or an unfinished handshake) and keeps running.
+    Busy,
+    /// No live actor for the session here.
+    NotAttached,
+}
+
 /// Where a session's live actor runs, from one service instance's viewpoint.
 #[derive(Debug, Clone)]
 pub enum SessionManagement {
@@ -208,6 +220,10 @@ pub enum SessionPurpose {
         /// Listed or unlisted, from the routine's setting.
         visibility: SessionVisibility,
     },
+    /// Work a person asked for that runs out of sight, its result read
+    /// elsewhere: a routine draft. Hidden, started by the person, and it
+    /// notifies nobody (see [`AgentSession::is_background`]).
+    Background,
 }
 
 impl SessionPurpose {
@@ -236,6 +252,7 @@ impl SessionPurpose {
             Self::AgentDm => hide_agent_dms,
             Self::Standalone => thread_id.is_some(),
             Self::Dispatched => false,
+            Self::Background => true,
             Self::Routine { visibility } => return visibility,
         };
         if hidden {
@@ -250,7 +267,7 @@ impl SessionPurpose {
         match self {
             Self::Dispatched => SessionSource::Agent,
             Self::Routine { .. } => SessionSource::Routine,
-            Self::Standalone | Self::Warm | Self::AgentDm => SessionSource::User,
+            Self::Standalone | Self::Warm | Self::AgentDm | Self::Background => SessionSource::User,
         }
     }
 }
@@ -274,7 +291,7 @@ impl SessionPurpose {
 #[strum(serialize_all = "snake_case")]
 pub enum SessionSource {
     /// A person, directly or through something they did: a prompt, a
-    /// mention, or an assignment.
+    /// mention, an assignment, or asking for a routine draft.
     #[default]
     User,
     /// Another agent, which dispatched the session on its owner's behalf.
@@ -311,6 +328,41 @@ pub enum SessionVisibility {
     /// Out of every list and search; reachable only by id, through what it
     /// backs (a thread, a DM) or once a warm claim lists it.
     Hidden,
+}
+
+/// Whether an in-process session's turns are billed to its owner. Stored as
+/// `agent_session.billing`, set by whoever opens the session and fixed for
+/// its life. Either way the turns are admitted and their usage recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionBilling {
+    /// Billed as the owner's agent session usage: every session unless its
+    /// opener chose otherwise.
+    #[default]
+    Billable,
+    /// Recorded but never billed: background work the owner didn't ask for
+    /// turn by turn.
+    NonBillable,
+}
+
+impl SessionBilling {
+    /// Whether this is the default, billed to the owner.
+    #[must_use]
+    pub fn is_billable(&self) -> bool {
+        *self == Self::Billable
+    }
 }
 
 /// Caller-provided values required to create an agent session.
@@ -360,6 +412,8 @@ pub struct CreateAgentSessionParams {
     /// What opened the session, written with the session's row. `Unknown`
     /// writes nothing: an unclaimed warm session has no cause yet.
     pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    pub billing: SessionBilling,
 }
 
 /// Who or what archived a session.
@@ -463,6 +517,23 @@ impl AgentSession {
     /// Whether the session is archived and therefore read-only.
     pub fn is_archived(&self) -> bool {
         self.archived.is_some()
+    }
+
+    /// Whether the session is work its owner asked for that runs out of
+    /// sight (a routine draft): started by them at their request, hidden, and
+    /// opened from no message, so no list, search or thread leads to it.
+    /// Nobody is told about its turns, and the routine scheduler that opened
+    /// it may delete it.
+    pub fn is_background(&self) -> bool {
+        self.source == SessionSource::User
+            && self.visibility == SessionVisibility::Hidden
+            && self.thread_id.is_none()
+            && self.originating_message_id.is_none()
+            && matches!(
+                &self.origin,
+                trigger_context::TriggerOrigin::Requested { by }
+                    if self.owner_id.as_user() == Some(by)
+            )
     }
 
     /// The user this session runs as; see [`session_owner_user`].

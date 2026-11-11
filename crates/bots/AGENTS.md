@@ -52,6 +52,10 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 
 - Agent create/update/patch must persist `has_agent = true` atomically with
   configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
 - Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
   metadata describes the requested PATCH, not a full snapshot — an omitted
   field serializes as `null` (see `README.md`). Consumers that need the bot's

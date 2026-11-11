@@ -122,7 +122,6 @@ export function DraggableChannelSectionHeading(props: {
         variant="ghost"
         appearance="bare"
         size="icon-xs"
-        data-icon-motion="none"
         class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/section-heading:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
         aria-label={t('channelSections.reorderSection', { name: props.label })}
         tooltip={t('channelSections.reorderSectionHint')}

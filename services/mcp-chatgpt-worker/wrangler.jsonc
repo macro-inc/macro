@@ -1,0 +1,77 @@
+/**
+ * The MCP server for ChatGPT: SDK-generated tools over Streamable HTTP, an
+ * OAuth resource server whose tokens come from the harness's MCP broker.
+ *
+ * URLs mirror crates/macro_service_urls: RESOURCE_URL is
+ * McpChatgptServiceUrl + "/mcp", AUTHORIZATION_SERVER_URL is McpPublicUrl.
+ * Service hosts come from the SDK for MACRO_ENV.
+ *
+ * Secrets (`wrangler secret put <NAME> --env <env>`):
+ *   DD_API_KEY - optional; sent with trace exports to a Datadog intake
+ */
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "mcp-chatgpt-worker",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-07-15",
+  // nodejs_compat: AsyncLocalStorage for otel-cf-workers' span context.
+  // global_fetch_strictly_public: the SDK's calls to our own zone's gateway
+  // would otherwise be routed back into the zone and refused.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "build": {
+    "command": "bun run generate"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "workers_dev": false,
+  "dev": {
+    "port": 8103
+  },
+  "vars": {
+    "ENVIRONMENT": "local",
+    "MACRO_ENV": "local",
+    "RESOURCE_URL": "http://localhost:8103/mcp",
+    "AUTHORIZATION_SERVER_URL": "http://localhost:8101",
+    "TOOL_GROUPING": "entity",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318/v1/traces"
+  },
+  "env": {
+    "local": {
+      "vars": {
+        "ENVIRONMENT": "local",
+        "MACRO_ENV": "local",
+        "RESOURCE_URL": "http://localhost:8103/mcp",
+        "AUTHORIZATION_SERVER_URL": "http://localhost:8101",
+        "TOOL_GROUPING": "entity",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318/v1/traces"
+      }
+    },
+    "dev": {
+      "name": "mcp-chatgpt-worker-dev",
+      "routes": [
+        { "pattern": "mcp-chatgpt.dev.macro.com", "custom_domain": true }
+      ],
+      "vars": {
+        "ENVIRONMENT": "development",
+        "MACRO_ENV": "dev",
+        "RESOURCE_URL": "https://mcp-chatgpt.dev.macro.com/mcp",
+        "AUTHORIZATION_SERVER_URL": "https://mcp-server-dev.macro.com",
+        "TOOL_GROUPING": "entity",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces"
+      }
+    },
+    "prod": {
+      "name": "mcp-chatgpt-worker",
+      "routes": [{ "pattern": "mcp-chatgpt.macro.com", "custom_domain": true }],
+      "vars": {
+        "ENVIRONMENT": "production",
+        "MACRO_ENV": "prod",
+        "RESOURCE_URL": "https://mcp-chatgpt.macro.com/mcp",
+        "AUTHORIZATION_SERVER_URL": "https://mcp-server.macro.com",
+        "TOOL_GROUPING": "entity",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces"
+      }
+    }
+  }
+}
