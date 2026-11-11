@@ -19,7 +19,6 @@ runs (`crates/hosted_runtimes/AGENTS.md#observability`):
 | `claim_pairing` | document_storage_service | macrod claiming its harness (its request carries the setup `traceparent`). |
 | `computer.macrod.connected` | agent_harness_service | The first connection being recorded. |
 | `computer.setup` | agent_harness_service | Total, reservation until macrod first connected. |
-| `report_capabilities` | document_storage_service | macrod's first capability report. |
 | `run_enroll`, `macrod.enroll.claim` | macrod | Guest-side detail, only when the guest has `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 
 The control-plane wait spans are exported with their recorded start and end
