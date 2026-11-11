@@ -153,3 +153,17 @@ fn agent_session_actions_yield_for_other_targets() -> Result<(), Error> {
     }
     Ok(())
 }
+
+#[test]
+fn agent_session_actions_reject_positional_payloads() {
+    for (name, json) in [
+        ("group-b.agent-session-expanded", "[1, true]"),
+        ("group-b.agent-session-normalize", "[1]"),
+    ] {
+        let error = decode_command(name, json, 0, None);
+        assert!(
+            matches!(error, Err(Error::Invariant(_))),
+            "{name}: {error:?}"
+        );
+    }
+}

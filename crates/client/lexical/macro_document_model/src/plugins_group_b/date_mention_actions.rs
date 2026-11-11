@@ -23,7 +23,11 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
     if name != DATE.name() {
         return Ok(None);
     }
-    let update: DateUpdate = serde_json::from_str(json)?;
+    let value: serde_json::Value = serde_json::from_str(json)?;
+    if !value.is_object() {
+        return Err(Error::Invariant("date mention object payload"));
+    }
+    let update: DateUpdate = serde_json::from_value(value)?;
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &DATE,
         DateCommand {

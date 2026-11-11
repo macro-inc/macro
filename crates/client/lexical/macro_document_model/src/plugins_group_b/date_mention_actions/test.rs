@@ -55,3 +55,14 @@ fn date_mention_yields_for_non_date_targets() -> Result<(), Error> {
     assert_eq!(editor.dispatch(&command(paragraph)?)?.0, Handled::No);
     Ok(())
 }
+
+#[test]
+fn date_mention_rejects_positional_payloads() {
+    let error = decode_command(
+        "group-b.date-mention",
+        r#"[1, "2026-09-20T00:00:00.000Z", "Sun, Sep 20, 2026"]"#,
+        0,
+        None,
+    );
+    assert!(matches!(error, Err(Error::Invariant(_))), "{error:?}");
+}

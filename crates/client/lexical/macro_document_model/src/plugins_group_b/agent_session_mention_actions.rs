@@ -27,9 +27,17 @@ fn key(index: u32, generation: u32) -> NodeKey {
     NodeKey::from_parts(KeyParts { index, generation })
 }
 
+fn object(json: &str) -> Result<serde_json::Value, Error> {
+    let value: serde_json::Value = serde_json::from_str(json)?;
+    if !value.is_object() {
+        return Err(Error::Invariant("agent session mention object payload"));
+    }
+    Ok(value)
+}
+
 pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
     if name == EXPANDED.name() {
-        let update: ExpandedUpdate = serde_json::from_str(json)?;
+        let update: ExpandedUpdate = serde_json::from_value(object(json)?)?;
         return Ok(Some(Command::Extension(ExtensionCommand::new(
             &EXPANDED,
             ExpandedCommand {
@@ -39,7 +47,7 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
         ))));
     }
     if name == NORMALIZE.name() {
-        let update: NormalizeUpdate = serde_json::from_str(json)?;
+        let update: NormalizeUpdate = serde_json::from_value(object(json)?)?;
         return Ok(Some(Command::Extension(ExtensionCommand::new(
             &NORMALIZE,
             key(update.key, generation),
