@@ -748,6 +748,12 @@ impl EditorSession {
     }
 }
 impl EditorSession {
+    pub(crate) fn resolve_selection(&self, value: &loro::LoroValue) -> Option<ViewSelection> {
+        let machine::Session::Editor(session) = &self.machine.session else {
+            return None;
+        };
+        session.resolve_selection(value)
+    }
     pub(crate) fn surface(&self) -> &document_session::EditorSurface {
         let machine::Session::Editor(session) = &self.machine.session else {
             unreachable!("editor session")

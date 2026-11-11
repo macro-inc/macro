@@ -23,6 +23,7 @@ import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import {
   type CommentSelection,
+  encodeCommentSelectionCursors,
   parseCommentSelection,
 } from './comment-selection';
 import type { NativeCommandKey } from './native-enter';
@@ -38,7 +39,7 @@ import type {
   TextFromView,
   ViewSink,
 } from './port';
-import type { TypeRow, ViewSelection } from './types';
+import type { Point, TypeRow, ViewSelection } from './types';
 
 export function selectionMessage(selection: ViewSelection): ISelectionMsg {
   const empty = { key: 0, offset: 0, type: 0 };
@@ -524,6 +525,25 @@ export class SessionPort implements EditorPort {
   commentSelection(): CommentSelection | null {
     const reply = this.query({ kind: 8, key: 0, flags: 0, text: '' });
     return parseCommentSelection(reply.nodes, reply.text);
+  }
+  /** Current points of durable cursors; null when either no longer resolves. */
+  resolveCommentSelection(
+    selection: CommentSelection
+  ): { readonly anchor: Point; readonly focus: Point } | null {
+    const reply = this.query({
+      kind: 12,
+      key: 0,
+      flags: 0,
+      text: encodeCommentSelectionCursors(selection),
+    });
+    const [anchor, focus] = reply.points;
+    if (!anchor || !focus) return null;
+    const point = (value: (typeof reply.points)[number]): Point => ({
+      key: value.key,
+      offset: value.offset,
+      type: value.type === 0 ? 'text' : 'element',
+    });
+    return { anchor: point(anchor), focus: point(focus) };
   }
   /** Publish or remove an annotation from the session's isolated staging peer. */
   comment(

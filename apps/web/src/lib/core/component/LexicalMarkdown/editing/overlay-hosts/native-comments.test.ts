@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { locks } from 'node:worker_threads';
 import * as native from '@core/document-session/wasm/document_session_wasm.js';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  CommandCode,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
@@ -162,6 +165,22 @@ test('anchors, caret marks and selection follow the native comment marks', async
       // No transport: the session cannot catch up, so it refuses.
       expect(await comments.publish('mark-c', bookmark)).toBe(false);
       expect(await comments.remove('mark-a')).toBe(false);
+
+      // Source drafts follow their durable cursors through edits before them.
+      caret(runtime, one.key, 0);
+      runtime.port.command(CommandCode.InsertText, 0, 0, 'XY');
+      expect(comments.resolveBookmark(bookmark)).toEqual({
+        anchor: { key: one.key, offset: 2, type: 'text' },
+        focus: { key: one.key, offset: 5, type: 'text' },
+      });
+
+      // An edit inside the range stays inside it.
+      caret(runtime, one.key, 3);
+      runtime.port.command(CommandCode.InsertText, 0, 0, 'Z');
+      const widened = comments.resolveBookmark(bookmark);
+      if (!widened) throw new Error('Missing resolved bookmark');
+      runtime.port.selectionFromView({ kind: 'range', ...widened });
+      expect(runtime.port.commentSelection()?.text).toBe('oZne');
 
       caret(runtime, one.key, 1);
       expect(comments.captureSelection()).toBeNull();

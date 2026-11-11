@@ -69,11 +69,13 @@ export function createNativeCommentDraft(options: {
   const refresh = () => {
     const current = draft();
     const parent = mount();
-    if (!current || !parent || current.bookmark.selection.kind !== 'range') {
+    // Durable cursors follow edits and key changes inside the range.
+    const points = current ? comments.resolveBookmark(current.bookmark) : null;
+    if (!points || !parent) {
       setRects([]);
       return;
     }
-    const { anchor, focus } = current.bookmark.selection;
+    const { anchor, focus } = points;
     const range = createDOMRange(view, anchor, focus);
     if (!range || range.collapsed) {
       setRects([]);

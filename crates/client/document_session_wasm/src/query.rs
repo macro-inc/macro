@@ -145,6 +145,48 @@ fn block_clipboard(
     })
 }
 
+/// Rebuild the Loro selection value whose cursor bytes JSON carried as numbers.
+fn selection_cursors(value: &serde_json::Value) -> Result<loro::LoroValue, BoundaryError> {
+    let cursor = |side: &str| -> Result<loro::LoroValue, BoundaryError> {
+        let node = value
+            .get(side)
+            .ok_or(BoundaryError::Invalid("selection cursor"))?;
+        let id = node
+            .get("nodeId")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(BoundaryError::Invalid("selection cursor node"))?;
+        let bytes = node
+            .get("cursor")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(BoundaryError::Invalid("selection cursor bytes"))?
+            .iter()
+            .map(|byte| {
+                byte.as_u64()
+                    .and_then(|byte| u8::try_from(byte).ok())
+                    .ok_or(BoundaryError::Invalid("selection cursor byte"))
+            })
+            .collect::<Result<Vec<u8>, _>>()?;
+        Ok(loro::LoroValue::Map(
+            vec![
+                ("nodeId".into(), loro::LoroValue::String(id.into())),
+                ("cursor".into(), loro::LoroValue::Binary(bytes.into())),
+            ]
+            .into_iter()
+            .collect::<std::collections::HashMap<_, _>>()
+            .into(),
+        ))
+    };
+    Ok(loro::LoroValue::Map(
+        vec![
+            ("anchor".to_owned(), cursor("anchor")?),
+            ("focus".to_owned(), cursor("focus")?),
+        ]
+        .into_iter()
+        .collect::<std::collections::HashMap<_, _>>()
+        .into(),
+    ))
+}
+
 pub(crate) fn query(
     session: &crate::EditorSession,
     msg: wire::QueryMsg,
@@ -221,6 +263,21 @@ pub(crate) fn query(
                 ))?];
                 // Comment publication requires this exact text under the cursors.
                 reply.text = view.selection_text_content()?;
+            }
+        }
+        12 => {
+            // Kind 8's JSON cursors resolve back to current model points.
+            let value: serde_json::Value = serde_json::from_str(&msg.text)?;
+            if let Some(ViewSelection::Range { anchor, focus, .. }) =
+                session.resolve_selection(&selection_cursors(&value)?)
+            {
+                for point in [anchor, focus] {
+                    reply.points.push(wire::PointMsg {
+                        key: point.key().index(),
+                        offset: point.offset(),
+                        _type: u8::from(matches!(point, Point::Element { .. })),
+                    });
+                }
             }
         }
         9 => {

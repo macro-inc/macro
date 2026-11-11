@@ -308,6 +308,15 @@ impl<S: Surface> DocumentSession<S> {
     ) {
         self.surface.acknowledge_application_output(receipts);
     }
+    /// Resolve durable selection cursors against the live document, as peer
+    /// presence does; deleted or unindexed nodes resolve to None.
+    pub fn resolve_selection(
+        &self,
+        value: &loro::LoroValue,
+    ) -> Option<lexical_model::ViewSelection> {
+        let live = self.held.as_ref().map_or(&self.doc, |held| &held.live);
+        self.surface.peer_selection(live, value)
+    }
     /// Current authorization fact; a later input must still pass normal admission.
     pub fn effective_access(&self) -> doc_sync_core::Access {
         self.sync.effective_access()

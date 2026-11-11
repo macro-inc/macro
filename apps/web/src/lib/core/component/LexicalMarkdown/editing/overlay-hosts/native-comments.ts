@@ -3,6 +3,7 @@ import type { CommentSelection } from '@macro-inc/lexical-wasm-view/view/comment
 import { SessionPort } from '@macro-inc/lexical-wasm-view/view/session-port';
 import type {
   NodeKey,
+  Point,
   ViewNode,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -50,6 +51,10 @@ export interface NativeComments {
   /** Mark ids at the caret (Source `$getMarkIdsAtCaret`); null without a selection. */
   readonly caretMarkIds: Accessor<readonly string[] | null>;
   captureSelection(): NativeCommentBookmark | null;
+  /** Current model points of a bookmark's durable cursors; null once deleted. */
+  resolveBookmark(
+    bookmark: NativeCommentBookmark
+  ): { readonly anchor: Point; readonly focus: Point } | null;
   /** True only when the session accepted the mark. */
   publish(markId: string, bookmark: NativeCommentBookmark): Promise<boolean>;
   /** True only when the session accepted the removal. */
@@ -260,6 +265,10 @@ export function createNativeComments(view: EditorView): NativeComments {
         text: cursors.text,
         cursors,
       };
+    },
+    resolveBookmark(bookmark) {
+      if (disposed || view.mirror.keyGeneration === null) return null;
+      return port.resolveCommentSelection(bookmark.cursors);
     },
     publish(markId, bookmark) {
       if (disposed || bookmark.generation !== view.mirror.keyGeneration)

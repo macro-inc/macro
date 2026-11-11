@@ -34,6 +34,18 @@ function cursor(value: unknown): INodeCursorMsg {
   return { nodeId: value.nodeId, cursor: bytes(value.cursor) };
 }
 
+/** Query kind 12 text: kind 8's JSON shape, cursor bytes as numbers. */
+export function encodeCommentSelectionCursors(selection: CommentSelection) {
+  const encode = (cursor: INodeCursorMsg) => ({
+    nodeId: cursor.nodeId,
+    cursor: [...cursor.cursor],
+  });
+  return JSON.stringify({
+    anchor: encode(selection.anchor),
+    focus: encode(selection.focus),
+  });
+}
+
 /** Parse the session's selection-cursor query (kind 8); null without a selection. */
 export function parseCommentSelection(
   nodes: readonly string[],
