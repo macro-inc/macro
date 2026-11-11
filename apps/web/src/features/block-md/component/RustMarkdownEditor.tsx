@@ -6,11 +6,15 @@ import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { createNativeFastContactDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-contact-views';
 import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-html-views';
+import { createNativeFastSelectionDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-selection-views';
+import { createNativeFastStaticDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-static-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
 import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
+import { createNativeHorizontalRuleViews } from '@core/component/LexicalMarkdown/decorator-host/native-horizontal-rule';
 import { createNativeImageContext } from '@core/component/LexicalMarkdown/decorator-host/native-image-host';
 import { createNativeImageDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/native-image-views';
+import { createNativeSelectionDecoratorContext } from '@core/component/LexicalMarkdown/decorator-host/native-selection-host';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
@@ -91,6 +95,8 @@ export default function RustMarkdownEditor(props: {
     imageUploads.events
   );
   overlayLifecycle.add(() => imageContext.dispose());
+  const selectionContext = createNativeSelectionDecoratorContext(theme);
+  overlayLifecycle.add(() => selectionContext.dispose());
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -150,6 +156,9 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeEquationViews(equationContext),
                   ...createNativeImageDecoratorViews(imageContext),
+                  ...createNativeFastStaticDecoratorViews(selectionContext),
+                  ...createNativeFastSelectionDecoratorViews(selectionContext),
+                  ...createNativeHorizontalRuleViews(selectionContext.bindView),
                   ...createNativeFastHTMLDecoratorViews({
                     theme,
                     host: {},

@@ -3326,6 +3326,11 @@ image file into the body and check that the preview stays visible during upload
 and that the saved image renders after reload. In a test where the upload fails,
 verify that the editor reports the failure and retains the local preview.
 
+Check documents with existing group, unknown and theme mentions, connection
+chips, static decorators and horizontal rules in the native body. Select an
+inline chip to check its selection styling and use the rule's Remove control.
+Reopen the document to check that the shared renderers mount again.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
