@@ -1,0 +1,33 @@
+{
+  "upstreamCommit": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "methods": [
+    {
+      "file": "packages/lexical/src/LexicalNode.ts",
+      "klass": "LexicalNode",
+      "name": "afterCloneFrom",
+      "sourceSHA256": "5503cc78ad06a3ed945f9805db9224fd2610da7fb597a078c0ab899939e43530",
+      "method": "afterCloneFrom(prevNode: this): void {\n    if (this.__key === prevNode.__key) {\n      this.__parent = prevNode.__parent;\n      this.__next = prevNode.__next;\n      this.__prev = prevNode.__prev;\n      this.__state = prevNode.__state;\n    } else if (prevNode.__state) {\n      this.__state = prevNode.__state.getWritable(this);\n    }\n  }"
+    },
+    {
+      "file": "packages/lexical/src/LexicalNode.ts",
+      "klass": "LexicalNode",
+      "name": "resetOnCopyNodeFrom",
+      "sourceSHA256": "5503cc78ad06a3ed945f9805db9224fd2610da7fb597a078c0ab899939e43530",
+      "method": "resetOnCopyNodeFrom(originalNode: this): void {\n    if (this.__state) {\n      this.__state = this.__state.getWritable(this).resetOnCopyNode();\n    }\n  }"
+    },
+    {
+      "file": "packages/lexical/src/nodes/LexicalElementNode.ts",
+      "klass": "ElementNode",
+      "name": "afterCloneFrom",
+      "sourceSHA256": "05d287fe8a0a60284e3e79470277c8efe5ec96210be879a4ffef69f39667d766",
+      "method": "afterCloneFrom(prevNode: this) {\n    super.afterCloneFrom(prevNode);\n    if (this.__key === prevNode.__key) {\n      this.__first = prevNode.__first;\n      this.__last = prevNode.__last;\n      this.__size = prevNode.__size;\n    }\n    this.__indent = prevNode.__indent;\n    this.__format = prevNode.__format;\n    this.__style = prevNode.__style;\n    this.__dir = prevNode.__dir;\n    this.__textFormat = prevNode.__textFormat;\n    this.__textStyle = prevNode.__textStyle;\n  }"
+    },
+    {
+      "file": "packages/lexical/src/nodes/LexicalTextNode.ts",
+      "klass": "TextNode",
+      "name": "afterCloneFrom",
+      "sourceSHA256": "94d4d76d7df287a0ece9928cb532543ce89a463c1d7a733e0cabe2df1d35ebef",
+      "method": "afterCloneFrom(prevNode: this): void {\n    super.afterCloneFrom(prevNode);\n    this.__text = prevNode.__text;\n    this.__format = prevNode.__format;\n    this.__style = prevNode.__style;\n    this.__mode = prevNode.__mode;\n    this.__detail = prevNode.__detail;\n  }"
+    }
+  ]
+}
