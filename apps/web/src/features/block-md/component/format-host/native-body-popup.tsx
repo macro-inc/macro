@@ -95,7 +95,8 @@ export function NativeBodyFormatPopup(props: {
   const commentControls = () =>
     props.host.root() !== null && props.commentAction?.canComment();
   const snippetLinkControls = () =>
-    props.host.root() !== null && (props.snippetLinkAction?.available() ?? false);
+    props.host.root() !== null &&
+    (props.snippetLinkAction?.available() ?? false);
   const controls = () =>
     props.host.interactable() || commentControls() || snippetLinkControls();
   const position = createMemo(() => {

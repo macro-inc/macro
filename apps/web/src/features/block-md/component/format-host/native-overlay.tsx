@@ -10,8 +10,8 @@ import {
 } from 'solid-js';
 import { CommentButton } from '../CommentButton';
 import { NativeBodyFormatPopup } from './native-body-popup';
-import { NativeSnippetLinkControl } from './native-snippet';
 import { createNativeDocumentFormattingObserver } from './native-observer';
+import { NativeSnippetLinkControl } from './native-snippet';
 
 /** Own only the optional body menu; the document owns its actual native view. */
 export function createNativeBodyFormattingOverlay(options: {
@@ -83,14 +83,12 @@ export function createNativeBodyFormattingOverlay(options: {
                   formatting.snippetLink()
                     ? {
                         available: () =>
-                          options.alive() && formatting.snippetLink() !== undefined,
+                          options.alive() &&
+                          formatting.snippetLink() !== undefined,
                         render: () => (
                           <Show when={formatting.snippetLink()}>
                             {(link) => (
-                              <NativeSnippetLinkControl
-                                link={link()}
-                                selection={controller().host.selection}
-                              />
+                              <NativeSnippetLinkControl link={link()} />
                             )}
                           </Show>
                         ),

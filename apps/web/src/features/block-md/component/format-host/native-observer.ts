@@ -38,12 +38,14 @@ export function createNativeDocumentFormattingObserver(options: {
     if (terminal) return;
     terminal = true;
     attached = undefined;
+    // Capture before cleanup: the scope releases in reverse and clears accessors.
+    const currentSnippet = snippetLink();
     const cleanup = createNativeListenerScope();
     cleanup.add(() => setController(undefined));
     cleanup.add(() => setLinks(undefined));
     cleanup.add(() => links()?.retire());
-    cleanup.add(() => snippetLink()?.dispose());
     cleanup.add(() => setSnippetLink(undefined));
+    cleanup.add(() => currentSnippet?.dispose());
     cleanup.add(() =>
       reason
         ? controller()?.observer.unavailable(reason)
@@ -68,6 +70,8 @@ export function createNativeDocumentFormattingObserver(options: {
               ...options,
               links: link,
             });
+            // Own each issued handle before the next fallible constructor.
+            cleanup.add(() => format.dispose());
             const snippet =
               options.snippetLink &&
               createNativeSnippetLink(view, options.snippetLink);

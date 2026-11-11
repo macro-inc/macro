@@ -8,7 +8,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import { SnippetLinkButton } from '../SnippetLinkButton';
 
 /** The model's selection snippet: Source `$getSelectionLocation`, text and end. */
@@ -22,6 +22,18 @@ export interface NativeSelectionSnippet {
   };
 }
 
+const U32_MAX = 0xffff_ffff;
+
+/** A native u32 (keys and offsets cross the bridge as nonnegative integers). */
+function isU32(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= U32_MAX
+  );
+}
+
 function isPoint(value: unknown): value is { id: string; offset: number } {
   return (
     typeof value === 'object' &&
@@ -29,7 +41,7 @@ function isPoint(value: unknown): value is { id: string; offset: number } {
     'id' in value &&
     typeof value.id === 'string' &&
     'offset' in value &&
-    typeof value.offset === 'number'
+    isU32(value.offset)
   );
 }
 
@@ -58,9 +70,9 @@ export function readNativeSelectionSnippet(
     typeof end !== 'object' ||
     end === null ||
     !('key' in end) ||
-    typeof end.key !== 'number' ||
+    !isU32(end.key) ||
     !('offset' in end) ||
-    typeof end.offset !== 'number' ||
+    !isU32(end.offset) ||
     !('type' in end) ||
     (end.type !== 'text' && end.type !== 'element')
   )
@@ -87,6 +99,11 @@ export function createNativeSnippetLink(
   const [copied, setCopied] = createSignal(false);
   const timers = new Set<ReturnType<typeof setTimeout>>();
   let disposed = false;
+  // Source resets the check icon when the selection changes; bind to actual
+  // native selection commits rather than formatting metadata republication.
+  const releaseCommits = view.onCommit((commit) => {
+    if (commit.selectionChanged) setCopied(false);
+  });
   const copy = async () => {
     if (disposed) return;
     const snippet = readNativeSelectionSnippet(view);
@@ -117,10 +134,10 @@ export function createNativeSnippetLink(
   return {
     copied,
     copy,
-    /** Source resets the check icon whenever the selection changes. */
-    reset: () => setCopied(false),
     dispose() {
+      if (disposed) return;
       disposed = true;
+      releaseCommits();
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
     },
@@ -130,9 +147,7 @@ export function createNativeSnippetLink(
 /** The popup slot for one live controller. */
 export function NativeSnippetLinkControl(props: {
   link: ReturnType<typeof createNativeSnippetLink>;
-  selection: Accessor<unknown>;
 }) {
-  createEffect(on(props.selection, () => props.link.reset(), { defer: true }));
   return (
     <SnippetLinkButton
       copied={props.link.copied()}
