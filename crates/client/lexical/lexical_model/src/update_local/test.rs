@@ -1,5 +1,7 @@
 use super::*;
 
+static EVENT: EventKey<u32> = EventKey::new("update-local.test");
+
 fn editor() -> Editor {
     Editor::builder(EditorMode::Headless)
         .build()
@@ -39,6 +41,17 @@ fn every_successful_publication_resets_the_slot_including_empty_ones() -> Result
     *tx.update_local_mut::<u32>()? = 2;
     let commit = tx.commit_phase()?;
     assert!(commit.is_noop());
+    assert_eq!(tx.update_local::<u32>(), None);
+    drop(tx);
+    // Event-only publication.
+    let mut tx = editor.transaction();
+    tx.emit(&EVENT, 1);
+    *tx.update_local_mut::<u32>()? = 4;
+    let commit = tx.commit_phase()?;
+    assert_eq!(
+        commit.events_of(&EVENT).copied().collect::<Vec<_>>(),
+        vec![1]
+    );
     assert_eq!(tx.update_local::<u32>(), None);
     drop(tx);
     // Tag-only publication.
@@ -106,7 +119,8 @@ fn suspend_resume_and_adoption_move_the_slot() -> Result<(), Error> {
 }
 
 #[test]
-fn adoption_requires_an_empty_target_slot_and_keeps_both_on_refusal() -> Result<(), Error> {
+fn adoption_requires_an_empty_target_slot_and_keeps_the_target_slot_on_refusal() -> Result<(), Error>
+{
     let mut editor = editor();
     let mut staged = editor.transaction();
     *staged.update_local_mut::<u32>()? = 4;
@@ -150,5 +164,19 @@ fn a_refused_resume_hands_back_the_same_slot() -> Result<(), Error> {
     let (error, pending) = failure.into_parts();
     assert!(matches!(error, Error::StaleSuspendedUpdate));
     assert_eq!(pending.update_local.get::<u32>(), Some(&4));
+    Ok(())
+}
+
+#[cfg(feature = "foreign-nodes")]
+#[test]
+fn a_foreign_read_only_transaction_rejects_slot_writes() -> Result<(), Error> {
+    let mut editor = editor();
+    let mut tx = editor.transaction();
+    tx.foreign_read_only = true;
+    assert!(matches!(
+        tx.update_local_mut::<u32>(),
+        Err(Error::ForeignReadOnly)
+    ));
+    assert_eq!(tx.update_local::<u32>(), None);
     Ok(())
 }
