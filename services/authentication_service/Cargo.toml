@@ -157,6 +157,7 @@ notification = { path = "../../crates/notification" }
 onboarding = { path = "../../crates/onboarding" }
 rand = { workspace = true }
 rate_limit = { path = "../../crates/rate_limit" }
+user_events = { path = "../../crates/user_events" }
 redis = { workspace = true }
 referral = { path = "../../crates/referral" }
 remote_env_var = { path = "../../crates/remote_env_var" }

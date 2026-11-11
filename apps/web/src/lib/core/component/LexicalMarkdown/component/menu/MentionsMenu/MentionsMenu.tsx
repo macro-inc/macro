@@ -29,6 +29,7 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
@@ -687,6 +688,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
+  const runWhenCurrent = createRunWhenCurrent(
+    () => searchTerm() !== props.menu.searchTerm(),
+    menuOpen
+  );
+
   const closeMenu = () => {
     props.editor?.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
@@ -724,24 +730,27 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       }
     },
-    onSelect: () => {
-      const selectedItem = controller.selectedItem();
-      // Keep the menu open on an offline agent so Enter reads as "not that
-      // one" rather than silently dismissing with nothing inserted.
-      if (selectedItem && isOffline(selectedItem)) return;
-      if (selectedItem) {
-        itemAction(selectedItem).catch((error) =>
-          Telemetry.error(error, {
-            surface: 'mentions-menu',
-            itemKind: selectedItem.kind,
-          })
-        );
-      } else {
-        closeMenu();
-      }
-      props.menu.setSearchTerm('');
-      setMenuOpen(false);
-    },
+    onSelect: () =>
+      // The list trails the typed term by the debounce; act on the list for
+      // the term on screen.
+      runWhenCurrent(() => {
+        const selectedItem = controller.selectedItem();
+        // Keep the menu open on an offline agent so Enter reads as "not that
+        // one" rather than silently dismissing with nothing inserted.
+        if (selectedItem && isOffline(selectedItem)) return;
+        if (selectedItem) {
+          itemAction(selectedItem).catch((error) =>
+            Telemetry.error(error, {
+              surface: 'mentions-menu',
+              itemKind: selectedItem.kind,
+            })
+          );
+        } else {
+          closeMenu();
+        }
+        props.menu.setSearchTerm('');
+        setMenuOpen(false);
+      }),
     onClose: () => {
       if (canExitViewAll()) {
         controller.exitViewAll();

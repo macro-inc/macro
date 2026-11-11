@@ -28,6 +28,7 @@ import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -717,18 +718,28 @@ function CommandSearchMenu(
     hide: true,
   });
 
+  // The list trails the typed text by the query debounce. Enter pressed in
+  // that gap waits for the list of the text on screen.
+  const runWhenCurrent = createRunWhenCurrent(
+    () => query() !== CommandState.query(),
+    CommandState.isOpen
+  );
+  const actOnSelected = (openInNewSplit: boolean) => {
+    if (query() === CommandState.query() && !selectedItem()) return false;
+    runWhenCurrent(() => {
+      const item = selectedItem();
+      if (item) handleItemAction(item, openInNewSplit);
+    });
+    return true;
+  };
+
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
     description: () => t('commandMenu.selectItem'),
     keyDownHandler: (event) => {
       if (event?.isComposing || event?.shiftKey) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, false);
-        return true;
-      }
-      return false;
+      return actOnSelected(false);
     },
     runWithInputFocused: true,
   });
@@ -741,12 +752,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.openInNewSplit'),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, true);
-        return true;
-      }
-      return false;
+      return actOnSelected(true);
     },
     runWithInputFocused: true,
   });
