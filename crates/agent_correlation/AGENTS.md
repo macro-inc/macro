@@ -19,7 +19,8 @@ code, not in its prompt.
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
   them.
-- `src/context.rs`: async context (`Attribution`: correlation and routine);
+- `src/context.rs`: async context (`Attribution`: correlation, routine, and the
+  validated session and its scope: `current_session`, `current_scope`);
   capture before spawning, scope each message. `current_routine()` feeds
   `macro_event_broker::Event.routine_id`, which keeps routines from starting
   on routine writes.
