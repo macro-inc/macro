@@ -3328,6 +3328,9 @@ image file into the body and check that the preview stays visible during upload
 and that the saved image renders after reload. In a test where the upload fails,
 verify that the editor reports the failure and retains the local preview.
 
+Open a native document with an existing video. Play it, then select the
+video and use its Remove control.
+
 Check documents with existing group, unknown and theme mentions, connection
 chips, static decorators and horizontal rules in the native body. Select an
 inline chip to check its selection styling and use the rule's Remove control.

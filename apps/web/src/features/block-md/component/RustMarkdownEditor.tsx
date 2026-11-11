@@ -17,6 +17,10 @@ import { createNativeImageDecoratorViews } from '@core/component/LexicalMarkdown
 import { createNativeSelectionDecoratorContext } from '@core/component/LexicalMarkdown/decorator-host/native-selection-host';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
+import {
+  createNativeVideoContext,
+  createNativeVideoDecoratorViews,
+} from '@core/component/LexicalMarkdown/decorator-host/native-video-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { createNativeImageUploadController } from '@core/component/LexicalMarkdown/plugins/media/native-image-upload';
@@ -84,17 +88,24 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => setEquationMenuActive(false));
   const imageUploads = createNativeImageUploadController();
   overlayLifecycle.add(() => imageUploads.dispose());
+  const canInteractWithMedia = () =>
+    ready() &&
+    permissions.canEdit() &&
+    !state.generation.isGenerating() &&
+    !state.generation.generatedAndWaiting() &&
+    !state.editor.error();
   const imageContext = createNativeImageContext(
     theme,
-    () =>
-      ready() &&
-      permissions.canEdit() &&
-      !state.generation.isGenerating() &&
-      !state.generation.generatedAndWaiting() &&
-      !state.editor.error(),
+    canInteractWithMedia,
     imageUploads.events
   );
   overlayLifecycle.add(() => imageContext.dispose());
+  const videoContext = createNativeVideoContext(
+    theme,
+    canInteractWithMedia,
+    imageUploads.events
+  );
+  overlayLifecycle.add(() => videoContext.dispose());
   const selectionContext = createNativeSelectionDecoratorContext(theme);
   overlayLifecycle.add(() => selectionContext.dispose());
   let root: HTMLDivElement | undefined;
@@ -156,6 +167,7 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeEquationViews(equationContext),
                   ...createNativeImageDecoratorViews(imageContext),
+                  ...createNativeVideoDecoratorViews(videoContext),
                   ...createNativeFastStaticDecoratorViews(selectionContext),
                   ...createNativeFastSelectionDecoratorViews(selectionContext),
                   ...createNativeHorizontalRuleViews(selectionContext.bindView),
