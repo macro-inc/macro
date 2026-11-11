@@ -15,6 +15,7 @@ pub mod link_patch;
 pub mod meta;
 pub mod normalize;
 pub mod page_retention;
+pub mod people;
 pub mod predicate;
 pub mod query_inspection;
 mod query_path;

@@ -21,7 +21,7 @@ fn legacy_page_compaction_preserves_entities_generation_queue_and_shadows() {
         );
         for n in 0..5000 {
             viewer.fields.insert(
-                format!("soup({{\"input\":{{\"continuation\":{{\"cursor\":\"{n}\"}}}}}})"),
+                format!("contacts({{\"after\":\"{n}\"}})"),
                 CacheValue::String("x".repeat(1024)),
             );
         }
@@ -50,7 +50,7 @@ fn legacy_page_compaction_preserves_entities_generation_queue_and_shadows() {
             .unwrap();
         driver::execute(
             &storage.connection(),
-            "DELETE FROM meta WHERE key = 'soup_page_retention_version'",
+            "UPDATE meta SET value = '1' WHERE key = 'soup_page_retention_version'",
             vec![],
         )
         .unwrap();
@@ -68,7 +68,7 @@ fn legacy_page_compaction_preserves_entities_generation_queue_and_shadows() {
             compacted
                 .fields
                 .keys()
-                .filter(|key| key.starts_with("soup("))
+                .filter(|key| key.starts_with("contacts("))
                 .count(),
             MAX_SOUP_PAGES
         );
