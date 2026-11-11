@@ -43,6 +43,7 @@ pub const SYMBOLS: &[&str] = &[
     "RoutineNamespace.list",
     "AgentNamespace.list",
     "DatabaseNamespace.list",
+    "AiNamespace.structuredCompletion",
 ];
 
 /// The handles whose fields the reference lists.
@@ -60,12 +61,14 @@ pub const FIELDS_OF: &[&str] = &[
 
 /// The session's one prompt, for a run started by `trigger`, for a person in
 /// IANA zone `timezone`, at `now`, with `reference`, the SDK reference for
-/// [`SYMBOLS`] and [`FIELDS_OF`] (empty when there is none).
+/// [`SYMBOLS`] and [`FIELDS_OF`] (empty when there is none), and `checker`,
+/// the model that reads each new idea against its items.
 pub fn brief(
     trigger: GenerationTrigger,
     timezone: &str,
     now: DateTime<Utc>,
     reference: &str,
+    checker: &str,
 ) -> String {
     let occasion = match trigger {
         GenerationTrigger::Onboarding => {
@@ -81,7 +84,8 @@ pub fn brief(
         .replace("{occasion}", occasion)
         .replace("{docs}", &docs(reference))
         .replace("{open_limit}", &OPEN_LIMIT.to_string())
-        .replace("{new_per_generation}", &NEW_PER_GENERATION.to_string());
+        .replace("{new_per_generation}", &NEW_PER_GENERATION.to_string())
+        .replace("{checker_model}", checker);
     let task = format!("{task}\n{}", clock(timezone, now));
     if reference.is_empty() {
         task

@@ -180,6 +180,7 @@ fn the_generation_scope_matches_the_sdk_catalog() {
         "scheduled-action.suggestRoutine",
         "scheduled-action.retireRoutineSuggestion",
         "email.createDraft",
+        "cognition.structuredCompletion",
     ];
     let scope = SessionScope::Generation;
     for (key, operation) in code_execution::domain::operations() {

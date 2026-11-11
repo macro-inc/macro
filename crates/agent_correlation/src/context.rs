@@ -2,6 +2,8 @@
 
 use uuid::Uuid;
 
+use crate::scope::SessionScope;
+
 /// What the current work is attributed to, accepted at its boundary.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Attribution {
@@ -9,6 +11,10 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
+    /// The validated invocation's agent session.
+    pub session_id: Option<Uuid>,
+    /// The scope that session's credential was minted with.
+    pub scope: Option<SessionScope>,
 }
 
 tokio::task_local! {
@@ -26,6 +32,16 @@ pub fn current() -> Option<Uuid> {
     attribution().correlation_id
 }
 
+/// The agent session behind the current request's validated invocation.
+pub fn current_session() -> Option<Uuid> {
+    attribution().session_id
+}
+
+/// The scope the current request's session credential was minted with.
+pub fn current_scope() -> Option<SessionScope> {
+    attribution().scope
+}
+
 /// The routine whose run the current request acts for, if any.
 pub fn current_routine() -> Option<Uuid> {
     attribution().routine_id
@@ -37,7 +53,7 @@ pub fn current_routine() -> Option<Uuid> {
 pub async fn scope<F: Future>(id: Option<Uuid>, future: F) -> F::Output {
     let attribution = Attribution {
         correlation_id: id,
-        routine_id: None,
+        ..Attribution::default()
     };
     scope_attribution(attribution, future).await
 }
@@ -86,6 +102,7 @@ mod tests {
         let routine_run = Attribution {
             correlation_id: Some(correlation),
             routine_id: Some(routine),
+            ..Attribution::default()
         };
         let (a, b) = tokio::join!(
             scope_attribution(routine_run, async {
