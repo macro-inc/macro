@@ -45,40 +45,16 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   pairing it was claimed from (`credentials.pairing_id`), so only a new
   pairing is claimed, and nothing else on the disk is touched. No enrollment
   in the source (removed after macrod connects) with a marker means enrolled.
-- `src/capabilities.rs`: on an enrolled Macro computer only (the marker
-  exists), reports `HarnessCapabilities` (`screen` = Xvnc on
-  `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a
-  minute) to `PUT /harnesses/me/capabilities` when they change. Open a fresh connection for each report so recurring polls
-  cannot pin a reassigned service IP after backend restarts. The reporter is
-  cancellation-aware and tracked by the daemon's `TaskTracker`, including
-  across re-pair and shutdown.
-- `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
-  the `computerControl` runtime messages and each Claude Code session's env.
-  Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's
-  `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+- `src/computer.rs`: on an enrolled Macro computer only (the marker
+  exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
+  session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
   `ANTHROPIC_AUTH_TOKEN` (its bearer) and
-  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
-  as `_meta.claudeCode.options.env`; once Claude Code is signed in to a
-  Claude account those variables are removed and sessions use Claude Code's
-  own stored credential, for sessions opened after the switch.
-  `claude_sign_in.rs` runs Claude Code's own login in a "Claude sign-in"
-  herdr workspace (`herdr_pane.rs` starts the user's headless `herdr server`
-  when none runs): it answers the first-run text-style and login-method
-  questions or types `/login`, reads the hard-wrapped OAuth URL off the
-  screen, types the pasted code, and treats `OAuth error` as typed
-  `InvalidCode` (start again for a fresh URL). Screen recognition is pure
-  (`Screen::read`) and tested against captured Claude Code 2.1.280 screens;
-  update those fixtures when the pinned Claude Code changes its wording.
-  `claude_auth.rs` reads `claude auth status --json` (only `claude.ai` logins
-  count) for the email, organization, plan (`subscriptionType`) and
-  `loginExpiresAt`, and `~/.claude.json` for `oauthAccount.accountUuid`, the
-  account's id; a Claude login without one is an error, never reported; sign-out runs
-  `claude auth logout`. `claude_sign_in_cancel` interrupts URL/code waits
-  before taking the sign-in mutex and closes the workspace. The capability
-  reporter re-reads the sign-in every minute and reports at once when it
-  changes. ACP trace logs contain only direction and byte counts. Spans:
-  `macrod.computer.control`, `macrod.claude.sign_in.start`/`.complete`,
-  `macrod.claude.sign_out`.
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` go to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`, always. macrod never calls Claude or
+  reads its files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
+  image's `claude` wrapper swaps the gateway env for the computer's own
+  credential when harnessd holds one. ACP trace logs contain only direction
+  and byte counts.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -228,10 +204,7 @@ stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 
 Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
-(gRPC). Only enrollment (`run_enroll`, `macrod.enroll.claim`) and capability
-report spans export, with the marker's computer UUID as a resource attribute.
-Enrollment joins the setup trace from `Enrollment.traceparent` and retains only
-that W3C context in `/var/lib/macrod/provision.traceparent`.
-A daemon started within an hour of enrollment is part of setup: its claim and
-first successful capability report send the setup `traceparent` (the raw parent
-when this daemon exports nothing). stdout remains the daemon protocol.
+(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
+with the marker's computer UUID as a resource attribute. Enrollment joins the
+setup trace from `Enrollment.traceparent`; its claim sends the setup
+`traceparent`. stdout remains the daemon protocol.
