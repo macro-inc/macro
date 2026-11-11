@@ -177,14 +177,18 @@ await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are.
+`channel.share(item)` shares a document, project, database, form, call, email
+thread, agent session, external chat or calendar event with a channel's current
+members, as posting it there does (`event.shareWithChannel(channel)` is the same
+for an event):
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await channel.share(doc);
 await event.shareWithChannel(channel);
 ```
 
@@ -622,6 +626,9 @@ and task handles; `initiative.update({ name, members, sharePermission })` and
 dueAfter, dueBefore, sort })` iterates the matching initiatives with their Status,
 Priority, assignees, due date and progress over the tasks the caller can view;
 `initiatives.summaries()` reads every name in one request.
+`initiative.read({ taskLimit, taskCursor })` reads one initiative's Status,
+Priority, assignees, due date and description with a page of the tasks the
+caller can view (`taskCount`, `nextTaskCursor`).
 `initiative.description()` returns its description as Markdown, and
 `comments()`, `comment(body)` and `commentById(id)` read and write its
 discussion; `comment.reply(body)` answers a thread. Its comments are the same
