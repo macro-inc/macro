@@ -56,9 +56,6 @@ through them and the per-runtime APIs.
   not one opaque span.
 - Record outcome on the span (error status, retry count, cache hit/miss), so
   slow and failed paths can be filtered without logs.
-- A Rust span field recorded later starts as `tracing::field::Empty` and is
-  recorded once. One given a value up front (`released = false`) and recorded
-  again is exported twice, and Datadog keeps the first.
 
 ## Logs
 

@@ -414,9 +414,9 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.stream_kind = "mail_folder",
             outlook.page_items = tracing::field::Empty,
             outlook.rows_queued = tracing::field::Empty,
-            outlook.delta_advanced = false,
+            outlook.delta_advanced = tracing::field::Empty,
             outlook.folder_initial_complete = lease.initial_complete,
-            outlook.cursor_reset = false,
+            outlook.cursor_reset = tracing::field::Empty,
             outlook.notification_wait_ms = lease
                 .notification
                 .as_ref()

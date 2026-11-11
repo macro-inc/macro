@@ -1,0 +1,19 @@
+id: rust-span-field-recorded-once
+language: rust
+severity: error
+message: Declare a span field that is recorded later as `tracing::field::Empty`, and record it once.
+note: |-
+  tracing-opentelemetry appends on `record`, so a field given `false` up front
+  and recorded `true` later is exported twice, and Datadog keeps the first. A
+  literal `true` or `false` field value is that placeholder: start it Empty and
+  record the outcome once on every path.
+files:
+  - crates/**
+  - services/**
+  - tooling/**
+rule:
+  any:
+    - kind: attribute_item
+      regex: '^#\[(tracing::)?instrument\b[\s\S]*=\s*(false|true)\s*[,)]'
+    - kind: macro_invocation
+      regex: '^(tracing::)?(span|trace_span|debug_span|info_span|warn_span|error_span)!\([\s\S]*=\s*(false|true)\s*[,)]'

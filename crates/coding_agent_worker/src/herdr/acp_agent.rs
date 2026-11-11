@@ -844,11 +844,12 @@ impl Adapter {
                 "macrod.herdr.prompt_wait",
                 session_id = %session.id,
                 native_turns = 0u32,
-                exit_dismissed = false,
+                exit_dismissed = tracing::field::Empty,
                 outcome = tracing::field::Empty,
             );
             let waited = async {
                 let mut native_turns = 0u32;
+                let mut exit_dismissed = false;
                 loop {
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -863,7 +864,10 @@ impl Adapter {
                     if info.as_ref().is_ok_and(|info| info.status == "blocked")
                         && self.stay(herdr, &live.name).await?
                     {
-                        tracing::Span::current().record("exit_dismissed", true);
+                        if !exit_dismissed {
+                            exit_dismissed = true;
+                            tracing::Span::current().record("exit_dismissed", true);
+                        }
                         continue;
                     }
                     native_turns += 1;
