@@ -2,7 +2,10 @@
 //!
 //! Legacy document consumers use [`encode`] and [`decode`]. Isolated surface
 //! sessions use the distinct identities, claims, and token helpers in [`session`].
+//! Artifact pages get view tokens from [`artifact_content`], which no document
+//! grant consumer accepts.
 
+pub mod artifact_content;
 pub mod session;
 
 use jsonwebtoken::{

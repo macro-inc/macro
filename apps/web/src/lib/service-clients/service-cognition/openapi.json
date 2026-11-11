@@ -4693,6 +4693,7 @@
           "md",
           "spreadsheet",
           "canvas",
+          "artifact",
           "coffee",
           "cson",
           "iced",

@@ -825,3 +825,8 @@ fn service_url_converts_to_string() {
 fn connect_api_url_parses() {
     assert_parses_for_all_environments(ConnectApiUrl::default_for_environment);
 }
+
+#[test]
+fn artifact_content_url_parses() {
+    assert_parses_for_all_environments(ArtifactContentUrl::default_for_environment);
+}

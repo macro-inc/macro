@@ -412,6 +412,15 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // Artifacts: the `macro.artifacts` namespace wraps these next.
+  'createArtifact',
+  'createArtifactUploads',
+  'getArtifact',
+  'getArtifactVersion',
+  'getArtifactViewUrl',
+  'listArtifactVersions',
+  'publishArtifactVersion',
+  'restoreArtifactVersion',
   // CRM privacy settings use the generated client.
   'getCrmEmailPrivacy',
   'updateCrmEmailPrivacy',

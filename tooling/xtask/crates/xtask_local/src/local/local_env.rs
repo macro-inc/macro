@@ -60,6 +60,11 @@ pub struct LocalEnv {
     /// single-instance CDN port, which nothing on a named instance serves;
     /// the proxy's `/static-file/*` block is what does.
     static_file_public_url: String,
+    /// Host artifact pages are served under, as
+    /// `OVERRIDE_ARTIFACT_CONTENT_URL`. Browsers open
+    /// `<document_id>.artifacts.localhost` on this instance's published
+    /// document storage port, which `*.localhost` resolves to.
+    artifact_content_url: String,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -108,6 +113,10 @@ impl LocalEnv {
             frontend_port,
             mcp_client_public_url: format!("{frontend_origin}/cognition"),
             static_file_public_url: format!("{frontend_origin}/static-file"),
+            artifact_content_url: format!(
+                "http://artifacts.localhost:{}",
+                instance.port(Port::DocStorage)
+            ),
             frontend_origin,
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(
@@ -152,6 +161,10 @@ impl LocalEnv {
         env.insert(
             "OVERRIDE_STATIC_FILE_PUBLIC_URL".into(),
             self.static_file_public_url.clone(),
+        );
+        env.insert(
+            "OVERRIDE_ARTIFACT_CONTENT_URL".into(),
+            self.artifact_content_url.clone(),
         );
         // Pipedream's hosted Connect UI refuses to be opened from an origin
         // outside this list, and document_cognition's own local default only

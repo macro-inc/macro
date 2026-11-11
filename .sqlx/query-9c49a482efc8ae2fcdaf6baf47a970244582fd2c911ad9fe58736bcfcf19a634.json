@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, name, \"projectId\" AS \"project_id!\"\n        FROM \"Document\"\n        WHERE \"projectId\" = ANY($1) AND \"deletedAt\" IS NULL\n        LIMIT $2\n        ",
+  "query": "\n        SELECT id, name, \"projectId\" AS \"project_id!\", \"fileType\" AS file_type\n        FROM \"Document\"\n        WHERE \"projectId\" = ANY($1) AND \"deletedAt\" IS NULL\n        LIMIT $2\n        ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "project_id!",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "file_type",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -28,8 +33,9 @@
     "nullable": [
       false,
       false,
+      true,
       true
     ]
   },
-  "hash": "732a799c309c5112b4684aaa7f9424f78cd13b425b36ce02335269f3c6cddda9"
+  "hash": "9c49a482efc8ae2fcdaf6baf47a970244582fd2c911ad9fe58736bcfcf19a634"
 }

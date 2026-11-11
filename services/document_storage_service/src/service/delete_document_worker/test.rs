@@ -92,3 +92,20 @@ fn test_count_occurrences() {
         ]
     );
 }
+
+/// The worker deletes an artifact's objects by listing this prefix; every key
+/// the artifact store writes must fall under it, and no other document's.
+#[test]
+fn artifact_cleanup_prefix_covers_only_that_artifacts_objects() {
+    let prefix = s3_key::build_artifact_document_prefix("01900000-0000-7000-8000-000000000001");
+    let sha = "0f8ca7467b0a55599c03aad0aed980d35f15acafcfa344cfdcd152af3044f7e8";
+
+    assert!(
+        s3_key::build_artifact_object_key("01900000-0000-7000-8000-000000000001", sha)
+            .starts_with(&prefix)
+    );
+    assert!(
+        !s3_key::build_artifact_object_key("01900000-0000-7000-8000-0000000000012", sha)
+            .starts_with(&prefix)
+    );
+}

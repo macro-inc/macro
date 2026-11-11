@@ -17,6 +17,7 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 
 Document sync: [DSS sync router](architecture/sync-router.md).
 
+Artifacts (agent-published web pages): [architecture](architecture/artifacts.md).
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).
 

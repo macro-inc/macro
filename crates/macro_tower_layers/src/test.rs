@@ -318,7 +318,7 @@ fn request_span_adopts_remote_traceparent() {
             .body(())
             .unwrap();
 
-        let span = MakeSpanWithRemoteParent.make_span(&request);
+        let span = MakeSpanWithRemoteParent::default().make_span(&request);
         let trace_id = span.context().span().span_context().trace_id();
         assert_eq!(
             trace_id.to_string(),
@@ -339,7 +339,7 @@ fn request_span_without_traceparent_stays_root() {
 
     with_default(subscriber, || {
         let request = http::Request::builder().uri("/test").body(()).unwrap();
-        let span = MakeSpanWithRemoteParent.make_span(&request);
+        let span = MakeSpanWithRemoteParent::default().make_span(&request);
         let trace_id = span.context().span().span_context().trace_id();
         assert_ne!(
             trace_id.to_string(),
@@ -404,4 +404,27 @@ async fn starvation_detector_does_not_warn_within_grace_period() {
     tokio::task::yield_now().await;
 
     assert_eq!(captured.event_count(Level::WARN), 0);
+}
+
+#[test]
+fn a_redacted_path_is_recorded_instead_of_the_request_path() {
+    let (subscriber, captured) = TracingCapture::new();
+
+    with_default(subscriber, || {
+        let request = Request::builder()
+            .uri("/t/secret-token/v/1/index.html")
+            .body(())
+            .unwrap();
+        let mut make_span = MakeSpanWithRemoteParent::with_redacted_path(|path| {
+            path.replace("secret-token", "<redacted>")
+        });
+        let _span = make_span.make_span(&request);
+    });
+
+    let fields = captured.initial_span_fields.lock().unwrap();
+    assert_eq!(
+        fields.get("url.path").unwrap(),
+        "\"/t/<redacted>/v/1/index.html\""
+    );
+    assert!(fields.values().all(|value| !value.contains("secret-token")));
 }

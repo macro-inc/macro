@@ -76,6 +76,11 @@ pub async fn handle(
         .delete_document(&owner, document_id)
         .await
         .context("failed to delete files from s3")?;
+    // Artifact files are keyed by document alone, outside the owner prefix.
+    ctx.s3_client
+        .delete_artifact_objects(document_id)
+        .await
+        .context("failed to delete artifact files from s3")?;
     tracing::trace!(document_id=%document_id, "deleted files from s3");
 
     // Delete files from sync service
