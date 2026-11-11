@@ -12,7 +12,7 @@ pub(crate) async fn process_message(
 ) -> Result<()> {
     let disposition = ctx
         .service
-        .process(extract_inbox_sync_message(message), &ctx.legacy)
+        .process(extract_inbox_sync_message(message))
         .await;
     match disposition {
         InboxSyncDisposition::DoneDelete => {

@@ -37,9 +37,10 @@ the gateway `/email` prefix.
   Gmail calls, and retry publication are in `outbound/message_labels/gmail_ops.rs`.
   Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
   `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` keeps
-  the shared backfill context unchanged. Stage A retains history and upsert
-  through a temporary borrowed legacy port; notification overrides update that
-  current legacy context before each delivery.
+  the shared backfill context unchanged. History and upsert orchestration also
+  live in the domain; these adapters retain the existing journal, invitation,
+  upload, notification and persistence implementations. The pending-label
+  compatibility module only re-exports the adapter used by backfill.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
@@ -175,7 +176,7 @@ the gateway `/email` prefix.
   only after every producer sends batches.
 - Gmail label writes leave a marker in `email_gmail_pending_label_writes`.
   Inbox sync keeps the local state of a label marked before or after it reads
-  Gmail (`inbox_sync::operations::pending_labels`); a re-sync or recovery
+  Gmail (`email::domain::mailbox::inbox_sync`); a re-sync or recovery
   backfill of a stored message also keeps labels Gmail's answer agrees with
   the pre-fetch snapshot on. gmail_ops sends only messages its write is the
   newest on, and sends them before an operation with a newer write still on

@@ -33,10 +33,11 @@ pub(super) enum Call {
     Enqueue(bool, serde_json::Value),
     Refresh(bool),
     Event(serde_json::Value),
-    Legacy(&'static str),
+    Import(&'static str, serde_json::Value),
 }
 
 pub(super) struct State {
+    pub import: super::import_fakes::ImportState,
     pub calls: Vec<Call>,
     pub failures: Vec<(&'static str, usize)>,
     counts: HashMap<&'static str, usize>,
@@ -67,6 +68,7 @@ impl ConnectionSourceError for Failure {
 impl Fake {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(State {
+            import: Default::default(),
             calls: vec![],
             failures: vec![],
             counts: HashMap::new(),
@@ -117,6 +119,7 @@ pub(super) fn make_service(
             queue: fake.clone(),
             effects: fake.clone(),
             retry_worker,
+            features: InboxSyncFeatures::default(),
         },
         fake,
     )
@@ -371,6 +374,15 @@ impl InboxSyncQueue for Fake {
             Call::Enqueue(false, serde_json::to_value(message).unwrap()),
         )
     }
+    async fn enqueue_backfill(
+        &self,
+        message: models_email::service::backfill::BackfillPubsubMessage,
+    ) -> Result<(), Failure> {
+        self.step(
+            "backfill_queue",
+            Call::Import("backfill_queue", serde_json::to_value(message).unwrap()),
+        )
+    }
     async fn enqueue_retry(&self, message: InboxSyncPubsubMessage) -> Result<(), Failure> {
         self.step(
             "enqueue_retry",
@@ -395,8 +407,24 @@ impl MacroEventBroker for Fake {
 
 impl InboxSyncRefresher for Fake {
     async fn refresh(&self, owner: &str, event: InboxSyncRefresh) {
-        assert_eq!(owner, "macro|owner@example.com");
+        assert_eq!(
+            owner,
+            self.0
+                .lock()
+                .unwrap()
+                .link
+                .as_ref()
+                .unwrap()
+                .macro_id
+                .as_ref()
+        );
         let deleted = match event {
+            InboxSyncRefresh::UpsertMessage(link) => {
+                assert_eq!(link, LINK);
+                self.step("refresh", Call::Import("refresh", serde_json::Value::Null))
+                    .unwrap();
+                return;
+            }
             InboxSyncRefresh::DeleteMessage(link) => {
                 assert_eq!(link, LINK);
                 true
@@ -407,38 +435,5 @@ impl InboxSyncRefresher for Fake {
             }
         };
         self.step("refresh", Call::Refresh(deleted)).unwrap();
-    }
-}
-
-impl LegacyInboxSync for Fake {
-    fn gmail_message<'a>(
-        &'a self,
-        link: &'a Link,
-        _: &'a models_email::gmail::inbox_sync::GmailMessagePayload,
-    ) -> futures::future::BoxFuture<'a, Result<(), ProcessingError>> {
-        assert_eq!(link.id, LINK);
-        Box::pin(async {
-            self.step("history", Call::Legacy("history")).map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::GmailApiFailed,
-                    source: e.into_original(),
-                })
-            })
-        })
-    }
-    fn upsert_message<'a>(
-        &'a self,
-        link: &'a Link,
-        _: &'a models_email::gmail::inbox_sync::UpsertMessagePayload,
-    ) -> futures::future::BoxFuture<'a, Result<(), ProcessingError>> {
-        assert_eq!(link.id, LINK);
-        Box::pin(async {
-            self.step("upsert", Call::Legacy("upsert")).map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::GmailApiFailed,
-                    source: e.into_original(),
-                })
-            })
-        })
     }
 }

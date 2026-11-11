@@ -3,9 +3,7 @@
 use super::super::connection::ConnectionSourceError;
 use email_api_client::domain::models::EmailApiError;
 use futures::future::BoxFuture;
-use models_email::gmail::inbox_sync::{
-    GmailMessagePayload, InboxSyncPubsubMessage, UpsertMessagePayload,
-};
+use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use models_email::service::pubsub::ProcessingError;
 use models_email::{db, service};
 use uuid::Uuid;
@@ -164,6 +162,11 @@ pub trait InboxSyncQueue: Send + Sync + 'static {
         &self,
         message: InboxSyncPubsubMessage,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Publish already selected backfill or CRM work.
+    fn enqueue_backfill(
+        &self,
+        message: models_email::service::backfill::BackfillPubsubMessage,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Publish a refused operation to the existing retry queue and delay.
     fn enqueue_retry(
         &self,
@@ -176,6 +179,8 @@ pub trait InboxSyncQueue: Send + Sync + 'static {
 pub enum InboxSyncRefresh {
     /// A message was removed.
     DeleteMessage(Uuid),
+    /// A provider message was inserted or refreshed.
+    UpsertMessage(Uuid),
     /// A message's labels changed.
     UpdateLabels(Uuid),
 }
@@ -184,20 +189,4 @@ pub enum InboxSyncRefresh {
 pub trait InboxSyncRefresher: Send + Sync + 'static {
     /// Preserve the existing feature gate, request, and error logging.
     fn refresh(&self, owner: &str, event: InboxSyncRefresh) -> impl Future<Output = ()> + Send;
-}
-
-/// Interim stage-A seam for the unchanged history and upsert implementations.
-pub trait LegacyInboxSync: Send + Sync {
-    /// Process the notification through the existing history implementation.
-    fn gmail_message<'a>(
-        &'a self,
-        link: &'a service::link::Link,
-        payload: &'a GmailMessagePayload,
-    ) -> BoxFuture<'a, Result<(), ProcessingError>>;
-    /// Process the message through the existing upsert implementation.
-    fn upsert_message<'a>(
-        &'a self,
-        link: &'a service::link::Link,
-        payload: &'a UpsertMessagePayload,
-    ) -> BoxFuture<'a, Result<(), ProcessingError>>;
 }

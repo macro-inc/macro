@@ -1,17 +1,24 @@
 //! Admission, reconciliation and delivery dispositions for Gmail inbox updates.
 
+mod catalog;
 mod delete_message;
 mod error_policy;
+mod gmail_message;
+mod import_ports;
 mod label_writes;
 mod pending_labels;
 mod ports;
 #[cfg(test)]
 mod test;
 mod update_labels;
+mod upsert_message;
 
 pub use error_policy::handle_operation_error;
-pub use pending_labels::PendingAroundRead;
+pub use gmail_message::{ensure_recovery_backfill_job, repair_stale_cursor};
+pub use import_ports::*;
+pub use pending_labels::{PendingAroundRead, read_around as read_pending_around};
 pub use ports::*;
+pub use upsert_message::{process_and_insert_message, resync_around, upload_claimed_attachments};
 
 use super::connection::ConnectionSourceError;
 use crate::domain::events::EmailMacroEvent;
@@ -73,6 +80,7 @@ impl InboxSyncFailureLog {
 }
 
 /// Processes inbox updates through the original provider and persistence boundaries.
+#[derive(Clone)]
 pub struct InboxSyncService<L, R, G, Q, E> {
     /// Existing delivered-inbox lookup.
     pub links: L,
@@ -86,21 +94,22 @@ pub struct InboxSyncService<L, R, G, Q, E> {
     pub effects: E,
     /// Whether the delivery came from the retry queue.
     pub retry_worker: bool,
+    /// Existing host feature switches for importing messages.
+    pub features: InboxSyncFeatures,
 }
 
 impl<L, R, G, Q, E> InboxSyncService<L, R, G, Q, E>
 where
     L: GmailOpsLinks,
-    R: InboxSyncRepository,
-    G: InboxSyncGmail,
+    R: InboxSyncImportRepository,
+    G: InboxSyncImportGmail,
     Q: InboxSyncQueue,
-    E: MacroEventBroker + InboxSyncRefresher,
+    E: MacroEventBroker + InboxSyncRefresher + InboxSyncImportEffects,
 {
     /// Decide admission, processing, and the listener's acknowledgement action.
-    pub async fn process<H: LegacyInboxSync>(
+    pub async fn process(
         &self,
         extracted: anyhow::Result<InboxSyncPubsubMessage>,
-        legacy: &H,
     ) -> InboxSyncDisposition {
         let data = match extracted {
             Ok(data) => data,
@@ -109,7 +118,7 @@ where
                 return InboxSyncDisposition::InvalidDelete(e);
             }
         };
-        match inner_process_message(self, &data, legacy).await {
+        match inner_process_message(self, &data).await {
             Ok(()) => InboxSyncDisposition::DoneDelete,
             Err(ProcessingError::NonRetryable(error)) => {
                 let log = if error.reason == FailureReason::GmailApiRateLimited {
@@ -126,19 +135,17 @@ where
     }
 }
 
-#[tracing::instrument(skip(ctx, legacy))]
-async fn inner_process_message<L, R, G, Q, E, H>(
+#[tracing::instrument(skip(ctx))]
+async fn inner_process_message<L, R, G, Q, E>(
     ctx: &InboxSyncService<L, R, G, Q, E>,
     data: &InboxSyncPubsubMessage,
-    legacy: &H,
 ) -> result::Result<(), ProcessingError>
 where
     L: GmailOpsLinks,
-    R: InboxSyncRepository,
-    G: InboxSyncGmail,
+    R: InboxSyncImportRepository,
+    G: InboxSyncImportGmail,
     Q: InboxSyncQueue,
-    E: MacroEventBroker + InboxSyncRefresher,
-    H: LegacyInboxSync,
+    E: MacroEventBroker + InboxSyncRefresher + InboxSyncImportEffects,
 {
     let link = ctx
         .links
@@ -171,15 +178,13 @@ where
 
     match &data.operation {
         InboxSyncOperation::GmailMessage(payload) => {
-            legacy
-                .gmail_message(&link, payload)
+            gmail_message::gmail_message(ctx, &link, payload)
                 .await
                 .map_err(|e| prefix_error_source(e, "gmail_message"))?;
             tracing::debug!("Successfully processed gmail message operation");
         }
         InboxSyncOperation::UpsertMessage(payload) => {
-            legacy
-                .upsert_message(&link, payload)
+            Box::pin(upsert_message::upsert_message(ctx, &link, payload))
                 .await
                 .map_err(|e| prefix_error_source(e, "upsert_message"))?;
             tracing::debug!("Successfully processed upsert message operation");
