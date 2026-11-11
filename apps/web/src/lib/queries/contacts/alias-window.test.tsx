@@ -137,3 +137,56 @@ it('keeps its window key while rows arrive and while a further page is listed be
   await vi.runOnlyPendingTimersAsync();
   client.clear();
 });
+
+it('keeps the users found for emails still listed while a changed list resolves again', async () => {
+  vi.useFakeTimers();
+  resolve.mockImplementation(async (_viewer, _host, lookup) => ({
+    users: lookup.values.map((email) => ({
+      id: `macro|${email}`,
+      email,
+      name: email,
+    })),
+    unresolved: [],
+    source: 'server',
+    offline: false,
+  }));
+  const contact = (name: string) => ({
+    id: name,
+    email: `${name}@example.com`,
+  });
+  const [rows, setRows] = createSignal([contact('ann'), contact('bo')]);
+  const client = new QueryClient();
+  let source: ReturnType<
+    typeof createContactAliasWindow<ReturnType<typeof contact>>
+  >;
+  const mounted = render(() => {
+    function Harness() {
+      source = createContactAliasWindow({
+        rows,
+        email: (row) => row.email,
+        search: () => 'a',
+        enabled: () => true,
+        hasMore: () => false,
+        loadMore: async () => {},
+      });
+      return null;
+    }
+    return (
+      <QueryClientProvider client={client}>
+        <Harness />
+      </QueryClientProvider>
+    );
+  });
+  const emails = () => source!.users().map((user) => user.email);
+  await vi.runOnlyPendingTimersAsync();
+  expect(emails()).toEqual(['ann@example.com', 'bo@example.com']);
+
+  // The server answer replaces one cached row; Ann is still listed.
+  setRows([contact('ann'), contact('cy')]);
+  expect(emails()).toEqual(['ann@example.com']);
+  await vi.runOnlyPendingTimersAsync();
+  expect(emails()).toEqual(['ann@example.com', 'cy@example.com']);
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+});

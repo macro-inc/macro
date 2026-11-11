@@ -430,26 +430,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
-  // A new page replaces the people window. Start it from the top unless the
-  // row the user chose is still listed.
-  let previousPeopleWindow: string | undefined;
-  let previousPeopleQuery = '';
-  createEffect(
-    on(peopleWindowKey, (key) => {
-      if (key === undefined) return;
-      if (
-        previousPeopleWindow !== undefined &&
-        key !== previousPeopleWindow &&
-        previousPeopleQuery === searchTerm() &&
-        !selectionAnchor.present()
-      ) {
-        selectionAnchor.release();
-        controller.selectItem(0);
-      }
-      previousPeopleWindow = key;
-      previousPeopleQuery = searchTerm();
-    })
-  );
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -639,7 +619,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     setSelectedIndex: (index) => controller.selectItem(index),
   });
   createEffect(
-    on(activeSearchTerm, () => controller.selectItem(0), { defer: true })
+    // Set the index itself: the list is often still empty at this moment.
+    on(activeSearchTerm, () => controller.setSelectedIndex(0), { defer: true })
   );
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<

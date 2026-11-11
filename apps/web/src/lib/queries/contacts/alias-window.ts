@@ -10,6 +10,10 @@ import { MAX_CONTACT_LOOKUP } from './lookup';
 import { createContactResolution } from './lookup-query';
 import { useContactDirectoryScope } from './use-directory';
 
+type ContactUsers = NonNullable<
+  ReturnType<ReturnType<typeof createContactResolution>['data']>
+>['users'];
+
 const ALIAS_WINDOW_SIZE = 50;
 const MAX_LISTED_ALIASES = MAX_CONTACT_LOOKUP;
 
@@ -61,13 +65,25 @@ export function createContactAliasWindow<T extends { id: string }>(options: {
     }),
     () => options.enabled() && options.resolveUsers?.() !== false
   );
+  // Resolution restarts whenever the listed rows change. Keep the users it
+  // already found for emails still listed until the new answer lands, so a
+  // contact does not split from its Macro user and merge again.
+  const users = createMemo<ContactUsers>((previous) => {
+    const resolved = resolution.data()?.users;
+    if (resolved) return resolved;
+    if (!resolution.loading()) return [];
+    const emails = new Set(
+      rows().map((row) => options.email(row)?.trim().toLowerCase())
+    );
+    return previous.filter((user) => emails.has(user.email.toLowerCase()));
+  }, []);
   return {
     rows,
     // One growing list per search: rows arriving, refreshing, or a further
     // page listed below are not a new window.
     windowKey: () =>
       options.enabled() ? hashKey([options.search()]) : undefined,
-    users: () => resolution.data()?.users ?? [],
+    users,
     loading: resolution.loading,
     error: resolution.error,
     hasMore: () =>

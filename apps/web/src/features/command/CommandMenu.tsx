@@ -525,30 +525,6 @@ function CommandSearchMenu(
     anchor.hold();
   };
 
-  // A new page replaces the people window. Start it from the top unless the
-  // row the user chose is still listed.
-  let previousWindow: string | undefined;
-  let previousWindowScope = '';
-  createEffect(
-    on(
-      () => pagination?.windowKey?.(),
-      (key) => {
-        if (key === undefined) return;
-        if (
-          previousWindow !== undefined &&
-          previousWindow !== key &&
-          previousWindowScope === selectionScope() &&
-          !anchor.present()
-        ) {
-          anchor.release();
-          listController.setSelectedIndex(0, { scrollIntoView: true });
-        }
-        previousWindow = key;
-        previousWindowScope = selectionScope();
-      }
-    )
-  );
-
   // Skip past the search row only onto a real result — when the query has
   // no results the rows below are fallbacks (ask AI), and the search row
   // should stay the default.
