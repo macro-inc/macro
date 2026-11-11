@@ -43,6 +43,15 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## Native HTTP connections
+
+Service requests from the native apps go through the HTTP plugin
+(`src/lib/core/util/platformFetch.ts`), not the WebView.
+
+Keep the plugin's `gzip` feature on: the services compress a response only for
+a client that asks. Changing it needs a native app release and changes nothing
+a web bundle sees.
+
 ## OTA bundle storage
 
 On iOS, the bundle updater stores downloads and their persistence markers in

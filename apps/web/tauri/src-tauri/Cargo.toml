@@ -51,7 +51,10 @@ tokio-util = { version = "0.7", features = ["io"] }
 # sean/cookie-store-path includes ws-replay-buffer. Keep both plugin revs identical
 # and the TauriMessage/ReplayEnvelope types in
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
+# gzip: the services compress only for clients that ask, and the plugin asks
+# only when built with it.
 tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "bc6ec3b8e80eed80ef4969f4463a357d46adb3b1", features = [
+  "gzip",
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
