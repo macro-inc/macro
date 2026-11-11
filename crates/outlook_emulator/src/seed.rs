@@ -1,4 +1,5 @@
-//! The seed file: the mailboxes an emulator starts with, as YAML or JSON.
+//! The seed file: the mailboxes and calendars an emulator starts with, as
+//! YAML or JSON.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

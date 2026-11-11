@@ -261,8 +261,8 @@ The authentication service runs without a PostHog key there, so
   onboarding email step.
 - The page and the emulator's control API are at the `outlook_emulator` port,
   `http://localhost:8481` on the default instance and the window's port on a
-  named one (`docker compose port outlook_emulator 8080`). Add users and mail
-  while the stack runs with `POST /_emulator/seed`; deliver new mail with
+  named one (`docker compose port outlook_emulator 8080`). Add users, mail and
+  calendars while the stack runs with `POST /_emulator/seed`; deliver new mail with
   `POST /_emulator/mailboxes/{email}/messages`. See the crate's `AGENTS.md`.
 - Like FusionAuth's own pages, the sign-in page is addressed as `localhost`,
   so sign in with Microsoft from a browser on this machine.
@@ -272,7 +272,12 @@ The authentication service runs without a PostHog key there, so
 - Change notifications are not delivered: Graph subscriptions need an HTTPS
   webhook, and the stack's services reach each other over HTTP. Mail that
   arrives at the emulator later shows up with the next sync, not at once.
-- The Outlook calendar is not emulated.
+- A connected mailbox's Outlook calendars sync from the emulator too: the
+  seed gives Ada and Bob calendars with repeating events, and events created
+  or changed in Macro are written to the emulator. The calendar service polls
+  every two minutes, so a change made in the emulator
+  (`POST /_emulator/mailboxes/{email}/calendars/default/events`) shows up
+  with the next poll.
 
 With a real Microsoft client in the environment the emulator does not start.
 Sign in with Microsoft is then unavailable locally, as before: the stack defines
@@ -361,7 +366,7 @@ A `--no-doppler` stack supplies deterministic stubs for required configuration. 
 | --- | --- | --- |
 | Google login / Gmail | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET_KEY` | The Gmail emulator answers in Google's place: Google sign-in and Gmail linking work with its seeded users, never a real account. Real keys (a `GOCSPX-` secret) switch the stack to Google. |
 | Pipedream | `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, `PIPEDREAM_PROJECT_ID` | Placeholders satisfy the harness configuration loader; Pipedream integrations require real credentials. |
-| Microsoft login / Outlook | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | The Outlook emulator answers in Microsoft's place: Microsoft sign-in and Outlook linking work with its seeded users, never a real account. A real client id switches the emulator off. |
+| Microsoft login / Outlook | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` | The Outlook emulator answers in Microsoft's place: Microsoft sign-in, Outlook linking and Outlook calendar sync work with its seeded users, never a real account. A real client id switches the emulator off. |
 | GitHub login | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_IDP_ID` | Login with GitHub is unavailable |
 | Stripe billing | `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` | Checkout and subscription endpoints fail. Signup skips Stripe and leaves profile billing unset, so free-team creation works. Only the required legacy account field stores a local placeholder. |
 | CloudFront signed URLs | `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY` | Document download URLs are unsigned (fine against local S3) |

@@ -1,4 +1,5 @@
-//! A stateful fake of the Microsoft Graph mail API Macro's email code calls.
+//! A stateful fake of the Microsoft Graph mail and calendar APIs Macro's
+//! email and calendar code call.
 //!
 //! [`OutlookEmulator::start`] listens on a `127.0.0.1` port and serves, for
 //! any number of mailboxes:
@@ -7,13 +8,17 @@
 //!   folder delta queries (skip and delta tokens, 410 for an expired one),
 //!   drafts, replies and forwards, send, attachments and upload sessions,
 //!   master categories, inbox rules, contacts, `$batch`, and subscriptions;
+//!   mailbox settings, calendars, `calendarView` and its delta, events,
+//!   series with their instances, exceptions and deleted occurrences, and
+//!   creating, changing, deleting and answering events;
 //! - the Microsoft identity platform under [`OutlookEmulator::login_url`]:
 //!   a sign-in page that lists the mailboxes as users, authorization codes,
 //!   the token endpoint, ID tokens with their signing keys and OpenID
 //!   discovery document, userinfo, and the admin-consent page;
 //! - a control API under `/_emulator/`, mirrored by the methods of
-//!   [`OutlookEmulator`]: seed mailboxes, deliver mail, inject errors and
-//!   throttling, advance the clock, and read what was received and notified.
+//!   [`OutlookEmulator`]: seed mailboxes and calendars, deliver mail, change
+//!   events, inject errors and throttling, advance the clock, and read what
+//!   was received and notified.
 //!
 //! What a client writes it reads back, and every change shows up in the
 //! folder's next delta round. Creating a subscription validates its
