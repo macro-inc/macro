@@ -40,8 +40,8 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## Scope
 
-- Owns: `idea`, `idea_prompt`, `idea_entity`, `idea_routine`, `idea_target`,
-  and its `suggestion_change` rows.
+- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+  `suggestion_routine`, `suggestion_target`, and its `suggestion_change` rows.
 - Not here: generation runs and their sessions (they write
   `suggestion_generation*`); routine suggestions → `crates/scheduled_action`.
 

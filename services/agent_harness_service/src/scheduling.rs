@@ -512,7 +512,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         authorization_state: authorization_state.clone(),
     };
     // Ideas: written and managed by hidden generation sessions through
-    // `macro.ideas.*`, read and acted on by the person. Served here, under
+    // `macro.suggestions.*`, read and acted on by the person. Served here, under
     // the scheduler's prefix, next to the routine suggestions they share
     // generation with.
     let idea_state = IdeaRouterState {
