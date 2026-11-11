@@ -139,3 +139,4 @@ workspace-members = [
 # must stay wasm-safe and out of the deploy dependency layers — the glob
 # keeps future client crates from silently gaining the workspace-hack dep.
 traversal-exclude-globs = ["crates/client/*", "crates/soup_filter_cache_adapter*"]
+# CI verification: no-op edit to force the full Rust suite.

@@ -294,3 +294,5 @@ export default defineConfig({
     ],
   },
 });
+
+// CI verification: no-op edit to run the web checks.

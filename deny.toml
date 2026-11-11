@@ -394,3 +394,4 @@ github = ["macro-inc"]
 gitlab = []
 # bitbucket.org organizations to allow git sources for
 bitbucket = []
+# CI verification: no-op edit to run cargo-deny.
