@@ -664,6 +664,8 @@ fn every_native_modify_target_round_trips_with_an_exhaustive_feature_stable_shap
 
 mod effective_access;
 
+mod media_actions;
+
 mod diff_projection;
 
 mod paste_intent;
