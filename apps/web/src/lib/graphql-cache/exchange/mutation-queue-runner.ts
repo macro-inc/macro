@@ -60,12 +60,12 @@ import {
   recoverySkipReason,
 } from './mutation-queue-telemetry';
 import type { NormalizedCacheExchangeOptions } from './normalized-cache-exchange';
-import { NO_QUEUE_OWNERS, type QueueOwners } from './queue-owners';
 import {
   notifyOptimisticMutationEnqueued,
   optimisticContextOf,
   withOptimisticMutationDisposition,
 } from './optimistic';
+import { NO_QUEUE_OWNERS, type QueueOwners } from './queue-owners';
 
 /**
  * Private operation-context field carrying the optimistic transaction id
