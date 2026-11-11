@@ -45,12 +45,16 @@ async function openDeleteDialog() {
   const onFinish = vi.fn();
   const onCancel = vi.fn();
   render(() => <GlobalBulkEditEntityModal />);
+  return { onFinish, onCancel, ...(await reopen(onFinish, onCancel)) };
+}
+
+async function reopen(onFinish: () => void, onCancel: () => void) {
   openBulkEditModal({ view: 'delete', entities: [task], onFinish, onCancel });
   const deleteButton = await screen.findByRole('button', {
     name: 'Delete item',
   });
   await vi.waitFor(() => expect(document.activeElement).toBe(deleteButton));
-  return { onFinish, onCancel };
+  return { deleteButton };
 }
 
 describe('delete item dialog keyboard', () => {
@@ -65,7 +69,19 @@ describe('delete item dialog keyboard', () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 
-  it('cancels on Escape without deleting', async () => {
+  it('deletes once when Enter is pressed again before the delete finishes', async () => {
+    const { promise, resolve } = Promise.withResolvers<boolean[]>();
+    mutateAsync.mockReturnValue(promise);
+    const { onFinish } = await openDeleteDialog();
+
+    await userEvent.keyboard('{Enter}{Enter}');
+    resolve([true]);
+
+    await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
+    expect(mutateAsync).toHaveBeenCalledOnce();
+  });
+
+  it('cancels on Escape without deleting, and focuses Delete again on reopen', async () => {
     const { onFinish, onCancel } = await openDeleteDialog();
 
     await userEvent.keyboard('{Escape}');
@@ -73,5 +89,7 @@ describe('delete item dialog keyboard', () => {
     await vi.waitFor(() => expect(onCancel).toHaveBeenCalledOnce());
     expect(mutateAsync).not.toHaveBeenCalled();
     expect(onFinish).not.toHaveBeenCalled();
+
+    await reopen(onFinish, onCancel);
   });
 });

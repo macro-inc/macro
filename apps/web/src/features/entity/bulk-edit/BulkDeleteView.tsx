@@ -29,7 +29,19 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
+  // Enter repeats while held and the button stays enabled, so ignore presses
+  // while an attempt is in flight instead of deleting the same items twice.
+  let deleting = false;
   const handleDelete = async () => {
+    if (deleting) return;
+    deleting = true;
+    try {
+      await deleteEntities();
+    } finally {
+      deleting = false;
+    }
+  };
+  const deleteEntities = async () => {
     // Keep the completion attached to the caller that submitted this attempt,
     // even if another modal replaces this one while the request is in flight.
     const onPartialDelete = props.onPartialDelete;
