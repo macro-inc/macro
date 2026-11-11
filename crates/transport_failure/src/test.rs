@@ -40,7 +40,10 @@ async fn a_refused_connection_is_a_connect_failure() {
     // The listener is dropped, so nothing accepts on this port.
     let error = reqwest::get(format!("http://{address}")).await.unwrap_err();
 
-    assert_eq!(TransportFailure::classify(&error), TransportFailure::Connect);
+    assert_eq!(
+        TransportFailure::classify(&error),
+        TransportFailure::Connect
+    );
 }
 
 #[tokio::test]
@@ -60,5 +63,8 @@ async fn a_request_past_its_deadline_is_a_timeout() {
         .unwrap_err();
     drop(listener);
 
-    assert_eq!(TransportFailure::classify(&error), TransportFailure::Timeout);
+    assert_eq!(
+        TransportFailure::classify(&error),
+        TransportFailure::Timeout
+    );
 }
