@@ -151,3 +151,30 @@ export const LIKELY_NEXT_VIEWS = [
   AgentsRouteView,
   CalendarRouteView,
 ];
+
+/**
+ * The app's other views. The native apps read chunks from their own bundle, so
+ * they warm these too, after the likely ones: nothing downloads, and a view
+ * nobody warmed shows its skeleton while its code loads.
+ */
+export const OTHER_APP_VIEWS = [
+  SearchRouteView,
+  NotificationsRouteView,
+  NotificationsCalendarRouteView,
+  RecentRouteView,
+  FoldersRouteView,
+  CallsRouteView,
+  CallsCallDetail,
+  CallDetailRouteView,
+  TasksDetailRouteView,
+  ProjectDetailRouteView,
+  ProjectTaskRouteView,
+  EmailComposeRouteView,
+  DriveCallRouteView,
+  ReviewsRouteView,
+  ReviewsPrDetailRouteView,
+  PrDetailRouteView,
+  ActivityRouteView,
+  CompaniesRouteView,
+  SettingsRouteView,
+];

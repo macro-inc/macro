@@ -13,7 +13,7 @@ import { isTauri } from '@core/util/platform';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
 import { type JSX, onCleanup, onMount, type ParentProps, Show } from 'solid-js';
-import { LIKELY_NEXT_VIEWS } from './lazy-route-views';
+import { LIKELY_NEXT_VIEWS, OTHER_APP_VIEWS } from './lazy-route-views';
 import { PublicBookingShell } from './public-booking-shell';
 
 /** Takes over from index.html's boot shell once this shell has drawn. */
@@ -103,7 +103,6 @@ function AppPage(props: ParentProps) {
   return <AppChrome>{props.children}</AppChrome>;
 }
 
-type PreloadableView = { preload: () => Promise<unknown> };
 type NetworkInformation = { saveData?: boolean };
 
 // Leave the first seconds to the landing view's own data and chunks.
@@ -116,17 +115,19 @@ const NATIVE_WARM_GAP_MS = 50;
 /**
  * Warms the likely-next view chunks one at a time while the app is open,
  * leaving startup and hidden tabs alone and skipping Save-Data connections.
- * The native apps load them back to back, pausing only to let input through.
+ * The native apps warm every view, back to back, pausing only to let input
+ * through.
  */
-function warmRouteViews(views: readonly PreloadableView[]): void {
+function warmRouteViews(): void {
   const connection = (
     navigator as Navigator & { connection?: NetworkInformation }
   ).connection;
   if (connection?.saveData) return;
 
   const native = isTauri();
-
-  const queue = [...views];
+  const queue = native
+    ? [...LIKELY_NEXT_VIEWS, ...OTHER_APP_VIEWS]
+    : [...LIKELY_NEXT_VIEWS];
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -166,7 +167,7 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
 
 /** The app: its chrome around the split layout, which renders every pane. */
 export function AppShell(): JSX.Element {
-  warmRouteViews(LIKELY_NEXT_VIEWS);
+  warmRouteViews();
   return (
     <AppProviders>
       <SplitLayoutProvider>
