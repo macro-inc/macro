@@ -32,16 +32,32 @@ export class DocumentChangedError extends MacroApiError {
   }
 }
 
+/**
+ * The document, or the Markdown written to it, exceeds the 4 MiB snapshot
+ * limit (HTTP 413), so nothing was written. This is permanent: retrying the
+ * same read or write fails the same way. Report it, or make the content
+ * smaller before writing again.
+ */
+export class DocumentTooLargeError extends MacroApiError {
+  constructor(data: unknown) {
+    super(413, data);
+    this.name = 'DocumentTooLargeError';
+    this.message =
+      'The document exceeds the 4 MiB snapshot limit; nothing was written. Retrying will not help: make the content smaller.';
+  }
+}
+
 /** Read the body and revision; `Document.contentWithRevision` calls this. */
 export async function readMarkdown(
   client: MacroClient,
   document: Document,
 ): Promise<DocumentMarkdown> {
-  return unwrap(
-    await client.storage.getDocumentMarkdown({
-      path: { document_id: document.id },
-    }),
-  );
+  const result = await client.storage.getDocumentMarkdown({
+    path: { document_id: document.id },
+  });
+  if (result.response?.status === 413)
+    throw new DocumentTooLargeError(result.error);
+  return unwrap(result);
 }
 
 /** Write the body at a revision; `Document.setContent` calls this. */
@@ -57,6 +73,7 @@ export async function writeMarkdown(
   });
   const status = result.response?.status;
   if (status === 409) throw new DocumentChangedError(result.error);
+  if (status === 413) throw new DocumentTooLargeError(result.error);
   if (status === 502 || status === 504)
     throw new EditOutcomeUnknownError(result.error, status);
   if (result.error !== undefined && result.response === undefined)

@@ -423,7 +423,9 @@ export class Document
   /**
    * A markdown document's or task body's Markdown together with the revision
    * it was read at. Pass the revision to `setContent` to write the body back
-   * only if nobody has changed the document since.
+   * only if nobody has changed the document since. Throws
+   * `DocumentTooLargeError` when the document exceeds the 4 MiB snapshot
+   * limit; retrying will not help.
    *
    * @readonly
    */
@@ -444,7 +446,9 @@ export class Document
    * blocks are replaced. No AI runs and nothing is billed.
    *
    * Throws `EditOutcomeUnknownError` when the write was sent but its outcome
-   * is unknown: read before retrying.
+   * is unknown: read before retrying. Throws `DocumentTooLargeError` when the
+   * document or the new Markdown exceeds the 4 MiB snapshot limit: nothing was
+   * written and retrying will not help.
    *
    * @example Append a line without overwriting a teammate's edits.
    * ```js
