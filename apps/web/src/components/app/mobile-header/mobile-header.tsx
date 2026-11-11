@@ -60,6 +60,8 @@ function MobileHeaderRoot(props: ParentProps<{ trailing?: JSX.Element }>) {
 function Title(props: {
   label: string;
   iconType?: EntityIconSelector;
+  /** Replaces the entity icon, e.g. with the session's model. */
+  icon?: JSX.Element;
   colorIcon?: boolean;
   class?: string;
 }) {
@@ -90,6 +92,11 @@ function Title(props: {
             size="xs"
             theme={props.colorIcon ? undefined : 'monochrome'}
           />
+        </Show>
+        <Show when={props.icon}>
+          <div class="flex shrink-0 items-center justify-center">
+            {props.icon}
+          </div>
         </Show>
         <span class="inline-flex min-w-0 items-center gap-1">
           <span class="inline-block truncate text-sm font-semibold">
