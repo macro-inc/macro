@@ -1,0 +1,21 @@
+packages/sdk/generated/storage/sdk.gen.ts
+  s_e28579a043217e::t_8db8c099e02370 5,639-642,716-742,746-750
+packages/sdk/generated/storage/index.ts
+  s_e28579a043217e::t_8db8c099e02370 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "90cd7655a3b5ca9726eaa4436c437256691e5ceb",
+  "prompts": {},
+  "sessions": {
+    "s_e28579a043217e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "490a404d-4c83-41f2-b737-127d76ca9d95",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
