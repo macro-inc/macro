@@ -16,6 +16,7 @@ import { LK_TRACK_SOURCE } from './livekit-loader';
 function ParticipantRow(props: {
   name: string;
   userId?: string;
+  accessMode?: 'guest' | 'member';
   local?: boolean;
   isProgram: boolean;
   speaking: boolean;
@@ -26,7 +27,7 @@ function ParticipantRow(props: {
     <li class="flex min-h-14 items-center gap-3 px-3 py-2">
       <div class="size-8 shrink-0">
         <Show
-          when={props.userId}
+          when={props.accessMode === 'guest' ? undefined : props.userId}
           fallback={
             <Avatar size="fill">
               <Avatar.Fallback>
@@ -87,7 +88,10 @@ function ParticipantRow(props: {
   );
 }
 
-function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
+function RemoteParticipantRow(props: {
+  participant: RemoteParticipant;
+  accessMode?: 'guest' | 'member';
+}) {
   const call = useCallContext();
   const userId = () => tryMacroId(props.participant.identity);
   const name = () =>
@@ -103,6 +107,7 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
     <ParticipantRow
       name={name()}
       userId={userId()}
+      accessMode={props.accessMode}
       isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
       muted={publication(LK_TRACK_SOURCE.Microphone)?.isMuted ?? true}
@@ -112,7 +117,10 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
 }
 
 /** Shows current human attendees from the live room, not channel membership. */
-export function CallParticipantsList(props: { localName?: string }) {
+export function CallParticipantsList(props: {
+  localName?: string;
+  accessMode?: 'guest' | 'member';
+}) {
   const call = useCallContext();
   const author = useAuthor();
   const currentUserId = useUserId();
@@ -139,6 +147,7 @@ export function CallParticipantsList(props: { localName?: string }) {
       <ParticipantRow
         name={localName()}
         userId={localUserId()}
+        accessMode={props.accessMode}
         local
         isProgram={isProgramParticipant(
           call.room()?.localParticipant.attributes
@@ -148,7 +157,12 @@ export function CallParticipantsList(props: { localName?: string }) {
         videoEnabled={!call.isVideoMuted()}
       />
       <For each={participants()}>
-        {(participant) => <RemoteParticipantRow participant={participant} />}
+        {(participant) => (
+          <RemoteParticipantRow
+            participant={participant}
+            accessMode={props.accessMode}
+          />
+        )}
       </For>
     </ul>
   );

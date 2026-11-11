@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
   displayNames: new Map<string, string>(),
   mobile: false,
+  profilePictures: vi.fn(() => [() => undefined]),
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -67,7 +68,7 @@ vi.mock('@core/context/user', () => ({
 }));
 
 vi.mock('@core/signal/profilePicture', () => ({
-  useProfilePictureUrl: () => [() => undefined],
+  useProfilePictureUrl: mocks.profilePictures,
 }));
 
 vi.mock('@core/user', () => ({
@@ -205,6 +206,7 @@ afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => {
   mocks.mobile = false;
   mocks.displayNames.clear();
+  mocks.profilePictures.mockClear();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -298,6 +300,28 @@ describe('CallOverlay muted microphone badges', () => {
       screen.getByRole('status', { name: 'Taylor Guest is muted' })
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
+  });
+
+  it('avoids account profile pictures in guest tiles and the participant list', () => {
+    const remote = createRemoteParticipant('account-participant', {}, 'Morgan');
+    setUpCallState([remote]);
+    const guest = render(() => (
+      <CallOverlay onLeave={() => undefined} accessMode="guest" />
+    ));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
+    expect(
+      screen.getByRole('list', { name: 'In-call participants' })
+    ).toBeTruthy();
+    expect(screen.queryByTestId('user-avatar')).toBeNull();
+    expect(mocks.profilePictures).not.toHaveBeenCalled();
+    guest.unmount();
+
+    render(() => <CallOverlay onLeave={() => undefined} accessMode="member" />);
+    expect(screen.getByTestId('user-avatar')).toBeTruthy();
+    expect(mocks.profilePictures).toHaveBeenCalledWith('account-participant');
   });
 
   it('restores the phone sidebar trigger after Escape', async () => {

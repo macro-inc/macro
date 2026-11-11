@@ -164,6 +164,7 @@ export function MeetingRouteContent(props: {
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
+          accessMode={authenticated() === true ? 'member' : 'guest'}
           footerLeading={copyButton}
           showChat={
             authenticated() === true ||

@@ -132,8 +132,11 @@ function ParticipantTileWrapper(props: {
 function ParticipantAvatar(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
+  accessMode?: 'guest' | 'member';
   avatarSize?: 'sm' | 'md';
 }) {
+  const profileId = () =>
+    props.accessMode === 'guest' ? undefined : props.userId?.trim();
   const avatarClass = () =>
     cn(
       'overflow-hidden rounded-full',
@@ -147,12 +150,12 @@ function ParticipantAvatar(props: {
 
   return (
     <div class="relative flex items-center justify-center size-full p-4">
-      <Show when={props.userId?.trim()} keyed>
+      <Show when={profileId()} keyed>
         {(userId) => <ParticipantAvatarBackground userId={userId} />}
       </Show>
       <div class={cn('relative', avatarClass())}>
         <Show
-          when={props.userId?.trim()}
+          when={profileId()}
           keyed
           fallback={
             <div
@@ -187,6 +190,7 @@ function LocalParticipantTile(props: {
   track: Track | undefined;
   userId: string | undefined;
   fallbackName: string | undefined;
+  accessMode?: 'guest' | 'member';
   isProgram: boolean;
   avatarSize?: 'sm' | 'md';
   class?: string;
@@ -208,6 +212,7 @@ function LocalParticipantTile(props: {
           <ParticipantAvatar
             userId={props.userId}
             fallbackName={props.fallbackName}
+            accessMode={props.accessMode}
             avatarSize={props.avatarSize}
           />
         }
@@ -231,6 +236,7 @@ function LocalParticipantTile(props: {
 
 function ParticipantTile(props: {
   participant: RemoteParticipant;
+  accessMode?: 'guest' | 'member';
   avatarSize?: 'sm' | 'md';
   isFocused: boolean;
   hidden: boolean;
@@ -273,6 +279,7 @@ function ParticipantTile(props: {
           <ParticipantAvatar
             userId={macroId()}
             fallbackName={displayName()}
+            accessMode={props.accessMode}
             avatarSize={props.avatarSize}
           />
         }
@@ -323,6 +330,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
 
 export function CallOverlay(props: {
   onLeave: () => void;
+  accessMode?: 'guest' | 'member';
   showTeamSharing?: boolean;
   sharedWithTeam?: boolean;
   localName?: string;
@@ -666,6 +674,7 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      accessMode={props.accessMode}
                       isProgram={isProgramParticipant(
                         callCtx.room()?.localParticipant.attributes
                       )}
@@ -686,6 +695,7 @@ export function CallOverlay(props: {
                       {(participant) => (
                         <ParticipantTile
                           participant={participant}
+                          accessMode={props.accessMode}
                           avatarSize={
                             focusedParticipant() === 'local' ? 'sm' : 'md'
                           }
@@ -733,6 +743,7 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      accessMode={props.accessMode}
                       isProgram={isProgramParticipant(
                         callCtx.room()?.localParticipant.attributes
                       )}
@@ -805,7 +816,12 @@ export function CallOverlay(props: {
             }}
             chatAvailable={canChat()}
             participantCount={participants().length + 1}
-            participants={<CallParticipantsList localName={props.localName} />}
+            participants={
+              <CallParticipantsList
+                localName={props.localName}
+                accessMode={props.accessMode}
+              />
+            }
             work={workTab()}
             workDot={callWork.showTabDot()}
             sidebarMount={widePanel() ? sidebarMount() : undefined}

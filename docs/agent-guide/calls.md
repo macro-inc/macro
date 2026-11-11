@@ -325,6 +325,8 @@ avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
 hover it on desktop or tap it on touch to open the profile card; guests use
 the shared avatar fallback.
+Signed-out meeting guests see initials for all participants, including account
+participants, without account profile-picture requests.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.

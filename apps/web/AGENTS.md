@@ -296,6 +296,8 @@ The stored discussion chooses one of two paths: `channel_thread` uses
 Quick and scheduled calls use `call_chat`. Guests use the same `MessageThread`
 and `ChannelInput` composer as members; they can send text, quote replies,
 react, and edit or delete their own messages.
+Signed-out meeting guests get initial avatars in tiles and the roster; do not
+mount account profile-picture queries for them.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
