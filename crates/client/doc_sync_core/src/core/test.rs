@@ -161,6 +161,9 @@ impl SyncDoc for Doc {
             .export(loro::ExportMode::shallow_snapshot(at))
             .map_err(|e| ExportFailure::Loro(loro::LoroError::DecodeError(e.to_string().into())))
     }
+    fn snapshot_stats(&self, at: &loro::Frontiers) -> SnapshotStats {
+        SnapshotStats::from_doc(&self.loro, at)
+    }
     fn probe_import(
         &mut self,
         snapshot: &[u8],

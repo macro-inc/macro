@@ -873,9 +873,40 @@ impl SyncCore {
         {
             return;
         }
+        let stats = doc.snapshot_stats(&self.confirmed_base);
+        let span = self.span("doc.snapshot.save", self.load_span, out);
+        let mut attrs = vec![
+            ("snapshot.current_ops", AttrValue::U64(stats.current_ops)),
+            (
+                "snapshot.cached_root_ops",
+                AttrValue::U64(stats.cached_root_ops),
+            ),
+            (
+                "snapshot.base_known",
+                AttrValue::Bool(stats.base_ops.is_some()),
+            ),
+        ];
+        for (key, value) in [
+            ("snapshot.base_ops", stats.base_ops),
+            ("snapshot.retained_ops", stats.retained_ops),
+            (
+                "snapshot.base_cached_root_distance",
+                stats.base_cached_root_distance,
+            ),
+        ] {
+            if let Some(value) = value {
+                attrs.push((key, AttrValue::U64(value)));
+            }
+        }
+        out.io.push(IoEffect::Telemetry(TelemetryRecord {
+            span,
+            kind: TelemetryKind::Event {
+                name: "doc.snapshot.export",
+            },
+            attrs,
+        }));
         match doc.export_shallow_snapshot(&self.confirmed_base) {
             Ok(bytes) => {
-                let span = self.span("doc.snapshot.save", self.load_span, out);
                 let covers = self
                     .wal
                     .entries
@@ -896,11 +927,14 @@ impl SyncCore {
                 );
                 self.end_span(span, "issued", false, out);
             }
-            Err(error) => self.event(
-                "doc.snapshot.error",
-                vec![("error", AttrValue::String(error.to_string()))],
-                out,
-            ),
+            Err(error) => {
+                self.event(
+                    "doc.snapshot.error",
+                    vec![("error", AttrValue::String(error.to_string()))],
+                    out,
+                );
+                self.end_span(span, "export_error", true, out);
+            }
         }
     }
 }

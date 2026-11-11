@@ -98,6 +98,9 @@ impl SimDoc {
     }
 }
 impl SyncDoc for SimDoc {
+    fn snapshot_stats(&self, at: &loro::Frontiers) -> SnapshotStats {
+        SnapshotStats::from_doc(&self.loro, at)
+    }
     fn peer_id(&self) -> u64 {
         self.loro.peer_id()
     }

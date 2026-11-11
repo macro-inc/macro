@@ -10,6 +10,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Forward application controller queries through EditorSurface.application_query using only the existing read-only core editor; never expose mutable Core or grant callback reentry.
 
 - Keep storage, transports, timers and identity generation outside this crate.
+- Forward snapshot statistics from the actual Loro document without exporting, checking out or changing the requested base.
 - Read `last_output` to encode committed effects without processing another input.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.

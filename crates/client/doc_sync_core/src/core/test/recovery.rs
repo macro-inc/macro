@@ -444,6 +444,68 @@ fn s7_123_snapshot_uses_confirmed_base_and_waits_for_typing() {
     h.at(6000, SyncInput::Tick);
     assert_eq!(h.doc.calls.borrow().snapshots.last(), Some(&confirmed));
 }
+
+#[test]
+fn snapshot_observation_preserves_the_requested_base_and_saved_bytes() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Durable);
+    h.settle();
+    let confirmed = h.core.confirmed_base.clone();
+    h.append();
+    let id = h.storage_id();
+    h.done(id);
+    let expected = h
+        .doc
+        .loro
+        .export(loro::ExportMode::shallow_snapshot(&confirmed))
+        .unwrap();
+    let vv = h.doc.oplog_vv();
+    h.at(6000, SyncInput::Tick);
+    assert_eq!(h.core.confirmed_base, confirmed);
+    assert_eq!(h.doc.oplog_vv(), vv);
+    assert!(h.out.io.iter().any(|effect| matches!(effect,
+        IoEffect::Storage { op: StorageOp::SnapshotSave { bytes, .. }, .. }
+            if bytes == &expected
+    )));
+    let record = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Telemetry(record)
+                if matches!(
+                    record.kind,
+                    TelemetryKind::Event {
+                        name: "doc.snapshot.export"
+                    }
+                ) =>
+            {
+                Some(record)
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        record
+            .attrs
+            .contains(&("snapshot.current_ops", AttrValue::U64(1)))
+    );
+    assert!(
+        record
+            .attrs
+            .contains(&("snapshot.base_ops", AttrValue::U64(0)))
+    );
+    assert!(
+        record
+            .attrs
+            .contains(&("snapshot.retained_ops", AttrValue::U64(1)))
+    );
+    assert!(
+        record
+            .attrs
+            .iter()
+            .all(|(_, value)| !matches!(value, AttrValue::String(_)))
+    );
+}
 #[test]
 fn answered_snapshot_slots_remain_tombstones() {
     let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
