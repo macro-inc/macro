@@ -1,3 +1,4 @@
+import { createServer, type ServerResponse } from 'node:http';
 import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { watchCompiledSourceDeps } from '../contact-browser-test/compiled-source-deps';
 import type {} from './fixture';
@@ -247,6 +248,217 @@ for (const key of ['Backspace', 'Delete']) {
         );
       }
     }
+    expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
+  });
+}
+
+// Capture the actual browser PUT bytes over HTTP, including WebKit Blob bodies.
+async function receiveUpload(status: number) {
+  const body = Promise.withResolvers<string>();
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-methods': 'PUT, OPTIONS',
+    'access-control-allow-headers': 'Content-Type',
+  };
+  let response: ServerResponse | undefined;
+  let released = false;
+  let count = 0;
+  const finish = () => {
+    if (!released || !response) return;
+    response.writeHead(status, cors).end();
+    response = undefined;
+  };
+  const server = createServer((request, reply) => {
+    if (request.method === 'OPTIONS') {
+      reply.writeHead(204, cors).end();
+      return;
+    }
+    if (request.method !== 'PUT') {
+      reply.writeHead(405, cors).end();
+      return;
+    }
+    count++;
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      response = reply;
+      body.resolve(Buffer.concat(chunks).toString('utf8'));
+      finish();
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    server.close();
+    throw new Error('Missing upload receiver port');
+  }
+  return {
+    body: body.promise,
+    url: `http://127.0.0.1:${address.port}/fixture-upload`,
+    requests: () => count,
+    release() {
+      released = true;
+      finish();
+    },
+    close() {
+      server.closeAllConnections();
+      return new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      );
+    },
+  };
+}
+
+for (const outcome of ['success', 'failure']) {
+  test(`Image upload ${outcome} uses the actual provider on Source and native`, async ({
+    browser,
+    baseURL,
+  }, info) => {
+    const contexts = await Promise.all(
+      ['factory', 'source', 'native'].map(() => browser.newContext({ baseURL }))
+    );
+    await Promise.all(contexts.map(routeFixtures));
+    const pages = await Promise.all(
+      contexts.map((context) => context.newPage())
+    );
+    const [factory, source, native] = pages;
+    if (!factory || !source || !native)
+      throw new Error('Missing upload proof pages');
+    const proofs = pages.map(watchCompiledSourceDeps);
+    const records = [];
+    let dependencyProofs: PromiseSettledResult<unknown>[] = [];
+    let cleanup: PromiseSettledResult<void>[] = [];
+    const errors: string[] = [];
+    for (const page of pages)
+      page.on('pageerror', (error) => errors.push(error.message));
+    try {
+      await factory.goto(`${path}?engine=factory&upload`);
+      await expect
+        .poll(() => factory.evaluate(() => !!window.imageProofFixture))
+        .toBe(true);
+      const input = (await capture(factory)).model;
+      for (const [engine, page] of [
+        ['lexical', source],
+        ['native', native],
+      ] as const) {
+        const id = '00000000-0000-4000-8000-000000000001';
+        const receiver = await receiveUpload(outcome === 'success' ? 200 : 500);
+        try {
+          let reservations = 0;
+          let discarded = 0;
+          await page.route('**/api/file', (route) => {
+            if (route.request().method() !== 'PUT') return route.fallback();
+            reservations++;
+            return route.fulfill({
+              json: {
+                id,
+                file_location: '/fixture-file',
+                upload_url: receiver.url,
+              },
+            });
+          });
+          await page.route(`**/api/file/${id}`, (route) => {
+            if (route.request().method() !== 'DELETE') return route.fallback();
+            discarded++;
+            return route.fulfill({ status: 204 });
+          });
+          await page.addInitScript((model) => {
+            window.imageProofInput = model;
+          }, input);
+          await page.bringToFront();
+          await page.goto(`${path}?engine=${engine}&upload`);
+          const root = page.getByRole('textbox', { name: 'Image proof' });
+          await expect
+            .poll(() => page.evaluate(() => !!window.imageProofFixture))
+            .toBe(true);
+          await root.locator('p').first().click();
+          await expect(root).toBeFocused();
+          await page.getByLabel('Image file').setInputFiles({
+            name: 'fixture.svg',
+            mimeType: 'image/svg+xml',
+            buffer: Buffer.from(svg),
+          });
+          await expect(root.getByText('Saving Image...')).toBeVisible();
+          expect(await receiver.body).toBe(svg);
+          const image = root.locator('img');
+          await expect(image).toBeVisible();
+          const original = await image.elementHandle();
+          const preview = await image.getAttribute('src');
+          expect(preview).toMatch(/^blob:/);
+          const pending = await capture(page);
+          expect(pending.model).toContain('"srcType":"local"');
+          receiver.release();
+          await expect(root.getByText('Saving Image...')).toHaveCount(0);
+          expect(
+            await original.evaluate((element) => element.isConnected)
+          ).toBe(true);
+          await expect(image).toHaveAttribute('src', preview ?? '');
+          const settled = await capture(page);
+          if (outcome === 'success') {
+            expect(settled.model).toContain('"srcType":"sfs"');
+            expect(settled.model).toContain(`"id":"${id}"`);
+            expect(settled.model).toContain(`/file/${id}`);
+            expect(discarded).toBe(0);
+          } else {
+            await expect(
+              page.getByText('Failed to upload image')
+            ).toBeVisible();
+            expect(settled.model).toBe(pending.model);
+            expect(discarded).toBe(1);
+          }
+          expect(reservations).toBe(1);
+          expect(receiver.requests()).toBe(1);
+          records.push({
+            engine,
+            pending,
+            settled,
+            reservations,
+            writes: receiver.requests(),
+            discarded,
+          });
+        } finally {
+          await receiver.close();
+        }
+      }
+      expect(errors).toEqual([]);
+    } finally {
+      try {
+        dependencyProofs = await Promise.allSettled(
+          proofs.map((finish) => finish())
+        );
+        await info.attach('image-upload-raw.json', {
+          contentType: 'application/json',
+          body: JSON.stringify({
+            records,
+            errors,
+            compiledProofs: dependencyProofs.map((result) =>
+              result.status === 'fulfilled'
+                ? result.value
+                : String(result.reason)
+            ),
+          }),
+        });
+      } finally {
+        cleanup = await Promise.allSettled(
+          pages.map(async (page) => {
+            try {
+              await page.evaluate(() => window.imageProofClose?.());
+            } finally {
+              await page.close();
+            }
+          })
+        );
+        await Promise.all(contexts.map((context) => context.close()));
+      }
+    }
+    expect(dependencyProofs.map((result) => result.status)).toEqual([
+      'fulfilled',
+      'fulfilled',
+      'fulfilled',
+    ]);
     expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
   });
 }

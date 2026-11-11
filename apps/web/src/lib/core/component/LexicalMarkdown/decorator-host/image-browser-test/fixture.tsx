@@ -2,8 +2,11 @@ import '@app/index.css';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import { handleFileFolderDrop } from '@core/util/upload';
+import { CodeNode } from '@lexical/code-core';
 import { $dfs } from '@lexical/utils';
 import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
 import { $createImageNode, $isImageNode } from '@macro-inc/lexical-core';
@@ -31,8 +34,10 @@ import {
   $getDocumentMetadata,
   documentMetadataPlugin,
 } from '../../plugins/document-metadata/documentMetadataPlugin';
+import { filePastePlugin } from '../../plugins/file-paste';
 import { dispatchApplicationCommandSettled } from '../../plugins/group-b/command';
-import { mediaPlugin } from '../../plugins/media';
+import { addMediaFromFile, mediaPlugin } from '../../plugins/media';
+import { createNativeImageUploadController } from '../../plugins/media/native-image-upload';
 import { createNativeMediaUploadEvents } from '../../plugins/media/native-upload-events';
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
 import { trailingParagraphPlugin } from '../../plugins/trailing-paragraph/trailingParagraphPlugin';
@@ -72,7 +77,11 @@ declare global {
   }
 }
 function Fixture() {
-  const engine = new URLSearchParams(location.search).get('engine');
+  const params = new URLSearchParams(location.search);
+  const engine = params.get('engine');
+  const uploadMode = params.has('upload');
+  if (uploadMode && CodeNode.getType() !== 'code')
+    throw new Error('Missing pinned Source code module');
   const owner = getOwner();
   const wrapper =
     engine === 'native'
@@ -90,7 +99,25 @@ function Fixture() {
     .use(mediaPlugin())
     .use(trailingParagraphPlugin())
     .use(documentMetadataPlugin({}));
-  const uploads = createNativeMediaUploadEvents();
+  if (wrapper && uploadMode) {
+    wrapper.plugins.use(
+      filePastePlugin({
+        onPasteFilesAndDirs(files, directories) {
+          handleFileFolderDrop(files, directories, async (entries) => {
+            for (const entry of entries) {
+              if (!entry.isFolder)
+                await addMediaFromFile(wrapper.editor, entry.file, 'image');
+            }
+          }).catch((error: unknown) => console.error(error));
+        },
+      })
+    );
+  }
+  const controller =
+    engine === 'native' && uploadMode
+      ? createNativeImageUploadController()
+      : undefined;
+  const uploads = controller?.events ?? createNativeMediaUploadEvents();
   const nativeContext =
     engine === 'native'
       ? createNativeImageContext(theme, () => true, uploads)
@@ -104,7 +131,8 @@ function Fixture() {
         await close?.();
       } finally {
         nativeContext?.dispose();
-        uploads.dispose();
+        if (controller) controller.dispose();
+        else uploads.dispose();
       }
     })();
     return closing;
@@ -159,11 +187,13 @@ function Fixture() {
         }
       );
       close = async () => {
+        controller?.dispose();
         nativeContext.dispose();
         await surface.close();
       };
       if (element.querySelector('[data-lexical-decorator]'))
         throw new Error('Observed native decorator before import');
+      controller?.bindView(surface.view);
       surface.port.setState(window.imageProofInput);
       const keyDown = surface.port.keyDown.bind(surface.port);
       surface.port.keyDown = (...args) => {
@@ -212,16 +242,17 @@ function Fixture() {
           () => {
             const node = $getRoot();
             $setId(node, 'image-proof-root');
-            node.append(
-              $createImageNode({
-                srcType: 'url',
-                url: 'https://static.klipy.com/fixture/image.svg',
-                alt: 'Fixture image',
-                width: 256,
-                height: 128,
-              }),
-              $createParagraphNode()
-            );
+            if (!uploadMode)
+              node.append(
+                $createImageNode({
+                  srcType: 'url',
+                  url: 'https://static.klipy.com/fixture/image.svg',
+                  alt: 'Fixture image',
+                  width: 256,
+                  height: 128,
+                })
+              );
+            node.append($createParagraphNode());
             for (const [index, { node: child }] of $dfs().slice(1).entries())
               $setId(child, `image-proof-${index}`);
           },
@@ -278,6 +309,24 @@ function Fixture() {
         class="md w-[640px] min-h-80 p-4 outline-none"
       />
       {wrapper && <DecoratorRenderer editor={wrapper.editor} />}
+      {uploadMode && (
+        <>
+          <input
+            type="file"
+            aria-label="Image file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (!file) return;
+              const result = controller
+                ? controller.insertFile(file)
+                : wrapper && addMediaFromFile(wrapper.editor, file, 'image');
+              result?.catch((error: unknown) => console.error(error));
+            }}
+          />
+          <ToastRegion />
+        </>
+      )}
     </>
   );
   return wrapper ? (

@@ -15,6 +15,13 @@ import {
 export function registerNativeFilePaste(
   view: EditorView,
   options: {
+    /** Restrict the native file intent before the clipboard priority decision. */
+    accepts?: (input: {
+      files: readonly File[];
+      entries: readonly FileSystemFileEntry[];
+      directories: readonly FileSystemDirectoryEntry[];
+      mobileImageRecovery: boolean;
+    }) => boolean;
     onPasteFilesAndDirs(
       files: FileSystemFileEntry[],
       directories: FileSystemDirectoryEntry[]
@@ -43,10 +50,21 @@ export function registerNativeFilePaste(
       fileEntries.length > 0 ||
       directoryEntries.length > 0 ||
       clipboard.files.length > 0;
+    const files = Array.from(clipboard.files);
+    if (
+      options.accepts &&
+      !options.accepts({
+        files,
+        entries: fileEntries,
+        directories: directoryEntries,
+        mobileImageRecovery: mobile,
+      })
+    )
+      return { entries: [], release() {} };
     const request = hasFiles || mobile ? ++nextRequest : 0;
     if (request)
       pending.set(request, {
-        files: Array.from(clipboard.files),
+        files,
         entries: fileEntries,
         directories: directoryEntries,
         mobile,

@@ -2,13 +2,12 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
 import type { EditorThemeClasses } from 'lexical';
 import { type Accessor, onCleanup } from 'solid-js';
-import type { DecoratorUploadCallbacks } from '../context/DecoratorHostContext';
 import {
   dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
 } from '../plugins/group-b/command';
 import type { createNativeMediaUploadEvents } from '../plugins/media/native-upload-events';
-import type { ImageHost } from './image-host';
+import type { ImageHost, ImageUploadCallbacks } from './image-host';
 import type { NativeDecoratorContext } from './native-adapter';
 import { createNativeSelectionDecoratorContext } from './native-selection-host';
 
@@ -35,9 +34,11 @@ export function createNativeImageContext(
     imageHost(snapshot: ViewNode): ImageHost {
       const mounted = view;
       const generation = mounted?.mirror.keyGeneration;
+      if (!mounted || generation == null)
+        throw new Error('Image decorator requires an acknowledged view');
       const captured = snapshot.props();
       let live = true;
-      let uploadCallbacks: DecoratorUploadCallbacks | undefined;
+      let uploadCallbacks: ImageUploadCallbacks | undefined;
       onCleanup(() => {
         live = false;
         uploadCallbacks = undefined;
@@ -45,9 +46,7 @@ export function createNativeImageContext(
       const current = () => {
         if (
           !live ||
-          !mounted ||
           view !== mounted ||
-          generation === null ||
           mounted.mirror.keyGeneration !== generation
         )
           return undefined;
@@ -62,7 +61,9 @@ export function createNativeImageContext(
         current() !== undefined && selection.host.isSelected(key);
       const localUrl = () => {
         const props = current()?.node.props();
-        return props?.srcType === 'local' && typeof props.url === 'string'
+        return props?.srcType === 'local' &&
+          props.id === captured.id &&
+          typeof props.url === 'string'
           ? props.url
           : undefined;
       };
@@ -149,15 +150,24 @@ export function createNativeImageContext(
             const release =
               url === undefined
                 ? undefined
-                : uploads.subscribe(url, {
+                : uploads.subscribe(generation, url, {
                     start: () => {
-                      if (current()) callbacks.start();
+                      if (localUrl() === url) callbacks.start();
                     },
-                    success: () => {
-                      if (current()) callbacks.success();
+                    success: (result) => {
+                      const props = current()?.node.props();
+                      if (
+                        props?.srcType === 'sfs' &&
+                        props.id === result.id &&
+                        props.url === result.url
+                      )
+                        callbacks.success();
                     },
                     failure: () => {
-                      if (current()) callbacks.failure();
+                      if (localUrl() === url) callbacks.failure();
+                    },
+                    cancelled: () => {
+                      if (localUrl() === url) callbacks.cancelled?.();
                     },
                   });
             return () => {
@@ -167,7 +177,7 @@ export function createNativeImageContext(
           },
           mounted() {
             const url = localUrl();
-            if (url !== undefined && uploads.pending(url)) {
+            if (url !== undefined && uploads.pending(generation, url)) {
               uploadCallbacks?.start();
             } else if (current()?.node.props().srcType === 'sfs') {
               setTimeout(() => {

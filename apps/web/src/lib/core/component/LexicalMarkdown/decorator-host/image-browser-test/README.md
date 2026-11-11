@@ -12,9 +12,13 @@ Use `IMAGE_SOURCE_ONLY=1` for the Source preimage capture and keep those raw
 captures for comparison against the Source host change. The test records the
 compiled Source dependency witnesses alongside each raw capture.
 
-The 50ce paired trace covers a remote URL and leaves upload IO inactive. It
-precedes the native DSS admission guard. DSS and upload completion require
-matching native and IO coverage.
+The original 50ce paired trace covers a remote URL and toolbar removal. The
+upload cases use a browser File, the existing app provider and the a899
+artifact containing both native media guards. The loopback receiver holds
+the actual PUT response until the test has observed progress. The raw traces
+retain each browser-generated preview URL and node ID. Compare the exact
+request bytes, local preview retention, and each persisted outcome without
+rewriting either trace.
 
 The image host observes upload events from the surface's IO owner. A stored
 local URL alone does not signal an in-flight upload.

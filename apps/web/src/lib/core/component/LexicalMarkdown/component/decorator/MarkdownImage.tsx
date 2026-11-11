@@ -162,6 +162,7 @@ export function MarkdownImage(props: MarkdownImageProps) {
     cleanupListners = host.image.subscribeUploads(props.key, {
       start: () => setUploading(true),
       success: () => setUploading(false),
+      cancelled: () => setUploading(false),
       failure: () => {
         setUploading(false);
         toast.failure('Failed to upload image');

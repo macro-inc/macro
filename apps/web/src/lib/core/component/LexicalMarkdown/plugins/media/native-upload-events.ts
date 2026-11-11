@@ -1,48 +1,73 @@
-import type { DecoratorUploadCallbacks } from '../../context/DecoratorHostContext';
+export interface NativeUploadResult {
+  id: string;
+  url: string;
+}
+
+interface NativeUploadCallbacks {
+  start(): void;
+  success(result: NativeUploadResult): void;
+  failure(): void;
+  cancelled(): void;
+}
 
 /** One surface's real upload operations and their component subscriptions. */
 export function createNativeMediaUploadEvents() {
   const pending = new Set<string>();
-  const listeners = new Map<string, Set<DecoratorUploadCallbacks>>();
+  const listeners = new Map<string, Set<NativeUploadCallbacks>>();
   let disposed = false;
 
-  function emit(localUrl: string, phase: keyof DecoratorUploadCallbacks): void {
-    for (const listener of listeners.get(localUrl) ?? []) listener[phase]();
+  const keyFor = (generation: number, localUrl: string) =>
+    `${generation}:${localUrl}`;
+
+  function notify(
+    key: string,
+    call: (listener: NativeUploadCallbacks) => void
+  ): void {
+    for (const listener of listeners.get(key) ?? []) call(listener);
   }
 
   return {
-    pending: (localUrl: string) => pending.has(localUrl),
-    subscribe(localUrl: string, callbacks: DecoratorUploadCallbacks) {
+    pending: (generation: number, localUrl: string) =>
+      pending.has(keyFor(generation, localUrl)),
+    subscribe(
+      generation: number,
+      localUrl: string,
+      callbacks: NativeUploadCallbacks
+    ) {
+      const key = keyFor(generation, localUrl);
       if (disposed) throw new Error('Native media uploads are disposed');
-      const current = listeners.get(localUrl) ?? new Set();
+      const current = listeners.get(key) ?? new Set();
       current.add(callbacks);
-      listeners.set(localUrl, current);
+      listeners.set(key, current);
       return () => {
         current.delete(callbacks);
-        if (current.size === 0 && listeners.get(localUrl) === current)
-          listeners.delete(localUrl);
+        if (current.size === 0 && listeners.get(key) === current)
+          listeners.delete(key);
       };
     },
     async track(
+      generation: number,
       localUrl: string,
-      upload: () => Promise<boolean>
+      upload: () => Promise<NativeUploadResult | undefined>
     ): Promise<void> {
+      const key = keyFor(generation, localUrl);
       if (disposed) throw new Error('Native media uploads are disposed');
-      if (pending.has(localUrl))
+      if (pending.has(key))
         throw new Error('Native media upload already tracked');
-      pending.add(localUrl);
+      pending.add(key);
       try {
-        emit(localUrl, 'start');
-        let committed: boolean;
+        notify(key, (listener) => listener.start());
+        let result: NativeUploadResult | undefined;
         try {
-          committed = await upload();
+          result = await upload();
         } catch (error) {
-          emit(localUrl, 'failure');
+          notify(key, (listener) => listener.failure());
           throw error;
         }
-        emit(localUrl, committed ? 'success' : 'failure');
+        if (result) notify(key, (listener) => listener.success(result));
+        else notify(key, (listener) => listener.cancelled());
       } finally {
-        pending.delete(localUrl);
+        pending.delete(key);
       }
     },
     dispose() {

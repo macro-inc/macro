@@ -50,3 +50,31 @@ test('native policy hands the exact pasted file entries to the view IO callback 
     fixture.close();
   }
 });
+
+test('declining file IO preserves the original clipboard behavior', async () => {
+  const fixture = nativeSurface();
+  const original = nativeSurface();
+  const release = registerNativeFilePaste(fixture.view, {
+    accepts({ files }) {
+      return files.every((file) => file.type.startsWith('image/'));
+    },
+    onPasteFilesAndDirs() {
+      throw new Error('Unaccepted file reached the IO callback');
+    },
+  });
+  try {
+    const file = new File(['payload'], 'fixture.txt', { type: 'text/plain' });
+    const originalHandled = await original.view.clipboard.paste(
+      transfer('Companion text', '', [file])
+    );
+    const actualHandled = await fixture.view.clipboard.paste(
+      transfer('Companion text', '', [file])
+    );
+    expect(actualHandled).toBe(originalHandled);
+    expect(fixture.root.innerHTML).toBe(original.root.innerHTML);
+  } finally {
+    release();
+    fixture.close();
+    original.close();
+  }
+});

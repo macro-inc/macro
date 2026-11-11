@@ -6,14 +6,14 @@ import { defineConfig } from '@playwright/test';
 const manifest = readFileSync(new URL('./wasm/manifest.json', import.meta.url));
 if (
   createHash('sha256').update(manifest).digest('hex') !==
-  'd3c531c9315168049711060a79b515845c9231077688d049a11be16b288f1963'
+  '62ff004f03c782064788516fa5fa51242197ce3eded7847383b9e83705754d7d'
 )
   throw new Error('Unqualified image artifact manifest');
 const expected = {
   'document_session_wasm.js':
     '766d9a3aa8e9b1c4514a73fa271dac6a548c81d91881e167f6648d4063f063de',
   'document_session_wasm_bg.wasm':
-    '192646382f06dbc385a0bf9334f9ac2a4b597a3ae40d58b87baf791e51ce243f',
+    'a27580b61deb04a44a018f21e07cde4ba293ab07b339d0cf2af3343ef78ae2b2',
   'document_session_wasm.d.ts':
     'c4fa70d3f51704f33d23ced204129acd8a485864eac514d8e376cbcdabe384c1',
   'document_session_wasm_bg.wasm.d.ts':
