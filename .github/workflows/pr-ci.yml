@@ -11,7 +11,7 @@ jobs:
   start:
     if: github.event.label.name == 'run-ci'
     name: Start
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       contents: read
       issues: write
@@ -632,7 +632,7 @@ jobs:
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''
     name: CI gate
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-linux-tiny-no-cache
     permissions:
       statuses: write
     timeout-minutes: 5

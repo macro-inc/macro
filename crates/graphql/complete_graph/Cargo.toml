@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+activity = { workspace = true, features = ["realtime"] }
+agent_correlation = { workspace = true, features = ["postgres"] }
 email_thread_id = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
@@ -55,6 +57,7 @@ notification = { workspace = true, default-features = true }
 predicate-index = { workspace = true }
 soup = { workspace = true, features = ["ports"] }
 soup-filter-projection = { workspace = true }
+sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -71,7 +74,7 @@ crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
 database_sql_runner = { workspace = true }
 databases_types = { workspace = true }
-activity = { workspace = true, features = ["realtime"] }
+macro_db_migrator = { workspace = true }
 attention_feed = { workspace = true, features = ["inbound"] }
 notification_inbox = { workspace = true }
 work_feed = { workspace = true }

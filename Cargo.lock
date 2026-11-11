@@ -318,6 +318,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "mcp_client",
+ "nom 8.0.0",
  "nutype",
  "pipedream_mcp",
  "rootcause",
@@ -333,6 +334,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "urlencoding",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -351,6 +353,7 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -2521,6 +2524,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "tracing-subscriber",
  "upstream_error",
  "url",
  "urlencoding",
@@ -5095,6 +5099,7 @@ name = "complete_graph"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "agent_session_realtime",
@@ -5140,6 +5145,7 @@ dependencies = [
  "graphql_soup",
  "graphql_work_feed",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
  "model_notifications",
  "model_owner",
@@ -5159,6 +5165,7 @@ dependencies = [
  "soup-filter-projection",
  "soup_realtime_core",
  "soup_types",
+ "sqlx",
  "tokio",
  "tracing",
  "uuid",
@@ -13191,8 +13198,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "email_validator",
+ "macro_env_var",
  "macro_redis",
  "redis",
+ "tokio",
  "workspace-hack",
 ]
 

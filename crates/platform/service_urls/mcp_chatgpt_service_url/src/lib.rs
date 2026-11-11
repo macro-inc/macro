@@ -6,7 +6,7 @@ service_url::service_url! {
     /// `McpPublicUrl` broker issues it Macro API tokens.
     pub struct McpChatgptServiceUrl {
         local: "http://localhost:8103",
-        dev: "https://mcp-chatgpt.dev.macro.com",
+        dev: "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
         prod: "https://mcp-chatgpt.macro.com",
     }
 }

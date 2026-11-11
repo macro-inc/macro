@@ -333,6 +333,7 @@ where
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
+                client: None,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
@@ -403,6 +404,7 @@ where
             actor,
             announce: _,
             context: _,
+            client: _,
         } = command;
 
         if !matches!(action, AgentAction::Stop)

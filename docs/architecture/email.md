@@ -317,6 +317,30 @@ A save can still be on the wire when its draft is sent, and the server refuses
 it once the send is admitted. That send carries the draft's content, so the
 refusal is ignored: the working copy is not marked failed and nothing is shown.
 
+Failure UI is for a write the user has to act on. A server fault (`INTERNAL`)
+on a draft save or discard may pass, and both writes are safe to send again (a
+full-state upsert, an idempotent delete), so the queue retries it twice in a row
+before the copy is marked failed (`shouldRetryGraphqlMutation`). The budget is
+small because the queue's head blocks every write behind it, and it is counted
+per queued write, apart from the larger budget for an unavailable server. While
+the local cache restarts, which it retries by itself, the composer shows
+nothing; unsynced edits still waiting after 15 seconds get the quiet waiting
+notice, and only storage that needs a reload shows the alert.
+
+`DraftSyncStatus` reads its props directly rather than through a `<Show>`
+accessor: the accessor threw when a child re-evaluated as the state cleared,
+which left the banner on screen after a successful retry.
+
+`lib/queries/email/tests/draft-sync-world.ts` runs this whole client against a
+simulated server, cache queue and clock: the composer's session, persistence,
+autosave and status primitives, the draft queue, the working-copy store, the
+cache exchange with its queue runner, and the send journal, dispatcher and
+recovery. `draft-sync.scenarios.test.ts` holds one scenario per way a draft has
+gone wrong, and `draft-sync.fuzz.test.ts` runs random sessions of typing,
+discarding, sending, undoing and reloading under faults that pass by
+themselves, checking that nothing is reported to the user and that the server
+ends with exactly what they did. Add a scenario with every draft sync fix.
+
 The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
 returned with the accepted attempt. A reply whose send fails, is cancelled, or is

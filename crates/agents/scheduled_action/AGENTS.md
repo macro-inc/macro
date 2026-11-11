@@ -134,8 +134,10 @@ each run.
 - Owns: scheduled-action and event-trigger CRUD, dispatch (in-process or
   tokio), run history, and live-update notifications over the connection
   gateway.
-- An authenticated caller with a routine ID can read its detail; listing,
-  run history, and mutations stay owner-scoped.
+- Reading a routine, listing, run history, and mutations are owner-scoped:
+  ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
+  loads the routine only for its owner (`granted_action`). Without a grant
+  they answer 401; with a grant but not the owner, 404.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,

@@ -90,7 +90,14 @@ pub async fn patch_settings_handler(
     // write) and report the count, so the client can have the user re-add them.
     // A rehost *error* (vs. an unresolved image) never blocks the save.
     if let Some(signature) = settings.signature.clone() {
-        match sfs_map::rehost_html_images(&ctx.db, &ctx.sfs_client, &signature).await {
+        match sfs_map::rehost_html_images(
+            &ctx.db,
+            &ctx.sfs_client,
+            &signature,
+            &sfs_map::PublicImages,
+        )
+        .await
+        {
             Ok((rehosted, unresolved)) => {
                 if unresolved > 0 {
                     return Err(PatchSettingsError::UnresolvedSignatureImages(

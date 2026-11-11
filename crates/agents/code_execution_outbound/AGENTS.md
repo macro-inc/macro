@@ -31,6 +31,8 @@ completed API writes. SDK and Handlebars bundles, the operation catalog and
 the SDK's type declarations come from `crates/agents/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads
 must be listed in the generator's `postReads`, or dry runs skip it.
+The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
+registry; the header is attached to that call's options before request dispatch.
 
 Authenticated SDK requests carry `x-macro-code-execution: 1`, the only mark a
 run under a plain user token (public MCP) has. APIs that ask a program to

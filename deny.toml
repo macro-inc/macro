@@ -224,6 +224,7 @@ deny = [
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
+    "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
     "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
     "macrod",                    # Standalone daemon logging setup

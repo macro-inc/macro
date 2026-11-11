@@ -291,8 +291,10 @@ async fn github_deliveries_need_a_claim_to_the_installation() {
 
 #[tokio::test]
 async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent() {
-    let registration: serde_json::Value =
-        serde_json::from_str(include_str!("../../../../../github/app-webhooks.json")).unwrap();
+    let registration: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../../integrations/github/app-webhooks.json"
+    ))
+    .unwrap();
     for name in registration["default_events"].as_array().unwrap() {
         let name = name.as_str().unwrap();
         let repo = Arc::new(Repo::default());

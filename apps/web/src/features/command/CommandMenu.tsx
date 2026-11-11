@@ -11,6 +11,10 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
+import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -28,6 +32,7 @@ import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -586,6 +591,13 @@ function CommandSearchMenu(
     const item = selectedItem();
     return item && (isEntityItem(item) || isUserItem(item));
   };
+  /** Entities Cmd+K opens in a split, so they can open in a new tab too. */
+  const selectedOpensInSplit = () => {
+    const item = selectedItem();
+    if (!item || !isEntityItem(item)) return false;
+    if (isGithubPrEntity(item.data)) return USE_MACRO_PR_SUMMARY_BLOCK;
+    return item.data.type !== 'foreign';
+  };
   const selectedIsSearch = () => {
     const item = selectedItem();
     return item && isSearchItem(item);
@@ -717,18 +729,28 @@ function CommandSearchMenu(
     hide: true,
   });
 
+  // The list trails the typed text by the query debounce. Enter pressed in
+  // that gap waits for the list of the text on screen.
+  const runWhenCurrent = createRunWhenCurrent(
+    () => query() !== CommandState.query(),
+    CommandState.isOpen
+  );
+  const actOnSelected = (openInNewSplit: boolean) => {
+    if (query() === CommandState.query() && !selectedItem()) return false;
+    runWhenCurrent(() => {
+      const item = selectedItem();
+      if (item) handleItemAction(item, openInNewSplit);
+    });
+    return true;
+  };
+
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
     scopeId: hotkeyScope,
     description: () => t('commandMenu.selectItem'),
     keyDownHandler: (event) => {
       if (event?.isComposing || event?.shiftKey) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, false);
-        return true;
-      }
-      return false;
+      return actOnSelected(false);
     },
     runWithInputFocused: true,
   });
@@ -741,12 +763,24 @@ function CommandSearchMenu(
     description: () => t('commandMenu.openInNewSplit'),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, true);
-        return true;
-      }
-      return false;
+      return actOnSelected(true);
+    },
+    runWithInputFocused: true,
+  });
+
+  const confirmTabHotkey = registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewTab'),
+    condition: () => canOpenInNewTab() && selectedOpensInSplit(),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      if (query() === CommandState.query() && !selectedItem()) return false;
+      runWhenCurrent(() => {
+        const item = selectedItem();
+        if (item) openInNewTab(() => handleItemAction(item, false));
+      });
+      return true;
     },
     runWithInputFocused: true,
   });
@@ -1034,6 +1068,12 @@ function CommandSearchMenu(
               <HotkeyHint
                 command={confirmSplitHotkey}
                 label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
+            <Show when={canOpenInNewTab() && selectedOpensInSplit()}>
+              <HotkeyHint
+                command={confirmTabHotkey}
+                label={t('commandMenu.openInNewTab')}
               />
             </Show>
           </Match>
