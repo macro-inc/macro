@@ -626,3 +626,5 @@ fn full_reconcile_property_order_is_key_sorted_and_noops_emit_nothing() {
 }
 
 mod decorator;
+
+mod ordered_props;

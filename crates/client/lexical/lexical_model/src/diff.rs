@@ -194,6 +194,31 @@ pub enum DiffOp {
         state: Option<SerializedNode>,
     },
 }
+// NodeProps are consumed as ordered JavaScript objects by decorator components.
+fn ordered_props_equal(left: &SerializedNode, right: &SerializedNode) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|((left_key, left), (right_key, right))| {
+                left_key == right_key && ordered_value_equal(left, right)
+            })
+}
+fn ordered_value_equal(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    match (left, right) {
+        (serde_json::Value::Object(left), serde_json::Value::Object(right)) => {
+            ordered_props_equal(left, right)
+        }
+        (serde_json::Value::Array(left), serde_json::Value::Array(right)) => {
+            left.len() == right.len()
+                && left
+                    .iter()
+                    .zip(right)
+                    .all(|(left, right)| ordered_value_equal(left, right))
+        }
+        _ => left == right,
+    }
+}
 fn own_props(view: StateRef<'_>, key: NodeKey) -> Result<SerializedNode, Error> {
     #[cfg(feature = "foreign-nodes")]
     let mut props = if view.state.foreign_instances.has_hooks() {
@@ -581,11 +606,17 @@ pub(crate) fn visit_transition_diff(
                 emit(DiffOp::ElementProps { key, props });
             }
         }
-        if !a.data.dyn_eq(b.data.as_ref()) {
-            emit(DiffOp::NodeProps {
-                key,
-                props: own_props(next, key)?,
-            });
+        let props = if !a.data.dyn_eq(b.data.as_ref()) {
+            Some(own_props(next, key)?)
+        } else if next.kind(key) == Some(NodeKind::Decorator) && !Arc::ptr_eq(&a.data, &b.data) {
+            let previous = own_props(prev, key)?;
+            let current = own_props(next, key)?;
+            (!ordered_props_equal(&previous, &current)).then_some(current)
+        } else {
+            None
+        };
+        if let Some(props) = props {
+            emit(DiffOp::NodeProps { key, props });
         }
         #[cfg(feature = "foreign-nodes")]
         let include_state = options.include_state && !next.state.foreign_instances.has_hooks();
