@@ -148,6 +148,9 @@ pub fn decode_command(
     if let Some(command) = decorator_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
+    if let Some(command) = diff::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if name == "group-b.select-all" {
         return Ok(Some(Command::SelectAll(event.cloned())));
     }

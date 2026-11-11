@@ -1,9 +1,147 @@
-//! Source diff-delete unwrapping at a collapsed block start.
+//! Source diff-delete unwrapping at a collapsed block start, and the Source
+//! DiffNode accept/reject actions behind its header buttons.
 use super::*;
-use crate::nodes::{DiffDeleteNode, DiffNode};
+use crate::NodeHost;
+use crate::nodes::{DiffDeleteNode, DiffInsertNode, DiffNode, Maybe};
+
+#[derive(Clone, Debug, serde::Deserialize)]
+struct DiffAction {
+    key: u32,
+}
+
+static ACCEPT: CommandKey<NodeKey> = CommandKey::new("group-b.diff-accept");
+static REJECT: CommandKey<NodeKey> = CommandKey::new("group-b.diff-reject");
+
+pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    let command = if name == ACCEPT.name() {
+        &ACCEPT
+    } else if name == REJECT.name() {
+        &REJECT
+    } else {
+        return Ok(None);
+    };
+    let action: DiffAction = serde_json::from_str(json)?;
+    Ok(Some(Command::Extension(ExtensionCommand::new(
+        command,
+        NodeKey::from_parts(KeyParts {
+            index: action.key,
+            generation,
+        }),
+    ))))
+}
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    builder.plugin(DiffDelete)
+    builder.plugin(DiffDelete).plugin(DiffActions)
+}
+
+static ACTIONS: [CommandRegistration; 2] = [
+    CommandRegistration {
+        command: CommandKind::Extension(&ACCEPT),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
+    CommandRegistration {
+        command: CommandKind::Extension(&REJECT),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
+];
+
+struct DiffActions;
+impl Plugin for DiffActions {
+    fn name(&self) -> &'static str {
+        "group-b.diff-actions"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &ACTIONS
+    }
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        let Command::Extension(command) = command else {
+            return Ok(Handled::No);
+        };
+        if let Some(diff) = command.payload(&ACCEPT) {
+            if !tx.is::<DiffNode>(*diff) {
+                return Ok(Handled::No);
+            }
+            accept(tx, *diff)?;
+            return Ok(Handled::Yes);
+        }
+        let Some(diff) = command.payload(&REJECT) else {
+            return Ok(Handled::No);
+        };
+        if !tx.is::<DiffNode>(*diff) {
+            return Ok(Handled::No);
+        }
+        reject(tx, *diff)?;
+        Ok(Handled::Yes)
+    }
+}
+
+/// Source DiffNode.handleAccept.
+fn accept(tx: &mut Transaction<'_>, diff: NodeKey) -> Result<(), Error> {
+    let Some(insert) = tx
+        .children_keys(diff)?
+        .into_iter()
+        .find(|child| tx.is::<DiffInsertNode>(*child))
+    else {
+        return Ok(());
+    };
+    let Maybe::Value(markdown) = tx
+        .get::<DiffInsertNode>(insert)
+        .ok_or(Error::NodeNotFound(insert))?
+        .markdown
+        .clone()
+    else {
+        // Source returns when getMarkdown() is undefined.
+        return Ok(());
+    };
+    for child in tx.children_keys(diff)? {
+        tx.remove(child, false)?;
+    }
+    let options = crate::transformers::MacroMarkdownOptions {
+        app_hostname: tx
+            .try_extension::<NodeHost>()
+            .and_then(|host| host.0.clone()),
+    };
+    let transformers = crate::transformers::transformers("all", &options)
+        .map_err(|error| Error::invariant(format!("Macro transformer list: {error}")))?;
+    // $convertFromMarkdownString(markdown, ALL_TRANSFORMERS, diff, false).
+    lexical_markdown::convert_from_markdown_string(
+        tx,
+        &markdown,
+        &transformers,
+        Some(diff),
+        &lexical_markdown::MarkdownOptions::default(),
+    )
+    .map_err(|error| Error::invariant(format!("Diff accept markdown: {error}")))?;
+    let last = tx.last_child(diff);
+    lexical_rich_nodes::utils::unwrap_node(tx, diff)?;
+    if let Some(last) = last {
+        tx.select_end(last)?;
+    }
+    Ok(())
+}
+
+/// Source DiffNode.handleReject.
+fn reject(tx: &mut Transaction<'_>, diff: NodeKey) -> Result<(), Error> {
+    let Some(deleted) = tx
+        .children_keys(diff)?
+        .into_iter()
+        .find(|child| tx.is::<DiffDeleteNode>(*child))
+    else {
+        tx.remove(diff, false)?;
+        return Ok(());
+    };
+    let mut last = None;
+    for child in tx.children_keys(deleted)? {
+        tx.insert_before(diff, child, true)?;
+        last = Some(child);
+    }
+    tx.remove(diff, false)?;
+    if let Some(last) = last {
+        tx.select_end(last)?;
+    }
+    Ok(())
 }
 struct DiffDelete;
 impl Plugin for DiffDelete {
@@ -75,3 +213,6 @@ impl Plugin for DiffDelete {
         Ok(Handled::Yes)
     }
 }
+
+#[cfg(test)]
+mod test;
