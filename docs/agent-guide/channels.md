@@ -1329,14 +1329,14 @@ scrolling row. All is selected initially, followed by Direct messages and custom
 sections in personal display order. All excludes pins except incoming-call rows;
 the shared list renderer owns that exclusion so ringing pins retain their Join
 and Decline actions. Other tabs retain their pinned members. The shared `PillTabs`
-control lives in the floating split header, scrolls horizontally, and reveals the
+control lives in the shared collection header, scrolls horizontally, and reveals the
 selected section. People and funnel icons match desktop.
 
 Search uses the existing dock Search; Chat has no separate search button or
 in-list search field. Opening conversations retains latest-message navigation,
 top-level read marking, incoming-call actions, and pull-to-refresh.
 
-Use the selected section's options button beside the pills to open the shared
+Use the selected section's pinned options button beside the pills to open the shared
 mobile sheet. Visible to, Sort, Display, and mute drill into the sheet with Back,
 not nested touch submenus. Sharing uses the verified current team, including when
 no other shared sections exist. **Edit section** closes the options sheet and opens

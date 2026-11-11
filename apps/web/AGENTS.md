@@ -818,7 +818,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
 - Virtualize mobile name results like desktop Command Menu; local Quick Access sources are unbounded, and mounting them all stalls iOS keyboard focus during layout. Load additional search pages near the scroll end instead of reserving a paging bar.
 - Reconcile mobile full-text rows by entity ID so appending a page preserves DOM rows and scroll position; restore item anchors after responsive row measurement and disable browser scroll anchoring so layout changes cannot override restoration.
-- Reserve the safe area plus the category row above mobile Search, and only the safe area above Channels; their hidden split headers must not add another blank strip.
+- Reserve the safe area plus the category row above mobile Search, and only the safe area above flag-off Channels; let the flagged Channels header own its top inset without reserving it again in the list.
 - Follow [mobile layout and chrome](../../.agents/rules/web/mobile.md#layout-and-chrome) for full-frame views and record tabs; verify their first controls below the navigation with a nonzero safe area on phones and tablets.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.
 - Opt views into session restoration with `split-layout/view-restoration` and set `resume: true` on ordinary layout navigation; publish captured state only through the leave guard's `onCommit`, keep explicit links and new splits fresh, and reuse entry-state captors rather than hidden mounted views.
@@ -943,7 +943,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Rail splits open at latest before notifications load; only rows that stand
   for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign on desktop and phone with `enable-chat-sidebar-sections`; wait for its result and restore the original rail and Recent phone feed when off.
-  Compose phone section navigation with the shared `PillTabs` in the split header, retain its scrolling and active-pill visibility, and use dock Search instead of a separate Chat search control.
+  Compose phone section navigation with the shared `PillTabs` in `ViewShell.Header`, retain its scrolling and active-pill visibility, and use dock Search instead of a separate Chat search control.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   Default desktop Chat to Favorites, Direct messages, the team's channels, custom sections, then All channels; preserve personal section reordering. Keep every joined public/private channel in All channels regardless of custom-section assignments.
   Hide section drag-handle icons; retain whole-heading drag-to-reorder and an icon-free reorder control in an out-of-flow wrapper revealed on keyboard focus without increasing header height. Preserve normal collapse clicks and exclude action buttons from dragging. Keep personal section order and route list navigation through the sectioned renderer's scroll handle, scrolling immediately with two rows of context clamped to the viewport.

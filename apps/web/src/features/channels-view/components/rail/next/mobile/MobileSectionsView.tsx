@@ -1,10 +1,10 @@
+import { ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { enableChannelTags } from '@core/constant/featureFlags';
 import type { ChannelEntity } from '@entity';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
@@ -162,8 +162,8 @@ export function MobileSectionsView(props: {
     },
   });
   return (
-    <>
-      <SplitHeaderLeft>
+    <div class="flex size-full min-h-0 flex-col">
+      <ViewShell.Header class="pb-3">
         <nav
           aria-label={t('channelSections.sections')}
           class="h-10 min-w-0 flex-1"
@@ -201,34 +201,41 @@ export function MobileSectionsView(props: {
             leading={
               <Show when={selectedLabel()}>
                 {(label) => (
-                  <HeaderIsland>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t('channelSections.optionsFor', {
-                        name: label().name,
-                      })}
-                      onClick={() => setOptionsFor(label().id)}
-                    >
-                      <DotsThreeIcon class="size-5" />
-                    </Button>
-                  </HeaderIsland>
+                  <div class="sticky left-(--mobile-chrome-gutter) z-10 shrink-0">
+                    <HeaderIsland>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('channelSections.optionsFor', {
+                          name: label().name,
+                        })}
+                        onClick={() => setOptionsFor(label().id)}
+                      >
+                        <DotsThreeIcon class="size-5" />
+                      </Button>
+                    </HeaderIsland>
+                  </div>
                 )}
               </Show>
             }
           />
         </nav>
-      </SplitHeaderLeft>
-      <ChannelsMobileView
-        source={source}
-        pinned={props.pinned}
-        searchQuery=""
-        onClearSearch={() => {}}
-        horizontalPins
-        scrollKey={selected()}
-        preferences={preferences()}
-        includePinnedInList={selected() !== 'all'}
-      />
+      </ViewShell.Header>
+      <div
+        class="min-h-0 flex-1"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
+        <ChannelsMobileView
+          source={source}
+          pinned={props.pinned}
+          searchQuery=""
+          onClearSearch={() => {}}
+          horizontalPins
+          scrollKey={selected()}
+          preferences={preferences()}
+          includePinnedInList={selected() !== 'all'}
+        />
+      </div>
       <Show when={optionsLabel()}>
         {(label) => (
           <MobileSectionOptions
@@ -285,6 +292,6 @@ export function MobileSectionsView(props: {
           />
         )}
       </Show>
-    </>
+    </div>
   );
 }
