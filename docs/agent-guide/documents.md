@@ -35,6 +35,15 @@ preserves the model and sends no local document update or WAL append. The first
 real text edit adds version 10 in that edit’s normal update; read-only export
 must retain it without another write.
 
+Click the gap between two adjacent code blocks or tables: one paragraph appears
+between them, takes the caret, and accepts typing; Undo and Redo restore the exact
+loaded models. Read-only UI and a revoked live host permission must prevent the
+gap action. On a touch device, hold a table cell without scrolling for 400 ms,
+then move to another cell to extend selection. Moving before the hold completes
+must leave scrolling available. This gesture check does not establish the table
+action bar or its clipboard actions. Disposing overlays during a queued gap
+action must prevent delayed browser focus.
+
 For native document view performance, run the lexical-wasm-view
 `commit-work.browser.e2e.ts` fixture against a source-matched session artifact.
 Typing in one comment should measure that block's anchors, preserve table cell

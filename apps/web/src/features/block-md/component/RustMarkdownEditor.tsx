@@ -100,7 +100,10 @@ export default function RustMarkdownEditor(props: {
               module,
               root: element,
               registry: registerMacroElementViews(createBuiltinRegistry()),
-              installOverlays: installNativeMarkdownOverlays,
+              installOverlays: (view) =>
+                installNativeMarkdownOverlays(view, {
+                  canEdit: permissions.canEdit,
+                }),
               view: {
                 namespace,
                 owner,

@@ -1,9 +1,20 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import type { ViewNode } from '@macro-inc/lexical-wasm-view/view/types';
+import type { Accessor } from 'solid-js';
+import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { dispatchApplicationCommand } from '../group-b/command';
 
 /** Geometry is a view fact; Rust rechecks adjacency and block eligibility. */
-export function registerNativeTrailingParagraph(view: EditorView): () => void {
+export function registerNativeTrailingParagraph(
+  view: EditorView,
+  canEdit: Accessor<boolean>
+): () => void {
+  let disposed = false;
+  const active = () =>
+    !disposed &&
+    view.isMounted &&
+    canEdit() &&
+    view.root.contentEditable === 'true';
   const needsCaret = (node: ViewNode) =>
     node.type === 'code' ||
     node.type === 'custom-code' ||
@@ -11,7 +22,7 @@ export function registerNativeTrailingParagraph(view: EditorView): () => void {
     (node.kind === 'decorator' && view.flags(node)?.isInline === false);
   const click = (event: MouseEvent) => {
     if (
-      view.root.contentEditable !== 'true' ||
+      !active() ||
       event.button !== 0 ||
       event.defaultPrevented ||
       event.target !== view.root
@@ -32,16 +43,29 @@ export function registerNativeTrailingParagraph(view: EditorView): () => void {
       const nextRect = nextElement.getBoundingClientRect();
       if (event.clientY > previousRect.bottom && event.clientY < nextRect.top) {
         event.preventDefault();
-        dispatchApplicationCommand(view, 'group-b.move', {
-          action: 'gap',
-          previous: key,
-          next: nextKey,
-        });
-        view.focus();
+        dispatchApplicationCommand(
+          view,
+          'group-b.move',
+          { action: 'gap', previous: key, next: nextKey },
+          undefined,
+          () => {
+            if (active()) view.focus();
+          }
+        );
         return;
       }
     }
   };
-  view.root.addEventListener('click', click);
-  return () => view.root.removeEventListener('click', click);
+  const listeners = createNativeListenerScope();
+  listeners.add(() => view.root.removeEventListener('click', click));
+  try {
+    view.root.addEventListener('click', click);
+  } catch (error) {
+    disposed = true;
+    return listeners.fail(error);
+  }
+  return () => {
+    disposed = true;
+    listeners.dispose();
+  };
 }
