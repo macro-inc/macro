@@ -15090,6 +15090,7 @@
       "crates/trigger_context",
       "crates/unfurl",
       "crates/upstream_error",
+      "crates/user_events",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
