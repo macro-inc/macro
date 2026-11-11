@@ -26,7 +26,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, repo_root};
+use super::{Mode, google_emulator, microsoft_emulator, repo_root};
 
 #[cfg(test)]
 mod test;
@@ -80,6 +80,9 @@ pub struct Sidecars {
     /// The Gmail emulator, in place of Google. On when the stack runs its own
     /// FusionAuth and the env names no real Google client.
     pub gmail_emulator: bool,
+    /// The Outlook emulator, in place of Microsoft. On when the stack runs
+    /// its own FusionAuth and the env names no real Microsoft client.
+    pub outlook_emulator: bool,
 }
 
 impl Sidecars {
@@ -90,6 +93,7 @@ impl Sidecars {
                     .get("GMAIL_FORWARDER_SA_KEY")
                     .is_some_and(|key| !key.trim().is_empty()),
             gmail_emulator: google_emulator::stands_in(mode, env),
+            outlook_emulator: microsoft_emulator::stands_in(mode, env),
         }
     }
 }
@@ -163,6 +167,27 @@ pub fn generate(
                 networks: net_aliases(&[
                     ("services", &[google_emulator::network_alias()]),
                     ("auth", &[google_emulator::network_alias()]),
+                ]),
+                ..Default::default()
+            }),
+        );
+    }
+    if sidecars.outlook_emulator {
+        let mut volumes = mounts.clone();
+        volumes.push(microsoft_emulator::seed_volume());
+        services.insert(
+            microsoft_emulator::SERVICE.to_string(),
+            Some(dct::Service {
+                image: Some(runtime_image.clone()),
+                volumes: volumes.into_iter().map(dct::Volumes::Simple).collect(),
+                command: Some(dct::Command::Args(microsoft_emulator::command(instance))),
+                ports: dct::Ports::Short(vec![microsoft_emulator::published_port(instance)]),
+                // The services call it on their network; FusionAuth, which
+                // discovers its endpoints and exchanges sign-in codes with
+                // it, only joins `auth`.
+                networks: net_aliases(&[
+                    ("services", &[microsoft_emulator::network_alias()]),
+                    ("auth", &[microsoft_emulator::network_alias()]),
                 ]),
                 ..Default::default()
             }),

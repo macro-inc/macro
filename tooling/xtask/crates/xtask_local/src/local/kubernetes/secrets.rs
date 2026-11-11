@@ -145,6 +145,7 @@ pub(super) fn create(state: &Path, args: &InstanceArgs, params: &mut Value) -> R
         &instance,
         super::super::kickstart::GoogleIdp::from_env(&env).as_ref(),
         super::super::kickstart::GithubIdp::from_env(&env).as_ref(),
+        None,
     )?;
     secret(
         state,

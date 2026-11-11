@@ -379,3 +379,38 @@ fn agent_oauth_redirects_authorize_the_machine_hostname_and_loopback() {
     )));
     assert!(redirects.contains(&json!("https://devbox.example:8090/mcp/oauth/callback")));
 }
+
+#[test]
+fn the_microsoft_idp_discovers_its_endpoints_and_refuses_unverified_domains() {
+    let mut doc = build(
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        None,
+    );
+    let before = doc["requests"].as_array().unwrap().len();
+    let microsoft = MicrosoftIdp {
+        client_id: "local-microsoft-client".into(),
+        client_secret: "local-microsoft-client-secret".into(),
+        issuer: "http://outlook-emulator:8080/common/v2.0".into(),
+    };
+
+    add_microsoft_idp(&mut doc, &microsoft, "function reconcile() { /* microsoft */ }");
+
+    let requests = doc["requests"].as_array().unwrap();
+    assert_eq!(requests.len(), before + 2);
+    let lambda = &requests[before]["body"]["lambda"];
+    assert_eq!(lambda["type"], "OpenIDReconcile");
+    let provider = &requests[before + 1]["body"]["identityProvider"];
+    assert_eq!(provider["name"], "microsoft");
+    assert_eq!(provider["lambdaConfiguration"]["reconcileId"], lambda["id"]);
+    // Endpoints come from the issuer, so FusionAuth verifies the ID token
+    // the lambda reads `xms_edov` from.
+    let oauth2 = &provider["oauth2"];
+    assert_eq!(oauth2["issuer"], "http://outlook-emulator:8080/common/v2.0");
+    assert!(oauth2.get("authorization_endpoint").is_none());
+    assert_eq!(oauth2["emailVerifiedClaim"], "xms_edov");
+    // The issuer is the same for every instance, so the snapshot key keeps it.
+    assert_eq!(without_redirect_urls(doc.clone()), without_redirect_urls(doc));
+}

@@ -14,6 +14,7 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::google_emulator;
 use super::instance::Port;
+use super::microsoft_emulator;
 use super::inventory::services_for_mode;
 use super::local_env::Tunnels;
 use super::{Mode, arch, env_layer, gen_compose, instance::Instance, proxy, workspace_root};
@@ -141,6 +142,18 @@ fn local_compose_flavor(
             Some(_) => {}
         }
     }
+    if sidecars.outlook_emulator {
+        match services.get(microsoft_emulator::SERVICE) {
+            None => failures.push(
+                "outlook_emulator sidecar is absent although no real Microsoft client is configured"
+                    .into(),
+            ),
+            Some(node) if !has_app_out_mount(node) => {
+                failures.push("outlook_emulator is missing the /app/out bind mount".into());
+            }
+            Some(_) => {}
+        }
+    }
     if sidecars.gmail_forwarder {
         match services.get("gmail_forwarder") {
             None => failures.push(
@@ -166,13 +179,15 @@ fn local_compose_flavor(
         "validate-local-compose ({}): OK ({} Rust services{}, computers {:?})",
         flavor_label(static_frontend),
         services_for_mode(mode).count(),
-        if sidecars.gmail_emulator {
-            " + gmail_emulator"
-        } else if sidecars.gmail_forwarder {
-            " + gmail_forwarder"
-        } else {
-            ""
-        },
+        [
+            (sidecars.gmail_emulator, " + gmail_emulator"),
+            (sidecars.outlook_emulator, " + outlook_emulator"),
+            (sidecars.gmail_forwarder, " + gmail_forwarder"),
+        ]
+        .iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, label)| *label)
+        .collect::<String>(),
         computers.fleet(),
     );
     Ok(())

@@ -39,6 +39,7 @@ pub mod kubernetes;
 pub mod local_env;
 pub mod localstack;
 pub mod mailpit;
+pub mod microsoft_emulator;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
@@ -1015,7 +1016,11 @@ fn prepare(
         let google = kickstart::GoogleIdp::from_env(&env.merged)
             .unwrap_or_else(|| google_emulator::idp(instance));
         let github = kickstart::GithubIdp::from_env(&env.merged);
-        fusionauth::write_kickstart(instance, Some(&google), github.as_ref())?;
+        // Without a real Microsoft client the stack's Outlook emulator is
+        // Microsoft.
+        let microsoft =
+            microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
+        fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1799,7 +1804,8 @@ pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     // No env is resolved here, so the sidecars are those of a stack without
-    // integration secrets: the Gmail emulator, and no Gmail forwarder.
+    // integration secrets: the Gmail and Outlook emulators, and no Gmail
+    // forwarder.
     let sidecars = gen_compose::Sidecars::from_env(Mode::Local, &std::collections::BTreeMap::new());
     let path = gen_compose::generate(
         Mode::Local,
