@@ -66,7 +66,7 @@ function setup(canEdit = true, value: Property['value'] = 'Keep this value') {
 }
 it('unpins without removing the saved property', async () => {
   const { remove, unpin } = setup();
-  await fireEvent.click(screen.getByRole('button', { name: 'Unpin' }));
+  await fireEvent.click(screen.getByRole('button', { name: 'Unpin property' }));
   expect(unpin).toHaveBeenCalledWith('assignment', 'definition');
   expect(remove).not.toHaveBeenCalled();
 });
@@ -80,7 +80,7 @@ it('unlinks by clearing the value and keeps the pin', async () => {
 });
 it('offers no unlink when the property has no value', () => {
   setup(true, null);
-  expect(screen.getByRole('button', { name: 'Unpin' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Unpin property' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Unlink' })).toBeNull();
 });
 it('never offers deleting the property from the item', () => {

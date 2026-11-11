@@ -46,6 +46,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
     props.canManage && ctx.canEdit && !props.property.isMetadata;
   const canUnlink = () =>
     canManage() &&
+    !props.property.isRequired &&
     !props.property.propertyId.startsWith('pending:') &&
     hasValue(props.property);
   const [unlinking, setUnlinking] = createSignal(false);
