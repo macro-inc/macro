@@ -1624,7 +1624,6 @@ Check: create a view for a contact and a domain, open it, mark a
 thread read and watch the dot, reorder two views and reload, then search inside
 the view and confirm results stay within it.
 
-
 Opening a row clears its unread state immediately; direct details mark read when
 ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
 mobile, and email inbox checks.
