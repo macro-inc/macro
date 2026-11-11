@@ -192,14 +192,20 @@ export class Idea {
   }
 
   /**
-   * The user takes up this idea. A background prompt idea starts running in a
-   * hidden session (see `run`), and one whose last run failed runs again; any
-   * other idea is only marked accepted, so do what it suggests yourself. For
-   * the user's own agent; a generation session gets a 403.
+   * Mark this idea as taken up for the user. Only the user starts a
+   * background prompt idea's run, from the app: accepting one here only
+   * takes it on (`state` becomes `accepted`, no run), so tell the user it is
+   * ready for them to run. Any other idea becomes done, so do what it
+   * suggests yourself. Fails with 409 when the idea changed since it was
+   * read: read it again. For the user's own agent; a generation session
+   * gets a 403.
    */
   async accept(): Promise<void> {
     unwrap(
-      await this.client.scheduledAction.acceptIdea({ path: { id: this.id } }),
+      await this.client.scheduledAction.acceptIdea({
+        path: { id: this.id },
+        body: { updatedAt: this.record.updatedAt },
+      }),
     );
   }
 

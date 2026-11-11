@@ -760,7 +760,11 @@ async fn an_idea_names_a_part_only_with_its_own_item(pool: PgPool) {
         .suggest(session, with_part("quotes:own", "thread-1:message"))
         .await;
     assert!(own.ok, "{:?}", own.problems);
-    let feed = h.service.feed(&user(OWNER), IdeaCaller::User, None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.ideas.len(), 1);
     assert_eq!(
         feed.ideas[0].about[0].part_id.as_deref(),
@@ -812,7 +816,11 @@ async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
     // Acting on an idea that isn't a background run finishes it: it shows
     // in the feed's done list, and accepting it again changes nothing.
     h.accept(&user(OWNER), idea.id).await.unwrap();
-    let feed = h.service.feed(&user(OWNER), IdeaCaller::User, None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert!(feed.ideas.is_empty());
     assert_eq!(feed.done[0].id, idea.id);
     assert_eq!(feed.done[0].state, IdeaState::Done);
@@ -1304,12 +1312,21 @@ async fn only_the_person_starts_a_background_run(pool: PgPool) {
         .await
         .unwrap();
     assert!(runs.started.lock().unwrap().is_empty());
-    let feed = h.service.feed(&user(OWNER), IdeaCaller::User, None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert_eq!(feed.ideas[0].state, IdeaState::Accepted);
     assert!(feed.ideas[0].run.is_none());
     // Again, still nothing runs.
     h.service
-        .accept(&user(OWNER), agent(), idea.id, as_agent(feed.ideas[0].updated_at))
+        .accept(
+            &user(OWNER),
+            agent(),
+            idea.id,
+            as_agent(feed.ideas[0].updated_at),
+        )
         .await
         .unwrap();
     assert!(runs.started.lock().unwrap().is_empty());
@@ -1351,7 +1368,12 @@ async fn a_background_idea_runs_only_as_the_person_saw_it(pool: PgPool) {
     };
     assert!(matches!(
         h.service
-            .accept(&user(OWNER), IdeaCaller::User, idea.id, as_person(idea.updated_at))
+            .accept(
+                &user(OWNER),
+                IdeaCaller::User,
+                idea.id,
+                as_person(idea.updated_at)
+            )
             .await,
         Err(IdeaError::Changed)
     ));
@@ -1402,7 +1424,11 @@ async fn a_run_left_waiting_is_given_up_and_runs_again(pool: PgPool) {
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
     assert_eq!(h.service.settle_runs().await.unwrap(), 2);
     assert_eq!(runs.discarded.lock().unwrap().len(), 2);
-    let feed = h.service.feed(&user(OWNER), IdeaCaller::User, None).await.unwrap();
+    let feed = h
+        .service
+        .feed(&user(OWNER), IdeaCaller::User, None)
+        .await
+        .unwrap();
     assert!(
         feed.ideas
             .iter()

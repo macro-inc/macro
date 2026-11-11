@@ -19,10 +19,10 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger, Idea,
-    IdeaCaller, IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome,
-    Ideas, KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError,
-    SessionKind, SessionReadError, SessionState, StoredRun, SuggestIdea, Target,
+    Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger,
+    Idea, IdeaCaller, IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState,
+    IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled,
+    RunStartError, SessionKind, SessionReadError, SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
     GenerationSessions, IdeaAccess, IdeaApi, IdeaDrafts, IdeaRepo, Limits, RequestSessions,

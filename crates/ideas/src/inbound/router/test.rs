@@ -139,6 +139,8 @@ impl MacroAuthorizationService for FakeAuthorization {
 #[derive(Default)]
 struct FakeIdeas {
     callers: Mutex<Vec<(String, IdeaCaller)>>,
+    /// Whether each accept was the person's own.
+    by_person: Mutex<Vec<bool>>,
     refused: Option<Uuid>,
 }
 
@@ -176,7 +178,9 @@ impl IdeaApi for FakeIdeas {
         user: &MacroUserIdStr<'static>,
         caller: IdeaCaller,
         _: Uuid,
+        accept: crate::domain::model::Accept,
     ) -> Result<(), IdeaError> {
+        self.by_person.lock().unwrap().push(accept.by_person);
         self.reach(user, caller)
     }
 
@@ -193,7 +197,7 @@ impl IdeaApi for FakeIdeas {
         unreachable!()
     }
 
-    async fn kept(&self, _: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, _: Uuid, _: Uuid) -> Result<u32, IdeaError> {
         unreachable!()
     }
 
@@ -270,7 +274,14 @@ async fn send(
     if program {
         request = request.header(CODE_EXECUTION_HEADER, "1");
     }
-    let request = request.body(Body::empty()).unwrap();
+    // Accepting carries the idea as the caller read it.
+    let body = if uri.ends_with("/accept") {
+        request = request.header(header::CONTENT_TYPE, "application/json");
+        Body::from(r#"{"updatedAt":"2026-11-10T09:00:00.123456Z"}"#)
+    } else {
+        Body::empty()
+    };
+    let request = request.body(body).unwrap();
     agent_correlation::context::scope(correlation, router.oneshot(request))
         .await
         .unwrap()
@@ -345,4 +356,54 @@ async fn a_refused_generation_session_gets_a_403() {
         let status = send(&service, method, &uri, AGENT_JWT, true, Some(generation)).await;
         assert_eq!(status, StatusCode::FORBIDDEN, "{method} {uri}");
     }
+}
+
+/// Only the person's own session, with no program's marks, is the person:
+/// an agent's credential, a program's request or a code-mode invocation
+/// acts for them, and their accept never counts as the person's.
+#[tokio::test]
+async fn only_the_persons_own_session_accepts_as_the_person() {
+    let service = Arc::new(FakeIdeas::default());
+    let accept = format!("/ideas/{}/accept", Uuid::now_v7());
+    for (jwt, program, correlation) in [
+        (SESSION_JWT, false, None),
+        (SESSION_JWT, true, None),
+        (SESSION_JWT, false, Some(Uuid::now_v7())),
+        (AGENT_JWT, false, None),
+    ] {
+        let status = send(&service, "POST", &accept, jwt, program, correlation).await;
+        assert!(
+            status.is_success(),
+            "{jwt} {program} {correlation:?}: {status}"
+        );
+    }
+    assert_eq!(
+        *service.by_person.lock().unwrap(),
+        [true, false, false, false]
+    );
+    assert_eq!(
+        service.callers.lock().unwrap()[0].1,
+        IdeaCaller::User,
+        "only the first is the person"
+    );
+    assert!(
+        service.callers.lock().unwrap()[1..]
+            .iter()
+            .all(|(_, caller)| matches!(caller, IdeaCaller::Agent { .. }))
+    );
+    // Without the idea as read, accepting is refused.
+    let router: Router = idea_router(IdeaRouterState {
+        service: Arc::clone(&service),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
+    });
+    let bare = Request::builder()
+        .method("POST")
+        .uri(&accept)
+        .header(header::AUTHORIZATION, format!("Bearer {SESSION_JWT}"))
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        router.oneshot(bare).await.unwrap().status(),
+        StatusCode::BAD_REQUEST
+    );
 }

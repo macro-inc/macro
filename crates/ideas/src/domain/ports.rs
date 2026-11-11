@@ -9,10 +9,10 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, Idea, IdeaCaller, IdeaContent,
-    IdeaError, IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason,
-    RetireIdea, RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun,
-    SuggestIdea, Target,
+    Accept, AttachDraft, Change, GenerationSession, GenerationTrigger, Idea, IdeaCaller,
+    IdeaContent, IdeaError, IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget,
+    ResolveReason, RetireIdea, RewriteIdea, RunSettled, RunStartError, SessionReadError,
+    SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
