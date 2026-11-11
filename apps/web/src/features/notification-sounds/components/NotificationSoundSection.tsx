@@ -44,7 +44,7 @@ export function NotificationSoundSection(props: {
   return (
     <SettingsSection
       title="Sounds"
-      description="Play a sound when a notification arrives. Saved on this device."
+      description="Sounds for notifications and browser calls. Saved on this device."
     >
       <SettingsCard>
         <SettingsRow
@@ -62,7 +62,7 @@ export function NotificationSoundSection(props: {
         <SettingsRow
           stackOnNarrow
           label="Call sounds"
-          description="Play a sound when someone joins or leaves a call."
+          description="Play a sound when someone joins or leaves a browser call."
         >
           <Button
             type="button"

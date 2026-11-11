@@ -22,7 +22,7 @@ export type NotificationSoundCategorySettings = {
 };
 
 export type NotificationSoundSettings = {
-  /** Master switch; sounds are off until the person turns them on. */
+  /** Notification sounds are off until the person turns them on. */
   enabled: boolean;
   /** Participant cues are independent of notification sounds. */
   callSoundsEnabled: boolean;
