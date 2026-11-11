@@ -3,6 +3,7 @@ import {
   type BrowserContext,
   expect,
   type Page,
+  type Request,
   test,
 } from '@playwright/test';
 import { splitContainerSelector } from '../../src/lib/core/dom-selectors';
@@ -23,8 +24,8 @@ type OpenSide = {
   side: Side;
   page: Page;
   errors: string[];
-  /** Rejects when the browser drops the page's requests; see README.md. */
-  networkChanged: Promise<never>;
+  /** Whether the browser has dropped any of the page's requests. */
+  dropped: () => boolean;
 };
 
 type SignedInState = Awaited<ReturnType<BrowserContext['storageState']>>;
@@ -77,24 +78,45 @@ async function openSide(
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  const networkChanged = new Promise<never>((_, reject) => {
-    page.on('requestfailed', (request) => {
-      if (request.failure()?.errorText !== 'net::ERR_NETWORK_CHANGED') return;
-
-      reject(
-        new Error(
-          `${side}: Chromium dropped requests (net::ERR_NETWORK_CHANGED), so the page is incomplete`
-        )
-      );
-    });
+  let dropped = false;
+  page.on('requestfailed', (request) => {
+    if (isNetworkChange(request)) dropped = true;
   });
-  // Only a state in progress listens; without this an idle rejection is unhandled.
-  networkChanged.catch(() => {});
 
   // A dev build serves thousands of modules, so wait on content, not `load`.
   await page.goto(`${origin}/app${view.path}`, { waitUntil: 'commit' });
 
-  return { side, page, errors, networkChanged };
+  return { side, page, errors, dropped: () => dropped };
+}
+
+const isNetworkChange = (request: Request) =>
+  request.failure()?.errorText === 'net::ERR_NETWORK_CHANGED';
+
+/**
+ * Chromium drops a page's in-flight requests when a network interface
+ * changes, which leaves a dev build blank. Fail at once so the view is
+ * retried, instead of waiting out the timeout on a page that will never load.
+ */
+async function withoutDrops(open: OpenSide, work: () => Promise<void>) {
+  const failure = new Error(
+    `${open.side}: Chromium dropped requests (net::ERR_NETWORK_CHANGED), so the page is incomplete`
+  );
+  if (open.dropped()) throw failure;
+
+  let stopListening = () => {};
+  const droppedNow = new Promise<never>((_, reject) => {
+    const onFailed = (request: Request) => {
+      if (isNetworkChange(request)) reject(failure);
+    };
+    open.page.on('requestfailed', onFailed);
+    stopListening = () => open.page.off('requestfailed', onFailed);
+  });
+
+  try {
+    await Promise.race([work(), droppedNow]);
+  } finally {
+    stopListening();
+  }
 }
 
 async function screenshot(open: OpenSide, name: string) {
@@ -124,7 +146,7 @@ for (const view of views) {
 
       try {
         for (const open of [baseline, branch]) {
-          await Promise.race([state.go(open.page), open.networkChanged]);
+          await withoutDrops(open, () => state.go(open.page));
         }
       } finally {
         // Kept for a state that never arrived, and for what a diff cannot judge.

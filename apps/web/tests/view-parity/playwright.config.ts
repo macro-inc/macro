@@ -26,7 +26,6 @@ export default defineConfig({
   use: {
     headless: true,
     ignoreHTTPSErrors: true,
-    reducedMotion: 'reduce',
     launchOptions,
   },
   projects: [
