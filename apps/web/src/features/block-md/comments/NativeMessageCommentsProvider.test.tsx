@@ -6,7 +6,10 @@ import { DRAFT_THREAD_ID } from '@core/comments/commentType';
 import { createNativeComments } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-comments';
 import * as native from '@core/document-session/wasm/document_session_wasm.js';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
-import { ABI_MAJOR } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  ABI_MAJOR,
+  CommandCode,
+} from '@macro-inc/collaboration/session/abi.generated';
 import {
   createBuiltinRegistry,
   mountLocalSessionView,
@@ -205,6 +208,7 @@ function setup() {
   return {
     state,
     session,
+    comments,
     scroll,
     markElement: () => session.root.querySelector('mark'),
     caretInMark: () =>
@@ -306,6 +310,183 @@ test('a native draft opens from a real selection, survives a refused publication
     controls.discard();
     expect(controls.current()).toBeUndefined();
     expect(harness.state.comments.marks[id]).toBeUndefined();
+  } finally {
+    await harness.close();
+  }
+});
+
+test('the native draft highlight follows its durable cursors through edits', async () => {
+  const harness = setup();
+  // jsdom has no layout: one rect per range, as wide as the range's text.
+  const ranges: string[] = [];
+  const emptyRects = Range.prototype.getClientRects;
+  Range.prototype.getClientRects = function (this: Range) {
+    ranges.push(this.toString());
+    return Object.assign([new DOMRect(0, 0, this.toString().length, 10)], {
+      item: () => null,
+    }) as unknown as DOMRectList;
+  };
+  try {
+    harness.finishLoading();
+    const controls = harness.state.editor.md.commentDraft;
+    if (!controls) throw new Error('Missing native draft controls');
+    const before = [...harness.session.view.mirror.values()].find(
+      (node) => node.kind === 'text' && node.text === 'before '
+    );
+    if (!before) throw new Error('Missing native text');
+    const select = (anchor: number, focus: number) =>
+      harness.session.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: before.key, offset: anchor, type: 'text' },
+        focus: { key: before.key, offset: focus, type: 'text' },
+      });
+    const highlights = () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-comment-draft-highlight]'
+        ),
+      ].map((element) => element.style.width);
+
+    select(0, 6);
+    expect(controls.create()).toBe(true);
+    expect(ranges.at(-1)).toBe('before');
+    expect(highlights()).toEqual(['6px']);
+
+    // An edit before the range shifts it; the highlight keeps the same text.
+    select(0, 0);
+    harness.session.port.command(CommandCode.InsertText, 0, 0, 'XY');
+    expect(ranges.at(-1)).toBe('before');
+    expect(highlights()).toEqual(['6px']);
+
+    // An edit inside the range widens it, and the highlight stays visible.
+    select(5, 5);
+    harness.session.port.command(CommandCode.InsertText, 0, 0, 'Z');
+    expect(ranges.at(-1)).toBe('befZore');
+    expect(highlights()).toEqual(['7px']);
+    expect(controls.current()).toBeDefined();
+
+    controls.discard();
+    expect(highlights()).toEqual([]);
+  } finally {
+    Range.prototype.getClientRects = emptyRects;
+    await harness.close();
+  }
+});
+
+function draftHarness() {
+  const harness = setup();
+  harness.finishLoading();
+  const controls = harness.state.editor.md.commentDraft;
+  if (!controls) throw new Error('Missing native draft controls');
+  const text = (value: string) => {
+    const node = [...harness.session.view.mirror.values()].find(
+      (entry) => entry.kind === 'text' && entry.text === value
+    );
+    if (!node) throw new Error(`Missing native text ${value}`);
+    return node;
+  };
+  const select = (value: string, anchor: number, focus: number) =>
+    harness.session.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: text(value).key, offset: anchor, type: 'text' },
+      focus: { key: text(value).key, offset: focus, type: 'text' },
+    });
+  const publication = (id: string) => {
+    const value = harness.state.comments.marks[id]?.publication;
+    if (!value) throw new Error(`Missing publication for ${id}`);
+    return value;
+  };
+  const remove = vi.spyOn(harness.comments, 'remove').mockResolvedValue(true);
+  return { ...harness, controls, select, publication, remove };
+}
+
+test('an abandoned native publication cleans up its own mark, never the newer draft', async () => {
+  const harness = draftHarness();
+  try {
+    let finish!: (accepted: boolean) => void;
+    vi.spyOn(harness.comments, 'publish').mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (finish = resolve))
+    );
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const firstId = harness.controls.current();
+    if (!firstId) throw new Error('Missing first draft');
+    const firstPublish = harness.publication(firstId).publish();
+
+    harness.controls.discard();
+    harness.select('Commented text', 0, 9);
+    expect(harness.controls.create()).toBe(true);
+    const secondId = harness.controls.current();
+    expect(secondId).not.toBe(firstId);
+
+    finish(true);
+    expect(await firstPublish).toBe(false);
+    expect(harness.remove).toHaveBeenCalledExactlyOnceWith(firstId);
+    expect(harness.controls.current()).toBe(secondId);
+  } finally {
+    await harness.close();
+  }
+});
+
+test('a published native draft is removed on discard and kept once its comment posts', async () => {
+  const harness = draftHarness();
+  try {
+    vi.spyOn(harness.comments, 'publish').mockResolvedValue(true);
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const discarded = harness.controls.current();
+    if (!discarded) throw new Error('Missing draft');
+    expect(await harness.publication(discarded).publish()).toBe(true);
+    harness.controls.discard();
+    await vi.waitFor(() =>
+      expect(harness.remove).toHaveBeenCalledExactlyOnceWith(discarded)
+    );
+
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const posted = harness.controls.current();
+    if (!posted) throw new Error('Missing draft');
+    expect(await harness.publication(posted).publish()).toBe(true);
+    expect(
+      await harness.publication(posted).post(async () => ({ id: 'message' }))
+    ).toEqual({ id: 'message' });
+    harness.controls.commit(posted);
+    expect(harness.controls.current()).toBeUndefined();
+    expect(harness.remove).not.toHaveBeenCalledWith(posted);
+
+    // A send that succeeds after its draft was closed keeps the mark.
+    harness.select('before ', 0, 6);
+    expect(harness.controls.create()).toBe(true);
+    const closed = harness.controls.current();
+    if (!closed) throw new Error('Missing draft');
+    expect(await harness.publication(closed).publish()).toBe(true);
+    let deliver!: (value: { id: string }) => void;
+    const sending = harness
+      .publication(closed)
+      .post(
+        () => new Promise<{ id: string }>((resolve) => (deliver = resolve))
+      );
+    harness.controls.discard();
+    deliver({ id: 'late' });
+    expect(await sending).toEqual({ id: 'late' });
+    expect(harness.remove).not.toHaveBeenCalledWith(closed);
+  } finally {
+    await harness.close();
+  }
+});
+
+test('a native draft inside an existing comment leaves that comment on cancellation', async () => {
+  const harness = draftHarness();
+  try {
+    harness.loadComments();
+    harness.select('Commented text', 2, 7);
+    expect(harness.controls.create()).toBe(true);
+    expect(harness.state.comments.activeCommentThread).toBe(DRAFT_THREAD_ID);
+    harness.controls.discard();
+    expect(harness.remove).not.toHaveBeenCalled();
+    expect(harness.state.comments.threads.root?.anchorId).toBe('mark');
+    expect(harness.markElement()?.textContent).toBe('Commented text');
+    expect(harness.state.comments.marks.mark?.existsOnServer).toBe(true);
   } finally {
     await harness.close();
   }
