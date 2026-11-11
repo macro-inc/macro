@@ -521,7 +521,13 @@ require their real document-owned callbacks. Task and document composer requests
 run synchronously after settled search removal, before queued picker requests;
 their boolean reports opening the composer, while placeholder admission belongs
 to its actual callbacks. The installer accepts those
-capabilities explicitly. The lifecycle controls in
+capabilities explicitly. The app installs the working native actions; entries
+without an installed native handler or request callback are excluded through the
+shared menu's existing ignore-ID option. The native host rechecks this capability
+before removing search text. The Source catalog, ordering and dependency checks
+remain unchanged. File and equation contexts are real document-owned controllers;
+equation binding occurs after initial projection, never during overlay setup.
+The lifecycle controls in
 `editing/native-actions-lifecycle.test.tsx` exercise actual SessionPort queries
 and registration cleanup; rendered catalog parity and app callback activation
 require their corresponding browser gates.

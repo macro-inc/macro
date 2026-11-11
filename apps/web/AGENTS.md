@@ -1,6 +1,6 @@
 ## Development Commands
 
-- Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope.
+- Share native inline-search subscriptions across menus while preserving each controller kind, ordered equal callbacks, local UI resets, generation readiness and the actual CRITICAL Enter scope. Hide action rows until their native handler or document-owned request callback is installed, and check that capability before removing search text.
 - Share floating-format markup through FormatMenuHost; retain actual Source wrapper/plugin registrations and require a qualified published-state observation before native metadata drives the menu.
 
 - Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.

@@ -88,7 +88,7 @@ export default function RustMarkdownEditor(props: {
   const flow = useFlow();
   const userId = useUserId();
   const owner = getOwner() ?? undefined;
-  const { documentId, permissions, state } = useMarkdownDocument();
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const [ready, setReady] = createSignal(false);
   const abort = new AbortController();
@@ -246,6 +246,18 @@ export default function RustMarkdownEditor(props: {
                       sourceDocumentId: documentId(),
                       disableMentionTracking: false,
                     },
+                    actions: {
+                      actionContext: {
+                        sourceDocumentId: documentId(),
+                        sourceBlockName: kind() === 'document' ? 'md' : kind(),
+                        disableMentionTracking: false,
+                      },
+                      requests: {
+                        openFileDialog: (kind) =>
+                          imageUploads.openFileDialog(kind),
+                        requestEquation: () => equationContext.requestCreate(),
+                      },
+                    },
                   });
                   if (abort.signal.aborted) {
                     const late = createNativeListenerScope();
@@ -362,6 +374,9 @@ export default function RustMarkdownEditor(props: {
               }
             });
             if (!abort.signal.aborted) {
+              if (lastError) throw lastError;
+              equationContext.bindView(mounted.view);
+              if (abort.signal.aborted) return;
               if (lastError) throw lastError;
               setReady(true);
               if (abort.signal.aborted) return;

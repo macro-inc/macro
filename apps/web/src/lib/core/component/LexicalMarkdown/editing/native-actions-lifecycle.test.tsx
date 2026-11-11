@@ -484,3 +484,28 @@ for (const kind of ['task', 'document'] as const) {
     }
   });
 }
+
+test('an unbound request cannot remove the live search before returning', async () => {
+  const runtime = mount();
+  const host = createNativeActionMenuHost(
+    runtime.view,
+    { requestTable() {} },
+    () => true
+  );
+  try {
+    await dispatchApplicationCommandSettled(
+      runtime.view,
+      'group-a.search-trigger',
+      { kind: 'actions' }
+    );
+    const before = runtime.executor.session.serializedState();
+    const gif = ACTIONS.find((item) => item.id === 'gif');
+    if (!gif) throw new Error('Missing source GIF catalog item');
+    host.select(gif, 'keyboard');
+    expect(runtime.executor.session.serializedState()).toBe(before);
+  } finally {
+    host.dispose();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});

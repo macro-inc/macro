@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { Telemetry } from '@macro-inc/observability';
 import { ACTIONS } from '../../plugins/actions/actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
 import {
@@ -44,7 +45,7 @@ export function createNativeActionMenuHost(
   view: EditorView,
   requests: NativeActionRequests,
   alive: () => boolean
-): ActionMenuHost & { dispose(): void } {
+): ActionMenuHost & { supports(action: Action): boolean; dispose(): void } {
   let disposed = false;
   const rootListeners = new Set<() => void>();
   const active = () => !disposed && alive() && view.isMounted;
@@ -62,6 +63,31 @@ export function createNativeActionMenuHost(
       throw new Error('Invalid native action dependency response');
     }
     return result.available;
+  };
+  const supports = (item: Action) => {
+    if (!active()) return false;
+    if (typeof requests.additionalActions?.get(item) === 'function')
+      return true;
+    if (!ACTIONS.includes(item)) return false;
+    if (blockKinds.has(item.id) || item.id === 'hr') return true;
+    switch (item.id) {
+      case 'table':
+        return typeof requests.requestTable === 'function';
+      case 'image':
+      case 'video':
+        return typeof requests.openFileDialog === 'function';
+      case 'gif':
+        return typeof requests.requestGif === 'function';
+      case 'latex':
+        return typeof requests.requestEquation === 'function';
+      case 'link':
+        return typeof requests.requestLink === 'function';
+      case 'task':
+      case 'document':
+        return typeof requests.requestCreation === 'function';
+      default:
+        return false;
+    }
   };
   const command = async (
     name: string,
@@ -103,52 +129,67 @@ export function createNativeActionMenuHost(
       requests.requestCreation(item.id, context);
       return;
     }
+    const requestContext = Telemetry.captureContext();
     await new Promise<void>((resolve) => queueMicrotask(resolve));
     if (!current()) return;
-    if (item.id === 'table') {
-      await requests.requestTable();
-    } else if (
-      (item.id === 'image' || item.id === 'video') &&
-      requests.openFileDialog
-    ) {
-      requests.openFileDialog('all');
-    } else if (item.id === 'gif' && requests.requestGif) {
-      requests.requestGif();
-    } else if (item.id === 'latex' && requests.requestEquation) {
-      requests.requestEquation();
-    } else if (item.id === 'link' && requests.requestLink) {
-      requests.requestLink();
-    } else {
-      throw new Error(`Native action capability is unavailable: ${item.id}`);
-    }
+    return requestContext.run(async () => {
+      if (item.id === 'table') {
+        await requests.requestTable();
+      } else if (
+        (item.id === 'image' || item.id === 'video') &&
+        requests.openFileDialog
+      ) {
+        requests.openFileDialog('all');
+      } else if (item.id === 'gif' && requests.requestGif) {
+        requests.requestGif();
+      } else if (item.id === 'latex' && requests.requestEquation) {
+        requests.requestEquation();
+      } else if (item.id === 'link' && requests.requestLink) {
+        requests.requestLink();
+      } else {
+        throw new Error(`Native action capability is unavailable: ${item.id}`);
+      }
+    });
   };
   const select = async (
     item: Action | undefined,
     origin: 'pointer' | 'keyboard',
     context?: ActionContext
   ) => {
-    if (!active()) return;
-    const generation = view.mirror.keyGeneration;
-    const current = () => active() && view.mirror.keyGeneration === generation;
-    const removal = await dispatchApplicationCommandSettled(
-      view,
-      'group-a.search-remove',
-      {}
-    );
-    if (removal.status === 'error') throw removal.error;
-    if (removal.status === 'cancelled' || !current() || !item) return;
-    if (
-      origin === 'pointer' &&
-      item.dependencies &&
-      !hasDependencies(item.dependencies)
-    ) {
-      console.error('Dispatched Action with missing dependencies:', item);
-      return;
+    if (!active() || (item && !supports(item))) return;
+    const span = Telemetry.span('editor.action');
+    span.setAttr('action.id', item?.id ?? 'none');
+    span.setAttr('action.origin', origin);
+    if (context?.sourceDocumentId)
+      span.setAttr('document.id', context.sourceDocumentId);
+    try {
+      const generation = view.mirror.keyGeneration;
+      const current = () =>
+        active() && view.mirror.keyGeneration === generation;
+      const removal = await span.run(() =>
+        dispatchApplicationCommandSettled(view, 'group-a.search-remove', {})
+      );
+      if (removal.status === 'error') throw removal.error;
+      if (removal.status === 'cancelled' || !current() || !item) return;
+      if (
+        origin === 'pointer' &&
+        item.dependencies &&
+        !hasDependencies(item.dependencies)
+      ) {
+        console.error('Dispatched Action with missing dependencies:', item);
+        return;
+      }
+      if (!current()) return;
+      await span.run(() => run(item, current, context));
+    } catch (error) {
+      span.error(error);
+      throw error;
+    } finally {
+      span.end();
     }
-    if (!current()) return;
-    await run(item, current, context);
   };
   return {
+    supports,
     root: () => (active() ? view.root : null),
     subscribeRoot(listener) {
       rootListeners.add(listener);

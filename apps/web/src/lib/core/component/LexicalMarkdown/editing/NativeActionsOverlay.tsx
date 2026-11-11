@@ -9,6 +9,8 @@ import {
 } from 'solid-js';
 import { HostedActionMenu } from '../component/menu/ActionsMenu';
 import { HostedFloatingTableMenu } from '../component/menu/FloatingTableMenu';
+import { ACTIONS } from '../plugins/actions/actions';
+import { mergeActions } from '../plugins/actions/available-actions';
 import { dispatchApplicationCommandSettled } from '../plugins/group-b/command';
 import { insertNativeTable } from '../plugins/tables/native';
 import type { MenuOperations } from '../shared/inlineMenu';
@@ -126,10 +128,21 @@ export function NativeActionsOverlay(props: {
   } catch (error) {
     unavailable(error);
   }
+  const ignoredActionIds = () => [
+    ...(props.source.ignoreActionIds ?? []),
+    ...mergeActions(ACTIONS, props.source.additionalActions)
+      .filter((action) => !host.supports(action))
+      .map((action) => action.id),
+  ];
   return (
     <Show when={ready() && props.alive()}>
       <HostedFloatingTableMenu host={picker} canEdit={props.canEdit} />
-      <HostedActionMenu {...props.source} menu={props.menu} host={host} />
+      <HostedActionMenu
+        {...props.source}
+        ignoreActionIds={ignoredActionIds()}
+        menu={props.menu}
+        host={host}
+      />
     </Show>
   );
 }

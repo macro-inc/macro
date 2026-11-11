@@ -18,6 +18,14 @@ and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Verify engine parity before treating the flagged path as
 ready; native menus and anchored comments also require their view installers.
 
+In the native body, type `/checklist`, choose Checklist, and type a label. Check
+heading, list, code and divider choices; `/table` opens the size picker. Image
+and Video open the shared all-media file dialog, and Math opens the retained
+equation menu in a plain document. GIF, Link, Task, Document, Query and Database
+stay hidden until their document-owned request callbacks are installed. Verify
+that closing the document retires its menu registrations without affecting a
+newly opened editor.
+
 Switch the body read-only and try paste, cut, drop and composition input: the
 model must stay unchanged while selecting and copying remain available. Unlock
 the same view and verify editing resumes. A rich paste waiting for its HTML
