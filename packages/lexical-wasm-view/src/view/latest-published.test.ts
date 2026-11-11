@@ -639,3 +639,85 @@ test('closing inside the real Escape callback retires without replacing its opaq
     await runtime.close();
   }
 });
+
+for (const lane of ['close', 'direct-dispose']) {
+  test(`terminal observer cannot admit ordinary command input during ${lane}`, async () => {
+    const attempted: unknown[] = [];
+    const attemptEntries: number[] = [];
+    let entries = 0;
+    let armed = false;
+    let mutate: (() => void) | undefined;
+    const runtime = mount(
+      [
+        {
+          published() {},
+          unavailable() {},
+          retired() {
+            const before = entries;
+            try {
+              mutate?.();
+            } catch (error) {
+              attempted.push(error);
+            } finally {
+              attemptEntries.push(entries - before);
+            }
+          },
+        },
+      ],
+      {
+        beforeConsume() {
+          if (armed) entries++;
+        },
+      }
+    );
+    runtime.port.setState(documentState('before retirement'));
+    armed = true;
+    mutate = () =>
+      runtime.port.setState(documentState('forbidden retirement input'));
+    try {
+      if (lane === 'close') await runtime.close();
+      else runtime.view.dispose();
+      expect(attempted).toHaveLength(1);
+      expect(attempted[0]).toEqual(new Error('Native editor view is closing'));
+      expect(attemptEntries).toEqual([0]);
+    } finally {
+      await runtime.close();
+    }
+  });
+}
+
+test('a retired no-command view has no DOM input route', async () => {
+  let entries = 0;
+  let armed = false;
+  const runtime = mount([], {
+    commands: false,
+    beforeConsume() {
+      if (armed) entries++;
+    },
+  });
+  try {
+    runtime.port.setState(documentState('retained no-command state'));
+    const before = runtime.view.query.serializedState();
+    runtime.view.dispose();
+    armed = true;
+    runtime.root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Backspace',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    runtime.root.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'insertText',
+        data: 'forbidden',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(entries).toBe(0);
+    expect(runtime.view.query.serializedState()).toBe(before);
+  } finally {
+    await runtime.close();
+  }
+});

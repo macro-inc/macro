@@ -143,3 +143,5 @@ Read view UI editability through isEditable and synchronous onEditableChange not
 Observe current published presentation with construction-time latestPublished observers only after inherited command cleanup and the outer FIFO unlock; require an attached, mounted, initialized view, retire on entry/apply/cleanup failure, and keep observer errors secondary. This is not a per-commit snapshot or an ownership receipt.
 
 Retire optional presentation resources through onTeardown on direct disposal or beginTeardown, including late registration; terminal callbacks must not enter native receivers. Verify recovery after a reported DOM apply failure never restores failed observation, and preserve opaque primary input failures through reentrant drains and cleanup.
+
+Block command-profile admission before invoking terminal observers. No-command terminal callbacks are pure cleanup and must not submit input; disposed views remove their DOM input route, but retained Port references gain no new admission fence.

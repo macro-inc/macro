@@ -243,7 +243,11 @@ export function mountSessionView(
           }
         : options
     );
-    if (publications) view.onTeardown(() => publications.retired());
+    if (publications)
+      view.onTeardown(() => {
+        commands?.output.beginTeardown();
+        publications.retired();
+      });
     unsubscribeAuthorization = session.auth.subscribe((...facts) => {
       const deliver = () => {
         if (!disposed) authorizationCallback?.(...facts);
@@ -266,8 +270,8 @@ export function mountSessionView(
         authorization.length = 0;
         const terminal = Promise.withResolvers<void>();
         closing = terminal.promise;
-        mounted.beginTeardown();
         commands?.output.beginTeardown();
+        mounted.beginTeardown();
         let requestFailure: ExecutorFailure | undefined;
         const finish = () => {
           const release = () => {
@@ -341,11 +345,11 @@ export function mountSessionView(
     };
   } catch (error) {
     disposed = true;
+    commands?.output.beginTeardown();
     publications?.retired();
     authorization.length = 0;
     const failed = view;
     view = undefined;
-    commands?.output.beginTeardown();
     for (const cleanup of [
       retire,
       () => failed?.dispose(),
