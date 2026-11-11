@@ -20,6 +20,7 @@ import type {
   DraftRoutineRequest,
   EmptyResponse,
   GenerationStarted,
+  IdeaChanged,
   IdeaReview,
   Ideas,
   IdeaWriteOutcome,
@@ -411,7 +412,7 @@ export type acceptIdeaResponse404 = {
 };
 
 export type acceptIdeaResponse409 = {
-  data: string;
+  data: IdeaChanged;
   status: 409;
 };
 

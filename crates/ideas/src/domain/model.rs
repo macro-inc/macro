@@ -722,9 +722,9 @@ pub enum IdeaError {
     /// the person.
     #[error("a generation session may not read the feed or act on ideas")]
     Generating,
-    /// The idea changed since the caller read it: read it again.
+    /// The idea changed since the caller read it: here it is as it is now.
     #[error("the idea changed since it was read; read it again")]
-    Changed,
+    Changed(Box<Idea>),
     /// Anything else.
     #[error("internal ideas error: {0:?}")]
     Internal(rootcause::Report),

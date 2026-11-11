@@ -30,6 +30,7 @@ use utoipa::OpenApi;
         crate::domain::model::SuggestIdea,
         crate::domain::model::RewriteIdea,
         crate::inbound::router::AcceptIdeaRequest,
+        crate::inbound::router::IdeaChanged,
         crate::domain::model::RetireIdea,
         crate::domain::model::AttachDraft,
         crate::domain::model::IdeaWriteOutcome,

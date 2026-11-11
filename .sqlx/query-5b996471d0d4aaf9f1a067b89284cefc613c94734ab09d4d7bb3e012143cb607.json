@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea\n               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5\n               WHERE user_id = $1 AND id = $2 AND state = ANY($3) AND updated_at = $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b996471d0d4aaf9f1a067b89284cefc613c94734ab09d4d7bb3e012143cb607"
+}
