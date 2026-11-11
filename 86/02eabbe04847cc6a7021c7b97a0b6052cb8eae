@@ -1,0 +1,21 @@
+apps/web/src/features/meetings/meeting-route.tsx
+  s_f1f7d0d5be9ceb::t_d98ac5dfdbc3ab 145,150-151
+docs/agent-guide/channels.md
+  s_f1f7d0d5be9ceb::t_a130081665b37f 1579-1581
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8602eabbe04847cc6a7021c7b97a0b6052cb8eae",
+  "prompts": {},
+  "sessions": {
+    "s_f1f7d0d5be9ceb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "400c2a02-faeb-49ee-bafa-b1f07c7830b4",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
