@@ -380,12 +380,13 @@ where
         }
 
         // A turn somebody other than the owner prompted spends the owner's
-        // access only with their say-so, one tool call at a time. Checked
-        // last, so the held request is already addressed and stamped, and an
-        // app the owner has not connected was answered above without asking
-        // anyone - nothing would run.
-        if let (EgressTarget::McpServer(destination), Some(prompter)) =
-            (&target, grant.held_prompter())
+        // access only with their say-so, one tool call at a time, and so does
+        // a write the owner confirms even in their own turn. Checked last, so
+        // the held request is already addressed and stamped, and an app the
+        // owner has not connected was answered above without asking anyone -
+        // nothing would run.
+        if let EgressTarget::McpServer(destination) = &target
+            && grant.prompter.is_some()
             && !matches!(destination, McpDestination::Preview)
             && *request.method() == Method::POST
         {
@@ -404,9 +405,10 @@ where
                     (format!("custom-{key}"), "custom MCP server".to_owned())
                 }
             };
-            if let Some(call) = ToolsCall::parse(&bytes)
-                .filter(|call| spends_owner_access(&server_slug, &call.name))
-            {
+            if let Some((call, prompter)) = ToolsCall::parse(&bytes).and_then(|call| {
+                let prompter = grant.approval_prompter(&server_slug, &call.name)?.clone();
+                Some((call, prompter))
+            }) {
                 let forward = Arc::clone(&self.forward);
                 let sessions = Arc::clone(&self.sessions);
                 let token = SessionToken::new(token.as_str());
@@ -417,7 +419,7 @@ where
                     .hold(HeldCall {
                         session: grant.session,
                         owner: grant.owner.clone(),
-                        prompter: prompter.clone(),
+                        prompter,
                         server_slug,
                         server_name,
                         call,

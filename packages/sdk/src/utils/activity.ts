@@ -1,3 +1,5 @@
+import { sdkVerbs } from './verbs';
+
 /**
  * A generated SDK operation lifecycle. Contains no arguments, URLs or response
  * data. A gated operation is `skipped` (answered without calling the API) or
@@ -21,6 +23,12 @@ let defaultObserver: ((event: RequestActivity) => void) | undefined;
 let defaultGate:
   | ((operation: { service: string; operation: string }) => RequestVerdict)
   | undefined;
+let sendVerbHeader = false;
+
+/** @internal Enable per-operation verb headers in the trusted code-mode runtime. */
+export function setDefaultRequestVerbHeader(enabled: boolean) {
+  sendVerbHeader = enabled;
+}
 
 /** @internal Install runtime diagnostics before constructing SDK clients. */
 export function setDefaultRequestObserver(
@@ -46,7 +54,8 @@ export function observeSdk<T extends object>(
   service: string,
   observer?: (event: RequestActivity) => void,
 ): T {
-  if (!observer && !defaultObserver && !defaultGate) return sdk;
+  if (!observer && !defaultObserver && !defaultGate && !sendVerbHeader)
+    return sdk;
   const notify = (event: RequestActivity) => {
     for (const callback of [defaultObserver, observer]) {
       try {
@@ -72,6 +81,21 @@ export function observeSdk<T extends object>(
         if (verdict && 'skip' in verdict) {
           notify({ ...event, status: 'skipped' });
           return { data: verdict.skip.data, error: undefined };
+        }
+        if (sendVerbHeader) {
+          const verb = sdkVerbs[`${service}.${key}`];
+          if (!verb)
+            throw new Error(`SDK operation ${service}.${key} has no verb`);
+          const options = args[0] as Record<string, unknown>;
+          const headers = new Headers(
+            options.headers as HeadersInit | undefined,
+          );
+          headers.set('x-macro-sdk-verb', verb);
+          const requestHeaders: Record<string, string> = {};
+          headers.forEach((value, name) => {
+            requestHeaders[name] = value;
+          });
+          args[0] = { ...options, headers: requestHeaders };
         }
         notify({ ...event, status: 'started' });
         try {

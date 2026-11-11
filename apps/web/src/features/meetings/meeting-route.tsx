@@ -95,6 +95,7 @@ export function MeetingRouteContent(props: {
   return (
     <MeetingPage
       source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
       participants={participantState()}
       onCallStateChange={props.onCallStateChange}
       onLeave={props.onLeave}
@@ -142,18 +143,13 @@ export function MeetingRouteContent(props: {
           }),
         disconnect: call.meetingSession.disconnect,
       }}
-      renderCall={(onLeave, name, credentials, copyButton) => (
+      renderCall={(onLeave, name, _credentials, copyButton) => (
         <CallOverlay
           onLeave={onLeave}
           localName={name()}
           footerLeading={copyButton}
-          showChat={
-            authenticated() === true ||
-            (authenticated() === false && !!credentials())
-          }
-          guestChatSession={
-            authenticated() === false ? credentials() : undefined
-          }
+          // Guest chat is off until it renders member messages correctly.
+          showChat={authenticated() === true}
           showTeamSharing={canShareWithTeam()}
           sharedWithTeam={
             record.isSuccess ? record.data.shareWithTeam : undefined

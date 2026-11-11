@@ -4,21 +4,31 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import type { MessageThread as ThreadData } from '@service-storage/messages';
 import { useQuery } from '@tanstack/solid-query';
-import { Show, Suspense } from 'solid-js';
+import { type JSX, Show, Suspense } from 'solid-js';
 import type { CallDiscussion } from '../discussion/call-discussion';
 import { buildCallMessageLink } from './build-call-message-link';
 import { useCallChat } from './queries/use-call-chat';
 
+export type CallDiscussionSource = {
+  thread: () => ThreadData | undefined;
+  loading: () => boolean;
+  empty: () => boolean;
+  failed: () => boolean;
+  refresh: () => Promise<unknown>;
+};
 type CallChatHistoryProps = {
   callId: string;
   targetId?: string;
   targetRequestKey?: string | number;
   onClearTarget?: () => void;
+  render?: (source: CallDiscussionSource) => JSX.Element;
 };
 
 /** Saved call chat shares the live thread cache and read-only message controls. */
 export function CallChatHistory(props: CallChatHistoryProps) {
+  if (props.render) return <CallChatHistoryContent {...props} />;
   return (
     <section class="flex min-w-0 flex-col gap-3" aria-label="Call chat">
       <h3 class="text-sm font-semibold text-ink">Call chat</h3>
@@ -39,12 +49,22 @@ function ChannelThreadHistory(props: {
   targetId?: string;
   targetRequestKey?: string | number;
   onClearTarget?: () => void;
+  render?: (source: CallDiscussionSource) => JSX.Element;
 }) {
   const parent = () => ({ type: 'channel' as const, id: props.channelId });
   const thread = useQuery(() => ({
     ...threadRepliesQueryOptions(parent(), props.rootId),
     retry: false,
   }));
+  if (props.render) {
+    return props.render({
+      thread: () => (thread.isSuccess ? thread.data : undefined),
+      loading: () => thread.isPending,
+      empty: () => thread.isSuccess && thread.data.replies.length === 0,
+      failed: () => thread.isError,
+      refresh: () => thread.refetch(),
+    });
+  }
 
   return (
     <Show when={thread.isSuccess && thread.data}>
@@ -94,20 +114,19 @@ export function CallDiscussionHistory(
   const channelThread = () =>
     props.discussion.kind === 'channel_thread' ? props.discussion : undefined;
 
+  // Record refetches replace the discussion object. Track presence, not object
+  // identity, so the recording rendered through this source keeps its media state.
   return (
-    <Show
-      when={channelThread()}
-      keyed
-      fallback={<CallChatHistory {...props} />}
-    >
+    <Show when={channelThread()} fallback={<CallChatHistory {...props} />}>
       {(thread) => (
         <Suspense>
           <ChannelThreadHistory
-            channelId={thread.channel_id}
-            rootId={thread.root_id}
+            channelId={thread().channel_id}
+            rootId={thread().root_id}
             targetId={props.targetId}
             targetRequestKey={props.targetRequestKey}
             onClearTarget={props.onClearTarget}
+            render={props.render}
           />
         </Suspense>
       )}
@@ -117,6 +136,7 @@ export function CallDiscussionHistory(
 
 function CallChatHistoryContent(props: CallChatHistoryProps) {
   const chat = useCallChat(() => props.callId);
+  if (props.render) return props.render(chat);
   return (
     <StaticMarkdownContext>
       <Show when={chat.loading()}>

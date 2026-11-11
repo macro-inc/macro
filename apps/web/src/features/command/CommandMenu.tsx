@@ -14,6 +14,7 @@ import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import {
@@ -27,6 +28,8 @@ import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
+import { createRunWhenCurrent } from '@core/util/run-when-current';
+import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
@@ -59,6 +62,7 @@ import {
 } from 'solid-js';
 import type { InputLayoutParts } from '../universal-input/context/capabilities';
 import { useUniversalInputEnabled } from '../universal-input/use-universal-input';
+import { commandSearchResultKey } from './contact-items';
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
 import { createCommandResultOpener } from './open-command-result';
@@ -507,25 +511,20 @@ function CommandSearchMenu(
     }
   });
 
-  let previousWindow: string | undefined;
-  let previousWindowQuery = '';
-  createEffect(
-    on(
-      () => pagination?.windowKey?.(),
-      (key) => {
-        if (key === undefined) return;
-        if (
-          previousWindow !== undefined &&
-          previousWindow !== key &&
-          previousWindowQuery === query()
-        ) {
-          listController.setSelectedIndex(0, { scrollIntoView: true });
-        }
-        previousWindow = key;
-        previousWindowQuery = query();
-      }
-    )
-  );
+  const viewerId = useUserId();
+  const selectionScope = createMemo(() => `${categoryFilter()}\n${query()}`);
+  const anchor = createSelectionAnchor({
+    items: filteredItems,
+    key: (item) => commandSearchResultKey(item, viewerId()),
+    scope: selectionScope,
+    selectedIndex: CommandState.selectedIndex,
+    setSelectedIndex: (index) =>
+      listController.setSelectedIndex(index, { scrollIntoView: true }),
+  });
+  const selectFromPointer = (index: number) => {
+    listController.setSelectedIndexFromPointer(index);
+    anchor.hold();
+  };
 
   // Skip past the search row only onto a real result — when the query has
   // no results the rows below are fallbacks (ask AI), and the search row
@@ -544,7 +543,12 @@ function CommandSearchMenu(
     on(
       resultFollowsSearchRow,
       (hasResult, hadResult) => {
-        if (hasResult && !hadResult && CommandState.selectedIndex() === 0) {
+        if (
+          hasResult &&
+          !hadResult &&
+          CommandState.selectedIndex() === 0 &&
+          !anchor.holding()
+        ) {
           listController.setSelectedIndex(1);
         }
       },
@@ -691,7 +695,9 @@ function CommandSearchMenu(
           fireAndForget(pagination?.loadMore(), 'command-menu');
         return true;
       }
-      return listController.selectNext();
+      const moved = listController.selectNext();
+      anchor.hold();
+      return moved;
     },
     runWithInputFocused: true,
     hide: true,
@@ -704,11 +710,28 @@ function CommandSearchMenu(
     keyDownHandler: () => {
       const items = filteredItems();
       if (items.length === 0) return false;
-      return listController.selectPrevious();
+      const moved = listController.selectPrevious();
+      anchor.hold();
+      return moved;
     },
     runWithInputFocused: true,
     hide: true,
   });
+
+  // The list trails the typed text by the query debounce. Enter pressed in
+  // that gap waits for the list of the text on screen.
+  const runWhenCurrent = createRunWhenCurrent(
+    () => query() !== CommandState.query(),
+    CommandState.isOpen
+  );
+  const actOnSelected = (openInNewSplit: boolean) => {
+    if (query() === CommandState.query() && !selectedItem()) return false;
+    runWhenCurrent(() => {
+      const item = selectedItem();
+      if (item) handleItemAction(item, openInNewSplit);
+    });
+    return true;
+  };
 
   const confirmHotkey = registerHotkey({
     hotkey: 'enter',
@@ -716,12 +739,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.selectItem'),
     keyDownHandler: (event) => {
       if (event?.isComposing || event?.shiftKey) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, false);
-        return true;
-      }
-      return false;
+      return actOnSelected(false);
     },
     runWithInputFocused: true,
   });
@@ -734,12 +752,7 @@ function CommandSearchMenu(
     description: () => t('commandMenu.openInNewSplit'),
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
-      const item = selectedItem();
-      if (item) {
-        handleItemAction(item, true);
-        return true;
-      }
-      return false;
+      return actOnSelected(true);
     },
     runWithInputFocused: true,
   });
@@ -963,7 +976,7 @@ function CommandSearchMenu(
           items={filteredItems()}
           selectedIndex={CommandState.selectedIndex()}
           onSelect={handleItemAction}
-          onItemMouseMove={listController.setSelectedIndexFromPointer}
+          onItemMouseMove={selectFromPointer}
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           pagination={pagination}
           loading={isLoadingEntities()}
