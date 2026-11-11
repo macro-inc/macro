@@ -1,0 +1,34 @@
+tooling/fuzz/call-guest-chat/cgc_guest.rs
+  s_07064c3ce26b90::t_d0425a00790681 47-50,65
+tooling/fuzz/call-guest-chat/cgc_differential.rs
+  s_07064c3ce26b90::t_548fa1e93b8a1c 36,103,128,147,170-176,179,185-186,188-199,205-210,220,356-358,391-394,564-565,578
+  s_07064c3ce26b90::t_0930408c719c4e 326-333
+  s_07064c3ce26b90::t_c8f62f8e684643 200-204
+  s_07064c3ce26b90::t_5c2204e9ff3f98 180-184,542-545
+  s_07064c3ce26b90::t_6956b716294928 554-562,568
+  s_07064c3ce26b90::t_8924e5eb5b9cf3 187
+  s_07064c3ce26b90::t_bd982f529c82b3 301,315-325,334-350,590
+  s_07064c3ce26b90::t_99760061b0142d 151-169
+tooling/fuzz/call-guest-chat/run.py
+  s_07064c3ce26b90::t_4a35533f14ee48 116-117
+tooling/fuzz/call-guest-chat/README.md
+  s_07064c3ce26b90::t_6a9bebbea42ae2 14
+  s_07064c3ce26b90::t_846a728fcdcf08 15-17
+  s_07064c3ce26b90::t_1a14fee9142bad 10-13,52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f6ea8883033fc46bd0d565d14047f86fea97b957",
+  "prompts": {},
+  "sessions": {
+    "s_07064c3ce26b90": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7ee-32b9-7350-8641-bc9f59b2da48",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
