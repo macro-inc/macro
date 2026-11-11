@@ -50,6 +50,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Require equivalent NodeState on both text neighbors before normalization merges them, including absent versus populated state.
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 - Preserve known typed state on raw remote updates only when its effective serialized value is unchanged; parse changed/explicit-null values and reset removals, while ordinary JSON imports always reparse.
+- Memoize reads of present unknown state without dirtying or cloning nodes; retain raw slots, copy completed typed values at the write barrier, and run parsers, equality and serializers outside memo locks.
 
 - Preserve owning-package extension callback errors in Error::Extension; never classify them as unrelated model failures.
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
