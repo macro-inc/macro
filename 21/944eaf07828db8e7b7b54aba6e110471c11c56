@@ -1,0 +1,202 @@
+agent-teammates/muppet/AGENTS.md
+  s_0030f7dd01decd::t_771558d4974985 1-59
+agent-teammates/muppet/packages/lib/examples/mail-triage/agent.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-44
+agent-teammates/muppet/packages/lib/utilities/time/test/time.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-36
+agent-teammates/muppet/packages/lib/utilities/jobs/herdr.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-311
+agent-teammates/muppet/packages/lib/utilities/jobs/test/jobs.test.ts
+  s_0030f7dd01decd::t_217ebb60bb5cef 21,115,135,147,155,158-160,162-163,170,178,185,195,207
+  s_0030f7dd01decd::t_cedc865523d1e0 1-20,22-114,116-134,136-146,148-154,156-157,161,164-169,171-177,179-184,186-194,196-206,208-275
+agent-teammates/muppet/packages/lib/utilities/credentials/test/credentials.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-95
+agent-teammates/muppet/packages/lib/utilities/macro/calls/flake.nix
+  s_0030f7dd01decd::t_cedc865523d1e0 1-32
+agent-teammates/muppet/packages/lib/examples/heartbeat/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-35
+agent-teammates/muppet/tsconfig.base.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-21
+agent-teammates/muppet/packages/lib/examples/heartbeat/AGENT.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-11
+agent-teammates/muppet/packages/lib/package.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-22
+agent-teammates/muppet/.gitignore
+  s_0030f7dd01decd::t_cedc865523d1e0 1-9
+agent-teammates/muppet/packages/lib/core/state.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-18
+agent-teammates/muppet/biome.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-34
+agent-teammates/muppet/packages/lib/utilities/failures/test/failures.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-118
+agent-teammates/muppet/packages/lib/utilities/credentials/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-37
+agent-teammates/muppet/packages/lib/examples/heartbeat/agent.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-47
+agent-teammates/muppet/packages/lib/utilities/credentials/sops.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-77
+agent-teammates/muppet/packages/lib/examples/heartbeat/capabilities.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-52
+agent-teammates/muppet/packages/lib/core/test/code.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-76
+agent-teammates/muppet/packages/lib/examples/heartbeat/behavior.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-68
+agent-teammates/muppet/packages/lib/examples/mail-triage/capabilities.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-70
+agent-teammates/muppet/packages/lib/examples/mail-triage/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-23
+agent-teammates/muppet/packages/lib/examples/heartbeat/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-39
+agent-teammates/muppet/packages/lib/core/event.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-130
+agent-teammates/muppet/packages/lib/utilities/macro/calls/policy.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-186
+agent-teammates/muppet/packages/lib/utilities/macro/calls/test/share.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-158
+agent-teammates/muppet/packages/lib/utilities/schedules/schedule.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-96
+agent-teammates/muppet/packages/lib/agents/claude-code.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-76
+agent-teammates/muppet/packages/lib/tsconfig.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-8
+agent-teammates/muppet/packages/lib/runtimes/test/parallel.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-92
+agent-teammates/muppet/packages/lib/core/test/capability.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-91
+agent-teammates/muppet/packages/lib/utilities/macro/chat/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-534
+agent-teammates/muppet/packages/lib/core/behavior.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-367
+agent-teammates/muppet/packages/lib/examples/mail-triage/behavior.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-18
+agent-teammates/muppet/packages/lib/core/capability.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-130
+agent-teammates/muppet/packages/lib/core/hook.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-86
+agent-teammates/muppet/packages/lib/utilities/schedules/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-91
+agent-teammates/muppet/packages/lib/utilities/schedules/schedules.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-58
+agent-teammates/muppet/DESIGN.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-220
+agent-teammates/muppet/packages/lib/utilities/macro/calls/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-29
+agent-teammates/muppet/packages/lib/examples/mail-triage/handlers.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-55
+agent-teammates/muppet/packages/lib/runtimes/test/simple.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-223
+agent-teammates/muppet/packages/lib/utilities/schedules/test/due.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-89
+agent-teammates/muppet/packages/lib/utilities/scripts/test/agent/greeting.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-27
+agent-teammates/muppet/tsconfig.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-4
+agent-teammates/muppet/packages/lib/core/prompt.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-34
+agent-teammates/muppet/packages/lib/runtimes/test/scripts.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-14
+agent-teammates/muppet/packages/lib/utilities/schedules/rrule.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-223
+agent-teammates/muppet/packages/lib/utilities/browser/flake.nix
+  s_0030f7dd01decd::t_cedc865523d1e0 1-46
+agent-teammates/muppet/packages/lib/examples/scripts.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-33
+agent-teammates/muppet/packages/lib/utilities/macro/test/presence.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-53
+agent-teammates/muppet/packages/lib/utilities/browser/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-133
+agent-teammates/muppet/packages/lib/core/test/behavior.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-127
+agent-teammates/muppet/packages/lib/utilities/time/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-101
+agent-teammates/muppet/packages/lib/core/agent.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-31
+agent-teammates/muppet/packages/lib/runtimes/parallel.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-34
+agent-teammates/muppet/packages/lib/core/test/event.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-168
+agent-teammates/muppet/packages/lib/utilities/scripts/test/scripts.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-182
+agent-teammates/muppet/packages/lib/examples/mail-triage/sources.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-30
+agent-teammates/muppet/packages/lib/core/runtime.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-18
+agent-teammates/muppet/packages/lib/utilities/credentials/flake.nix
+  s_0030f7dd01decd::t_cedc865523d1e0 1-40
+agent-teammates/muppet/packages/lib/examples/mail-triage/context.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-33
+agent-teammates/muppet/packages/lib/utilities/failures/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-107
+agent-teammates/muppet/packages/lib/utilities/macro/calls/frames.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-194
+agent-teammates/muppet/CLAUDE.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1
+agent-teammates/muppet/packages/lib/runtimes/simple.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-45
+agent-teammates/muppet/packages/lib/examples/mail-triage/AGENT.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-6
+agent-teammates/muppet/packages/lib/utilities/macro/calls/test/policy.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-58
+agent-teammates/muppet/packages/lib/runtimes/pieces.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-146
+agent-teammates/muppet/packages/lib/utilities/macro/calls/decoder.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-95
+agent-teammates/muppet/packages/lib/utilities/schedules/due.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-192
+agent-teammates/muppet/packages/lib/utilities/schedules/scheduler.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-279
+agent-teammates/muppet/packages/lib/core/error.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-7
+agent-teammates/muppet/packages/lib/utilities/schedules/test/rrule.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-65
+agent-teammates/muppet/STYLE.md
+  s_0030f7dd01decd::t_cedc865523d1e0 1-7
+agent-teammates/muppet/flake.nix
+  s_0030f7dd01decd::t_cedc865523d1e0 1-56
+agent-teammates/muppet/packages/lib/core/code.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-145
+agent-teammates/muppet/packages/lib/utilities/macro/calls/share.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-259
+agent-teammates/muppet/packages/lib/utilities/macro/chat/test/chat.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-219
+agent-teammates/muppet/packages/lib/utilities/schedules/store.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-51
+agent-teammates/muppet/package.json
+  s_0030f7dd01decd::t_cedc865523d1e0 1-19
+agent-teammates/muppet/packages/lib/utilities/schedules/test/scheduler.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-189
+agent-teammates/muppet/packages/lib/utilities/jobs/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-242
+agent-teammates/muppet/packages/lib/utilities/browser/test/browser.test.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-50
+agent-teammates/muppet/packages/lib/utilities/scripts/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-271
+agent-teammates/muppet/packages/lib/utilities/macro/index.ts
+  s_0030f7dd01decd::t_cedc865523d1e0 1-119
+agent-teammates/muppet/bun.lock
+  s_0030f7dd01decd::t_43a3f544855084 1-376
+agent-teammates/muppet/flake.lock
+  s_0030f7dd01decd::t_e9076001552da7 1-61
+agent-teammates/muppet/packages/lib/utilities/browser/flake.lock
+  s_0030f7dd01decd::t_c67e2f08750e72 1-27
+agent-teammates/muppet/packages/lib/utilities/credentials/flake.lock
+  s_0030f7dd01decd::t_472edf8f8e4a23 1-27
+agent-teammates/muppet/packages/lib/utilities/macro/calls/flake.lock
+  s_0030f7dd01decd::t_8e881737708c2b 1-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "21944eaf07828db8e7b7b54aba6e110471c11c56",
+  "prompts": {},
+  "sessions": {
+    "s_0030f7dd01decd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "169c829c-493c-4436-9e16-7883862f5297",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
