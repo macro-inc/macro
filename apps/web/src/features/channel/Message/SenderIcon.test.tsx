@@ -48,10 +48,10 @@ const message = (senderId: string, sender?: MessageData['sender']) =>
     sender,
   }) as unknown as MessageData;
 
-const renderSender = (data: MessageData) =>
+const renderSender = (data: MessageData, interactive = true) =>
   render(() => (
     <MessageProvider value={() => data}>
-      <SenderIcon />
+      <SenderIcon interactive={interactive} />
     </MessageProvider>
   ));
 
@@ -121,6 +121,20 @@ describe('SenderIcon', () => {
 
   it('leaves people to the card UserIcon already draws', () => {
     const { queryByTestId } = renderSender(message('macro|peter@macro.com'));
+    expect(queryByTestId('user-card')).toBeNull();
+  });
+
+  it('keeps a non-interactive sender avatar inside its enclosing action', () => {
+    const { getByTestId, queryByTestId } = renderSender(
+      message(`bot|${TEAM_BOT_ID}`, {
+        type: 'bot',
+        id: TEAM_BOT_ID,
+        name: 'Helper',
+        avatar_url: null,
+      }),
+      false
+    );
+    expect(getByTestId('bot-icon').textContent).toBe('Helper');
     expect(queryByTestId('user-card')).toBeNull();
   });
 

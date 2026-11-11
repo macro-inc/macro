@@ -1976,6 +1976,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2031,6 +2032,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
             action_id: None,
             actor: Some(sender()),
             context: None,
+            client: None,
         },
     );
     let agent = container.agent();
@@ -2078,6 +2080,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2149,6 +2152,7 @@ async fn an_external_bots_permission_request_waits_for_a_users_answer() {
                 action: permission_answer("perm-1", "once"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2184,6 +2188,7 @@ async fn a_harness_principal_cannot_answer_a_permission_request() {
                 action: permission_answer("perm-1", "always"),
                 actor: None,
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2225,6 +2230,7 @@ async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
                 action: permission_answer("perm-1", "once"),
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2252,6 +2258,7 @@ async fn an_archived_session_rejects_new_controls() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2287,6 +2294,7 @@ async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2339,6 +2347,7 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2388,6 +2397,7 @@ async fn a_queued_prompt_survives_a_replica_restart() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2427,6 +2437,7 @@ async fn a_resume_restores_the_persisted_queue() {
             announce: None,
             announced_message_id: None,
             context: None,
+            client: None,
         }],
     )
     .await
@@ -2439,6 +2450,7 @@ async fn a_resume_restores_the_persisted_queue() {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -2488,6 +2500,7 @@ async fn archiving_drops_prompts_queued_behind_a_running_turn() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2523,6 +2536,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2541,6 +2555,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2597,6 +2612,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2721,6 +2737,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let second = service.control_event(id, prompt("second")).await.unwrap();
     let third = service.control_event(id, prompt("third")).await.unwrap();
@@ -2783,6 +2800,7 @@ async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service
         .control_event(id, prompt("first waiting"))
@@ -2845,6 +2863,7 @@ async fn a_model_change_bypasses_the_running_turn() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2881,6 +2900,7 @@ async fn a_control_event_is_accepted_under_the_callers_own_action_id() {
                 action_id: Some(action_id),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2917,6 +2937,7 @@ async fn a_control_event_without_an_action_id_is_given_a_fresh_one() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service.control_event(id, unnamed("first")).await.unwrap();
     let second = service.control_event(id, unnamed("second")).await.unwrap();
@@ -2952,6 +2973,7 @@ async fn re_sending_a_waiting_action_id_does_not_queue_it_twice() {
         action_id: Some(action_id),
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service.control_event(id, retried()).await.unwrap();
     let again = service.control_event(id, retried()).await.unwrap();
@@ -2982,6 +3004,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
             action_id: None,
             actor: Some(sender()),
             context: None,
+            client: None,
         },
     );
     let agent = container.agent();
@@ -3013,6 +3036,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -3387,6 +3411,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -4296,6 +4321,7 @@ mod lifecycle_events {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         };
         service
             .control_event(id, prompt("first"))
@@ -4384,6 +4410,7 @@ mod lifecycle_events {
                     action_id: None,
                     actor: Some(staff_sender()),
                     context: None,
+                    client: None,
                 })),
             )
             .await
@@ -5136,6 +5163,7 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
                 action: permission_answer("editor-approval", "once"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await

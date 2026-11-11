@@ -28,6 +28,7 @@ export const entityDirectories: readonly string[] = [
   'canvases',
   'channels',
   'connected-apps',
+  'ui',
   'external-chat',
   'whatsapp',
   'crm',
