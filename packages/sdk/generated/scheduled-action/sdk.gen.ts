@@ -62,7 +62,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller's feed.
+     * The caller's feed, for them or their own agent.
      */
     public listIdeas<ThrowOnError extends boolean = false>(options?: Options<ListIdeasData, ThrowOnError>): RequestResult<ListIdeasResponses, ListIdeasErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListIdeasResponses, ListIdeasErrors, ThrowOnError>({ url: '/ideas', ...options });
@@ -105,9 +105,10 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller acts on an idea: a background prompt idea is taken on; any
-     * other is done once they act on it (open its item, the composer, the
-     * routine), and shows in the feed's `done`.
+     * The caller, or someone acting for them, acts on an idea: a background
+     * prompt idea starts its run when the person accepts it in the app (anyone
+     * else only takes it on); any other is done once they act on it (open its
+     * item, the composer, the routine), and shows in the feed's `done`.
      */
     public acceptIdea<ThrowOnError extends boolean = false>(options: Options<AcceptIdeaData, ThrowOnError>): RequestResult<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError>({
@@ -121,7 +122,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller isn't interested in an open idea.
+     * The caller, or their own agent, isn't interested in an open idea.
      */
     public dismissIdea<ThrowOnError extends boolean = false>(options: Options<DismissIdeaData, ThrowOnError>): RequestResult<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/dismiss', ...options });

@@ -83,7 +83,7 @@ export const scheduledActionHealth = async (
 };
 
 /**
- * @summary The caller's feed.
+ * @summary The caller's feed, for them or their own agent.
  */
 export type listIdeasResponse200 = {
   data: Ideas;
@@ -93,6 +93,11 @@ export type listIdeasResponse200 = {
 export type listIdeasResponse401 = {
   data: string;
   status: 401;
+};
+
+export type listIdeasResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type listIdeasResponse404 = {
@@ -110,6 +115,7 @@ export type listIdeasResponseSuccess = listIdeasResponse200 & {
 };
 export type listIdeasResponseError = (
   | listIdeasResponse401
+  | listIdeasResponse403
   | listIdeasResponse404
   | listIdeasResponse500
 ) & {
@@ -374,9 +380,10 @@ export const rewriteIdea = async (
 };
 
 /**
- * @summary The caller acts on an idea: a background prompt idea is taken on; any
-other is done once they act on it (open its item, the composer, the
-routine), and shows in the feed's `done`.
+ * @summary The caller, or someone acting for them, acts on an idea: a background
+prompt idea starts its run when the person accepts it in the app (anyone
+else only takes it on); any other is done once they act on it (open its
+item, the composer, the routine), and shows in the feed's `done`.
  */
 export type acceptIdeaResponse204 = {
   data: void;
@@ -391,6 +398,11 @@ export type acceptIdeaResponse400 = {
 export type acceptIdeaResponse401 = {
   data: string;
   status: 401;
+};
+
+export type acceptIdeaResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type acceptIdeaResponse404 = {
@@ -414,6 +426,7 @@ export type acceptIdeaResponseSuccess = acceptIdeaResponse204 & {
 export type acceptIdeaResponseError = (
   | acceptIdeaResponse400
   | acceptIdeaResponse401
+  | acceptIdeaResponse403
   | acceptIdeaResponse404
   | acceptIdeaResponse409
   | acceptIdeaResponse500
@@ -452,7 +465,7 @@ export const acceptIdea = async (
 };
 
 /**
- * @summary The caller isn't interested in an open idea.
+ * @summary The caller, or their own agent, isn't interested in an open idea.
  */
 export type dismissIdeaResponse204 = {
   data: void;
@@ -462,6 +475,11 @@ export type dismissIdeaResponse204 = {
 export type dismissIdeaResponse401 = {
   data: string;
   status: 401;
+};
+
+export type dismissIdeaResponse403 = {
+  data: string;
+  status: 403;
 };
 
 export type dismissIdeaResponse404 = {
@@ -479,6 +497,7 @@ export type dismissIdeaResponseSuccess = dismissIdeaResponse204 & {
 };
 export type dismissIdeaResponseError = (
   | dismissIdeaResponse401
+  | dismissIdeaResponse403
   | dismissIdeaResponse404
   | dismissIdeaResponse500
 ) & {
