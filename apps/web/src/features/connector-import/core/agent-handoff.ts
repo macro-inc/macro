@@ -38,21 +38,21 @@ function createWith(config: ImportCategoryConfig): string {
 function ledgerSteps(provider: ImportProvider): string[] {
   if (!provider.ledger) return [];
   return [
-    `Check ListImportEntities for source ${provider.ledger} first and leave out anything already imported or declined.`,
-    `After creating each item, record it with CreateImportEntity: source ${provider.ledger}, status imported, and the new entityId.`,
+    `Check macro.imports.ledger.list({source: '${provider.ledger}'}) first and leave out anything already imported or declined.`,
+    `After creating each item, record it with macro.imports.ledger.recordImported, source ${provider.ledger}, and the new Macro item.`,
   ];
 }
 
 /**
  * Notion runs Macro's workspace importer: the agent asks who should see the
- * import, plans it with ImportFromNotion, and presents the plan for review.
+ * import, plans it with macro.imports.notion, and presents the plan for review.
  */
 const NOTION_WORKSPACE_HANDOFF: AgentImportHandoff = {
   input: 'Import my Notion workspace into Macro.',
   instructions: [
     "The user started this from Macro's import dialog and has just connected Notion.",
-    'Import their workspace with ImportFromNotion: ask who should see it if the tool says to, plan it, and present the plan for review right away.',
-    'Never recreate Notion pages with CreateDocument or ImportNotionPage, and never edit or delete anything in Notion.',
+    'Import their workspace with macro.imports.notion: ask who should see it if planning says to, plan it, and present the plan for review right away.',
+    'Never recreate Notion pages as documents or one page at a time, and never edit or delete anything in Notion.',
   ].join(' '),
 };
 
@@ -66,7 +66,7 @@ export function agentImportHandoff(
       input: `Import my ${provider.name} workspace into Macro.`,
       instructions: [
         `The user started this from Macro's import dialog and has just connected ${provider.name}.`,
-        `Use ImportFrom${provider.name} to plan their workspace, ask who should see it if required, and present the import review right away.`,
+        `Use macro.imports.${provider.ledger} to plan their workspace, ask who should see it if required, and present the import review right away.`,
         `Never recreate plan items with other tools, and never edit or delete anything in ${provider.name}.`,
       ].join(' '),
     };
