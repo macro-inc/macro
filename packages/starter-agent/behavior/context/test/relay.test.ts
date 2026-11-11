@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { constantTimeEqual, relayHandler, startRelay } from '../relay.ts';
+import {
+  constantTimeEqual,
+  relayHandler,
+  type SocketTarget,
+  socketTarget,
+  startRelay,
+} from '../relay.ts';
 
 const capability = 'capability-token';
 const apiKey = 'mak_real_key';
@@ -138,6 +144,197 @@ describe('startRelay', () => {
       first.stop();
       second.stop();
       macro.stop(true);
+    }
+  });
+});
+
+const upgrade = (path: string, headers: Record<string, string> = {}) =>
+  new Request(`http://127.0.0.1:9${path}`, {
+    headers: { connection: 'Upgrade', upgrade: 'websocket', ...headers },
+  });
+
+const target = socketTarget({
+  targets: {
+    'agent-harness': 'https://gateway.example/agent-harness/',
+    storage: 'https://macro.example/dss',
+  },
+  capability,
+  apiKey,
+  equal: constantTimeEqual,
+});
+
+const relayed = (result: SocketTarget | Response): SocketTarget => {
+  if (result instanceof Response) throw new Error(`refused ${result.status}`);
+  return result;
+};
+
+describe('socketTarget', () => {
+  test('opens speech sockets with the agent key as a bearer token, its own model and the trace context only', () => {
+    for (const [path, model] of [
+      ['stt', 'deepgram%2Fnova-3'],
+      ['tts', 'deepgram%2Faura-2'],
+    ] as const) {
+      const found = relayed(
+        target(
+          upgrade(`/agent-harness/brain/inference/${path}?model=evil&x=1`, {
+            'x-macro-user-api-key': capability,
+            authorization: 'Bearer forged',
+            cookie: 'session=forged',
+            'x-macro-bot-token': 'mbot_forged',
+            traceparent:
+              '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
+          })
+        )
+      );
+      expect(found.url).toBe(
+        `wss://gateway.example/agent-harness/brain/inference/${path}?model=${model}`
+      );
+      expect(found.headers).toEqual({
+        authorization: `Bearer ${apiKey}`,
+        traceparent: '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01',
+      });
+    }
+  });
+
+  test('refuses a wrong or missing capability before anything else', () => {
+    const given: Record<string, string>[] = [
+      { 'x-macro-user-api-key': 'guess' },
+      {},
+    ];
+    for (const headers of given) {
+      const refused = target(upgrade('/storage/socket', headers));
+      expect(refused instanceof Response && refused.status).toBe(401);
+    }
+  });
+
+  test('refuses every other path and service, and any method but GET', () => {
+    const headers = { 'x-macro-user-api-key': capability };
+    for (const path of [
+      '/agent-harness/brain/inference',
+      '/agent-harness/brain/inference/stt/',
+      '/agent-harness/brain/inference/%73tt',
+      '/agent-harness/agent-session/socket',
+      '/storage/brain/inference/stt',
+      '/connection/socket',
+      '/',
+    ]) {
+      const refused = target(upgrade(path, headers));
+      expect(refused instanceof Response && refused.status).toBe(403);
+    }
+    const posted = target(
+      new Request('http://127.0.0.1:9/agent-harness/brain/inference/stt', {
+        method: 'POST',
+        headers: { ...headers, connection: 'Upgrade', upgrade: 'websocket' },
+      })
+    );
+    expect(posted instanceof Response && posted.status).toBe(405);
+  });
+
+  test('refuses speech when it has no address for agent-harness', () => {
+    const refused = socketTarget({
+      targets: {},
+      capability,
+      apiKey,
+      equal: constantTimeEqual,
+    })(
+      upgrade('/agent-harness/brain/inference/tts', {
+        'x-macro-user-api-key': capability,
+      })
+    );
+    expect(refused instanceof Response && refused.status).toBe(404);
+  });
+});
+
+describe('startRelay sockets', () => {
+  test('carries a speech socket both ways with the key added upstream, never sent to the child', async () => {
+    const seen: { authorization: string | null; url: string }[] = [];
+    const harness = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: (request, server) => {
+        seen.push({
+          authorization: request.headers.get('authorization'),
+          url: request.url,
+        });
+        return server.upgrade(request, { data: undefined })
+          ? undefined
+          : new Response('no', { status: 400 });
+      },
+      websocket: {
+        message: (socket, message) => {
+          socket.send(`echo:${String(message)}`);
+        },
+      },
+    });
+    const relay = startRelay({
+      targets: { 'agent-harness': harness.url.href },
+      apiKey,
+    });
+    try {
+      const socket = new WebSocket(
+        `${relay.url.replace('http', 'ws')}/agent-harness/brain/inference/stt`,
+        { headers: { 'x-macro-user-api-key': relay.token } }
+      );
+      const answers: string[] = [];
+      socket.addEventListener('message', ({ data }) =>
+        answers.push(String(data))
+      );
+      // Sent before upstream is open: held, then delivered in order.
+      socket.addEventListener('open', () => {
+        socket.send('one');
+        socket.send('two');
+      });
+      const closed = new Promise<number>((resolve) =>
+        socket.addEventListener('close', ({ code }) => resolve(code))
+      );
+      const deadline = Date.now() + 5000;
+      while (answers.length < 2 && Date.now() < deadline) await Bun.sleep(10);
+      expect(answers).toEqual(['echo:one', 'echo:two']);
+      expect(answers.join()).not.toContain(apiKey);
+      expect(seen).toEqual([
+        {
+          authorization: `Bearer ${apiKey}`,
+          url: `${harness.url.href}brain/inference/stt?model=deepgram%2Fnova-3`,
+        },
+      ]);
+      // Upstream going away closes the child's side.
+      harness.stop(true);
+      expect(await closed).toBeGreaterThan(0);
+    } finally {
+      relay.stop();
+      harness.stop(true);
+    }
+  });
+
+  test('refuses a socket to any other path, with nothing opened upstream', async () => {
+    const seen: string[] = [];
+    const harness = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: (request) => {
+        seen.push(request.url);
+        return new Response('no', { status: 400 });
+      },
+    });
+    const relay = startRelay({
+      targets: { 'agent-harness': harness.url.href },
+      apiKey,
+    });
+    try {
+      const response = await fetch(`${relay.url}/agent-harness/socket`, {
+        headers: {
+          'x-macro-user-api-key': relay.token,
+          connection: 'Upgrade',
+          upgrade: 'websocket',
+          'sec-websocket-key': 'dGhlIHNhbXBsZSBub25jZQ==',
+          'sec-websocket-version': '13',
+        },
+      });
+      expect(response.status).toBe(403);
+      expect(seen).toEqual([]);
+    } finally {
+      relay.stop();
+      harness.stop(true);
     }
   });
 });
