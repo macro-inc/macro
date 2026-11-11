@@ -10,6 +10,8 @@ mod model_types;
 /// Owned native transport patch, excluding private component policies.
 pub use model_types::Diff as FfiDiff;
 mod native_diff;
+mod native_observer;
+pub use native_observer::FfiDecoratorBatch;
 mod query;
 mod sync_types;
 pub use query::*;

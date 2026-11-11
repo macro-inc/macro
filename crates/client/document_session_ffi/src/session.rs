@@ -6,6 +6,7 @@ struct NativeHost<S: Surface> {
     clock: Arc<AtomicI64>,
     application: Option<FfiApplicationConfig>,
     pending_decorators: native_diff::PendingDecorators,
+    decorator_view: native_observer::NativeDecoratorView,
 }
 fn config(
     value: FfiSessionConfig,
@@ -101,8 +102,93 @@ impl NativeEditorSession {
                 clock,
                 application,
                 pending_decorators: native_diff::PendingDecorators::default(),
+                decorator_view: native_observer::NativeDecoratorView::default(),
             }),
         }))
+    }
+    /// Begin explicit remount preparation; no observation is exposed until installation acknowledgment.
+    pub fn begin_decorator_view(&self) -> Result<u64, FfiSessionError> {
+        let mut host = lock(&self.inner)?;
+        let lease = host.decorator_view.begin()?;
+        host.pending_decorators.retired.clear();
+        Ok(lease)
+    }
+    /// Retire the exact consuming view; stale retirement cannot affect its replacement.
+    pub fn retire_decorator_view(&self, lease: u64) -> Result<bool, FfiSessionError> {
+        Ok(lock(&self.inner)?.decorator_view.retire(lease))
+    }
+    /// Stage actual facts and consumed removals without exposing signatures or advancing a baseline.
+    pub fn stage_decorators(
+        &self,
+        lease: u64,
+        keys: Vec<NodeKey>,
+        removed: Vec<NodeKey>,
+    ) -> Result<FfiDecoratorBatch, FfiSessionError> {
+        let mut host = lock(&self.inner)?;
+        let NativeHost {
+            session,
+            application,
+            pending_decorators,
+            decorator_view,
+            ..
+        } = &mut *host;
+        decorator_view.validate_lease(lease)?;
+        let state = session.surface().state();
+        let generation = state.max_key().generation();
+        let mut seen = std::collections::BTreeSet::new();
+        for key in keys.iter().chain(&removed) {
+            if key.generation() != generation || !seen.insert(*key) {
+                return Err(invalid("invalid decorator batch identity"));
+            }
+        }
+        for key in &removed {
+            // Non-opt-in decorators have no queued policy, but their consumed
+            // removal still belongs to this view. Repeated removal is harmless.
+            if state.view().is_attached(*key) {
+                return Err(invalid("decorator removal is still attached"));
+            }
+        }
+        let FfiQueryReply::Decorators { nodes } = query::query(
+            session,
+            application.as_ref(),
+            FfiQuery::Decorators { keys: keys.clone() },
+            pending_decorators,
+        )?
+        else {
+            return Err(invalid("decorator facts missing"));
+        };
+        let state = session.surface().state();
+        let mut changes = Vec::new();
+        for key in &keys {
+            changes.push(DecoratorRenderChange {
+                key: *key,
+                policy: state.view().decorator_render_policy(*key)?,
+            });
+        }
+        changes.extend(removed.iter().map(|key| DecoratorRenderChange {
+            key: *key,
+            policy: None,
+        }));
+        decorator_view.stage(lease, generation, nodes, changes, removed)
+    }
+    /// Acknowledge installed facts, or discard failed installation; never performs model input or IO.
+    pub fn finish_decorators(
+        &self,
+        lease: u64,
+        token: u64,
+        consumed: bool,
+    ) -> Result<(), FfiSessionError> {
+        let mut host = lock(&self.inner)?;
+        let generation = host.session.surface().state().max_key().generation();
+        let removed = host
+            .decorator_view
+            .finish(lease, token, generation, consumed)?;
+        for key in removed {
+            if !host.pending_decorators.policies.contains_key(&key) {
+                host.pending_decorators.retired.remove(&key);
+            }
+        }
+        Ok(())
     }
     /// Observe current effective access; later inputs still require normal admission.
     pub fn effective_access(&self) -> Result<Access, FfiSessionError> {
@@ -251,6 +337,7 @@ impl NativeDocSession {
                 clock,
                 application,
                 pending_decorators: native_diff::PendingDecorators::default(),
+                decorator_view: native_observer::NativeDecoratorView::default(),
             }),
         }))
     }

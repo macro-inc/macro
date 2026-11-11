@@ -65,3 +65,5 @@ Forward the shared group-b.table-facts JSON through application_query; preserve 
 Reject stale application model generations before decoding commands; retain normal session readiness and access admission.
 
 Compute decoded media layout through renderer-local MediaLayouts queries using plain data clones and the shared constraint helper; never mutate document dimensions or invoke clone hooks for SessionRead presentation.
+
+Stage decorator facts through the shared model observer under the session mutex; promote its opaque candidate only after the consuming native view acknowledges actual installation, including removal-only batches. Retire exact view leases and require explicit remount preparation after detach; stale callbacks must never reactivate or retire a replacement.

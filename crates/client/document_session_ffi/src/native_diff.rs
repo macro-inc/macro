@@ -1,9 +1,11 @@
 //! Session-owned native policies and an exhaustive transport projection without signatures.
 use crate::*;
+use std::collections::BTreeSet;
 
 #[derive(Default)]
 pub(crate) struct PendingDecorators {
     generation: Option<u32>,
+    pub(crate) retired: BTreeSet<NodeKey>,
     pub(crate) policies: BTreeMap<NodeKey, DecoratorRenderPolicy>,
 }
 impl PendingDecorators {
@@ -20,11 +22,14 @@ impl PendingDecorators {
         } = value;
         if self.generation != Some(generation) {
             self.policies.clear();
+            self.retired.clear();
             self.generation = Some(generation);
         }
         for op in &ops {
-            if let DiffOp::Remove { key, .. } = op {
-                self.policies.remove(key);
+            if let DiffOp::Remove { key, .. } = op
+                && self.policies.remove(key).is_some()
+            {
+                self.retired.insert(*key);
             }
         }
         let mut decorator_keys = Vec::with_capacity(decorator_renders.len());
@@ -36,9 +41,11 @@ impl PendingDecorators {
             match change.policy {
                 Some(policy) => {
                     self.policies.insert(change.key, policy);
+                    self.retired.remove(&change.key);
                 }
                 None => {
                     self.policies.remove(&change.key);
+                    self.retired.insert(change.key);
                 }
             }
         }
