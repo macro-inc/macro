@@ -282,7 +282,16 @@ where
         .as_deref()
         .or(stored.description.as_deref());
     let location = patch.location.as_deref().or(stored.location.as_deref());
-    if first_macro_call_url(location, description).is_some() {
+    if let Some(url) = first_macro_call_url(location, description)
+        .or_else(|| first_macro_call_url(stored.location.as_deref(), stored.description.as_deref()))
+    {
+        // A replacement description that leaves the stored call's link out
+        // would drop it from the event, so it keeps the join line.
+        if let Some(replacement) = patch.description.as_deref()
+            && first_macro_call_url(None, Some(replacement)).is_none()
+        {
+            patch.description = Some(attach_macro_call(Some(replacement), None, &url).0);
+        }
         if patch.is_empty() {
             return Err(CalendarMutationError::InvalidInput(
                 "this event already carries a Macro call".to_string(),

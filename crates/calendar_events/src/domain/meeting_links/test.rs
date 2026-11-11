@@ -653,6 +653,43 @@ async fn retrying_a_finished_switch_writes_nothing() {
 }
 
 #[tokio::test]
+async fn a_replacement_description_keeps_the_stored_calls_join_line() {
+    let (description, location) = attach_macro_call(None, None, URL);
+    let mutations = mutations_holding(EventDetails {
+        description: Some(description),
+        location: Some(location),
+        has_conference: false,
+        ..stored_details()
+    });
+    let links = FakeMeetingLinks::default();
+
+    update_event_with_macro_call(
+        &mutations,
+        &links,
+        "macro|owner@example.com",
+        Uuid::from_u128(7),
+        None,
+        CalendarEventPatch {
+            description: Some("Agenda".to_string()),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    assert!(links.requests.lock().unwrap().is_empty());
+    let updated = mutations.updated.lock().unwrap();
+    let (_, _, patch, _) = updated.first().expect("one write");
+    let written = patch.description.as_deref().expect("description written");
+    assert!(written.starts_with("Agenda"));
+    assert_eq!(
+        first_macro_call_url(None, Some(written)).as_deref(),
+        Some(URL)
+    );
+}
+
+#[tokio::test]
 async fn a_switch_refused_before_the_provider_cancels_the_fresh_meeting() {
     for refused in [
         CalendarMutationError::GuestsCannotModify,
