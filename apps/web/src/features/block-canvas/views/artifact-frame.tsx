@@ -1,3 +1,4 @@
+import { frameThemeTokens } from '@app/features/theme/utils/frame-theme';
 import {
   createEffect,
   createMemo,
@@ -10,7 +11,6 @@ import {
 import { useArtifactLibrary } from '../context/artifact-library';
 import {
   ARTIFACT_SANDBOX,
-  artifactThemeTokens,
   composeArtifactDocument,
   isArtifactLoadMarker,
 } from '../core/artifact-document';
@@ -49,7 +49,7 @@ export function ArtifactFrame(props: {
   const srcdoc = createMemo(() =>
     composeArtifactDocument(
       props.html,
-      artifactThemeTokens(document.documentElement),
+      frameThemeTokens(document.documentElement),
       artifacts.library(),
       loadToken
     )

@@ -7,6 +7,8 @@
  * server as the viewer and sends only the outcome back.
  */
 
+import { installMacroStyles } from './macro-styles';
+
 /** The parts of a preview frame the hosts read, so tests can stand one in. */
 export type PreviewFrame = Pick<
   HTMLIFrameElement,
@@ -240,12 +242,18 @@ export const PROGRAM_DOCUMENT_CSP = [
 ].join('; ');
 
 /**
- * The preview document with its policy and the helper installed. Parsing and
- * reserializing keeps both first in `<head>`, the policy before any script,
- * even for documents without a head.
+ * The preview document with its policy and the helper installed, and Macro's
+ * styles when the page links them (`themeRule` is the viewer's theme).
+ * Parsing and reserializing keeps the policy and helper first in `<head>`,
+ * the policy before any script, even for documents without a head.
  */
-export function composeProgramDocument(html: string, token: string): string {
+export function composeProgramDocument(
+  html: string,
+  token: string,
+  themeRule: string
+): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
+  installMacroStyles(parsed, themeRule);
   const policy = parsed.createElement('meta');
   policy.httpEquiv = 'Content-Security-Policy';
   policy.content = PROGRAM_DOCUMENT_CSP;

@@ -19,22 +19,6 @@ export const ARTIFACT_CSP = [
 
 export const ARTIFACT_SANDBOX = 'allow-scripts';
 
-const THEME_TOKENS = [
-  '--color-panel',
-  '--color-ink',
-  '--color-ink-muted',
-  '--color-accent',
-  '--color-edge-muted',
-];
-
-/** Macro's resolved theme colors, for artifacts that want to match the app. */
-export function artifactThemeTokens(element: Element): Record<string, string> {
-  const style = getComputedStyle(element);
-  return Object.fromEntries(
-    THEME_TOKENS.map((token) => [token, style.getPropertyValue(token).trim()])
-  );
-}
-
 /**
  * Focus inside a frame keeps keys from the host, so the host cannot exit or step
  * through a presentation. Forward the few it needs, unless the artifact handled

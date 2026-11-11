@@ -1,3 +1,7 @@
+import {
+  frameThemeRule,
+  watchAppTheme,
+} from '@app/features/theme/utils/frame-theme';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableHtmlCodeMode } from '@core/constant/featureFlags';
@@ -8,11 +12,13 @@ import X from '@icon/system/regular/x.svg';
 import { useQuery } from '@tanstack/solid-query';
 import { Button } from '@ui/components/Button';
 import {
+  type Accessor,
   createEffect,
   createMemo,
   createSignal,
   For,
   Match,
+  on,
   onCleanup,
   Show,
   Switch,
@@ -20,6 +26,10 @@ import {
 } from 'solid-js';
 import { attachEventHost } from '../code-mode/event-host';
 import { composeProgramDocument } from '../code-mode/frame-helper';
+import {
+  composePlainDocument,
+  postFrameTheme,
+} from '../code-mode/macro-styles';
 import { attachNavigationGuard } from '../code-mode/navigation-guard';
 import { attachProgramHost } from '../code-mode/preview-runner';
 import { documentBuildQueryOptions } from '../queries/document-programs';
@@ -63,14 +73,55 @@ export function HtmlPreview(props: HtmlPreviewProps) {
   );
 }
 
+/**
+ * The rule holding Macro's theme tokens for a frame, read at the frame so
+ * `--color-surface` is its layer's, and kept current with the app's theme.
+ * A page that links `macro:styles` gets it in its srcdoc and, on every load
+ * and theme change, as a message, so a theme change never reloads the page.
+ */
+function createFrameTheme(frame: Accessor<HTMLIFrameElement | undefined>) {
+  const read = () => {
+    const element = frame();
+    return frameThemeRule(
+      element?.isConnected ? element : document.documentElement
+    );
+  };
+  const [rule, setRule] = createSignal(read());
+  onCleanup(watchAppTheme(() => setRule(read())));
+
+  const post = (current: string) => {
+    const element = frame();
+    if (element) postFrameTheme(element, current);
+  };
+  createEffect(on(rule, post, { defer: true }));
+
+  return {
+    /** The current rule, for a srcdoc, without tracking theme changes. */
+    initial: () => untrack(rule),
+    /** The frame loaded its srcdoc; send it the rule read where it sits. */
+    onLoad: () => {
+      setRule(read());
+      post(untrack(rule));
+    },
+  };
+}
+
 function PlainFrame(props: { html: string }) {
+  const [frame, setFrame] = createSignal<HTMLIFrameElement>();
+  const theme = createFrameTheme(frame);
+  const srcdoc = createMemo(() =>
+    composePlainDocument(props.html, theme.initial())
+  );
+
   return (
     <iframe
+      ref={setFrame}
       title={t('htmlPreview.frameTitle')}
       class="size-full border-0"
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
-      srcdoc={props.html}
+      srcdoc={srcdoc()}
+      onLoad={theme.onLoad}
     />
   );
 }
@@ -188,21 +239,28 @@ export function ProgramFrame(props: {
   onStale: () => void;
 }) {
   const token = crypto.randomUUID();
-  const srcdoc = createMemo(() => composeProgramDocument(props.html, token));
+  const [frame, setFrame] = createSignal<HTMLIFrameElement>();
+  const theme = createFrameTheme(frame);
+  const srcdoc = createMemo(() =>
+    composeProgramDocument(props.html, token, theme.initial())
+  );
   const [failure, setFailure] = createSignal<string | undefined>(
     untrack(() => props.notice)
   );
   const [left, setLeft] = createSignal(false);
-  let frame: HTMLIFrameElement | undefined;
 
   createEffect(() => {
-    if (!frame || left()) return;
+    const element = frame();
+    if (!element || left()) return;
     const { documentId, sourceHash, onStale } = props;
     onCleanup(
-      attachNavigationGuard(frame, { token, onLeave: () => setLeft(true) })
+      attachNavigationGuard(element, {
+        token,
+        onLeave: () => setLeft(true),
+      })
     );
     onCleanup(
-      attachProgramHost(frame, {
+      attachProgramHost(element, {
         documentId,
         sourceHash,
         token,
@@ -210,7 +268,7 @@ export function ProgramFrame(props: {
         onFailure: (message) => setFailure(message),
       })
     );
-    onCleanup(attachEventHost(frame, { documentId, token }));
+    onCleanup(attachEventHost(element, { documentId, token }));
   });
 
   return (
@@ -225,12 +283,13 @@ export function ProgramFrame(props: {
           )}
         </Show>
         <iframe
-          ref={frame}
+          ref={setFrame}
           title={t('htmlPreview.frameTitle')}
           class="min-h-0 w-full flex-1 border-0"
           sandbox="allow-scripts"
           referrerPolicy="no-referrer"
           srcdoc={srcdoc()}
+          onLoad={theme.onLoad}
         />
       </div>
     </Show>

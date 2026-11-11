@@ -7,6 +7,8 @@ import {
   readSubscriptionMessage,
 } from './frame-helper';
 
+const THEME = ':root{color-scheme:dark;--color-ink:#eee}';
+
 const parse = (html: string) =>
   new DOMParser().parseFromString(html, 'text/html');
 
@@ -14,7 +16,8 @@ describe('composeProgramDocument', () => {
   it('installs the helper before the document’s own scripts', () => {
     const composed = composeProgramDocument(
       '<html><head><script>first()</script></head><body>Hi</body></html>',
-      'token'
+      'token',
+      THEME
     );
     const scripts = [...parse(composed).head.querySelectorAll('script')];
     expect(scripts).toHaveLength(2);
@@ -26,7 +29,8 @@ describe('composeProgramDocument', () => {
   it('puts the content security policy first, before every script', () => {
     const composed = composeProgramDocument(
       '<html><head><meta charset="utf-8"><script>first()</script></head><body><script type="module">run()</script></body></html>',
-      'token'
+      'token',
+      THEME
     );
     const document = parse(composed);
     const policy = document.head.firstElementChild;
@@ -47,7 +51,8 @@ describe('composeProgramDocument', () => {
   it('keeps the built page’s body and bundled client script', () => {
     const composed = composeProgramDocument(
       '<p>Hello</p><script type="module">run("tasks")</script>',
-      't'
+      't',
+      THEME
     );
     const document = parse(composed);
     expect(document.body.querySelector('p')?.textContent).toBe('Hello');
@@ -55,6 +60,30 @@ describe('composeProgramDocument', () => {
       document.body.querySelector('script[type="module"]')?.textContent
     ).toBe('run("tasks")');
     expect(composed.startsWith('<!doctype html>')).toBe(true);
+  });
+
+  it('replaces a macro:styles link with the theme and stylesheet, after the policy', () => {
+    const composed = composeProgramDocument(
+      '<html><head><link rel="stylesheet" href="macro:styles"><link rel="stylesheet" href="macro:styles"><style>.mine{}</style></head><body></body></html>',
+      'token',
+      THEME
+    );
+    const document = parse(composed);
+    expect(document.querySelector('link')).toBeNull();
+    const styles = [...document.head.querySelectorAll('style')];
+    expect(
+      styles.map((style) => style.hasAttribute('data-macro-theme'))
+    ).toEqual([true, false, false]);
+    expect(styles[0]?.textContent).toBe(THEME);
+    expect(styles[1]?.textContent).toContain('.card');
+    expect(styles[2]?.textContent).toBe('.mine{}');
+    const policy = document.head.firstElementChild;
+    expect(policy?.getAttribute('http-equiv')).toBe('Content-Security-Policy');
+  });
+
+  it('adds no theme to a page that doesn’t link macro:styles', () => {
+    const composed = composeProgramDocument('<p>Hi</p>', 'token', THEME);
+    expect(composed).not.toContain(THEME);
   });
 });
 
