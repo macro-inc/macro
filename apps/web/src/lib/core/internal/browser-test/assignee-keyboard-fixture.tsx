@@ -1,8 +1,10 @@
 import '@app/index.css';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -94,6 +96,8 @@ function Fixture() {
   );
 }
 
+applyTheme('Macro Light');
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture root');
 render(
