@@ -1,0 +1,22 @@
+crates/coding_agent_worker/src/tui/agent_catalog/test.rs
+  s_a060bcd90a5cca::t_24152a1cc4e3d9 231-234,247-255
+  s_a060bcd90a5cca::t_5692021d713d88 256-257
+crates/coding_agent_worker/src/tui/agent_catalog/npm_adapter.rs
+  s_a060bcd90a5cca::t_24152a1cc4e3d9 162-165,167,170,172,180-190,194-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0a133f198a4aa9a4660bfe07e21747bd8e4c1444",
+  "prompts": {},
+  "sessions": {
+    "s_a060bcd90a5cca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38f8202b-190a-453b-9627-e96e1b2c6df8",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
