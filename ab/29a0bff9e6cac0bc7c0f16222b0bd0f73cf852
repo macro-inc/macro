@@ -1,0 +1,31 @@
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_c6a08203850d89::t_9534b157f0b0ee 24,71,209,305-314,318-324
+  s_c6a08203850d89::t_63c166797f0360 315-317
+  s_c6a08203850d89::t_458515ea7be110 325-326
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_c6a08203850d89::t_67a9d249b53c8a 135,138-139,153,158,193,215,239,282,333,677,698,746,819-824
+apps/web/src/features/meetings/meeting-route.tsx
+  s_c6a08203850d89::t_9ad29fd851aaf4 167
+docs/agent-guide/calls.md
+  s_c6a08203850d89::t_a45667b5e97704 328-329
+apps/web/src/features/channel/Call/CallParticipantsList.tsx
+  s_c6a08203850d89::t_3b856e7dc9c143 19,30,91-94,110,120-123,150,160-165
+apps/web/AGENTS.md
+  s_c6a08203850d89::t_a45667b5e97704 299-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ab29a0bff9e6cac0bc7c0f16222b0bd0f73cf852",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
