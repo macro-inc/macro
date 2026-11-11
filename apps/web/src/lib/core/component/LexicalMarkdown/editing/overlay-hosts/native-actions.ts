@@ -1,0 +1,168 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { ACTIONS } from '../../plugins/actions/actions';
+import type { Action, ActionContext } from '../../plugins/actions/types';
+import {
+  dispatchApplicationCommand,
+  dispatchApplicationCommandSettled,
+  queryApplication,
+} from '../../plugins/group-b/command';
+import type { ActionMenuHost } from './actions';
+import { createNativeListenerScope } from './native-listeners';
+
+export interface NativeActionRequests {
+  requestTable(): void | Promise<void>;
+  openFileDialog?: (kind: 'all') => boolean;
+  requestGif?: () => boolean;
+  requestEquation?: () => void;
+  requestLink?: () => void;
+  additionalActions?: ReadonlyMap<
+    Action,
+    (context?: ActionContext) => void | Promise<void>
+  >;
+}
+
+const blockKinds = new Map([
+  ['paragraph', 'paragraph'],
+  ['heading1', 'heading1'],
+  ['heading2', 'heading2'],
+  ['heading3', 'heading3'],
+  ['quote', 'quote'],
+  ['code', 'code'],
+  ['list-bullet', 'list-bullet'],
+  ['list-number', 'list-number'],
+  ['list-check', 'list-check'],
+]);
+
+/** Catalog classes supply dependency names; the native registry owns availability. */
+export function createNativeActionMenuHost(
+  view: EditorView,
+  requests: NativeActionRequests,
+  alive: () => boolean
+): ActionMenuHost & { dispose(): void } {
+  let disposed = false;
+  const rootListeners = new Set<() => void>();
+  const active = () => !disposed && alive() && view.isMounted;
+  const hasDependencies: ActionMenuHost['hasDependencies'] = (dependencies) => {
+    if (!active()) return false;
+    const result = queryApplication(view, 'group-a.action-dependencies', {
+      types: dependencies.map((dependency) => dependency.getType()),
+    });
+    if (
+      typeof result !== 'object' ||
+      result === null ||
+      !('available' in result) ||
+      typeof result.available !== 'boolean'
+    ) {
+      throw new Error('Invalid native action dependency response');
+    }
+    return result.available;
+  };
+  const command = async (
+    name: string,
+    payload: string | Record<string, never>,
+    current: () => boolean
+  ) => {
+    if (!current()) return;
+    const result = await dispatchApplicationCommandSettled(view, name, payload);
+    if (result.status === 'error') throw result.error;
+  };
+  const run = async (
+    item: Action,
+    current: () => boolean,
+    context?: ActionContext
+  ) => {
+    if (!current()) return;
+    const additional = requests.additionalActions?.get(item);
+    if (additional) {
+      await additional(context);
+      return;
+    }
+    if (!ACTIONS.includes(item)) {
+      throw new Error(
+        'Native action handler is unavailable for this catalog item'
+      );
+    }
+    const block = blockKinds.get(item.id);
+    if (block) {
+      await command('group-b.node-transform', block, current);
+      return;
+    }
+    if (item.id === 'hr') {
+      await command('group-b.horizontal-rule', {}, current);
+      return;
+    }
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+    if (!current()) return;
+    if (item.id === 'table') {
+      await requests.requestTable();
+    } else if (
+      (item.id === 'image' || item.id === 'video') &&
+      requests.openFileDialog
+    ) {
+      requests.openFileDialog('all');
+    } else if (item.id === 'gif' && requests.requestGif) {
+      requests.requestGif();
+    } else if (item.id === 'latex' && requests.requestEquation) {
+      requests.requestEquation();
+    } else if (item.id === 'link' && requests.requestLink) {
+      requests.requestLink();
+    } else {
+      throw new Error(`Native action capability is unavailable: ${item.id}`);
+    }
+  };
+  const select = async (
+    item: Action | undefined,
+    origin: 'pointer' | 'keyboard',
+    context?: ActionContext
+  ) => {
+    if (!active()) return;
+    const generation = view.mirror.keyGeneration;
+    const current = () => active() && view.mirror.keyGeneration === generation;
+    const removal = await dispatchApplicationCommandSettled(
+      view,
+      'group-a.search-remove',
+      {}
+    );
+    if (removal.status === 'error') throw removal.error;
+    if (removal.status === 'cancelled' || !current() || !item) return;
+    if (
+      origin === 'pointer' &&
+      item.dependencies &&
+      !hasDependencies(item.dependencies)
+    ) {
+      console.error('Dispatched Action with missing dependencies:', item);
+      return;
+    }
+    await run(item, current, context);
+  };
+  return {
+    root: () => (active() ? view.root : null),
+    subscribeRoot(listener) {
+      rootListeners.add(listener);
+      try {
+        listener();
+      } catch (error) {
+        rootListeners.delete(listener);
+        throw error;
+      }
+      return () => rootListeners.delete(listener);
+    },
+    hasDependencies,
+    closeSearch() {
+      if (active())
+        dispatchApplicationCommand(view, 'group-a.search-close', {});
+    },
+    select(item, origin, context) {
+      fireAndForget(select(item, origin, context), 'native-action-menu');
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      const listeners = createNativeListenerScope();
+      for (const listener of rootListeners) listeners.add(listener);
+      rootListeners.clear();
+      listeners.dispose();
+    },
+  };
+}

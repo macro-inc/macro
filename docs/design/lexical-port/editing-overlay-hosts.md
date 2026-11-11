@@ -496,3 +496,28 @@ once a generation exists, and preserve every ordered callback afterward. Retire
 pending subscriptions on disposal. Invalid optional menu replies release that
 menu's registrations, close its UI and report telemetry while the document and
 independent overlays remain available; never fabricate a default snapshot.
+
+
+## Native action-menu installation
+
+The optional `actions` installation renders `HostedActionMenu` and the shared
+table picker under the document's component owner. It uses the unchanged Source
+catalog and dependency filtering. Dependencies are read from the actual native
+registry through `group-a.action-dependencies`; a null generation waits for the
+first projection. Search removal settles before the selected command or host
+request, with pointer-only dependency rechecking and the current selection.
+
+The actions search and CRITICAL Enter registrations belong to the installation,
+including periods when the menu is closed. An actions-local error boundary
+retires failed construction, rendering or dependency reads and drains its own
+registrations while sibling overlays and document input continue. Late cleanup
+handles are released immediately after retirement. Installation and component
+cleanup share idempotent ownership.
+
+Block choices and divider insertion use existing typed native commands. Table
+selection uses the actual picker host. File, GIF, equation and link requests
+require their real document-owned callbacks. The installer accepts those
+capabilities explicitly. The lifecycle controls in
+`editing/native-actions-lifecycle.test.tsx` exercise actual SessionPort queries
+and registration cleanup; rendered catalog parity and app callback activation
+require their corresponding browser gates.
