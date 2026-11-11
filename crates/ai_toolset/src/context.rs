@@ -1,3 +1,4 @@
+use crate::ToolCallOrigin;
 use crate::tool_search::{SearchableTool, ToolLoader};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::ops::{Deref, DerefMut};
@@ -46,6 +47,9 @@ pub struct RequestContext {
     /// agent session actor does, for the in-process runtime - so each call is
     /// counted once.
     pub genai_telemetry: bool,
+    /// Who dispatched this request's tool calls, recorded on each call's
+    /// `execute_tool` span whether or not [`Self::genai_telemetry`] is on.
+    pub origin: ToolCallOrigin,
 }
 
 impl RequestContext {
@@ -58,6 +62,7 @@ impl RequestContext {
             tool_loader: None,
             cancel: CancellationToken::new(),
             genai_telemetry: true,
+            origin: ToolCallOrigin::default(),
         }
     }
 
@@ -65,6 +70,12 @@ impl RequestContext {
     /// off (see [`Self::genai_telemetry`]).
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Say who dispatches this request's tool calls (see [`Self::origin`]).
+    pub fn with_origin(mut self, origin: ToolCallOrigin) -> Self {
+        self.origin = origin;
         self
     }
 

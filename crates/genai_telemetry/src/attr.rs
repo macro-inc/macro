@@ -103,6 +103,21 @@ pub const MACRO_TOOL_TITLE: &str = "macro.genai.tool.title";
 pub const MACRO_TOOL_RESULT_BYTES: &str = "macro.genai.tool.result_bytes";
 /// Macro-specific: the MCP server a tool was reached through, when it was.
 pub const MACRO_MCP_SERVER: &str = "macro.genai.mcp.server";
+/// Macro-specific: the host or agent that dispatched a tool call
+/// (`agent_session`, `memory`, `ai_projection`, `public_mcp`, …).
+pub const MACRO_TOOL_HOST: &str = "macro.genai.tool.host";
+/// Macro-specific: how the caller is presented Macro's tools: `code` or
+/// `standard`.
+pub const MACRO_TOOL_MODE: &str = "macro.genai.tool.mode";
+/// Macro-specific: what the turn that made a call is for (`conversation`,
+/// `summary`).
+pub const MACRO_TURN_PURPOSE: &str = "macro.genai.turn.purpose";
+/// Macro-specific: the kind of authenticated public MCP caller: `mcp_client`,
+/// `agent` or `api_key`.
+pub const MACRO_MCP_CALLER: &str = "macro.genai.mcp.caller";
+/// Macro-specific: the name an OAuth MCP client registered under, bounded.
+/// Self-reported, so a label only.
+pub const MACRO_MCP_CLIENT_NAME: &str = "macro.genai.mcp.client.name";
 
 /// Well-known [`OPERATION_NAME`] values.
 pub mod operation {

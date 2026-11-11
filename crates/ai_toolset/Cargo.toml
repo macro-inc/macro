@@ -18,6 +18,7 @@ genai_telemetry = { path = "../genai_telemetry" }
 axum = { workspace = true }
 axum-macros = { workspace = true }
 tracing = { workspace = true }
+strum = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 tokio-util.workspace = true
 
