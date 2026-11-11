@@ -1,0 +1,20 @@
+apps/web/src/components/app/tab-layout/tests/tab-hotkeys.test.tsx
+  s_60bbe192a6a060::t_7a04cb0bf59d8e 45-50
+  s_60bbe192a6a060::t_0d4e578a5c5583 70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9bd6cf0bbdbd98ba627f7c91e0951948f1b8c737",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
