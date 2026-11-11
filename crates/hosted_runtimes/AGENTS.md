@@ -316,6 +316,16 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 
+### Agent teammate computers
+
+`ComputerService::purchase_for_agent` is `purchase_for_team` with the computer
+linked to an agent account (`hosted_runtime.agent_user_id`, one computer per
+agent); `ComputerAgents` reads the link. This crate knows nothing else about
+the agent: at enrollment the operator asks its `AgentEnrollmentSource`
+(`domain/agent.rs`) for `Enrollment.agent`, which team_agents issues. A failed
+issuance fails the enrollment, so an agent computer never boots without its
+agent; `NoAgentEnrollment` (the default) enrolls every computer without one.
+
 ## Typed boundaries
 
 - Keep `#![deny(missing_docs)]` enabled and document every public item tersely (CS-54).

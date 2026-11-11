@@ -132,15 +132,19 @@ pub enum AgentEnrollmentError {
 }
 
 /// A boxed issuance, so the operator can hold any source.
-pub type AgentEnrollmentFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<Option<AgentEnrollment>, AgentEnrollmentError>> + Send + 'a>>;
+pub type AgentEnrollmentFuture<'a> = Pin<
+    Box<dyn Future<Output = Result<Option<AgentEnrollment>, AgentEnrollmentError>> + Send + 'a>,
+>;
 
 /// Issues the agent part of a computer's enrollment.
 pub trait AgentEnrollmentSource: Send + Sync + 'static {
     /// The agent's enrollment for this guest creation, or `None` when the
     /// computer runs no agent. Each call may mint fresh credentials.
-    fn issue(&self, computer: ComputerId, generation: EnrollmentGeneration)
-    -> AgentEnrollmentFuture<'_>;
+    fn issue(
+        &self,
+        computer: ComputerId,
+        generation: EnrollmentGeneration,
+    ) -> AgentEnrollmentFuture<'_>;
 }
 
 /// For deployments without agent teammates: every computer enrolls without

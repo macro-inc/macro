@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use super::*;
 use crate::domain::agent::{
-    AgentEnrollment, AgentEnrollmentError, AgentEnrollmentFuture, AgentEnrollmentSource,
-    AgentEnv, AgentEnvKey,
+    AgentEnrollment, AgentEnrollmentError, AgentEnrollmentFuture, AgentEnrollmentSource, AgentEnv,
+    AgentEnvKey,
 };
 
 fn ada() -> MacroUserIdStr<'static> {
