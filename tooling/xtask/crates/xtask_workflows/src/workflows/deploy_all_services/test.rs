@@ -53,7 +53,7 @@ fn email_and_document_storage_deploy_in_the_shared_matrix() {
     std::fs::write(
         dir.path().join(".github/services-config.json"),
         serde_json::json!({"services": {
-            "email-service": {"deploy_enabled": false},
+            "email-service": {},
             "document-storage-service": {},
             "unrelated": {}
         }})
@@ -75,9 +75,9 @@ fn email_and_document_storage_deploy_in_the_shared_matrix() {
     );
     let result = std::fs::read_to_string(output_path).unwrap();
     assert!(
-        result
-            .lines()
-            .any(|line| line == r#"matrix=["document-storage-service","unrelated"]"#),
+        result.lines().any(
+            |line| line == r#"matrix=["document-storage-service","email-service","unrelated"]"#
+        ),
         "{result}"
     );
 
