@@ -351,7 +351,7 @@ async fn undo_before_the_queued_removal_keeps_the_item(pool: PgPool) {
     service.undo_cancel(TEAM, id).await.unwrap();
     service.run_billing_effects().await.unwrap();
 
-    assert_eq!(stripe.items_for(id).await, [item.clone()]);
+    assert_eq!(stripe.items_for(id).await, std::slice::from_ref(&item));
     assert_eq!(
         billing_of(&repo, id).await,
         Billing::Active {
@@ -524,7 +524,7 @@ async fn reconcile_removes_items_no_computer_is_billed_on(pool: PgPool) {
         .iter()
         .map(|(item, _)| item.clone())
         .collect();
-    assert_eq!(remaining, [kept.clone()]);
+    assert_eq!(remaining, std::slice::from_ref(&kept));
     for gone in [duplicate, left, orphan] {
         assert!(!remaining.contains(&gone));
     }
