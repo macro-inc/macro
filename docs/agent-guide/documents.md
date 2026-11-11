@@ -81,6 +81,9 @@ selections must remain owned by their own controls. For a loaded video, click
 its frame to select it, verify playback controls remain available, then remove
 it from the decorator toolbar. For a local video upload, check that the same
 preview stays mounted while saving and after success or failure.
+For a PR reference, let its lookup resolve and check both the displayed title
+and exported GitHub URL. Open a Snapshot preview and delete it from Reference
+actions; verify the caret returns to its neighbor.
 
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.

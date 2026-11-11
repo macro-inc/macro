@@ -147,6 +147,7 @@ commits without hover, including after a sibling component is disposed.
 
 Contact decorators use a narrow published-selection/Normal-Enter host; preserve synchronous null-command dispatch, pending-versus-published timing and disposal, and keep raw metadata failures separate from explicit Source-export reimport cohorts in `decorator-host/contact-browser-test`.
 Preserve Snapshot’s captured Source editor, Normal Enter cleanup and Snapshot-only removal predicate through its narrow host; compare literal before/after captures with `decorator-host/interactive-browser-test/playwright.config.ts` before native binding.
+Route PR query enrichment through its narrow host with the Source history, DOM-selection and scroll tags; preserve the public node payload and query/preview UI. Verify PR and Snapshot raw pairs in `decorator-host/reference-browser-test`.
 Selection-only chips may receive a narrow `DecoratorSelectionHost`; preserve their actual LexicalWrapper selection fallback when it is absent. Verify OFF bytes, import-matched native DOM/JSON and actual selection with `decorator-host/selection-browser-test/playwright.config.ts` in all three engines; this fixture is not the complete application registry.
 Prove Source-admitted decorator values through actual parse and mounted controls before widening real UI inputs; keep public node props unchanged and never coerce inputs through an unchecked registry type. The Magic control lives in `decorator-host/magic-source-browser-test`.
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
