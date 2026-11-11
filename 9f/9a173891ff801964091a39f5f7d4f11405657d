@@ -1,0 +1,23 @@
+crates/calendar_events/src/domain/meeting_links.rs
+  s_45e02213934692::t_6654a9ca8f20e6 285-287
+  s_45e02213934692::t_a50874d0ffdacf 288-294
+crates/calendar_events/src/domain/meeting_links/test.rs
+  s_45e02213934692::t_6654a9ca8f20e6 656-691
+  s_45e02213934692::t_2ee6937da5aee8 655
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9f9a173891ff801964091a39f5f7d4f11405657d",
+  "prompts": {},
+  "sessions": {
+    "s_45e02213934692": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f8d27815-6322-4700-80df-638571b17855",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
