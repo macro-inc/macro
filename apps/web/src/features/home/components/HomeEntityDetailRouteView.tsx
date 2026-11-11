@@ -104,7 +104,7 @@ function HomeMarkdownBreadcrumb(props: {
 }) {
   const { displayName } = useMarkdownName();
   const { documentId, kind, permissions } = useMarkdownDocument();
-  const { fileOperations, menuTools } = useMarkdownDocumentTools();
+  const { fileOperations, actions } = useMarkdownDocumentTools();
   const blockType = () => {
     const documentKind = kind();
     return documentKind === 'document' ? 'md' : documentKind;
@@ -128,7 +128,7 @@ function HomeMarkdownBreadcrumb(props: {
           itemType="document"
           name={name()}
           ops={fileOperations}
-          tools={menuTools}
+          tools={[actions.history, actions.askMacro, actions.codeActions]}
           entityKind={blockType()}
           permissions={menuPermissions()}
         />

@@ -13,6 +13,7 @@ import {
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
+import { MarkdownHeaderActions } from '@block-md/views/desktop-markdown-header-parts';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -123,6 +124,7 @@ function MarkdownDetailContent(props: {
         <SidePanel.Layout headerToggle={false} floating>
           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
             <MarkdownSidePanelSections />
+            <MarkdownHeaderActions />
           </Show>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
             <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">

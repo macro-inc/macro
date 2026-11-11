@@ -37,7 +37,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const panel = useSplitPanelOrThrow();
   const { displayName } = useMarkdownName();
   const { permissions, state } = useMarkdownDocument();
-  const { fileOperations, menuTools } = useMarkdownDocumentTools();
+  const { fileOperations, actions } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
   const documentName = () =>
     displayName() || props.fallbackName || blockNameToDefaultFile(blockName());
@@ -96,7 +96,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
               itemType="document"
               name={documentName()}
               ops={fileOperations}
-              tools={menuTools}
+              tools={[actions.history, actions.askMacro, actions.codeActions]}
               entityKind={blockName()}
               permissions={menuPermissions()}
               onDuplicate={(id) => props.onDuplicate(id, documentName())}

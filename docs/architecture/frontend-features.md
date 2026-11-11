@@ -313,6 +313,12 @@ views/shared/<name>-parts.tsx  parts both views render
   (`components/app/mobile-header`). While it is mounted it owns the pane's
   header: nothing else in the pane can add to it. A mobile view may branch on
   `isMobile()` / `mobile:` for phone versus tablet.
+- **A block's desktop header uses `DesktopBlockToolbar`**
+  (`components/app/desktop-block-toolbar`): its tools in one group, the side
+  panel's header actions, trailing controls such as Share, and the title menu
+  with the rows the view lists. `ResponsiveBlockToolbar` builds both
+  platforms' headers in one component and remains only for blocks not yet
+  split.
 
 Some items have two hosts: on touch an email thread, channel, agent session,
 document, or CRM record opens as its block, while desktop shows it inline in
@@ -323,6 +329,12 @@ desktop-only.
 `features/task-composer` (`compose-task.tsx` and `views/`) and
 `features/block-email` (`EmailBlockAdapter.tsx` and `views/`) are the
 references.
+
+A large view can be split in steps, header first. `features/block-md` is at
+that stage: `component/Block.tsx` switches between
+`views/desktop-markdown-header.tsx` and `views/mobile-markdown-header.tsx`,
+while the document body below them is still shared and its files are still in
+the baseline.
 
 ### `context/`: the feature's capability contract
 
