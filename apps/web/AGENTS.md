@@ -79,8 +79,9 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
 further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers keep a replaceable window with explicit paging. A
-window key names the page or growing list on screen, never a refresh of it. Reset
+to a bound; property pickers use explicit paging, and company pages append to
+the visible options. A window key names the page or growing list on screen,
+never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.

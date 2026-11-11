@@ -30,8 +30,10 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   on,
   Show,
+  Switch,
 } from 'solid-js';
 import {
   type CombinedEntity,
@@ -120,6 +122,21 @@ function getEntityName(entity: CombinedEntity): string {
 }
 
 const MAX_LIST_HEIGHT = 192;
+const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
+const MAX_SEARCH_RESULTS = 20;
+
+function getMaxLocalResults(
+  entityType: EntitySelectorConfig['specificEntityType'],
+  hasSearchTerm: boolean,
+  loadedEntityCount: number
+): number {
+  if (entityType === 'COMPANY') {
+    // Quick Access bounds each company page; don't hide rows appended by
+    // Next options behind another fixed cap.
+    return loadedEntityCount;
+  }
+  return hasSearchTerm ? MAX_SEARCH_RESULTS : MAX_VISIBLE_ENTITIES_NO_SEARCH;
+}
 
 export function PropertyEntitySelector(props: EntityInputProps) {
   const [inputValue, setRawInputValue] = createSignal('');
@@ -329,8 +346,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     const userId = currentUserId();
 
     // List is unvirtualized — revisit if these caps grow significantly.
-    const MAX_VISIBLE_ENTITIES_NO_SEARCH = 50;
-    const MAX_SEARCH_RESULTS = 20;
+    const maxLocalResults = getMaxLocalResults(
+      props.config.specificEntityType,
+      !!term,
+      allEntities.length
+    );
 
     // Filter out the current entity when selecting same entity type
     const blockId = selfFilterBlockId();
@@ -383,14 +403,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
     let localResults: CombinedEntity[];
     if (term) {
       localResults = entitySearch(allEntities, term)
-        .slice(0, MAX_SEARCH_RESULTS)
+        .slice(0, maxLocalResults)
         .map((result) => result.item)
         .filter(excludeFilter);
     } else {
       localResults = sortEntitiesWithSelfFirst(
         allEntities.filter(excludeFilter),
         userId
-      ).slice(0, MAX_VISIBLE_ENTITIES_NO_SEARCH);
+      ).slice(0, maxLocalResults);
     }
 
     // For THREAD or generic entity: merge local + server results
@@ -770,7 +790,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           onPointerDown={(event) => event.preventDefault()}
           onClick={loadNext}
         >
-          {t('viewMenus.nextOptions')}
+          <Switch fallback={t('viewMenus.nextOptions')}>
+            <Match when={quickAccess.isLoadingMore()}>
+              {t('common.loadingOptions')}
+            </Match>
+          </Switch>
         </Button>
       </Show>
     </div>
