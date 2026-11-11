@@ -317,13 +317,14 @@ const videoFile = new URL(
   '../../../../../../features/block-pptx/browser-test/fixtures/clip.webm',
   import.meta.url
 );
-for (const [label, outcome] of [
-  ['Image', 'success'],
-  ['Image', 'failure'],
-  ['Video', 'success'],
-  ['Video', 'failure'],
+for (const [label, outcome, intake] of [
+  ['Image', 'success', 'picker'],
+  ['Image', 'failure', 'picker'],
+  ['Video', 'success', 'picker'],
+  ['Video', 'failure', 'picker'],
+  ['Video', 'success', 'clipboard'],
 ] as const) {
-  test(`${label} upload ${outcome} uses the actual provider on Source and native`, async ({
+  test(`${label} upload ${outcome} uses the actual provider on Source and native via ${intake === 'clipboard' ? 'Source picker and native clipboard' : 'picker'}`, async ({
     browser,
     baseURL,
   }, info) => {
@@ -399,7 +400,26 @@ for (const [label, outcome] of [
             .toBe(true);
           await root.locator('p').first().click();
           await expect(root).toBeFocused();
-          await page.getByLabel(`${label} file`).setInputFiles(file);
+          if (intake === 'clipboard' && engine === 'native') {
+            expect(
+              await page.evaluate(
+                ({ name, mimeType, bytes }) => {
+                  const clipboard = new DataTransfer();
+                  clipboard.items.add(
+                    new File([new Uint8Array(bytes)], name, { type: mimeType })
+                  );
+                  return window.imageProofFixture?.paste?.(clipboard);
+                },
+                {
+                  name: file.name,
+                  mimeType: file.mimeType,
+                  bytes: Array.from(file.buffer),
+                }
+              )
+            ).toBe(true);
+          } else {
+            await page.getByLabel(`${label} file`).setInputFiles(file);
+          }
           await expect(root.getByText(`Saving ${label}...`)).toBeVisible();
           expect((await receiver.body).equals(file.buffer)).toBe(true);
           const media = root.locator(video ? 'video' : 'img');

@@ -47,6 +47,7 @@ import { createNativeMediaUploadEvents } from '../../plugins/media/native-upload
 import { selectionDataPlugin } from '../../plugins/selection-data/selectionDataPlugin';
 import { trailingParagraphPlugin } from '../../plugins/trailing-paragraph/trailingParagraphPlugin';
 import { theme } from '../../theme';
+import { createFilesReadyHandler } from '../../utils/fileUploadUtils';
 import { createNativeImageContext } from '../native-image-host';
 import { createNativeImageDecoratorViews } from '../native-image-views';
 import {
@@ -80,6 +81,7 @@ declare global {
     imageProofFixture?: {
       snapshot(): Capture;
       keyAdmissions(): readonly KeyAdmission[];
+      paste?: (clipboard: DataTransfer) => Promise<boolean>;
       setUrl(url: string, rerender: boolean): Promise<void>;
       close(): Promise<void>;
     };
@@ -115,12 +117,11 @@ function Fixture() {
     wrapper.plugins.use(
       filePastePlugin({
         onPasteFilesAndDirs(files, directories) {
-          handleFileFolderDrop(files, directories, async (entries) => {
-            for (const entry of entries) {
-              if (!entry.isFolder)
-                await addMediaFromFile(wrapper.editor, entry.file, 'image');
-            }
-          }).catch((error: unknown) => console.error(error));
+          handleFileFolderDrop(
+            files,
+            directories,
+            createFilesReadyHandler(wrapper.editor)
+          ).catch((error: unknown) => console.error(error));
         },
       })
     );
@@ -160,6 +161,7 @@ function Fixture() {
     const element = root;
     const keyAdmissions: KeyAdmission[] = [];
     let model: () => string;
+    let paste: ((clipboard: DataTransfer) => Promise<boolean>) | undefined;
     let setUrl: (url: string, rerender: boolean) => Promise<void>;
     if (engine === 'native') {
       if (typeof window.imageProofInput !== 'string')
@@ -220,6 +222,7 @@ function Fixture() {
       if (element.querySelector('[data-lexical-decorator]'))
         throw new Error('Observed native decorator before import');
       controller?.bindView(surface.view);
+      paste = (clipboard) => surface.view.clipboard.paste(clipboard);
       surface.port.setState(window.imageProofInput);
       const keyDown = surface.port.keyDown.bind(surface.port);
       surface.port.keyDown = (...args) => {
@@ -324,6 +327,7 @@ function Fixture() {
     }
     window.imageProofFixture = {
       keyAdmissions: () => keyAdmissions,
+      paste,
       setUrl,
       snapshot() {
         return {

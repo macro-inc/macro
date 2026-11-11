@@ -29,3 +29,11 @@ VP8 decode plugins. It dispatches a DOM click to the shared decorator
 handler because browser playback widgets can consume pointer clicks. The
 toolbar removal still uses a pointer click. Both engines must retain the
 same Portal host through the cached URL setter and subsequent remount.
+
+The clipboard case feeds a browser DataTransfer into the native clipboard
+pipeline and compares its provider outcome with Source's real file picker.
+It covers the native file intent and IO callback. It does not claim OS
+clipboard parity. Chromium and WebKit also passed the separate paired
+constructed-ClipboardEvent trace. Firefox's Source trace handled that
+constructed event without delivering its file, and that failed trace is
+retained separately.

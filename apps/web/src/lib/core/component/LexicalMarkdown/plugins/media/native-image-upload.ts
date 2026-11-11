@@ -22,13 +22,15 @@ import { dispatchApplicationCommandSettled } from '../group-b/command';
 import { type MediaType, processFile, validateMediaFile } from './io';
 import { createNativeMediaUploadEvents } from './native-upload-events';
 
-function isImageFileName(name: string): boolean {
+function inlineMediaKind(name: string): MediaType | undefined {
   const extension = fileExtension(name);
-  return (
-    extension != null &&
-    (blockNameToFileExtensions.image.includes(extension) ||
-      HEIC_EXTENSIONS.some((candidate) => candidate === extension))
-  );
+  if (extension == null) return;
+  if (
+    blockNameToFileExtensions.image.includes(extension) ||
+    HEIC_EXTENSIONS.some((candidate) => candidate === extension)
+  )
+    return 'image';
+  if (blockNameToFileExtensions.video.includes(extension)) return 'video';
 }
 
 // Like Source, copies and undo keep the preview URL and its page-owned upload.
@@ -195,7 +197,7 @@ export function createNativeImageUploadController() {
               return (
                 !directories.length &&
                 (names.length > 0
-                  ? names.every(isImageFileName)
+                  ? names.every((name) => inlineMediaKind(name) !== undefined)
                   : mobileImageRecovery)
               );
             },
@@ -211,9 +213,11 @@ export function createNativeImageUploadController() {
                       view.root.contentEditable !== 'true'
                     )
                       return;
+                    if (entry.isFolder) continue;
+                    const kind = inlineMediaKind(entry.file.name);
                     if (
-                      !entry.isFolder &&
-                      !(await insertFile(entry.file)) &&
+                      kind !== undefined &&
+                      !(await insertFile(entry.file, kind)) &&
                       current(view, generation) &&
                       editable(view) &&
                       view.root.contentEditable === 'true'
@@ -221,7 +225,7 @@ export function createNativeImageUploadController() {
                       toast.failure('Invalid media attachment file(s)');
                   }
                 }),
-                'native-image-paste'
+                'native-media-paste'
               );
             },
           })
