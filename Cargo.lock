@@ -22145,6 +22145,7 @@ dependencies = [
  "tracing",
  "trigger_context",
  "url",
+ "user_events",
  "utoipa",
  "uuid",
  "webhook_signature",
