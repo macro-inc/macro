@@ -349,6 +349,45 @@ async fn unverified_guest_quotes_are_not_posted_or_patched() {
 }
 
 #[tokio::test]
+async fn guest_edits_share_the_post_character_limit() {
+    let (mut repo, events, _, call, guest) = setup();
+    repo.message.sender_id = ChannelSender::new_from_guest(guest);
+    let service = GuestChatService::new(
+        Arc::new(MessageService::new(repo.clone(), events.clone())),
+        Arc::new(Authorizer { call, guest }),
+    );
+
+    for content in [String::new(), " ".into(), "a".repeat(16_001)] {
+        assert!(matches!(
+            service
+                .patch_message(
+                    call,
+                    "active-session",
+                    call,
+                    GuestChatPatch { content }
+                )
+                .await,
+            Err(MessageError::Invalid(_))
+        ));
+    }
+    assert!(repo.edits.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+
+    service
+        .patch_message(
+            call,
+            "active-session",
+            call,
+            GuestChatPatch {
+                content: "a".repeat(16_000),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(repo.edits.lock().unwrap()[0].content.chars().count(), 16_000);
+}
+
+#[tokio::test]
 async fn guest_mutations_require_ownership_and_publish_changes() {
     let (mut repo, events, _, call, guest) = setup();
     repo.message.sender_id = ChannelSender::new_from_guest(guest);

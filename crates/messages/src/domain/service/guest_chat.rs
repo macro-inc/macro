@@ -588,9 +588,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
         }
-        if input.content.trim().is_empty() {
+        if input.content.trim().is_empty() || input.content.chars().count() > 16_000 {
             return Err(MessageError::Invalid(
-                "a message needs content or an attachment",
+                "Enter a message of at most 16000 characters",
             ));
         }
         let message = self
