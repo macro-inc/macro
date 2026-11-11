@@ -28,6 +28,8 @@ import {
 import { blocks } from '@core/constant/allBlocks';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { render } from 'solid-js/web';
+import { openInNewTab } from '../open-in-new-tab';
+import { openInNewTabMiddleware } from '../open-in-tab-middleware';
 import { createTabManager } from '../tab-manager';
 
 let mounts = 0;
@@ -58,6 +60,7 @@ function App() {
     routes,
     history: createMemoryHistory('/md/doc-one'),
     paneStore: createMemoryPaneStore<Entry>(),
+    middleware: [openInNewTabMiddleware],
     policy: createAppPanePolicy({
       manager: () => manager,
       toContent: splitContentFromLocation,
@@ -83,6 +86,17 @@ function App() {
     close: (index: number) => tabManager.closeTab(tabManager.tabs()[index]!.id),
     openDocument: () =>
       manager.openWithSplit({ type: 'md', id: 'doc-one' }).status,
+    // A menu's "Open in new tab" over the ordinary current-split open.
+    openInNewTab: (id: string) =>
+      openInNewTab(() =>
+        manager.openWithSplit({ type: 'md', id }, { preferNewSplit: false })
+      ),
+    openInCurrentSplit: (id: string) =>
+      manager.openWithSplit({ type: 'md', id }, { preferNewSplit: false })
+        .status,
+    tabCount: () => tabManager.tabs().length,
+    activeIndex: () =>
+      tabManager.tabs().findIndex((tab) => tab.id === tabManager.activeTabId()),
   });
 
   return (
