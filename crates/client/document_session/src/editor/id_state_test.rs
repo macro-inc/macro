@@ -173,6 +173,7 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
     assert_eq!(restored.oplog_vv(), restored_vv);
 }
 
+#[cfg(feature = "application")]
 #[test]
 fn editable_draft_cleanup_preserves_bare_metadata_storage() {
     let now = Now {
@@ -255,6 +256,7 @@ fn standalone_key_raw_import_keeps_empty_missing_and_nonstring_ids_omitted() {
     }
 }
 
+#[cfg(feature = "application")]
 #[test]
 fn live_history_keeps_metadata_while_loro_undo_removes_and_redo_restores_its_slot() {
     let now = Now {
