@@ -9,6 +9,7 @@ mod database_query_actions;
 mod decorator_actions;
 mod decorator_content_actions;
 mod diff;
+mod equation_insert;
 mod focus;
 mod formatting;
 mod horizontal_rule;
@@ -101,7 +102,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = metadata::register(builder);
     let builder = decorator_actions::register(builder);
     let builder = decorator_content_actions::register(builder);
-    pr_mention_actions::register(builder)
+    let builder = pr_mention_actions::register(builder);
+    equation_insert::register(builder)
 }
 
 #[cfg(test)]
@@ -186,6 +188,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = pr_mention_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = equation_insert::decode(name, json)? {
         return Ok(Some(command));
     }
     if name == "group-b.select-all" {

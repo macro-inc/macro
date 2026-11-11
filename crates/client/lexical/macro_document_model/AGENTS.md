@@ -133,3 +133,5 @@ Read bulk table geometry through group-b.table-facts and the actual core table m
 Apply group-b.table selection-merge and selection-split through the shared table operations and clear selection after success for the touch bar. Use format-selection-merge and format-selection-split for desktop formatting so the operation retains its resulting selection. Keep clipboard completion policy separate. The border insert-row action selects the first new cell after insertion, while column insertion uses the selection returned by the shared column operation.
 
 Use the opt-in Macro search-text sync policy only when the browser enables Markdown search text. The policy reads the typed durable ID and projects the derived field to Loro while keeping ordinary editor exports unchanged until a storage import.
+
+Construct inserted equations before invoking the shared current/previous/root-end selection insertion primitive; preserve the display flag and the inherited inline decorator policy.
