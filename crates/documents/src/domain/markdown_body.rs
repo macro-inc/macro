@@ -4,7 +4,7 @@
 
 use super::ai_edit::{ensure_markdown, worker_token};
 use super::models::DocumentError;
-use super::ports::editing::{EditingWorkerService, MarkdownWrite};
+use super::ports::editing::{EditingWorkerService, MarkdownRead, MarkdownWrite};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use model::document::DocumentBasic;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -44,6 +44,10 @@ pub enum DocumentMarkdownError {
     /// The document changed since the caller read it; nothing was written.
     #[error("the document changed since it was read")]
     Conflict,
+    /// The document, or the body written to it, exceeds the snapshot limit;
+    /// nothing was written, and retrying cannot succeed.
+    #[error("the document exceeds the snapshot limit")]
+    TooLarge,
     /// The body could not be read.
     #[error("markdown read failed: {0}")]
     ReadFailed(anyhow::Error),
@@ -62,10 +66,14 @@ pub async fn read_markdown<Worker: EditingWorkerService>(
 ) -> Result<DocumentMarkdown, DocumentMarkdownError> {
     ensure_markdown(&access, document)?;
     let (document_token, _) = worker_token(&access, AccessLevel::View, jwt_secret)?;
-    worker
+    let read = worker
         .read_markdown(&document.document_id, &document_token)
         .await
-        .map_err(DocumentMarkdownError::ReadFailed)
+        .map_err(DocumentMarkdownError::ReadFailed)?;
+    match read {
+        MarkdownRead::Read(markdown) => Ok(markdown),
+        MarkdownRead::TooLarge => Err(DocumentMarkdownError::TooLarge),
+    }
 }
 
 /// Replace a markdown document's body with its edit receipt, only if the
@@ -100,5 +108,6 @@ pub async fn write_markdown<Worker: EditingWorkerService>(
     match write {
         MarkdownWrite::Written(written) => Ok(written),
         MarkdownWrite::Conflict => Err(DocumentMarkdownError::Conflict),
+        MarkdownWrite::TooLarge => Err(DocumentMarkdownError::TooLarge),
     }
 }
