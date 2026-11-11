@@ -200,3 +200,6 @@ pub fn query(
 pub fn key_prevents_default(name: &str) -> Option<bool> {
     (name == "group-b.table-key").then_some(false)
 }
+
+/// Read-only source checklist metadata, with no installed commands or listeners.
+pub mod checklist_controls;
