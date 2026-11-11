@@ -1,9 +1,8 @@
-use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
-use crm::domain::service::CrmService;
-use email_db_client::crm_cleanup::{candidates, job};
-use models_email::email::service::crm_cleanup::{
-    CrmCleanupJobStatus, CrmCleanupOperation, CrmCleanupPubsubMessage,
+use super::{
+    CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
+    CrmCleanupService,
 };
+use models_email::email::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -37,12 +36,20 @@ const PRUNE_MIN_AGE: chrono::TimeDelta = chrono::TimeDelta::hours(6);
 /// skipping it there would strand the row forever. By the nightly run,
 /// populate has long since settled.
 #[tracing::instrument(skip(ctx), err)]
-pub async fn list_candidates(
-    ctx: &CrmCleanupContext,
+pub(super) async fn list_candidates<R, C, Q, T>(
+    ctx: &CrmCleanupService<R, C, Q, T>,
     job_id: Uuid,
     last_id: i64,
-) -> Result<(), ProcessingError> {
-    let job = job::get_job(&ctx.db, job_id)
+) -> Result<(), ProcessingError>
+where
+    R: CleanupJobs + CleanupCandidates + CleanupMailbox,
+    C: CleanupCrm,
+    Q: CleanupQueue,
+    T: CleanupClock,
+{
+    let job = ctx
+        .repository
+        .get_job(job_id)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -65,19 +72,16 @@ pub async fn list_candidates(
         }
     }
 
-    let page = candidates::list_candidates_page(
-        &ctx.db,
-        last_id,
-        job.max_candidate_id,
-        CANDIDATE_PAGE_SIZE,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to list crm cleanup candidates"),
-        })
-    })?;
+    let page = ctx
+        .repository
+        .list_candidates_page(last_id, job.max_candidate_id, CANDIDATE_PAGE_SIZE)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to list crm cleanup candidates"),
+            })
+        })?;
 
     let pairs: Vec<(Uuid, String)> = page
         .iter()
@@ -86,7 +90,7 @@ pub async fn list_candidates(
 
     // Pairs too young to prune safely — see PRUNE_MIN_AGE. Dispatched
     // unconditionally, which is exactly the pre-filter behaviour.
-    let prune_cutoff = chrono::Utc::now() - PRUNE_MIN_AGE;
+    let prune_cutoff = ctx.clock.now() - PRUNE_MIN_AGE;
     let too_young: HashSet<(Uuid, String)> = page
         .iter()
         .filter(|c| c.created_at > prune_cutoff)
@@ -119,7 +123,9 @@ pub async fn list_candidates(
     // ProcessCandidate message each to reach the same conclusion. Runs before
     // any dispatch, so a failure retries the whole page cleanly.
     if !to_prune.is_empty() {
-        let pruned = candidates::claim_candidates(&ctx.db, &to_prune)
+        let pruned = ctx
+            .repository
+            .claim_candidates(&to_prune)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
@@ -136,12 +142,10 @@ pub async fn list_candidates(
     }
 
     for (link_id, contact_email) in &to_dispatch {
-        ctx.sqs_client
-            .enqueue_email_crm_cleanup_message(CrmCleanupPubsubMessage {
-                operation: CrmCleanupOperation::ProcessCandidate {
-                    link_id: *link_id,
-                    contact_email: contact_email.clone(),
-                },
+        ctx.queue
+            .enqueue(CrmCleanupOperation::ProcessCandidate {
+                link_id: *link_id,
+                contact_email: contact_email.clone(),
             })
             .await
             .map_err(|e| {
@@ -154,7 +158,8 @@ pub async fn list_candidates(
 
     // Observability only; may over-count when a page is redelivered mid-dispatch.
     if !to_dispatch.is_empty() {
-        job::add_dispatched_count(&ctx.db, job_id, to_dispatch.len() as i64)
+        ctx.repository
+            .add_dispatched_count(job_id, to_dispatch.len() as i64)
             .await
             .inspect_err(|e| tracing::error!(error = ?e, "Failed to bump dispatched_count"))
             .ok();
@@ -162,12 +167,10 @@ pub async fn list_candidates(
 
     if page.len() as i64 == CANDIDATE_PAGE_SIZE {
         let next_cursor = page.last().map(|c| c.id).unwrap_or(last_id);
-        ctx.sqs_client
-            .enqueue_email_crm_cleanup_message(CrmCleanupPubsubMessage {
-                operation: CrmCleanupOperation::ListCandidates {
-                    job_id,
-                    last_id: next_cursor,
-                },
+        ctx.queue
+            .enqueue(CrmCleanupOperation::ListCandidates {
+                job_id,
+                last_id: next_cursor,
             })
             .await
             .map_err(|e| {
@@ -177,7 +180,8 @@ pub async fn list_candidates(
                 })
             })?;
     } else {
-        job::set_job_status(&ctx.db, job_id, CrmCleanupJobStatus::Complete)
+        ctx.repository
+            .set_job_status(job_id, CrmCleanupJobStatus::Complete)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {

@@ -1,4 +1,6 @@
 //! Outbound infrastructure adapters.
+/// Nightly CRM cleanup effects.
+pub mod crm_cleanup;
 /// Email-owned invitation extraction.
 pub mod invitation_extraction;
 

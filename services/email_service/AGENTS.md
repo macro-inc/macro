@@ -57,6 +57,10 @@ the gateway `/email` prefix.
   `outbound/sfs_upload.rs`; mapping fallback, best-effort writes, and self-contact
   refresh decisions live in the domain. Adapters reuse the existing image
   fetch/upload and gateway helpers with their original spans and failures.
+  CRM cleanup composes `email::domain::crm_cleanup` with `outbound/crm_cleanup.rs`;
+  the domain owns job state, pruning, dispatch, teardown guards and retry policy.
+  Adapters retain the existing SQL and CRM teardown transactions, queue envelope,
+  and UTC reads at the same two decision sites.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.

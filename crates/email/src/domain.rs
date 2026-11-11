@@ -74,3 +74,7 @@ pub mod signature_settings;
 /// Backfill-job access, cancellation, and initialization publication.
 #[cfg(feature = "mailbox")]
 pub mod backfill_jobs;
+
+/// Nightly CRM candidate cleanup and delivery disposition.
+#[cfg(feature = "mailbox")]
+pub mod crm_cleanup;

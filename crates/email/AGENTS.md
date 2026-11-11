@@ -23,6 +23,8 @@ tools — hexagonal, heavily feature-gated.
 - `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed
   contact-photo uploads, best-effort persistence, self-contact refresh, and
   delivery disposition.
+- `src/domain/crm_cleanup.rs` (feature `mailbox`): nightly cleanup job lifecycle,
+  candidate pruning and dispatch, teardown guards, and delivery disposition.
 - `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
   push-token rotation retry and notification intake; lifecycle also owns ordered
   deletion requests for a deleted user's inboxes.

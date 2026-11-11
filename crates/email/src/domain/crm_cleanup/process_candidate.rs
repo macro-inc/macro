@@ -1,6 +1,7 @@
-use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
-use crm::domain::service::CrmService;
-use email_db_client::crm_cleanup::candidates;
+use super::{
+    CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
+    CrmCleanupService,
+};
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
@@ -20,12 +21,20 @@ use uuid::Uuid;
 /// message landing between the check and the cascade could see a transient
 /// deleted state; the populate path on that new message re-creates the rows.
 #[tracing::instrument(skip(ctx, contact_email), err, fields(link_id = %link_id))]
-pub async fn process_candidate(
-    ctx: &CrmCleanupContext,
+pub(super) async fn process_candidate<R, C, Q, T>(
+    ctx: &CrmCleanupService<R, C, Q, T>,
     link_id: Uuid,
     contact_email: &str,
-) -> Result<(), ProcessingError> {
-    let claimed = candidates::claim_candidate(&ctx.db, link_id, contact_email)
+) -> Result<(), ProcessingError>
+where
+    R: CleanupJobs + CleanupCandidates + CleanupMailbox,
+    C: CleanupCrm,
+    Q: CleanupQueue,
+    T: CleanupClock,
+{
+    let claimed = ctx
+        .repository
+        .claim_candidate(link_id, contact_email)
         .await
         .map_err(|e| {
             ProcessingError::Retryable(DetailedError {
@@ -38,7 +47,7 @@ pub async fn process_candidate(
         tracing::debug!("Candidate row already claimed (duplicate dispatch or redelivery)");
     }
 
-    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
+    let link = match ctx.repository.fetch_link_by_id(link_id).await {
         Ok(Some(link)) => link,
         Ok(None) => {
             // Link deleted since the candidate was written; its CRM sources are
@@ -89,15 +98,16 @@ pub async fn process_candidate(
         return Ok(());
     }
 
-    let still_has_any =
-        email_db_client::contacts::get::link_has_any_message_with(&ctx.db, link.id, contact_email)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to check remaining messages with contact"),
-                })
-            })?;
+    let still_has_any = ctx
+        .repository
+        .link_has_any_message_with(link.id, contact_email)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to check remaining messages with contact"),
+            })
+        })?;
 
     if still_has_any {
         tracing::debug!(
