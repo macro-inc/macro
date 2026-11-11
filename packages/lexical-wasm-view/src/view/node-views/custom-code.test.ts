@@ -6,7 +6,11 @@ import {
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { beforeAll, expect, test } from 'vitest';
+import type { RenderContext } from '../registry';
 import { selectionMessage } from '../session-port';
+import type { ViewNode } from '../types';
+import { createBuiltinRegistry } from './builtins';
+import { registerMacroElementViews } from './macro';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
@@ -83,15 +87,33 @@ test('creates the Source code element attributes in Source order', () => {
   }
 });
 
+// An unset language exists natively only between open and the first local update (any update runs
+// the view-attached plaintext default, and the test fixture's setState is an update), so check the
+// view directly.
 test('omits data-language for an unset language', () => {
-  const fixture = nativeSurface(Access.Edit, THEME);
-  try {
-    const { element } = load(fixture, {});
-    expect(element.hasAttribute('data-language')).toBe(false);
-    expect(element.hasAttribute('style')).toBe(false);
-  } finally {
-    fixture.close();
-  }
+  const view = registerMacroElementViews(createBuiltinRegistry()).get(
+    'custom-code'
+  );
+  const node = {
+    key: 1,
+    type: 'custom-code',
+    typeIndex: 0,
+    kind: 'element',
+    parent: null,
+    children: [],
+    text: '',
+    propsJSON: '{}',
+    stateJSON: '{}',
+    props: () => ({}),
+  } as unknown as ViewNode;
+  const context = {
+    document,
+    theme: THEME,
+    view: { node: () => null, flags: () => undefined },
+  } as unknown as RenderContext;
+  const element = view.createDOM(node, context);
+  expect(element.hasAttribute('data-language')).toBe(false);
+  expect(element.hasAttribute('style')).toBe(false);
 });
 
 test('creates an SVG preview block as non-editable preview mode', () => {
