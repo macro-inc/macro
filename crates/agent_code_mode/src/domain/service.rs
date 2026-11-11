@@ -361,6 +361,41 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReadDesign"
                 | "ReadPhotoshopDocument"
                 | "ReadIllustratorDocument"
+                // macro.documents.create(), createSpreadsheet(), createCanvas()
+                // and upload(); macro.tasks.create().
+                | "CreateDocument"
+                // Document.updateSharePermissions() and Project.updateSharePermissions().
+                | "UpdateSharing"
+                // Database.saveQuery() and DatabaseTable.saveQuery().
+                | "SaveDatabaseQuery"
+                // macro.crm: companyById(), createCompany(), createContact()
+                // and importCompaniesCsv().
+                | "GetCompany"
+                | "CreateCompany"
+                | "CreateContact"
+                | "ImportCompaniesCsv"
+                // macro.crm.pipelines and CrmPipeline. CreatePipeline stays:
+                // the SDK's create() takes no stages or fields.
+                | "ListPipelines"
+                | "FindPipelineEntries"
+                | "AddToPipeline"
+                | "UpdatePipelineEntries"
+                | "RemoveFromPipeline"
+                | "EditPipeline"
+                | "ImportPipelineCsv"
+                | "ExportPipelineCsv"
+                // macro.initiatives and Initiative.update() and delete().
+                | "ListInitiatives"
+                | "CreateInitiative"
+                | "UpdateInitiative"
+                | "UpdateInitiativeSharing"
+                | "DeleteInitiative"
+                // macro.agents.list(), Agent.update() and
+                // macro.agentSessions.createManaged({ agent }). ListAgentUpdates
+                // stays: its result renders the cards the user answers on.
+                | "ListAgents"
+                | "ConfigureAgent"
+                | "CreateAgentSession"
         )
 }
 
