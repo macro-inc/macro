@@ -82,7 +82,10 @@ State ownership, reactivity, and async error handling.
   `solid-js/store`, not `query.data`. The result is a store proxy, so every
   field read in a tracked scope creates a signal: walking a 14,700-channel
   list tracked held about seven times the list's own memory. The read of
-  `query.data` still tracks the result being replaced.
+  `query.data` still tracks the result being replaced, which is every update
+  of a query without `reconcile`. A query with `reconcile` updates rows in
+  place without replacing `data`, so an unwrapped walk would miss them: keep
+  its reads tracked.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".
