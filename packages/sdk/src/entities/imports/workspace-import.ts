@@ -55,8 +55,10 @@ export class WorkspaceImport {
    * is written. Answers within seconds, usually while planning still runs
    * (`status: 'running'`): present the review at once, don't wait or poll.
    * Throws a 409 `MacroApiError` with `data.code` `sharing_required` when the
-   * user is on a team and `sharing` is missing (ask them), or
-   * `not_connected` when the source isn't connected.
+   * user is on a team and `sharing` is missing (ask them). A source that isn't
+   * connected comes back as a `failed` report whose `error` says so (or a 409
+   * `not_connected`): offer to connect it instead of presenting a review.
+   * Never call it to check progress: it replaces the plan; use `status()`.
    */
   async plan(
     options: WorkspacePlanOptions = {},

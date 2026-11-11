@@ -75,6 +75,8 @@ export class ImportLedger {
  *   themselves, or let AI decide per page, then plan again with their answer.
  *   A report with `onTeam: false` means everything is personal; don't offer
  *   team sharing.
+ * - If the report is `failed` (e.g. the source isn't connected), say why and
+ *   offer to connect it; don't present a review.
  * - Present the plan in the same program, right after `plan` returns, even
  *   while it is still `running`: `const review = await
  *   execution.reviews.create({kind: 'import', title: 'Import from Notion',
@@ -87,7 +89,11 @@ export class ImportLedger {
  *   `macro.imports.notion.start(execution.session().reviews.byId(id))`, which
  *   returns the import's report to return as `data`; while the plan is still
  *   being made it is refused, so say it isn't ready yet.
- * - `cancel()` stops planning or writing; what was imported stays.
+ * - To check progress later, call `status()`; never `plan()` again, which
+ *   replaces the plan.
+ * - `cancel()` stops planning or writing; what was imported stays. A plan
+ *   that is `ready` but not started is dropped by dismissing its review
+ *   (`execution.session().reviews.byId(id).dismissAll()`), not by `cancel()`.
  *
  * ## Single items and the ledger
  *
