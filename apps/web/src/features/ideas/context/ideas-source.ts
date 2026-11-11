@@ -10,8 +10,12 @@ export type IdeasSource = {
   retry(): void;
   /** Read the feed again, after something outside it changed an idea. */
   refresh(): Promise<void>;
-  /** Take an idea up; a background prompt idea starts running. */
-  accept(id: string): Promise<void>;
+  /**
+   * Take an idea up as the card showed it; a background prompt idea starts
+   * running. `changed` means it was rewritten since: nothing was taken up and
+   * the feed was read again.
+   */
+  accept(idea: Pick<Idea, 'id' | 'updatedAt'>): Promise<'accepted' | 'changed'>;
   /** Turn an idea down. `leaving` sends it so it survives the page closing. */
   dismiss(id: string, options?: { leaving?: boolean }): Promise<void>;
 };

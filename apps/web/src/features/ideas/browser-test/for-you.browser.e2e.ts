@@ -173,6 +173,22 @@ test('a running idea reads as under way, not as one waiting', async ({
   await expect(running.getByLabel('Prompt')).toHaveCount(0);
 });
 
+test('Run on an idea that changed shows the new text and starts nothing until pressed again', async ({
+  page,
+}) => {
+  await page.goto('/?scenario=changed');
+  const idea = card(page, 'idea-background');
+  await idea.getByRole('button', { name: 'Run in background' }).click();
+
+  await expect(idea.locator('[data-idea-changed]')).toBeVisible();
+  await expect(idea).toContainText('Rewritten: the team moved the summary');
+  await expect(idea).toHaveAttribute('data-idea-status', 'open');
+
+  await idea.getByRole('button', { name: 'Run in background' }).click();
+  await expect(idea).toHaveAttribute('data-idea-status', 'running');
+  await expect(idea.locator('[data-idea-changed]')).toHaveCount(0);
+});
+
 test('an opened idea becomes done and can be opened again', async ({
   page,
 }) => {

@@ -25,6 +25,8 @@ export type IdeaCardProps = {
   isNew: boolean;
   busy: boolean;
   failed: boolean;
+  /** It was rewritten since the card showed it; the action took nothing up. */
+  changed: boolean;
   routine?: RoutineIdeaText;
   parts: IdeaItemParts;
   onAccept(): void;
@@ -366,6 +368,11 @@ export function IdeaCard(props: IdeaCardProps) {
         <Show when={props.failed}>
           <p role="alert" class="text-sm text-failure">
             {t('ideas.actionFailed')}
+          </p>
+        </Show>
+        <Show when={props.changed}>
+          <p role="status" class="text-sm text-ink-muted" data-idea-changed>
+            {t('ideas.ideaChanged')}
           </p>
         </Show>
         <div class="flex min-w-0 items-center gap-2">

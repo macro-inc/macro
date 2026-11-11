@@ -35,6 +35,7 @@ import {
   getListIdeasUrl,
 } from './generated/client';
 import type {
+  AcceptIdeaRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
@@ -211,8 +212,11 @@ export const scheduledActionClient = {
     scheduledActionFetch<Ideas>(getListIdeasUrl(args), { method: 'GET' }),
 
   /** Take an idea up; a background prompt idea starts running. */
-  acceptIdea: (args: { ideaId: string }) =>
-    scheduledActionFetch(getAcceptIdeaUrl(args.ideaId), { method: 'POST' }),
+  acceptIdea: (args: { ideaId: string; body: AcceptIdeaRequest }) =>
+    scheduledActionFetch(getAcceptIdeaUrl(args.ideaId), {
+      method: 'POST',
+      body: JSON.stringify(args.body),
+    }),
 
   /** `keepalive` lets the call outlive a page that is closing. */
   dismissIdea: (args: { ideaId: string; keepalive?: boolean }) =>

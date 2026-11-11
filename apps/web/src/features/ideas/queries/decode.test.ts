@@ -46,6 +46,7 @@ it('reads a running background idea with what it will send', () => {
     state: 'accepted',
     createdAt: '2026-11-09T06:00:00Z',
     stateChangedAt: '2026-11-09T08:00:00Z',
+    updatedAt: '2026-11-09T08:00:00Z',
     about: [{ entityType: 'channel', entityId: 'channel-1' }],
     produced: [],
   });

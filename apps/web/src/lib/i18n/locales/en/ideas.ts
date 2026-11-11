@@ -38,6 +38,7 @@ export default {
   runFailed:
     'The run didn’t finish. Nothing more will happen unless you run it again.',
   actionFailed: 'That didn’t work. Try again.',
+  ideaChanged: 'This idea was updated just now. Check it, then try again.',
   loading: 'Loading your ideas',
   loadError: 'Your ideas couldn’t be loaded.',
   retry: 'Try again',

@@ -27,6 +27,8 @@ export type FeedEntry = {
   busy: boolean;
   /** Its last action failed. */
   failed: boolean;
+  /** It was rewritten under the card: the action took nothing up, and the card now shows the new text. */
+  changed: boolean;
 };
 
 export type FeedView =
@@ -60,6 +62,7 @@ export function createIdeasFeed(
   const [sentIds, setSentIds] = createSignal<string[]>([]);
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
   const [failedIds, setFailedIds] = createSignal<string[]>([]);
+  const [changedIds, setChangedIds] = createSignal<string[]>([]);
 
   const ordered = createMemo(() => {
     const ideas = source.ideas();
@@ -90,6 +93,7 @@ export function createIdeasFeed(
         isNew: isNewSince(idea, options.lastSeenAt?.()),
         busy: busyIds().includes(idea.id),
         failed: failedIds().includes(idea.id),
+        changed: changedIds().includes(idea.id),
       }))
       .filter((entry) => matchesFilter(entry.status, filter()));
     if (entries.length === 0) return { kind: 'empty' };
@@ -106,6 +110,7 @@ export function createIdeasFeed(
 
     setBusyIds((ids) => [...ids, idea.id]);
     setFailedIds(without(idea.id));
+    setChangedIds(without(idea.id));
     try {
       await Telemetry.span(`ideas.${name}`, async (span) => {
         span.setAttr('idea.id', idea.id);
@@ -139,7 +144,9 @@ export function createIdeasFeed(
         else if (about) actions.openItem(about);
       }
 
-      await source.accept(idea.id);
+      if ((await source.accept(idea)) === 'changed') {
+        setChangedIds((ids) => [...ids, idea.id]);
+      }
     });
 
   const sendDismissal = async (id: string, leaving: boolean) => {

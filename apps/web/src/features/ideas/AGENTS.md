@@ -48,9 +48,13 @@ only, behind `enable-ideas`.
   with `keepalive` on unload). Splits can stay mounted after navigating away,
   so leaving alone would not send it.
 - The feed keeps the server's order (most important first); only done ideas
-  move, to the end. An idea taken up by opening it (`accepted`, no run) shows
-  as done; Open on it opens again without accepting, which the server refuses
-  twice.
+  move, to the end. The server decides what is done: accepting anything but a
+  background idea makes it `done`. An `accepted` background idea with no run
+  was taken on for the person by an agent; it stays open and Run starts it.
+- Accept sends the idea's `updatedAt` as the card read it. If the idea was
+  rewritten since, the server refuses (409): the source reads the feed again
+  and answers `changed`, and the card shows the new text with a note, so Run
+  never starts text the person didn't see.
 - The page follows the chosen design frames: one column; a card is a tile,
   title, state badge and time, one sentence, one block for its kind (prompt
   quote, drafted reply, routine sentence, a finished run's result), then

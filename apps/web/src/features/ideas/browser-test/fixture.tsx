@@ -63,6 +63,8 @@ const PARTS: IdeaItemParts = {
   ),
 };
 
+const REWRITTEN_AT = '2026-11-09T09:30:00Z';
+
 /** A scripted source: writes are recorded, and a run moves on when told to. */
 function Fixture() {
   const scenario = PARAMS.get('scenario');
@@ -89,8 +91,18 @@ function Fixture() {
       setIdeas(ALL);
     },
     refresh: async () => {},
-    accept: async (id) => {
+    accept: async ({ id, updatedAt }) => {
       record(`accept ${id}`);
+      if (scenario === 'changed' && updatedAt !== REWRITTEN_AT) {
+        // Rewritten under the card: the server refuses and the feed is read again.
+        change(id, (idea) => ({
+          ...idea,
+          summary: 'Rewritten: the team moved the summary to Mondays.',
+          updatedAt: REWRITTEN_AT,
+        }));
+        return 'changed';
+      }
+
       change(id, (idea) =>
         idea.kind === 'prompt' && idea.runMode === 'background'
           ? {
@@ -104,6 +116,8 @@ function Fixture() {
             }
           : { ...idea, state: 'done' }
       );
+
+      return 'accepted';
     },
     dismiss: async (id) => {
       record(`dismiss ${id}`);

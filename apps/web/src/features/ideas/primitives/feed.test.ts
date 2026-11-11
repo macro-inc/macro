@@ -21,7 +21,7 @@ function host(ideas: Idea[]) {
     failed: () => false,
     retry: vi.fn(),
     refresh: vi.fn(async () => {}),
-    accept: vi.fn(async () => {}),
+    accept: vi.fn(async (): Promise<'accepted' | 'changed'> => 'accepted'),
     dismiss: vi.fn(async () => {}),
   } satisfies IdeasSource;
   const actions = {
@@ -85,7 +85,7 @@ describe('ideas feed', () => {
       expect(actions.openComposer).toHaveBeenCalledWith(
         'Draft a one-page brief for the budget review.'
       );
-      expect(source.accept).toHaveBeenCalledWith('idea-composer');
+      expect(source.accept).toHaveBeenCalledWith(composerIdea);
     });
   });
 
@@ -93,7 +93,7 @@ describe('ideas feed', () => {
     await withFeed([backgroundIdea], async (feed, { source, actions }) => {
       await feed.accept(backgroundIdea);
 
-      expect(source.accept).toHaveBeenCalledWith('idea-background');
+      expect(source.accept).toHaveBeenCalledWith(backgroundIdea);
       expect(actions.openComposer).not.toHaveBeenCalled();
       expect(actions.openItem).not.toHaveBeenCalled();
     });
@@ -103,7 +103,10 @@ describe('ideas feed', () => {
     const deps = host([backgroundIdea]);
     let finish = () => {};
     deps.source.accept.mockImplementation(
-      () => new Promise<void>((resolve) => (finish = resolve))
+      () =>
+        new Promise<'accepted'>((resolve) => {
+          finish = () => resolve('accepted');
+        })
     );
 
     await createRoot(async (dispose) => {
@@ -160,8 +163,41 @@ describe('ideas feed', () => {
     });
   });
 
-  it('shows an idea that was opened as done, and opens it again without accepting', async () => {
-    const opened = { ...draftedReplyIdea, state: 'accepted' as const };
+  it('shows the new text and takes nothing up when the idea changed under the card', async () => {
+    const deps = host([backgroundIdea]);
+    deps.source.accept.mockResolvedValueOnce('changed');
+
+    await createRoot(async (dispose) => {
+      const feed = createIdeasFeed(deps.source, deps.actions);
+      const entry = () => {
+        const view = feed.view();
+        if (view.kind !== 'ideas') throw new Error('expected ideas');
+
+        return view.entries[0];
+      };
+
+      await feed.accept(backgroundIdea);
+      expect(entry()?.changed).toBe(true);
+      expect(entry()?.failed).toBe(false);
+
+      await feed.accept(backgroundIdea);
+      expect(entry()?.changed).toBe(false);
+      dispose();
+    });
+  });
+
+  it('keeps Run on a background idea someone took on for the person without starting it', async () => {
+    const takenOn = { ...backgroundIdea, state: 'accepted' as const };
+    await withFeed([takenOn], async (feed, { source }) => {
+      expect(feed.counts()).toEqual({ all: 1, running: 0, open: 1, done: 0 });
+
+      await feed.accept(takenOn);
+      expect(source.accept).toHaveBeenCalledWith(takenOn);
+    });
+  });
+
+  it('lists an opened idea as done once the server says so, and opens it again without accepting', async () => {
+    const opened = { ...draftedReplyIdea, state: 'done' as const };
     await withFeed([opened, replyIdea], async (feed, { source, actions }) => {
       expect(shownIds(feed)).toEqual(['idea-reply', opened.id]);
       expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });

@@ -2,7 +2,7 @@ import { useUserId } from '@core/context/user';
 import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
@@ -61,9 +61,18 @@ export function useIdeasSource(): IdeasSource {
     failed: () => feed.isError && ideas() === undefined,
     retry: () => fireAndForget(refresh(), 'ideas'),
     refresh,
-    async accept(id) {
-      await throwOnErr(() => scheduledActionClient.acceptIdea({ ideaId: id }));
+    async accept(idea) {
+      const result = await scheduledActionClient.acceptIdea({
+        ideaId: idea.id,
+        body: { updatedAt: idea.updatedAt },
+      });
       await refresh();
+      if (result.isOk()) return 'accepted';
+      if (result.error.some((error) => error.code === 'CONFLICT')) {
+        return 'changed';
+      }
+
+      throw new ThrownResultError(result.error);
     },
     async dismiss(id, options) {
       await throwOnErr(() =>

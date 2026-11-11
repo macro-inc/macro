@@ -6,6 +6,7 @@ const BASE = {
   state: 'proposed' as const,
   createdAt: '2026-11-09T04:00:00Z',
   stateChangedAt: '2026-11-09T06:00:00Z',
+  updatedAt: '2026-11-09T06:00:00Z',
   about: [],
   produced: [],
 };

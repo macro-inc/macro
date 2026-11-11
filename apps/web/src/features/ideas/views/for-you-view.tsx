@@ -108,6 +108,7 @@ export function ForYouView(props: {
           isNew={entry.isNew}
           busy={entry.busy}
           failed={entry.failed}
+          changed={entry.changed}
           parts={props.parts}
           routine={
             entry.idea.kind === 'routine'

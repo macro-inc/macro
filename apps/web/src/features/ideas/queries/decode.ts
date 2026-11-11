@@ -101,6 +101,7 @@ export function toIdea(idea: WireIdea): Idea | undefined {
     state,
     createdAt: idea.createdAt,
     stateChangedAt: idea.stateChangedAt,
+    updatedAt: idea.updatedAt,
     about: idea.about.map(toTarget),
     produced: idea.produced.map(toTarget),
   };

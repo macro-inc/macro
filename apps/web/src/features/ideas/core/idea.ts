@@ -54,6 +54,8 @@ export type Idea = IdeaKind & {
   createdAt: string;
   /** When its state last changed: for a done idea, when it finished. */
   stateChangedAt: string;
+  /** When it was last written; accepting sends it back, so a card can't take up text it never showed. */
+  updatedAt: string;
   about: IdeaTarget[];
   produced: IdeaTarget[];
 };
@@ -63,14 +65,13 @@ export type Idea = IdeaKind & {
  * - `open`: waiting for the person.
  * - `running`: its background run is under way.
  * - `failed`: its last background run failed; Run tries again.
- * - `done`: finished, or taken up by opening it: nothing more to do here.
+ * - `done`: finished: nothing more to do here.
  */
 export type IdeaStatus = 'open' | 'running' | 'failed' | 'done';
 
 export function ideaStatus(idea: Idea): IdeaStatus {
   if (idea.state === 'done') return 'done';
 
-  const isBackground = idea.kind === 'prompt' && idea.runMode === 'background';
   if (idea.kind === 'prompt' && idea.runMode === 'background' && idea.run) {
     if (idea.run.progress === 'failed') return 'failed';
     // Finished, and about to be listed as done.
@@ -78,9 +79,6 @@ export function ideaStatus(idea: Idea): IdeaStatus {
 
     return 'running';
   }
-
-  // Opening an idea's item, draft or composer is all there is to do with it.
-  if (idea.state === 'accepted' && !isBackground) return 'done';
 
   return 'open';
 }
