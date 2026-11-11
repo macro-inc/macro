@@ -291,6 +291,19 @@ describe('isCalendarEventVisible', () => {
 });
 
 describe('mapCalendarEventToFullCalendar', () => {
+  it.each([undefined, '2026-09-10T13:00:00+00:00'])(
+    'allows moving and resizing a recurring occurrence with recurrence id %s',
+    (recurrenceId) => {
+      const source = item([copy('primary')]);
+      source.event.recurrenceLines = ['RRULE:FREQ=WEEKLY;BYDAY=TH'];
+      source.occurrence.recurrenceId = recurrenceId;
+      const event = mapCalendarOccurrence(source, { sourceById });
+      const rendered = mapCalendarEventToFullCalendar(event);
+      expect(event.seriesTime).toEqual(source.event.time);
+      expect(rendered.startEditable).toBe(true);
+      expect(rendered.durationEditable).toBe(true);
+    }
+  );
   it('preserves an imported point while giving the grid a noneditable display footprint', () => {
     const source = item([copy('primary')]);
     const instant = '2026-09-10T13:00:00Z';

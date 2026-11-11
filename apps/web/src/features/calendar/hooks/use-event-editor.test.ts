@@ -131,6 +131,14 @@ describe('editing event times', () => {
         },
         ...overrides,
       };
+      event.seriesTime = event.allDay
+        ? { kind: 'allDay', startDate: event.start, endDate: event.end }
+        : {
+            kind: 'timed',
+            startsAt: event.start,
+            endsAt: event.end,
+            timeZone: event.timeZone ?? 'UTC',
+          };
       const onSaved = vi.fn();
       const editor = useEventEditor({
         event: () => event,

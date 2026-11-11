@@ -47,14 +47,16 @@ export function canEditCalendarEvent(event: CalendarEvent) {
   return canDeleteCalendarEvent(event) && !event.isSnapshot;
 }
 
+/** Both materialized series occurrences and detached exceptions are recurring. */
+export function isRecurringCalendarEvent(event: CalendarEvent) {
+  return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined;
+}
 /** Whether an occurrence can safely be moved or resized from the calendar. */
 export function canEditCalendarEventTime(event: CalendarEvent) {
   return (
     canEditCalendarEvent(event) &&
     !guestEditsRestricted(event) &&
-    !isTimedPointEvent(event) &&
-    event.recurrenceLines.length === 0 &&
-    event.recurrenceId === undefined
+    !isTimedPointEvent(event)
   );
 }
 
@@ -64,7 +66,14 @@ export function calendarEventTimeFromFullCalendar(
   original: Pick<CalendarEvent, 'timeZone'>
 ): EventTime | undefined {
   const { start, end } = event;
-  if (!start || !end || end <= start) return undefined;
+  if (
+    !start ||
+    !end ||
+    !Number.isFinite(start.getTime()) ||
+    !Number.isFinite(end.getTime()) ||
+    end <= start
+  )
+    return undefined;
 
   if (event.allDay) {
     const startDate = formatLocalDate(start);
@@ -87,4 +96,5 @@ export function calendarEventTimeFromFullCalendar(
 export interface CalendarEventTimeChange {
   event: EventApi;
   revert: () => void;
+  kind?: 'move' | 'resize';
 }
