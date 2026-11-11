@@ -80,7 +80,7 @@ pub struct AgentActivityQuery {
     pub limit: Option<NonZeroU32>,
 }
 
-/// Mount alongside the session API at the application root.
+/// Mount under `/agent-sessions`, beside the other session routers.
 pub fn router<
     R: AgentActivityReads,
     Access: EntityAccessService,
@@ -90,7 +90,7 @@ pub fn router<
 ) -> Router {
     Router::new()
         .route(
-            "/agent-sessions/{session_id}/activity",
+            "/{session_id}/activity",
             get(get_agent_session_activity::<R, Access, Auth>),
         )
         .with_state(state)
