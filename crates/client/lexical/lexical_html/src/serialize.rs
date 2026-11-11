@@ -52,6 +52,9 @@ pub fn outer_html(node: &HtmlNode, output: &mut String) {
             output.push('<');
             output.push_str(&element.tag);
             for attr in element.attrs.iter().rev() {
+                if matches!(&attr.value, crate::dom::AttrValue::Property(_)) {
+                    continue;
+                }
                 let value = attr.value.string();
                 if value.is_empty() && ["id", "class", "style"].contains(&attr.name.as_str()) {
                     continue;

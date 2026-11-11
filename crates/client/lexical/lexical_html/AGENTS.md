@@ -6,6 +6,7 @@ Portable export-only DOM builder, walker and linkedom 0.18.13 serializer.
 
 ## Boundaries
 
+- Record the initial LI.value property before theme attributes; keep it out of headless serialization and do not mix later same-name property/attribute edits.
 - Keep unknown-type error names owned: collaborative opaque node names borrow their snapshot.
 - Depend only on the portable model and scalar/parser libraries; no DOM, I/O or runtime.
 - Implement each node's ExportDom next to its owning type; rich and Macro impls are feature gated.

@@ -31,13 +31,14 @@ pub(crate) struct Attr {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum AttrValue {
     Plain(String),
+    Property(String),
     Class(Vec<String>),
     Style(Vec<(String, String)>),
 }
 impl AttrValue {
     pub(crate) fn string(&self) -> String {
         match self {
-            Self::Plain(value) => value.clone(),
+            Self::Plain(value) | Self::Property(value) => value.clone(),
             Self::Class(tokens) => tokens.join(" "),
             Self::Style(properties) => properties
                 .iter()
@@ -58,7 +59,11 @@ impl HtmlElement {
         }
     }
     fn set(&mut self, name: &str, value: AttrValue) {
-        if let Some(attr) = self.attrs.iter_mut().find(|attr| attr.name == name) {
+        if let Some(attr) = self
+            .attrs
+            .iter_mut()
+            .find(|attr| attr.name == name && !matches!(&attr.value, AttrValue::Property(_)))
+        {
             attr.value = value;
         } else {
             self.attrs.push(Attr {
@@ -78,13 +83,39 @@ impl HtmlElement {
     }
     /// Remove a named attribute.
     pub fn remove_attribute(&mut self, name: &str) {
-        self.attrs.retain(|attr| attr.name != name);
+        self.attrs
+            .retain(|attr| attr.name != name || matches!(&attr.value, AttrValue::Property(_)));
+    }
+    /// Record the initial LI value write before its theme attributes.
+    /// This construction lane does not support later value attribute/property edits.
+    pub fn set_initial_list_item_value(&mut self, value: i32) {
+        self.attrs.push(Attr {
+            name: "value".to_owned(),
+            value: AttrValue::Property(value.to_string()),
+        });
+    }
+    /// Visit final attributes and the initial LI value in native construction order.
+    pub fn dom_construction(
+        &self,
+    ) -> impl Iterator<Item = (&str, String, &[(String, String)], bool)> {
+        self.attrs.iter().map(|attr| {
+            let properties = match &attr.value {
+                AttrValue::Style(properties) => properties.as_slice(),
+                _ => &[],
+            };
+            (
+                attr.name.as_str(),
+                attr.value.string(),
+                properties,
+                matches!(&attr.value, AttrValue::Property(_)),
+            )
+        })
     }
     /// Read the current attribute string.
     pub fn get_attribute(&self, name: &str) -> Option<String> {
         self.attrs
             .iter()
-            .find(|attr| attr.name == name)
+            .find(|attr| attr.name == name && !matches!(&attr.value, AttrValue::Property(_)))
             .map(|attr| attr.value.string())
     }
     /// Add verbatim class tokens, skipping only empty tokens and duplicates.
@@ -92,7 +123,7 @@ impl HtmlElement {
         let mut classes = match self
             .attrs
             .iter()
-            .find(|attr| attr.name == "class")
+            .find(|attr| attr.name == "class" && !matches!(&attr.value, AttrValue::Property(_)))
             .map(|attr| &attr.value)
         {
             Some(AttrValue::Class(tokens)) => tokens.clone(),
@@ -128,7 +159,7 @@ impl HtmlElement {
         match self
             .attrs
             .iter()
-            .find(|attr| attr.name == "style")
+            .find(|attr| attr.name == "style" && !matches!(&attr.value, AttrValue::Property(_)))
             .map(|attr| &attr.value)
         {
             Some(AttrValue::Style(styles)) => styles.clone(),

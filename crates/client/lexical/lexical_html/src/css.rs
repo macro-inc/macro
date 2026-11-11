@@ -71,7 +71,10 @@ pub fn normalize_class_names<'s>(names: impl IntoIterator<Item = Option<&'s str>
 }
 /// Add normalized class-name arguments to an element.
 pub fn add_class_names(element: &mut HtmlElement, names: &[Option<&str>]) {
-    element.class_list_add(normalize_class_names(names.iter().copied()));
+    let names = normalize_class_names(names.iter().copied());
+    if !names.is_empty() {
+        element.class_list_add(names);
+    }
 }
 static HYPHEN: LazyLock<regress::Regex> = LazyLock::new(|| {
     regress::Regex::new("(([A-Z0-9])([A-Z0-9][a-z]))|(([a-z0-9]+)([A-Z]))")
@@ -99,3 +102,6 @@ pub fn uhyphen(name: &str) -> String {
     output.push_str(name.get(previous..).unwrap_or_default());
     output.to_lowercase()
 }
+
+#[cfg(test)]
+mod test;

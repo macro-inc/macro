@@ -44,3 +44,27 @@ fn fragments_and_css_follow_linkedom_maps() {
     assert_eq!(crate::js::btoa("😀"), None);
     assert_eq!(crate::js::btoa_or_utf8("😀"), "8J+YgA==");
 }
+
+#[test]
+fn initial_list_value_is_not_a_reflected_headless_attribute() {
+    let mut element = HtmlElement::new("li");
+    element.set_attribute("role", "checkbox");
+    element.set_initial_list_item_value(7);
+    element.set_attribute("class", "item");
+    assert_eq!(element.get_attribute("value"), None);
+    assert_eq!(
+        element
+            .dom_construction()
+            .map(|(name, value, _, property)| (name, value, property))
+            .collect::<Vec<_>>(),
+        vec![
+            ("role", "checkbox".into(), false),
+            ("value", "7".into(), true),
+            ("class", "item".into(), false),
+        ]
+    );
+    assert_eq!(
+        inner_html(&[HtmlNode::Element(element)]),
+        "<li class=\"item\" role=\"checkbox\"></li>"
+    );
+}

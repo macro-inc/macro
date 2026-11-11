@@ -98,6 +98,7 @@ impl ExportDom for ListItemNode {
                 },
             );
         }
+        el.set_initial_list_item_value(self.value);
         if let Some(theme) = &ctx.theme.list {
             add_class_names(&mut el, &[theme.listitem.as_deref()]);
             if check {
@@ -207,3 +208,6 @@ fn attribute_value(value: &serde_json::Value) -> lexical_html::Result<String> {
         value => lexical_model::to_js_json_string(value),
     })
 }
+
+#[cfg(test)]
+mod test;
