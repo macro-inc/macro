@@ -54,6 +54,10 @@ instead of a seeded persona, for a backend that asks for an emailed code.
 Screenshots go to `PARITY_OUTPUT` (default `/tmp/view-parity`).
 
 A dev build serves thousands of modules per page, so the first run is slow.
+Chromium drops in-flight requests whenever a network interface changes
+(`net::ERR_NETWORK_CHANGED`), which leaves the page blank; on a machine running
+several Docker stacks that happens often, so a view is retried up to three
+times.
 Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` where the bundled Chromium cannot
 start. On a machine with no system fonts text has no size, so every
 visibility wait fails: point `FONTCONFIG_FILE` at a config that lists a font

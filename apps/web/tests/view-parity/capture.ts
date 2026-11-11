@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 /** One control a person can see and act on, with where it sits. */
 export type ControlBox = {
@@ -23,18 +23,8 @@ export type ViewCapture = {
 const CONTROL_SELECTOR =
   'button, a[href], input, textarea, select, [role="button"], [role="tab"], [role="menuitem"], [role="radio"], [contenteditable="true"], [data-header-island]';
 
-/**
- * What the two builds must agree on: the accessibility tree and the geometry
- * of every control. Class names and wrapper elements are left out, because a
- * refactor may change them without changing what anyone sees.
- */
-export async function captureView(
-  page: Page,
-  errors: string[]
-): Promise<ViewCapture> {
-  const aria = await page.locator('body').ariaSnapshot();
-
-  const controls = await page.evaluate((selector) => {
+function readControls(page: Page): Promise<ControlBox[]> {
+  return page.evaluate((selector) => {
     const visible = (element: Element) => {
       const rect = element.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return false;
@@ -63,6 +53,33 @@ export async function captureView(
         };
       });
   }, CONTROL_SELECTOR);
+}
+
+/** The controls once two readings agree, so a capture never lands mid-transition. */
+async function settledControls(page: Page): Promise<ControlBox[]> {
+  let controls = await readControls(page);
+
+  await expect(async () => {
+    const before = controls;
+    await page.waitForTimeout(250);
+    controls = await readControls(page);
+    expect(controls).toEqual(before);
+  }).toPass({ timeout: 15_000 });
+
+  return controls;
+}
+
+/**
+ * What the two builds must agree on: the accessibility tree and the geometry
+ * of every control. Class names and wrapper elements are left out, because a
+ * refactor may change them without changing what anyone sees.
+ */
+export async function captureView(
+  page: Page,
+  errors: string[]
+): Promise<ViewCapture> {
+  const controls = await settledControls(page);
+  const aria = await page.locator('body').ariaSnapshot();
 
   const touch = await page.evaluate(() => ({
     pointerCoarse: matchMedia('(pointer: coarse)').matches,

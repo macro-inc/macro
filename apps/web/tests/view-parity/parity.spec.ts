@@ -1,4 +1,11 @@
-import { type Browser, expect, type Page, test } from '@playwright/test';
+import {
+  type Browser,
+  type BrowserContext,
+  expect,
+  type Page,
+  test,
+} from '@playwright/test';
+import { splitContainerSelector } from '../../src/lib/core/dom-selectors';
 import { captureView, type ViewCapture } from './capture';
 import { PARITY_VIEWS, type ParityView } from './views';
 
@@ -12,17 +19,41 @@ const SELECTED = process.env.PARITY_VIEWS?.split(',');
 
 type Side = keyof typeof ORIGINS;
 
-type OpenSide = { page: Page; errors: string[] };
+type OpenSide = {
+  side: Side;
+  page: Page;
+  errors: string[];
+  /** Rejects when the browser drops the page's requests; see README.md. */
+  networkChanged: Promise<never>;
+};
 
-async function signIn(page: Page, origin: string) {
-  if (!LOGIN_EMAIL) return;
+type SignedInState = Awaited<ReturnType<BrowserContext['storageState']>>;
 
+// One sign-in per build: the auth service limits code checks per address, and
+// every view opens a fresh context on each build.
+const signedIn = new Map<Side, SignedInState>();
+
+async function signIn(browser: Browser, side: Side, origin: string) {
+  if (STORAGE_STATE) return STORAGE_STATE;
+  if (!LOGIN_EMAIL) return undefined;
+
+  const known = signedIn.get(side);
+  if (known) return known;
+
+  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  const page = await context.newPage();
   // A local stack signs a seeded persona in from this link without a code.
   await page.goto(
     `${origin}/app/login?email=${encodeURIComponent(LOGIN_EMAIL)}`,
     { waitUntil: 'commit' }
   );
   await expect(page).not.toHaveURL(/\/app\/(welcome|signup|login)/);
+  await expect(page.locator(splitContainerSelector).first()).toBeVisible();
+
+  const state = await context.storageState();
+  await context.close();
+  signedIn.set(side, state);
+  return state;
 }
 
 async function openSide(
@@ -40,33 +71,36 @@ async function openSide(
     isMobile,
     ignoreHTTPSErrors: true,
     reducedMotion: 'reduce',
-    storageState: STORAGE_STATE,
+    storageState: await signIn(browser, side, origin),
   });
   const page = await context.newPage();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  try {
-    // A dev build serves thousands of modules, so wait on content, not `load`.
-    await signIn(page, origin);
-    await page.goto(`${origin}/app${view.path}`, { waitUntil: 'commit' });
-    await view.ready(page);
-  } catch (error) {
-    await page.screenshot({
-      path: test.info().outputPath(`${view.id}-${side}-did-not-open.png`),
-    });
-    throw error;
-  }
+  const networkChanged = new Promise<never>((_, reject) => {
+    page.on('requestfailed', (request) => {
+      if (request.failure()?.errorText !== 'net::ERR_NETWORK_CHANGED') return;
 
-  return { page, errors };
+      reject(
+        new Error(
+          `${side}: Chromium dropped requests (net::ERR_NETWORK_CHANGED), so the page is incomplete`
+        )
+      );
+    });
+  });
+  // Only a state in progress listens; without this an idle rejection is unhandled.
+  networkChanged.catch(() => {});
+
+  // A dev build serves thousands of modules, so wait on content, not `load`.
+  await page.goto(`${origin}/app${view.path}`, { waitUntil: 'commit' });
+
+  return { side, page, errors, networkChanged };
 }
 
-async function capture(side: Side, open: OpenSide, name: string) {
-  const { page, errors } = open;
-  await page.screenshot({
-    path: test.info().outputPath(`${name}-${side}.png`),
+async function screenshot(open: OpenSide, name: string) {
+  await open.page.screenshot({
+    path: test.info().outputPath(`${name}-${open.side}.png`),
   });
-  return captureView(page, errors);
 }
 
 const views = PARITY_VIEWS.filter(
@@ -84,14 +118,25 @@ for (const view of views) {
     const branch = await openSide(browser, 'branch', view);
     const touch = test.info().project.use.hasTouch === true;
 
-    const states = [{ name: 'open', go: async () => {} }, ...view.states];
+    const states = [{ name: 'open', go: view.ready }, ...view.states];
     for (const state of states) {
-      await state.go(baseline.page);
-      await state.go(branch.page);
-
       const name = `${view.id}-${state.name}`;
-      const expected: ViewCapture = await capture('baseline', baseline, name);
-      const actual: ViewCapture = await capture('branch', branch, name);
+
+      try {
+        for (const open of [baseline, branch]) {
+          await Promise.race([state.go(open.page), open.networkChanged]);
+        }
+      } finally {
+        // Kept for a state that never arrived, and for what a diff cannot judge.
+        await screenshot(baseline, name);
+        await screenshot(branch, name);
+      }
+
+      const expected: ViewCapture = await captureView(
+        baseline.page,
+        baseline.errors
+      );
+      const actual: ViewCapture = await captureView(branch.page, branch.errors);
 
       // A capture taken with the wrong device profile proves nothing.
       expect(actual.touch, `${name}: touch detection`).toEqual({

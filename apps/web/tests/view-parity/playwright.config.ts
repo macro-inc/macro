@@ -17,7 +17,10 @@ export default defineConfig({
   outputDir: process.env.PARITY_OUTPUT ?? '/tmp/view-parity',
   // The first load of a dev build compiles and serves thousands of modules.
   timeout: 900_000,
-  expect: { timeout: 300_000 },
+  expect: { timeout: 120_000 },
+  // Chromium drops in-flight requests when a network interface changes, which
+  // a machine running several Docker stacks does often.
+  retries: 3,
   workers: 1,
   reporter: 'list',
   use: {
