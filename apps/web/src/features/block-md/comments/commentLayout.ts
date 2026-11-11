@@ -18,7 +18,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -36,12 +35,13 @@ type StackInput<T> = CommentViewerInitialLayout<T> & { height: number };
 
 /**
  * Stacks margin threads (sorted by their marks' positions) so no two cards
- * overlap and none starts above the top of the margin, where it could never
- * be scrolled to. The anchor (the active thread) sits beside its mark, moved
- * up only as far as it takes to end inside the page; threads above it are
- * pushed up and threads below it are pushed down. When the threads above do
- * not fit between the top of the page and the anchor, the whole stack is
- * pushed down instead. Threads below may run past the page's bottom; the
+ * overlap. The anchor (the active thread) sits beside its mark, moved up only
+ * as far as it takes to end inside the page, and never above its top; threads
+ * above it are pushed up and threads below it are pushed down. In a crowded
+ * margin the threads above may pass the top of the page rather than move the
+ * anchor off its text, as in Google Docs: with nothing selected the stack
+ * starts at the first thread, so each is still reached by deselecting or by
+ * selecting its text. Threads below may run past the page's bottom; the
  * document scrolls to them.
  */
 export function stackMarginThreads<T>(
@@ -66,13 +66,6 @@ export function stackMarginThreads<T>(
       tops[i],
       tops[i + 1] - threads[i].height - MIN_THREAD_GAP
     );
-  }
-
-  // Threads pushed above the top come back down, and push the rest down.
-  let floor = 0;
-  for (let i = 0; i < threads.length; i++) {
-    tops[i] = Math.max(tops[i], floor);
-    floor = tops[i] + threads[i].height + MIN_THREAD_GAP;
   }
 
   return threads.map((thread, i): CommentLayout<T> => {
@@ -173,6 +166,14 @@ export function createCommentLayout() {
 
   const [markLayouts, setMarkLayouts] = createSignal<MarkLayout[]>([]);
 
+  // Selecting a thread re-anchors the stack even when no card changes height,
+  // as when a viewer who cannot reply opens one. The caret writes a new id
+  // list on every move, so only a change of anchor re-runs the layout.
+  const activeAnchorMarkId = createMemo(() => {
+    const ids = commentState.activeMarkIds;
+    return ids[Math.floor(ids.length / 2)];
+  });
+
   createEffect(() => {
     const layouts = Object.values(commentState.marks)
       .filter((m) => m !== undefined)
@@ -229,13 +230,9 @@ export function createCommentLayout() {
       return;
     }
 
-    // if no threads is active by default
-    // position threads as if the first one is active
-    const activeMarkIdsValue = untrack(() => commentState.activeMarkIds);
-    const middleMarkId =
-      activeMarkIdsValue[Math.floor(activeMarkIdsValue.length / 2)];
+    // With no active thread, position threads as if the first one is active.
     const anchorPositionId =
-      middleMarkId ?? sortedThreadsByOriginalPosition[0].id;
+      activeAnchorMarkId() ?? sortedThreadsByOriginalPosition[0].id;
     if (!anchorPositionId) return;
 
     const anchorIndex = Math.max(
