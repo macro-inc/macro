@@ -187,6 +187,8 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+A level meter under the preview lights as the microphone picks up sound
+(`Speak to test your mic`); muting it empties the meter and shows `Mic is off`.
 Shared-link setup shows the people currently connected, with avatars, names, and
 an attendee count. It refreshes every 15 seconds while setup is open; guests see
 this only for standalone links. Empty calls show `No one else is here yet`; a
