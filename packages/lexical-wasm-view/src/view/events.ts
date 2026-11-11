@@ -505,12 +505,9 @@ export function registerEvents(view: EditorView): {
       );
     }
     let selection: ViewSelection;
-    if (
-      keepRange ||
-      ((event.key === 'Backspace' || event.key === 'Delete') &&
-        plain &&
-        published.kind === 'node')
-    ) {
+    // Source keydown keeps a NodeSelection; selectionchange admits a new DOM
+    // range only after a mouse press.
+    if (keepRange || published.kind === 'node') {
       selection = { kind: 'keep' };
     } else if (routed === CommandCode.Undo || routed === CommandCode.Redo) {
       selection = readSelectionFromChange(view);
@@ -749,9 +746,12 @@ export function registerEvents(view: EditorView): {
       event.data
     );
   });
+  let selectionChangeFromMouseDown = false;
   const selectionChange = () => {
     const dom = doc.getSelection();
     if (!dom?.anchorNode || EditorView.fromDOM(dom.anchorNode) !== view) return;
+    const fromMouseDown = selectionChangeFromMouseDown;
+    selectionChangeFromMouseDown = false;
     if (consumeSelectionChangeFromDOMUpdate(dom, postDelete !== null)) return;
     if (
       !isSelectionWithinEditor(
@@ -762,6 +762,9 @@ export function registerEvents(view: EditorView): {
     )
       return;
     const current = view.selection().selection;
+    // Pinned $internalCreateSelection clones a NodeSelection instead of reading
+    // the DOM range, unless a mouse press asked for a new range.
+    if (current.kind === 'node' && !fromMouseDown) return;
     if (current.kind === 'table') {
       const table = view.getElementByKey(current.table);
       if (
@@ -887,6 +890,19 @@ export function registerEvents(view: EditorView): {
     });
   });
   listen('pointerdown', (event) => {
+    // Pinned onPointerDown: a primary mouse press outside a decorator lets the
+    // next selectionchange replace a non-range selection.
+    const target = event.target;
+    if (
+      target instanceof Node &&
+      event.pointerType !== 'touch' &&
+      event.pointerType !== 'pen' &&
+      event.button === 0
+    ) {
+      const key = view.keyFromDOM(target);
+      if (key === null || view.node(key)?.kind !== 'decorator')
+        selectionChangeFromMouseDown = true;
+    }
     view.runViewCommand('PointerDown', event, 'before');
   });
   listen('focus', (event) => {
