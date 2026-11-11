@@ -294,6 +294,13 @@ goes inside `MeetingDiscussionHost`, created by the host's render function.
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
+Inviting an agent teammate from Team → Members (People | Agent in Invite to
+Team, behind `enable-agent-teammates`), its row's Setting up → Running status,
+and its removal have a backend-free browser regression at desktop 1440 and
+phone 390 over a scripted auth service. It launches Chromium with
+`--disable-web-security` because the scripted services answer for other origins:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,

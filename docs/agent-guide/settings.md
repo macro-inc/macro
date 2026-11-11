@@ -197,7 +197,7 @@ settings (gear) menu beside **Copy link** with **Reset link** (the old link
 stops working and a new one is copied) and **Turn off**, each behind a
 confirmation. Anyone who may invite can copy the
 link or create the first one. Below it, **Invite by email** sends invitations
-as before. The dialog no longer offers agent invites; send them with
+as before. Existing agent accounts are still invited with
 `team.invite(email, { agent: true })` (see [agent accounts](login.md#agent-accounts)). Each email says what joining gives: **Pro is included** when joining
 grants a Pro seat (an enterprise team, or one with a subscription), otherwise
 **Free to join**. Examples: [desktop](media/team-invite-email/desktop.png) and
@@ -221,6 +221,28 @@ than 14 days old, already-members, and invites whose sender left the team get no
 last sent, for owners and admins, who can **Resend**, copy the invite link,
 or cancel it. Resend unlocks an hour after the last email, the email's rate
 limit; re-inviting the address from **Invite** follows the same rule.
+
+#### Agent teammates
+
+Behind `enable-agent-teammates` (on in dev), owners and admins see a
+**People | Agent** switch at the top of the invite dialog; members, and
+everyone while the flag is off or still loading, see the people form unchanged.
+**Agent** asks for a name, job description, personality, an optional picture
+(**Upload**), and the agent's computer size from the same catalog and prices as
+Buy a computer (sold-out sizes offer **Notify me**). The agent's seat is
+included, so **Invite agent · $X/month** shows the computer's price, or
+**Invite agent** when it is included. Inviting calls `POST /team_agents` on the
+auth service, which creates the agent's account, buys its computer and adds it
+to the team; refusals show inline (sold out or no subscription, a failed
+workspace that charged nothing). The new agent appears in **Team → Members** as
+its own row (name, **Agent** tag, job description) with a status in place of a
+role: **Setting up** with a spinner while its computer provisions (the list
+polls every 3 seconds), then **Running**, **Paused**, **Needs attention** or
+**Released**. Owners and admins remove an agent with its trash button and a
+confirmation; that releases its computer and deletes its account. On phones the
+dialog and confirmation are sheets and rows stay touch rows. Backend-free check:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`
+from `apps/web` (desktop 1440 and phone 390).
 
 Under **Team → Members** (**Invite settings**), owners/admins can turn
 **Auto-join on domain** off and can restrict invitations to admins with

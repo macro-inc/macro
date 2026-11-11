@@ -1,9 +1,14 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
+import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableAiUsageBilling,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -34,13 +39,19 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import {
+  useRemoveTeamAgentMutation,
+  useTeamAgentsQuery,
+} from '@queries/team-agents/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
+import type { TeamAgent } from '@service-auth/team-agents';
 import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
 import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -272,6 +283,19 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
   const [showInviteModal, setShowInviteModal] = createSignal(false);
+  const [agentToRemove, setAgentToRemove] = createSignal<TeamAgent | null>(
+    null
+  );
+
+  // Agent teammates: listed with their status once the flag is on. Loading
+  // is not on, and off leaves the roster exactly as it was.
+  const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
+  const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
+  const removeAgentMutation = useRemoveTeamAgentMutation();
+  const agents = () =>
+    agentsOn() && agentsQuery.isSuccess ? agentsQuery.data.agents : [];
+  const agentUserIds = () => agents().map((agent) => agent.userId);
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
@@ -311,6 +335,19 @@ export function TeamMembers(props: { team: TeamSummary }) {
     // Shared uFuzzy-backed filter (ranks by relevance, favoring contiguity).
     return fuzzyFilter(q, memberSearchIndex(), (entry) => entry.haystack()).map(
       (entry) => entry.member
+    );
+  });
+
+  // Agents are team members too; they get their own rows, with status.
+  const filteredPeople = () =>
+    filteredMembers().filter(
+      (member) => !agentUserIds().includes(member.user_id)
+    );
+  const filteredAgents = createMemo(() => {
+    const q = debouncedMemberQuery().trim().toLowerCase();
+    if (!q) return agents();
+    return fuzzyFilter(q, agents(), (agent) =>
+      `${agent.name} ${agent.jobDescription}`.toLowerCase()
     );
   });
 
@@ -368,6 +405,20 @@ export function TeamMembers(props: { team: TeamSummary }) {
     removeUserMutation.mutate(
       { teamId: props.team.id, userId: member.user_id },
       { onSuccess: () => setShowRemoveModal(null) }
+    );
+  };
+
+  const handleRemoveAgent = () => {
+    const agent = agentToRemove();
+    if (!props.team.id || !agent) return;
+
+    removeAgentMutation.mutate(
+      { teamId: props.team.id, userId: agent.userId },
+      {
+        onSuccess: () => setAgentToRemove(null),
+        onError: () =>
+          toast.failure(t('teamAgents.removeFailed', { name: agent.name })),
+      }
     );
   };
 
@@ -459,7 +510,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             }
           >
             <Show
-              when={filteredMembers().length > 0}
+              when={filteredPeople().length + filteredAgents().length > 0}
               fallback={
                 <SettingsCard>
                   <div class="px-6 py-8 text-center text-sm text-ink-muted">
@@ -472,7 +523,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   below stay in reach. The height cuts a row in half so the
                   list visibly continues. */}
               <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
-                <For each={filteredMembers()}>
+                <For each={filteredPeople()}>
                   {(member) => (
                     <MemberRow
                       member={member}
@@ -514,6 +565,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           },
                         });
                       }}
+                    />
+                  )}
+                </For>
+                <For each={filteredAgents()}>
+                  {(agent) => (
+                    <TeamAgentRow
+                      agent={agent}
+                      canRemove={isAdminOrOwner()}
+                      onRemove={() => setAgentToRemove(agent)}
                     />
                   )}
                 </For>
@@ -611,6 +671,18 @@ export function TeamMembers(props: { team: TeamSummary }) {
         }
       />
       <ConfirmDialog
+        open={!!agentToRemove()}
+        onOpenChange={(open) => !open && setAgentToRemove(null)}
+        title={t('teamAgents.removeTitle')}
+        tone="danger"
+        confirmLabel={t('teamAgents.removeConfirm')}
+        pending={removeAgentMutation.isPending}
+        onConfirm={handleRemoveAgent}
+        body={t('teamAgents.removeBody', {
+          name: agentToRemove()?.name ?? '',
+        })}
+      />
+      <ConfirmDialog
         open={!!showCancelInviteModal()}
         onOpenChange={(open) => !open && setShowCancelInviteModal(null)}
         title="Cancel Invitation"
@@ -630,6 +702,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}
+        canInviteAgents={isAdminOrOwner()}
         open={showInviteModal()}
         onClose={() => setShowInviteModal(false)}
       />
