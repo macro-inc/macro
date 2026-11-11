@@ -1,5 +1,4 @@
 //! Existing worker persistence, Gmail admission, and retry publication behind domain ports.
-
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use anyhow::Context;
@@ -7,6 +6,8 @@ use email::domain::message_labels::gmail_ops::{
     GmailLabelWrites, GmailMailboxOperations, GmailOpsLinks, GmailOpsRetryQueue, LabelWriteRevert,
     LabelWriteTurn, RevertedMessageFlag,
 };
+use email::domain::message_labels::state as label_state;
+use email::outbound::label_state_pg::{PgLabelCatalog, PgLabelState};
 use email_api_client::domain::models::EmailApiError;
 use email_db_client::labels::pending_writes;
 use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
@@ -40,30 +41,28 @@ impl GmailLabelWrites for PgGmailOps {
         labels: &[String],
         write_id: Uuid,
     ) -> Result<HashMap<Uuid, LabelWriteTurn>, Self::Err> {
-        let turns = pending_writes::label_write_turns(&self.0, message_ids, labels, write_id)
-            .await
-            .map_err(anyhow::Error::from)?;
-        Ok(turns
-            .into_iter()
-            .map(|(id, turn)| {
-                (
-                    id,
-                    match turn {
-                        pending_writes::LabelWriteTurn::Send => LabelWriteTurn::Send,
-                        pending_writes::LabelWriteTurn::Wait => LabelWriteTurn::Wait,
-                        pending_writes::LabelWriteTurn::Superseded => LabelWriteTurn::Superseded,
-                    },
-                )
-            })
-            .collect())
+        let turns = label_state::label_write_turns(
+            &mut PgLabelCatalog(&self.0),
+            message_ids,
+            labels,
+            write_id,
+        )
+        .await
+        .map_err(anyhow::Error::from)?;
+        Ok(turns)
     }
 
     async fn abandon(&self, link: Uuid, messages: &[Uuid], write: Uuid) -> Result<(), Self::Err> {
         async {
             let mut tx = begin_locked(&self.0, link, messages).await?;
-            pending_writes::abandon_pending_label_writes(&mut tx, link, messages, write)
-                .await
-                .context("Failed to drop superseded pending label writes")?;
+            label_state::abandon_pending_label_writes(
+                &mut PgLabelState(&mut tx),
+                link,
+                messages,
+                write,
+            )
+            .await
+            .context("Failed to drop superseded pending label writes")?;
             commit(tx).await
         }
         .await
@@ -73,7 +72,7 @@ impl GmailLabelWrites for PgGmailOps {
     async fn confirm(&self, link: Uuid, messages: &[Uuid], write: Uuid) -> Result<(), Self::Err> {
         async {
             let mut tx = begin_locked(&self.0, link, messages).await?;
-            pending_writes::confirm_pending_label_writes(&mut tx, messages, write)
+            label_state::confirm_pending_label_writes(&mut PgLabelState(&mut tx), messages, write)
                 .await
                 .context("Failed to confirm pending label writes")?;
             commit(tx).await
@@ -137,11 +136,14 @@ async fn revert_write(
         .await
         .context("Failed to lock the threads of the reverted messages")?;
     let reverted_ids = match change {
-        LabelWriteRevert::Pending(write_id) => {
-            pending_writes::abandon_pending_label_writes(&mut tx, link, &sent_ids, write_id)
-                .await
-                .context("Failed to abandon pending label writes")?
-        }
+        LabelWriteRevert::Pending(write_id) => label_state::abandon_pending_label_writes(
+            &mut PgLabelState(&mut tx),
+            link,
+            &sent_ids,
+            write_id,
+        )
+        .await
+        .context("Failed to abandon pending label writes")?,
         legacy => {
             invert_label_change(&mut tx, link, legacy, &sent_ids).await?;
             sent_ids
@@ -177,8 +179,8 @@ async fn invert_label_change(
     };
     let message_ids = message_ids.to_vec();
     if was_adding {
-        email_db_client::labels::delete::delete_message_labels_batch(
-            &mut *tx,
+        label_state::delete_message_labels_batch(
+            &mut PgLabelState(tx),
             &message_ids,
             &provider_label_id,
             link,
@@ -186,8 +188,8 @@ async fn invert_label_change(
         .await
         .context("Failed to revert adding labels")?;
     } else {
-        email_db_client::labels::insert::insert_message_labels_batch(
-            &mut *tx,
+        label_state::insert_message_labels_batch(
+            &mut PgLabelState(tx),
             &message_ids,
             &provider_label_id,
             link,
@@ -197,8 +199,8 @@ async fn invert_label_change(
     }
     match flag {
         RevertedMessageFlag::Read(is_read) => {
-            email_db_client::messages::update::update_message_read_status_batch(
-                &mut *tx,
+            label_state::update_message_read_status_batch(
+                &mut PgLabelState(tx),
                 message_ids,
                 link,
                 is_read,
@@ -207,8 +209,8 @@ async fn invert_label_change(
             .context("Failed to revert message read status")?;
         }
         RevertedMessageFlag::Starred(is_starred) => {
-            email_db_client::messages::update::update_message_starred_status_batch(
-                &mut *tx,
+            label_state::update_message_starred_status_batch(
+                &mut PgLabelState(tx),
                 message_ids,
                 link,
                 is_starred,

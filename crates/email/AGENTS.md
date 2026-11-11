@@ -217,6 +217,10 @@ tools — hexagonal, heavily feature-gated.
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the
   domain service, never an outbound adapter directly from another crate.
+- `domain/message_labels/state.rs` owns pending-write turn folding, restoration
+  sequencing, batch validation/count interpretation, and catalog id/deletion
+  policy; `outbound/label_state_pg.rs` borrows the caller's transaction or pool
+  for the original statement-sized queries in `email_db_client`.
 - `EmailRepo::stage_thread_label_change` reads which messages change, applies
   the change and marks the changed provider messages (exactly what
   `commit_thread_label_write` enqueues) in one transaction holding the thread's

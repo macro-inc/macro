@@ -18026,6 +18026,7 @@ dependencies = [
  "chrono",
  "clap",
  "comms_db_client",
+ "email",
  "email_db_client",
  "email_utils",
  "entity_access",

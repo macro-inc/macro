@@ -35,3 +35,7 @@ pub use gmail_token_provider::GmailTokenProviderImpl;
 pub use s3_draft_attachment_storage::S3DraftAttachmentStorage;
 #[cfg(feature = "outbound")]
 pub use shared_thread_replies::EntityAccessSharedThreadReplies;
+
+/// PostgreSQL statement adapters for label-state rules.
+#[cfg(feature = "outbound")]
+pub mod label_state_pg;

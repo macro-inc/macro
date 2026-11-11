@@ -67,6 +67,12 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   they drive, in their local state when it re-syncs a stored message. Given a
   `ResyncSnapshot` from before the Gmail fetch, it changes only labels where
   Gmail disagrees with that snapshot, so a write made during the fetch stays.
+- Label-state queries return facts and selected fallback rows to
+  `email::domain::message_labels::state`; that domain folds turns, partitions
+  restorations, validates batches, and interprets affected counts. Keep the
+  atomic sequence/expiry/fallback predicates in the existing SQL. The ingestion
+  helper `labels::insert::insert_message_labels` still owns its legacy mapping
+  until the ingestion workflow moves.
 - `email_gmail_pending_label_writes` keeps one row per write on a message's
   label, newest by `seq` (staging order, which write ids need not follow).
   Only the newest row's write sends; older ones wait while a newer row hasn't

@@ -499,7 +499,7 @@ async fn update_message_read_status_batch_scopes_to_owning_link(
     let message_id = Uuid::parse_str(READ_STATUS_MSG_A)?;
 
     // Ids that belong to a different link than the one supplied must not be updated,
-    // and the mismatch is loud rather than silently absorbed.
+    // and the returned count exposes the mismatch to the domain.
     let result = crate::messages::update::update_message_read_status_batch(
         &pool,
         vec![message_id],
@@ -508,7 +508,7 @@ async fn update_message_read_status_batch_scopes_to_owning_link(
     )
     .await;
 
-    assert!(result.is_err());
+    assert_eq!(result?, 0);
     assert!(!fetch_is_read(&pool, message_id).await?);
 
     Ok(())
