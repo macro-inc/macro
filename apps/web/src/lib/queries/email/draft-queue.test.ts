@@ -19,6 +19,7 @@ import { refetchSoupEntity } from '../soup/cache';
 import { markThreadDraftSaved } from './draft-cache';
 import { emailKeys } from './keys';
 import {
+  beginDraftAttempt,
   emailSendOwnsDraft,
   localDraftMessage,
   readLocalDraft,
@@ -96,6 +97,15 @@ beforeEach(() => {
   mocks.cacheEnabled = true;
   vi.mocked(queryClient.invalidateQueries).mockResolvedValue(undefined);
   vi.mocked(refetchSoupEntity).mockResolvedValue(undefined);
+  vi.mocked(beginDraftAttempt).mockResolvedValue({
+    kind: 'email-draft',
+    id: 'attempt',
+    draftKey: 'draft',
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    operation: 'save',
+  });
 });
 
 async function setup(committed = false) {
@@ -590,4 +600,14 @@ it('does not report a save that lost to its own send', async () => {
     code: 'INVALID',
   });
   expect(toast.failure).toHaveBeenCalledOnce();
+});
+
+it('queues nothing for a draft that is being discarded', async () => {
+  const { operations } = await setup();
+  vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('deleting'));
+  // A closed composer's last flush arrives after the discard.
+  vi.mocked(beginDraftAttempt).mockResolvedValue(undefined);
+
+  expect(await saveEmailDraftQueued({ args })).toEqual({ kind: 'queued' });
+  expect(operations).toEqual([]);
 });

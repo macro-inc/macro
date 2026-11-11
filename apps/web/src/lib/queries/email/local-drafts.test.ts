@@ -652,10 +652,28 @@ describe('draft queue recovery', () => {
     );
     expect(await runtime.listLocalDrafts()).toEqual([]);
   });
-  it('lets a newer save drop a discard the queue has not admitted', async () => {
+  it('keeps a discard when a save of the same revision arrives after it', async () => {
     const draft = await runtime.saveLocalDraft(input());
     const deleting = await runtime.beginDraftAttempt(draft, 'delete');
-    await runtime.beginDraftAttempt(draft, 'save');
+    // A closed composer's last flush: no edit came after the discard.
+    expect(await runtime.beginDraftAttempt(draft, 'save')).toBeUndefined();
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(true);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    expect(await runtime.beginDraftAttempt(draft, 'save')).toBeUndefined();
+  });
+  it('lets an edit withdraw a discard the queue has not admitted', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const edited = await runtime.saveLocalDraft({
+      ...input('Typed after discarding'),
+      expectedGeneration: draft.generation,
+      expectedRevision: draft.revision,
+    });
+    expect(await runtime.beginDraftAttempt(edited, 'save')).toBeDefined();
     expect(
       await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
         discard(deleting)
