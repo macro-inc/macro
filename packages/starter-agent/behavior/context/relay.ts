@@ -4,8 +4,8 @@
  * every service at this relay, on loopback, with a capability made fresh for
  * each run of the agent, and the relay makes the call with the real key. It
  * forwards plain HTTP API calls to the services it has an address for, and
- * nothing else: no websocket, no other host, and nothing about a call is
- * logged.
+ * one kind of websocket: a call's speech (`socketRoutes`). Nothing else, no
+ * other host, and nothing about a call or a frame is logged.
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Hosts } from './addresses.ts';
@@ -111,6 +111,88 @@ export const relayHandler =
     }
   };
 
+/**
+ * The only websockets the relay carries: a call's speech, which Macro
+ * proxies to LiveKit Inference with the agent's key. Each path takes one
+ * model, which the relay sets itself.
+ */
+export const socketRoutes = [
+  {
+    service: 'agent-harness',
+    path: 'brain/inference/stt',
+    model: 'deepgram/nova-3',
+  },
+  {
+    service: 'agent-harness',
+    path: 'brain/inference/tts',
+    model: 'deepgram/aura-2',
+  },
+] as const;
+
+/** Where a relayed socket goes, and the headers it is opened with. */
+export type SocketTarget = {
+  readonly url: string;
+  readonly headers: Readonly<Record<string, string>>;
+};
+
+/** Trace context is the one thing of the caller's that goes on with a socket. */
+const traceHeaders = ['traceparent', 'tracestate'];
+
+const asSocket = (url: string): string =>
+  url.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+
+/**
+ * Whether a websocket upgrade may be relayed, and where: the capability
+ * first, as for HTTP; then a GET to exactly one of `socketRoutes`, on a
+ * service the relay has an address for. Upstream it carries the agent's key
+ * as a bearer token, which is how the speech gateway authenticates, and the
+ * caller's trace context; nothing else of the caller's, and none of its query.
+ */
+export const socketTarget =
+  ({
+    targets,
+    capability,
+    apiKey,
+    equal,
+  }: {
+    readonly targets: Hosts;
+    readonly capability: string;
+    readonly apiKey: string;
+    readonly equal: (given: string, expected: string) => boolean;
+  }) =>
+  (request: Request): SocketTarget | Response => {
+    if (!equal(request.headers.get(keyHeader) ?? '', capability))
+      return refuse(401, 'the relay needs its capability');
+    if (request.method !== 'GET')
+      return refuse(405, 'a relayed socket opens with GET');
+    const { pathname } = new URL(request.url);
+    const route = socketRoutes.find(
+      ({ service, path }) => pathname === `/${service}/${path}`
+    );
+    if (route === undefined)
+      return refuse(403, "the relay carries only a call's speech sockets");
+    const base = targets[route.service];
+    if (base === undefined)
+      return refuse(404, 'the relay has no address for that path');
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${apiKey}`,
+    };
+    for (const name of traceHeaders) {
+      const value = request.headers.get(name);
+      if (value !== null) headers[name] = value;
+    }
+    const url = new URL(`${base.replace(/\/+$/, '')}/${route.path}`);
+    url.searchParams.set('model', route.model);
+    return { url: asSocket(url.href), headers };
+  };
+
+/** What the relay keeps per relayed socket: where it goes, and its upstream once open. */
+type Socket = SocketTarget & {
+  upstream?: WebSocket;
+  /** What the caller sent before upstream opened. */
+  readonly early: (string | Buffer)[];
+};
+
 export type Relay = {
   /** Its loopback origin, e.g. `http://127.0.0.1:41234`. A service is at `${url}/${service}`. */
   readonly url: string;
@@ -131,16 +213,57 @@ export const startRelay = ({
   readonly apiKey: string;
 }): Relay => {
   const token = randomBytes(capabilityBytes).toString('hex');
-  const server = Bun.serve({
+  const http = relayHandler({
+    targets,
+    capability: token,
+    apiKey,
+    fetch: (request) => fetch(request),
+    equal: constantTimeEqual,
+  });
+  const socket = socketTarget({
+    targets,
+    capability: token,
+    apiKey,
+    equal: constantTimeEqual,
+  });
+  const server = Bun.serve<Socket>({
     hostname: loopback,
     port: 0,
-    fetch: relayHandler({
-      targets,
-      capability: token,
-      apiKey,
-      fetch: (request) => fetch(request),
-      equal: constantTimeEqual,
-    }),
+    fetch: (request, server) => {
+      if (!isUpgrade(request)) return http(request);
+      const target = socket(request);
+      if (target instanceof Response) return target;
+      return server.upgrade(request, { data: { ...target, early: [] } })
+        ? undefined
+        : refuse(400, 'not a websocket upgrade');
+    },
+    websocket: {
+      open: (client) => {
+        const upstream = new WebSocket(client.data.url, {
+          headers: client.data.headers,
+        });
+        upstream.binaryType = 'arraybuffer';
+        client.data.upstream = upstream;
+        upstream.addEventListener('open', () => {
+          for (const message of client.data.early.splice(0))
+            upstream.send(message);
+        });
+        upstream.addEventListener('message', ({ data }) => {
+          if (typeof data === 'string' || data instanceof ArrayBuffer)
+            client.send(data);
+        });
+        upstream.addEventListener('close', () => client.close());
+        upstream.addEventListener('error', () => client.close());
+      },
+      message: (client, message) => {
+        const upstream = client.data.upstream;
+        if (upstream?.readyState === WebSocket.OPEN) upstream.send(message);
+        else client.data.early.push(message);
+      },
+      close: (client) => {
+        client.data.upstream?.close();
+      },
+    },
   });
   return {
     url: `http://${loopback}:${server.port}`,
