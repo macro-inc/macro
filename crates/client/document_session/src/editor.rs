@@ -344,14 +344,7 @@ impl EditorSurface {
             {
                 continue;
             }
-            let mut action = self.tracker.classify(commit, now);
-            if action == HistoryAction::Push
-                && self
-                    .item_started
-                    .is_some_and(|started| now.0 < started.0.saturating_add(self.config.delay_ms))
-            {
-                action = HistoryAction::Merge;
-            }
+            let action = self.tracker.classify(commit, now);
             match action {
                 HistoryAction::Push => {
                     undo.group_end();
@@ -905,6 +898,9 @@ mod selection_test;
 
 #[cfg(test)]
 mod routed_history_test;
+
+#[cfg(all(test, feature = "application"))]
+mod grouping_test;
 
 #[cfg(test)]
 mod identity_test;

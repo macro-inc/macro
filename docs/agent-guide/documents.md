@@ -3297,3 +3297,8 @@ IDs and failed durability as failures. Local recovery, rendered counts and fixed
 waits do not establish server persistence. Qualify mega-paste restoration separately.
 
 Copied content keeps its formatting when pasted into the same or another document. Undo removes the paste; redo restores the same pasted content and references.
+
+Create a table and immediately resize it with several pointer moves. One undo
+must restore the original dimensions while retaining the table; redo restores
+the complete gesture. Check typing bursts separately from paste, formatting and
+node insertion: a short delay alone must not combine those distinct edits.
