@@ -21,6 +21,7 @@ import { CalendarReplacementFixture } from './calendar-replacement-fixture';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
 import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
+import { QueueLeaseFixture } from './queue-lease-fixture';
 import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
 import { SyncStatusFixture } from './sync-status-fixture';
@@ -366,6 +367,8 @@ render(
       <AndroidBackFixture />
     ) : new URLSearchParams(location.search).has('sync-status') ? (
       <SyncStatusFixture />
+    ) : new URLSearchParams(location.search).has('queue-lease') ? (
+      <QueueLeaseFixture />
     ) : (
       <Fixture />
     ),
