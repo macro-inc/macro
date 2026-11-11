@@ -292,6 +292,7 @@ The mention/image/equation backend-free source interaction check is
 Compare its raw model and DOM captures before and after host refactors in all
 three engines; source results do not establish native binding acceptance.
 Bind native decorators through the initialized component registry and typed props projectors in `decorator-host/native-adapter.ts`; supply only real host capabilities and reject incomplete full-host requests, keeping model nodes and observer lifetime metadata authoritative.
+Publish a fresh Source component closure for each uncached native view-node update inside the retained Provider and Portal; let actual native render revisions preserve cached captured props before the adapter runs.
 Merge the actual horizontal-rule leaf into the complete `registerMacroViews`
 record; preserve its missing-component checks rather than supplying placeholders.
 Run `native-horizontal-rule.test.ts` against an own-source document-session WASM
