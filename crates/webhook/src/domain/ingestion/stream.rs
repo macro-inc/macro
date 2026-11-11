@@ -4,7 +4,7 @@ use super::{
     LifecycleAudience, TriggerAudience, WebhookEventIngestionError, lifecycle_audience,
     normalized_agent_session_lifecycle_event, normalized_agent_trigger_event,
     normalized_call_notification_event, normalized_channel_event, normalized_document_event,
-    normalized_message_event, normalized_webhook_event,
+    normalized_message_event, normalized_user_event, normalized_webhook_event,
 };
 use crate::domain::{
     events::WebhookTopicEvent,
@@ -18,6 +18,7 @@ use documents::domain::events::DocumentTopicEvent;
 use entity_access::domain::models::EntityType;
 use macro_event_broker::Event;
 use messages::outbound::broker::MessageTopicEvent;
+use user_events::UserTopicEvent;
 
 pub(crate) fn document_stream_candidate(
     event: &Event<DocumentTopicEvent>,
@@ -71,6 +72,18 @@ pub(crate) fn message_stream_candidate(
         audience: StreamAudience::Entity {
             entity_id: normalized.entity_id.clone(),
             entity_type,
+        },
+        event: normalized,
+    })
+}
+
+pub(crate) fn user_stream_candidate(
+    event: &Event<UserTopicEvent>,
+) -> Result<StreamCandidateEvent, WebhookEventIngestionError> {
+    let (normalized, user_id) = normalized_user_event(event)?;
+    Ok(StreamCandidateEvent {
+        audience: StreamAudience::Workspace {
+            workspace_id: user_id.to_string(),
         },
         event: normalized,
     })

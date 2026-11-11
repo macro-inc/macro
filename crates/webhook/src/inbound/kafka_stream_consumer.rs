@@ -5,7 +5,7 @@ use crate::domain::ingestion::{
     stream::{
         agent_session_lifecycle_stream_candidate, agent_trigger_stream_candidate,
         call_stream_candidate, channel_stream_candidate, document_stream_candidate,
-        message_stream_candidate, webhook_stream_candidate,
+        message_stream_candidate, user_stream_candidate, webhook_stream_candidate,
     },
 };
 use crate::domain::stream::StreamCandidateEvent;
@@ -83,5 +83,6 @@ fn candidate_from(
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
             agent_session_lifecycle_stream_candidate(event.event()).map(Some)
         }
+        DeclaredMacroEvent::UserMacroEvent(event) => user_stream_candidate(event.event()).map(Some),
     }
 }

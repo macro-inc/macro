@@ -820,13 +820,17 @@ replay if you disconnect.
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Four families are delivered: `document.*`, `channel.*`, `message.*`, and
-`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
+and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
 `attachment_created`, `attachment_removed`) cover channel messages and document
 comments alike: `metadata.parent` names the channel or document, and the
 hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
 reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
 `message.mentioned` deliveries that name the caller.
+`user.picture_changed` tells you a user's own profile picture changed (set or
+removed) and is delivered only to the changed user's own workspaces; it hydrates
+to the `User` and, when the picture is a static file, its `StaticImage` (`image`
+is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,

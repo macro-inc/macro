@@ -15,7 +15,7 @@ before changing ingestion or delivery behavior.
 - `src/inbound/kafka_consumer.rs` / `kafka_stream_consumer.rs`: ingestion
   consumers for `macro.documents`, `macro.channels`, `macro.messages`,
   `macro.webhooks`, `macro.agent_sessions`, `macro.agent_session_lifecycle`,
-  and `macro.call_notifications`.
+  `macro.users`, and `macro.call_notifications`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 
@@ -27,7 +27,7 @@ before changing ingestion or delivery behavior.
 ## Boundaries
 
 - Depends on: `channels`, `documents`, `messages`, `agent_session`,
-  `agent_trigger`, `entity_access`, `macro_event_broker`, `kafka_util`,
+  `agent_trigger`, `user_events`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.
 - Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
 
