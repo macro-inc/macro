@@ -138,6 +138,10 @@ impl BundleRoot {
     }
 }
 
+/// The newest bundle manifest schema this updater reads, sent with each check
+/// so the server never offers desktop a schema it would reject.
+pub const SUPPORTED_MANIFEST_SCHEMA: u64 = 3;
+
 /// Metadata generated with each JavaScript bundle build.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -150,7 +154,7 @@ pub struct BundleManifest {
     pub min_native_build: u64,
     /// Independent mobile build minima for schema 3 bundles.
     #[serde(default)]
-    pub min_native_builds: Option<NativeBuildMinima>,
+    pub min_native_builds: Option<MobileBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
@@ -159,14 +163,11 @@ pub struct BundleManifest {
 
 /// Independent native build requirements for a shared bundle.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
-pub struct NativeBuildMinima {
+pub struct MobileBuildMinima {
     /// Android versionCode.
     pub android: u64,
     /// iOS CFBundleVersion.
     pub ios: u64,
-    /// Desktop release build; absent means the bundle is not for desktop.
-    #[serde(default)]
-    pub desktop: Option<u64>,
 }
 
 impl BundleManifest {
@@ -177,7 +178,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), Target::Android) => Some(builds.android),
             (3, Some(builds), Target::Ios) => Some(builds.ios),
-            (3, Some(builds), Target::Darwin | Target::Linux | Target::Windows) => builds.desktop,
+            (3, Some(_), Target::Darwin | Target::Linux | Target::Windows) => {
+                Some(self.min_native_build)
+            }
             _ => None,
         }
     }

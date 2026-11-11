@@ -160,15 +160,13 @@ build-staging: build-wasm
 
 # Production bundles carry the native build floors checked in at
 # min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
-# `just ios-bump` raises the iOS one and `just android-bump` the Android one;
-# the desktop one is a release build number (`desktop-release.mjs`).
+# `just ios-bump` raises the iOS one and `just android-bump` the Android one.
 # Explicit MIN_NATIVE_BUILD_* env still wins.
 build-prod: build-wasm
     #!/usr/bin/env bash
     set -euo pipefail
     export MIN_NATIVE_BUILD_ANDROID="${MIN_NATIVE_BUILD_ANDROID:-$(bun -e "console.log(require('./min-native-build.json').android)")}"
     export MIN_NATIVE_BUILD_IOS="${MIN_NATIVE_BUILD_IOS:-$(bun -e "console.log(require('./min-native-build.json').ios)")}"
-    export MIN_NATIVE_BUILD_DESKTOP="${MIN_NATIVE_BUILD_DESKTOP:-$(bun -e "console.log(require('./min-native-build.json').desktop)")}"
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 

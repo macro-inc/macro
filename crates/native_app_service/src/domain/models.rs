@@ -79,25 +79,20 @@ pub struct BundleManifest {
     pub min_native_build: u64,
     /// Platform-specific native minima. Schema 3 requires both mobile platforms.
     #[serde(default)]
-    pub min_native_builds: Option<NativeBuildMinima>,
+    pub min_native_builds: Option<MobileBuildMinima>,
     /// Short git SHA used to build the bundle.
     pub git_sha: Option<String>,
     /// Application package version used for the bundle.
     pub app_version: String,
 }
 
-/// Native build numbers are independent across platforms.
+/// Native build numbers are independent across mobile platforms.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct NativeBuildMinima {
+pub struct MobileBuildMinima {
     /// Minimum Android versionCode.
     pub android: u64,
     /// Minimum iOS CFBundleVersion.
     pub ios: u64,
-    /// Minimum desktop release build. Without it, desktop gets no schema 3
-    /// bundle: desktop updaters older than this field reject schema 3 after
-    /// downloading it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub desktop: Option<u64>,
 }
 
 impl BundleManifest {
@@ -108,7 +103,9 @@ impl BundleManifest {
             (2, None, _) => Some(self.min_native_build),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Android)) => Some(builds.android),
             (3, Some(builds), AllTargets::Mobile(MobileTarget::Ios)) => Some(builds.ios),
-            (3, Some(builds), AllTargets::Desktop(_)) => builds.desktop,
+            // Desktop keeps the shared minimum; its release numbers come from
+            // hand-typed tags, so they cannot gate updater capabilities.
+            (3, Some(_), AllTargets::Desktop(_)) => Some(self.min_native_build),
             _ => None,
         }
     }
@@ -171,6 +168,9 @@ pub struct BundleUpdateRequest {
     pub current_bundle_build: u64,
     /// the native app build number
     pub native_build: u64,
+    /// The newest bundle manifest schema the updater reads. Desktop updaters
+    /// that predate schema 3 send none and reject it after downloading.
+    pub manifest_schema: Option<u64>,
 }
 
 /// Server-side compatibility and revocation rules for JS bundle updates.

@@ -25,14 +25,8 @@ await test('independent mobile minima use a schema older updaters reject', () =>
   assert.equal(manifest.schemaVersion, 3);
   assert.deepEqual(manifest.minNativeBuilds, { android: 2050001, ios: 184 });
 });
-await test('a desktop minimum makes the bundle available to desktop', () => {
-  const manifest = build({ MIN_NATIVE_BUILD_ANDROID: '2050001', MIN_NATIVE_BUILD_IOS: '184', MIN_NATIVE_BUILD_DESKTOP: '202611120000' });
-  assert.equal(manifest.schemaVersion, 3);
-  assert.deepEqual(manifest.minNativeBuilds, { android: 2050001, ios: 184, desktop: 202611120000 });
-});
 await test('incomplete or unsafe minima fail the build', () => {
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '2' }));
-  assert.throws(() => build({ MIN_NATIVE_BUILD_DESKTOP: '1' }));
   assert.throws(() => build({ MIN_NATIVE_BUILD_ANDROID: '9007199254740992', MIN_NATIVE_BUILD_IOS: '1' }));
 });
 await test('legacy manifests retain schema 2', () => {

@@ -128,6 +128,7 @@ fn request(
         arch,
         current_bundle_build,
         native_build,
+        manifest_schema: Some(3),
     }
 }
 
@@ -414,10 +415,9 @@ fn with_policy_env(json: Option<&str>, file: Option<&str>, test: impl FnOnce()) 
 async fn shared_bundle_uses_independent_mobile_build_minima() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
-        desktop: None,
     });
     for (target, build, minimum) in [
         (MobileTarget::Android, 2_050_000, 2_050_001),
@@ -439,51 +439,71 @@ async fn shared_bundle_uses_independent_mobile_build_minima() {
 }
 
 #[tokio::test]
-async fn shared_bundle_uses_its_desktop_build_minimum() {
+async fn schema_3_reaches_only_desktop_updaters_that_read_it() {
     let mut service = service(20, 0, BundleUpdatePolicy::default());
     service.bundle_fetcher.manifest.schema_version = 3;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+    service.bundle_fetcher.manifest.min_native_build = 5;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
-        desktop: Some(202_611_120_000),
     });
-    for target in [DesktopTarget::Darwin, DesktopTarget::Linux] {
+    for target in DesktopTarget::iter() {
+        let target = AllTargets::Desktop(target);
+        // Older desktop updaters reject schema 3 after downloading it, on
+        // every check, so they are never offered one.
+        let legacy = domain::models::BundleUpdateRequest {
+            manifest_schema: None,
+            ..request(target, Arch::Aarch64, 10, 202_611_100_001)
+        };
+        assert_matches!(service.get_bundle_update(legacy).await, Ok(None));
         assert_matches!(
-            service
-                .get_bundle_update(request(AllTargets::Desktop(target), Arch::Aarch64, 10, 202_611_100_001))
-                .await,
+            service.get_bundle_update(request(target, Arch::Aarch64, 10, 4)).await,
             Ok(Some(BundleAction::NativeUpdateRequired(required))) => {
-                assert_eq!(required.min_native_build, 202_611_120_000);
+                assert_eq!(required.min_native_build, 5);
             }
         );
         assert_matches!(
-            service
-                .get_bundle_update(request(AllTargets::Desktop(target), Arch::Aarch64, 10, 202_611_120_000))
-                .await,
+            service.get_bundle_update(request(target, Arch::Aarch64, 10, 5)).await,
             Ok(Some(BundleAction::Update(update))) => {
-                assert_eq!(update.min_native_build, 202_611_120_000);
+                assert_eq!(update.min_native_build, 5);
             }
         );
     }
+}
 
-    // Without a desktop floor, older desktop updaters would download and then
-    // reject the schema 3 bundle on every check.
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
+#[tokio::test]
+async fn route_reads_the_updater_manifest_schema() {
+    let mut service = service(20, 0, BundleUpdatePolicy::default());
+    service.bundle_fetcher.manifest.schema_version = 3;
+    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::MobileBuildMinima {
         android: 2_050_001,
         ios: 184,
-        desktop: None,
     });
-    assert_matches!(
-        service
-            .get_bundle_update(request(
-                AllTargets::Desktop(DesktopTarget::Darwin),
-                Arch::Aarch64,
-                10,
-                202_611_120_000
-            ))
-            .await,
-        Ok(None)
-    );
+    let app = native_app_router::<_, ()>(RouterState {
+        inner: Arc::new(service),
+    });
+    for (query, status) in [
+        (
+            "current_bundle_build=10&native_build=1",
+            StatusCode::NO_CONTENT,
+        ),
+        (
+            "current_bundle_build=10&native_build=1&manifest_schema=3",
+            StatusCode::OK,
+        ),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/update/bundle/darwin/aarch64?{query}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), status, "{query}");
+    }
 }
 
 #[tokio::test]
@@ -504,11 +524,8 @@ async fn ambiguous_or_unknown_manifest_cannot_offer_an_update() {
         );
     }
     service.bundle_fetcher.manifest.schema_version = 2;
-    service.bundle_fetcher.manifest.min_native_builds = Some(domain::models::NativeBuildMinima {
-        android: 9,
-        ios: 2,
-        desktop: None,
-    });
+    service.bundle_fetcher.manifest.min_native_builds =
+        Some(domain::models::MobileBuildMinima { android: 9, ios: 2 });
     assert_matches!(
         service
             .get_bundle_update(request(
