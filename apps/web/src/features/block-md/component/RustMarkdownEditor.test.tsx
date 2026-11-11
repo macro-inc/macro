@@ -23,6 +23,33 @@ vi.mock('@app/observability/flow', () => ({
     },
   }),
 }));
+vi.mock('@property/tags', () => ({
+  useDocTags: () => ({
+    isApplied: () => false,
+    applyTag: async () => {},
+  }),
+}));
+vi.mock('./format-host/native-overlay', () => ({
+  createNativeBodyFormattingOverlay: () => ({
+    observer: {
+      published() {},
+      unavailable() {},
+      retired() {},
+    },
+    dispose() {},
+    Overlay: () => null,
+  }),
+}));
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-host',
+  () => ({
+    createNativeTagMentionContext: () => ({ dispose() {} }),
+  })
+);
+vi.mock(
+  '@core/component/LexicalMarkdown/decorator-host/native-tag-mention-views',
+  () => ({ createNativeTagMentionViews: () => ({}) })
+);
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'fixture-user',
 }));
@@ -42,6 +69,7 @@ vi.mock('../queries/editor-authorization', () => ({
 vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'fixture-document',
+    kind: () => 'document',
     permissions: { canEdit: () => control.canEdit() },
     state: {
       session: { setStatus: control.status },

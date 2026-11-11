@@ -228,7 +228,8 @@ test('a later child render failure retires actions while the actual mention bind
 for (const cause of [undefined, null]) {
   test(`synchronous partial registration ${String(cause)} releases its returned handle and permits remount`, async () => {
     const runtime = mount();
-    vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    const errors = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    const actionRender = vi.spyOn(actions, 'NativeActionsOverlay');
     const releaseMention = registerNativeMentionSearch(
       runtime.view,
       createMenuOperations()
@@ -253,9 +254,44 @@ for (const cause of [undefined, null]) {
       canEdit: () => true,
       actions: { requests: {} },
     });
+    const container = document.createElement('div');
+    document.body.append(container);
     let remounted: ReturnType<typeof installNativeMarkdownOverlays> | undefined;
+    let unmount: (() => void) | undefined;
     try {
-      expect(installation.Overlays).toBeUndefined();
+      // Drag retains its own renderer after the actions listener retires.
+      expect(installation.Overlays).toBeDefined();
+      const Overlays = installation.Overlays;
+      if (!Overlays) throw new Error('Missing independent overlay');
+      unmount = render(() => <Overlays />, container);
+      expect(actionRender).not.toHaveBeenCalled();
+      expect(errors).toHaveBeenCalledWith(cause, {
+        surface: 'native-action-menu',
+      });
+      const inputs = vi.spyOn(runtime.port, 'input');
+      runtime.root.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: '/',
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      runtime.root.dispatchEvent(
+        new InputEvent('beforeinput', {
+          inputType: 'insertText',
+          data: '/',
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+      expect(actionRender).not.toHaveBeenCalled();
+      expect(
+        inputs.mock.calls.some(
+          ([input]) =>
+            input.isEditorApplication() &&
+            input.value.name === 'group-a.search-trigger'
+        )
+      ).toBe(false);
       expect(returned).toHaveLength(1);
       expect(returned[0]).toHaveBeenCalledTimes(1);
       expect(runtime.port.nativeEnter?.hasListeners()).toBe(true);
@@ -279,6 +315,8 @@ for (const cause of [undefined, null]) {
       observe.mockRestore();
       remounted?.dispose();
       installation.dispose();
+      unmount?.();
+      container.remove();
       releaseMention();
       await runtime.close();
       runtime.root.remove();
