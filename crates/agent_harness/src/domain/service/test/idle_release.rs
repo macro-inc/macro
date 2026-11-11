@@ -338,3 +338,175 @@ async fn a_session_kept_at_its_idle_timeout_is_tried_again_until_it_releases() {
         "its actor is closed"
     );
 }
+
+/// Every field of the idle release's span is exported once. A field given a
+/// value up front and recorded again is exported twice, and Datadog keeps
+/// the first: every release read `released=false` that way.
+#[tokio::test]
+async fn each_idle_release_span_field_is_exported_once() {
+    let (exporter, provider, _guard) = span_exporter();
+    let ((service, repo, containers, _announcer, _runtimes), mut signals) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let (prompted, ()) = tokio::join!(
+        service.execute(id, HarnessCommand::Deliver(forward_message("first"))),
+        async {
+            complete_resume(&containers.wait_for_resumes(id, 1).await).await;
+        },
+    );
+    prompted.expect("the first prompt runs");
+    signals.settled(id).await;
+    containers.keep_on_release(id);
+
+    tokio::time::pause();
+    let patience = WORKER_IDLE_TIMEOUT * 10;
+    tokio::time::timeout(patience, containers.wait_for_lossless_checks(id, 1))
+        .await
+        .expect("the first try runs");
+    containers.allow_release(id);
+    tokio::time::timeout(patience, containers.wait_for_release(id))
+        .await
+        .expect("the next try releases it");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::resume();
+
+    provider.force_flush().expect("the spans flush");
+    let spans: Vec<_> = exporter
+        .get_finished_spans()
+        .expect("finished spans")
+        .into_iter()
+        .filter(|span| span.name == "agent.session.idle_release")
+        .collect();
+    let exported: Vec<Vec<(String, String)>> = spans
+        .iter()
+        .map(|span| {
+            span.attributes
+                .iter()
+                .filter(|kv| kv.key.as_str().starts_with("agent.session.idle_release."))
+                .map(|kv| (kv.key.to_string(), kv.value.to_string()))
+                .collect()
+        })
+        .collect();
+    let field = |name: &str, value: &str| {
+        (
+            format!("agent.session.idle_release.{name}"),
+            value.to_owned(),
+        )
+    };
+    assert_eq!(
+        exported,
+        vec![
+            vec![
+                field("attempt", "0"),
+                field("quiet", "true"),
+                field("lossless", "false"),
+                field("closed_actor", "false"),
+                field("released", "false"),
+                field("outcome", "not_lossless"),
+            ],
+            vec![
+                field("attempt", "1"),
+                field("quiet", "true"),
+                field("lossless", "true"),
+                field("closed_actor", "true"),
+                field("released", "true"),
+                field("outcome", "released"),
+            ],
+        ],
+        "each try's fields, each once"
+    );
+}
+
+/// A try that finds a turn still running replays nothing, so it is not what
+/// the backoff is for: the worker tries again at the plain timeout for as
+/// long as the turn runs, and the session is released soon after it ends.
+#[tokio::test]
+async fn a_session_kept_for_a_running_turn_is_tried_again_at_the_plain_timeout() {
+    let (exporter, provider, _guard) = span_exporter();
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let container = {
+        let (prompted, container) = tokio::join!(
+            service.execute(id, HarnessCommand::Deliver(forward_message("long task"))),
+            async {
+                let container = containers.wait_for_resumes(id, 1).await;
+                resume_and_hold_the_prompt(&container).await;
+                container
+            },
+        );
+        prompted.expect("the prompt is on the wire");
+        container
+    };
+
+    tokio::time::pause();
+    tokio::time::sleep(WORKER_IDLE_TIMEOUT * 24 + Duration::from_secs(1)).await;
+    provider.force_flush().expect("the spans flush");
+    let tries: Vec<String> = exporter
+        .get_finished_spans()
+        .expect("finished spans")
+        .into_iter()
+        .filter(|span| span.name == "agent.session.idle_release")
+        .filter_map(|span| {
+            span.attributes
+                .iter()
+                .find(|kv| kv.key.as_str() == "agent.session.idle_release.outcome")
+                .map(|kv| kv.value.to_string())
+        })
+        .collect();
+    assert_eq!(
+        tries,
+        vec!["not_quiet".to_owned(); 24],
+        "one try every idle timeout while the turn runs"
+    );
+    assert!(
+        containers.released().is_empty(),
+        "the turn is still running"
+    );
+
+    container.agent().completes_prompt().await;
+    tokio::time::timeout(WORKER_IDLE_TIMEOUT * 2, containers.wait_for_release(id))
+        .await
+        .expect("a try after the turn ends releases it");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::resume();
+
+    assert_eq!(service.command_workers(), 0, "its worker retires");
+}
+
+/// A session whose row was deleted elsewhere while this process still held
+/// it has nothing left to keep: the worker drops what is held and retires,
+/// rather than failing to read the row on every try for the life of the
+/// process.
+#[tokio::test]
+async fn a_session_whose_row_is_gone_is_released() {
+    let ((service, repo, containers, _announcer, _runtimes), mut signals) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let (prompted, ()) = tokio::join!(
+        service.execute(id, HarnessCommand::Deliver(forward_message("first"))),
+        async {
+            complete_resume(&containers.wait_for_resumes(id, 1).await).await;
+        },
+    );
+    prompted.expect("the first prompt runs");
+    signals.settled(id).await;
+    assert!(service.inner.sessions.attached_mcp_servers(id).is_some());
+
+    agent_session::domain::ports::AgentSessionRepo::delete(&repo, id)
+        .await
+        .expect("the row is deleted");
+
+    tokio::time::pause();
+    tokio::time::timeout(WORKER_IDLE_TIMEOUT * 2, containers.wait_for_release(id))
+        .await
+        .expect("the idle session is released");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::resume();
+
+    assert_eq!(service.command_workers(), 0, "its worker retires");
+    assert!(
+        service.inner.sessions.attached_mcp_servers(id).is_none(),
+        "its actor is closed"
+    );
+    assert_eq!(service.inner.sessions.active_sessions(), 0);
+}

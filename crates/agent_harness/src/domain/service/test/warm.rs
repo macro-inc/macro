@@ -234,23 +234,6 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
 }
 
-fn span_exporter() -> (
-    opentelemetry_sdk::trace::InMemorySpanExporter,
-    opentelemetry_sdk::trace::SdkTracerProvider,
-    tracing::subscriber::DefaultGuard,
-) {
-    use opentelemetry::trace::TracerProvider as _;
-    use tracing_subscriber::layer::SubscriberExt as _;
-    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
-    let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
-    tracing::callsite::rebuild_interest_cache();
-    (exporter, provider, guard)
-}
-
 fn attributes(
     exporter: &opentelemetry_sdk::trace::InMemorySpanExporter,
     provider: &opentelemetry_sdk::trace::SdkTracerProvider,

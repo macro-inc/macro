@@ -41,6 +41,14 @@ impl IdleRelease {
         matches!(self, Self::Released | Self::OtherRuntime)
     }
 
+    /// Whether the next try waits longer. Only a try that read and replayed
+    /// the log, or failed, does: a session kept for a running turn or an
+    /// actor mid-work is tried again at the plain timeout, so it is released
+    /// soon after its work ends.
+    pub(super) fn backs_off(self) -> bool {
+        matches!(self, Self::NotLossless | Self::Failed)
+    }
+
     fn as_str(self) -> &'static str {
         match self {
             Self::Released => "released",
@@ -181,14 +189,19 @@ where
 
         let mut closed_actor = false;
         if attached {
-            let session = match self.sessions.get_session(session_id).await {
-                Ok(session) => session,
+            // A session whose row is gone is closed whatever ran it: no
+            // provider reaps the transport of a session that no longer exists.
+            let in_memory = match self.sessions.get_session(session_id).await {
+                Ok(session) => {
+                    AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::InMemory
+                }
+                Err(AgentSessionError::NotFound(_)) => true,
                 Err(error) => {
                     tracing::warn!(error = ?error, %session_id, "could not read an idle session");
                     return (IdleRelease::Failed, false);
                 }
             };
-            if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::InMemory {
+            if !in_memory {
                 return (IdleRelease::OtherRuntime, false);
             }
             match self.sessions.release_session(session_id).await {

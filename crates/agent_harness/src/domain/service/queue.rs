@@ -180,12 +180,13 @@ where
 }
 
 /// How long a worker waits for a command before it tries to release its
-/// session, after `attempts` tries that left the session held. A session that
-/// stays unreleasable (its log rebuilds differently) is checked again at
-/// `timeout`, twice it, four times it, then every sixteen times it: each check
-/// reads and replays the session's whole log.
-pub(super) fn idle_wait(timeout: std::time::Duration, attempts: u32) -> std::time::Duration {
-    let factor = match attempts {
+/// session, after `backoffs` tries that replayed the log and kept the session,
+/// or failed ([`IdleRelease::backs_off`](super::idle::IdleRelease::backs_off)).
+/// A session that stays unreleasable (its log rebuilds differently) is
+/// checked again at `timeout`, twice it, four times it, then every sixteen
+/// times it: each check reads and replays the session's whole log.
+pub(super) fn idle_wait(timeout: std::time::Duration, backoffs: u32) -> std::time::Duration {
+    let factor = match backoffs {
         0 => 1,
         1 => 2,
         2 => 4,
@@ -1900,10 +1901,13 @@ pub(super) async fn run_session_worker<
     // Releases tried since the session's last command that left something
     // held here.
     let mut attempts: u32 = 0;
+    // Of those, the ones that replayed the log or failed: what the wait
+    // before the next try grows with.
+    let mut backoffs: u32 = 0;
     loop {
         let queued = tokio::select! {
             queued = receiver.recv() => queued,
-            () = tokio::time::sleep(idle_wait(inner.worker_idle_timeout, attempts)) => {
+            () = tokio::time::sleep(idle_wait(inner.worker_idle_timeout, backoffs)) => {
                 // Before retiring, while commands for the session still queue
                 // behind this worker rather than racing it on a new one.
                 let outcome = inner.release_idle(session_id, attempts).await;
@@ -1915,6 +1919,9 @@ pub(super) async fn run_session_worker<
                     }
                 } else {
                     attempts = attempts.saturating_add(1);
+                    if outcome.backs_off() {
+                        backoffs = backoffs.saturating_add(1);
+                    }
                 }
                 continue;
             }
@@ -1924,6 +1931,7 @@ pub(super) async fn run_session_worker<
             return;
         };
         attempts = 0;
+        backoffs = 0;
         let QueuedCommand {
             command,
             completed,

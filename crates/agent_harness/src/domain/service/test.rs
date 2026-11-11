@@ -5147,3 +5147,64 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
         ))
     );
 }
+
+/// Spans exported through the real OpenTelemetry layer, as production does,
+/// into memory, for as long as the guard is held.
+///
+/// Other tests run on other threads with no subscriber. A callsite one of
+/// them registers while this one's subscriber is being installed can cache
+/// "never" and drop this test's spans, so a global subscriber that answers
+/// "sometimes" for every callsite is installed first: no callsite is ever
+/// cached as never, and each span asks the thread's own subscriber.
+fn span_exporter() -> (
+    opentelemetry_sdk::trace::InMemorySpanExporter,
+    opentelemetry_sdk::trace::SdkTracerProvider,
+    tracing::subscriber::DefaultGuard,
+) {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static UNDECIDED: std::sync::Once = std::sync::Once::new();
+    UNDECIDED.call_once(|| {
+        tracing::subscriber::set_global_default(Undecided)
+            .expect("no other test installs a global subscriber");
+    });
+    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+    (exporter, provider, guard)
+}
+
+/// The global subscriber [`span_exporter`] installs: records nothing, and
+/// leaves every callsite to be asked again each time.
+struct Undecided;
+
+impl tracing::Subscriber for Undecided {
+    fn register_callsite(
+        &self,
+        _metadata: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+    fn event(&self, _event: &tracing::Event<'_>) {}
+
+    fn enter(&self, _span: &tracing::span::Id) {}
+
+    fn exit(&self, _span: &tracing::span::Id) {}
+}

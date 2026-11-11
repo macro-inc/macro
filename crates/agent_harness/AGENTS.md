@@ -108,15 +108,19 @@ Each session's commands run one at a time on its command worker
 (`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
 worker tries to release its session (`service/idle.rs`) and exits only when
 nothing is left to free (`IdleRelease::holds_nothing`: released, or another
-runtime's session); a session still held keeps its worker, which tries again
-after twice, four times, then every sixteen times the timeout (`idle_wait`),
-because each try replays the whole log. A worker also exits with the session
-it deletes. Both remove its map entry through `retire_worker`; commands are
-sent under the same entry lock, so one racing the exit either keeps the worker
-or starts a new one. The release silently releases a quiet session (nothing admitted
-in `busy`, empty queue, no notification batch) whose runtime says the release
-is lossless (`ContainerManager::idle_release_is_lossless`: the in-process
-manager compares its live state with what the log rebuilds). An in-process
+runtime's session); a session still held keeps its worker, which tries again.
+A try that replayed the log and kept the session, or failed, pushes the next
+one out to twice, four times, then every sixteen times the timeout
+(`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
+whole log; a try that found work open (a running turn, a busy actor) does not,
+so the session is tried again at the plain timeout. A worker also exits with
+the session it deletes. Both remove its map entry through `retire_worker`;
+commands are sent under the same entry lock, so one racing the exit either
+keeps the worker or starts a new one. A try silently releases a quiet session
+(nothing admitted in `busy`, empty queue, no notification batch) whose runtime
+says the release is lossless (`ContainerManager::idle_release_is_lossless`:
+the in-process manager compares its live state with what the log rebuilds). A
+session whose row is gone has nothing left to keep and is released. An in-process
 session's actor attached here goes through
 `AgentSessionService::release_session`, never `close_session`: no
 `disconnected` frame, no `SessionStopped`, no lifecycle event or webhook, its
