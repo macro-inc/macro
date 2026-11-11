@@ -29,7 +29,6 @@ use uuid::Uuid;
 use crate::domain::ids::ComputerId;
 use crate::domain::models::{
     ComputerStatus, Purchase, PurchaseBilling, PurchaseKey, PurchaseRequest, Quote, SizeOffer,
-    SubscriptionItem,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
