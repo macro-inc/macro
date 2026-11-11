@@ -19,6 +19,9 @@ pub mod invitation_import;
 pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
+/// Optimistic message-label batches and provider-write compensation.
+#[cfg(feature = "ports")]
+pub mod message_labels;
 pub mod models;
 #[cfg(feature = "ports")]
 pub mod read_receipts;
