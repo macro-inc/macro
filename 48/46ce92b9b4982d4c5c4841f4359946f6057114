@@ -1,0 +1,19 @@
+apps/web/src/features/agents-view/browser-test/agent-mention.tsx
+  s_de4cf04c50e624::t_f0ab7293f372f4 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4846ce92b9b4982d4c5c4841f4359946f6057114",
+  "prompts": {},
+  "sessions": {
+    "s_de4cf04c50e624": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "62056402-579f-415d-b2c0-9ef4267ebf8c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
