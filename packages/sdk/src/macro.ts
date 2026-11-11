@@ -5,6 +5,7 @@ import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
 import { ApiKeyNamespace } from './entities/api-keys/namespace';
+import { ArtifactNamespace } from './entities/artifacts/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
@@ -161,6 +162,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
 
   readonly ai: AiNamespace;
 
+  /** Publish web pages as artifacts, version them and place them on canvases. */
+  readonly artifacts: ArtifactNamespace;
+
   readonly bots: BotsNamespace;
 
   readonly calendar: CalendarNamespace;
@@ -263,6 +267,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.entityMentions = new EntityMentionNamespace(client);
     this.agentSessions = new AgentSessionNamespace(client);
     this.ai = new AiNamespace(client);
+    this.artifacts = new ArtifactNamespace(client);
     this.bots = new BotsNamespace(client);
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
@@ -363,6 +368,21 @@ export {
 } from './entities/agents/agent';
 export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';
+export {
+  Artifact,
+  type ArtifactFile,
+  type ArtifactPlacement,
+  ArtifactScene,
+  ArtifactVersion,
+  type PlaceArtifactOptions,
+  type PublishArtifactOptions,
+} from './entities/artifacts/artifact';
+export type {
+  ArtifactFileSource,
+  ArtifactFiles,
+  ArtifactSceneInput,
+} from './entities/artifacts/bundle';
+export type { CreateArtifactOptions } from './entities/artifacts/namespace';
 export {
   Bot,
   type BotOwner,

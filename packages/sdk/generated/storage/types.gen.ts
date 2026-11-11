@@ -15921,6 +15921,52 @@ export type PipelineRecordType = 'company' | 'contact';
 export type PipelineSharing = 'private' | 'team';
 
 /**
+ * Place an artifact, or one of its scenes, on a canvas.
+ */
+export type PlaceArtifactRequest = {
+    /**
+     * The canvas document; needs edit access to it.
+     */
+    canvas_id: string;
+    /**
+     * Node height.
+     */
+    height: number;
+    /**
+     * The node's canvas item id. Retry a placement with the same id to get
+     * one node and one reference; a new id when omitted.
+     */
+    item_id?: string | null;
+    /**
+     * Scene to show instead of `index.html`; it must exist in the current
+     * version.
+     */
+    scene?: string | null;
+    /**
+     * Node width.
+     */
+    width: number;
+    /**
+     * World x of the node's top-left corner.
+     */
+    x: number;
+    /**
+     * World y of the node's top-left corner.
+     */
+    y: number;
+};
+
+/**
+ * The node an artifact was placed as.
+ */
+export type PlaceArtifactResponse = {
+    /**
+     * The canvas item id of the node.
+     */
+    item_id: string;
+};
+
+/**
  * What a placeholder inserted on a slide layout holds (PowerPoint's Slide
  * Master ▸ Insert Placeholder menu).
  */
@@ -23538,6 +23584,34 @@ export type GetArtifactResponses = {
 };
 
 export type GetArtifactResponse = GetArtifactResponses[keyof GetArtifactResponses];
+
+export type PlaceArtifactData = {
+    body: PlaceArtifactRequest;
+    path: {
+        /**
+         * Artifact document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/artifacts/{document_id}/place';
+};
+
+export type PlaceArtifactErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PlaceArtifactError = PlaceArtifactErrors[keyof PlaceArtifactErrors];
+
+export type PlaceArtifactResponses = {
+    201: PlaceArtifactResponse;
+};
+
+export type PlaceArtifactResponse2 = PlaceArtifactResponses[keyof PlaceArtifactResponses];
 
 export type CreateArtifactUploadsData = {
     body: ArtifactUploadsRequest;

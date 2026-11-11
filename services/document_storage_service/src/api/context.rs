@@ -485,6 +485,7 @@ pub(crate) type DssArtifactService = artifacts::wiring::ArtifactServiceFor<
     crate::outbound::artifacts::DocumentsForArtifacts,
     crate::outbound::artifacts::ArtifactContentViewTokens,
     crate::outbound::artifacts::ConnectionGatewayArtifactNotifier,
+    crate::outbound::artifacts::CanvasesForArtifacts,
 >;
 
 /// The artifacts API router state.

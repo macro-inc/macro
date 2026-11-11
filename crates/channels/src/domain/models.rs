@@ -1333,6 +1333,9 @@ pub struct EntityMention {
 /// Options for creating an entity mention.
 #[derive(Debug, Clone)]
 pub struct CreateEntityMentionOptions {
+    /// A caller-chosen id, so a retried write cannot record the mention
+    /// twice; a new v7 id when `None`.
+    pub id: Option<Uuid>,
     /// Type of the entity that owns the mention.
     pub source_entity_type: String,
     /// Id of the entity that owns the mention.

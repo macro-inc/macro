@@ -1078,6 +1078,96 @@
         }
       }
     },
+    "/artifacts/{document_id}/place": {
+      "post": {
+        "tags": ["artifacts"],
+        "summary": "Place the artifact, or one of its scenes, on a canvas as an embedded\ndocument node, recording the canvas's reference to it like the canvas UI\ndoes.",
+        "operationId": "place_artifact",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Artifact document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceArtifactRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceArtifactResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/artifacts/{document_id}/uploads": {
       "post": {
         "tags": ["artifacts"],
@@ -51303,6 +51393,58 @@
         "type": "string",
         "description": "Initial sharing, or the desired team grant. Individual ownership is preserved.",
         "enum": ["private", "team"]
+      },
+      "PlaceArtifactRequest": {
+        "type": "object",
+        "description": "Place an artifact, or one of its scenes, on a canvas.",
+        "required": ["canvas_id", "x", "y", "width", "height"],
+        "properties": {
+          "canvas_id": {
+            "type": "string",
+            "description": "The canvas document; needs edit access to it."
+          },
+          "height": {
+            "type": "number",
+            "format": "double",
+            "description": "Node height."
+          },
+          "item_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The node's canvas item id. Retry a placement with the same id to get\none node and one reference; a new id when omitted."
+          },
+          "scene": {
+            "type": ["string", "null"],
+            "description": "Scene to show instead of `index.html`; it must exist in the current\nversion."
+          },
+          "width": {
+            "type": "number",
+            "format": "double",
+            "description": "Node width."
+          },
+          "x": {
+            "type": "number",
+            "format": "double",
+            "description": "World x of the node's top-left corner."
+          },
+          "y": {
+            "type": "number",
+            "format": "double",
+            "description": "World y of the node's top-left corner."
+          }
+        }
+      },
+      "PlaceArtifactResponse": {
+        "type": "object",
+        "description": "The node an artifact was placed as.",
+        "required": ["item_id"],
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The canvas item id of the node."
+          }
+        }
       },
       "PlaceholderKind": {
         "type": "string",

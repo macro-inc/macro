@@ -78,6 +78,7 @@ Mounted at `/artifacts` on DSS (utoipa tag `artifacts`, snake_case JSON).
 | `GET /artifacts/{id}/versions/{number}` | view | One version. |
 | `POST /artifacts/{id}/versions/{number}/restore` | edit | Publish that manifest again. 201. |
 | `POST /artifacts/{id}/view_url` | view, anonymous via public link | A URL for an iframe, for a version and optionally a scene and theme. |
+| `POST /artifacts/{id}/place` | view on the artifact, edit on `canvas_id` | Place the artifact or one scene on a canvas. 201 `{item_id}`. |
 
 Create and publish bodies are limited to 32 MiB: inline content is for small
 pages and code mode, large files go through `/uploads` (the presigned `PUT`
@@ -148,6 +149,51 @@ The web app frames it as
 `<iframe sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer">`;
 `allow-same-origin` is safe because the origin is the artifact's own.
 
+## Placing on a canvas
+
+On a canvas an artifact is the canvas's ordinary `document` node with
+`fileType: 'artifact'`, `display: 'embed'`, the artifact's name, and the scene
+id as `subpath`; it follows the current version. People insert it from the
+canvas UI. Agents and the SDK (`artifact.placeOn(canvas, …)`) call
+`POST /artifacts/{id}/place {item_id?, canvas_id, scene?, x, y, width, height}`.
+The placement is idempotent on `item_id`, the new node's canvas id (DSS
+picks one when it is omitted; `placeOn` picks one per call and reuses it when
+it retries a lost response):
+
+1. The artifact document loads as for every route and `DocumentAccessExtractor`
+   checks view access to it; the body's canvas loads through
+   `ArtifactService::load_canvas` (400 unless its file type is `canvas`) and
+   the same extractor checks edit access to it.
+2. The service refuses an artifact with no published version, a scene the
+   current version lacks, and geometry outside the canvas editing bounds
+   (±1,000,000 world units, sizes up to 100,000), before touching anything.
+3. It records the canvas's reference to the artifact through the
+   `ArtifactCanvases` port, as a mention whose id is derived from the item id
+   (uuid v5). DSS implements it with the channel service's
+   `create_entity_mention`, the domain behind `POST /channels/mentions` that
+   the canvas UI calls when it inserts a document node, and keeps a mention
+   already recorded under that id.
+4. It commits the node through the documents domain's `CanvasEmbedder`,
+   which mints an edit permission token for the publisher (actor: their agent)
+   and calls the editing worker's internal `embed` request on `POST /canvas`
+   (see `services/ai-editing-worker/AI_EDITING.md`). The worker writes the node
+   and the mention id into the canvas's `canvasMentions` map in the same flush,
+   so the canvas UI's reference reconciliation sees it as already recorded.
+   A node already under the item id (same document) is left as it is, and a
+   mention already in the map is not written again.
+5. When the embed fails, the error is returned and the mention stays.
+   Retrying with the same `item_id` converges on one mention and one node,
+   whether or not the failed attempt committed.
+   A placement that fails and is never retried leaves its reference: the
+   canvas lists the artifact in its references without a node for it.
+
+The span is `canvas.embed_artifact` (document_id, canvas_id, version, scene,
+item_id); the worker's `canvas.ai.session` span (action `embed`) joins it.
+
+The embed request needs the worker's `INTERNAL_API_KEY` to equal DSS's; the
+local stack writes it into the worker's `.dev.vars`
+(`docker/ai-editing-worker.Dockerfile`).
+
 ## Infrastructure
 
 - `infra/stacks/preview-gateway`: the ACM certificate for `*.<content host>`
@@ -165,8 +211,3 @@ bytes_inline, bytes_reused), `artifact.uploads`, `artifact.restore`,
 (document_id, version, path, cache = `served` or `not_modified`). Tokens are
 never recorded: the content router's request span records `url.path` as
 `/t/<redacted>/v/<n>/<path>` (`MacroRequestIdAndTracingLayer::with_redacted_path`).
-
-## Not yet
-
-- Placing an artifact on a canvas (`POST /artifacts/{id}/place`) is a separate
-  layer.

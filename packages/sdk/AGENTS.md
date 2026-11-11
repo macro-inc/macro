@@ -112,6 +112,12 @@ enforced by the ordinary backend APIs.
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/artifacts/`: `macro.artifacts` publishes agent-written web
+  pages. `bundle.ts` hashes files with WebCrypto, sends digests the artifact
+  already stores without bytes, inlines new bytes up to the 32 MiB request
+  limit and presigns uploads above it; code mode reaches only Macro's API, so
+  there a version's new bytes must fit inline. `artifact.placeOn(canvas)` uses
+  `POST /artifacts/{id}/place`.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
   grants, webhook URLs, `BotToken`s) with user auth, and reads the
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
