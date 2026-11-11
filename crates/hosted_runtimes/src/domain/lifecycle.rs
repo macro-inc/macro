@@ -51,17 +51,17 @@ pub struct BillingPolicy {
 pub struct InvalidBillingPolicy(&'static str);
 
 impl BillingPolicy {
-    /// From whole days, as configured (`COMPUTERS_RETENTION_DAYS`,
-    /// `COMPUTERS_PAST_DUE_GRACE_DAYS`).
+    /// From whole days, as configured (`COMPUTER_RETENTION_DAYS`,
+    /// `COMPUTER_PAST_DUE_GRACE_DAYS`).
     pub fn from_days(
         retention_days: u32,
         past_due_grace_days: u32,
     ) -> Result<Self, InvalidBillingPolicy> {
         if retention_days == 0 {
-            return Err(InvalidBillingPolicy("COMPUTERS_RETENTION_DAYS"));
+            return Err(InvalidBillingPolicy("COMPUTER_RETENTION_DAYS"));
         }
         if past_due_grace_days == 0 {
-            return Err(InvalidBillingPolicy("COMPUTERS_PAST_DUE_GRACE_DAYS"));
+            return Err(InvalidBillingPolicy("COMPUTER_PAST_DUE_GRACE_DAYS"));
         }
         Ok(Self {
             retention: Duration::days(i64::from(retention_days)),

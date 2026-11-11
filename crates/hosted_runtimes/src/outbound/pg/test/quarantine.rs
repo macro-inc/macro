@@ -48,7 +48,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         .unwrap();
     assert!(matches!(
         healthy.healthy().unwrap().state.phase,
-        Phase::Running { .. }
+        Phase::Running
     ));
     let bad = records
         .iter()

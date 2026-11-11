@@ -8,9 +8,21 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 
 ## How it works
 
-- `domain::lifecycle::transition(state, event, context) -> (state, effects)` is
-  pure. `ComputerRepo::apply` locks the row (and host), runs it, and stores the
-  state, outbox effects and timers in one transaction.
+- `domain::lifecycle::transition(state, event, context) -> Result<(state, effects), Rejected>`
+  is pure. `ComputerRepo::apply` locks the row (and host), runs it, and stores
+  the state, outbox effects and timers in one transaction; a `Rejected`
+  request writes nothing and comes back as `Applied::Rejected`, which the
+  service maps to `ComputerError::Rejected` (409). The service never re-checks
+  phases; `lifecycle::undo_allowed`/`restore_allowed` are the rules it asks
+  before re-adding a billing item.
+- The state holds two machines side by side: `Phase` (the guest: Provisioning,
+  Booting, Running, Crashed{restarts, retry}, Stopping, Stopped, Destroying)
+  and `Billing` (Active{item}, PastDue{since, item}, EndsAt{at}, Comped{reason}),
+  both in `hosted_runtime.state` (`state.phase.phase`, `state.billing.billing`).
+  The host is a column and a `Computer` field, not part of the phase. Billing
+  events change only `Billing` and emit the machine effects billing calls for.
+  `Crashed` with no `retry` gave up (too many crashes, a failed effect, a lost
+  host): it paged, and `OperatorRetry` restarts it.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
@@ -53,8 +65,15 @@ Require image, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
 See [the required variable list](../../docs/development/running-locally.md#macro-computers).
-Keep lifecycle timings (`RETENTION`, `MACROD_GRACE`, backoffs,
-leases and polling intervals) as named policy constants, not config defaults.
+Retention (14 days) and past-due grace (7 days) are the typed
+`lifecycle::BillingPolicy`, from the mandatory `COMPUTER_RETENTION_DAYS` and
+`COMPUTER_PAST_DUE_GRACE_DAYS` in both services; `PgComputerRepo::new(pool,
+policy)` applies every transition with it (`ComputerRepo::policy`). Keep the
+other lifecycle timings (`MACROD_GRACE`, `RESERVATION_TTL`, leases, polling)
+as named policy constants. Every backoff goes through
+`lifecycle::backoff(Backoff, attempt)` on tokio-retry's `ExponentialBackoff`
+(`CAPACITY_BACKOFF`, `RESTART_BACKOFF`, `BILLING_BACKOFF`, the operator's
+fleet and registration backoffs); never hand-roll doubling.
 Reject invalid stored numeric capacity and retry counts rather than substituting values.
 
 ## Contracts
@@ -72,7 +91,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   notify_me before reads, billing or writes; preserve existing rollout denial
   first. Internal purchase/quote/status authenticate through `InternalOnly`
   before entering the same gate. Missing rows on a detached fleet return 503.
-  Do not gate catalog(), size_spec(), reconcile_billed_counts,
+  Do not gate catalog(), size_spec(), observe_subscription, confirm_reservations,
   run_billing_effects, operator methods or `list`: every team member's
   Settings and Billing list the team's computers, so a detached fleet still
   answers 200 with its rows (empty for a team without computers). PostgreSQL reports attached iff any
@@ -90,8 +109,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   requiring name confirmation. Maintenance does not bypass team ownership or
   quarantine validation.
 - **Sold resources**: Snapshot `ComputerResources { vcpus: Vcpus, memory_gib: MemoryGib, disk_gib: DiskGib }`,
-  `CatalogEntryId` and `price_id` once at purchase. Comped rows have NULL price IDs;
-  Stripe retries and removal use the saved price. Use the versioned catalog only
+  `CatalogEntryId` and the price (or comp reason) once at purchase. Comped rows
+  have NULL price IDs; restores copy the saved price. Use the versioned catalog only
   for new offers and purchases; never infer size from resources. Fleet CPU/RAM/root
   limits, capacity and reconcile drift checks read recorded resources.
   Drift logs an operator error without resizing.
@@ -99,13 +118,13 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   The disk quota splits into a fixed `image::ROOT_DISK_GIB` (32 GiB) root disk
   and a data disk of the rest (`image::data_disk_gib`; 68/168/368 GiB for the
   current sizes); drift checks compare the root disk only.
-  Subscription reconcile compares saved price ids, never current catalog prices.
+  Subscription reconcile matches computer ids, never prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   Read configured offers without billing through `ComputerService::catalog()`
-  and `size_spec(size)`; omitted sizes return `ComputerError::BadRequest`.
+  and `size_spec(size)`; omitted sizes return `ComputerError::SizeNotOffered`.
   The schema is one migration (`*_macro_computers.sql`, plus the concurrent
-  harness index); a Stripe computer always has a price and a comped one never
-  does (`hosted_runtime_price_provenance_check`).
+  harness index); a row with both or neither of a price and a comp reason is
+  quarantined.
   Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.
@@ -141,62 +160,76 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   checks ownership and deletes orphans only after ten minutes. Creation timestamps
   are stamped once as `user.macro.created_at` / `macro.created_at`; missing or
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
-- **Capacity**: Every purchase holds oversold units until payment refusal or
-  destruction, reserved under the host lock. `GET /team/computers/offers`
-  reports `soldOut` per size.
-- **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, extra_items, billing })`
-  → `computer_id`. A Stripe purchase adds the computer's item plus
-  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: stripe::PriceId, quantity }`, quantity
-  added to the item's current quantity), invoiced at once with proration. In-process
-  in authentication_service, and on the internal route `POST /internal/computers`.
-  For Stripe, persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect
-  together before billing. Apply `PaymentConfirmed` in the purchase request as
-  soon as Stripe succeeds, atomically clearing the recovery effect. Only unknown
-  outcomes (provider errors or lost writes) wait for delayed confirmation;
-  confirmed computers make recovery a no-op. Serialize payment resolution through
-  its lifecycle write with the per-computer payment guard. Both the normal path
-  and the two-minute safety net use
-  `computer-add:{computer_id}` and the same extra items. Unknown outcomes stay
-  pending and retry indefinitely with capped backoff; definite refusals become
-  `PaymentFailed`, visible without holding capacity and clearable by release.
-- **Payment provenance**: Persist `ComputerState.payment` as `pending` until
-  payment confirmation latches `paid`, a comp latches `comped`, or refusal records `unbilled`; preserve it
-  through release and expose it in every team/internal `ComputerStatus`.
-  Unbilled computers never remove a billing item. Migrate legacy state before
-  running code that requires this field; do not add serde defaults.
+- **Capacity**: free sold units are sold capacity minus the units of live
+  computers (phase not `destroying`) and unexpired reservations, reserved under
+  the host lock. `GET /team/computers/offers` reports `soldOut` per size.
+- **Purchase**: `ComputerService::purchase(PurchaseRequest { billing, purchase_key, team_id, created_by, size, name, extra_items })`
+  → `Purchase::{Ready(id), Confirming(id)}`. The client's `purchase_key` (one
+  per Buy dialog, reused on retry) makes `ComputerRepo::reserve` return what
+  the key already led to (`Reserved::{New, Pending, Purchased}`), so a retry
+  never charges twice or buys a second computer; a key used by another team
+  or size is `PurchaseKeyConflict`. A `computer_reservation` row (id = the
+  future computer id) holds the units until `expires_at` (`RESERVATION_TTL`,
+  15 minutes). The charge is ONE subscription update adding the computer's
+  own item (`computer_id` metadata, a price of its own) plus `extra_items`,
+  `always_invoice` + `error_if_incomplete`, Stripe idempotency key
+  `computer-add:{reservation id}`. Definite success converts the reservation
+  (`convert_reservation`: delete it, insert the computer in Provisioning with
+  `Billing::Active{item}`, enqueue Create, in one transaction); a definite
+  refusal deletes it and returns the typed error; an unknown outcome answers
+  `Confirming` (HTTP 202). `confirm_reservations` (run by the billing worker)
+  replays the same idempotent update for reservations older than
+  `CONFIRM_DELAY` until expiry, then `settle_computer_add` abandons the change
+  for good and converts only if the subscription carries an item with the
+  computer's id; otherwise the reservation is deleted. An error shown to the
+  buyer therefore always means nothing was charged. Status/list show a
+  reservation as status `purchasing` (setup step Creating); every request on
+  it is `ComputerError::NotPurchased` (409).
+- **Billing**: cancel removes the item at once without proration (the period
+  is paid) → `EndsAt{at = period end}` and a `BillingEnds` timer at `at` that
+  stops the computer and starts retention (`RetentionExpired` at `at +
+  retention` destroys it). Undo before `at` re-adds an item without proration;
+  after `at` it is `Rejected::BillingEnded` and restore
+  (`POST /team/computers/{id}/restore`) re-adds it prorated, keeping the
+  stopped guest. A re-add first reuses an item already carrying the computer
+  id (an earlier unknown outcome). Release now removes the item and destroys.
+  `RemoveBillingItem{item}` treats an item or subscription already gone as
+  removed and, after `MAX_BILLING_ATTEMPTS`, logs `computer billing item
+  removal abandoned` (a Datadog monitor in `infra/stacks/monitoring`) and
+  stops. `observe_subscription(team, SubscriptionObserved)` is the one billing
+  owner for webhooks: items are matched by `computer_id`, never by price or
+  count; a billed computer whose item is missing (or whose subscription
+  ended) gets `BillingItemMissing` (ends billing now, retention); past
+  due/unpaid/paused → `PaymentLapsed` (`PastDue`, the computer is turned off
+  after the grace, never destroyed); paid again → `PaymentRecovered`. A
+  snapshot read before a computer's `billing_changed_at` cannot change it.
+  Items naming no known computer are logged, never mapped.
+- **Team deletion**: `TeamComputerRelease::release_team` releases every live
+  computer through the normal effects and deletes the team's reservations;
+  teams calls it before cancelling the subscription. `hosted_runtime.team_id`
+  has no foreign key, so rows outlive the team until their effects ran.
 - **Quote**: `ComputerService::quote(team_id, size, &PurchaseBilling)` → `Quote { price_id, amount, currency, interval }`
   at the team subscription's interval.
 - **Comped computers**: `PurchaseBilling::{Stripe, Comped { reason: String }}`
-  selects funding on `PurchaseRequest` and `NewComputer`. `CompPolicy::comp_reason(team_id)`
+  selects funding on `PurchaseRequest`; it is saved as `Funding` (price id or
+  comp reason; `price_id`/`comp_reason` columns). `CompPolicy::comp_reason(team_id)`
   returns `Result<Option<String>, Self::Err>`; inject it with `with_comp_policy`.
-  authentication_service wires `MacroStaffCompPolicy`: a verified owner/admin
-  email at its explicitly configured domain qualifies the team. Team purchase calls
+  authentication_service wires `MacroStaffCompPolicy`. Team purchase calls
   `purchase_for_team(PurchaseRequest)` and overwrites billing from policy; its
-  JSON body only accepts `size` and `name` (no client billing flag). Team quotes
-  and offers also use policy (`quote_for_team`). Internal-key-only
+  JSON body only accepts `purchaseKey`, `size` and `name`. Team quotes and
+  offers also use policy (`quote_for_team`). Internal-key-only
   `POST /internal/computers` requires explicit `billing: { "kind": "stripe" }`
-  or `{ "kind": "comped", "reason": "..." }`; its quote route remains Stripe.
-  Comped purchases reject nonempty `extraItems` and never call the Billing port.
-  Reservation applies `Event::Comped { reason }` in the reservation transaction
-  to begin provisioning before commit; `PendingPayment` is never observable and
-  no `ConfirmPayment` effect is emitted. Legacy pending comps can still recover
-  through the billing worker. `PaymentOutcome::Comped` serializes as `"comped"`,
-  with the reason exposed separately as `ComputerStatus.compReason: string | null`.
-  Payment and reason remain latched through release. The optional persisted reason
-  is absent on legacy Stripe rows; no migration is required.
-  Comped computers never carry a charged subscription item, emit
-  `RemoveBillingItem`, or count in `reconcile_billed_counts`; subscription webhooks
-  cannot cancel them. Cancel-at-period-end stops them immediately (`at = now`)
-  and retains the disk for the usual 14 days; undo is unavailable afterward.
-  Cancel, release, retention expiry and delayed payment recovery make no Billing
-  calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
-  price id, currency and interval. Without a subscription the quote returns
-  `NoSubscription`; billing errors propagate.
+  or `{ "kind": "comped", "reason": "..." }` and a `purchaseKey`. Comped
+  purchases reject nonempty `extraItems` (`CompedExtraItems`), never call the
+  Billing port, and convert at once with `Billing::Comped{reason}`. A comped
+  cancel stops at once and starts retention; restore comps it again. A comped
+  quote reads the Stripe quote and sets amount to zero.
 - **Waiting for capacity**: Preserve stopped fleet state and project
   `power_on_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
   (also provisioning with `start: false`). Suppress setup progress while waiting.
-  Persist `CapacityWait` on the first blocked start: check room after 20, 40,
-  80, 160, 320, then 600 seconds, capped thereafter. A repeated power-on or a
+  Persist the wait as `capacity_wait: Retry { attempt, next_at }` on the
+  first blocked start: check room after `CAPACITY_BACKOFF` (20, 40, 80, 160,
+  320, then 600 seconds, capped). A repeated power-on or a
   stale timer does not bypass the deadline. Log each new deadline once.
   When a computer leaves awake, enqueue immediate `CapacityChanged` timers for
   waiters on its host in the same transaction. Lock the host before computer
@@ -226,19 +259,23 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   team owner, the server rule behind the web's `canManageClaude`; others get 403.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
-  Connecting → Ready, positions 1–4) until macrod first connects. Pending payment
-  reports Creating (1 of 4); setup never exposes a payment phase. Payment outcomes
-  remain in the billing fields `payment` and `compReason`. Readable by any team member.
+  Connecting → Ready, positions 1–4) until macrod first connects. A purchase
+  being confirmed reports status `purchasing`, step Creating (1 of 4).
+  Billing is `billing` (`purchasing`, `active`, `past_due`, `ending`,
+  `ended`, `comped`) with `cancelsAt`, `canUndoCancel`, `retainedUntil`,
+  `canRestore`, `pastDueSince` and `compReason`. Readable by any team member.
 - **Retry/reprovision**: `ComputerService::retry(team_id, computer_id)` → `ComputerStatus`,
   exposed to team admins at `POST /team/computers/{computer_id}/retry`. Only
-  `Failed` computers can be retried; other phases return `NotFailed` (409).
+  computers that gave up (`Crashed` with no retry) can be retried; the
+  lifecycle rejects others with `Rejected::NotFailed` (409).
   Applies `OperatorRetry` and never touches billing or purchases. A typed missing
   fleet instance completes its effect and applies `InstanceLost`: recreate on the
   same host, computer row and harness id, starting only with power On and room.
-  Reconcile also detects missing Failed/Stopped guests; awake guests
-  first follow crash/restart. Re-enrollment re-keys the harness. A canceled
-  computer with no guest becomes Destroyed and revokes its harness without
-  removing billing again. Missing stop/destroy are idempotent successes.
+  Reconcile also detects missing gave-up/Stopped guests; awake guests
+  first follow crash/restart. Re-enrollment re-keys the harness. A lost guest
+  whose billing ended becomes Destroying with a Destroy effect (so the fleet
+  still deletes its data volume) and revokes its harness, without removing
+  billing again. Missing stop/destroy are idempotent successes.
 - **Reprovision**: `InstanceLost` recreates the guest from the fleet's
   configured image with a fresh pairing for the same harness, on the data
   disk the lost guest left (homes, Claude login and Docker data survive).
@@ -343,7 +380,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (MagicDNS); serial console is break-glass. See `nix/hosts/README.md` for the
   last-IAP switch, root-only auth-key file transfer, and tailnet rebuild commands.
 
-- Lifecycle state stores the phase tag at `state.phase.phase`; SQL selectors must read that nested tag.
+- Lifecycle state stores the phase tag at `state.phase.phase` and the billing
+  tag at `state.billing.billing`; SQL selectors must read those nested tags.
+  Size, effect worker, timer kind, notice stage and provider are Postgres
+  enums mapped with `sqlx::Type` (`ComputerSize`, the adapter's
+  `OutboxWorker`, `TimerKind`, `ClaudeSignInStage`, `AgentProvider`).
 - V1 runs one fleet (one host) per control plane; an effect for another host fails.
 - Shared hosts require distinct `COMPUTERS_CONTROL_PLANE_ID` per control plane;
   only owned instances are reconciled. Local stacks use `local-<instance>`.
@@ -355,7 +396,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   only a computer's oldest effect per worker).
 - Timers are never cancelled: `transition` ignores events that no longer apply,
   so a new state must guard every timer event it can receive.
-- Unresolved payment retries log `computer payment unresolved` at error level.
+- A purchase whose charge cannot be settled at expiry logs `computer payment
+  unresolved` at error level and keeps its reservation for the next pass.
 
 ## Related
 
@@ -375,7 +417,7 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   never grow the setup trace. Already-entered callbacks use `resume` (link).
 - `apply_locked` advances the timeline after each transition and exports the
   waits that ended, with their recorded start and end, through the global
-  tracer: `computer.setup.payment` (reservation → paid/comped),
+  tracer: `computer.setup.payment` (reservation → conversion),
   `computer.setup.create` (→ guest booting, including outbox and capacity
   waits), `computer.setup.boot` (→ first macrod connection) and the total
   `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,
