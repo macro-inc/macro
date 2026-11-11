@@ -39,9 +39,11 @@ const dashboard = new datadog.Dashboard('queue-alerts', {
         warning: '1800',
       }),
       thresholdGraph({
-        title: 'Email backfill backlog growing abnormally',
+        // The lowest age over 30 minutes, as the monitor evaluates it.
+        title: 'Email backfill queue not draining',
         query:
-          "anomalies(max:aws.sqs.approximate_number_of_messages_visible{queuename:email-service-backfill-queue-prod}, 'agile', 3)",
+          "moving_rollup(max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-backfill-queue-prod}, 1800, 'min')",
+        critical: '900',
       }),
     ]),
   ],
@@ -87,21 +89,26 @@ prodMonitor('sqs-work-queue-age', {
   runbook: 'docs/runbooks/queues.md#backlog',
 });
 
-// Datadog only: Grafana alerting has no anomaly detection.
+// The early warning before `sqs-email-backfill-age`. Datadog only: it never
+// paged, and Grafana's copy of that age rule covers the queue.
+//
+// The visible count is not a backlog signal on this queue: bursts of 8k-18k
+// visible messages drain as fast as they fill, with the oldest message under
+// 2 minutes old. The lowest age over 30 minutes stays above 900s only while
+// messages wait: over the 45 days to 2026-11-11 it crossed 900s only during
+// the 2026-10-28 to 10-30 backlogs (peak 8.5 hours). The visible-count
+// anomaly this replaced fired 119 times in those days, 112 of them on bursts
+// that drained on their own. Recovery at 300s means the oldest message is
+// fresh again.
 prodMonitor('sqs-email-backfill-backlog-anomaly', {
-  title: 'Email backfill backlog growing abnormally',
+  title: 'Email backfill queue not draining',
   service: 'email-service',
   query:
-    "avg(last_4h):anomalies(max:aws.sqs.approximate_number_of_messages_visible{queuename:email-service-backfill-queue-prod}, 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
-  // An anomaly monitor recovers once no point in its window is outside the band.
-  monitorThresholds: { critical: '1', criticalRecovery: '0' },
-  monitorThresholdWindows: {
-    triggerWindow: 'last_30m',
-    recoveryWindow: 'last_15m',
-  },
+    'min(last_30m):max:aws.sqs.approximate_age_of_oldest_message{queuename:email-service-backfill-queue-prod} > 900',
+  monitorThresholds: { critical: '900', criticalRecovery: '300' },
   pages: false,
   description:
-    'Visible messages in email-service-backfill-queue-prod are above their usual band. A jump in enqueues loads macrodb through the backfill workers.',
+    'The oldest message in email-service-backfill-queue-prod has been at least {{value}} seconds old for 30 minutes, so the backfill workers are not keeping up. A burst of visible messages that drains within minutes does not trip this.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/queues.md#backlog',
 });
