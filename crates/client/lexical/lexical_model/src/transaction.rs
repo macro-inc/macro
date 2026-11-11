@@ -663,8 +663,14 @@ impl<'editor> Transaction<'editor> {
             self.writable(copy)?.data = data;
         }
         let mut state = original.state;
-        if !skip_reset && let Some(state) = &mut state {
-            Arc::make_mut(state).reset_copy();
+        if let Some(state) = &mut state
+            && (!skip_reset || state.has_storage_only())
+        {
+            let state = Arc::make_mut(state);
+            state.discard_storage_only();
+            if !skip_reset {
+                state.reset_copy();
+            }
         }
         self.writable(copy)?.state = state;
         if !skip_reset {
@@ -797,6 +803,12 @@ impl<'editor> Transaction<'editor> {
             raw,
             retain_ordinary,
         );
+        let state = match import.state {
+            StateImportFilter::All => state,
+            StateImportFilter::Only(_) | StateImportFilter::None => {
+                NodeState::with_stored_import_source(state, json, &layout)
+            }
+        };
         self.writable(key)?.state = state.map(Arc::new);
         if import.base_fields {
             let number = |name: &str| {

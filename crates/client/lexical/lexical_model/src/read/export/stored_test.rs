@@ -328,3 +328,131 @@ fn retained_root_can_be_absent_live_and_present_in_storage_until_cold_import()
     );
     Ok(())
 }
+
+#[test]
+fn filtered_slots_survive_same_node_cow_but_not_authored_copies()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Eager>()
+        .build()?;
+    let (key, _) = editor.update(|tx| {
+        let node = tx.create(Eager {})?.key();
+        tx.append(NodeKey::ROOT, &[node])?;
+        tx.update_from_json_with(
+            node,
+            json!({"$":{"other":true,"dropped":"raw"},
+            "stored-value":{"n":7}})
+            .as_object()
+            .expect("literal"),
+            JsonImport {
+                state: StateImportFilter::Only(&["other"]),
+                base_fields: false,
+                own_fields: false,
+            },
+        )?;
+        Ok(node)
+    })?;
+    let before = editor.state().clone();
+    assert_eq!(before.view().get_state(key, &VALUE)?, 0);
+    assert_eq!(
+        before.view().export_json(key)?.get("$"),
+        Some(&json!({"other":true}))
+    );
+    assert_eq!(
+        before.view().export_stored_json(key)?["stored-value"],
+        json!({"n":7})
+    );
+    for skip_reset in [false, true] {
+        let (copy, _) = editor.update(|tx| {
+            let copy = tx.copy_node(key, skip_reset)?;
+            tx.append(NodeKey::ROOT, &[copy])?;
+            Ok(copy)
+        })?;
+        let copied = editor.state().view().export_stored_json(copy)?;
+        assert!(!copied.contains_key("stored-value"));
+        assert_eq!(copied.get("$"), Some(&json!({"other":true})));
+    }
+    editor.update(|tx| tx.set_state(key, &OTHER, false))?;
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["stored-value"],
+        json!({"n":7})
+    );
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["dropped"],
+        "raw"
+    );
+    editor.update(|tx| tx.set_state(key, &VALUE, 0))?;
+    assert!(
+        !editor
+            .state()
+            .view()
+            .export_stored_json(key)?
+            .contains_key("stored-value")
+    );
+    assert_eq!(
+        before.view().export_stored_json(key)?["stored-value"],
+        json!({"n":7})
+    );
+    Ok(())
+}
+
+#[test]
+fn filtered_only_nested_slots_allocate_no_ordinary_state() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut editor = Editor::builder(EditorMode::Headless).build()?;
+    let (key, _) = editor.update(|tx| {
+        let node = tx.create(crate::Paragraph::default())?.key();
+        tx.append(NodeKey::ROOT, &[node])?;
+        tx.update_from_json_with(
+            node,
+            json!({"$":{"stored-value":{"n":9}}})
+                .as_object()
+                .expect("literal"),
+            JsonImport {
+                state: StateImportFilter::None,
+                base_fields: false,
+                own_fields: false,
+            },
+        )?;
+        Ok(node)
+    })?;
+    assert!(!editor.state().view().export_json(key)?.contains_key("$"));
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"],
+        json!({"stored-value":{"n":9}})
+    );
+    assert_eq!(editor.state().view().get_state(key, &VALUE)?, 0);
+    assert!(!editor.state().view().export_json(key)?.contains_key("$"));
+    editor.update(|tx| tx.set_state(key, &VALUE, 3))?;
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["stored-value"],
+        3
+    );
+    Ok(())
+}
+
+#[test]
+fn ordinary_skip_reset_copy_keeps_shared_state_and_read_memo()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut editor = Editor::builder(EditorMode::Headless).build()?;
+    editor.update(|tx| {
+        let node = tx.import_node(
+            json!({"type":"paragraph","children":[],
+            "$":{"stored-value":{"n":4}}})
+            .as_object()
+            .expect("literal"),
+        )?;
+        tx.append(NodeKey::ROOT, &[node])?;
+        assert_eq!(tx.get_state(node, &VALUE)?, 4);
+        let copy = tx.copy_node(node, true)?;
+        tx.append(NodeKey::ROOT, &[copy])?;
+        assert!(std::ptr::eq(
+            tx.node(node).and_then(NodeRef::node_state).expect("state"),
+            tx.node(copy)
+                .and_then(NodeRef::node_state)
+                .expect("copied state")
+        ));
+        Ok(())
+    })?;
+    Ok(())
+}

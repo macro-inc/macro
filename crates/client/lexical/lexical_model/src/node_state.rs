@@ -9,6 +9,8 @@ use std::{
 };
 
 mod read_memo;
+#[cfg(test)]
+mod stored_import_test;
 
 use read_memo::ReadMemo;
 
@@ -303,6 +305,8 @@ pub struct NodeState {
     pub(crate) unknown: Option<IndexMap<String, Arc<Value>>>,
     // Imported storage survives read-only parsing and COW; explicit writes supersede a key.
     imported_raw: Option<ImportedSlots>,
+    // Slots excluded from ordinary import belong only to this storage node.
+    storage_only: Vec<String>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign: crate::foreign::state::ForeignBindings,
 }
@@ -313,6 +317,7 @@ impl Clone for NodeState {
             read_memo: self.read_memo.clone_configs(),
             unknown: self.unknown.clone(),
             imported_raw: self.imported_raw.clone(),
+            storage_only: self.storage_only.clone(),
             #[cfg(feature = "foreign-nodes")]
             foreign: self.foreign.clone(),
         }
@@ -475,9 +480,53 @@ impl NodeState {
         Ok(())
     }
     pub(crate) fn forget_stored_value(&mut self, name: &str) {
+        self.storage_only.retain(|stored| stored != name);
         if let Some(values) = &mut self.imported_raw {
             values.shift_remove(name);
         }
+    }
+    pub(crate) fn has_storage_only(&self) -> bool {
+        !self.storage_only.is_empty()
+    }
+    pub(crate) fn discard_storage_only(&mut self) {
+        if let Some(raw) = &mut self.imported_raw {
+            for name in self.storage_only.drain(..) {
+                raw.shift_remove(&name);
+            }
+        }
+    }
+    /// Restore filtered storage slots without importing ordinary state or invoking codecs.
+    pub(crate) fn with_stored_import_source(
+        state: Option<Self>,
+        json: &crate::SerializedNode,
+        layout: &StateLayout,
+    ) -> Option<Self> {
+        let mut original: IndexMap<String, Arc<Value>> = json
+            .get("$")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .map(|(name, value)| (name.clone(), Arc::new(value.clone())))
+            .collect();
+        for entry in &layout.entries {
+            if entry.flat
+                && let Some(value) = json.get(entry.key.name())
+            {
+                original.insert(entry.key.name().to_owned(), Arc::new(value.clone()));
+            }
+        }
+        if original.is_empty() {
+            return state;
+        }
+        let mut state = state.unwrap_or_default();
+        let raw = state.imported_raw.get_or_insert_with(IndexMap::default);
+        for (name, value) in original {
+            if !raw.contains_key(&name) {
+                state.storage_only.push(name.clone());
+                raw.insert(name, Some(value));
+            }
+        }
+        Some(state)
     }
     pub(crate) fn reset_copy(&mut self) {
         self.fold_read_memo();
@@ -609,6 +658,7 @@ impl NodeState {
             read_memo: ReadMemo::default(),
             unknown: Some(unknown),
             imported_raw: (!imported_raw.is_empty()).then_some(imported_raw),
+            storage_only: Vec::new(),
             #[cfg(feature = "foreign-nodes")]
             foreign: previous
                 .map(|state| state.foreign.clone())

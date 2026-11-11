@@ -958,3 +958,6 @@ mod namespace_test;
 
 #[cfg(test)]
 mod clipboard_id_test;
+
+#[cfg(all(test, feature = "application"))]
+mod import_storage_test;

@@ -563,3 +563,67 @@ fn empty_foreign_state_metadata_borrows_layout_and_builtin_text_still_uses_js_st
     assert_eq!(previous.view().export_json(key)?["counter"], 1);
     Ok(())
 }
+
+#[test]
+fn real_foreign_write_supersedes_filtered_raw_only_slot() -> Result<(), Box<dyn std::error::Error>>
+{
+    struct Codec;
+    impl ForeignStateCodec for Codec {
+        fn is_equal(&self, a: &Value, b: &Value) -> bool {
+            a == b
+        }
+        fn is_default(&self, value: &Value) -> bool {
+            value == 0
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_state(ForeignStateConfig {
+            key: "counter".into(),
+            flat: false,
+            codec: Arc::new(Codec),
+        })
+        .build()?;
+    let (key, _) = editor.update(|tx| {
+        let node = tx.create(crate::Paragraph::default())?.key();
+        tx.append(NodeKey::ROOT, &[node])?;
+        tx.update_from_json_with(
+            node,
+            serde_json::json!({"$":{"counter":9}})
+                .as_object()
+                .expect("literal"),
+            crate::JsonImport {
+                state: crate::StateImportFilter::None,
+                base_fields: false,
+                own_fields: false,
+            },
+        )?;
+        Ok(node)
+    })?;
+    assert!(!editor.state().view().export_json(key)?.contains_key("$"));
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["counter"],
+        9
+    );
+    let (_, unchanged) = editor.update(|tx| tx.set_foreign_state(key, "counter", 0.into()))?;
+    assert!(unchanged.is_noop());
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["counter"],
+        9
+    );
+    editor.update(|tx| tx.set_foreign_state(key, "counter", 2.into()))?;
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["counter"],
+        2
+    );
+    editor.update(|tx| tx.set_foreign_state(key, "counter", 0.into()))?;
+    assert!(
+        editor
+            .state()
+            .view()
+            .export_stored_json(key)?
+            .get("$")
+            .and_then(|state| state.get("counter"))
+            .is_none()
+    );
+    Ok(())
+}
