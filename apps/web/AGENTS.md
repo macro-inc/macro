@@ -156,6 +156,8 @@ commits without hover, including after a sibling component is disposed.
 
 Keep document-reference Source UI behind the actual narrow mention/card hosts; preserve published selection, Normal Enter timing, preview owner/cache and Source transaction tags when binding native views.
 
+Booking decorators preserve their Source fallback through a narrow host; use published selection, real Normal Enter and generation-bound queued label updates, and qualify Source bytes in `decorator-host/booking-browser-test` before native activation.
+
 Contact decorators use a narrow published-selection/Normal-Enter host; preserve synchronous null-command dispatch, pending-versus-published timing and disposal, and keep raw metadata failures separate from explicit Source-export reimport cohorts in `decorator-host/contact-browser-test`.
 Preserve Snapshot’s captured Source editor, Normal Enter cleanup and Snapshot-only removal predicate through its narrow host; compare literal before/after captures with `decorator-host/interactive-browser-test/playwright.config.ts` before native binding.
 Route PR query enrichment through its narrow host with the Source history, DOM-selection and scroll tags; preserve the public node payload and query/preview UI. Verify PR and Snapshot raw pairs in `decorator-host/reference-browser-test`.
