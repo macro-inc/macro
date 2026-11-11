@@ -20,6 +20,7 @@ import {
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -97,6 +98,7 @@ export type TaskListProps = {
 
 export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
+  const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
   const {
     state,
@@ -365,23 +367,24 @@ export function TaskList(props: TaskListProps) {
     },
   });
 
-  let restoredScroll = false;
   function registerVirtualizer(handle?: VirtualizerHandle) {
     setVirtualizer(handle);
-    if (!handle || restoredScroll) return;
-
-    handle.scrollTo(scrollOffset);
-    restoredScroll = true;
+    // Loading a different tab can replace the virtualizer after its position
+    // was restored. Apply the retained offset to each newly mounted handle.
+    handle?.scrollTo(scrollOffset);
   }
 
   createEffect(
     on(
-      listTab,
-      (tab) => {
+      () => [listTab(), userId()] as const,
+      ([tab, viewer], previous) => {
+        const accountChanged = previous?.[1] !== viewer;
+        if (accountChanged) listStorage.clearTabs();
+        scrollAnchor = undefined;
         listInteractions.selection.clear();
         list.focus.clear({ reason: 'programmatic' });
         const restored =
-          tab === undefined
+          tab === undefined || accountChanged
             ? undefined
             : listStorage.restoreTab(readListState(), tab);
         setPersistedListState(restored ?? DEFAULT_TASKS_LIST_STATE);
@@ -412,6 +415,7 @@ export function TaskList(props: TaskListProps) {
   let scrollAnchor: { id: string; offset: number } | undefined;
   function recordScrollAnchor() {
     const handle = virtualizer();
+    if (handle) scrollOffset = handle.scrollOffset;
     if (!handle || handle.scrollOffset <= 0) {
       scrollAnchor = undefined;
       return;
