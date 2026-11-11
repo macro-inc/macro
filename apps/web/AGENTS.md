@@ -122,6 +122,7 @@ Keep the floating link controller and markup on `LinkMenuHost`; its Source
 adapter retains PluginManager ownership and HIGH Escape/CRITICAL Enter order.
 Keep the table size picker on `TablePickerHost`; its Source adapter retains
 PluginManager ownership, string dimensions and no-header insertion.
+Open task/document composers through the actual split manager and typed creation callbacks; retain the Source editor, synchronous start/failure dispatch, mention-tracking order and lazy replacement construction. Verify completed raw editor stages in `decorator-host/creation-browser-test`; an open request is not native insertion evidence.
 Keep the GIF Source commit synchronous; await only native commit promises, check the originating upload request before closing a menu, and mark uploaded-file ownership from actual main commit evidence before consume can throw.
 Keep GIF upload state in the shared `GifMenuHost` controller and preserve its
 Source capture, dirty cancellation, root identity and synchronous commit result.

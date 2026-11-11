@@ -364,6 +364,8 @@ Choose **Create Document** or press Cmd/Ctrl+Enter. The composer closes and the
 source editor shows a creation placeholder at the insertion point, then replaces
 it with the new document mention. If creation fails, the placeholder is removed
 and the composer reopens with the title, body, and tags for retry.
+Deleting a pending placeholder directly prevents its successful completion
+from inserting a mention elsewhere in the editor.
 **Continue editing in split** creates the document with the current draft and
 tags, opens it in an adjacent split, and inserts its mention in the source editor.
 An empty title uses **New Note** when expanding.
