@@ -14,18 +14,23 @@ options in `voices.ts`.
 
 ## What a call needs
 
-| Credential         | For                                                                        |
-| ------------------ | -------------------------------------------------------------------------- |
-| `MACRO_API_KEY`    | Everything: the calls list, the seat, the room, chat, `ai.decide`.         |
-| `DEEPGRAM_API_KEY` | Hearing (Nova-3) and the default voice (Aura-2). Calls are off without it. |
-| `INWORLD_API_KEY`  | Only if `voiceSpec` in `voices.ts` names an Inworld voice.                 |
+Only the agent's `MACRO_API_KEY`, and a call's process never holds it: it is
+started with the relay's environment (`base.relayed()`), and everything,
+speech included, goes through the agent's relay, which adds the key.
 
-Without `DEEPGRAM_API_KEY` the watcher reads nothing and joins nothing: it
-logs `calls: off` once to the `calls` log and looks for the key again every
-minute, so `setCredential` turns calls on without a restart. `placeCall`,
-`askOntoCall` and `joinCall` throw one sentence naming the key. The join
-judgment and the switch judgment run `claude -p`, which the agent has
-anyway; screen sharing needs the screen area's browser to be up.
+- **Speech is LiveKit Inference through Macro** (`context/speech.ts`):
+  Deepgram Nova-3 to hear, Aura-2 to speak, over
+  `agent-harness /brain/inference/{stt,tts}`, which holds the project's keys
+  and bills the team's credits. The relay carries exactly those two sockets.
+  LiveKit's inference classes are used as they are, with only `connectWs`
+  replaced, so the socket opens on the relay.
+- **The voice** is `config/voice.json` in the agent's repository,
+  `{ "model": "aura-2-<voice>-<language>" }`, which Macro's agent settings
+  commit; Thalia until one is chosen (`parseVoice` in `voices.ts`). A file
+  that names no Aura-2 voice fails the join.
+
+The join judgment and the switch judgment run `claude -p`, which the agent
+has anyway; screen sharing needs the screen area's browser to be up.
 
 ## Shape
 
@@ -56,7 +61,7 @@ is built, `capabilities/<name>.ts` holds the capabilities, and
 | `report.ts`, `replay.ts`      | A call's timeline from its event log; a recording through the real session with a stub brain.                                                                         |
 | `share.ts`, `share-policy.ts` | Showing a browser in a call (below). The browser itself is the screen area's.                                                                                         |
 | `context.ts`, `index.ts`      | The area's context, built once (`callsContext`), and its capabilities.                                                                                                |
-| `context/`                    | The real ports: `voice.ts` and `voiceLive.ts` (LiveKit, loaded only when a call needs it), `disk.ts` and `disk-worker.ts`, `ledgers.ts`, `processes.ts`, `share*.ts`. |
+| `context/`                    | The real ports: `voice.ts`, `voiceLive.ts` and `speech.ts` (LiveKit, loaded only when a call needs it), `disk.ts` and `disk-worker.ts`, `ledgers.ts`, `processes.ts`, `share*.ts`. |
 
 **Capabilities.** Each is `bin/agent <name> '<json>'` from a shell, and an
 imported function in a script; `bin/agent describe <name>` has its docs.

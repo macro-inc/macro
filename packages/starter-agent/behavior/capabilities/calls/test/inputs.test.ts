@@ -1,7 +1,5 @@
 import { expect, test } from 'bun:test';
 import { invoke } from '../../../../test/invoke.ts';
-import { memoryCredentials } from '../../../context/credentials.ts';
-import { noVoice } from '../config.ts';
 import { callsModule } from '../index.ts';
 
 /**
@@ -93,21 +91,4 @@ test('alwaysJoinCalls refuses an empty channelId', async () => {
     { channelId: '' },
     'channelId must not be empty'
   );
-});
-
-test('placeCall and askOntoCall refuse, naming the key, while calls have no speech key', async () => {
-  const context = { credentials: memoryCredentials(), ledgers: {} };
-  await refuses(
-    'placeCall',
-    context,
-    { who: 'macro|ada@example.com', why: 'a reason' },
-    noVoice
-  );
-  await refuses(
-    'askOntoCall',
-    context,
-    { message: { channelId: 'c1', id: 'm1' } },
-    noVoice
-  );
-  expect(noVoice).toContain('DEEPGRAM_API_KEY');
 });

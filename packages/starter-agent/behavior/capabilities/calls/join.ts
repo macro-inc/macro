@@ -8,9 +8,11 @@
  * This is the orchestration, over ports: `context/voice.ts` builds the real
  * ones, and the tests run it against fakes.
  */
+
 import type { Room } from '@livekit/rtc-node';
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import { z } from 'zod';
+import type { Trace } from '../../agent/claude.ts';
 import type { Disk } from '../../context/disk.ts';
 import { ringMs } from './arbiter.ts';
 import { type Brain, type BrainNeeds, uninvitedNote } from './brain.ts';
@@ -176,6 +178,8 @@ export type Proc = {
 };
 
 export type JoinPorts = {
+  /** Spans: leaving is one, with why. */
+  readonly trace: Trace;
   /** The agent's name: how it greets, and what it answers to. */
   readonly name: string;
   readonly api: Pick<CallApi, 'join' | 'publishScreen'>;
@@ -410,6 +414,15 @@ export const joinCall = async (
   const finish = async (why: string): Promise<void> => {
     if (finished) return;
     finished = true;
+    await ports.trace('calls.leave', async (span) => {
+      span.set('call.id', callId);
+      span.set('call.leave_reason', why);
+      span.set('call.human_joined', humanHere);
+      await leaving(why);
+    });
+  };
+
+  const leaving = async (why: string): Promise<void> => {
     emit('call.leave', { why });
     clearInterval(aloneCheck);
     stopLoopWatch();

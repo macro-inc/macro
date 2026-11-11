@@ -40,7 +40,7 @@ to `state/memory/identity/identity.md`.
 | `heartbeat` | Schedules, its own clock, and changing its own code (`commit`, `land`)  | nothing                             |
 | `tools`     | Its credentials, by name                                                | nothing                             |
 | `secrets`   | The team's vault: search, copy a field or TOTP code to the clipboard, create and update, request access; never a value | the `enable-agent-vault` flag on the team; `xclip` and `timeout` on the computer |
-| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | speech credentials (see below)      |
+| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | nothing (speech is Macro's gateway) |
 | `screen`    | Show a browser on a call                                                | the screen service running          |
 
 An area whose credentials are missing stays quiet: nothing fails, and the
@@ -71,12 +71,8 @@ fails.
 | Credential                                                   | What it turns on                                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------------------- |
 | `MACRO_API_KEY`, `MACRO_GATEWAY`                             | The agent itself: chat, schedules, memory. Set by enrollment.        |
-| `DEEPGRAM_API_KEY`                                           | Calls: hearing, and the default voice. Without it no call is joined. |
-| `INWORLD_API_KEY`                                            | Only if the agent's voice is changed to an Inworld one.              |
 | `AGENT_GITHUB_TOKEN`                                         | Only with a GitHub remote: landing through a PR and CI.              |
 
-Calls check for their credentials again every few minutes, so
-adding one turns the feature on without a restart.
 
 ## How it runs
 
