@@ -392,6 +392,7 @@ export {
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
+export type { ChannelShareable } from './entities/channels/share';
 export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
   ConnectedAppKind,
@@ -495,6 +496,8 @@ export {
   Initiative,
   type InitiativeActivityEntry,
   type InitiativeOptions,
+  type InitiativeOverview,
+  type InitiativeReadOptions,
 } from './entities/initiatives/initiative';
 export type {
   InitiativeListing,

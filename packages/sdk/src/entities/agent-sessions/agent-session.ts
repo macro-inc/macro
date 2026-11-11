@@ -207,6 +207,9 @@ export type CreateManagedSessionOptions = {
 
 /** A managed or externally hosted coding-agent session. */
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'agent_session' as const;
+
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'agent_session', this);
 

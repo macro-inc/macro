@@ -211,8 +211,12 @@ the existing gateway prefixes.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
   or `initiatives.summaries` (the list response); `name()` per handle loads each
   entity. `initiatives.list(filters)` pages `/initiatives/page` and maps
-  the system Status and Priority option ids to names; keep its tables in step
-  with `system_properties`' `StatusOption` and `PriorityOption`. Task create
+  the system Status and Priority option ids to names (`initiatives/options.ts`,
+  shared with `Initiative.read()`, which reads `/initiatives/{id}/overview`);
+  keep its tables in step with `system_properties`' `StatusOption` and
+  `PriorityOption`. `Channel.share(item)` shares any `ChannelShareable` handle,
+  dispatched on its `entityType`, through `POST /channels/{id}/shares`; code
+  mode hides `ReadInitiative` and `ShareWithChannel`. Task create
   `propertyValues` replace the service defaults (creator assigned, Not
   started), so `Task.create` spells them out when it sends any.
 - CRM records and initiatives share `messages/discussion.ts`: their comments are

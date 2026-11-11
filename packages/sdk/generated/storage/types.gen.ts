@@ -12993,6 +12993,29 @@ export type InitiativeList = {
 };
 
 /**
+ * One initiative as an agent reads it: its detail with a page of the tasks
+ * the caller can view, its own canonical properties and its description.
+ */
+export type InitiativeOverview = InitiativeDetail & {
+    /**
+     * The description as Markdown; empty when it has none.
+     */
+    description: string;
+    /**
+     * Continuation for the next task page, absent after the last.
+     */
+    nextTaskCursor?: string | null;
+    /**
+     * The initiative's own canonical property values.
+     */
+    properties: InitiativePropertySnapshot;
+    /**
+     * Total associated tasks the caller can view.
+     */
+    taskCount: number;
+};
+
+/**
  * One authorized project collection page.
  */
 export type InitiativePage = {
@@ -31864,6 +31887,45 @@ export type GetInitiativeDescriptionResponses = {
 };
 
 export type GetInitiativeDescriptionResponse = GetInitiativeDescriptionResponses[keyof GetInitiativeDescriptionResponses];
+
+export type GetInitiativeOverviewData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: {
+        /**
+         * Maximum task ids, from 1 through 100; 100 when omitted.
+         */
+        taskLimit?: number;
+        /**
+         * `nextTaskCursor` from the preceding page.
+         */
+        taskCursor?: string;
+    };
+    url: '/initiatives/{initiative_id}/overview';
+};
+
+export type GetInitiativeOverviewErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeOverviewError = GetInitiativeOverviewErrors[keyof GetInitiativeOverviewErrors];
+
+export type GetInitiativeOverviewResponses = {
+    200: InitiativeOverview;
+};
+
+export type GetInitiativeOverviewResponse = GetInitiativeOverviewResponses[keyof GetInitiativeOverviewResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;

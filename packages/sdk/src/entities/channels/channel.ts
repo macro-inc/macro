@@ -31,6 +31,7 @@ import { ChannelActivity } from './activity';
 import { Message } from './message';
 import type { ChannelPicture } from './picture';
 import { postToChannel } from './post';
+import { type ChannelShareable, shareWithChannel } from './share';
 import type { Thread } from './thread';
 
 type ChannelDetail = GetChannelResponses[200];
@@ -311,6 +312,21 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
    */
   message(id: string): Message {
     return Message.byId(this.client, this.id, id);
+  }
+
+  /**
+   * Share an item with the channel's current members, as posting it in the
+   * channel does: a document, project, database, form, call, email thread,
+   * agent session, external chat or calendar event. The caller must be in the
+   * channel and allowed to share the item; a calendar event must be on their
+   * own calendar, and private or confidential events are refused with a 403.
+   * Sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async share(item: ChannelShareable): Promise<void> {
+    await shareWithChannel(this.client, this, item);
   }
 
   /**

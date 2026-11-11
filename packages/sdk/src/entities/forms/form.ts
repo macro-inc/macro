@@ -177,6 +177,9 @@ export type FormQuestionTally = {
  * editors can build it and read responses; owners control its audience.
  */
 export class Form extends MacroEntity<FormDetail> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'form' as const;
+
   protected async fetch(): Promise<FormDetail> {
     return unwrap(await this.client.storage.getForm({ path: { id: this.id } }));
   }

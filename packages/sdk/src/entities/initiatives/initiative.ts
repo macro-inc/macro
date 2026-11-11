@@ -26,6 +26,13 @@ import {
 } from '../sharing/permissions';
 import { Task } from '../tasks/task';
 import { User } from '../users/user';
+import {
+  type InitiativePriority,
+  type InitiativeStatus,
+  optionName,
+  PRIORITY_OPTION_IDS,
+  STATUS_OPTION_IDS,
+} from './options';
 
 /** Initiative creation settings. */
 export interface InitiativeOptions {
@@ -55,6 +62,46 @@ export interface InitiativeActivityEntry {
   payload: unknown;
   /** When it happened, RFC 3339. */
   occurredAt: string;
+}
+
+/** Which page of its tasks {@link Initiative.read} includes. */
+export interface InitiativeReadOptions {
+  /** Tasks per page, 1 through 100; defaults to 100. */
+  taskLimit?: number;
+  /** `nextTaskCursor` from the preceding read. */
+  taskCursor?: string;
+}
+
+/** An initiative as {@link Initiative.read} returns it. */
+export interface InitiativeOverview {
+  /** Display name. */
+  name: string;
+  /** Owner. */
+  owner: User;
+  /** Members it is shared with, distinct from its assignees. */
+  members: User[];
+  /** The caller's access. */
+  accessLevel: InitiativeDetail['userAccessLevel'];
+  /** Sharing configuration. */
+  sharePermissions: InitiativeDetail['sharePermission'];
+  /** Its own Status. */
+  status: InitiativeStatus | undefined;
+  /** Its own Priority. */
+  priority: InitiativePriority | undefined;
+  /** Assigned users, independent of sharing membership. */
+  assignees: User[];
+  /** Due date, RFC 3339. */
+  dueDate: string | undefined;
+  /** Whether its Status counts as complete. */
+  completed: boolean;
+  /** The description as GitHub-flavored Markdown; empty when it has none. */
+  description: string;
+  /** This page of the tasks the caller can view. */
+  tasks: Task[];
+  /** Every task in it the caller can view, across pages. */
+  taskCount: number;
+  /** Pass as `taskCursor` to read the next page; absent after the last. */
+  nextTaskCursor: string | undefined;
 }
 
 /** A group of tasks and members working toward an outcome. */
@@ -99,6 +146,48 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
 
   /** Display name. */
   readonly name = this.field('name');
+
+  /**
+   * The initiative in one read: its own Status, Priority, assignees and due
+   * date, its description, sharing, and a page of the tasks the caller can
+   * view with their total. Read further pages with `nextTaskCursor`.
+   *
+   * @readonly
+   */
+  async read(options: InitiativeReadOptions = {}): Promise<InitiativeOverview> {
+    const overview = unwrap(
+      await this.client.storage.getInitiativeOverview({
+        path: { initiative_id: this.id },
+        query: { taskLimit: options.taskLimit, taskCursor: options.taskCursor },
+      }),
+    );
+    return {
+      name: overview.name,
+      owner: User.byId(this.client, overview.ownerId),
+      members: overview.memberIds.map((id) => User.byId(this.client, id)),
+      accessLevel: overview.userAccessLevel,
+      sharePermissions: overview.sharePermission,
+      status: optionName(
+        STATUS_OPTION_IDS,
+        'Status',
+        overview.properties.status,
+      ),
+      priority: optionName(
+        PRIORITY_OPTION_IDS,
+        'Priority',
+        overview.properties.priority,
+      ),
+      assignees: overview.properties.assignees.map((id) =>
+        User.byId(this.client, id),
+      ),
+      dueDate: overview.properties.dueDate ?? undefined,
+      completed: overview.properties.completed,
+      description: overview.description,
+      tasks: overview.taskIds.map((id) => Task.byId(this.client, id)),
+      taskCount: overview.taskCount,
+      nextTaskCursor: overview.nextTaskCursor ?? undefined,
+    };
+  }
 
   /** Owner. */
   readonly owner = this.mappedField('ownerId', (id) =>

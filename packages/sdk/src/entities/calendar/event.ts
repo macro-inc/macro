@@ -132,6 +132,9 @@ export interface RsvpEventOptions {
  * mutations, but reading a field on it throws.
  */
 export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'calendar_event' as const;
+
   protected async fetch(): Promise<CalendarEventRecord> {
     throw new MacroError(
       `calendar event ${this.id} has no fetch-by-id endpoint; read the record ` +
