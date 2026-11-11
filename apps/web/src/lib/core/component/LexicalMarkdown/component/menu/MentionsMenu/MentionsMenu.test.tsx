@@ -272,6 +272,40 @@ it('keeps matching category and row nodes mounted across typing and updated peop
   expect(menu.isOpen()).toBe(false);
 });
 
+it('selects a local person with Enter before the search debounce settles', () => {
+  vi.useFakeTimers();
+  Element.prototype.scrollIntoView = vi.fn();
+  const ana: IUser = {
+    id: 'external|ana',
+    name: 'Ana Ruiz',
+    email: 'ana@example.com',
+  };
+  const ben: IUser = {
+    id: 'external|ben',
+    name: 'Ben Ortiz',
+    email: 'ben@example.com',
+  };
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const onPick = vi.fn();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      users={() => [ana, ben]}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={onPick}
+    />
+  ));
+
+  menu.setSearchTerm('Ana');
+  fireEvent.keyDown(document, { key: 'Enter' });
+
+  expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ data: ana }));
+  expect(menu.isOpen()).toBe(false);
+});
+
 it.each([false, true])(
   'leaves closed mention sources idle and refreshes them on reopen (mobile: %s)',
   async (mobile) => {

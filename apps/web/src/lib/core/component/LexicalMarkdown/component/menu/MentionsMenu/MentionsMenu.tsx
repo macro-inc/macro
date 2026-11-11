@@ -718,9 +718,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
       }
     },
-    onSelect: () =>
-      // The list trails the typed term by the debounce; act on the list for
-      // the term on screen.
+    onSelect: () => {
+      // A local people list can catch up synchronously, so the next keypress
+      // cannot change the query before Enter selects the matching person.
+      if (props.sources?.length === 1 && props.sources[0] === 'users') {
+        searchTerm.flush();
+      }
+      // Other lists may load asynchronously; wait for the typed term there.
       runWhenCurrent(() => {
         const selectedItem = controller.selectedItem();
         // Keep the menu open on an offline agent so Enter reads as "not that
@@ -738,7 +742,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         }
         props.menu.setSearchTerm('');
         setMenuOpen(false);
-      }),
+      });
+    },
     onClose: () => {
       if (canExitViewAll()) {
         controller.exitViewAll();

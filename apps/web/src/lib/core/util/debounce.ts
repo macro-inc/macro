@@ -15,12 +15,20 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Create a debounced view of a signal.
  */
-export function debouncedDependent<T>(source: () => T, delay = 300): () => T {
+export function debouncedDependent<T>(
+  source: () => T,
+  delay = 300
+): (() => T) & { flush: () => void } {
   const [debounced, setDebounced] = createSignal(source());
   const schedule = solidDebounce((v: T) => setDebounced(() => v), delay);
   createEffect(() => schedule(source()));
   onCleanup(() => schedule.clear());
-  return debounced;
+  return Object.assign(debounced, {
+    flush: () => {
+      schedule.clear();
+      setDebounced(() => source());
+    },
+  });
 }
 
 /**
