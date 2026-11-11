@@ -14,6 +14,12 @@ export type Credentials = {
   readonly names: () => Promise<readonly string[]>;
 };
 
+export {
+  envFileCredentials,
+  type ParsedEnvFile,
+  parseEnvFile,
+  withheldCredentials,
+} from './env-file.ts';
 export { sopsCredentials } from './sops.ts';
 
 /** Credentials kept in memory, e.g. for tests. */

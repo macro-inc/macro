@@ -1,13 +1,23 @@
 import {
   createSdkMcpServer,
-  type query,
+  type McpStdioServerConfig,
+  type Options,
+  type SDKMessage,
   tool,
 } from '@anthropic-ai/claude-agent-sdk';
 import type { Agent, EventContext } from '@macro-inc/muppet/core/agent';
 import { z } from 'zod';
 import { type Guard, refusal } from './guard.ts';
 
-const server = 'agent';
+/** The name of the agent's own MCP server, which no server it is given may take. */
+export const capabilityServer = 'agent';
+const server = capabilityServer;
+
+/** The SDK's `query`, as much of it as a wake uses. */
+export type Query = (params: {
+  readonly prompt: string;
+  readonly options?: Options;
+}) => AsyncIterable<SDKMessage>;
 
 /** How one wake is run: what it may spend, how long it may take, and where it works. */
 export type Profile = {
@@ -26,6 +36,8 @@ export type Profile = {
  */
 export const agentClaude = ({
   query: run,
+  claude,
+  mcpServers,
   model,
   profile,
   environment,
@@ -34,11 +46,15 @@ export const agentClaude = ({
   record,
 }: {
   /** The SDK's `query`, injected. */
-  readonly query: typeof query;
+  readonly query: Query;
+  /** The `claude` program to run, from PATH: the image's wrapper, which signs in on its own when no Anthropic gateway is given. */
+  readonly claude: () => string;
+  /** Stdio MCP servers every wake has beside its capabilities, e.g. computer use. */
+  readonly mcpServers: Readonly<Record<string, McpStdioServerConfig>>;
   readonly model: string;
   /** Chooses how a wake is run from the event that led to it. */
   readonly profile: (event: EventContext) => Profile;
-  /** The whole environment a run gets, which makes git and gh act as the agent. An undefined value is a variable the run must not have. */
+  /** The whole environment a run gets: nothing it isn't given here. An undefined value is a variable the run must not have. */
   readonly environment: () => Promise<
     Readonly<Record<string, string | undefined>>
   >;
@@ -53,8 +69,8 @@ export const agentClaude = ({
       name: server,
       tools: [
         tool(
-          'ExecuteCode',
-          'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it inside your running process, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
+          'RunCapabilityScript',
+          'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
           { source: z.string() },
           async ({ source }) => {
             const executed = await state.code.execute(source);
@@ -105,7 +121,8 @@ export const agentClaude = ({
           maxBudgetUsd: budgetUsd,
           abortController: abort,
           env,
-          mcpServers: { [server]: capabilities },
+          pathToClaudeCodeExecutable: claude(),
+          mcpServers: { ...mcpServers, [server]: capabilities },
           systemPrompt: {
             type: 'preset',
             preset: 'claude_code',

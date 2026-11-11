@@ -49,29 +49,44 @@ lists them.
 
 ## Credentials
 
-The agent's credentials are in `secrets.enc.json`, encrypted with SOPS to this
-machine's age key. They are used by name and never printed.
+A hosted agent's credentials are its enrollment's `agent.env` (`KEY=value`
+lines, given as a systemd credential at `MUPPET_CREDENTIALS_FILE`): its Macro
+key and where Macro is (`MACRO_GATEWAY` and the `OVERRIDE_*` service URLs),
+its repository's, and, in Macro-credits mode, `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, the
+only ones Claude Code is given. They are read once, only read, used by name
+and never printed: `setCredential` refuses. A self-hosted agent sets
+`MUPPET_CREDENTIALS=sops` instead, and keeps them in `secrets.enc.json`,
+encrypted with SOPS to its machine's age key, where `setCredential` adds one
+(value on stdin, never as an argument).
 
     bin/agent listCredentials
-    bin/agent describe setCredential
 
-`setCredential` takes the value on stdin, never as an argument; its docs give
-the exact input. The agent can also be told, in chat, to add one.
+Scripts the agent writes, and Claude Code itself, never hold a credential:
+each script runs in a process of its own, with a cleared environment, and
+reaches Macro through a loopback relay in the agent's process, which adds
+the key. There `listCredentials` still lists the names; reading a value
+fails.
 
 | Credential                                                   | What it turns on                                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `MACRO_API_KEY`                                              | The agent itself: chat, schedules, memory. Set by `bin/setup`.       |
+| `MACRO_API_KEY`, `MACRO_GATEWAY`                             | The agent itself: chat, schedules, memory. Set by enrollment.        |
 | `DEEPGRAM_API_KEY`                                           | Calls: hearing, and the default voice. Without it no call is joined. |
 | `INWORLD_API_KEY`                                            | Only if the agent's voice is changed to an Inworld one.              |
 | `MAIL_CLIENT_ID`, `MAIL_CLIENT_SECRET`, `MAIL_REFRESH_TOKEN` | Mail: a Gmail account's OAuth client and refresh token.              |
-| `AGENT_GITHUB_TOKEN`                                         | Pushing its repository to a remote, and landing through a PR and CI. |
+| `AGENT_GITHUB_TOKEN`                                         | Only with a GitHub remote: landing through a PR and CI.              |
 
 Calls and mail check for their credentials again every few minutes, so
 adding one turns the feature on without a restart.
 
 ## How it runs
 
-One process, `bin/agent run`, under the computer's agent service. It builds
+One process, `bin/agent run`, under the computer's agent service, which sets
+`AGENT_WORKSPACE` (this repository), `MUPPET_CREDENTIALS_FILE`,
+`MUPPET_LAST_GOOD_FILE`, `MUPPET_RESTART_FILE` and, for stdio MCP servers
+every wake gets (e.g. computer use), `MUPPET_MCP_SERVERS_JSON`. None has a
+default: a missing or invalid one exits 78, which the service retries without
+rolling back. It runs Claude Code as the `claude` on PATH. It builds
 the behavior in `behavior/`, shows the agent online in Macro, and waits on its
 event sources. A handler decides cheaply what each event needs, and wakes the
 agent (Claude Code, with `AGENT.md` and who it is as its system prompt) only
@@ -79,7 +94,12 @@ when it is needed.
 
 A run that answers a message only talks. Anything longer the agent hands to
 itself (`doLater`) and is woken for on its own. Every wake ends with a commit
-of this repository.
+of this repository, a pull of its remote's `main` with `--rebase`, and a push.
+
+What a run may spend is capped, per run and per day of its owner, by
+`budgetUsdPerRun` and `budgetUsdPerDay` in `agent.json` (5 and 50 USD unless
+set). Once a day's runs reach the daily cap nothing wakes until the next day,
+and the owner is told once.
 
 Each call the agent is on is a process of its own (`bin/agent joinCall`), so
 a call outlives a restart of the agent.

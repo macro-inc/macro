@@ -11,7 +11,9 @@ const server = 'muppet';
 /**
  * Claude Code as an agent, through the Claude Agent SDK. Each wake starts a
  * session with the request and its event as the prompt, and the system
- * prompt appended to Claude Code's own, and gives it the code-mode tools, ExecuteCode and DescribeCapabilities.
+ * prompt appended to Claude Code's own, and gives it the code-mode tools, RunCapabilityScript and DescribeCapabilities.
+ * The names are its own, so they never collide with Macro's MCP tools
+ * (ExecuteCode, DescribeCodeTools, ReadCodeDocs) when both are offered.
  */
 export const claudeCode = ({
   query: run,
@@ -24,8 +26,8 @@ export const claudeCode = ({
       name: server,
       tools: [
         tool(
-          'ExecuteCode',
-          'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it inside your running process, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
+          'RunCapabilityScript',
+          'Type-check a TypeScript module that exports `async function main({ context, log })`, then run it with your context, and get back what main returned and everything it passed to log, or the type errors that kept it from running. Use it to use your capabilities.',
           { source: z.string() },
           async ({ source }) => {
             const executed = await state.code.execute(source);

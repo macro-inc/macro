@@ -18,7 +18,7 @@ import type { Script } from ${JSON.stringify(behaviorFile)};
 import { triageMail } from ${JSON.stringify(mail.file)};
 `;
     console.log(
-      'ExecuteCode:',
+      'RunCapabilityScript:',
       await state.code.execute(`${imports}
 export async function main({ context, log }: Script) {
 	log("triaging from a script");
@@ -27,7 +27,7 @@ export async function main({ context, log }: Script) {
 `)
     );
     console.log(
-      'ExecuteCode with a type error:',
+      'RunCapabilityScript with a type error:',
       await state.code.execute(`${imports}
 export async function main({ context }: Script) {
 	return await triageMail(context, { subject: 1 });

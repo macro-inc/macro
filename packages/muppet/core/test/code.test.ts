@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { execute, type Load } from '../code.ts';
+import { execute, inSubprocess, type Load, resultLine } from '../code.ts';
 
 const context = { greeting: 'hello' };
 
@@ -71,6 +71,81 @@ describe('execute', () => {
     expect(await execute(context, loading({ x: 1 }))('source')).toMatchObject({
       kind: 'failed',
       error: 'the script must export `async function main({ context, log })`',
+    });
+  });
+});
+
+describe('inSubprocess', () => {
+  const succeeded = {
+    kind: 'succeeded',
+    output: { answer: 42 },
+    logs: 'working',
+  } as const;
+
+  test('sends the source on stdin and reads back the result the child printed', async () => {
+    const sent: { source: string; timeoutMs: number }[] = [];
+    const run = inSubprocess({
+      timeoutMs: 1000,
+      run: async (source, { timeoutMs }) => {
+        sent.push({ source, timeoutMs });
+        return {
+          kind: 'exited',
+          code: 0,
+          stdout: `a stray console.log\n${resultLine(succeeded)}`,
+          stderr: '',
+        };
+      },
+    });
+    expect(await run('export const main = () => 42')).toEqual({
+      ...succeeded,
+      logs: 'working\na stray console.log',
+    });
+    expect(sent).toEqual([
+      { source: 'export const main = () => 42', timeoutMs: 1000 },
+    ]);
+  });
+
+  test('passes on a failure the child reports', async () => {
+    const failed = { kind: 'failed', error: 'broken', logs: '' } as const;
+    const run = inSubprocess({
+      timeoutMs: 1000,
+      run: async () => ({
+        kind: 'exited',
+        code: 1,
+        stdout: resultLine(failed),
+        stderr: '',
+      }),
+    });
+    expect(await run('source')).toEqual(failed);
+  });
+
+  test('fails a script that ran out of time', async () => {
+    const run = inSubprocess({
+      timeoutMs: 250,
+      run: async () => ({ kind: 'timedOut', stdout: 'started', stderr: '' }),
+    });
+    expect(await run('source')).toEqual({
+      kind: 'failed',
+      error: 'the script was stopped after 250ms',
+      logs: 'started',
+    });
+  });
+
+  test('fails with what the child said when it printed no result', async () => {
+    const run = inSubprocess({
+      timeoutMs: 1000,
+      run: async () => ({
+        kind: 'exited',
+        code: 78,
+        stdout: '',
+        stderr: 'AGENT_WORKSPACE is not set\n',
+      }),
+    });
+    expect(await run('source')).toEqual({
+      kind: 'failed',
+      error:
+        'the script process exited 78 without a result: AGENT_WORKSPACE is not set',
+      logs: '',
     });
   });
 });
