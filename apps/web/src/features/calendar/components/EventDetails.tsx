@@ -43,8 +43,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import {
+  calendarDescriptionPreviewHtml,
   parseMacroAppLink,
-  sanitizeCalendarDescription,
 } from '../utils/calendar-description';
 import { conferenceJoinUrl, safeConferenceUrl } from '../utils/conference-link';
 import {
@@ -496,7 +496,7 @@ export function EventDetails(props: {
     removeCalendarMacroCall(props.event, macroMeetingUrl())
   );
   const descriptionHtml = createMemo(() =>
-    sanitizeCalendarDescription(eventContent().description)
+    calendarDescriptionPreviewHtml(eventContent().description)
   );
   const openDescriptionLink = createCallback((event: MouseEvent) => {
     const anchor = (event.target as Element | null)?.closest('a[href]');
@@ -618,7 +618,7 @@ export function EventDetails(props: {
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
             <div
-              class="select-text leading-relaxed text-ink-muted [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-link [&_a:hover]:text-link-hover [&_a:visited]:text-link-visited [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_.calendar-description-paragraph+_.calendar-description-paragraph]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
               innerHTML={html()}
               onClick={openDescriptionLink}
             />

@@ -14,7 +14,10 @@ import {
   sanitizeDocument,
 } from './calendar-description-sanitizer';
 
-export { sanitizeCalendarDescription } from './calendar-description-sanitizer';
+export {
+  calendarDescriptionPreviewHtml,
+  sanitizeCalendarDescription,
+} from './calendar-description-sanitizer';
 
 function parseHtml(html: string): Document {
   return new DOMParser().parseFromString(html, 'text/html');
