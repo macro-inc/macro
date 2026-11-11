@@ -12,6 +12,8 @@ export type NotificationSoundId =
   | 'ping'
   | 'bloom';
 
+export type CallSoundId = 'call-join' | 'call-leave';
+
 export type NotificationTone = {
   /** Start frequency in Hz. */
   frequency: number;
@@ -27,7 +29,7 @@ export type NotificationTone = {
 };
 
 export type NotificationSound = {
-  id: NotificationSoundId;
+  id: NotificationSoundId | CallSoundId;
   label: string;
   tones: readonly NotificationTone[];
 };
@@ -117,14 +119,50 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
 ];
 
+/** Participant join and leave cues, kept out of notification category choices. */
+export const CALL_SOUNDS: readonly NotificationSound[] = [
+  {
+    id: 'call-join',
+    label: 'Call join',
+    tones: [
+      { frequency: 523.25, start: 0, duration: 0.14, gain: 0.8, wave: 'sine' },
+      {
+        frequency: 783.99,
+        start: 0.12,
+        duration: 0.2,
+        gain: 0.8,
+        wave: 'sine',
+      },
+    ],
+  },
+  {
+    id: 'call-leave',
+    label: 'Call leave',
+    tones: [
+      { frequency: 783.99, start: 0, duration: 0.14, gain: 0.8, wave: 'sine' },
+      {
+        frequency: 523.25,
+        start: 0.12,
+        duration: 0.2,
+        gain: 0.8,
+        wave: 'sine',
+      },
+    ],
+  },
+];
+
 export function isNotificationSoundId(
   value: unknown
 ): value is NotificationSoundId {
   return NOTIFICATION_SOUNDS.some((sound) => sound.id === value);
 }
 
-export function notificationSound(id: NotificationSoundId): NotificationSound {
-  const sound = NOTIFICATION_SOUNDS.find((candidate) => candidate.id === id);
+export function notificationSound(
+  id: NotificationSoundId | CallSoundId
+): NotificationSound {
+  const sound =
+    NOTIFICATION_SOUNDS.find((candidate) => candidate.id === id) ??
+    CALL_SOUNDS.find((candidate) => candidate.id === id);
   if (!sound) throw new Error(`Unknown notification sound: ${id}`);
   return sound;
 }

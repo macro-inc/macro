@@ -16,6 +16,7 @@ import type {
   NotificationSoundSettings,
 } from '../core/settings';
 import {
+  type CallSoundId,
   isNotificationSoundId,
   NOTIFICATION_SOUNDS,
   type NotificationSoundId,
@@ -30,12 +31,13 @@ const SOUND_OPTIONS = NOTIFICATION_SOUNDS.map((sound) => ({
 export function NotificationSoundSection(props: {
   settings: NotificationSoundSettings;
   onEnabledChange: (enabled: boolean) => void;
+  onCallSoundsEnabledChange: (enabled: boolean) => void;
   onVolumeChange: (volume: number) => void;
   onCategoryChange: (
     id: NotificationSoundCategoryId,
     change: Partial<NotificationSoundCategorySettings>
   ) => void;
-  onPreview: (sound: NotificationSoundId) => void;
+  onPreview: (sound: NotificationSoundId | CallSoundId) => void;
 }) {
   const volumePercent = () => Math.round(props.settings.volume * 100);
 
@@ -57,7 +59,36 @@ export function NotificationSoundSection(props: {
             onChange={props.onEnabledChange}
           />
         </SettingsRow>
-        <Show when={props.settings.enabled}>
+        <SettingsRow
+          stackOnNarrow
+          label="Call sounds"
+          description="Play a sound when someone joins or leaves a call."
+        >
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onPreview('call-join')}
+          >
+            Preview join
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => props.onPreview('call-leave')}
+          >
+            Preview leave
+          </Button>
+          <ToggleSwitch
+            size="md"
+            label="Call sounds"
+            labelClass="sr-only"
+            checked={props.settings.callSoundsEnabled}
+            onChange={props.onCallSoundsEnabledChange}
+          />
+        </SettingsRow>
+        <Show when={props.settings.enabled || props.settings.callSoundsEnabled}>
           <SettingsRow stackOnNarrow label="Volume">
             <Slider
               aria-label="Volume"
@@ -68,7 +99,11 @@ export function NotificationSoundSection(props: {
               step={5}
               onChange={([percent]) => props.onVolumeChange(percent / 100)}
               onChangeEnd={() =>
-                props.onPreview(props.settings.categories.mentions.sound)
+                props.onPreview(
+                  props.settings.enabled
+                    ? props.settings.categories.mentions.sound
+                    : 'call-join'
+                )
               }
             >
               <Slider.Track>
@@ -82,6 +117,8 @@ export function NotificationSoundSection(props: {
               {volumePercent()}%
             </span>
           </SettingsRow>
+        </Show>
+        <Show when={props.settings.enabled}>
           <For each={NOTIFICATION_SOUND_CATEGORIES}>
             {(category) => {
               const current = () => props.settings.categories[category.id];

@@ -10,7 +10,11 @@ import {
   parseQuietHours,
   type QuietHours,
 } from './quiet-hours';
-import { isNotificationSoundId, type NotificationSoundId } from './sounds';
+import {
+  type CallSoundId,
+  isNotificationSoundId,
+  type NotificationSoundId,
+} from './sounds';
 
 export type NotificationSoundCategorySettings = {
   enabled: boolean;
@@ -20,6 +24,8 @@ export type NotificationSoundCategorySettings = {
 export type NotificationSoundSettings = {
   /** Master switch; sounds are off until the person turns them on. */
   enabled: boolean;
+  /** Participant cues are independent of notification sounds. */
+  callSoundsEnabled: boolean;
   /** 0 to 1. */
   volume: number;
   categories: Record<
@@ -52,6 +58,7 @@ export const NOTIFICATION_SOUND_MIN_GAP_MS = 1_500;
 
 export const DEFAULT_NOTIFICATION_SOUND_SETTINGS: NotificationSoundSettings = {
   enabled: false,
+  callSoundsEnabled: true,
   volume: 0.7,
   categories: categorySettings((id) => {
     const category = notificationSoundCategory(id);
@@ -62,6 +69,7 @@ export const DEFAULT_NOTIFICATION_SOUND_SETTINGS: NotificationSoundSettings = {
 
 const storedSettingsSchema = z.object({
   enabled: z.boolean().optional(),
+  callSoundsEnabled: z.boolean().optional(),
   volume: z.number().min(0).max(1).optional(),
   categories: z
     .record(
@@ -93,6 +101,7 @@ export function parseNotificationSoundSettings(
   const stored = parsed.data;
   return {
     enabled: stored.enabled ?? defaults.enabled,
+    callSoundsEnabled: stored.callSoundsEnabled ?? defaults.callSoundsEnabled,
     volume: stored.volume ?? defaults.volume,
     quietHours: parseQuietHours(stored.quietHours),
     categories: categorySettings((id) => {
@@ -123,4 +132,15 @@ export function soundForNotification(
   if (!categoryId) return null;
   const category = settings.categories[categoryId];
   return category.enabled ? category.sound : null;
+}
+
+/** The participant cue to play, independent of notification sound categories. */
+export function soundForCallEvent(
+  event: 'join' | 'leave',
+  settings: NotificationSoundSettings,
+  now = new Date()
+): CallSoundId | null {
+  if (!settings.callSoundsEnabled || settings.volume === 0) return null;
+  if (isWithinQuietHours(settings.quietHours, now)) return null;
+  return event === 'join' ? 'call-join' : 'call-leave';
 }

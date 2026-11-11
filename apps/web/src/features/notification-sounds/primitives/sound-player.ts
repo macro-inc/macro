@@ -1,4 +1,8 @@
-import { type NotificationSoundId, notificationSound } from '../core/sounds';
+import {
+  type CallSoundId,
+  type NotificationSoundId,
+  notificationSound,
+} from '../core/sounds';
 
 /** Loudest a tone gets at full volume; notification sounds stay gentle. */
 const MAX_GAIN = 0.3;
@@ -38,7 +42,7 @@ export async function unlockNotificationSounds(): Promise<void> {
  * any interaction stays silent instead of playing late once audio resumes.
  */
 export async function playNotificationSound(
-  id: NotificationSoundId,
+  id: NotificationSoundId | CallSoundId,
   volume: number
 ): Promise<void> {
   const context = audioContext();

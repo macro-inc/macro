@@ -371,12 +371,20 @@ Desktop channel and AI composers use an `Attach files` paperclip that opens the 
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming
 notifications. It is off by default and saved per person on each device
-(user-scoped localStorage), so a laptop and a phone choose separately. With
-sounds on, it shows a volume slider and one row per type (Messages, Mentions,
-Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
-else), each with its own on/off switch, sound picker, and play button. Picking
-a sound previews it. Email, AI & agents, and Everything else start off.
+(user-scoped localStorage), so a laptop and a phone choose separately. The
+volume slider appears when notification sounds or Call sounds are on. Turning
+notification sounds on reveals one row per type (Messages, Mentions, Thread
+replies, Email, Meetings & reminders, Tasks, AI & agents, Everything else), each
+with its own on/off switch, sound picker, and play button. Picking a sound
+previews it. Email, AI & agents, and Everything else start off.
 Channel join requests use Everything else, alongside sharing and invitations.
+
+**Call sounds** is a separate, default-on toggle with Join and Leave preview
+buttons. Browser calls use fixed ascending/descending cues for deliberate
+participation changes, including your own. They share this volume and quiet
+hours but do not require notification sounds to be on. See
+[join and leave sounds](calls.md#join-and-leave-sounds) for recovery and platform
+limits.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new
