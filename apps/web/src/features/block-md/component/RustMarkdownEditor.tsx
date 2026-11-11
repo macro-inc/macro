@@ -5,6 +5,7 @@ import { DecoratorHostContext } from '@core/component/LexicalMarkdown/context/De
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
 import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { createNativeFastContactDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-contact-views';
+import { createNativeFastHTMLDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-html-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
 import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
 import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
@@ -130,6 +131,16 @@ export default function RustMarkdownEditor(props: {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
                   ...createNativeEquationViews(equationContext),
+                  ...createNativeFastHTMLDecoratorViews({
+                    theme,
+                    host: {},
+                    bindView(view) {
+                      if (view.root !== element)
+                        throw new Error(
+                          'HTML decorator belongs to another editor'
+                        );
+                    },
+                  }),
                 }
               ),
               installOverlays(view) {

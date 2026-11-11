@@ -3317,6 +3317,10 @@ apply the edit. Reopen the menu to verify the saved expression. Check both
 inline and block equations, and confirm that closing the document releases
 the menu.
 
+Open a native document containing an HTML block and check that its rendered
+content appears inside the editor. Check the visible content after closing
+and reopening the document.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
