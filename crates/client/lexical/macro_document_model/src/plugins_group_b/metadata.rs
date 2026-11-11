@@ -40,6 +40,7 @@ impl Plugin for Metadata {
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
         if tx.is_initializing() || commit.changes.mutations.is_empty() {
             return Ok(());
         }
@@ -53,7 +54,6 @@ impl Plugin for Metadata {
             .unwrap_or(-1.0)
             < DOCUMENT_VERSION
         {
-            let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
             // The source schedules a follow-up even when another update upgraded metadata.
             // Avoid a redundant identity-only state write once the value is current.
             if current.get("version").and_then(Value::as_f64) != Some(DOCUMENT_VERSION) {
