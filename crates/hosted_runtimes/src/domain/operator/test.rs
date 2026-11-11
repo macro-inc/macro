@@ -1,5 +1,5 @@
 use std::str::FromStr;
-mod image_update;
+mod data_disk;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -114,22 +114,6 @@ impl Fleet for FakeFleet {
                 .or_insert_with(|| format!("data-{}", generation.get()));
         }
         Ok(image)
-    }
-
-    async fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> Result<(), FakeFleetError> {
-        if self.missing {
-            return Err(FakeFleetError::Missing);
-        }
-        self.calls
-            .lock()
-            .unwrap()
-            .push(format!("rebuild {} {image} start={start}", computer.id));
-        Ok(())
     }
 
     async fn start(&self, id: ComputerId) -> Result<(), FakeFleetError> {

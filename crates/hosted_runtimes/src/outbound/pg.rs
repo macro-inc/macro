@@ -129,7 +129,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -360,7 +360,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             FROM hosted_runtime
             WHERE host_id = $1
             "#,
@@ -378,7 +378,7 @@ impl PgComputerRepo {
     ) -> Result<Vec<Uuid>, PgComputerError> {
         let worker = worker.map(|worker| worker.as_ref().to_owned());
         let rows = sqlx::query_as!(ComputerRow,
-            "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image FROM hosted_runtime
+            "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image FROM hosted_runtime
              WHERE id IN (
                  SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2
                  UNION
@@ -551,7 +551,6 @@ impl ComputerRepo for PgComputerRepo {
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
-            previous_image: None,
             enrollment_generation: Default::default(),
         })
     }
@@ -577,7 +576,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             FROM hosted_runtime
             WHERE id = $1
             "#,
@@ -594,7 +593,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             FROM hosted_runtime
             WHERE team_id = $1
             ORDER BY created_at
@@ -623,7 +622,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
@@ -704,8 +703,7 @@ impl ComputerRepo for PgComputerRepo {
         sqlx::query!(
             r#"
             UPDATE hosted_runtime
-            SET previous_image = CASE WHEN image IS DISTINCT FROM $2 THEN image ELSE previous_image END,
-                image = $2
+            SET image = $2
             WHERE id = $1
             "#,
             computer_id.as_uuid(),
@@ -743,7 +741,7 @@ impl ComputerRepo for PgComputerRepo {
             SET setup_completed_at = COALESCE(setup_completed_at, $2)
             WHERE id = $1
             RETURNING id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image
+                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image
             "#,
             computer_id.as_uuid(),
             now,

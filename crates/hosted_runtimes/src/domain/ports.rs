@@ -173,8 +173,7 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_ids: &[ComputerId],
     ) -> impl Future<Output = Result<HashMap<ComputerId, u32>, Self::Err>> + Send;
 
-    /// Record the image the guest's root disk was built from; a different
-    /// image moves the current one to `previous_image`, the rollback target.
+    /// Record the image the guest was created from.
     fn record_image(
         &self,
         computer_id: ComputerId,
@@ -380,16 +379,6 @@ pub trait Fleet: Send + Sync + 'static {
         enrollment: &impl FleetEnrollment,
         start: bool,
     ) -> impl Future<Output = Result<GuestImage, Self::Err>> + Send;
-
-    /// Stop the guest, rebuild its root disk from `image` keeping its data
-    /// disk and enrollment, then start it when `start`. A guest already on
-    /// `image` is only brought to the requested power state.
-    fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Start the guest if stopped.
     fn start(&self, computer_id: ComputerId) -> impl Future<Output = Result<(), Self::Err>> + Send;

@@ -105,7 +105,6 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
-        previous_image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
@@ -211,7 +210,6 @@ fn a_remote_image_names_its_server_and_protocol() {
         setup_completed_at: None,
         default_agent_id: None,
         image: None,
-        previous_image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(

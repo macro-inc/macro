@@ -363,24 +363,6 @@ where
                 self.fleet.stop(computer_id).await,
                 Some(Event::InstanceStopped),
             ),
-            Effect::Rebuild { image, start, .. } => {
-                let computer = self.computer(computer_id).await?;
-                let result = self.fleet.rebuild(&computer, image, *start).await;
-                if result.is_ok() {
-                    self.repo
-                        .record_image(computer_id, image)
-                        .await
-                        .map_err(internal)?;
-                }
-                fleet_completion(
-                    result,
-                    Some(if *start {
-                        Event::InstanceStarted
-                    } else {
-                        Event::InstanceStopped
-                    }),
-                )
-            }
             Effect::Destroy { .. } => {
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
                 Ok(None)
@@ -722,7 +704,6 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
         | Effect::Stop { host }
         | Effect::Restart { host }
         | Effect::RestartMacrod { host }
-        | Effect::Rebuild { host, .. }
         | Effect::Destroy { host } => Some(*host),
         Effect::ConfirmPayment { .. }
         | Effect::RemoveBillingItem

@@ -2,9 +2,9 @@
 //! `macro-box/<version>` image, carrying its [`Enrollment`] in the
 //! [`INCUS_ENROLLMENT_KEY`] config key that macrod reads through `/dev/incus`.
 //!
-//! Each VM has a root disk of [`ROOT_DISK_GIB`] rebuilt by image updates, and
-//! a custom block volume `<instance>-data` (disk device `data`, the rest of
-//! the quota) that the guest mounts at `/home` and that survives updates.
+//! Each VM has a root disk of [`ROOT_DISK_GIB`] from the image, and a custom
+//! block volume `<instance>-data` (disk device `data`, the rest of the
+//! quota) that the guest mounts at `/home`.
 //! Incus does not delete custom volumes with their instance, so destroy
 //! deletes it afterwards. A guest recreated after a loss reuses the volume.
 //!
@@ -17,7 +17,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
-    ImageAlias, ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
+    ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
     InstanceKind, InstanceName, InvalidName, ProfileName, StoragePoolName, StorageVolumeName,
 };
 
@@ -36,7 +36,7 @@ pub const CONTROL_PLANE_KEY: &str = "user.macro.control_plane";
 const CREATED_AT_KEY: &str = "user.macro.created_at";
 const GENERATION_KEY: &str = "user.macro.enrollment_generation";
 const PAIRING_KEY: &str = "user.macro.pairing_id";
-/// The image the root disk was last built from, set at create and rebuild.
+/// The image the instance was created from.
 const IMAGE_KEY: &str = "user.macro.image";
 /// Disk device of the data volume; the guest finds it by this name.
 const DATA_DEVICE: &str = "data";
@@ -105,12 +105,6 @@ pub enum IncusFleetError {
     /// The configured or requested image is not a valid image name.
     #[error(transparent)]
     Image(#[from] crate::domain::image::InvalidGuestImage),
-    /// The requested image alias is not on the host.
-    #[error("image {image} is not on the Incus host")]
-    ImageMissing {
-        /// The image that was requested.
-        image: GuestImage,
-    },
     /// The instance does not record the image it runs.
     #[error("instance {name} has no {IMAGE_KEY}")]
     UnknownImage {
@@ -332,46 +326,6 @@ impl Fleet for IncusFleet {
                 }
                 Ok(self.image.clone())
             }
-        }
-    }
-
-    #[tracing::instrument(name = "incus_fleet.rebuild", skip_all, fields(computer_id = %computer.id, image = %image, start), err)]
-    async fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> Result<(), IncusFleetError> {
-        let computer_id = computer.id;
-        let name = instance_name(computer_id);
-        let instance = self
-            .find(computer_id)
-            .await?
-            .ok_or(IncusFleetError::Missing { computer_id })?;
-        // The key is set only after a rebuild succeeds, so a retry after it
-        // does not rebuild (and reboot) the guest again.
-        if instance.config.get(IMAGE_KEY).map(String::as_str) != Some(image.as_str()) {
-            let alias = ImageAlias::try_new(image.as_str())?;
-            // A missing alias must not read as a lost instance.
-            match self.client.image_alias(&alias).await {
-                Ok(_) => {}
-                Err(IncusError::NotFound { .. }) => {
-                    return Err(IncusFleetError::ImageMissing {
-                        image: image.clone(),
-                    });
-                }
-                Err(error) => return Err(error.into()),
-            }
-            self.stop(computer_id).await?;
-            self.client.rebuild(&name, &alias).await?;
-            self.client
-                .set_config_key(&name, IMAGE_KEY, image.as_str())
-                .await?;
-        }
-        if start {
-            self.start(computer_id).await
-        } else {
-            self.stop(computer_id).await
         }
     }
 

@@ -125,7 +125,6 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
-            previous_image: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),
         };
         let source = TestEnrollment {
@@ -176,7 +175,7 @@ impl DockerCommand for RecordingDocker {
 }
 
 #[tokio::test]
-async fn docker_rebuild_recreates_the_container_on_its_volumes_and_destroy_removes_them() {
+async fn docker_destroy_removes_the_container_then_its_volumes() {
     let root = tempfile::tempdir().unwrap();
     let runner = Arc::new(RecordingDocker::default());
     let mut fleet = DockerFleet::new(
@@ -194,77 +193,6 @@ async fn docker_rebuild_recreates_the_container_on_its_volumes_and_destroy_remov
     )
     .unwrap();
     fleet.command = Some(runner.clone());
-    let computer = Computer {
-        id: COMPUTER_ID,
-        team_id: Uuid::nil(),
-        name: ComputerName::try_new("Fixture computer").unwrap(),
-        size: crate::domain::size::ComputerSize::Standard,
-        resources: crate::domain::size::ComputerResources {
-            vcpus: crate::domain::size::Vcpus::new(6),
-            memory_gib: crate::domain::size::MemoryGib::new(12),
-            disk_gib: crate::domain::size::DiskGib::new(100),
-        },
-        catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
-            .unwrap(),
-        price_id: None,
-        state: crate::domain::lifecycle::ComputerState::reserved(
-            crate::domain::ids::HostId::new(Uuid::nil()),
-            Utc::now(),
-        ),
-        harness_id: None,
-        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
-        created_at: Utc::now(),
-        enrolled_at: None,
-        setup_completed_at: None,
-        default_agent_id: None,
-        image: None,
-        previous_image: None,
-        enrollment_generation: EnrollmentGeneration::new(1),
-    };
-    let container = container_name(COMPUTER_ID);
-
-    // Already on the image: only the power state is applied.
-    fleet
-        .rebuild(
-            &computer,
-            &GuestImage::try_new("macro-box:2026-11-01").unwrap(),
-            true,
-        )
-        .await
-        .unwrap();
-    let verbs =
-        |calls: &[Vec<String>]| calls.iter().map(|call| call[0].clone()).collect::<Vec<_>>();
-    assert_eq!(
-        verbs(&runner.calls.lock().unwrap()),
-        ["ps", "inspect", "start"]
-    );
-    runner.calls.lock().unwrap().clear();
-
-    fleet
-        .rebuild(
-            &computer,
-            &GuestImage::try_new("macro-box:2026-11-10").unwrap(),
-            true,
-        )
-        .await
-        .unwrap();
-    let calls = runner.calls.lock().unwrap().clone();
-    assert_eq!(
-        verbs(&calls),
-        ["ps", "inspect", "ps", "stop", "rm", "create", "start"]
-    );
-    let create = &calls[5];
-    assert!(create.contains(&"macro.image=macro-box:2026-11-10".to_owned()));
-    assert!(create.contains(&"macro.enrollment_generation=1".to_owned()));
-    assert!(create.contains(&"macro.created_at=2026-11-05T10:00:00+00:00".to_owned()));
-    assert!(create.iter().any(|arg| arg.starts_with(&format!(
-        "type=volume,source={container}-home,target=/home,"
-    ))));
-    assert_eq!(create.last().unwrap(), "macro-box:2026-11-10");
-    // The rebuild never touches the volumes.
-    assert!(!calls.iter().any(|call| call[0] == "volume"));
-    runner.calls.lock().unwrap().clear();
-
     fleet.destroy(COMPUTER_ID).await.unwrap();
     assert_eq!(
         *runner.calls.lock().unwrap(),

@@ -147,7 +147,6 @@ impl ComputerRepo for FakeRepo {
             setup_completed_at: None,
             default_agent_id: None,
             image: None,
-            previous_image: None,
             enrollment_generation: Default::default(),
         };
         let (effects, run_after) = match computer.billing {
@@ -322,10 +321,8 @@ impl ComputerRepo for FakeRepo {
         image: &crate::domain::image::GuestImage,
     ) -> Result<(), FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id)
-            && computer.image.as_ref() != Some(image)
-        {
-            computer.previous_image = computer.image.replace(image.clone());
+        if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id) {
+            computer.image = Some(image.clone());
         }
         Ok(())
     }

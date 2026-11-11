@@ -9,7 +9,6 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::domain::enrollment::EnrollmentGeneration;
-use crate::domain::image::GuestImage;
 use crate::domain::models::SubscriptionItem;
 
 mod capacity;
@@ -82,14 +81,6 @@ pub enum Phase {
     Stopping {
         /// Host holding the computer.
         host: HostId,
-    },
-    /// The root disk is being rebuilt from another image, keeping the data
-    /// disk; the guest starts again afterwards when `start`.
-    Updating {
-        /// Host holding the computer.
-        host: HostId,
-        /// Whether the guest was running and starts after the rebuild.
-        start: bool,
     },
     /// Guest is powered off.
     Stopped {
@@ -225,7 +216,6 @@ impl ComputerState {
             | Phase::Restarting { host }
             | Phase::Running { host }
             | Phase::Stopping { host }
-            | Phase::Updating { host, .. }
             | Phase::Stopped { host }
             | Phase::Failed { host } => Some(host),
             Phase::PaymentFailed | Phase::Destroyed => None,
@@ -256,7 +246,6 @@ impl ComputerState {
                 | Phase::Restarting { .. }
                 | Phase::Running { .. }
                 | Phase::Stopping { .. }
-                | Phase::Updating { start: true, .. }
         )
     }
 }
@@ -322,11 +311,6 @@ pub enum Event {
     RetentionExpired,
     /// Retry a failed guest.
     OperatorRetry,
-    /// An operator moves a running or stopped computer to another image.
-    UpdateImage {
-        /// Image to rebuild the root disk from.
-        image: GuestImage,
-    },
     /// A fleet effect failed after its retries; an operator looks.
     EffectFailed {
         /// Reason for this decision or failure.
@@ -418,16 +402,6 @@ pub enum Effect {
     RestartMacrod {
         /// Host holding the computer.
         host: HostId,
-    },
-    /// Stop the guest, rebuild its root disk from `image` keeping the data
-    /// disk, and start it again when `start`.
-    Rebuild {
-        /// Host holding the computer.
-        host: HostId,
-        /// Image to rebuild the root disk from.
-        image: GuestImage,
-        /// Whether to start the guest after the rebuild.
-        start: bool,
     },
     /// Delete the guest, its root disk and its data disk.
     Destroy {
@@ -577,9 +551,7 @@ pub fn transition(
         }
 
         Event::InstanceStarted => {
-            if let Phase::Provisioning { start: true, .. } | Phase::Updating { start: true, .. } =
-                state.phase
-            {
+            if let Phase::Provisioning { start: true, .. } = state.phase {
                 if state.power == Power::On {
                     if state.macrod_connected {
                         next.phase = Phase::Running { host };
@@ -596,7 +568,7 @@ pub fn transition(
         Event::InstanceStopped => {
             if matches!(
                 state.phase,
-                Phase::Provisioning { .. } | Phase::Stopping { .. } | Phase::Updating { .. }
+                Phase::Provisioning { .. } | Phase::Stopping { .. }
             ) {
                 next.phase = Phase::Stopped { host };
                 next.macrod_connected = false;
@@ -731,24 +703,6 @@ pub fn transition(
                     next.phase = Phase::Stopped { host };
                     effects.push(Effect::Stop { host });
                 }
-            }
-        }
-
-        Event::UpdateImage { image } => {
-            let start = match state.phase {
-                Phase::Running { .. } => Some(true),
-                Phase::Stopped { .. } => Some(false),
-                _ => None,
-            };
-            if let Some(start) = start {
-                next.phase = Phase::Updating { host, start };
-                next.macrod_connected = false;
-                next.macrod_misses = 0;
-                effects.push(Effect::Rebuild {
-                    host,
-                    image: image.clone(),
-                    start,
-                });
             }
         }
 
@@ -919,7 +873,6 @@ fn power_down(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId)
         }
         Phase::PendingPayment { .. }
         | Phase::Provisioning { .. }
-        | Phase::Updating { .. }
         | Phase::Stopping { .. }
         | Phase::Stopped { .. }
         | Phase::PaymentFailed

@@ -27,14 +27,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
-use crate::domain::image::GuestImage;
 use crate::domain::models::{
     ComputerStatus, PurchaseBilling, PurchaseRequest, Quote, SizeOffer, SubscriptionItem,
 };
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
 };
-use crate::domain::service::{Clock, ComputerError, ComputerService, ImageUpdate, TeamMemberRole};
+use crate::domain::service::{Clock, ComputerError, ComputerService, TeamMemberRole};
 use crate::domain::size::ComputerSize;
 
 /// Router state: the computer service plus what team access checks need.
@@ -167,14 +166,6 @@ where
         .route(
             "/computers/{computer_id}",
             get(internal_status::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
-        )
-        .route(
-            "/computers/{computer_id}/image",
-            post(internal_update_image::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
-        )
-        .route(
-            "/computers/{computer_id}/image/rollback",
-            post(internal_rollback_image::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
         )
         .with_state(state)
 }
@@ -768,81 +759,6 @@ pub async fn internal_status<
     ))
 }
 
-/// Body of an image update.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct InternalUpdateImageBody {
-    /// Team that owns the computer.
-    pub team_id: Uuid,
-    /// The versioned image to rebuild the root disk from, e.g. `macro-box/2026-11-10`.
-    #[schema(value_type = String)]
-    pub image: GuestImage,
-}
-
-#[utoipa::path(
-    post,
-    path = "/internal/computers/{computer_id}/image",
-    operation_id = "internal_update_computer_image",
-    params(("computer_id" = Uuid, Path)),
-    request_body = InternalUpdateImageBody,
-    responses((status = 200, body = ImageUpdate), (status = 409, body = ErrorResponse)),
-)]
-/// Rebuild a running or stopped computer's root disk from another image,
-/// keeping its data disk.
-#[tracing::instrument(skip_all, fields(computer_id = %computer_id), err)]
-pub async fn internal_update_image<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
->(
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
-    Path(computer_id): Path<ComputerId>,
-    Json(body): Json<InternalUpdateImageBody>,
-) -> Result<Json<ImageUpdate>, ComputersHttpError> {
-    Ok(Json(
-        state
-            .service
-            .update_image(body.team_id, computer_id, body.image)
-            .await?,
-    ))
-}
-
-#[utoipa::path(
-    post,
-    path = "/internal/computers/{computer_id}/image/rollback",
-    operation_id = "internal_rollback_computer_image",
-    params(("computer_id" = Uuid, Path), InternalTeamQuery),
-    responses((status = 200, body = ImageUpdate), (status = 409, body = ErrorResponse)),
-)]
-/// Update a computer back to the image it ran before its last update.
-#[tracing::instrument(skip_all, fields(computer_id = %computer_id), err)]
-pub async fn internal_rollback_image<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
->(
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
-    Path(computer_id): Path<ComputerId>,
-    Query(query): Query<InternalTeamQuery>,
-) -> Result<Json<ImageUpdate>, ComputersHttpError> {
-    Ok(Json(
-        state
-            .service
-            .rollback_image(query.team_id, computer_id)
-            .await?,
-    ))
-}
-
 /// An HTTP view of [`ComputerError`].
 #[derive(Debug)]
 pub struct ComputersHttpError(ComputerError);
@@ -865,10 +781,7 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::FleetUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             ComputerError::RolloutDisabled | ComputerError::Forbidden => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
-            ComputerError::SoldOut
-            | ComputerError::NotFailed
-            | ComputerError::NotUpdatable
-            | ComputerError::NoPreviousImage => StatusCode::CONFLICT,
+            ComputerError::SoldOut | ComputerError::NotFailed => StatusCode::CONFLICT,
             ComputerError::BadRequest(_) | ComputerError::ConfirmationMismatch => {
                 StatusCode::BAD_REQUEST
             }

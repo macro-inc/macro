@@ -6,7 +6,6 @@ use proptest::prelude::*;
 use super::*;
 
 mod comped;
-mod image_update;
 mod instance_lost;
 mod payment;
 
@@ -884,9 +883,6 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::OperatorRetry),
         Just(Event::EffectFailed {
             reason: "boom".to_owned()
-        }),
-        Just(Event::UpdateImage {
-            image: crate::domain::image::GuestImage::try_new("macro-box/2026-11-10").unwrap()
         }),
     ]
 }

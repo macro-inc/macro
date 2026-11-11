@@ -624,4 +624,3 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
     );
 }
 
-mod image;

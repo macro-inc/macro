@@ -115,8 +115,8 @@ CREATE TABLE hosted_runtime_host (
 -- The resources, catalog entry and price are snapshotted at purchase; comped
 -- computers have no price. `created_by` is RESTRICTed so enrollment and
 -- billing attribution survive until the computer or team is deleted.
--- `image` is what the root disk was last built from and `previous_image`
--- the rollback target, both null until the first creation finishes.
+-- `image` is the image the computer was created from, null until the first
+-- creation finishes.
 -- Bots are soft-deleted, so `default_agent_id` can name a deleted agent.
 CREATE TABLE hosted_runtime (
     id UUID PRIMARY KEY,
@@ -143,7 +143,6 @@ CREATE TABLE hosted_runtime (
     setup_completed_at TIMESTAMPTZ,
     default_agent_id UUID REFERENCES bots (id) ON DELETE SET NULL,
     image TEXT,
-    previous_image TEXT,
     CONSTRAINT hosted_runtime_price_provenance_check
         CHECK ((price_id IS NULL) = (state->>'comp_reason' IS NOT NULL))
 );

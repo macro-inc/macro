@@ -3,9 +3,8 @@
 //! Each computer is a `macro-box` container running systemd.
 //! The disk size is not enforced (overlayfs has no per-container quota).
 //!
-//! Like an Incus computer's data disk, two named volumes keep `/home` and
-//! `/var/lib/macrod` (the enrollment marker and Claude token store) across
-//! an image update, which recreates the container from the new image.
+//! Like an Incus computer's data disk, two named volumes hold `/home` and
+//! `/var/lib/macrod` (the enrollment marker and Claude credential).
 //! Destroy deletes them; a guest recreated after a loss reuses them. They
 //! carry the computer and control-plane labels, so a stack reset finds them.
 //!
@@ -294,45 +293,6 @@ impl Fleet for DockerFleet {
                 self.start(computer.id).await?;
             }
             Ok(self.config.image.clone())
-        }
-    }
-
-    /// Recreates the container from `image` with the same identity, volumes
-    /// and enrollment directory; Docker has no in-place rebuild.
-    #[tracing::instrument(name = "docker_fleet.rebuild", skip_all, fields(computer_id = %computer.id, image = %image, start), err)]
-    async fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> Result<(), DockerFleetError> {
-        if self.state(computer.id).await?.is_none() {
-            return Err(DockerFleetError::Missing {
-                computer_id: computer.id,
-            });
-        }
-        let labels = self.labels(computer.id).await?;
-        if labels.image != *image {
-            let spec = CreateSpec {
-                image: image.clone(),
-                network: self.config.network.clone(),
-                computer_id: computer.id,
-                control_plane_id: labels.control_plane_id,
-                created_at: labels.created_at,
-                generation: labels.generation,
-                pairing_id: labels.pairing_id,
-                memory_gb: computer.resources.memory_gib.get(),
-                vcpus: computer.resources.vcpus.get(),
-                enrollment_dir: self.enrollment_dir(computer.id),
-            };
-            self.stop(computer.id).await?;
-            self.docker("rm", &remove_args(computer.id)).await?;
-            self.docker("create", &create_args(&spec)).await?;
-        }
-        if start {
-            self.start(computer.id).await
-        } else {
-            self.stop(computer.id).await
         }
     }
 

@@ -65,18 +65,6 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
-    async fn rebuild(
-        &self,
-        computer: &Computer,
-        image: &GuestImage,
-        start: bool,
-    ) -> Result<(), Self::Err> {
-        match self {
-            Self::Incus(fleet) => Ok(fleet.rebuild(computer, image, start).await?),
-            Self::Docker(fleet) => Ok(fleet.rebuild(computer, image, start).await?),
-        }
-    }
-
     async fn start(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.start(computer_id).await?),

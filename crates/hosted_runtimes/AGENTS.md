@@ -24,13 +24,12 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
-- `src/domain/image.rs` + `src/domain/service/image.rs`: versioned images,
-  the root/data disk split, and the operator's image update and rollback.
+- `src/domain/image.rs`: versioned images and the root/data disk split.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
   macrod presence); wired in
   `services/agent_harness_service/src/computers.rs`.
-- `src/inbound/axum_router.rs`: `/team/computers*` and `/internal/computers*`
-  (including the image update routes), mounted by authentication_service.
+- `src/inbound/axum_router.rs`: `/team/computers*` and `/internal/computers*`,
+  mounted by authentication_service.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
 
@@ -253,26 +252,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   volumes `macro-computer-<id>-home` (`/home`) and `-macrod`
   (`/var/lib/macrod`). Create and destroy are idempotent and leave no volume
   behind a destroyed computer.
-- **Image updates**: images are versioned aliases (`macro-box/<version>` on
-  Incus, `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new
-  computers get. `hosted_runtime.image` records what each root disk was built
+- **Images**: images are versioned aliases (`macro-box/<version>` on Incus,
+  `macro-box:<tag>` on Docker); `COMPUTERS_IMAGE` names the one new computers
+  get. `hosted_runtime.image` records the image each computer was created
   from (`Fleet::create` returns it, stamped as `user.macro.image` /
-  `macro.image` on the guest) and `previous_image` the one before
-  (`ComputerRepo::record_image`). `Event::UpdateImage { image }` moves a
-  Running or Stopped computer to `Phase::Updating { start }` with
-  `Effect::Rebuild`: stop → rebuild the root disk (Incus `rebuild`, Docker
-  recreate on the same volumes and labels) → start when it was running,
-  completing with `InstanceStarted`/`InstanceStopped`. Other phases ignore
-  it. A guest already stamped with the image is only powered, so a retry
-  never rebuilds twice; a missing Incus alias fails the effect instead of
-  reading as a lost instance. Enrollment and the pairing survive, so macrod
-  reconnects without re-enrolling. Rollback is an update to `previous_image`.
-  Operators use internal-key routes
-  `POST /internal/computers/{computer_id}/image` (`{teamId, image}`) and
-  `POST /internal/computers/{computer_id}/image/rollback?teamId=`, which
-  answer `ImageUpdate { image, previousImage }`; a computer in another phase,
-  already on that image or with nothing to roll back to answers 409/400.
-  There is no UI.
+  `macro.image` on the guest). Updating running computers to a new image is
+  not built yet; it will be a fleet-wide rollout, not a per-computer API.
 - **Enrollment**: `Enrollment { computer_id, generation, pairing_id, device_secret, name, deployment, traceparent }`
   is the one-time `user.macro.enrollment` JSON or Docker file. `deployment`
   (agent harness, document storage, app and egress URLs) comes from the
@@ -335,8 +320,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 ## Checks
 
 - `cargo test -p hosted_runtimes` (`SQLX_OFFLINE` unset for DB tests).
-- `cargo run -p hosted_runtimes --example incus_fleet_smoke -- … --update-image macro-box/<version>`
-  drives create → stop → start → rebuild → destroy against a dev Incus host.
+- `cargo run -p hosted_runtimes --example incus_fleet_smoke -- …` drives
+  create → stop → start → destroy against a dev Incus host.
 - With `macro-box:latest` loaded, run the Docker isolation regression with
   `cargo test -p hosted_runtimes listing_cannot_expose_another_fleets_containers_to_reconciliation -- --ignored`.
 
