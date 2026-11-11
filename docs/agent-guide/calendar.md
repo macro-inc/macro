@@ -46,6 +46,11 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
+Opening the calendar draws the visible period alone. The two neighboring periods
+mount on later tasks once the visible period has its events, or after a moment
+when that load is slow. They start beside whatever period is on screen by then,
+and paging waits for them.
+
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
 grids stay mounted and undimmed while occurrences load. An uncached range never
