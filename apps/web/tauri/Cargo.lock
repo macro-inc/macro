@@ -1052,7 +1052,7 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
- "database_sql",
+ "database_sql_engine",
  "lru",
  "macro_user_id",
  "maybe_send",
@@ -1400,6 +1400,15 @@ name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
+
+[[package]]
+name = "convert_case"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
+dependencies = [
+ "unicode-segmentation",
+]
 
 [[package]]
 name = "cookie"
@@ -1850,15 +1859,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
-name = "database_sql"
+name = "database_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "serde",
+ "specta",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "database_sql_engine"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "databases_types",
  "filter_ast",
  "item_filters",
  "logos",
  "maybe_send",
- "models_databases",
  "nom 8.0.0",
  "serde",
  "serde-wasm-bindgen",
@@ -1867,6 +1887,23 @@ dependencies = [
  "thiserror 2.0.18",
  "uuid",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "databases_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "database_id",
+ "fractional_index",
+ "macro_user_id",
+ "nom 8.0.0",
+ "serde",
+ "specta",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -2012,7 +2049,7 @@ version = "0.99.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
 dependencies = [
- "convert_case",
+ "convert_case 0.4.0",
  "proc-macro2",
  "quote",
  "rustc_version",
@@ -3630,6 +3667,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
 
 [[package]]
+name = "id_newtype"
+version = "0.1.0"
+dependencies = [
+ "macro_uuid",
+ "nutype",
+ "uuid",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3986,6 +4032,27 @@ dependencies = [
  "bitflags 2.11.1",
  "serde",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "kinded"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21677048d7aa2c4c73e7edac4a9d5aee810a3987ccef2762c8449ffd0b92f8d2"
+dependencies = [
+ "kinded_macros",
+]
+
+[[package]]
+name = "kinded_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6eaa04e7e45e39b21765756cc9544a4eb4a7f41abefbe77e6256a1649789551d"
+dependencies = [
+ "convert_case 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4492,23 +4559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_databases"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "fractional_index",
- "macro_user_id",
- "macro_uuid",
- "nom 8.0.0",
- "serde",
- "specta",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "utoipa",
- "uuid",
-]
-
-[[package]]
 name = "muda"
 version = "0.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4878,6 +4928,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "nutype"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae5a3dbe7b39891991de649985f7930fea69131fc7492d1cf2621d279ad56f77"
+dependencies = [
+ "nutype_macros",
+]
+
+[[package]]
+name = "nutype_macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea8ebf0265a233787dc277bd299f7facf14954a4e8a40c7c3435d8a58c9cd522"
+dependencies = [
+ "cfg-if",
+ "kinded",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.117",
+ "urlencoding",
 ]
 
 [[package]]
