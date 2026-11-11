@@ -13,6 +13,7 @@ use the real development conformance host.
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
 - `src/backend/factory.ts`: typed editor configuration and validated hook-order binding selected after initialization; root module evaluation never loads WASM.
 - `src/configuration/registered-nodes.ts`: real static preparation and default registry; engine initialization binds this preparer after the cold class graph loads.
+- `src/backend/production/mirror-README.md`: sparse acknowledged record index and lazy readonly native Map contract; focused cache tests do not constitute native compatibility acceptance.
 - `src/backend/conformance.ts`: development backend and its runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
