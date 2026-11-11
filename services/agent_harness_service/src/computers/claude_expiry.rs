@@ -2,7 +2,7 @@
 //! (`hosted_runtimes::domain::claude_sign_in`): computers signed in to Claude
 //! through Macro, read from their active Claude login, harness and computer
 //! rows; the team's
-//! admins; and the `claude_sign_in_expiry` notification.
+//! admins; and the `agent_sign_in_expiry` notification.
 
 #[cfg(test)]
 mod test;
@@ -19,7 +19,7 @@ use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
-use model_notifications::{ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage};
+use model_notifications::{AgentProvider, AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
@@ -187,13 +187,14 @@ impl<Ingress: NotificationIngress> ClaudeSignInNotices for IngressClaudeSignInNo
             notification_entity: EntityType::Harness
                 .with_entity_string(expiry.harness_id.to_string()),
             secondary_notification_entity: None,
-            notification: ClaudeSignInExpiryMetadata {
+            notification: AgentSignInExpiryMetadata {
+                agent: AgentProvider::Claude,
                 harness_id: expiry.harness_id.as_uuid(),
                 computer_name: expiry.computer_name,
                 stage: match expiry.notice.stage {
-                    ClaudeSignInStage::ExpiresSoon => ClaudeSignInExpiryStage::ExpiresSoon,
-                    ClaudeSignInStage::ExpiresToday => ClaudeSignInExpiryStage::ExpiresToday,
-                    ClaudeSignInStage::Expired => ClaudeSignInExpiryStage::Expired,
+                    ClaudeSignInStage::ExpiresSoon => AgentSignInExpiryStage::ExpiresSoon,
+                    ClaudeSignInStage::ExpiresToday => AgentSignInExpiryStage::ExpiresToday,
+                    ClaudeSignInStage::Expired => AgentSignInExpiryStage::Expired,
                 },
                 expires_at: expiry.notice.expires_at,
             },

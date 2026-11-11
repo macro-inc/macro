@@ -216,11 +216,6 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             ),
             (
                 Method::POST,
-                "/team/computers/notify".to_owned(),
-                r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#.to_owned(),
-            ),
-            (
-                Method::POST,
                 format!("/team/computers/{id}/power"),
                 r#"{"on":true}"#.to_owned(),
             ),

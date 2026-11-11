@@ -22,8 +22,6 @@ export interface SizeOffer {
    * @minimum 0
    */
   memoryGb: number;
-  /** The caller asked to hear when this size is back. */
-  notifyRequested: boolean;
   /** Price for one computer. */
   quote: Quote;
   /** Purchased catalog size. */

@@ -1527,22 +1527,25 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'routine_run_finished'>
     )
     .with(
-      { __typename: 'GraphqlClaudeSignInExpiryMetadata' },
+      { __typename: 'GraphqlAgentSignInExpiryMetadata' },
       (metadata) =>
         ({
-          tag: 'claude_sign_in_expiry',
+          tag: 'agent_sign_in_expiry',
           content: {
-            harnessId: metadata.claudeSignInExpiryHarnessId,
-            computerName: metadata.claudeSignInExpiryComputerName,
-            stage: match(metadata.claudeSignInExpiryStage)
+            agent: match(metadata.agentSignInExpiryAgent)
+              .with('CLAUDE', () => 'claude' as const)
+              .exhaustive(),
+            harnessId: metadata.agentSignInExpiryHarnessId,
+            computerName: metadata.agentSignInExpiryComputerName,
+            stage: match(metadata.agentSignInExpiryStage)
               .with('EXPIRES_SOON', () => 'expires_soon' as const)
               .with('EXPIRES_TODAY', () => 'expires_today' as const)
               .with('EXPIRED', () => 'expired' as const)
               // A stage this build doesn't know still asks for a new sign-in.
               .exhaustive(() => 'expires_soon' as const),
-            expiresAt: metadata.claudeSignInExpiryExpiresAt,
+            expiresAt: metadata.agentSignInExpiryExpiresAt,
           },
-        }) satisfies NotifEventMember<'claude_sign_in_expiry'>
+        }) satisfies NotifEventMember<'agent_sign_in_expiry'>
     )
     .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },

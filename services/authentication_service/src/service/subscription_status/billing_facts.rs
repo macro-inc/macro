@@ -3,7 +3,6 @@ use super::billing::{
     SubscriptionBilling, SubscriptionBillingLineItem, SubscriptionBillingLineKind,
     SubscriptionNextInvoice, SubscriptionSeatTotal,
 };
-use crate::domain::computer_billing::ComputerPrices;
 use hosted_runtimes::domain::{
     ids::ComputerId,
     models::{BillingInterval, ComputerName, ComputerStatusKind},
@@ -40,7 +39,6 @@ pub struct SubscriptionBillingFacts {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RecurringItemKind {
     Seat(SeatPlan),
-    LegacyComputer,
     Other,
 }
 
@@ -73,7 +71,6 @@ impl RecurringItemKind {
     /// Recorded computer identity wins over current price-table classifications.
     pub fn for_provider_price(
         seats: &SeatPrices,
-        configured_prices: &ComputerPrices,
         computers: &[BillingComputer],
         price_id: &stripe::PriceId,
         computer_id: Option<ComputerId>,
@@ -88,14 +85,6 @@ impl RecurringItemKind {
         }
         if let Some(plan) = seats.plan_for_price(price_id.as_str()) {
             return Self::Seat(plan);
-        }
-        if computer_id.is_none()
-            && computers
-                .iter()
-                .any(|computer| !computer.included && computer.price_id.is_none())
-            && configured_prices.contains_legacy_price(price_id)
-        {
-            return Self::LegacyComputer;
         }
         Self::Other
     }
@@ -122,7 +111,6 @@ impl SubscriptionBillingFacts {
                 .checked_mul(i64::try_from(item.quantity).ok()?)?;
             result.subscription_total = result.subscription_total.checked_add(amount)?;
             let mut remaining = item.quantity;
-            let mut legacy_computer = false;
             match &item.kind {
                 RecurringItemKind::Seat(plan) => {
                     let seats: Vec<_> = self
@@ -163,14 +151,12 @@ impl SubscriptionBillingFacts {
                         }
                     }
                 }
-                RecurringItemKind::LegacyComputer | RecurringItemKind::Other => {
+                RecurringItemKind::Other => {
                     let computers: Vec<_> = self
                         .computers
                         .iter()
                         .filter(|computer| computer.matches(item))
                         .collect();
-                    legacy_computer =
-                        item.kind == RecurringItemKind::LegacyComputer && computers.is_empty();
                     if u64::try_from(computers.len()).ok()? <= remaining
                         && computers.iter().all(|computer| {
                             items.iter().filter(|other| computer.matches(other)).count() == 1
@@ -185,11 +171,7 @@ impl SubscriptionBillingFacts {
             }
             if remaining > 0 {
                 result.line_items.push(SubscriptionBillingLineItem {
-                    kind: if legacy_computer {
-                        SubscriptionBillingLineKind::Computer
-                    } else {
-                        SubscriptionBillingLineKind::Other
-                    },
+                    kind: SubscriptionBillingLineKind::Other,
                     plan: None,
                     quantity: remaining,
                     unit_amount: Some(item.unit_amount),
@@ -197,11 +179,7 @@ impl SubscriptionBillingFacts {
                         .unit_amount
                         .checked_mul(i64::try_from(remaining).ok()?)?,
                     computer_id: None,
-                    name: if legacy_computer {
-                        "Computer".to_owned()
-                    } else {
-                        item.name.clone()
-                    },
+                    name: item.name.clone(),
                     size: None,
                     status: None,
                     included: false,

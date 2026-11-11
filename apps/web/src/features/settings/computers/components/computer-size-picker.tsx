@@ -1,18 +1,14 @@
 import { t } from '@app/lib/i18n';
 import type { ComputerSize, SizeOffer } from '@service-auth/computers';
-import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import { ChoiceRow } from '../../primitives';
 import { formatQuote, offerSpecs, sizeLabel } from '../core/computer-display';
 
-/** One choice per size; sold-out sizes can't be picked but offer Notify me. */
+/** One choice per size; sold-out sizes show disabled with Sold out. */
 export function ComputerSizePicker(props: {
   offers: readonly SizeOffer[];
   selected: ComputerSize | undefined;
-  /** The size a Notify me request is in flight for. */
-  notifyPending?: ComputerSize;
   onSelect: (size: ComputerSize) => void;
-  onNotify: (size: ComputerSize) => void;
 }) {
   return (
     <fieldset class="flex min-w-0 flex-col gap-2">
@@ -38,28 +34,8 @@ export function ComputerSizePicker(props: {
                   </span>
                 }
               >
-                <span class="flex flex-col items-end gap-1">
-                  <span class="text-xs font-medium text-ink-muted">
-                    Sold out
-                  </span>
-                  <Show
-                    when={!offer.notifyRequested}
-                    fallback={
-                      <span class="text-xs text-ink-extra-muted">
-                        We'll let you know
-                      </span>
-                    }
-                  >
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={props.notifyPending === offer.size}
-                      onClick={() => props.onNotify(offer.size)}
-                    >
-                      Notify me
-                    </Button>
-                  </Show>
+                <span class="whitespace-nowrap text-xs font-medium text-ink-muted">
+                  Sold out
                 </span>
               </Show>
             }

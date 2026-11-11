@@ -10,6 +10,7 @@ mod item_changes;
 mod subscription_items;
 use subscription_items::{cadence, item_quantity_updates, update_error};
 mod computer_items;
+pub use computer_items::{COMPUTER_ID_KEY, item_computer_id};
 mod subscription_error;
 use computer_items::ComputerItem;
 use subscription_error::SubscriptionDataError;

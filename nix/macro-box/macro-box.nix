@@ -88,6 +88,22 @@ in
                 | jq --exit-status '.result.agentInfo.version == "${box.claudeAgentAcp.version}"'
               touch $out
             '';
+        # agentMode takes the macro user's sudo rule and docker group away.
+        macro-box-agent-mode =
+          let
+            agent = (guest ./_container.nix).extendModules {
+              modules = [ { macro.box.agentMode = true; } ];
+            };
+            groups = agent.config.users.users.macro.extraGroups;
+            macroSudo = builtins.filter (
+              rule: builtins.elem "macro" rule.users
+            ) agent.config.security.sudo.extraRules;
+          in
+          assert lib.assertMsg (
+            !(builtins.elem "docker" groups) && !(builtins.elem "wheel" groups)
+          ) "agentMode leaves macro in ${builtins.toJSON groups}";
+          assert lib.assertMsg (macroSudo == [ ]) "agentMode leaves a sudo rule for macro";
+          pkgs.runCommand "macro-box-agent-mode" { } "touch $out";
         macro-box = import ./_vm-test.nix {
           inherit pkgs;
           guest = {
