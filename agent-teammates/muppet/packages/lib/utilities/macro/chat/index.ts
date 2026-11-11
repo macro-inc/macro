@@ -8,63 +8,57 @@
  *       .on((sources) => sources.messages, async (message, { wake, chat }) => …)
  */
 import type { Macro } from "@macro-inc/sdk";
-import { z } from "zod";
 import { behavior } from "../../../core/behavior.ts";
 import { module } from "../../../core/capability.ts";
 import { source } from "../../../core/event.ts";
 
 /** What a message carries besides its text: a forwarded email can arrive with no text at all. */
-export const Attachment = z.object({ type: z.string(), id: z.string() });
-export type Attachment = z.infer<typeof Attachment>;
+export type Attachment = { readonly type: string; readonly id: string };
 
 /** One message, as it arrives. */
-export const Message = z.object({
-	id: z.string(),
-	channelId: z.string(),
+export type Message = {
+	readonly id: string;
+	readonly channelId: string;
 	/** The channel's name. */
-	channel: z.string(),
+	readonly channel: string;
 	/** The conversation the message belongs to: its own id for a root, the root's for a reply. */
-	root: z.string().nullish(),
+	readonly root?: string | null;
 	/** The root's id for a reply; null for a root. */
-	thread: z.string().nullable(),
-	dm: z.boolean(),
+	readonly thread: string | null;
+	readonly dm: boolean;
 	/** The sender's display name. Never proof of who sent it. */
-	from: z.string(),
+	readonly from: string;
 	/** Macro's id for the sender, e.g. `macro|name@example.com`. The only thing that says who sent it. */
-	senderId: z.string(),
+	readonly senderId: string;
 	/** Whether the agent sent it. */
-	mine: z.boolean(),
-	at: z.string(),
-	text: z.string(),
+	readonly mine: boolean;
+	readonly at: string;
+	readonly text: string;
 	/** The ids of whoever it mentions. */
-	mentions: z.array(z.string()),
-	attachments: z.array(Attachment),
-});
-export type Message = z.infer<typeof Message>;
+	readonly mentions: readonly string[];
+	readonly attachments: readonly Attachment[];
+};
 
 /** A message as read back from a conversation. */
-export const Line = z.object({
-	id: z.string(),
-	from: z.string(),
-	senderId: z.string(),
-	at: z.string(),
-	text: z.string(),
-});
-export type Line = z.infer<typeof Line>;
+export type Line = {
+	readonly id: string;
+	readonly from: string;
+	readonly senderId: string;
+	readonly at: string;
+	readonly text: string;
+};
 
-export const EmailLine = z.object({
-	from: z.string().optional(),
-	at: z.string().optional(),
-	subject: z.string().optional(),
-	text: z.string().optional(),
-});
-export type EmailLine = z.infer<typeof EmailLine>;
+export type EmailLine = {
+	readonly from?: string;
+	readonly at?: string;
+	readonly subject?: string;
+	readonly text?: string;
+};
 
-export const Posted = z.object({
-	channelId: z.string(),
-	messageId: z.string(),
-});
-export type Posted = z.infer<typeof Posted>;
+export type Posted = {
+	readonly channelId: string;
+	readonly messageId: string;
+};
 
 /** Macro chat, as the agent's account. `sdkChat` is the real one. */
 export type Chat = {
@@ -365,14 +359,14 @@ export const typing = ({
 
 type Context = { readonly chat: Chat; readonly typing: Typing };
 
-/** A flag where a message should be is a mistyped command, not something to send. */
-const Text = z
-	.string()
-	.trim()
-	.min(1, "empty message")
-	.refine((value) => !/^--?\w[\w-]*$/.test(value), {
-		message: "refusing to send a flag as a message",
-	});
+/** The text to post: trimmed, and never empty. A flag where a message should be is a mistyped command, not something to send. */
+const messageText = (text: string): string => {
+	const trimmed = text.trim();
+	if (trimmed === "") throw new Error("empty message");
+	if (/^--?\w[\w-]*$/.test(trimmed))
+		throw new Error("refusing to send a flag as a message");
+	return trimmed;
+};
 
 type InChannel = { readonly channelId: string };
 
@@ -398,7 +392,7 @@ export const postMessage = async (
 	{ chat, typing }: Context,
 	{ channelId, text }: InChannel & { readonly text: string },
 ): Promise<Posted> => {
-	const posted = await chat.send(channelId, Text.parse(text));
+	const posted = await chat.send(channelId, messageText(text));
 	await typing.stop(channelId);
 	return posted;
 };
@@ -420,7 +414,7 @@ export const replyInThread = async (
 		readonly text: string;
 	},
 ): Promise<Posted> => {
-	const posted = await chat.reply(channelId, root, Text.parse(text));
+	const posted = await chat.reply(channelId, root, messageText(text));
 	await typing.stop(channelId);
 	return posted;
 };
@@ -456,7 +450,7 @@ export const react = async (
 export const dmPerson = (
 	{ chat }: Context,
 	{ userId, text }: { readonly userId: string; readonly text: string },
-): Promise<Posted> => chat.dm(userId, Text.parse(text));
+): Promise<Posted> => chat.dm(userId, messageText(text));
 
 /**
  * A channel's latest messages, oldest first, or with `root`, one thread: its

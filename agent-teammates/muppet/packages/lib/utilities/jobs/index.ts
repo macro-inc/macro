@@ -12,7 +12,6 @@
  *     behavior().use(jobs({ jobs: herdrJobs({ parent: "t60" }) }))
  *       .on((sources) => sources.jobs, async (job, { wake }) => …)
  */
-import { z } from "zod";
 import { behavior } from "../../core/behavior.ts";
 import { module } from "../../core/capability.ts";
 import { source } from "../../core/event.ts";
@@ -20,32 +19,29 @@ import { source } from "../../core/event.ts";
 export { herdrJobs } from "./herdr.ts";
 
 /** Where a job is: still going, with what an agent is doing if it is one, or ended, and how. */
-export const Status = z.discriminatedUnion("kind", [
-	z.object({
-		kind: z.literal("running"),
-		/** For an agent, what it is doing, e.g. `working`, `blocked` or `done` (with its turn). Absent for a plain program. */
-		activity: z.string().optional(),
-	}),
-	z.object({
-		kind: z.literal("finished"),
-		/** Why it ended, e.g. `exited`, `killed`, or `stopped_by_restart` when whatever ran it restarted. */
-		reason: z.string(),
-		exitCode: z.number().optional(),
-		signal: z.number().optional(),
-	}),
-]);
-export type Status = z.infer<typeof Status>;
+export type Status =
+	| {
+			readonly kind: "running";
+			/** For an agent, what it is doing, e.g. `working`, `blocked` or `done` (with its turn). Absent for a plain program. */
+			readonly activity?: string;
+	  }
+	| {
+			readonly kind: "finished";
+			/** Why it ended, e.g. `exited`, `killed`, or `stopped_by_restart` when whatever ran it restarted. */
+			readonly reason: string;
+			readonly exitCode?: number;
+			readonly signal?: number;
+	  };
 
-export const Job = z.object({
+export type Job = {
 	/** Unique among running jobs. */
-	name: z.string(),
+	readonly name: string;
 	/** What it was started with, to find it by. */
-	labels: z.record(z.string(), z.string()),
+	readonly labels: Readonly<Record<string, string>>;
 	/** The job it runs under, if any: it is shown beneath it, and ends with it unless it outlives it. */
-	parent: z.string().optional(),
-	status: Status,
-});
-export type Job = z.infer<typeof Job>;
+	readonly parent?: string;
+	readonly status: Status;
+};
 
 /** What to run. */
 export type Start = {
