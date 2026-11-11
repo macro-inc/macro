@@ -14,6 +14,7 @@ export default {
   markUnread: 'Mark Unread',
   open: 'Open',
   openInNewSplit: 'Open in new split',
+  openInNewTab: 'Open in new tab',
   openInCurrentSplit: 'Open in current split',
   openFullscreen: 'Open fullscreen',
   rename: 'Rename',
