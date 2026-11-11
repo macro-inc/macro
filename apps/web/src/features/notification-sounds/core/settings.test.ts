@@ -57,16 +57,20 @@ it('defaults call sounds on for legacy storage without changing notification sou
   expect(soundForNotification('channel_mention', settings)).toBeNull();
 });
 
-it('synthesizes short ascending and descending sine cues', () => {
+it('synthesizes short rising and falling plucks', () => {
   const join = notificationSound('call-join').tones;
   const leave = notificationSound('call-leave').tones;
 
   expect(join.every((tone) => tone.wave === 'sine')).toBe(true);
   expect(leave.every((tone) => tone.wave === 'sine')).toBe(true);
-  expect(join[0].frequency).toBeLessThan(join[1].frequency);
-  expect(leave[0].frequency).toBeGreaterThan(leave[1].frequency);
-  expect(join[1].start + join[1].duration).toBeLessThan(0.5);
-  expect(leave[1].start + leave[1].duration).toBeLessThan(0.5);
+  for (const tone of join) {
+    expect(tone.glideTo).toBeGreaterThan(tone.frequency);
+    expect(tone.start + tone.duration).toBeLessThan(0.25);
+  }
+  for (const tone of leave) {
+    expect(tone.glideTo).toBeLessThan(tone.frequency);
+    expect(tone.start + tone.duration).toBeLessThan(0.25);
+  }
 });
 
 it('silences call sounds when disabled, muted, or within quiet hours', () => {

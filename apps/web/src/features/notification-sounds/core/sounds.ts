@@ -119,18 +119,26 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
 ];
 
-/** Participant join and leave cues, kept out of notification category choices. */
+/** Short, warm plucks: rising on arrival and falling on departure. */
 export const CALL_SOUNDS: readonly NotificationSound[] = [
   {
     id: 'call-join',
     label: 'Call join',
     tones: [
-      { frequency: 523.25, start: 0, duration: 0.14, gain: 0.8, wave: 'sine' },
       {
-        frequency: 783.99,
-        start: 0.12,
+        frequency: 440,
+        glideTo: 554.37,
+        start: 0,
         duration: 0.2,
-        gain: 0.8,
+        gain: 0.65,
+        wave: 'sine',
+      },
+      {
+        frequency: 880,
+        glideTo: 1108.73,
+        start: 0,
+        duration: 0.09,
+        gain: 0.12,
         wave: 'sine',
       },
     ],
@@ -139,12 +147,20 @@ export const CALL_SOUNDS: readonly NotificationSound[] = [
     id: 'call-leave',
     label: 'Call leave',
     tones: [
-      { frequency: 783.99, start: 0, duration: 0.14, gain: 0.8, wave: 'sine' },
       {
-        frequency: 523.25,
-        start: 0.12,
-        duration: 0.2,
-        gain: 0.8,
+        frequency: 369.99,
+        glideTo: 277.18,
+        start: 0,
+        duration: 0.22,
+        gain: 0.6,
+        wave: 'sine',
+      },
+      {
+        frequency: 739.99,
+        glideTo: 554.37,
+        start: 0,
+        duration: 0.1,
+        gain: 0.1,
         wave: 'sine',
       },
     ],
