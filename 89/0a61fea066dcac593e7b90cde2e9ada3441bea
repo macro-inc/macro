@@ -1,0 +1,25 @@
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_6f597a0c0ac16e::t_37210932829ed0 6843-6847,6858,6926-6930,6944
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_6f597a0c0ac16e::t_f4963d4fec3b5c 5894-5903,5973-5982
+packages/sdk/generated/auth/types.gen.ts
+  s_6f597a0c0ac16e::t_03d9baa875be3a 4776-4779,4840-4843
+packages/sdk/specs/auth.json
+  s_6f597a0c0ac16e::t_570f3791e8800d 5894-5903,5973-5982
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "890a61fea066dcac593e7b90cde2e9ada3441bea",
+  "prompts": {},
+  "sessions": {
+    "s_6f597a0c0ac16e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0ceb2d46-b50e-448e-a4b8-742da2de62d5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
