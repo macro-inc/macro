@@ -111,12 +111,12 @@ fn search_uses_actual_application_generation_admission_and_readonly_cache_query(
         }
         offset = (start + length + 3) & !3;
     }
-    assert_eq!(callbacks.len(), 5);
+    assert_eq!(callbacks.len(), 6);
     assert_eq!(callbacks[0]["callback"], "open");
     assert_eq!(callbacks[0]["kind"], "actions");
     for (event, kind) in callbacks[1..]
         .iter()
-        .zip(["emojis", "mentions", "snippets", "actions"])
+        .zip(["emojis", "mentions", "tags", "snippets", "actions"])
     {
         assert_eq!(event["callback"], "term");
         assert_eq!(event["kind"], kind);

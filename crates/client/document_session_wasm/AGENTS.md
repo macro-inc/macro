@@ -57,6 +57,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 ## Boundaries
 
 - Keep application query kind 9 generation-fenced while forwarding to the surface controller query; ordinary query receivers remain unavailable inside native dispatcher callbacks.
+- Keep search wire-output tests aligned with the full Source controller registration order, including tags between mentions and snippets; preserve every callback and its literal snapshot assertions.
 
 Route raw live-state string and query-kind-7 exports through the model streaming writer in `src/bulk.rs`; keep application saved-state cleanup separate.
 
