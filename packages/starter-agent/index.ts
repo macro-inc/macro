@@ -6,6 +6,7 @@
  */
 // Bun before 1.4.2 has no Temporal: drop the polyfill once the repo's Bun has it.
 import 'temporal-polyfill/global';
+import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { inSubprocess } from '@macro-inc/muppet/core/code';
@@ -21,6 +22,7 @@ import {
 import { agentClaude, capabilityServer } from './behavior/agent/claude.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { profile } from './behavior/agent/profile.ts';
+import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
 import { childEnvironment } from './behavior/context/children.ts';
 import { base as makeBase } from './behavior/context/index.ts';
 import { timedOut } from './behavior/context/shell.ts';
@@ -31,11 +33,17 @@ import {
   runFiles,
   startup,
 } from './behavior/context/startup.ts';
-import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
+import {
+  telemetryEnvironment,
+  trace,
+  traceparentVariable,
+} from './behavior/context/telemetry.ts';
 import { assistant as makeAgent } from './behavior/index.ts';
 
 const wakesLog = 'wakes';
 const budgetOwner = 'budget';
+/** Where a script's process finds the wake it runs in (the secrets capability's session id). */
+const wakeVariable = 'MUPPET_WAKE_ID';
 const restartVariable = 'MUPPET_RESTART_FILE';
 const claudeProgram = 'claude';
 /** The flag that makes `cli.ts exec` print its result for `inSubprocess` to read. */
@@ -74,6 +82,15 @@ const restart =
         exit: () => undefined,
       });
 
+/** Bubblewrap, which the image provides when children run sandboxed. */
+export const sandboxProgram = (): string | undefined => {
+  const [program] = started.sandbox;
+  if (program === undefined) return undefined;
+  const found = Bun.which(program);
+  if (found === null) throw new Error(`${program} is not on PATH`);
+  return found;
+};
+
 /** The `claude` on PATH, which the image provides. */
 export const claude = (): string => {
   const found = Bun.which(claudeProgram);
@@ -108,20 +125,46 @@ export const scripts: Scripts = {
   signatures: async (file, names) => check.signatures(file, names),
   run: inSubprocess({
     timeoutMs: base.config.scriptTimeoutMs,
-    run: async (source, { timeoutMs }) => {
-      const ran = await base.shell.run(
-        [process.execPath, base.config.cli, 'exec', resultFlag, '-'],
-        {
-          cwd: base.config.root,
-          stdin: source,
-          env: { ...(await wiring.relayed()), ...launcher },
-          timeoutMs,
-        }
-      );
-      return ran.code === timedOut
-        ? { kind: 'timedOut', stdout: ran.stdout, stderr: ran.stderr }
-        : { kind: 'exited', ...ran };
-    },
+    run: (source, { timeoutMs, wakeId }) =>
+      trace('agent.capability_script', async (span) => {
+        if (wakeId !== undefined) span.set('agent.wake_id', wakeId);
+        const parent = span.traceparent();
+        const ran = await base.shell.run(
+          [
+            ...started.sandbox,
+            process.execPath,
+            base.config.cli,
+            'exec',
+            resultFlag,
+            '-',
+          ],
+          {
+            cwd: base.config.root,
+            stdin: source,
+            env: {
+              ...(await wiring.relayed()),
+              ...launcher,
+              ...(wakeId === undefined ? {} : { [wakeVariable]: wakeId }),
+              ...(parent === undefined
+                ? {}
+                : { [traceparentVariable]: parent }),
+              ...telemetryEnvironment(process.env),
+            },
+            timeoutMs,
+          }
+        );
+        span.set(
+          'agent.script_outcome',
+          ran.code === timedOut
+            ? 'timed_out'
+            : ran.code === 0
+              ? 'exited'
+              : 'failed'
+        );
+        return ran.code === timedOut
+          ? { kind: 'timedOut', stdout: ran.stdout, stderr: ran.stderr }
+          : { kind: 'exited', ...ran };
+      }),
   }),
 };
 
@@ -156,6 +199,18 @@ const claudeAgent = agentClaude({
     return () => clearTimeout(timer);
   },
   guards,
+  wakeId: () => Bun.randomUUIDv7(),
+  trace,
+  sandbox: {
+    argv: started.sandbox,
+    spawn: ([command = '', ...args], { cwd, env, signal }) =>
+      spawn(command, args, {
+        cwd,
+        env,
+        signal,
+        stdio: ['pipe', 'pipe', 'inherit'],
+      }),
+  },
   record: async (entry) => {
     await base.log.event(wakesLog, entry);
     await spend(entry);

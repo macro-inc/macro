@@ -82,6 +82,27 @@ describe('inSubprocess', () => {
     logs: 'working',
   } as const;
 
+  test('hands the runner the wake the script belongs to', async () => {
+    const wakes: (string | undefined)[] = [];
+    const run = inSubprocess({
+      timeoutMs: 1000,
+      run: async (_source, { wakeId }) => {
+        wakes.push(wakeId);
+        return {
+          kind: 'exited',
+          code: 0,
+          stdout: resultLine(succeeded),
+          stderr: '',
+        };
+      },
+    });
+    await run('export const main = () => 42', {
+      wakeId: '0190e3b0-0000-7000-8000-000000000000',
+    });
+    await run('export const main = () => 42');
+    expect(wakes).toEqual(['0190e3b0-0000-7000-8000-000000000000', undefined]);
+  });
+
   test('sends the source on stdin and reads back the result the child printed', async () => {
     const sent: { source: string; timeoutMs: number }[] = [];
     const run = inSubprocess({

@@ -39,6 +39,7 @@ to `state/memory/identity/identity.md`.
 | `people`    | Remember the people it talks with, on this machine only                 | nothing                             |
 | `heartbeat` | Schedules, its own clock, and changing its own code (`commit`, `land`)  | nothing                             |
 | `tools`     | Its credentials, by name                                                | nothing                             |
+| `secrets`   | The team's vault: search, copy a field or TOTP code to the clipboard, create and update, request access; never a value | the `enable-agent-vault` flag on the team; `xclip` and `timeout` on the computer |
 | `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | speech credentials (see below)      |
 | `screen`    | Show a browser on a call                                                | the screen service running          |
 

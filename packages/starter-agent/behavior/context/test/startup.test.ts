@@ -24,6 +24,7 @@ describe('startup', () => {
           file: '/run/credentials/macro-agent.service/agent.env',
         },
         mcpServers: {},
+        sandbox: [],
       },
     });
   });
@@ -136,6 +137,29 @@ describe('startup', () => {
         message: expect.stringContaining('MUPPET_MCP_SERVERS_JSON'),
       });
     }
+  });
+});
+
+describe('sandbox', () => {
+  test('under systemd credentials, children run in bubblewrap with the credentials hidden', () => {
+    const started = startup(
+      {
+        AGENT_WORKSPACE: '/w',
+        MUPPET_CREDENTIALS_FILE:
+          '/run/credentials/macro-agent.service/agent.env',
+        CREDENTIALS_DIRECTORY: '/run/credentials/macro-agent.service',
+      },
+      reserved
+    );
+    expect(started.kind === 'configured' && started.value.sandbox).toEqual([
+      'bwrap',
+      '--dev-bind',
+      '/',
+      '/',
+      '--tmpfs',
+      '/run/credentials/macro-agent.service',
+      '--',
+    ]);
   });
 });
 

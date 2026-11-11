@@ -63,7 +63,30 @@ export type Startup = {
   readonly workspace: string;
   readonly credentials: CredentialSource;
   readonly mcpServers: Readonly<Record<string, McpServer>>;
+  /**
+   * What every child (a script's process, Claude Code) is started under: on
+   * a computer, bubblewrap with the systemd credentials directory hidden, so
+   * only this process can read the enrollment's secrets; nothing elsewhere.
+   */
+  readonly sandbox: readonly string[];
 };
+
+/** Set by systemd when the unit loads credentials (`LoadCredential=`). */
+const credentialsDirectory = 'CREDENTIALS_DIRECTORY';
+
+/** Bubblewrap's argv prefix that hides `directory` and changes nothing else. */
+export const hiding = (directory: string): readonly string[] => [
+  'bwrap',
+  '--dev-bind',
+  '/',
+  '/',
+  '--tmpfs',
+  directory,
+  '--',
+];
+
+const sandboxOf = (directory: string | undefined): readonly string[] =>
+  directory === undefined ? [] : hiding(directory);
 
 export type RunFiles = { readonly lastGood: string; readonly restart: string };
 
@@ -176,6 +199,7 @@ export const startup = (
       workspace,
       credentials: credentials.value,
       mcpServers: servers.value,
+      sandbox: sandboxOf(given(environment, credentialsDirectory)),
     },
   };
 };

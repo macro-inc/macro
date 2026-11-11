@@ -19,11 +19,14 @@ import { laterCapabilities } from './capabilities/later/index.ts';
 import { peopleContext } from './capabilities/people/context.ts';
 import { peopleCapabilities } from './capabilities/people/index.ts';
 import { screenContext } from './capabilities/screen/context.ts';
+import { secretsContext } from './capabilities/secrets/context.ts';
+import { secretsCapabilities } from './capabilities/secrets/index.ts';
 import { screenCapabilities } from './capabilities/screen/index.ts';
 import { toolsContext } from './capabilities/tools/context.ts';
 import { toolsCapabilities } from './capabilities/tools/index.ts';
 import type { Base } from './context/index.ts';
 import { callsHandlers } from './events/handlers/calls.ts';
+import { secretsHandlers } from './events/handlers/secrets.ts';
 import { chatHandlers } from './events/handlers/chat.ts';
 import { failureHandlers } from './events/handlers/failures.ts';
 import { heartbeatHandlers } from './events/handlers/heartbeat.ts';
@@ -70,6 +73,7 @@ export const assistant = (
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
   const screen = screenContext(base);
+  const secrets = secretsContext(base, scheduled.decorations.schedules);
   return behavior()
     .decorate(base)
     .decorate({ agent })
@@ -97,7 +101,10 @@ export const assistant = (
     .use(callsCapabilities)
     .use(callsHandlers(callsEvents))
     .use(screen)
-    .use(screenCapabilities);
+    .use(screenCapabilities)
+    .use(secrets)
+    .use(secretsCapabilities)
+    .use(secretsHandlers(scheduled));
 };
 
 export type Assistant = ReturnType<typeof assistant>;
