@@ -27,7 +27,7 @@ pub static DOCUMENT_METADATA: StateKey<Arc<Value>> = StateKey::new("documentMeta
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder
-        .state_export_order::<Root>(&["id", "documentMetadata"])
+        .state_export_order::<Root>(&["id", "documentMetadata", "pinnedPropertyIds"])
         .plugin(Metadata)
 }
 struct Metadata;

@@ -116,6 +116,79 @@ fn imported_null_invalid_and_empty_pins_are_stored_empty_lists() -> Result<(), E
     Ok(())
 }
 
+/// Literal Source root order from an imported (reloaded) document with unknown
+/// keys: [zUnknown, id, aUnknown, documentMetadata, pinnedPropertyIds].
+fn import_source_root(editor: &mut Editor) -> Result<(), Error> {
+    editor.update(|tx| {
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "$".into(),
+            serde_json::from_str(
+                r#"{"zUnknown":"z","id":"rootId","aUnknown":"a","documentMetadata":{"version":10},"pinnedPropertyIds":["p"]}"#,
+            )?,
+        );
+        tx.update_from_json(NodeKey::ROOT, &data)
+    })?;
+    Ok(())
+}
+
+fn key_order(json: &str) -> Vec<&'static str> {
+    let mut keys: Vec<(usize, &'static str)> = [
+        "zUnknown",
+        "aUnknown",
+        "id",
+        "documentMetadata",
+        "pinnedPropertyIds",
+    ]
+    .into_iter()
+    .filter_map(|key| json.find(&format!("\"{key}\":")).map(|at| (at, key)))
+    .collect();
+    keys.sort();
+    keys.into_iter().map(|(_, key)| key).collect()
+}
+
+const FINALIZED_ORDER: [&str; 5] = [
+    "zUnknown",
+    "aUnknown",
+    "id",
+    "documentMetadata",
+    "pinnedPropertyIds",
+];
+
+/// Source live order after pinning matches the root finalizer; unknown keys
+/// keep their relative order. Source's own reload frontier
+/// ([zUnknown, id, aUnknown, ...]) comes from storage map order and is not
+/// reproduced by the finalizer.
+#[test]
+fn root_exports_finalize_id_metadata_then_pins_after_unknown_keys() -> Result<(), Error> {
+    let mut editor = editor();
+    import_source_root(&mut editor)?;
+    let ordinary = editor.state().to_json_string()?;
+    assert_eq!(key_order(&ordinary), FINALIZED_ORDER, "{ordinary}");
+    let stored = serde_json::to_string(&editor.state().view().export_stored_json(NodeKey::ROOT)?)?;
+    assert_eq!(key_order(&stored), FINALIZED_ORDER, "{stored}");
+    Ok(())
+}
+
+#[test]
+fn a_fresh_pin_after_unknown_keys_exports_in_source_live_order() -> Result<(), Error> {
+    let mut editor = editor();
+    editor.update(|tx| {
+        let mut data = serde_json::Map::new();
+        data.insert(
+            "$".into(),
+            json!({ "zUnknown": "z", "aUnknown": "a", "id": "rootId", "documentMetadata": { "version": 10 } }),
+        );
+        tx.update_from_json(NodeKey::ROOT, &data)
+    })?;
+    update(&mut editor, json!([{ "id": "p", "pin": true }]))?;
+    let ordinary = editor.state().to_json_string()?;
+    assert_eq!(key_order(&ordinary), FINALIZED_ORDER, "{ordinary}");
+    let stored = serde_json::to_string(&editor.state().view().export_stored_json(NodeKey::ROOT)?)?;
+    assert_eq!(key_order(&stored), FINALIZED_ORDER, "{stored}");
+    Ok(())
+}
+
 #[test]
 fn pinned_properties_reject_positional_operations() {
     assert!(
