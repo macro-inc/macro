@@ -3313,6 +3313,12 @@ mention, close a query with Escape, and close the installation with the picker
 open. This bounded USER stage does not verify other mention sources or backend
 tracking. Keep those gaps explicit when reporting editor acceptance.
 
+For Contact renderer changes, open a native document containing a Contact
+mention and verify its label, published selection styling and Normal-priority
+Enter handling. Close and reopen the document to check listener cleanup. A
+registered Contact renderer does not establish Contact picker insertion or
+successful navigation; verify those flows separately.
+
 
 Include the hosted factory controls when changing native overlay startup: open
 before first projection, verify one real query after hydration, inject an invalid
