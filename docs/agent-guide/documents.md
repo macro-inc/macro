@@ -58,6 +58,12 @@ pick a tag to insert it, then confirm **Add tag to Document** (or Task) to apply
 it to the item's properties. A second `#` while the menu is open closes it and
 leaves literal text. `@` likewise opens after `(`, `[` and quotes in both engines.
 
+For block dragging, hover a paragraph or checklist row and drag the handle to
+the indicator before or after another block. Check undo/redo, nested checklist
+group ownership, save/reopen and read-only transitions. The isolated paired
+controls are in `LexicalMarkdown/editing/drag-browser-test`; they use trusted
+mouse HTML5 dragging and do not establish touch dragging or a click block menu.
+
 The isolated GIF menu controls live in
 `LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
 animated-byte upload, cancellation and actual commit errors before enabling a

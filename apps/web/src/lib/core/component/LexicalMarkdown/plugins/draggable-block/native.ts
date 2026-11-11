@@ -1,6 +1,7 @@
 import { EditorView } from '@macro-inc/lexical-wasm-view';
 import { readSelection } from '@macro-inc/lexical-wasm-view/view/selection';
 import { Telemetry } from '@macro-inc/observability';
+import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { dispatchApplicationCommand } from '../group-b/command';
 import { nativeBlockAtY } from './nativeGeometry';
 
@@ -31,8 +32,11 @@ export function ownsNativeBlockDrag(
 /** DOM geometry and transfer ownership; every tree mutation is one native command. */
 export function registerNativeDraggableBlock(
   view: EditorView,
-  onState: (state: NativeDragState) => void
+  onState: (state: NativeDragState) => void,
+  canEdit: () => boolean = () => true
 ) {
+  const listeners = createNativeListenerScope();
+  let disposed = false;
   let state: NativeDragState = {
     hoveredElement: null,
     isDragging: false,
@@ -40,11 +44,17 @@ export function registerNativeDraggableBlock(
     targetPosition: null,
   };
   const update = (patch: Partial<NativeDragState>) => {
+    if (disposed) return;
     state = { ...state, ...patch };
     onState(state);
   };
   const reset = () =>
-    update({ isDragging: false, targetElement: null, targetPosition: null });
+    update({
+      hoveredElement: null,
+      isDragging: false,
+      targetElement: null,
+      targetPosition: null,
+    });
   let frame: number | undefined;
   let latest: MouseEvent | undefined;
   const clearHover = () => {
@@ -58,6 +68,10 @@ export function registerNativeDraggableBlock(
       const event = latest;
       latest = undefined;
       if (!event || state.isDragging) return;
+      if (!canEdit()) {
+        clearHover();
+        return;
+      }
       if (!(event.target instanceof HTMLElement)) {
         clearHover();
         return;
@@ -125,12 +139,16 @@ export function registerNativeDraggableBlock(
     if (
       !view.ownsEvent(event.target, true) ||
       active?.view !== view ||
-      !event.dataTransfer?.types.includes(MIME) ||
-      view.root.contentEditable !== 'true'
+      !event.dataTransfer?.types.includes(MIME)
     )
       return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (!canEdit() || view.root.contentEditable !== 'true') {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+      reset();
+      return;
+    }
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
     const point = target(event);
     update({
@@ -139,17 +157,15 @@ export function registerNativeDraggableBlock(
     });
   };
   const drop = (event: DragEvent) => {
-    if (
-      !view.ownsEvent(event.target, true) ||
-      !ours(event) ||
-      !active ||
-      view.root.contentEditable !== 'true'
-    )
-      return;
+    if (!view.ownsEvent(event.target, true) || !ours(event) || !active) return;
     const drag = active;
     active = null;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if (!canEdit() || view.root.contentEditable !== 'true') {
+      reset();
+      return;
+    }
     const point = target(event);
     reset();
     if (
@@ -179,17 +195,42 @@ export function registerNativeDraggableBlock(
   const scroll = () => {
     if (!state.isDragging) update({ hoveredElement: null });
   };
-  view.root.ownerDocument.addEventListener('mousemove', hover);
-  view.root.addEventListener('keydown', clearHover);
-  view.root.addEventListener('dragover', over, true);
-  view.root.addEventListener('drop', drop, true);
-  view.root.ownerDocument.addEventListener('dragend', end);
-  view.root.ownerDocument.addEventListener('scroll', scroll, true);
+  listeners.add(() => {
+    disposed = true;
+    if (active?.view === view) active = null;
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+    latest = undefined;
+  });
+  try {
+    view.root.ownerDocument.addEventListener('mousemove', hover);
+    listeners.add(() =>
+      view.root.ownerDocument.removeEventListener('mousemove', hover)
+    );
+    view.root.addEventListener('keydown', clearHover);
+    listeners.add(() => view.root.removeEventListener('keydown', clearHover));
+    view.root.addEventListener('dragover', over, true);
+    listeners.add(() => view.root.removeEventListener('dragover', over, true));
+    view.root.addEventListener('drop', drop, true);
+    listeners.add(() => view.root.removeEventListener('drop', drop, true));
+    view.root.ownerDocument.addEventListener('dragend', end);
+    listeners.add(() =>
+      view.root.ownerDocument.removeEventListener('dragend', end)
+    );
+    view.root.ownerDocument.addEventListener('scroll', scroll, true);
+    listeners.add(() =>
+      view.root.ownerDocument.removeEventListener('scroll', scroll, true)
+    );
+  } catch (error) {
+    listeners.fail(error);
+  }
   return {
     /** The handle may live in a portal; its owner supplies the hovered element. */
     start(event: DragEvent, element: HTMLElement): boolean {
       const key = view.keyFromDOM(element);
       if (
+        disposed ||
+        !canEdit() ||
         !view.isMounted ||
         view.root.contentEditable !== 'true' ||
         !view.ownsEvent(element, true) ||
@@ -215,7 +256,7 @@ export function registerNativeDraggableBlock(
       );
       const payload = JSON.stringify({ drag: ++sequence });
       event.dataTransfer.setData(MIME, payload);
-      event.dataTransfer.effectAllowed = 'copyMove';
+      event.dataTransfer.effectAllowed = 'move';
       const dragImage = view.getElementByKey(source);
       if (dragImage) event.dataTransfer.setDragImage(dragImage, 0, 0);
       active = {
@@ -228,16 +269,7 @@ export function registerNativeDraggableBlock(
       update({ isDragging: true });
       return true;
     },
-    dispose() {
-      if (active?.view === view) active = null;
-      if (frame !== undefined) cancelAnimationFrame(frame);
-      latest = undefined;
-      view.root.ownerDocument.removeEventListener('mousemove', hover);
-      view.root.removeEventListener('keydown', clearHover);
-      view.root.removeEventListener('dragover', over, true);
-      view.root.removeEventListener('drop', drop, true);
-      view.root.ownerDocument.removeEventListener('dragend', end);
-      view.root.ownerDocument.removeEventListener('scroll', scroll, true);
-    },
+    end,
+    dispose: listeners.dispose,
   };
 }

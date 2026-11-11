@@ -17,6 +17,7 @@ import {
   NativeActionsOverlay,
 } from './NativeActionsOverlay';
 import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
+import { NativeDraggableBlockOverlay } from './NativeDraggableBlockOverlay';
 import {
   type NativeUserMentionsOptions,
   NativeUserMentionsOverlay,
@@ -66,6 +67,55 @@ export function installNativeMarkdownOverlays(
     listeners.add(registerNativeChecklist(view));
     listeners.add(registerNativeTrailingParagraph(view, options.canEdit));
     listeners.add(registerNativeTableTouchSelection(view, options.canEdit));
+    const dragListeners = createNativeListenerScope();
+    listeners.add(dragListeners.dispose);
+    const [dragAvailable, setDragAvailable] = createSignal(true);
+    let dragRetired = false;
+    const reportDrag = (error: unknown) => {
+      try {
+        Telemetry.error(error, { surface: 'native-block-drag' });
+      } catch {
+        // An optional handle failure preserves the document and sibling overlays.
+      }
+    };
+    const retireDrag = (error: unknown) => {
+      dragRetired = true;
+      reportDrag(error);
+      try {
+        setDragAvailable(false);
+      } catch (retirementError) {
+        reportDrag(retirementError);
+      } finally {
+        try {
+          dragListeners.dispose();
+        } catch (cleanupError) {
+          reportDrag(cleanupError);
+        }
+      }
+    };
+    overlays.push(() =>
+      createComponent(ErrorBoundary, {
+        fallback(error: unknown) {
+          retireDrag(error);
+          return null;
+        },
+        get children() {
+          return (
+            dragAvailable() &&
+            createComponent(NativeDraggableBlockOverlay, {
+              view,
+              canEdit: options.canEdit,
+              alive: () =>
+                !disposed && !dragRetired && renderActive() && view.isMounted,
+              own(cleanup) {
+                if (disposed || dragRetired) cleanup();
+                else dragListeners.add(cleanup);
+              },
+            })
+          );
+        },
+      })
+    );
     if (options.mentions) {
       const menu = createMenuOperations();
       const source = options.mentions;
