@@ -1,6 +1,30 @@
 /** Product introductions, based on the founder's README and product guides. */
 export const productIntroductions: Partial<Record<string, readonly string[]>> =
   {
+    Workspace: [
+      'We wanted to bring the company’s work into one place without making people settle for a worse email client, document editor, or task manager. Each part has to be good on its own. The reason to put them together is that the work already belongs together.',
+      'Macro replaces separate subscriptions with a connected workspace for people and agents. A customer email can become a task, link to a discussion, and stay attached to the customer record. You save on software, but you also spend less time moving information between tools and explaining it again.',
+    ],
+    'Company graph': [
+      'A task rarely makes sense on its own. There’s a customer email behind it, a conversation about what to do, and a document with the details. We wanted those connections to stay attached to the work, so the next person or agent could follow them without asking someone to explain everything again.',
+      'In Macro, **links work both ways**. @mention a document in chat and its References panel shows that conversation. Create a task from an email and you can get back to the original request. The context builds up as your team works.',
+    ],
+    'AI tagging': [
+      'Organizing work becomes another job when every app has its own labels and folders. We wanted one set of tags across the company, with agents doing the repetitive sorting. A customer’s emails, tasks, and meeting notes should be easy to find together.',
+      'Macro tags work across your workspace. **Set up a routine** to tag incoming email or new tasks by customer, topic, or urgency, then use those same tags to find related work. Your team shares the tags, so everyone can use the same organization.',
+    ],
+    'Automatic permissions': [
+      'Sending someone a document should be enough for them to open it. We wanted sharing to follow the conversation, without a second round of access requests or a separate list of people to maintain on every file.',
+      'In Macro, **access follows channel membership**. Share a document, email, or task in a channel and its members can open it. New members get that context too; people who leave lose the access that channel gave them. You can still manage access to an individual item from Share.',
+    ],
+    'Workspace events': [
+      'We wanted agents to help when something happens, without someone remembering to start a chat. A customer email arrives, a task gets completed, or a call ends. Those are natural moments to do the next piece of work.',
+      'Macro gives email, chat, docs, tasks, and calls **one event system**. Choose a trigger and instructions for a routine, and an agent can draft a reply, post an update, or turn a call into follow-up tasks. It works with the context already in your workspace and the permissions of the person who set it up.',
+    ],
+    'Unified search': [
+      'You can remember what someone said without remembering whether it was in an email, a document, or a call. We wanted one place to look. Agents need that too: finding the right context shouldn’t depend on guessing which app to search first.',
+      'Macro searches emails, messages, documents, tasks, and calls together. **People and agents search the same workspace**, with timestamps and links back to the original work. Find the customer’s request, follow the discussion, and see what happened next.',
+    ],
     Email: [
       'There have been a million email clients, each doing something well, but none felt like the complete package to us. We wanted superhuman speed, all our accounts in one inbox, and agents that could help without us copying everything into ChatGPT.',
       'Macro Mail brings those pieces together. Your emails are connected to your team’s conversations, tasks, and customer records. Share a thread in chat, turn a request into a task, or ask an agent to draft a reply using the context already in your workspace.',

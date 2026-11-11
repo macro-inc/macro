@@ -1,6 +1,6 @@
 .benefit-page { --benefit-accent: #aebce5; }
 main.feature-page:has(.benefit-page)::before { display: none; }
-.benefit-page .product-feature-intro { text-align: center; }
+.benefit-page .product-feature-intro { text-align: left; }
 
 .benefit-page .email-page-hero h1 { white-space: normal; text-wrap: balance; }
 .benefit-page .feature-guide { width: min(640px, calc(100% - 48px)); margin: 40px auto 80px; }

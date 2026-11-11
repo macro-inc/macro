@@ -128,13 +128,14 @@ product demos, including changing walkthrough narration inside their footer
 controls; retain useful keyboard shortcuts and controls.
 Write it the way the founder talks to another founder: plain words, “we,” the
 competitor by name when the comparison is specific, and why we built it.
-Feature introductions use two paragraphs from `product-introductions.ts` immediately
+Feature and benefit introductions use two paragraphs from `product-introductions.ts` immediately
 below the hero tutorial and above the feature sections, using the H2 section body
 typography: explain what we wanted from existing tools, then
 the one or two concrete benefits of Macro. Keep comparisons specific, distinguish
 product goals from shipped integrations, and preserve the founder's emphasis on
 agents in Chat, prioritization in Mail, writing and collaboration in Docs, and the
 unified event system in Routines.
+Include all five benefit overviews and Save money; place the Save money note below its hero, before the calculator, since that page has no video.
 Use a subtle increase in text brightness for emphasis in these introductions;
 keep the surrounding 370 font weight rather than rendering bold text.
 Use 33px type and -0.5px letter spacing for body slab headings on every non-homepage
