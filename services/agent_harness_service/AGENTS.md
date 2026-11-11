@@ -58,6 +58,11 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
+  Granola and Dialpad call sync (`crates/granola_sync`, `crates/dialpad_sync`)
+  are built in `server.rs`: each mounts an unauthenticated signed-webhook route
+  in `api.rs` and runs one worker, and Dialpad also mounts its authenticated
+  connection routes. Dialpad sync runs only when `CONNECT_CUSTOMER_KEY` is set;
+  both seal webhook signing secrets under the MCP credentials key.
 - `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.

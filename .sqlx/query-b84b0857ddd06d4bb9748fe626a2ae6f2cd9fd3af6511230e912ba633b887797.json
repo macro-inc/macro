@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH failed AS (\n                UPDATE dialpad_sync_connections SET setup_attempts = setup_attempts + 1,\n                    -- At the cap, setup waits for the user to reconnect.\n                    last_error = CASE WHEN setup_attempts + 1 >= $4 THEN $5 ELSE $3 END\n                WHERE id = $1 AND NOT enabled AND setup_started_at = $2 AND last_error IS NULL\n                RETURNING id\n            )\n            DELETE FROM dialpad_sync_events\n            WHERE connection_id IN (SELECT id FROM failed) AND completed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b84b0857ddd06d4bb9748fe626a2ae6f2cd9fd3af6511230e912ba633b887797"
+}

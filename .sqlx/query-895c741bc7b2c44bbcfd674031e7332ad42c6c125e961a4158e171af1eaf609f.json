@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO dialpad_sync_events (connection_id, call_id, state, occurred_at, payload, traceparent)\n            SELECT id, $2, $3, $4, $5, $6 FROM dialpad_sync_connections\n            -- Running, or mid-setup (deliveries can beat activation); never stopped.\n            WHERE id = $1 AND (enabled OR (setup_started_at IS NOT NULL AND last_error IS NULL))\n            ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Text",
+        "Timestamptz",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "895c741bc7b2c44bbcfd674031e7332ad42c6c125e961a4158e171af1eaf609f"
+}

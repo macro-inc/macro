@@ -37,6 +37,7 @@ type MobileSettingsSheetProps = {
   emailSignatures?: boolean;
   /** Whether search lists the Outlook connection; see `searchSettings`. */
   outlook?: boolean;
+  dialpad?: boolean;
   name: string;
   email: string;
   avatar: JSX.Element;
@@ -54,6 +55,7 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
     searchSettings(props.searchGroups ?? props.groups, query(), {
       emailSignatures: props.emailSignatures,
       outlook: props.outlook,
+      dialpad: props.dialpad,
     })
   );
   let mainScrollTop = 0;

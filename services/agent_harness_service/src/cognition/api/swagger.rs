@@ -22,6 +22,13 @@ use ai_projections::inbound::axum_router::upsert_projection::{
     ProjectionStateResponse, UpsertProjectionRequest,
 };
 use ai_usage::inbound::axum_router::{self as ai_usage_api};
+use dialpad_sync::{
+    domain::models::Backfill as DialpadBackfill,
+    inbound::{
+        self as dialpad_api, ConnectDialpadRequest, ConnectDialpadResponse,
+        DialpadConnectionResponse, DialpadConnectionState, DialpadSyncIssue,
+    },
+};
 use image_generation::inbound::axum_router::{self as image_generation_api};
 use import::inbound::axum_router::{self as import_api, RunImportRequest};
 use mcp_client::inbound::axum_router::{
@@ -139,7 +146,11 @@ use utoipa::OpenApi;
             pipedream_api::recover_connection,
             pipedream_api::complete_connect,
             pipedream_api::browse_catalog_handler,
-            pipedream_api::list_overlays
+            pipedream_api::list_overlays,
+            dialpad_api::get_connection,
+            dialpad_api::connect,
+            dialpad_api::complete,
+            dialpad_api::disconnect
         ),
         components(
             schemas(
@@ -320,6 +331,14 @@ use utoipa::OpenApi;
                 PipedreamCatalogEntryResponse,
                 PipedreamOverlayResponse,
                 model_error_response::ErrorResponse,
+
+                // Dialpad call sync
+                DialpadConnectionResponse,
+                DialpadConnectionState,
+                DialpadSyncIssue,
+                ConnectDialpadRequest,
+                ConnectDialpadResponse,
+                DialpadBackfill,
             ),
         ),
         tags(

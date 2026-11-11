@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM dialpad_sync_connections\n            WHERE NOT enabled\n                AND (setup_started_at IS NULL\n                    OR setup_started_at < now() - make_interval(secs => $1))\n                AND (last_error IS NULL\n                    OR (last_error = $2 AND setup_started_at < now() - make_interval(secs => $3)))\n            ORDER BY enrolled_at LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Text",
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dfe91416828f7cbfaa3652120e1f38046c971f995620ea7ae7789b158216dd85"
+}

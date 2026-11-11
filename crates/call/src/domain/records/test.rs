@@ -14,6 +14,7 @@ fn source_requires_a_supported_provider() {
     for (value, expected) in [
         ("macro", CallProvider::Macro),
         ("granola", CallProvider::Granola),
+        ("dialpad", CallProvider::Dialpad),
     ] {
         source["provider"] = json!(value);
         let parsed: CallSource = serde_json::from_value(source.clone()).unwrap();

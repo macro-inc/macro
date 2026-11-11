@@ -29,6 +29,8 @@ export type IntegrationItem = {
   status: IntegrationStatus;
   /** Overrides the status word, e.g. "Reconnect required". */
   statusLabel?: string;
+  /** True while the deployment cannot offer it; the row is left out. */
+  hidden?: boolean;
   /** Rendered in the row's trailing cell; reads its own reactive state. */
   Actions: Component;
 };

@@ -13,7 +13,7 @@ in-call chat.
   join access, and program-only expiry. Keep these decisions out of HTTP handlers.
 - `src/domain/service/guest_chat.rs`: active guest authorization for the shared
   call discussion; message storage and delivery belong to `messages`.
-- `src/domain/imports.rs`: the provider-neutral import port (Granola).
+- `src/domain/imports.rs`: the provider-neutral import port (Granola, Dialpad).
   Each import is a full snapshot; `src/outbound/pg_imported_call_repo.rs` keeps
   participant ids stable across re-imports by matching email and phone
   together, then email, then phone, reserving stronger matches before shared

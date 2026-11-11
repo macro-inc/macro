@@ -26,7 +26,8 @@ through `call::domain::imports`.
 
 ## Boundaries
 
-- Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
+- Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`,
+  `row_cipher` (signing secrets).
 - Used by: `services/agent_harness_service` (composition root, worker, webhook route).
 
 ## Checks

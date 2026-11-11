@@ -92,6 +92,8 @@ vi.mock('./integration-items', async (importOriginal) => {
     useEmailItems: () => () => [],
     useGithubItem: () => item('GitHub', () => null),
     useGranolaItem: () => item('Granola', () => null),
+    // Unavailable without Macro Connect, like most deployments under test.
+    useDialpadItem: () => ({ ...item('Dialpad', () => null), hidden: true }),
     useAgentProviderItem: (_model: unknown, provider: 'slack' | 'linear') =>
       item(provider === 'slack' ? 'Slack' : provider, () => {
         const view = useConnectionsView();
@@ -360,6 +362,7 @@ describe('unified Integrations page', () => {
       .map((row) => row.querySelector('span.font-medium')?.textContent);
     expect(names.slice(0, 2)).toEqual(['Team tools', 'Granola']);
     expect(names).toContain('GitHub');
+    expect(names).not.toContain('Dialpad');
     expect(screen.getByText('Integration catalog')).toBeTruthy();
   });
 

@@ -33,6 +33,7 @@ import {
   aiAppItems,
   type IntegrationItemHosts,
   useAgentProviderItem,
+  useDialpadItem,
   useEmailItems,
   useGithubItem,
   useGranolaItem,
@@ -223,12 +224,14 @@ function IntegrationsOverview(
     useGithubItem(props.model),
     ...agentTools,
     useGranolaItem(),
+    useDialpadItem(),
     ...aiAppItems(props),
   ];
   // Agent tool rows need connector records; without them their state is unknown.
   const matching = () =>
     [...emailItems(), ...otherItems].filter(
       (item) =>
+        !item.hidden &&
         (props.agentToolsAvailable || !agentTools.includes(item)) &&
         matchesIntegration(item, query())
     );

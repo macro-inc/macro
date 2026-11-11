@@ -174,6 +174,7 @@ export function CallChannelNameBadge(props: { channelName: string }) {
 
 const IMPORTED_CALL_PROVIDERS: Partial<Record<CallProvider, string>> = {
   granola: 'Granola',
+  dialpad: 'Dialpad',
 };
 
 /** The name of the app an imported call came from; none for a Macro call. */

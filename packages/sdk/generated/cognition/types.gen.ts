@@ -458,6 +458,26 @@ export type CompletionUsage = {
 };
 
 /**
+ * Start connecting Dialpad.
+ */
+export type ConnectDialpadRequest = {
+    /**
+     * How far back to import calls; defaults to new calls only.
+     */
+    backfill?: DialpadBackfill;
+};
+
+/**
+ * Where to send the user to approve Dialpad.
+ */
+export type ConnectDialpadResponse = {
+    /**
+     * The Macro Connect page to open.
+     */
+    connectUrl: string;
+};
+
+/**
  * One of the user's MCP server connections, as the setup page sees it.
  */
 export type ConnectedServer = {
@@ -592,6 +612,36 @@ export type DecisionResponse = {
         [key: string]: number;
     };
 };
+
+/**
+ * How far back to import calls when a user first connects.
+ */
+export type DialpadBackfill = 'none' | 'week' | 'month' | 'quarter';
+
+/**
+ * The user's Dialpad call sync.
+ */
+export type DialpadConnectionResponse = {
+    issue?: null | DialpadSyncIssue;
+    /**
+     * When a call last synced.
+     */
+    lastSyncedAt?: string | null;
+    /**
+     * Where sync stands.
+     */
+    state: DialpadConnectionState;
+};
+
+/**
+ * Where the user's Dialpad call sync stands.
+ */
+export type DialpadConnectionState = 'unavailable' | 'not_connected' | 'connecting' | 'connected' | 'failed';
+
+/**
+ * Why Dialpad sync needs attention.
+ */
+export type DialpadSyncIssue = 'stopped' | 'needs_reauth' | 'setup_failed' | 'setup_abandoned' | 'call_sync_failed' | 'calls_abandoned' | 'backfill_failed';
 
 /**
  * The prompts the user dismissed, on any device.
@@ -3673,6 +3723,89 @@ export type CancelWorkspaceHandlerResponses = {
 };
 
 export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
+
+export type DisconnectDialpadData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/integrations/dialpad/connection';
+};
+
+export type DisconnectDialpadErrors = {
+    401: string;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type DisconnectDialpadError = DisconnectDialpadErrors[keyof DisconnectDialpadErrors];
+
+export type DisconnectDialpadResponses = {
+    204: void;
+};
+
+export type DisconnectDialpadResponse = DisconnectDialpadResponses[keyof DisconnectDialpadResponses];
+
+export type GetDialpadConnectionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/integrations/dialpad/connection';
+};
+
+export type GetDialpadConnectionErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type GetDialpadConnectionError = GetDialpadConnectionErrors[keyof GetDialpadConnectionErrors];
+
+export type GetDialpadConnectionResponses = {
+    200: DialpadConnectionResponse;
+};
+
+export type GetDialpadConnectionResponse = GetDialpadConnectionResponses[keyof GetDialpadConnectionResponses];
+
+export type ConnectDialpadData = {
+    body: ConnectDialpadRequest;
+    path?: never;
+    query?: never;
+    url: '/integrations/dialpad/connection';
+};
+
+export type ConnectDialpadErrors = {
+    401: string;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type ConnectDialpadError = ConnectDialpadErrors[keyof ConnectDialpadErrors];
+
+export type ConnectDialpadResponses = {
+    200: ConnectDialpadResponse;
+};
+
+export type ConnectDialpadResponse2 = ConnectDialpadResponses[keyof ConnectDialpadResponses];
+
+export type CompleteDialpadConnectionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/integrations/dialpad/connection/complete';
+};
+
+export type CompleteDialpadConnectionErrors = {
+    401: string;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type CompleteDialpadConnectionError = CompleteDialpadConnectionErrors[keyof CompleteDialpadConnectionErrors];
+
+export type CompleteDialpadConnectionResponses = {
+    200: DialpadConnectionResponse;
+};
+
+export type CompleteDialpadConnectionResponse = CompleteDialpadConnectionResponses[keyof CompleteDialpadConnectionResponses];
 
 export type DeleteMcpServerData = {
     body?: never;

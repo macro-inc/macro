@@ -212,9 +212,10 @@ On phones each pill is a `tel:` link to the device's dialer; on larger screens
 the number sits beside a **Call** link. **Add phone** / **Edit phones** opens a
 dialog of numbers, each needing its country code (`+…`); the server stores them
 in E.164 and refuses others. Numbers also arrive from contact CSV imports and
-from imported calls whose guest matched the contact by email. Imported calls
-(Granola today) link to the contact (email first, then phone) and appear in
-its Calls section for people who can open the call.
+from imported calls whose guest matched the contact by email (Dialpad sets
+guests' numbers). Imported Granola and Dialpad calls link to the contact (email
+first, then phone) and appear in its Calls section for people who can open the
+call.
 
 Only contacts with a known personal-provider email can link or switch company.
 Their company pill opens the Tasks singleton picker; on touch, select a company

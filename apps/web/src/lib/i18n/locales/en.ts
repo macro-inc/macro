@@ -11,6 +11,7 @@ import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
+import dialpad from './en/dialpad';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
@@ -45,6 +46,7 @@ export default {
   common,
   create,
   crm,
+  dialpad,
   emailViews,
   entityActions,
   localRuntime,

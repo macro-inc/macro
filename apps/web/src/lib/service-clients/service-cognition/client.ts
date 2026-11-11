@@ -16,8 +16,11 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
+import type { ConnectDialpadRequest } from './generated/schemas/connectDialpadRequest';
+import type { ConnectDialpadResponse } from './generated/schemas/connectDialpadResponse';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
+import type { DialpadConnectionResponse } from './generated/schemas/dialpadConnectionResponse';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
 import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPreviewResponse';
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
@@ -434,6 +437,37 @@ export const cognitionApiServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  /** The user's Dialpad call sync. */
+  async getDialpadConnection() {
+    return await dcsFetch<DialpadConnectionResponse>(
+      `/integrations/dialpad/connection`,
+      { method: 'GET' }
+    );
+  },
+
+  /** Start connecting Dialpad; answers the Macro Connect URL to open. */
+  async connectDialpad(args: ConnectDialpadRequest) {
+    return await dcsFetch<ConnectDialpadResponse>(
+      `/integrations/dialpad/connection`,
+      { method: 'POST', body: JSON.stringify(args) }
+    );
+  },
+
+  /** Finish connecting after the user approved Dialpad in Macro Connect. */
+  async completeDialpadConnection() {
+    return await dcsFetch<DialpadConnectionResponse>(
+      `/integrations/dialpad/connection/complete`,
+      { method: 'POST' }
+    );
+  },
+
+  /** Stop syncing Dialpad calls. Imported calls stay. */
+  async disconnectDialpad() {
+    return await dcsFetch(`/integrations/dialpad/connection`, {
+      method: 'DELETE',
+    });
   },
 
   async databaseQuery(args: DatabaseQueryRequest) {

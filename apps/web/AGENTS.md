@@ -304,6 +304,9 @@ goes inside `MeetingDiscussionHost`, created by the host's render function.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
+The Dialpad row in Settings (connect with the backfill choice, and reconnect)
+has a backend-free browser regression:
+`bunx playwright test --config src/features/dialpad-connect/browser-test/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free

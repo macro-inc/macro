@@ -2637,7 +2637,7 @@ export type CallNotificationMetadata = {
 /**
  * Supported call and transcript providers. Add variants as integrations grow.
  */
-export type CallProvider = 'macro' | 'granola';
+export type CallProvider = 'macro' | 'granola' | 'dialpad';
 
 /**
  * Full record of a call, unifying rows from `calls` (active) and

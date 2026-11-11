@@ -14,4 +14,5 @@ export type CallProvider = (typeof CallProvider)[keyof typeof CallProvider];
 export const CallProvider = {
   macro: 'macro',
   granola: 'granola',
+  dialpad: 'dialpad',
 } as const;

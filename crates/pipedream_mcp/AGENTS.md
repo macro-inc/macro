@@ -78,6 +78,8 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   imports (Linear, Jira, Notion) and Granola sync, which use the Pipedream
   proxy. Keep those slugs out of `mcp_overlays` until their readers have a
   native path.
+- `dialpad` stays overlaid: Dialpad call sync (`dialpad_sync`) reads through
+  Macro Connect, not a Pipedream grant.
 - Discovery answers an overlaid app's connection status through
   `OverlayConnections` (implemented in `mcp_select` over the native store); its
   advertised tools still come from Pipedream's listing for the slug.
