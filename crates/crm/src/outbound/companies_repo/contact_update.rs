@@ -129,7 +129,7 @@ impl CompaniesRepositoryImpl {
                FROM crm_contact_emails ce
                JOIN crm_contacts ct ON ct.id = ce.contact_id
                LEFT JOIN crm_companies co ON co.id = ct.company_id
-               WHERE ce.email = $2 AND ct.team_id = $1 AND ct.id <> $3"#,
+               WHERE ce.email = LOWER(BTRIM($2)) AND ct.team_id = $1 AND ct.id <> $3"#,
             team_id,
             email,
             contact_id,

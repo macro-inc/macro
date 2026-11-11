@@ -147,10 +147,14 @@ tools/HTTP/GraphQL surfaces over them.
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
   `crm_contact_emails` (sync, teardown, email scope, thread access, call
-  linking); read `crm_contacts.email` only to display the primary. The
-  activity scope still reads the primary: joining every contact of a team to
-  its addresses costs a probe per contact, so give that query its own plan
-  before widening it.
+  linking); read `crm_contacts.email` only to display the primary. Three
+  paths still match the primary only: company-domain population (it upserts
+  on company and primary), contact search and listing, and the activity
+  scope, where joining every contact of a team to its addresses costs a probe
+  per contact and needs its own plan. A mailbox source is recorded per contact
+  and mailbox, not per address: before anything writes a second address,
+  teardown must keep the source while that mailbox still has mail with
+  another of the contact's addresses.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.
