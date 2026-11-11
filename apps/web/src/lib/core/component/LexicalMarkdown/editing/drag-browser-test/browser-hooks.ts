@@ -3,12 +3,14 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
-const DIST = fileURLToPath(
-  new URL(
-    '../../../../../../../node_modules/.drag-overlays-dist/',
-    import.meta.url
-  )
-);
+const DIST =
+  process.env.EDITOR_OVERLAYS_DIST ??
+  fileURLToPath(
+    new URL(
+      '../../../../../../../node_modules/.drag-overlays-dist/',
+      import.meta.url
+    )
+  );
 const hash = (bytes: Uint8Array | string) =>
   createHash('sha256').update(bytes).digest('hex');
 const CORE = new Map([

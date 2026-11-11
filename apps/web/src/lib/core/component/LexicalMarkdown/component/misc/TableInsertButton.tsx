@@ -1,21 +1,7 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import {
-  $computeTableMapSkipCellCheck,
-  $getTableNodeFromLexicalNodeOrThrow,
-  $insertTableColumnAtSelection,
-  $insertTableRowAtSelection,
-  $isTableCellNode,
-  getDOMCellFromTarget,
-  getTableElement,
-} from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
-import {
-  $getNearestNodeFromDOMNode,
-  $getNodeByKey,
-  isHTMLElement,
-} from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -24,15 +10,20 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { createLexicalTableInsertHost } from '../../editing/overlay-hosts/lexical-table-insert';
+import type {
+  TableInsertHit,
+  TableInsertHost,
+} from '../../editing/overlay-hosts/table-insert';
 import { tableColumnResizeEdge } from './TableCellResizer';
 
 // How close (px) the pointer must be to a row/column border for the button to show.
 const BORDER_PROXIMITY = 6;
 
-type InsertTarget = {
+type InsertTarget<Key> = {
   type: 'row' | 'column';
   // Cell whose trailing edge is the hovered border; insertion happens after it.
-  cellKey: string;
+  cellKey: Key;
   // Button center, viewport coordinates.
   x: number;
   y: number;
@@ -45,7 +36,16 @@ export function TableInsertButton() {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = () => lexicalWrapper?.editor;
 
-  const [insertTarget, setInsertTarget] = createSignal<InsertTarget>();
+  return (
+    <HostedTableInsertButton host={createLexicalTableInsertHost(editor)} />
+  );
+}
+
+export function HostedTableInsertButton<
+  Key,
+  Hit extends TableInsertHit,
+>(props: { host: TableInsertHost<Key, Hit> }) {
+  const [insertTarget, setInsertTarget] = createSignal<InsertTarget<Key>>();
   const [buttonHovered, setButtonHovered] = createSignal(false);
 
   const clear = () => {
@@ -63,14 +63,10 @@ export function TableInsertButton() {
 
   const onPointerMove = createCallback((event: PointerEvent) => {
     if (tableColumnResizeEdge()) return;
-    const currentEditor = editor();
-    const target = event.target;
-    if (!currentEditor || !isHTMLElement(target)) return;
-
-    const domCell = getDOMCellFromTarget(target);
-    if (!domCell) return clear();
-
-    const rect = domCell.elem.getBoundingClientRect();
+    const domCell = props.host.cellFromTarget(event.target);
+    if (domCell === null) return;
+    if (domCell === undefined) return clear();
+    const rect = domCell.element.getBoundingClientRect();
     const edge = (
       [
         {
@@ -104,118 +100,65 @@ export function TableInsertButton() {
 
     if (!edge) return clear();
 
-    currentEditor.read(() => {
-      const cellNode = $getNearestNodeFromDOMNode(domCell.elem);
-      if (!$isTableCellNode(cellNode)) return clear();
+    const reference = props.host.referenceForBorder(
+      domCell,
+      edge.type,
+      edge.side
+    );
+    if (!reference) return clear();
+    const tableElem = reference.table;
+    const tableRect = tableElem.getBoundingClientRect();
+    const wrapperRect = tableElem
+      .closest('.md-table-scrollable-wrapper')
+      ?.getBoundingClientRect();
 
-      const tableNode = $getTableNodeFromLexicalNodeOrThrow(cellNode);
-
-      // The border is the trailing edge of some cell; for leading edges resolve
-      // the neighboring cell before it. The outer top/left edges have no
-      // neighbor and get no button (we only insert after).
-      let referenceCell = cellNode;
-      if (edge.side === 'start') {
-        const [gridMap, cellMap] = $computeTableMapSkipCellCheck(
-          tableNode,
-          cellNode,
-          null
-        );
-        if (!cellMap) return clear();
-        const { startRow, startColumn } = cellMap;
-        const neighbor =
-          edge.type === 'row'
-            ? startRow > 0
-              ? gridMap[startRow - 1][startColumn]
-              : undefined
-            : startColumn > 0
-              ? gridMap[startRow][startColumn - 1]
-              : undefined;
-        if (!neighbor) return clear();
-        referenceCell = neighbor.cell;
-      }
-
-      const tableElem = getTableElement(
-        tableNode,
-        currentEditor.getElementByKey(tableNode.getKey())
-      );
-      if (!tableElem) return clear();
-
-      const tableRect = tableElem.getBoundingClientRect();
-      const wrapperRect = tableElem
-        .closest('.md-table-scrollable-wrapper')
-        ?.getBoundingClientRect();
-
-      if (edge.type === 'row') {
-        const left = Math.max(tableRect.left, wrapperRect?.left ?? -Infinity);
-        const right = Math.min(tableRect.right, wrapperRect?.right ?? Infinity);
-        setInsertTarget({
-          type: 'row',
-          cellKey: referenceCell.getKey(),
-          x: (rect.left + rect.right) / 2,
-          y: edge.pos,
-          lineFrom: left,
-          lineTo: right,
-        });
-      } else {
-        const top = Math.max(tableRect.top, 0);
-        const bottom = Math.min(tableRect.bottom, window.innerHeight);
-        setInsertTarget({
-          type: 'column',
-          cellKey: referenceCell.getKey(),
-          x: edge.pos,
-          y: (rect.top + rect.bottom) / 2,
-          lineFrom: top,
-          lineTo: bottom,
-        });
-      }
-    });
+    if (edge.type === 'row') {
+      const left = Math.max(tableRect.left, wrapperRect?.left ?? -Infinity);
+      const right = Math.min(tableRect.right, wrapperRect?.right ?? Infinity);
+      setInsertTarget({
+        type: 'row',
+        cellKey: reference.key,
+        x: (rect.left + rect.right) / 2,
+        y: edge.pos,
+        lineFrom: left,
+        lineTo: right,
+      });
+    } else {
+      const top = Math.max(tableRect.top, 0);
+      const bottom = Math.min(tableRect.bottom, window.innerHeight);
+      setInsertTarget({
+        type: 'column',
+        cellKey: reference.key,
+        x: edge.pos,
+        y: (rect.top + rect.bottom) / 2,
+        lineFrom: top,
+        lineTo: bottom,
+      });
+    }
   });
 
   const onInsert = createCallback(() => {
     const target = insertTarget();
-    const currentEditor = editor();
-    if (!target || !currentEditor) return;
-
-    currentEditor.update(() => {
-      const cell = $getNodeByKey(target.cellKey);
-      if (!$isTableCellNode(cell) || !cell.isAttached()) return;
-
-      // The insert helpers operate on the selection, so anchor it in the
-      // cell whose trailing edge was hovered.
-      cell.selectStart();
-      if (target.type === 'row') {
-        const newRow = $insertTableRowAtSelection(true);
-        const firstCell = newRow?.getFirstChild();
-        if ($isTableCellNode(firstCell)) firstCell.selectStart();
-      } else {
-        $insertTableColumnAtSelection(true);
-      }
-    });
+    if (!target) return;
+    if (props.host.insertAfter(target.cellKey, target.type) === 'keep-target')
+      return;
 
     setButtonHovered(false);
     setInsertTarget(undefined);
   });
 
-  const removeRootListener = editor()?.registerRootListener(
-    (rootElement, prevRootElement) => {
-      prevRootElement?.removeEventListener('pointermove', onPointerMove);
-      rootElement?.addEventListener('pointermove', onPointerMove);
-    }
-  );
+  const removeRootListener = props.host.registerRoot(onPointerMove);
 
   // Positions go stale on any scroll; just hide.
   const onScroll = () => {
     setInsertTarget(undefined);
     setButtonHovered(false);
   };
-  document.addEventListener('scroll', onScroll, {
-    capture: true,
-    passive: true,
-  });
+  const removeScrollListener = props.host.registerScroll(onScroll);
 
   onCleanup(() => {
     removeRootListener?.();
-    document.removeEventListener('scroll', onScroll, { capture: true });
+    removeScrollListener();
   });
 
   return (

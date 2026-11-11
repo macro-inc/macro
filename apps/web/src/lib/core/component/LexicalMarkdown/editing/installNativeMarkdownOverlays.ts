@@ -18,6 +18,7 @@ import {
   NativeActionsOverlay,
 } from './NativeActionsOverlay';
 import { NativeDraggableBlockOverlay } from './NativeDraggableBlockOverlay';
+import { NativeTableHoverOverlay } from './NativeTableHoverOverlay';
 import { type NativeTagsOptions, NativeTagsOverlay } from './NativeTagsOverlay';
 import {
   type NativeUserMentionsOptions,
@@ -125,6 +126,56 @@ export function installNativeMarkdownOverlays(
                 if (disposed || dragRetired) cleanup();
                 else dragListeners.add(cleanup);
               },
+            })
+          );
+        },
+      })
+    );
+    const tableListeners = createNativeListenerScope();
+    listeners.add(tableListeners.dispose);
+    const [tableAvailable, setTableAvailable] = createSignal(true);
+    let tableRetired = false;
+    const reportTable = (error: unknown) => {
+      try {
+        Telemetry.error(error, { surface: 'native-table-hover' });
+      } catch {
+        // Optional border controls cannot prevent opening the document.
+      }
+    };
+    const retireTable = (error: unknown) => {
+      tableRetired = true;
+      reportTable(error);
+      try {
+        setTableAvailable(false);
+      } catch (retirementError) {
+        reportTable(retirementError);
+      } finally {
+        try {
+          tableListeners.dispose();
+        } catch (cleanupError) {
+          reportTable(cleanupError);
+        }
+      }
+    };
+    overlays.push(() =>
+      createComponent(ErrorBoundary, {
+        fallback(error: unknown) {
+          retireTable(error);
+          return null;
+        },
+        get children() {
+          return (
+            tableAvailable() &&
+            createComponent(NativeTableHoverOverlay, {
+              view,
+              canEdit: options.canEdit,
+              alive: () =>
+                !disposed && !tableRetired && renderActive() && view.isMounted,
+              own(cleanup) {
+                if (disposed || tableRetired) cleanup();
+                else tableListeners.add(cleanup);
+              },
+              onUnavailable: retireTable,
             })
           );
         },

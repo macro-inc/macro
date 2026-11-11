@@ -79,6 +79,14 @@ follows edits until the mark is published through the session's isolated
 staging peer. Existing comment marks bind to their threads, highlight at the
 caret, and open from comment links once the native body is ready.
 
+For desktop table borders, hover a cell edge to insert a row or column, and the
+left/top/corner controls to delete the hovered row, column or table. Check the
+new row's typing caret and read-only retirement/remount with
+`LexicalMarkdown/editing/table-hover-browser-test`. Native border controls have
+their own failure lifetime; a facts-query failure must leave body typing and
+sibling overlays usable. Resize, touch bars, picker ownership and collaborative
+history are separate checks.
+
 The isolated GIF menu controls live in
 `LexicalMarkdown/decorator-host/gif-browser-test`. Exercise trending/search,
 animated-byte upload, cancellation and actual commit errors before enabling a
