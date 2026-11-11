@@ -112,8 +112,12 @@ pub fn with_global_env(workflow: Workflow) -> Workflow {
         .add_env(("RUSTFLAGS", "-C link-arg=-fuse-ld=lld"))
 }
 
-/// Cancel superseded runs of this workflow on the same git ref.
+/// Cancel superseded runs of this workflow on the same git ref. When `PR CI`
+/// calls the workflow, the group is that run's own, because `PR CI` cancels
+/// its own superseded runs.
 pub fn concurrency(prefix: &str) -> Concurrency {
-    Concurrency::new(Expression::new(format!("{prefix}-${{{{ github.ref }}}}")))
-        .cancel_in_progress(true)
+    Concurrency::new(Expression::new(format!(
+        "{prefix}-${{{{ github.event_name == 'pull_request' && github.run_id || github.ref }}}}"
+    )))
+    .cancel_in_progress(true)
 }

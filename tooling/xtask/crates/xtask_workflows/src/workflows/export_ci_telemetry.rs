@@ -1,18 +1,31 @@
-//! Export completed GitHub Actions attempts as workflow/job/step traces.
+//! Export completed GitHub Actions attempts as workflow/job/step traces, and as
+//! push, job and step events for percentiles over days.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, Step, Workflow, WorkflowRun, WorkflowRunType,
 };
 
-// Explicit names avoid recursively observing this exporter. Add new workflows here.
+use crate::workflows::steps;
+
+#[cfg(test)]
+mod test;
+
+// Explicit names avoid recursively observing this exporter. Add new workflows here,
+// and every workflow a PR runs: a push counts as finished when these have finished.
 const OBSERVED_WORKFLOWS: &[&str] = &[
+    "Android Play Release",
+    "Android Release Drift",
     "Auto Label PRs",
     "Build Agent Daemon on Tag",
+    "Build CEF with codecs",
     "Build AppImage",
     "Build Desktop on Tag",
     "Build Rust CI Image",
     "Build Web App",
     "Build macOS DMG",
+    "CI Gate Reminder",
+    "CI Gate for Forks",
+    "CI Gate Label Check",
     "CLA",
     "Cancel Stuck Cloud Storage Deploys",
     "Cleanup Preview",
@@ -21,6 +34,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Deploy CLA Worker",
     "Deploy FusionAuth Instance",
     "Deploy Lexical Service",
+    "Deploy Observability",
     "Deploy Production Release",
     "Deploy Service (Generic)",
     "Deploy Sync Service",
@@ -30,15 +44,20 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Deploy on Push",
     "Export Datadog observability definitions",
     "Migrate Macro Database",
+    "Native Check Label",
+    "PR CI",
+    "PR Privacy Check",
     "Publish Android to Google Play",
     "Publish SDK",
     "Pull Request",
     "Pulumi Preview on PR",
     "Push local stack binaries",
     "Release SDK",
+    "Release Label Check",
     "Reusable Deploy Service",
     "Reusable Preview Service",
     "SDK Check",
+    "Test macrod update",
     "Web App Pr Checks",
     "cargo deny check",
     "cargo workspace dependency check",
@@ -49,10 +68,13 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "conventions code check",
     "deploy pulumi service",
     "iOS App Store Publish",
+    "iOS App Store Release",
     "iOS Preview",
+    "iOS Release Drift",
     "infra code check",
 ];
 const HAS_JOBS: &str = "steps.preflight.outputs.export == 'true'";
+const EVENTS_FILE: &str = "${{ runner.temp }}/ci-telemetry-events.json";
 
 /// Build the CI telemetry observer without checking out code or downloading artifacts.
 pub fn export_ci_telemetry() -> Workflow {
@@ -70,6 +92,7 @@ pub fn export_ci_telemetry() -> Workflow {
         .permissions(Permissions {
             contents: Some(Level::Read),
             actions: Some(Level::Read),
+            pull_requests: Some(Level::Read),
             id_token: Some(Level::Write),
             ..Default::default()
         })
@@ -78,7 +101,7 @@ pub fn export_ci_telemetry() -> Workflow {
 
 fn export() -> Job {
     Job::default()
-        // GitHub's hosted image supplies AWS CLI and Python without a checkout/setup step.
+        // GitHub's hosted image supplies AWS CLI, Python and Node without a checkout/setup step.
         .runs_on("ubuntu-latest")
         .timeout_minutes(10u32)
         .add_step(
@@ -91,6 +114,19 @@ fn export() -> Job {
                 .id("preflight")
                 .add_with(("script", include_str!("scripts/ci_telemetry_preflight.js"))),
         )
+        // Before any credential exists, so nothing the run produced shares a step with it.
+        .add_step(
+            Step::new("Collect push, job and step events")
+                .run(steps::node_script(include_str!(
+                    "scripts/ci_telemetry_collect.ts"
+                )))
+                .shell("bash")
+                .if_condition(Expression::new("always()"))
+                .continue_on_error(true)
+                .timeout_minutes(2u32)
+                .add_env(("GITHUB_TOKEN", "${{ github.token }}"))
+                .add_env(("CI_TELEMETRY_EVENTS", EVENTS_FILE)),
+        )
         .add_step(
             Step::new("Assume CI telemetry role")
                 .uses(
@@ -98,7 +134,7 @@ fn export() -> Job {
                     "configure-aws-credentials",
                     "e7f100cf4c008499ea8adda475de1042d6975c7b",
                 )
-                .if_condition(Expression::new(HAS_JOBS))
+                .if_condition(Expression::new("always()"))
                 .add_with((
                     "role-to-assume",
                     "arn:aws:iam::569036502058:role/macro-observability-ci",
@@ -110,8 +146,23 @@ fn export() -> Job {
             Step::new("Read ingestion credential")
                 .run(include_str!("scripts/read_ci_ingestion_credential.sh"))
                 .id("ingest")
-                .if_condition(Expression::new(HAS_JOBS))
+                .if_condition(Expression::new("always()"))
                 .shell("bash"),
+        )
+        // Ahead of the traces: one failing must not cost the other, and this one is
+        // the only record of a run the trace exporter refuses.
+        .add_step(
+            Step::new("Send push, job and step events")
+                .run(steps::node_script(include_str!(
+                    "scripts/ci_telemetry_send.ts"
+                )))
+                .shell("bash")
+                .if_condition(Expression::new("always()"))
+                .continue_on_error(true)
+                .timeout_minutes(1u32)
+                .add_env(("CI_TELEMETRY_EVENTS", EVENTS_FILE))
+                .add_env(("OTLP_LOGS_URL", "https://otlp.macro-internal.com/v1/logs"))
+                .add_env(("OTLP_HEADERS", "${{ steps.ingest.outputs.headers }}")),
         )
         .add_step(
             Step::new("Export workflow, job and step traces")

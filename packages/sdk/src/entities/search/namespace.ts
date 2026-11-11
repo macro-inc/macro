@@ -68,7 +68,7 @@ const searchTypes: readonly SearchType[] = [
  * handles, with the same filters as the per-type searches and more: exact
  * matching, tags, one inbox and agent session transcripts.
  *
- * @routing Use when finding, looking up or listing the user's own Macro content, across types or in one, browsing recent or filtered workspace items, or reading an AI chat; not the web, and not one item already in context.
+ * @routing Use when finding or looking up the user's own Macro content by keyword, across types or in one; not browsing recent items (`macro.workspace`), the web, or one item already in context.
  *
  * @agent
  * Search is keyword search, not semantic: pass 1-3 words that would literally appear in the item, not the user's description. Whitespace-separated terms are ANDed; for documents and email each word is a prefix and terms may match different passages, while for other kinds the query is one adjacent phrase prefix, so long phrases match nothing. Quote a multi-word phrase; use matchType 'exact' for a whole word, identifier or email address. Search a person and a topic separately. To find someone's email, search their quoted address, not their name.
@@ -96,7 +96,7 @@ const searchTypes: readonly SearchType[] = [
  * ```
  * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow rejected branches. Normal for/while/for-await with break and sequential dependent calls are supported.
  *
- * Skills are documents. When a request names a skill that is not attached, find it by name with macro.documents.search(name, {searchOn:'name'}), read its instructions with content() before doing the task, and follow them for that request only. Built-in system skills (macro.documents.systemSkills()) have no document; read them with the ReadSkill tool.
+ * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
  * @example Find a contract across email and documents, in one inbox
  * ```js
@@ -113,6 +113,8 @@ export class SearchNamespace {
   /**
    * One bounded page of matches across every kind of item, most relevant
    * first; resume with `nextCursor` and the same options.
+   *
+   * @readonly
    */
   async page(
     query: string,
@@ -130,6 +132,8 @@ export class SearchNamespace {
   /**
    * Every match across every kind of item, most relevant first, auto-paginated.
    * Break a `for await` loop to stop; no further page is fetched.
+   *
+   * @readonly
    */
   async *all(
     query: string,

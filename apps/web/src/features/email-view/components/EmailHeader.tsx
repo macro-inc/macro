@@ -26,6 +26,12 @@ import {
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
+import {
+  EmailSavedViewActions,
+  EmailSavedViewMenu,
+  EmailSaveViewButton,
+  useEmailSavedViewTitle,
+} from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
@@ -35,9 +41,12 @@ export type EmailHeaderProps = {
 };
 
 export function EmailViewBreadcrumbItem() {
-  const { state, tagViewTitle } = useEmailView();
-  const inboxSelected = () => !isTouchDevice() && isEmailInboxTab(state.tab);
+  const { state, tagViewTitle, savedViewActive } = useEmailView();
+  const savedViewTitle = useEmailSavedViewTitle();
+  const inboxSelected = () =>
+    !isTouchDevice() && !savedViewActive() && isEmailInboxTab(state.tab);
   const tabTitle = () =>
+    savedViewTitle() ??
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
@@ -83,18 +92,21 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab, tagViewTitle } = useEmailView();
+  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+    useEmailView();
+  const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
-  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const inboxSelected = () => !savedViewActive() && isEmailInboxTab(state.tab);
   const inboxTabs = () =>
     EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
       value: id,
       label: EMAIL_TAB_LABELS[id],
     }));
   const selectedTabLabel = () =>
+    savedViewTitle() ??
     tagViewTitle() ??
     (inboxSelected()
       ? 'Inbox'
@@ -154,6 +166,9 @@ export function EmailHeader(props: EmailHeaderProps) {
               </h2>
             </Show>
           </div>
+          <Show when={savedViewActive()}>
+            <EmailSavedViewMenu />
+          </Show>
           <Show when={inboxSelected()}>
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
@@ -168,6 +183,8 @@ export function EmailHeader(props: EmailHeaderProps) {
         </div>
       }
     >
+      <EmailSavedViewActions />
+      <EmailSaveViewButton />
       <Show when={state.tab !== 'scheduled'}>
         <EmailControls
           filterOpen={filterOpen()}

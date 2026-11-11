@@ -1,7 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { IUser } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user/util';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -15,13 +13,10 @@ import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
-import { type CombinedEntity, getEntityName, getEntityType } from '@property';
 import { CreatePropertyModal } from '@property/component/modal/CreatePropertyModal';
 import { PropertyValueIcon } from '@property/component/propertyValue';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
 import { usePropertySelection } from '@property/hooks';
-import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { canTagEntity, useDocTags } from '@property/tags';
 import { TagDot } from '@property/tags/TagDot';
 import {
@@ -78,8 +73,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { EntityPropertyEditor } from './entity-property-editor';
 import { useAllProperties } from './hooks/useAllProperties';
-import { useEntitiesForProperty } from './hooks/useEntitiesForProperty';
 import { useSavePropertyForMultiEntitites } from './hooks/useSaveProperties';
 import {
   closePropertyEditor,
@@ -190,13 +185,6 @@ function selectedOptionIds(
   }
 
   return new Set(property.value ?? []);
-}
-
-function selectedEntityRefs(
-  property: Property | PropertyDefinitionDomain
-): EntityReference[] {
-  if (!('value' in property) || property.valueType !== 'ENTITY') return [];
-  return property.value ?? [];
 }
 
 function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
@@ -1394,7 +1382,6 @@ function PropertyValueEditor(props: {
         <EntityPropertyEditor
           property={resolvedProperty()}
           searchValue={props.searchValue}
-          setSearchValue={props.setSearchValue}
           selectedIndex={props.selectedIndex}
           setSelectedIndex={props.setSelectedIndex}
           onSubmit={handleSubmit}
@@ -1710,332 +1697,6 @@ function SelectPropertyEditor(props: {
         )}
       </CommandMenuList>
     </Show>
-  );
-}
-
-function EntityPropertyEditor(props: {
-  property?: Property | PropertyDefinitionDomain;
-  searchValue: Accessor<string>;
-  setSearchValue: Setter<string>;
-  selectedIndex: Accessor<number>;
-  setSelectedIndex: Setter<number>;
-  onSubmit: (value: EntityReference) => void;
-  onSave: (
-    apiValues: PropertyApiValues,
-    event?: KeyboardEvent | MouseEvent
-  ) => void;
-  setKeybindings: (binding: ListNavActions) => void;
-  setPlaceholder: Setter<string>;
-  selectedEntityCount: number;
-}) {
-  // Company owners are always teammates, so the owner picker offers the
-  // team roster instead of the default quick-access people pool (same as
-  // the row-cell owner editor in EntityEditor).
-  const isCompanyOwner = () => {
-    const property = props.property;
-    if (!property) return false;
-    const definitionId =
-      'propertyDefinitionId' in property
-        ? property.propertyDefinitionId
-        : property.id;
-    return definitionId === SYSTEM_PROPERTY_IDS.COMPANY_OWNER;
-  };
-  const teamQuery = useCurrentTeamQuery();
-  const teamMembers = (): IUser[] =>
-    (teamQuery.data?.members ?? []).map((member) => ({
-      id: member.user_id,
-      email: idToEmail(member.user_id),
-      name: idToDisplayName(member.user_id),
-    }));
-
-  const { entities } = useEntitiesForProperty(
-    () => props.property,
-    props.searchValue,
-    { users: () => (isCompanyOwner() ? teamMembers() : undefined) }
-  );
-  const [localSelectedRefs, setLocalSelectedRefs] = createSignal(
-    props.property ? selectedEntityRefs(props.property) : []
-  );
-  const [orderedSelectedIds, setOrderedSelectedIds] = createSignal(
-    new Set(
-      props.property
-        ? selectedEntityRefs(props.property).map((ref) => ref.entity_id)
-        : []
-    )
-  );
-  let syncedPropertyId = props.property ? propertyIdentity(props.property) : '';
-  let syncedSelectionKey = props.property
-    ? selectedEntityRefs(props.property)
-        .map((ref) => ref.entity_id)
-        .sort()
-        .join('\0')
-    : '';
-  const [openOrderFrozen, setOpenOrderFrozen] = createSignal(false);
-
-  createEffect(() => {
-    const propertyId = props.property ? propertyIdentity(props.property) : '';
-    const refs = props.property ? selectedEntityRefs(props.property) : [];
-    const nextSelectionKey = refs
-      .map((ref) => ref.entity_id)
-      .sort()
-      .join('\0');
-
-    if (propertyId !== syncedPropertyId) {
-      syncedPropertyId = propertyId;
-      syncedSelectionKey = nextSelectionKey;
-      setOpenOrderFrozen(false);
-      setLocalSelectedRefs(refs);
-      setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
-      return;
-    }
-
-    if (openOrderFrozen() || nextSelectionKey === syncedSelectionKey) return;
-
-    syncedSelectionKey = nextSelectionKey;
-    setLocalSelectedRefs(refs);
-    setOrderedSelectedIds(new Set(refs.map((ref) => ref.entity_id)));
-  });
-
-  createEffect(() => {
-    const entityTypeLabel =
-      props.property?.specificEntityType?.toLowerCase() || 'entity';
-    props.setPlaceholder(`Search for ${entityTypeLabel}...`);
-  });
-
-  createEffect(() => {
-    props.searchValue();
-    props.setSelectedIndex(0);
-  });
-
-  const selectEntity = (entity: CombinedEntity) => {
-    const entityType = getEntityType(entity);
-    if (!entityType) return;
-    const entityRef: EntityReference = {
-      entity_id: entity.id,
-      entity_type: entityType,
-    };
-    props.onSubmit(entityRef);
-  };
-
-  const canGroupMultiValues = () =>
-    Boolean(
-      props.property?.isMultiSelect &&
-        props.selectedEntityCount === 1 &&
-        props.property &&
-        'value' in props.property
-    );
-
-  const localSelectedIds = createMemo(
-    () => new Set(localSelectedRefs().map((ref) => ref.entity_id))
-  );
-
-  const orderedEntities = createMemo(() => {
-    if (!canGroupMultiValues()) return entities();
-
-    const selectedAtOpen = orderedSelectedIds();
-    const selected = entities().filter((entity) =>
-      selectedAtOpen.has(entity.id)
-    );
-    const remaining = entities().filter(
-      (entity) => !selectedAtOpen.has(entity.id)
-    );
-
-    return [...selected, ...remaining];
-  });
-
-  const selectedGroupSize = createMemo(() =>
-    canGroupMultiValues()
-      ? orderedEntities().filter((entity) =>
-          orderedSelectedIds().has(entity.id)
-        ).length
-      : 0
-  );
-
-  const searchQuery = () => props.searchValue().trim();
-  const showClearAllRow = () =>
-    canGroupMultiValues() && orderedSelectedIds().size > 0;
-  const showClearAllAtTop = () => showClearAllRow() && !searchQuery();
-  const showClearAllAtBottom = () => showClearAllRow() && !!searchQuery();
-
-  type EntityPropertyRow =
-    | { type: 'clear'; separatorBefore: boolean }
-    | {
-        type: 'entity';
-        entity: CombinedEntity;
-        separatorBefore: boolean;
-      };
-
-  const rows = createMemo(() => {
-    const nextRows: EntityPropertyRow[] = [];
-
-    if (showClearAllAtTop()) {
-      nextRows.push({ type: 'clear', separatorBefore: false });
-    }
-
-    for (const [index, entity] of orderedEntities().entries()) {
-      nextRows.push({
-        type: 'entity',
-        entity,
-        separatorBefore:
-          canGroupMultiValues() && index === selectedGroupSize() && index > 0,
-      });
-    }
-
-    if (showClearAllAtBottom()) {
-      nextRows.push({
-        type: 'clear',
-        separatorBefore: orderedEntities().length > 0,
-      });
-    }
-
-    return nextRows;
-  });
-
-  const toggleEntity = (
-    entity: CombinedEntity,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
-    if (!canGroupMultiValues()) {
-      selectEntity(entity);
-      return;
-    }
-
-    const entityType = getEntityType(entity);
-    if (!entityType) return;
-    const selectedIds = localSelectedIds();
-    setOpenOrderFrozen(true);
-    const nextRefs = selectedIds.has(entity.id)
-      ? localSelectedRefs().filter((ref) => ref.entity_id !== entity.id)
-      : [
-          ...localSelectedRefs(),
-          {
-            entity_id: entity.id,
-            entity_type: entityType,
-          },
-        ];
-
-    setLocalSelectedRefs(nextRefs);
-    props.onSave(
-      {
-        valueType: 'ENTITY',
-        refs: nextRefs.length > 0 ? nextRefs : null,
-      },
-      event
-    );
-  };
-
-  const clearAllEntities = (event?: KeyboardEvent | MouseEvent) => {
-    if (!showClearAllRow()) return;
-
-    setOpenOrderFrozen(true);
-    setLocalSelectedRefs([]);
-    props.onSave({ valueType: 'ENTITY', refs: null }, event);
-  };
-
-  const selectRow = (
-    row: EntityPropertyRow,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
-    if (row.type === 'clear') {
-      clearAllEntities(event);
-      return;
-    }
-
-    toggleEntity(row.entity, event);
-  };
-
-  const listController = createCommandListController({
-    items: rows,
-    selectedIndex: props.selectedIndex,
-    setSelectedIndex: props.setSelectedIndex,
-  });
-
-  props.setKeybindings({
-    select: (event) => {
-      const row = rows()[props.selectedIndex()];
-      if (row) selectRow(row, event);
-    },
-    next: () => {
-      listController.selectNext();
-    },
-    previous: () => {
-      listController.selectPrevious();
-    },
-  });
-
-  return (
-    <Show
-      when={rows().length > 0}
-      fallback={
-        <CommandMenuEmptyState>
-          {props.searchValue().trim()
-            ? 'No matching entities found'
-            : 'No entities available'}
-        </CommandMenuEmptyState>
-      }
-    >
-      <CommandMenuList
-        items={rows()}
-        selectedIndex={props.selectedIndex()}
-        scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
-        itemId={(_, index) => `entity-option-${index}`}
-        beforeItem={(row) =>
-          row.separatorBefore ? (
-            <div class="mx-2 my-1 h-px bg-edge-muted/50" />
-          ) : null
-        }
-        onSelect={(row, _, event) => selectRow(row, event)}
-        onItemMouseMove={(index) =>
-          listController.setSelectedIndexFromPointer(index)
-        }
-      >
-        {(row) => (
-          <Switch>
-            <Match when={row.type === 'clear'}>
-              <CircleDashedEmpty class="size-4 text-ink-muted opacity-50" />
-              <span class="min-w-0 flex-1 truncate text-ink-muted">
-                Clear all{' '}
-                {props.property?.displayName.toLowerCase() ?? 'entities'}
-              </span>
-            </Match>
-            <Match when={row.type === 'entity' && row.entity}>
-              {(entity) => (
-                <EntityRowContent
-                  entity={entity()}
-                  multiselect={canGroupMultiValues()}
-                  selected={localSelectedIds().has(entity().id)}
-                />
-              )}
-            </Match>
-          </Switch>
-        )}
-      </CommandMenuList>
-    </Show>
-  );
-}
-
-function EntityRowContent(props: {
-  entity: CombinedEntity;
-  multiselect?: boolean;
-  selected?: boolean;
-}) {
-  const { icon } = usePropertyEntityDisplay(
-    () => props.entity.id,
-    () => getEntityType(props.entity)
-  );
-
-  return (
-    <>
-      <Show when={props.multiselect}>
-        <OptionCheckBox checked={Boolean(props.selected)} multiselect />
-      </Show>
-      <span class="size-4 flex items-center justify-center shrink-0">
-        {icon()}
-      </span>
-      <div class="flex-1 text-left">
-        <p class="text-sm font-medium">{getEntityName(props.entity)}</p>
-      </div>
-    </>
   );
 }
 

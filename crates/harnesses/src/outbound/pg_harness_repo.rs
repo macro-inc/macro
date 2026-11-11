@@ -5,16 +5,18 @@ mod tests;
 
 use anyhow::Context;
 use chrono::{DateTime, Utc};
+use entity_access_db_utils::{EntityType, delete_entity_access_rows, team_share};
 use harness_id::HarnessId;
 use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-        PairingStatus,
+        Harness, HarnessAccess, HarnessAgent, HarnessOwner, HarnessResident, HarnessSession,
+        PairingClaimFacts, PairingDetails, PairingStatus,
     },
     ports::{HarnessChanges, HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
 };
@@ -38,28 +40,64 @@ struct HarnessRow {
     kind: String,
     name: String,
     owner_user_id: Option<String>,
-    team_id: Option<Uuid>,
     created_by: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     last_connected_at: Option<DateTime<Utc>>,
     last_disconnected_at: Option<DateTime<Utc>>,
+    has_live_connection: bool,
+    has_connection_record: bool,
+    access: Option<AccessLevel>,
+    shared_team_ids: Option<Vec<String>>,
+}
+
+impl HarnessRow {
+    /// A live connection row is the answer. A row whose lease lapsed means the
+    /// replica holding it died. With no rows at all, the connection may come
+    /// from a replica older than these rows, which only stamps the timestamps.
+    fn connected(&self) -> bool {
+        if self.has_live_connection {
+            return true;
+        }
+
+        if self.has_connection_record {
+            return false;
+        }
+
+        match (self.last_connected_at, self.last_disconnected_at) {
+            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
+    }
+}
+
+fn harness_access(level: Option<AccessLevel>) -> HarnessAccess {
+    match level {
+        Some(AccessLevel::Owner) => HarnessAccess::Owner,
+        Some(AccessLevel::Edit) => HarnessAccess::User,
+        Some(AccessLevel::Comment | AccessLevel::View) => HarnessAccess::Read,
+        None => HarnessAccess::None,
+    }
 }
 
 impl TryFrom<HarnessRow> for Harness {
     type Error = anyhow::Error;
 
     fn try_from(row: HarnessRow) -> Result<Self, Self::Error> {
-        let owner = match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => HarnessOwner::User { user_id },
-            (None, Some(team_id)) => HarnessOwner::Team { team_id },
-            _ => anyhow::bail!("harness row violated its owner invariant"),
+        let connected = row.connected();
+        // A row still naming only a team was written by a replica on the previous
+        // release during rollout; it belongs to whoever registered it.
+        let owner = HarnessOwner::User {
+            user_id: row.owner_user_id.unwrap_or_else(|| row.created_by.clone()),
         };
-        let connected = match (row.last_connected_at, row.last_disconnected_at) {
-            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
-            (Some(_), None) => true,
-            (None, _) => false,
-        };
+        let shared_team_ids = row
+            .shared_team_ids
+            .unwrap_or_default()
+            .iter()
+            .map(|team_id| team_id.parse())
+            .collect::<Result<Vec<Uuid>, _>>()
+            .context("persisted team grant is not a team id")?;
 
         Ok(Self {
             id: HarnessId::new_from_uuid(row.id),
@@ -67,6 +105,8 @@ impl TryFrom<HarnessRow> for Harness {
             kind: row.kind,
             name: row.name,
             owner,
+            access: harness_access(row.access),
+            shared_team_ids,
             created_by: row.created_by,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -93,8 +133,21 @@ async fn fetch_harness(
         HarnessRow,
         r#"
         SELECT
-            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at
+            id, kind, name, owner_user_id, created_by, allow_permission_bypass,
+            created_at, updated_at, last_connected_at, last_disconnected_at,
+            EXISTS (
+                SELECT 1 FROM harness_runtime_connection c
+                WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+            ) AS "has_live_connection!",
+            EXISTS (
+                SELECT 1 FROM harness_runtime_connection c
+                WHERE c.harness_id = harnesses.id
+            ) AS "has_connection_record!",
+            NULL::"AccessLevel" AS "access?: AccessLevel",
+            ARRAY(
+                SELECT ea.source_id FROM entity_access ea
+                WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+            ) AS shared_team_ids
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -204,19 +257,15 @@ impl HarnessRepo for PgHarnessRepo {
     ) -> Result<Option<Harness>, Self::Err> {
         let mut tx = self.pool.begin().await.context("failed to begin tx")?;
 
-        let (owner_user_id, team_id) = match &harness.owner {
-            HarnessOwner::User { user_id } => (Some(user_id.as_str()), None),
-            HarnessOwner::Team { team_id } => (None, Some(*team_id)),
-        };
+        let HarnessOwner::User { user_id } = &harness.owner;
         sqlx::query!(
             r#"
-            INSERT INTO harnesses (id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass)
-            VALUES ($1, 'macrod', $2, $3, $4, $5, $6)
+            INSERT INTO harnesses (id, kind, name, owner_user_id, created_by, allow_permission_bypass)
+            VALUES ($1, 'macrod', $2, $3, $4, $5)
             "#,
             harness.id.as_uuid(),
             harness.name,
-            owner_user_id,
-            team_id,
+            user_id,
             harness.created_by.as_ref(),
             harness.allow_permission_bypass,
         )
@@ -242,6 +291,21 @@ impl HarnessRepo for PgHarnessRepo {
             // Roll the harness insert back: the pairing raced to another state.
             tx.rollback().await.context("failed to roll back")?;
             return Ok(None);
+        }
+
+        if let Some(team_id) = harness.team_grant {
+            team_share::acquire_guard(&mut tx)
+                .await
+                .context("failed to acquire team-share guard")?;
+            team_share::upsert_direct(
+                &mut tx,
+                &harness.id.as_uuid(),
+                EntityType::Harness,
+                team_id,
+                AccessLevel::Edit,
+            )
+            .await
+            .context("failed to grant harness to team")?;
         }
 
         let created = fetch_harness(&mut *tx, harness.id.as_uuid())
@@ -329,7 +393,7 @@ impl HarnessRepo for PgHarnessRepo {
         Ok(Some(harness))
     }
 
-    async fn list_visible_harnesses(
+    async fn list_usable_harnesses(
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> Result<Vec<Harness>, Self::Err> {
@@ -337,15 +401,42 @@ impl HarnessRepo for PgHarnessRepo {
             HarnessRow,
             r#"
             SELECT
-                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
-            FROM harnesses
-            WHERE deleted_at IS NULL
+                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
+                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = h.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = h.id
+                ) AS "has_connection_record!",
+                harness_access_level(h.id, $1) AS "access?: AccessLevel",
+                ARRAY(
+                    SELECT ea.source_id FROM entity_access ea
+                    WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+                ) AS shared_team_ids
+            FROM harnesses h
+            WHERE h.deleted_at IS NULL
+              AND harness_can_run(h.id, $1)
               AND (
-                owner_user_id = $1
-                OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $1)
+                h.owner_user_id = $1
+                OR h.created_by = $1
+                OR h.id IN (
+                    SELECT ea.entity_id FROM entity_access ea
+                    WHERE ea.entity_type = 'harness'
+                      AND (
+                        (ea.source_type = 'user' AND ea.source_id = $1)
+                        OR (
+                            ea.source_type = 'team'
+                            AND ea.source_id IN (
+                                SELECT tu.team_id::text FROM team_user tu WHERE tu.user_id = $1
+                            )
+                        )
+                      )
+                )
               )
-            ORDER BY created_at DESC
+            ORDER BY h.created_at DESC
             "#,
             caller.as_ref(),
         )
@@ -354,6 +445,128 @@ impl HarnessRepo for PgHarnessRepo {
         .context("failed to list harnesses")?;
 
         rows.into_iter().map(Harness::try_from).collect()
+    }
+
+    async fn list_directory_harnesses(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Harness>, Self::Err> {
+        let rows = sqlx::query_as!(
+            HarnessRow,
+            r#"
+            SELECT
+                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,
+                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = h.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = h.id
+                ) AS "has_connection_record!",
+                harness_access_level(h.id, $1) AS "access?: AccessLevel",
+                ARRAY(
+                    SELECT ea.source_id FROM entity_access ea
+                    WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+                ) AS shared_team_ids
+            FROM harnesses h
+            WHERE h.deleted_at IS NULL
+              AND (
+                COALESCE(h.owner_user_id, h.created_by) = $1
+                OR COALESCE(h.owner_user_id, h.created_by) IN (
+                    SELECT theirs.user_id
+                    FROM team_user mine
+                    JOIN team_user theirs ON theirs.team_id = mine.team_id
+                    WHERE mine.user_id = $1
+                )
+              )
+            ORDER BY h.created_at DESC
+            "#,
+            caller.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the runtime directory")?;
+
+        rows.into_iter().map(Harness::try_from).collect()
+    }
+
+    async fn harness_access(
+        &self,
+        harness_id: HarnessId,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<HarnessAccess, Self::Err> {
+        let level = sqlx::query_scalar!(
+            r#"SELECT harness_access_level($1, $2) AS "access?: AccessLevel""#,
+            harness_id.as_uuid(),
+            caller.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read harness access")?;
+        Ok(harness_access(level))
+    }
+
+    async fn set_team_access(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+        enabled: bool,
+    ) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+        team_share::acquire_guard(&mut tx)
+            .await
+            .context("failed to acquire team-share guard")?;
+        if enabled {
+            team_share::upsert_direct(
+                &mut tx,
+                &harness_id.as_uuid(),
+                EntityType::Harness,
+                team_id,
+                AccessLevel::Edit,
+            )
+            .await
+            .context("failed to grant harness to team")?;
+        } else {
+            team_share::delete_direct(&mut tx, &harness_id.as_uuid(), EntityType::Harness, team_id)
+                .await
+                .context("failed to remove team grant")?;
+        }
+        tx.commit().await.context("failed to commit")?;
+        Ok(())
+    }
+
+    async fn list_residents(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Vec<HarnessResident>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT b.id, b.name, b.owner_user_id, b.team_id
+            FROM agent_configs ac
+            JOIN bots b ON b.id = ac.bot_id
+            WHERE ac.harness_id = $1
+              AND NOT ac.is_coding
+              AND b.deleted_at IS NULL
+              AND b.has_agent
+            ORDER BY b.created_at
+            "#,
+            harness_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list residents")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| HarnessResident {
+                bot_id: bot_id::BotId::new_from_uuid(row.id),
+                name: row.name,
+                owner_user_id: row.owner_user_id,
+                team_id: row.team_id,
+            })
+            .collect())
     }
 
     async fn get_harness(&self, harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
@@ -375,8 +588,21 @@ impl HarnessRepo for PgHarnessRepo {
                 updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
             RETURNING
-                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                id, kind, name, owner_user_id, created_by, allow_permission_bypass,
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!",
+                NULL::"AccessLevel" AS "access?: AccessLevel",
+                ARRAY(
+                    SELECT ea.source_id FROM entity_access ea
+                    WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'
+                ) AS shared_team_ids
             "#,
             harness_id.as_uuid(),
             changes.name,
@@ -415,6 +641,10 @@ impl HarnessRepo for PgHarnessRepo {
         .execute(&mut *tx)
         .await
         .context("failed to revoke harness tokens")?;
+
+        delete_entity_access_rows(&mut tx, &harness_id.as_uuid(), EntityType::Harness)
+            .await
+            .context("failed to drop harness grants")?;
 
         tx.commit().await.context("failed to commit")?;
         Ok(deleted.rows_affected() == 1)
@@ -478,6 +708,10 @@ impl HarnessRepo for PgHarnessRepo {
             WHERE ac.harness_id = $1
               AND b.deleted_at IS NULL
               AND b.has_agent
+              -- A resident runs only while its owner may run agents here, the
+              -- rule `authorize_runtime` applies per turn. A coding agent is
+              -- checked against whoever prompts it, so it always loads.
+              AND (ac.is_coding OR agent_owner_can_run(ac.bot_id))
             ORDER BY b.created_at
             "#,
             harness_id.as_uuid(),

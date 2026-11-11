@@ -45,6 +45,11 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 ## Gotchas
 
+- Thread attachment flags (`has_calendar_attachment`, `has_pdf_attachment`,
+  `has_image_attachment`, `has_document_attachment`) back the CalendarOnly and
+  Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
+  wherever a message's attachments change or a message is deleted; the MIME
+  prefixes in `threads/update.rs` mirror the web client's attachment filters.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
@@ -70,6 +75,21 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   (`label_present_before`, passed on by older writes given up). Code that
   stages, confirms or abandons a Gmail label write takes
   `lock_thread_label_writes` for its threads first.
+- The mailbox purge (`links::delete`) is bound by storage latency: a
+  500-message batch reads about as many pages as its rows, TOAST and child
+  rows occupy, so its time tracks per-read latency. A covering
+  `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap
+  reads into the DELETE; it was benchmarked and rejected. A restarted purge
+  rescans the dead index entries the earlier run left until vacuum can remove
+  them.
+- SQLx can't see that a column read through a `LEFT JOIN` inside a `LATERAL`
+  subquery can be NULL and types it non-null from the table. Alias such
+  columns `"name?"`, and never force `"name!"` on one; `from_contact_id` is
+  nullable and `ON DELETE SET NULL`, so contact columns are often NULL.
+- A query that claims rows (`upload_claimed_at`) must return every row it
+  claims: read optional columns such as the sender through a `LEFT JOIN`. A
+  claimed attachment the caller never sees is never uploaded, and the Outlook
+  projection waits on its claim forever.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
@@ -80,3 +100,5 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 ## Related
 
 - Rules: `.agents/rules/rust/db.md` · Docs: `docs/development/database.md`
+
+- Scheduled-message reads and upserts preserve nullable agent correlation across delivery claims and retries.

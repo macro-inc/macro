@@ -524,6 +524,14 @@ export const enableCrm = defineFlag({
   default: onInDev,
 });
 
+// Emergency stop for CRM contact results in @ mentions and Command K/mobile
+// name searches. Companies and Macro users remain searchable. Off until
+// PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.
+export const disableCrmContactSearch = defineFlag({
+  key: 'disable-crm-contact-search',
+  env: 'DISABLE_CRM_CONTACT_SEARCH',
+});
+
 /** CRM activity tabs and context-aware task composition. Off until opted in. */
 export const enableCrmActivity = defineFlag({
   key: 'enable-crm-activity',
@@ -570,6 +578,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// Saved email views: named filters (people, domains, subjects, inboxes, status)
+// pinned in Mail's sidebar and mobile picker, with personal order and unread
+// dots. Needs the saved-view order and subject/attachment filter backend.
+export const enableEmailSavedViews = defineFlag({
+  key: 'enable-email-saved-views',
+  env: 'ENABLE_EMAIL_SAVED_VIEWS',
+  default: onInDev,
+});
+
 // The Focus tab in Mail: signal threads the email focus worker classified as
 // worth the owner's attention. Only allowlisted inboxes are classified, so the
 // tab is empty for everyone else.
@@ -596,6 +613,14 @@ export const enableGitBlame = defineFlag({
 export const enableInlineAiEditing = defineFlag({
   key: 'inline-ai-editing',
   env: 'INLINE_AI_EDITING',
+  default: onInDev,
+});
+
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
   default: onInDev,
 });
 
@@ -864,6 +889,14 @@ export const enableUnifiedNotifications = defineFlag({
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.
+// Work: what an account registered as its work, in DMs with agent accounts and
+// in calls.
+export const enableAgentWork = defineFlag({
+  key: 'enable-agent-work',
+  env: 'ENABLE_AGENT_WORK',
+  default: onInDev,
+});
+
 export const enableAgentUpdates = defineFlag({
   key: 'enable-agent-updates',
   env: 'ENABLE_AGENT_UPDATES',
@@ -916,6 +949,35 @@ export const enableCodexAgents = defineFlag({
 export const enableRoutineConditions = defineFlag({
   key: 'enable-routine-conditions',
   env: 'ENABLE_ROUTINE_CONDITIONS',
+  default: onInDev,
+});
+
+// Macro's built-in routine templates (Sort my inbox, Morning brief, ...): the
+// strip above the routines list and New routine's Templates section. Not
+// shared templates, which follow enable-routine-sharing.
+export const enableRoutineStarterTemplates = defineFlag({
+  key: 'enable-routine-starter-templates',
+  env: 'ENABLE_ROUTINE_STARTER_TEMPLATES',
+  default: onInDev,
+});
+
+// AI writes routine steps as code (Draft it, the add-step box, code starter
+// templates). Off, it writes Ask AI steps only; code steps a routine already
+// has still show, run and change.
+export const enableRoutineCodeSteps = defineFlag({
+  key: 'enable-routine-code-steps',
+  env: 'ENABLE_ROUTINE_CODE_STEPS',
+  default: onInDev,
+});
+
+// Routines AI picks for the user from the catalog: sidebar cards, the
+// Routines page and onboarding's last step. The scheduler checks the same
+// PostHog flag before it reads mail or generates, so with it off there are
+// none to show. Suggestions are built on code-step routines and ship with
+// enable-routine-code-steps; both must be on.
+export const enableRoutineSuggestions = defineFlag({
+  key: 'enable-routine-suggestions',
+  env: 'ENABLE_ROUTINE_SUGGESTIONS',
   default: onInDev,
 });
 

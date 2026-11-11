@@ -11,6 +11,7 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  CRM_RETIRED_DATABASES_ROUTE_IDS,
   crmItemBlockType,
   crmItemParams,
   crmItemStateSchema,
@@ -22,6 +23,8 @@ import {
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
+  crmRetiredDatabaseParams,
+  crmRetiredRecordDatabasesParams,
   crmViewReference,
 } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
@@ -129,6 +132,14 @@ export const agentSetupRoute = defineRoute({
 export const agentSetupDoneRoute = defineRoute({
   id: 'agent-setup-done',
   path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
+/** The one-time link in an account manager approval message. */
+export const accountManagerRoute = defineRoute({
+  id: 'account-manager',
+  path: 'account-manager/:grantId',
+  params: z.object({ grantId: z.string().uuid() }),
   externalSearch: '*',
 });
 
@@ -504,6 +515,15 @@ export const notificationsRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'notifications' }),
 });
 
+/** The Calendar view inline in Notifications, at the Calendar route's own period path and search. */
+export const notificationsCalendarRoute = defineRoute({
+  id: 'notifications-calendar',
+  path: 'calendar/:period',
+  params: calendarPeriodParams,
+  serializeParams: ({ period }) => ({ period: calendarPeriodPath(period) }),
+  search: [CALENDAR_SEARCH_NAMESPACE],
+});
+
 export const routinesRoute = defineRoute({
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
@@ -514,7 +534,7 @@ export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
   aliases: ['routine/new', 'automation/new'],
-  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+  claim: () => ({ namespace: 'component', id: 'routines' }),
 });
 
 export const routineDetailRoute = defineRoute({
@@ -767,6 +787,35 @@ export const crmPipelineRecordFileItemRoute = defineRoute({
   id: 'companies-pipeline-record-file-item',
 });
 
+/** A database opened from the retired Customers Databases view; redirects to it. */
+export const crmRetiredDatabaseRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.database,
+  path: 'database/:databaseId',
+  params: crmRetiredDatabaseParams,
+  toReference: ({ databaseId }) => uuidRouteReference(databaseId, 'database'),
+});
+
+export const crmPipelineRetiredDatabaseRoute = defineRoute({
+  ...crmRetiredDatabaseRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineDatabase,
+});
+
+/** A record's retired Databases section, or a database opened from it; redirects. */
+export const crmRetiredRecordDatabasesRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.record,
+  path: ':recordType/:recordId/databases/:databaseId?',
+  params: crmRetiredRecordDatabasesParams,
+  toReference: ({ recordType, recordId, databaseId }) =>
+    databaseId
+      ? uuidRouteReference(databaseId, 'database')
+      : uuidRouteReference(recordId, recordType),
+});
+
+export const crmPipelineRetiredRecordDatabasesRoute = defineRoute({
+  ...crmRetiredRecordDatabasesRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineRecord,
+});
+
 export const crmPipelineRoute = defineRoute({
   id: 'companies-pipeline',
   path: 'pipeline/:pipelineId',
@@ -820,9 +869,7 @@ const debugComponentIds = [
         'md',
         'data',
         'chat',
-        'chat-attachment',
         'chat-tool',
-        'http-stream',
         'static-markdown-stream',
         'resize',
         'notifications-playground',

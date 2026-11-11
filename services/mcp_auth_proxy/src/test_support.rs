@@ -4,7 +4,7 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -14,15 +14,18 @@ use crate::domain::{
     browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
-        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, SignInMethod, UpstreamTokens, UserConsent,
+        EmailCodeRequest, IssuedAuthorizationCode, PendingAuthorization, RefreshToken,
+        RefreshTokenBinding, RegisteredClient, UpstreamLogin, UpstreamTokens, UserConsent,
     },
     ports::{
-        ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
-        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
+        ClientRegistrationStore, EmailCodeError, EmailCodeProvider, EmailCodeRequestFuture,
+        EmailCodeTokensFuture, GrantRevokedFuture, MacroApiTokenMinter, MintedAccessToken,
+        MintedAccessTokenFuture, OAuthProvider, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture, UpstreamGrantError,
         UpstreamRevocationFuture, UpstreamTokensFuture,
     },
     redirect_uri::RedirectUriPolicy,
+    resource::McpResources,
     service::{
         InflightAuthStore, McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl,
     },
@@ -50,6 +53,44 @@ pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
 /// hour JWT FusionAuth issues.
 pub const UPSTREAM_EXPIRES_IN: u64 = 3600;
+/// An address the fake email provider sends codes to.
+pub const EMAIL_ADDRESS: &str = "user@example.com";
+/// An address whose domain the fake email provider routes to single sign-on.
+pub const SSO_EMAIL_ADDRESS: &str = "user@sso.example";
+/// The only code the fake email provider accepts.
+pub const EMAIL_CODE: &str = "123456";
+/// The harness's public MCP, as its metadata advertises it.
+pub const HARNESS_RESOURCE: &str = "https://mcp.macro.com/mcp";
+/// The ChatGPT MCP server, which gets Macro API tokens.
+pub const CHATGPT_RESOURCE: &str = "https://mcp-chatgpt.macro.com/mcp";
+
+/// The longest token the fake minter signs, like the harness's signer cap.
+pub const MINTED_LIFETIME_CAP_SECONDS: u64 = 900;
+
+/// Minter that spells out what it signed, standing in for the harness's Macro
+/// API token signer, and caps lifetimes as it does.
+pub struct FakeMacroApiTokens;
+
+impl MacroApiTokenMinter for FakeMacroApiTokens {
+    fn mint<'a>(
+        &'a self,
+        upstream: &'a AccessToken,
+        client_name: Option<&'a str>,
+        lifetime: Duration,
+    ) -> MintedAccessTokenFuture<'a> {
+        Box::pin(async move {
+            let seconds = lifetime.as_secs().min(MINTED_LIFETIME_CAP_SECONDS);
+            Ok(MintedAccessToken {
+                token: AccessToken::from(format!(
+                    "macro-api-token for {} via {} for {seconds}s",
+                    upstream.as_str(),
+                    client_name.unwrap_or("no client"),
+                )),
+                lifetime: Duration::from_secs(seconds),
+            })
+        })
+    }
+}
 
 /// Computes the S256 challenge for a PKCE verifier.
 pub fn code_challenge_for(verifier: &str) -> String {
@@ -111,6 +152,15 @@ impl InflightAuthStore for FakeInflightAuth {
             .expect("pending lock")
             .insert(session_id.to_owned(), pending);
         Ok(())
+    }
+
+    async fn find_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
+        Ok(self
+            .pending
+            .lock()
+            .expect("pending lock")
+            .get(session_id)
+            .cloned())
     }
 
     async fn take_pending(&self, session_id: &str) -> anyhow::Result<Option<PendingAuthorization>> {
@@ -230,10 +280,15 @@ impl RefreshTokenBindingStore for FakeClientRegistry {
     }
 }
 
+/// Builds the failure a fake upstream grant answers with.
+type GrantFailure = Box<dyn Fn() -> UpstreamGrantError + Send + Sync>;
+
 /// Upstream provider that hands back fixed tokens, standing in for FusionAuth.
 pub struct FakeOAuthProvider {
     rotated_refresh_token: Option<String>,
     revoked_refresh_tokens: Mutex<HashSet<String>>,
+    refresh_failure: Option<GrantFailure>,
+    code_exchange_failure: Option<GrantFailure>,
 }
 
 impl FakeOAuthProvider {
@@ -243,7 +298,28 @@ impl FakeOAuthProvider {
         Self {
             rotated_refresh_token: None,
             revoked_refresh_tokens: Mutex::default(),
+            refresh_failure: None,
+            code_exchange_failure: None,
         }
+    }
+
+    /// This provider, with every refresh grant failing with `failure()`.
+    pub fn failing_refresh(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.refresh_failure = Some(Box::new(failure));
+        self
+    }
+
+    /// This provider, with every authorization code grant failing with
+    /// `failure()`.
+    pub fn failing_code_exchange(
+        mut self,
+        failure: impl Fn() -> UpstreamGrantError + Send + Sync + 'static,
+    ) -> Self {
+        self.code_exchange_failure = Some(Box::new(failure));
+        self
     }
 
     /// Returns whether the provider was asked to revoke `refresh_token`.
@@ -258,7 +334,7 @@ impl FakeOAuthProvider {
     pub fn rotating(rotated_refresh_token: &str) -> Self {
         Self {
             rotated_refresh_token: Some(rotated_refresh_token.to_owned()),
-            revoked_refresh_tokens: Mutex::default(),
+            ..Self::new()
         }
     }
 }
@@ -267,17 +343,21 @@ impl OAuthProvider for FakeOAuthProvider {
     fn construct_authorize_url(
         &self,
         state: &str,
-        sign_in: SignInMethod,
+        login: UpstreamLogin<'_>,
     ) -> anyhow::Result<String> {
-        let page = match sign_in {
-            SignInMethod::Google => "authorize",
-            SignInMethod::Login => "login",
+        let page = match login {
+            UpstreamLogin::Google => "authorize",
+            UpstreamLogin::LoginPage => "login",
+            UpstreamLogin::Sso { .. } => "sso",
         };
         Ok(format!("https://upstream.example/{page}?state={state}"))
     }
 
     fn exchange_authorization_code<'a>(&'a self, _code: &'a str) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.code_exchange_failure {
+                return Err(failure());
+            }
             Ok(UpstreamTokens {
                 access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
                 refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
@@ -291,13 +371,18 @@ impl OAuthProvider for FakeOAuthProvider {
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a> {
         Box::pin(async move {
+            if let Some(failure) = &self.refresh_failure {
+                return Err(failure());
+            }
             if self
                 .revoked_refresh_tokens
                 .lock()
                 .expect("revoked refresh tokens lock")
                 .contains(refresh_token.as_str())
             {
-                anyhow::bail!("refresh token was revoked upstream");
+                return Err(UpstreamGrantError::InvalidGrant {
+                    detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+                });
             }
             let next = self
                 .rotated_refresh_token
@@ -325,6 +410,51 @@ impl OAuthProvider for FakeOAuthProvider {
     }
 }
 
+/// Email provider that sends codes to one address and accepts one code,
+/// standing in for the authentication service.
+#[derive(Default)]
+pub struct FakeEmailCodes {
+    requested: Mutex<Vec<String>>,
+}
+
+impl FakeEmailCodes {
+    /// The addresses a code was requested for.
+    pub fn requested(&self) -> Vec<String> {
+        self.requested.lock().expect("requested lock").clone()
+    }
+}
+
+impl EmailCodeProvider for FakeEmailCodes {
+    fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a> {
+        Box::pin(async move {
+            self.requested
+                .lock()
+                .expect("requested lock")
+                .push(email.to_owned());
+            match email {
+                EMAIL_ADDRESS => Ok(EmailCodeRequest::Sent),
+                SSO_EMAIL_ADDRESS => Ok(EmailCodeRequest::SsoRequired {
+                    idp_id: "idp-1".to_owned(),
+                }),
+                _ => Err(EmailCodeError::NotAllowed),
+            }
+        })
+    }
+
+    fn redeem_code<'a>(&'a self, _email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a> {
+        Box::pin(async move {
+            if code != EMAIL_CODE {
+                return Err(EmailCodeError::InvalidCode);
+            }
+            Ok(UpstreamTokens {
+                access_token: AccessToken::from(UPSTREAM_ACCESS_TOKEN),
+                refresh_token: RefreshToken::from(UPSTREAM_REFRESH_TOKEN),
+                expires_in: UPSTREAM_EXPIRES_IN,
+            })
+        })
+    }
+}
+
 /// A broker service wired to in-memory stores, trusting only `claude.ai` for
 /// `https` redirect URIs.
 pub struct Harness {
@@ -336,6 +466,8 @@ pub struct Harness {
     pub registry: Arc<FakeClientRegistry>,
     /// The upstream provider the service was built with.
     pub provider: Arc<FakeOAuthProvider>,
+    /// The email code provider the service was built with.
+    pub email_codes: Arc<FakeEmailCodes>,
     /// The secret cookie of the browser the tests drive flows from.
     pub browser: BrowserBinding,
 }
@@ -351,6 +483,7 @@ impl Harness {
         let inflight = Arc::new(FakeInflightAuth::default());
         let registry = Arc::new(FakeClientRegistry::default());
         let provider = Arc::new(provider);
+        let email_codes = Arc::new(FakeEmailCodes::default());
         let service = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
             public_url: "https://mcp.macro.com".to_owned(),
             redirect_uri_policy: RedirectUriPolicy::new(["claude.ai", "chatgpt.com"]),
@@ -358,6 +491,9 @@ impl Harness {
             client_registrations: Arc::clone(&registry) as Arc<dyn ClientRegistrationStore>,
             refresh_token_bindings: Arc::clone(&registry) as Arc<dyn RefreshTokenBindingStore>,
             oauth_provider: Arc::clone(&provider) as Arc<dyn OAuthProvider>,
+            email_codes: Arc::clone(&email_codes) as Arc<dyn EmailCodeProvider>,
+            resources: McpResources::new(HARNESS_RESOURCE.to_owned(), CHATGPT_RESOURCE.to_owned()),
+            macro_api_tokens: Arc::new(FakeMacroApiTokens),
         });
 
         Self {
@@ -365,6 +501,7 @@ impl Harness {
             inflight,
             registry,
             provider,
+            email_codes,
             browser: BrowserBinding::generate(),
         }
     }
@@ -396,7 +533,9 @@ impl Harness {
             code_challenge: code_challenge.to_owned(),
             code_challenge_method: "S256".to_owned(),
             sign_in: None,
+            delivery: None,
             scope: None,
+            resource: None,
         }
     }
 
@@ -418,7 +557,7 @@ impl Harness {
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
-        let redirect = self
+        let delivery = self
             .service
             .complete_callback(
                 CallbackRequest {
@@ -432,7 +571,7 @@ impl Harness {
             .await
             .expect("callback should succeed");
 
-        query_param(&redirect, "code").expect("redirect carries a code")
+        query_param(&delivery.url, "code").expect("redirect carries a code")
     }
 }
 

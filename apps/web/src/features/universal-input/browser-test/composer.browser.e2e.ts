@@ -406,19 +406,6 @@ test('uses the shared AI picker and exposes its real connection and creation act
   await expect(page.getByTestId('agent-action')).toHaveText('create');
 });
 
-test('uses the shared legacy model picker and submits the chosen model', async ({
-  page,
-}) => {
-  await page.goto('/?legacy');
-  const input = page.getByRole('textbox', { name: 'Your input', exact: true });
-  await input.fill('Help me plan the launch');
-  await chooseType(page, 'AI');
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('menuitem', { name: /GPT-5/ }).click();
-  await input.press('ControlOrMeta+Enter');
-  await expect(page.getByTestId('last-submission')).toContainText('gpt-5');
-});
-
 test('global Search uses its own rows and keeps manual queries while the draft changes', async ({
   page,
 }) => {
@@ -590,10 +577,8 @@ test('keeps a partially typed Cc address while inference updates unrelated field
   );
 });
 
-test('keeps Command K open while searching and choosing an AI model', async ({
-  page,
-}) => {
-  await page.goto('/?command-menu&eligible&legacy&classification=ai');
+test('keeps Command K open while choosing an AI agent', async ({ page }) => {
+  await page.goto('/?command-menu&eligible&classification=ai');
   await page
     .getByRole('button', { name: 'Open Command K', exact: true })
     .click();
@@ -605,31 +590,21 @@ test('keeps Command K open while searching and choosing an AI model', async ({
     exact: true,
   });
   await expect(input).toHaveText(text);
-  const picker = dialog.getByRole('button', { name: 'Model', exact: true });
+  const picker = dialog.getByRole('button', { name: 'Agent', exact: true });
   await picker.click();
-  const search = page.getByRole('textbox', {
-    name: 'Search models',
+  const create = page.getByRole('menuitem', {
+    name: 'Create agent',
     exact: true,
   });
-  await search.fill('GPT-5');
-  await page
-    .getByRole('menuitem', { name: /GPT-5/ })
-    .or(page.getByRole('radio', { name: /GPT-5/ }))
-    .click();
-  await expect(search).not.toBeVisible();
-  await expect(input).toHaveText(text);
-  await picker.click();
-  await search.click();
-  await search.press('Escape');
-  await expect(search).not.toBeVisible();
+  await expect(create).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(create).not.toBeVisible();
   await expect(input).toBeVisible();
+  await expect(input).toHaveText(text);
   await input.click();
   await expect(input).toBeFocused();
   await input.press('ControlOrMeta+Enter');
   await expect(page.getByTestId('command-submission-count')).toHaveText('1');
-  await expect(page.getByTestId('last-command-submission')).toContainText(
-    'gpt-5'
-  );
   await expect(input).not.toBeVisible();
 });
 

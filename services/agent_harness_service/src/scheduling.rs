@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use email_service_client::EmailServiceClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -14,23 +15,37 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_service_urls::{ConnectionGatewayUrl, EmailServiceUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
+pub mod routine_suggestions;
 use config::Config;
+use scheduled_action::domain::code_upgrade;
+use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
 };
-use scheduled_action::domain::ports::ScheduledActionDispatcher;
+use scheduled_action::domain::models::CreatedItem;
+use scheduled_action::domain::ports::{
+    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+};
+use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
+use scheduled_action::domain::suggestions::{
+    RoutineSuggestionService, StoredSuggestionOrigins, SuggestionAgent,
+};
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
+use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::suggestion_router::{
+    RoutineSuggestionRouterState, routine_suggestion_router,
+};
 use scheduled_action::inbound::template_router::{
     RoutineTemplateRouterState, routine_template_router,
 };
@@ -39,12 +54,15 @@ use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdate
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
+use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
+use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -62,6 +80,61 @@ const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 const EVENT_CONCURRENCY: u16 = 2;
 const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
+/// How often drafts a stopped process left behind are cleaned up.
+const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+/// How often suggestion sessions a stopped process left behind are cleaned up.
+const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+
+/// What a session's programs created, from the activity recorded for its
+/// code-mode invocations.
+struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
+
+/// Activity rows read per draft; a draft creates a handful of items.
+const DRAFT_ACTIVITY_PAGE: u32 = 100;
+
+#[async_trait::async_trait]
+impl SessionCreations for ActivityCreations {
+    async fn created_by(&self, session: uuid::Uuid) -> Result<Vec<CreatedItem>> {
+        use activity::domain::models::{Action, RecordedAction};
+        use activity::domain::ports::AgentActivityReads as _;
+        let page = self
+            .0
+            .agent_activity(
+                session,
+                None,
+                None,
+                std::num::NonZeroU32::new(DRAFT_ACTIVITY_PAGE).context("page size")?,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
+        Ok(page
+            .records
+            .into_iter()
+            .filter(|record| matches!(record.action, RecordedAction::Known(Action::Created)))
+            .map(|record| CreatedItem {
+                entity_type: record.entity_type,
+                entity_id: record.entity_id,
+            })
+            .collect())
+    }
+}
+
+/// The agent session behind a code-mode request, from the invocation its
+/// credential names.
+struct CorrelationSessions(agent_correlation::outbound::PgCorrelationRepository);
+
+#[async_trait::async_trait]
+impl RequestSessions for CorrelationSessions {
+    async fn session_of(&self, correlation: uuid::Uuid) -> Result<Option<uuid::Uuid>> {
+        use agent_correlation::domain::CorrelationRepository as _;
+        Ok(self
+            .0
+            .find(correlation)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a code-mode invocation: {error}"))?
+            .map(|correlation| correlation.session_id))
+    }
+}
 
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
@@ -89,6 +162,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
+    code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -126,16 +200,68 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         &format!("http://{harness_address}"),
         &config.internal_api_key,
     )?);
+    // Conditions and decisions share one classifier, the only model work this
+    // process meters (agent targets are funded by the harness); both are off
+    // without a TypeSafe key. Counted usage asks the authentication service to
+    // settle the payer, as every other host does.
+    let typesafe = config
+        .typesafe_api_key
+        .value()
+        .map(SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?;
+    let conditions_enabled = typesafe.is_some();
+    let classifier = typesafe
+        .map(|provider| -> Result<_> {
+            Ok(Arc::new(JevClassifier::new(
+                provider,
+                ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            )))
+        })
+        .transpose()?;
+    // Trigger content is read for templates and the agent's account of the
+    // event whether or not there is a classifier.
     let event_content = Arc::new(event_content(
         &db,
         &registrar,
         Arc::clone(&access),
         &config,
     )?);
-    let runner = Arc::new(TargetRunner::new(
-        Arc::clone(&sessions),
-        Arc::clone(&event_content),
-    ));
+    // Tool and code steps run in this process, as the owner; agent steps
+    // still go through the routine-session operations.
+    let code = Arc::new(code);
+    let upgrades = Arc::new(PgCodeUpgrades::new(db.clone()));
+    // After a release, bring routines' code to the new SDK before their runs
+    // need it; a run still upgrades its own code if this hasn't reached it.
+    {
+        let (code, upgrades, repo) = (Arc::clone(&code), Arc::clone(&upgrades), Arc::clone(&repo));
+        let stop = lifecycle.stop_workers.clone();
+        let mut ready = ready.clone();
+        lifecycle.workers.spawn(async move {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+            }
+            if let Err(error) =
+                code_upgrade::sweep(code.as_ref(), upgrades.as_ref(), repo.as_ref(), &stop).await
+            {
+                tracing::warn!(error = ?error, "routine code sweep stopped");
+            }
+        });
+    }
+    let runner = Arc::new(
+        ProgramRunner::new(
+            Arc::new(TargetRunner::new(Arc::clone(&sessions))),
+            Arc::clone(&event_content),
+        )
+        .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
+    );
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -143,7 +269,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission)
+    .with_admission(Arc::clone(&ai_admission))
     .with_observer(Arc::new((
         routine_analytics::RoutineAnalytics(
             agent_harness_service::product_analytics::ProductAnalytics::new(
@@ -190,31 +316,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // eventually block cron dispatch or its shutdown.
     drop(execution_rx);
 
-    let typesafe = config
-        .typesafe_api_key
-        .value()
-        .map(SystemOneJev::typesafe)
-        .transpose()
-        .context("invalid TYPESAFE_API_KEY")?;
-    let conditions_enabled = typesafe.is_some();
-    let conditions = match typesafe {
-        Some(provider) => Some(ConditionGate::new(
-            event_content,
-            // Condition evaluation is the only model work this process meters
-            // (agent targets are funded by the harness). Counted usage asks the
-            // authentication service to settle the payer, as every other host does.
-            Arc::new(JevClassifier::new(
-                provider,
-                ai_billing::composition::pg_settling_recorder(
-                    db.clone(),
-                    config.enable_ai_usage_enforcement,
-                    config.ai_pricing(),
-                    config.settlement_route()?,
-                ),
-            )),
-        )),
-        None => None,
-    };
+    let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
@@ -263,6 +365,51 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
+    // AI drafts routines in hidden sessions of the in-process Macro agent on
+    // the model the person's Ask AI steps use, admitted and billed as their
+    // agent session usage. A draft's session hands its routine back by checking
+    // it; the check is kept on the draft's row, so any replica can read it.
+    let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let drafts = Arc::new(
+        RoutineDrafts::new(
+            Arc::clone(&code),
+            Arc::clone(&sessions),
+            Arc::clone(&hand_backs),
+            DraftAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                // Generated from the SDK at build time, so it is always there.
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            },
+        )
+        .with_session_creations(Arc::new(ActivityCreations(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+        )))
+        .with_conditions_enabled(conditions_enabled),
+    );
+    // Drafts a stopped process left behind lose their session and row.
+    {
+        let drafts = Arc::clone(&drafts);
+        let stop = lifecycle.stop_workers.clone();
+        lifecycle.workers.spawn(async move {
+            let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = stop.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                // Logged by the sweep's span.
+                let _ = drafts.sweep().await;
+            }
+        });
+    }
+    let suggestion_code = Arc::clone(&code);
+    // Which agent session a code-mode request came from, for drafts' checks
+    // and suggestion sessions' suggestions.
+    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+        agent_correlation::outbound::PgCorrelationRepository(db.clone()),
+    ));
+    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -272,8 +419,13 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(sessions))
-        .with_github_links(PgGithubInstallationClaims::new(db.clone())),
+        .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
+        .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
+            &suggestion_repo,
+        ))))
+        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
+        .with_code(code, upgrades),
     );
     let template_flags = config
         .posthog_api_key
@@ -290,6 +442,58 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         })
         .transpose()
         .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Suggestions run once per person, when their inbox connects, in hidden
+    // sessions of the in-process Macro agent on the free tier's model, as
+    // drafts do, but opened non-billable (`SessionBilling::NonBillable`), so
+    // their usage is recorded, never billed; each session hands back its
+    // suggestions through `macro.routines.suggest`. They read the newest mail through
+    // email_service, which reads it from the provider.
+    let suggestions = Arc::new(RoutineSuggestionService::new(
+        Arc::clone(&service),
+        suggestion_repo,
+        Arc::new(routine_suggestions::HarnessSuggestionSources {
+            email: Arc::new(EmailServiceClient::new(
+                config.internal_api_key.to_string(),
+                EmailServiceUrl::new()?.to_string(),
+            )),
+            apps: crate::routine_sessions::PipedreamConnectedApps(
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+            ),
+        }),
+        sessions,
+        suggestion_code,
+        request_sessions,
+        template_flags.clone(),
+        SuggestionAgent {
+            bot: bot_id::MACRO_NEW_BOT_ID,
+            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            model: chat::domain::models::FREE_MODEL.to_owned(),
+        },
+        lifecycle.workers.clone(),
+        lifecycle.stop_workers.clone(),
+    ));
+    // Suggestion sessions a stopped process left behind lose their session.
+    {
+        let suggestions = Arc::clone(&suggestions);
+        let stop = lifecycle.stop_workers.clone();
+        lifecycle.workers.spawn(async move {
+            let mut every = tokio::time::interval(SUGGESTION_SWEEP_INTERVAL);
+            every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = stop.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                // Logged by the sweep's span.
+                let _ = suggestions.sweep().await;
+            }
+        });
+    }
+    let suggestion_state = RoutineSuggestionRouterState {
+        service: suggestions,
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -299,13 +503,19 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
     };
+    let draft_state = RoutineDraftRouterState {
+        service: drafts,
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
         authorization_state,
     };
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
-        .merge(routine_template_router::<_, _, _, ()>(template_state));
+        .merge(routine_template_router::<_, _, _, ()>(template_state))
+        .merge(routine_draft_router::<_, _, ()>(draft_state))
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -324,8 +534,9 @@ fn mount_router(routes: Router) -> Router {
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
-/// condition checks and the agent's account of the event. None of these reads
-/// notify, publish or enqueue.
+/// trigger conditions, code and the agent's account of the event. None of
+/// these reads notify, publish or enqueue; routine writes go through code
+/// steps' SDK calls or the agent.
 fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,

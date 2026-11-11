@@ -102,6 +102,10 @@ impl InflightAuthStore for BrokenLegacy {
         broken()
     }
 
+    async fn find_pending(&self, _: &str) -> anyhow::Result<Option<PendingAuthorization>> {
+        broken()
+    }
+
     async fn take_pending(&self, _: &str) -> anyhow::Result<Option<PendingAuthorization>> {
         broken()
     }

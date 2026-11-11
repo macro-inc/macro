@@ -1,0 +1,5 @@
+[
+  { "viewer": "macro|viewer@example.com", "user": "macro|person@example.com", "id": "8b6318fd-4063-5ddb-90c2-83a401b63538" },
+  { "viewer": "macro|other@example.com", "user": "macro|person@example.com", "id": "72686053-1d6e-5338-9c4a-43e99f38423d" },
+  { "viewer": "macro|viewer@example.com", "user": "macro|person+tag@example.com", "id": "3ff5ea9c-d372-5f6e-9c69-e34fc6e3ad14" }
+]

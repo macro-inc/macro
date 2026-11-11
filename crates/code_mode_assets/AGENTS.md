@@ -3,7 +3,9 @@
 ## What it is
 
 Agent code mode's generated assets: the public SDK and Handlebars bundled for
-Deno, the agent SDK documentation catalog, and the SDK operation labels. They are
+Deno, the agent SDK documentation catalog, the SDK operation catalog (label,
+method, path and whether it writes), and the SDK's TypeScript declarations
+routine code is type-checked against. They are
 built from `packages/sdk` when this crate compiles and are never committed.
 
 ## How it works
@@ -13,7 +15,8 @@ built from `packages/sdk` when this crate compiles and are never committed.
 - `CODE_MODE_ASSETS_DIR` set (Nix builds and Rust CI): that directory, built by
   the `code-mode-assets` flake package from the Nix `node_modules`. Rust CI
   restores it from Namespace's remote cache, keyed by its store path, and builds
-  it only on a miss (`steps::code_mode_assets`).
+  it only on a miss (`steps::code_mode_assets`). A build
+  restores node_modules the same way, under its own store path.
 - Unset (local cargo): it runs `packages/code-mode-sdk/scripts/generate.ts` with
   `bun` into `OUT_DIR`, rerunning when SDK, generator or lockfile sources change.
 

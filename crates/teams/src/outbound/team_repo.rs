@@ -114,7 +114,7 @@ impl TeamRepositoryImpl {
                     .map_err(type_err)?
                     .into_owned(),
                 // New teams have no team_crm_settings row yet.
-                crm_enabled: false,
+                crm_enabled: true,
                 auto_join_domain: row.auto_join_domain,
                 enterprise: row.enterprise,
                 allow_non_admin_invites: row.allow_non_admin_invites,
@@ -137,10 +137,9 @@ impl TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
-        // Seed the team's CRM settings row. `crm_enabled` defaults to
-        // FALSE — toggled on later via `PATCH /team/crm`. Created in
-        // the same tx as the team itself so the row always exists for
-        // any team that exists.
+        // Seed governance/view settings. The retired `crm_enabled` column
+        // stays false for compatibility with old workers during rollout;
+        // current CRM access is independent of mailbox contribution consent.
         sqlx::query!(
             r#"
             INSERT INTO team_crm_settings (team_id)
@@ -1177,7 +1176,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
-                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
+                TRUE AS "crm_enabled!"
             FROM team t
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
             WHERE t.id = $1
@@ -1245,7 +1244,7 @@ impl TeamRepository for TeamRepositoryImpl {
                 t.allow_non_admin_invites,
                 t.default_link_share as "default_link_share: LinkShare",
                 t.language as "language: Language",
-                COALESCE(tcs.crm_enabled, FALSE) AS "crm_enabled!"
+                TRUE AS "crm_enabled!"
             FROM team t
             JOIN team_user tu ON t.id = tu.team_id
             LEFT JOIN team_crm_settings tcs ON tcs.team_id = t.id
@@ -1366,6 +1365,33 @@ impl TeamRepository for TeamRepositoryImpl {
         .await?;
 
         Ok(name)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_user_display_name(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<String>, TeamError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                NULLIF(mui.first_name,  'N/A') AS first_name,
+                NULLIF(mui.last_name,   'N/A') AS last_name
+            FROM macro_user_info mui
+            JOIN "User" u ON mui.macro_user_id = u.macro_user_id
+            WHERE u.id = $1
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.and_then(|row| match (row.first_name, row.last_name) {
+            (None, None) => None,
+            (Some(name), None) | (None, Some(name)) => Some(name),
+            (Some(first), Some(last)) => Some(format!("{first} {last}")),
+        }))
     }
 
     #[tracing::instrument(skip(self), err)]

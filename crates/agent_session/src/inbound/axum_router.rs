@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::coding_preferences::CodingPreferences;
-use crate::domain::error::AgentSessionError;
+use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
     SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
@@ -75,7 +75,19 @@ pub mod pull_requests;
 /// Auto-archive defaults and per-session choices.
 pub mod auto_archive;
 
+/// Linking a session to the Macro task it works on.
+pub mod task;
+
+/// The caller's coding sessions waiting for them or stalled.
+pub mod updates;
+
+/// Registering sessions as an account's work.
+pub mod work_registration;
+
 mod owned_purge;
+
+/// Session-correlated activity read surface.
+pub mod activity;
 
 /// Shared state for the agent session router: the agent session service plus
 /// the authorization state the request extractors authenticate against.
@@ -373,9 +385,17 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
-            Self::Domain(AgentSessionError::InvalidSharing(message)) => {
-                (StatusCode::BAD_REQUEST, message).into_response()
-            }
+            // Its own code, so a client can tell a stopped agent from a
+            // session it may not touch, and show why.
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+            )
+                .into_response(),
+            Self::Domain(
+                AgentSessionError::InvalidSharing(message)
+                | AgentSessionError::InvalidActivityQuery(message),
+            ) => (StatusCode::BAD_REQUEST, message).into_response(),
             Self::Domain(AgentSessionError::SharingChanged) => (
                 StatusCode::CONFLICT,
                 "sharing changed; reload and try again",
@@ -647,6 +667,10 @@ pub struct AgentSessionResponse {
     pub acp_session_id: Option<String>,
     /// The session's status.
     pub status: SessionStatusDto,
+    /// What opened the session: who or what started it, and what it is about.
+    /// `unknown` when nothing recorded it.
+    #[serde(default)]
+    pub origin: trigger_context::TriggerOrigin,
     /// The external provider serving this session, when one does. Absent for
     /// sandboxed sessions, so existing payloads are byte-identical.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -718,6 +742,7 @@ impl AgentSessionResponse {
             acp_session_id: session.acp_session_id.map(|id| id.to_string()),
             external: session.external.map(Into::into),
             status: session.status.into(),
+            origin: session.origin,
             created_at: session.created_at,
             modified_at: session.modified_at,
         }
@@ -1910,6 +1935,15 @@ pub struct CreateAgentSessionRequest {
     /// a session is a control action instead, and reads as one in its
     /// transcript.
     pub model: Option<String>,
+    /// What opened the session, copied from the trigger event by the runtime
+    /// answering it. Honored only from a harness, and only as a description.
+    /// Internal to runtimes, so not part of the public API.
+    #[serde(
+        default,
+        skip_serializing_if = "trigger_context::TriggerOrigin::is_unknown"
+    )]
+    #[schema(ignore)]
+    pub origin: trigger_context::TriggerOrigin,
 }
 
 /// The triggering mention on a create request.
@@ -2075,6 +2109,13 @@ impl IntoResponse for CreateSessionApiError {
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+                )
+                    .into_response();
+            }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
@@ -2271,6 +2312,14 @@ pub async fn create_agent_session_handler<
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None, state.non_user_owners)?;
+        // Only a person's own request is the composer; a bot's is an API call
+        // nothing yet says the reason for.
+        let origin = match (&caller.authorization, owner.as_user()) {
+            (UserBotOrHarnessAuthorization::User(_), Some(by)) => {
+                trigger_context::TriggerOrigin::Requested { by: by.clone() }
+            }
+            _ => trigger_context::TriggerOrigin::Unknown,
+        };
         let profile = if let Some(bot_id) = request.bot_id {
             let selected =
                 persona_for_owner(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
@@ -2330,6 +2379,7 @@ pub async fn create_agent_session_handler<
                             model: request.model.filter(|model| !model.trim().is_empty()),
                             source: SessionSource::User,
                             visibility: SessionVisibility::Listed,
+                            origin,
                         })
                         .await?;
                     return Ok((
@@ -2346,6 +2396,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request
@@ -2364,6 +2415,7 @@ pub async fn create_agent_session_handler<
                 model: request.model.filter(|model| !model.trim().is_empty()),
                 source: SessionSource::User,
                 visibility: SessionVisibility::Listed,
+                origin,
             })
             .await?;
         return Ok((
@@ -2447,6 +2499,12 @@ pub async fn create_agent_session_handler<
             owner,
             thread: thread.clone(),
             instructions,
+            origin: match &caller.authorization {
+                UserBotOrHarnessAuthorization::Harness(_) => request.origin,
+                UserBotOrHarnessAuthorization::User(_) | UserBotOrHarnessAuthorization::Bot(_) => {
+                    trigger_context::TriggerOrigin::Unknown
+                }
+            },
         })
         .await
     {

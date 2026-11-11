@@ -53,7 +53,7 @@
 		"lint:ci": "cd apps/web && bunx --bun @biomejs/biome ci --changed --no-errors-on-unmatched --error-on-warnings",
 		"check": "cd apps/web && tsc --noEmit --skipLibCheck --project tsconfig.json",
 		"lint": "cd apps/web && bunx --bun @biomejs/biome lint --skip=suspicious/noImportCycles",
-		"lint:oxlint": "cd apps/web && npm exec --yes --package=oxlint@1.73.0 --package=oxlint-tsgolint@7.0.2004 -- oxlint --type-aware",
+		"lint:oxlint": "cd apps/web && oxlint --type-aware",
 		"format": "cd apps/web && bunx --bun @biomejs/biome format --write"
 	},
 	"trustedDependencies": [
@@ -71,6 +71,7 @@
 			"apps/marketing",
 			"packages/observability",
 			"packages/code-mode-sdk",
+			"packages/sdk-mcp",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
@@ -78,6 +79,7 @@
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
+			"services/mcp-chatgpt-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/goalert-bot",
 			"services/bots/stripe-payment-bot",
@@ -89,5 +91,9 @@
 		"catalog": {
 			"loro-crdt": "1.16.3"
 		}
+	},
+	"devDependencies": {
+		"oxlint": "1.73.0",
+		"oxlint-tsgolint": "7.0.2004"
 	}
 }

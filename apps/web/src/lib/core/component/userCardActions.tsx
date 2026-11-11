@@ -5,10 +5,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
+import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import WideChat from '@icon/system/regular/chat.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import WideTask from '@icon/system/regular/list-checks.svg';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import {
   type Accessor,
   type Component,
@@ -69,10 +69,8 @@ export function useUserCardActions(
 ): Accessor<UserCardAction[]> {
   const currentUserId = useUserId();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
-  const { openWithSplit, popoverSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
-    onError: () => toast.failure('Failed to open direct message'),
-  });
+  const { popoverSplit } = useSplitLayout();
+  const openDm = useOpenDirectMessage();
 
   const userId = () => target().id;
   const canTreatAsUser = () =>
@@ -114,15 +112,7 @@ export function useUserCardActions(
     event.stopPropagation();
     const recipientId = userId();
     if (!recipientId) return;
-    const preferNewSplit = event.shiftKey;
-    // The mutation's onError callback handles failure feedback.
-    const { channel_id } = await getOrCreateDmMutation.mutateAsync({
-      recipient_id: recipientId,
-    });
-    openWithSplit(
-      { type: 'channel', id: channel_id },
-      { preferNewSplit, reopen: 'latest' }
-    );
+    await openDm(recipientId, { preferNewSplit: event.shiftKey });
   };
 
   const openTaskComposer = (event: MouseEvent) => {

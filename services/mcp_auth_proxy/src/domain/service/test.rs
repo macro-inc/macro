@@ -7,8 +7,9 @@ use crate::{
         models::{AccessToken, ClientRegistrationRequest},
     },
     test_support::{
-        ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, FakeOAuthProvider, GATEWAY_REDIRECT_URI,
-        Harness, LOOPBACK_REDIRECT_URI, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI,
+        ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, CHATGPT_RESOURCE, FakeOAuthProvider,
+        GATEWAY_REDIRECT_URI, HARNESS_RESOURCE, Harness, LOOPBACK_REDIRECT_URI,
+        MINTED_LIFETIME_CAP_SECONDS, REFRESHED_ACCESS_TOKEN, TRUSTED_REDIRECT_URI,
         UPSTREAM_ACCESS_TOKEN, UPSTREAM_EXPIRES_IN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
         code_challenge_for,
     },
@@ -201,6 +202,7 @@ async fn authorize_for_an_unlisted_host_asks_for_consent_and_stores_nothing() {
         AuthorizationStart::ConsentRequired(ConsentPrompt {
             client_name: "test-client".to_owned(),
             redirect_host: "gateway.example".to_owned(),
+            delivery: crate::domain::models::CodeDelivery::Redirect,
         })
     );
     assert!(
@@ -258,7 +260,8 @@ async fn approved_client_on_an_unlisted_host_completes_the_flow() {
             Some(harness.browser.clone()),
         )
         .await
-        .expect("callback should succeed");
+        .expect("callback should succeed")
+        .url;
 
     assert!(
         redirect.starts_with(&format!("{GATEWAY_REDIRECT_URI}?code=")),
@@ -355,6 +358,7 @@ async fn an_unbound_pending_flow_completes_only_to_a_trusted_redirect_uri() {
                     client_state: "client-state".to_owned(),
                     client_redirect_uri: redirect_uri.to_owned(),
                     browser_binding_digest: None,
+                    delivery: crate::domain::models::CodeDelivery::Redirect,
                 },
             )
             .await
@@ -434,6 +438,7 @@ async fn authorization_code_grant_returns_upstream_tokens() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: Some(client_id),
+            resource: None,
         })
         .await
         .expect("the legitimate client should get its tokens");
@@ -459,6 +464,7 @@ async fn authorization_code_grant_requires_a_client_id() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: None,
+            resource: None,
         })
         .await
         .expect_err("a token request without client_id must be rejected");
@@ -492,6 +498,7 @@ async fn authorization_code_grant_rejects_a_different_client() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: Some(other_client_id),
+            resource: None,
         })
         .await
         .expect_err("a code must only be redeemable by the client it was issued to");
@@ -518,6 +525,7 @@ async fn refresh_grant_succeeds_for_the_client_the_token_was_issued_to() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: Some(client_id.clone()),
+            resource: None,
         })
         .await
         .expect("code exchange should succeed");
@@ -531,6 +539,7 @@ async fn refresh_grant_succeeds_for_the_client_the_token_was_issued_to() {
             refresh_token: Some(issued.refresh_token),
             redirect_uri: None,
             client_id: Some(client_id),
+            resource: None,
         })
         .await
         .expect("the bound client should be able to refresh");
@@ -552,6 +561,7 @@ async fn refresh_grant_rejects_an_unbound_refresh_token() {
             refresh_token: Some(RefreshToken::from(UPSTREAM_REFRESH_TOKEN)),
             redirect_uri: None,
             client_id: Some(client_id),
+            resource: None,
         })
         .await
         .expect_err("a refresh token the broker never issued must be rejected");
@@ -577,6 +587,7 @@ async fn refresh_grant_rejects_a_client_the_token_was_not_issued_to() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: Some(owner_client_id),
+            resource: None,
         })
         .await
         .expect("code exchange should succeed");
@@ -590,6 +601,7 @@ async fn refresh_grant_rejects_a_client_the_token_was_not_issued_to() {
             refresh_token: Some(issued.refresh_token),
             redirect_uri: None,
             client_id: Some(other_client_id),
+            resource: None,
         })
         .await
         .expect_err("another client must not be able to use this refresh token");
@@ -610,6 +622,7 @@ async fn refresh_grant_requires_a_client_id() {
             refresh_token: Some(RefreshToken::from(UPSTREAM_REFRESH_TOKEN)),
             redirect_uri: None,
             client_id: None,
+            resource: None,
         })
         .await
         .expect_err("a refresh without client_id must be rejected");
@@ -634,6 +647,7 @@ async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
             refresh_token: None,
             redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
             client_id: Some(client_id.clone()),
+            resource: None,
         })
         .await
         .expect("code exchange should succeed");
@@ -648,6 +662,7 @@ async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
             refresh_token: Some(original_refresh_token.clone()),
             redirect_uri: None,
             client_id: Some(client_id.clone()),
+            resource: None,
         })
         .await
         .expect("the bound client should be able to refresh");
@@ -662,6 +677,7 @@ async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
             refresh_token: Some(original_refresh_token),
             redirect_uri: None,
             client_id: Some(client_id.clone()),
+            resource: None,
         })
         .await
         .expect_err("the superseded refresh token must not work again");
@@ -676,6 +692,7 @@ async fn rotated_refresh_token_is_rebound_and_the_old_one_is_refused() {
             refresh_token: Some(refreshed.refresh_token),
             redirect_uri: None,
             client_id: Some(client_id),
+            resource: None,
         })
         .await;
     assert!(rotated.is_ok(), "the rotated token must be usable");
@@ -705,6 +722,7 @@ fn refresh_request(refresh_token: RefreshToken, client_id: &str) -> TokenRequest
         refresh_token: Some(refresh_token),
         redirect_uri: None,
         client_id: Some(client_id.to_owned()),
+        resource: None,
     }
 }
 
@@ -733,6 +751,118 @@ async fn revoked_refresh_token_cannot_mint_access_tokens() {
         .await
         .expect_err("a revoked refresh token must not mint an access token");
     assert!(matches!(error, TokenExchangeError::UnboundRefreshToken));
+}
+
+#[tokio::test]
+async fn a_refresh_token_the_upstream_refuses_is_an_invalid_grant() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_grant (refresh_token_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("a refused refresh token must not mint an access token");
+
+    match error {
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::InvalidGrant { detail }) => {
+            assert_eq!(detail, "invalid_grant (refresh_token_not_found)");
+        }
+        other => panic!("expected an upstream invalid grant, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn an_upstream_outage_during_refresh_is_reported_as_unavailable() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_refresh(|| {
+        UpstreamGrantError::Unavailable {
+            retry_after: Some(Duration::from_secs(30)),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an outage must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Unavailable {
+            retry_after: Some(retry_after),
+        }) if retry_after == Duration::from_secs(30)
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_upstream_refresh_keeps_its_cause() {
+    let harness = Harness::with_provider(
+        FakeOAuthProvider::new()
+            .failing_refresh(|| UpstreamGrantError::Failed(anyhow::anyhow!("unexpected 500"))),
+    );
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect_err("an upstream failure must fail the refresh");
+
+    assert!(matches!(
+        error,
+        TokenExchangeError::RefreshFailed(UpstreamGrantError::Failed(_))
+    ));
+    assert!(
+        error.to_string().contains("unexpected 500"),
+        "the cause must survive into the message: {error}"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_upstream_code_fails_the_callback_without_issuing_a_code() {
+    let harness = Harness::with_provider(FakeOAuthProvider::new().failing_code_exchange(|| {
+        UpstreamGrantError::InvalidGrant {
+            detail: "invalid_request (auth_code_not_found)".to_owned(),
+        }
+    }));
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    harness
+        .service
+        .start_authorization(
+            harness.authorize_request(
+                &client_id,
+                TRUSTED_REDIRECT_URI,
+                &code_challenge_for(VICTIM_CODE_VERIFIER),
+            ),
+            harness.browser.clone(),
+            UserConsent::NotAsked,
+        )
+        .await
+        .expect("authorize should succeed");
+
+    let error = harness
+        .service
+        .complete_callback(
+            upstream_callback(&harness.inflight.only_pending_session_id()),
+            Some(harness.browser.clone()),
+        )
+        .await
+        .expect_err("a refused upstream code must fail the callback");
+
+    assert!(matches!(
+        error,
+        CompleteCallbackError::AuthorizationCodeExchangeFailed(
+            UpstreamGrantError::InvalidGrant { .. }
+        )
+    ));
 }
 
 #[tokio::test]
@@ -927,7 +1057,8 @@ async fn callback_redirect_preserves_a_query_on_the_registered_redirect_uri() {
             Some(harness.browser.clone()),
         )
         .await
-        .expect("callback should succeed");
+        .expect("callback should succeed")
+        .url;
 
     assert!(
         redirect.starts_with("https://claude.ai/api/mcp/auth_callback?tenant=macro&code="),
@@ -971,6 +1102,7 @@ fn authorization_code_request(code: &str, client_id: &str) -> TokenRequest {
         refresh_token: None,
         redirect_uri: Some(TRUSTED_REDIRECT_URI.to_owned()),
         client_id: Some(client_id.to_owned()),
+        resource: None,
     }
 }
 
@@ -1067,6 +1199,7 @@ async fn refresh_grant_returns_upstream_lifetime() {
             refresh_token: Some(issued.refresh_token),
             redirect_uri: None,
             client_id: Some(client_id),
+            resource: None,
         })
         .await
         .expect("refresh exchange should succeed");
@@ -1133,20 +1266,6 @@ fn protected_resource_metadata_includes_required_resource_url() {
     );
 }
 
-#[test]
-fn protected_resource_metadata_does_not_double_the_mcp_path() {
-    let mut service = Harness::new().service;
-    service.public_url = "https://gateway.macro.com/mcp".to_owned();
-    assert_eq!(
-        service.protected_resource_metadata(),
-        serde_json::json!({
-            "resource": "https://gateway.macro.com/mcp",
-            "authorization_server": "https://gateway.macro.com/mcp",
-            "authorization_servers": ["https://gateway.macro.com/mcp"],
-        })
-    );
-}
-
 // --- Access token clients ------------------------------------------------
 
 #[tokio::test]
@@ -1188,4 +1307,141 @@ async fn an_access_token_cannot_be_presented_as_a_refresh_token() {
         .expect_err("an access token is not a refresh token");
 
     assert!(matches!(error, TokenExchangeError::UnboundRefreshToken));
+}
+
+// --- Resources (RFC 8707) ----------------------------------------------
+
+#[tokio::test]
+async fn authorize_accepts_any_resource() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+
+    for resource in [
+        HARNESS_RESOURCE,
+        CHATGPT_RESOURCE,
+        "https://gateway.macro.com/mcp/mcp",
+        "https://other.example/mcp",
+    ] {
+        let mut request = harness.authorize_request(
+            &client_id,
+            TRUSTED_REDIRECT_URI,
+            &code_challenge_for(VICTIM_CODE_VERIFIER),
+        );
+        request.resource = Some(resource.to_owned());
+
+        let start = harness
+            .service
+            .start_authorization(request, harness.browser.clone(), UserConsent::NotAsked)
+            .await
+            .expect("authorize ignores the resource");
+        assert!(matches!(start, AuthorizationStart::SignIn(_)), "{resource}");
+    }
+}
+
+#[tokio::test]
+async fn the_harness_resource_gets_the_upstream_access_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let mut request = authorization_code_request(&code, &client_id);
+    request.resource = Some(HARNESS_RESOURCE.to_owned());
+
+    let response = harness
+        .service
+        .exchange_token(request)
+        .await
+        .expect("code exchange should succeed");
+
+    assert_eq!(response.access_token.as_str(), UPSTREAM_ACCESS_TOKEN);
+}
+
+/// The ChatGPT server hands its token straight to Macro's APIs, so the token
+/// is a Macro API token for the same user, labelled with the client's name and
+/// expiring when the upstream token would.
+#[tokio::test]
+async fn the_chatgpt_resource_gets_a_macro_api_token_naming_the_client() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let mut request = authorization_code_request(&code, &client_id);
+    request.resource = Some(CHATGPT_RESOURCE.to_owned());
+
+    let response = harness
+        .service
+        .exchange_token(request)
+        .await
+        .expect("code exchange should succeed");
+
+    // The upstream token lives an hour; the signer caps the minted one, and
+    // expires_in reports the minted lifetime so the client refreshes in time.
+    assert_eq!(
+        response.access_token.as_str(),
+        "macro-api-token for upstream-access-token via test-client for 900s"
+    );
+    assert_eq!(response.expires_in, MINTED_LIFETIME_CAP_SECONDS);
+    assert_eq!(response.refresh_token.as_str(), UPSTREAM_REFRESH_TOKEN);
+}
+
+#[tokio::test]
+async fn a_chatgpt_refresh_mints_from_the_refreshed_upstream_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+    let mut request = refresh_request(refresh_token, &client_id);
+    request.resource = Some(CHATGPT_RESOURCE.to_owned());
+
+    let response = harness
+        .service
+        .exchange_token(request)
+        .await
+        .expect("refresh should succeed");
+
+    assert_eq!(
+        response.access_token.as_str(),
+        "macro-api-token for refreshed-access-token via test-client for 900s"
+    );
+    assert_eq!(response.expires_in, MINTED_LIFETIME_CAP_SECONDS);
+}
+
+/// Deployed clients send whatever resource they derive from their configured
+/// URL; anything but the ChatGPT server's keeps the FusionAuth token they have
+/// always received.
+#[tokio::test]
+async fn an_unrecognized_resource_gets_the_upstream_access_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let code = harness
+        .complete_flow_to_code(&client_id, TRUSTED_REDIRECT_URI, VICTIM_CODE_VERIFIER)
+        .await;
+    let mut request = authorization_code_request(&code, &client_id);
+    request.resource = Some("https://mcp-chatgpt.macro.com".to_owned());
+
+    let response = harness
+        .service
+        .exchange_token(request)
+        .await
+        .expect("code exchange should succeed");
+
+    assert_eq!(response.access_token.as_str(), UPSTREAM_ACCESS_TOKEN);
+}
+
+#[tokio::test]
+async fn a_refresh_with_an_unrecognized_resource_gets_the_upstream_access_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+    let mut request = refresh_request(refresh_token, &client_id);
+    request.resource = Some("http://mcp-chatgpt.macro.com/mcp".to_owned());
+
+    let response = harness
+        .service
+        .exchange_token(request)
+        .await
+        .expect("refresh should succeed");
+
+    assert_eq!(response.access_token.as_str(), REFRESHED_ACCESS_TOKEN);
 }

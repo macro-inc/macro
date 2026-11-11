@@ -2,6 +2,7 @@ import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
@@ -139,6 +140,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      <SidebarRoutineSuggestions
+        surface="chat"
+        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+      />
       <Show when={rail.labelsFailed()}>
         <div
           class="flex items-center gap-2 px-3 text-xs text-ink-muted"
@@ -560,9 +565,14 @@ function BrowseSection(props: {
         <ChannelRailVirtualizer
           ref={(current) => {
             handle.virtualizer = current;
-            handle.outerScroll = outerScroll();
             setVirtualizer(current);
-            if (current) props.onReady();
+            // The virtualizer clears its ref while the rail is disposed. A
+            // reactive read then can rerun the owner being disposed, so keep
+            // the last snapshot.
+            if (!current) return;
+
+            handle.outerScroll = outerScroll();
+            props.onReady();
           }}
           keys={rowIds()}
           scrollRoot={rowsScrollRoot()}

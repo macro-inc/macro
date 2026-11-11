@@ -110,6 +110,7 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
+                billing: Default::default(),
                 purpose: agent_session::domain::model::SessionPurpose::Standalone,
                 repo_branch: None,
                 id: request.id.unwrap_or_else(AgentSessionId::new),
@@ -127,6 +128,7 @@ where
                 // Mint the session MCP credential when an authenticated
                 // runtime binds, and rotate it on each subsequent binding.
                 egress_token_hash: None,
+                origin: request.origin,
                 // The thread linkage is the caller's claim, not an observed
                 // mention; it must not grant the channel anything.
             })
@@ -486,6 +488,7 @@ where
         let session = self
             .sessions
             .create_session(CreateAgentSessionParams {
+                billing: Default::default(),
                 purpose: if announcement.reply_placement == ReplyPlacement::Timeline {
                     agent_session::domain::model::SessionPurpose::AgentDm
                 } else {
@@ -517,6 +520,7 @@ where
                 // advertised, for as long as the session lives.
                 mcp_servers: runtime.mcp_servers.clone(),
                 egress_token_hash: Some(egress.session_token_hash),
+                origin: origin.trigger_origin().clone(),
                 // This open came from an observed trigger event.
             })
             .await?;

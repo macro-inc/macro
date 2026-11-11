@@ -59,7 +59,12 @@ export class DocumentAnchor extends MacroEntity<AnchorRecord> {
   /** Page containing the annotation. */
   readonly page = this.field('page');
 
-  /** Edit a placeable comment's position and display settings. */
+  /**
+   * Edit a placeable comment's position and display settings.
+   *
+   * @write
+   * @idempotent
+   */
   async edit(
     options: Omit<EditPdfPlaceableCommentAnchorRequest, 'uuid'>,
   ): Promise<void> {
@@ -77,7 +82,12 @@ export class DocumentAnchor extends MacroEntity<AnchorRecord> {
     );
   }
 
-  /** Delete a standalone highlight annotation. */
+  /**
+   * Delete a standalone highlight annotation.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     if ((await this.kind()) !== 'highlight')
       throw new Error(

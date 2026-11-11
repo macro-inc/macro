@@ -18,6 +18,11 @@ IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
 editing and saving a message; integrations need not supply email or displayName.
 
+## Channel calls
+
+A channel call may have its own row and thread in the channel. See
+[calls whose discussion is a channel thread](calls.md#calls-whose-discussion-is-a-channel-thread).
+
 ## Channel list previews
 
 Message text in channel rows and Home cards is display-only, including quoted
@@ -31,6 +36,34 @@ Conversation headers and shared detail breadcrumbs use the same identity icon:
 the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
+
+## Composer focus and Esc
+
+Every way of opening a conversation follows one rule
+(`arrivalFocusesComposer` in `features/channel/composer-arrival-focus.ts`):
+a click, Enter or Cmd+K focuses its composer, whether it opens from the Chat
+sidebar, Home, the Notifications list, search, a link or mention, a
+notification, or in a new split. Arrow keys and `j` / `k` preview conversations
+and keep focus in the list. Back/Forward, switching to a view that restores its
+last conversation (the sidebar or a `g` shortcut), and taps leave focus where
+it is, so the on-screen keyboard stays down. A click or Enter on the
+conversation already open focuses its composer again.
+
+Esc steps back out. In the composer, the first Esc moves focus to the message
+list; anything in the composer that answers Esc first still does (mention and
+emoji menus, dictation, a message being edited, a thread reply). On the message
+list, a selected message or focused thread reply clears first, then Esc returns
+to the list the conversation was opened from, on its row: the Chat sidebar,
+Home, or the Notifications list. A conversation that arrived from elsewhere
+(Cmd+K, a link, search) returns to its row in the Chat sidebar of the same
+split, and a collapsed Chat sidebar opens for it. Without a list, including a
+narrow split that shows the conversation alone, Esc reaches the split as before
+(clearing a selection, leaving spotlight).
+
+To check this, arrow through several conversations (focus stays in the list),
+press Enter (the composer takes focus), press Esc twice (back on the same row),
+then click another conversation and type. Repeat from Home and from the
+Notifications list.
 
 ## Message links
 
@@ -84,7 +117,17 @@ new page cursor before deciding whether to request another page.
 
 An empty human DM shows the centered conversations illustration and “Say hello”
 above the composer. The copy explains that recipients without a Macro account
-receive the message by email. Opening the DM sends nothing. Sending a human
+receive the message by email. Opening the DM sends nothing.
+
+Opening a person you have no DM with shows this same empty DM, with their name
+and avatar in the header, under a temporary `pending-dm-` id kept only in that
+tab. Nothing exists on the server, so the DM is in neither person's list until
+the first message creates it and the view becomes the real conversation. Check
+that leaving without sending creates nothing, that the other person's list gains
+the DM only after the send, and that reloading a `pending-dm-` URL opens the
+Chat list on desktop and closes the pane on touch.
+
+Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
 replies, and mentions; registered users retain their notification preferences.
 Check narrow and wide panes: the composer stays usable, and the empty state
@@ -103,6 +146,13 @@ three-step flow:
 
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
+
+The channel header's Invite dialog and Participants add controls use paged personal
+suggestions, not a complete address book. Next options (or PageDown) replaces the
+window; selected people and typed external addresses remain independent. Existing
+members are excluded, including anyone who joins while selected. A large roster
+can leave a short or empty page with more options available. Add all teammates
+uses the current team roster, never just the visible suggestion page.
 
 The first message in a DM to an unregistered recipient sends an email saying
 `<sender email> sent you a message on Macro`, with the message and a **View message**
@@ -376,6 +426,25 @@ shows the Macro bot with **from <user>**. To check this, connect an MCP client
 over OAuth, ask it to post in a channel and to comment on a document, and
 confirm both show the client and the user on desktop and at phone width.
 
+## Account manager requests
+
+A DM between a person and an agent account has an account manager button
+(user-gear icon) in the channel top bar; a DM between two agents or two people
+doesn't, because an agent can't be managed and only an agent can manage. It starts
+a request: the person asks the agent to manage their account, or the agent asks to
+manage the person's. Either way a card appears
+in the DM (`<m-account-manager-request>{"id":"<grant>"}</...>`).
+
+- The side that didn't ask gets **Approve** and **Decline**. Approve opens a
+  confirmation stating the access it gives. The side that asked gets **Withdraw**.
+- Approval posts a second card with a one-time link to
+  `/app/account-manager/<grant>`. **Reveal token** on either surface works once,
+  only for the manager, and shows the token in a dialog.
+- Requests and unclaimed approvals expire after 7 days. Revoke active access from
+  Settings → Account Managers.
+- Messages the manager sends with the token show the managed account as sender,
+  with a `from <agent>` line (`triggered_by`).
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send on pointer
@@ -552,12 +621,12 @@ The mention menu offers a single `@Macro`; the `enable-chat-v3-agents` rollout d
 whether it answers in the thread as the classic bot or opens an agent session. Without the
 rollout, `@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
 no composer or pending-confirmation card in a channel, so asking it to create a calendar
-event without attendees creates the event right away (unlike AI chat, where creation waits
-for the user to confirm a composer card). For an event with attendees the bot is prompted to
+event without attendees creates the event right away (unlike an agent session, where
+creation waits for the session owner to review it). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
-(chips or attachments) that the replying bot created for them while answering: those with a
+(chips, attachments, or forms presented as cards in the reply's steps) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
 the thread before the reply, or, for a bot message that starts its own thread (a poll card
 posted top-level), their latest message in the channel. Forms and databases an agent creates
@@ -648,7 +717,7 @@ channel participant. Custom agents keep their channel visibility rules
 regardless of which harness they use.
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor** or **Connect Codex** chip. Each chip
-opens Settings → Agents → Runtimes, where the connection cards in the reader's rollout are visible. The same
+opens Settings → Agents → Machines, where the connection cards in the reader's rollout are visible. The same
 chip reads **connected** after setup; mention the bot again to start a session.
 Codex also prompts for a cloud environment when ChatGPT is connected but no
 environment has been saved. New sessions use that environment on
@@ -662,7 +731,7 @@ a configured backend for end-to-end verification.
 Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
 no Cursor API key opens no session: the Cursor bot replies in the thread that
 `@cursor` runs on their own account and is not connected yet, followed by a
-**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Runtimes; once a key
+**Connect Cursor** chip. Clicking the chip opens Settings → Agents → Machines; once a key
 is saved the same chip reads **Cursor connected** and stops navigating. The
 original mention is not replayed - mention `@cursor` again after connecting.
 
@@ -741,8 +810,10 @@ names who is being waited on. Once answered, the area shows the agent's passage 
 A prompt the agent read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
-confirmation - the agent then sends or creates directly (`SendConfirmedEmail`,
-`CreateConfirmedCalendarEvent`), with no session visit needed. Being asked to send or
+confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
+`CreateConfirmedCalendarEvent`, or in code mode `macro.email.sendConfirmed`,
+`EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
+with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
 Images made with `GenerateImage` are saved to static file service. The bot embeds
 the returned URL as a Markdown image in its channel reply; generated images have
@@ -989,6 +1060,8 @@ in place until the result arrives.
 
 ## Chat navigation rail
 
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list.
+
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.
 It keeps the shared channel detail mounted and does not show a **Content already open**
@@ -1030,11 +1103,12 @@ Chat remembers this choice independently of other workspaces and restores it
 after reload. While no conversation is selected, the rail stays open regardless
 of that choice and offers no **Hide navigation** control (`Cmd+.` is inert);
 selecting a conversation applies the saved choice again. Chat uses
-the shared 256px default sidebar width and resize limits. In splits narrower than
-720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
-with the same full sidebar contents. With no conversation selected, the
-slide-over opens on its own and closes once a conversation is picked; the
-backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
+the shared 256px default sidebar width and resize limits. In splits 720px wide or
+narrower, the rail and the conversation take turns at full width instead of a
+slide-over: with no conversation selected the rail fills the split (no Hide
+navigation, `Cmd+.` inert), and an open conversation shows **Back** (left arrow)
+where the hamburger was. Back opens the Channels list route, so browser or split
+back returns to the conversation. There is no separate skinny sidebar mode.
 
 ### Sidebar redesign rollout
 
@@ -1062,8 +1136,8 @@ collapses and sorts independently; open groups split the available height.
 the channel filter, while the Conversations section lists channels and DMs with
 threads the user participates in. Scrolling loads more. Selecting a conversation
 filters the thread view instead of opening that conversation. On desktop, Threads
-pins navigation open with no Hide navigation control. In narrow splits, changing
-between Threads, All, and Recent preserves an already-open navigation overlay.
+pins navigation open with no Hide navigation control. In narrow splits the thread
+view fills the split like a conversation, and **Back** returns to All.
 
 ### Sectioned sidebar (flag on)
 
@@ -1776,3 +1850,21 @@ For tab performance QA, switch Attachments → Calls → Participants → Messag
 in both the routed channel and a block split. Each actual selection should
 produce one `channel.tab` interaction with its `channel.*.view` child; repeat
 the current selection and confirm it does not create a new interaction.
+
+## Work in a DM with an agent account
+
+Behind `enable-agent-work`, a 1:1 DM shows the other account's registered work
+when that account is an agent (`isAgentAccount`) and has work you can open. The
+rule lives in `features/agent-work/core/work-visibility.ts`. DMs with people,
+group DMs, and channels show nothing.
+
+The side panel toggle appears in the top bar only while there's work, using the
+floating `SidePanel` the agent session uses. When the agent goes from no work to
+some, a "<name> started working" label appears beside the toggle for six
+seconds without opening the panel; clicking it opens the panel. Clicking a row
+opens the session in a new split. Rows keep their order as state changes.
+
+To exercise it, register a session as the agent account through the SDK
+(`session.registerAsWork()`), share it with the viewer, and watch the DM update
+live. `session.unregisterAsWork()` removes it. A registered session the viewer
+can't open stays hidden.

@@ -24,7 +24,7 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
@@ -32,6 +32,9 @@ import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
 import type { AccessLevel } from './generated/schemas/accessLevel';
+import type { AccountManagerDecision } from './generated/schemas/accountManagerDecision';
+import type { AccountManagerGrant } from './generated/schemas/accountManagerGrant';
+import type { AccountManagersList } from './generated/schemas/accountManagersList';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
@@ -61,6 +64,7 @@ import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
+import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
 import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
@@ -161,12 +165,15 @@ import type { RenameChannelLabelRequest } from './generated/schemas/renameChanne
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
+import type { RequestAccountManagerBody } from './generated/schemas/requestAccountManagerBody';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
+import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
@@ -273,6 +280,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
   };
 }
 
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
+}
+
 export async function getDocumentPermissionToken(
   documentId: string
 ): Promise<string> {
@@ -334,10 +351,16 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
+/** Who owns a registered harness: always one person. */
+export type HarnessOwner = { type: 'user'; user_id: string };
+
+/** An agent living on a runtime. */
+export type HarnessResident = {
+  bot_id: string;
+  name: string;
+  owner_user_id?: string | null;
+  team_id?: string | null;
+};
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
@@ -346,6 +369,10 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
+  /** The viewer's role. Only `owner` and `user` can run agents on it. */
+  access: 'owner' | 'user' | 'read' | 'none';
+  /** Teams it is a team machine for: their every member is a user of it. */
+  shared_team_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -853,6 +880,34 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
+  },
+
   async getHarnessPairing(args: { code: string }) {
     return (
       await dssFetch<HarnessPairing>(
@@ -962,6 +1017,52 @@ export const storageServiceClient = {
     return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
       method: 'DELETE',
     });
+  },
+
+  async listAccountManagers() {
+    return (
+      await dssFetch<AccountManagersList>(`/account-managers`, {
+        method: 'GET',
+      })
+    ).map((result) => result.grants);
+  },
+
+  async getAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'GET' }
+    );
+  },
+
+  async requestAccountManager(args: RequestAccountManagerBody) {
+    return await dssFetch<AccountManagerGrant>(`/account-managers`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+  },
+
+  async respondToAccountManagerRequest(args: {
+    id: string;
+    decision: AccountManagerDecision;
+  }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}/response`,
+      { method: 'POST', body: JSON.stringify({ decision: args.decision }) }
+    );
+  },
+
+  async claimAccountManagerToken(args: { id: string }) {
+    return await dssFetch<ClaimedAccountManagerToken>(
+      `/account-managers/${encodeURIComponent(args.id)}/token`,
+      { method: 'POST' }
+    );
+  },
+
+  async revokeAccountManagerGrant(args: { id: string }) {
+    return await dssFetch<AccountManagerGrant>(
+      `/account-managers/${encodeURIComponent(args.id)}`,
+      { method: 'DELETE' }
+    );
   },
 
   async listUserApiKeys() {
@@ -2928,6 +3029,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async setContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async setContactCompany({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactCompanyRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
   },
   async setContactHidden({
     contactId,

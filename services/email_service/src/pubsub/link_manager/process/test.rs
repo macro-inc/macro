@@ -52,6 +52,27 @@ async fn teardown_does_not_retry_permanent_failures() {
     }
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_stalled_probe_fails_so_the_message_is_redelivered() {
+    let error = within_probe_timeout(std::future::pending())
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("timed out"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_probe_keeps_its_error() {
+    let error = within_probe_timeout(async { Err(MailboxError::Persistence) })
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<MailboxError>(),
+        Some(MailboxError::Persistence)
+    ));
+}
+
 #[test]
 fn settle_reauth_returns_successful_token() {
     let result = settle_reauth_result(Ok(AccessToken::new("token")), false).unwrap();

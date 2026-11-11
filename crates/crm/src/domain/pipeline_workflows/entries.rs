@@ -1,4 +1,4 @@
-//! Entries as read back: the record each tracks, its fields by name, and the
+//! Entries as read back: the record each tracks, if any, its fields by name, and the
 //! counts and totals over a set of them.
 
 use std::collections::{BTreeMap, HashMap};
@@ -43,18 +43,34 @@ pub(super) fn entry_view(
     row: &StorageRow,
     records: &HashMap<Uuid, PipelineRecord>,
 ) -> PipelineEntryView {
-    let record = record_id(row.cells.get(&overview.record_field().id))
-        .map(|id| {
-            records
-                .get(&id)
-                .cloned()
-                .unwrap_or_else(|| PipelineRecord::unnamed(id))
-        })
-        .unwrap_or_else(|| PipelineRecord::unnamed(Uuid::nil()));
+    let record = overview.record_field().map(|field| {
+        record_id(row.cells.get(&field.id))
+            .map(|id| {
+                records
+                    .get(&id)
+                    .cloned()
+                    .unwrap_or_else(|| PipelineRecord::unnamed(id))
+            })
+            .unwrap_or_else(|| PipelineRecord::unnamed(Uuid::nil()))
+    });
     PipelineEntryView {
         entry_id: row.row_id,
         record,
         fields: field_values(&overview.fields, &row.cells),
+    }
+}
+
+/// Whether `entry` is what `search` looks for: the record it tracks, or in a
+/// generic pipeline one of its text fields.
+pub(super) fn matches_search(entry: &PipelineEntryView, search: &str) -> bool {
+    match &entry.record {
+        Some(record) => record.matches(search),
+        None => {
+            let search = search.trim().to_lowercase();
+            entry.fields.iter().any(|(_, value)| {
+                matches!(value, FieldValue::Text(text) if text.to_lowercase().contains(&search))
+            })
+        }
     }
 }
 

@@ -53,7 +53,6 @@ github = { path = "../github", default-features = false, features = [
 ] }
 feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev" }
-kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 # The owner's custom MCP server rows, listed so a sandbox can be told they exist.
 mcp_client = { path = "../mcp_client" }
@@ -74,6 +73,7 @@ messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rand = { workspace = true }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
@@ -108,7 +108,6 @@ dynamic_ui = { path = "../dynamic_ui" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
-mockall = { workspace = true }
 model_user = { path = "../model_user" }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tower = { workspace = true }

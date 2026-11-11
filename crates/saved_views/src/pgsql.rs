@@ -1,6 +1,11 @@
-use crate::{ExcludedDefaultView, View, storage::ExcludedDefaultViewStorage};
+use crate::{
+    ExcludedDefaultView, View, domain::PositionedView, storage::ExcludedDefaultViewStorage,
+};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
 
 pub struct PgViewStorage {
     pool: PgPool,
@@ -112,6 +117,19 @@ impl crate::domain::ViewRepository for PgViewStorage {
         Ok(created)
     }
 
+    #[tracing::instrument(skip_all, fields(count = ids.len()), err)]
+    async fn get_many(&self, ids: &[Uuid]) -> Result<Vec<View>, Self::Err> {
+        sqlx::query_as!(
+            View,
+            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id
+             FROM saved_view WHERE id = ANY($1::uuid[])",
+            ids
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    // Unplaced views sort after placed ones; the sentinel stays inside SQL.
     #[tracing::instrument(skip_all, fields(limit, kind), err)]
     async fn list_views_for_access_check(
         &self,
@@ -120,24 +138,75 @@ impl crate::domain::ViewRepository for PgViewStorage {
         kind: Option<&str>,
         after: Option<crate::domain::Cursor>,
         limit: i64,
-    ) -> Result<Vec<View>, Self::Err> {
-        sqlx::query_as!(
-            View,
-            "SELECT id, user_id, name, config, created_at, updated_at, revision, shared_team_id
-             FROM saved_view
-             WHERE (user_id = $1 OR shared_team_id = ANY($2::uuid[]))
-               AND ($3::text IS NULL OR config->>'kind' = $3)
-               AND ($4::timestamptz IS NULL OR (created_at, id) > ($4, $5))
-             ORDER BY created_at, id LIMIT $6",
+    ) -> Result<Vec<PositionedView>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"SELECT v.id, v.user_id, v.name, v.config, v.created_at, v.updated_at, v.revision,
+                    v.shared_team_id, p.position AS "position?"
+             FROM saved_view v
+             LEFT JOIN saved_view_position p ON p.saved_view_id = v.id AND p.user_id = $1
+             WHERE (v.user_id = $1 OR v.shared_team_id = ANY($2::uuid[]))
+               AND ($3::text IS NULL OR v.config->>'kind' = $3)
+               AND ($5::timestamptz IS NULL
+                    OR (COALESCE(p.position, 2147483647), v.created_at, v.id)
+                       > (COALESCE($4::int, 2147483647), $5, $6))
+             ORDER BY COALESCE(p.position, 2147483647), v.created_at, v.id LIMIT $7"#,
             viewer,
             team_ids,
             kind,
+            after.and_then(|c| c.position),
             after.map(|c| c.created_at),
             after.map(|c| c.id),
             limit
         )
         .fetch_all(&self.pool)
-        .await
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| PositionedView {
+                view: View {
+                    id: row.id,
+                    user_id: row.user_id,
+                    name: row.name,
+                    config: row.config,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    revision: row.revision,
+                    shared_team_id: row.shared_team_id,
+                },
+                position: row.position,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip_all, fields(kind, count = ids.len()), err)]
+    async fn set_positions(&self, viewer: &str, kind: &str, ids: &[Uuid]) -> Result<(), Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        // Serialize one viewer's reorders of a kind so the last one wins whole.
+        let key = format!("saved-view-order:{viewer}:{kind}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query!(
+            "DELETE FROM saved_view_position p USING saved_view v
+             WHERE p.saved_view_id = v.id AND p.user_id = $1 AND v.config->>'kind' = $2",
+            viewer,
+            kind
+        )
+        .execute(&mut *tx)
+        .await?;
+        // Joining saved_view skips a view deleted since the service checked it.
+        sqlx::query!(
+            "INSERT INTO saved_view_position (user_id, saved_view_id, position)
+             SELECT $1, v.id, (ordered.ord - 1)::int
+             FROM unnest($2::uuid[]) WITH ORDINALITY AS ordered(id, ord)
+             JOIN saved_view v ON v.id = ordered.id
+             ON CONFLICT (user_id, saved_view_id) DO UPDATE SET position = EXCLUDED.position",
+            viewer,
+            ids
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await
     }
 
     #[tracing::instrument(skip_all, fields(view_id = %id, revision), err)]
