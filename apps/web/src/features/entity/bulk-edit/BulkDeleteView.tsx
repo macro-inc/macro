@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { ActionDialogShell, Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import { createBulkDeleteDssItemsMutation } from '../queries/dss';
 import type { EntityData } from '../types/entity';
@@ -11,6 +12,16 @@ export type PartialDeleteHandler = (
   deleted: EntityData[],
   remaining: EntityData[]
 ) => void;
+
+/** Move focus to Delete when the confirmation opens, so Enter confirms it. */
+export function focusDeleteConfirmation(event: Event) {
+  const content = event.currentTarget;
+  if (!(content instanceof HTMLElement)) return;
+  const confirm = content.querySelector<HTMLElement>('[data-confirm-delete]');
+  if (!confirm) return;
+  event.preventDefault();
+  confirm.focus();
+}
 
 export const BulkDeleteView = (props: {
   entities: EntityData[];
@@ -25,7 +36,10 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
+  let submitting = false;
   const handleDelete = async () => {
+    if (submitting) return;
+    submitting = true;
     // Keep the completion attached to the caller that submitted this attempt,
     // even if another modal replaces this one while the request is in flight.
     const onPartialDelete = props.onPartialDelete;
@@ -54,8 +68,27 @@ export const BulkDeleteView = (props: {
       }
       console.error('Failed to delete entities:', error);
       props.onError?.(error);
+    } finally {
+      submitting = false;
     }
   };
+
+  // Enter confirms before list hotkeys, which listen on document. Escape still
+  // dismisses, and a focused control keeps Space and click. Text entry is left alone.
+  onMount(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' || event.repeat || event.isComposing) return;
+      if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey)
+        return;
+      if (event.target instanceof Element && isEditableInput(event.target))
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      fireAndForget(handleDelete(), 'bulk-delete');
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    onCleanup(() => window.removeEventListener('keydown', onKeyDown, true));
+  });
 
   return (
     <>
@@ -84,7 +117,9 @@ export const BulkDeleteView = (props: {
           Cancel
         </Button>
         <Button
+          type="button"
           variant="secondary"
+          data-confirm-delete=""
           onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
         >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}
