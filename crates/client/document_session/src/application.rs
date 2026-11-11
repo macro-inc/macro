@@ -20,6 +20,8 @@ pub fn application_editor_config(
 ) -> EditorConfig {
     if editor_type == macro_document_model::EditorType::MarkdownSync {
         config.namespace = "block-md-main".into();
+        config.browser_history_awareness = config.mode == lexical_model::EditorMode::ViewAttached
+            && config.view_host.engine != lexical_model::ViewEngine::Native;
     }
     config.policy = &macro_document_model::sync::MACRO_SYNC_POLICY;
     config.comment_node = |tx, ids| {

@@ -15,6 +15,7 @@ import { EditorView } from './editor-view';
 import {
   isSelectionWithinEditor,
   readSelection,
+  readSelectionFromChange,
   resolvePoint,
   sameSelection,
 } from './selection';
@@ -479,7 +480,10 @@ export function registerEvents(view: EditorView): {
     }
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
-    const selection = readSelection(view);
+    const selection =
+      routed === CommandCode.Undo || routed === CommandCode.Redo
+        ? readSelectionFromChange(view)
+        : readSelection(view);
     if (
       !routed &&
       !rustListeners.has('KeyDown') &&
@@ -720,7 +724,7 @@ export function registerEvents(view: EditorView): {
       )
     )
       return;
-    const selection = readSelection(view);
+    const selection = readSelectionFromChange(view);
     const marked = view.recentSelectionMark();
     const markedRange =
       marked?.selection.kind === 'range' ? marked.selection : null;

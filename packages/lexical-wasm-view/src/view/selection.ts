@@ -54,25 +54,78 @@ export function resolvePoint(
     type: 'element',
   };
 }
-export function readSelection(view: EditorView): ViewSelection {
+/**
+ * On a real selectionchange, Source descends from an owned root boundary
+ * into its element child unless the previous point already selects the root.
+ */
+function resolveRootBoundary(
+  view: EditorView,
+  dom: Node,
+  offset: number,
+  point: Point,
+  previous: Point | undefined
+): Point {
+  if (dom !== view.root || previous?.key === point.key) return point;
+  const root = view.node(point.key);
+  if (root?.kind !== 'root') return point;
+  const atEnd = offset > 0 && offset === dom.childNodes.length;
+  const childKey = root.children[point.offset - (atEnd ? 1 : 0)];
+  if (childKey === undefined) return point;
+  let child = view.node(childKey);
+  if (child?.kind !== 'element') return point;
+  while (child.kind === 'element' && child.children.length > 0) {
+    const key = child.children[atEnd ? child.children.length - 1 : 0];
+    const next = view.node(key);
+    if (!next) return point;
+    if (next.kind === 'text') {
+      return { key, offset: atEnd ? next.text.length : 0, type: 'text' };
+    }
+    if (next.kind !== 'element') {
+      return { key: child.key, offset: atEnd ? 1 : 0, type: 'element' };
+    }
+    child = next;
+  }
+  return { key: child.key, offset: 0, type: 'element' };
+}
+
+function read(view: EditorView, rootBoundary: boolean): ViewSelection {
   const selection = view.root.ownerDocument.getSelection();
   if (!selection?.anchorNode || !selection.focusNode) return { kind: 'none' };
-  const anchor = resolvePoint(
-    view,
-    selection.anchorNode,
-    selection.anchorOffset
-  );
-  const focus = resolvePoint(view, selection.focusNode, selection.focusOffset);
-  return anchor && focus
-    ? {
-        kind: 'range',
-        anchor,
-        focus,
-        dirty:
-          (anchor.type === 'text' && selection.anchorNode.nodeType !== 3) ||
-          (focus.type === 'text' && selection.focusNode.nodeType !== 3),
-      }
-    : { kind: 'none' };
+  let anchor = resolvePoint(view, selection.anchorNode, selection.anchorOffset);
+  let focus = resolvePoint(view, selection.focusNode, selection.focusOffset);
+  if (!anchor || !focus) return { kind: 'none' };
+
+  // The root DOM itself is a legitimate Source caret, even when the resolved
+  // model point is text. Do not mark that boundary for a forced DOM rewrite.
+  const dirty =
+    (anchor.type === 'text' && selection.anchorNode.nodeType !== 3) ||
+    (focus.type === 'text' && selection.focusNode.nodeType !== 3);
+  if (rootBoundary) {
+    const previous = view.selection().selection;
+    anchor = resolveRootBoundary(
+      view,
+      selection.anchorNode,
+      selection.anchorOffset,
+      anchor,
+      previous.kind === 'range' ? previous.anchor : undefined
+    );
+    focus = resolveRootBoundary(
+      view,
+      selection.focusNode,
+      selection.focusOffset,
+      focus,
+      previous.kind === 'range' ? previous.focus : undefined
+    );
+  }
+  return { kind: 'range', anchor, focus, dirty };
+}
+
+export function readSelection(view: EditorView): ViewSelection {
+  return read(view, false);
+}
+
+export function readSelectionFromChange(view: EditorView): ViewSelection {
+  return read(view, true);
 }
 export function sameSelection(
   left: ViewSelection,

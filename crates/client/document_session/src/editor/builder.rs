@@ -255,3 +255,42 @@ impl Plugin for RestoreModelSelection {
         Ok(Handled::Yes)
     }
 }
+
+#[derive(Clone, Debug)]
+pub(super) struct HistoryAwarenessRestore {
+    pub(super) range: RangeSelection,
+    pub(super) focused: bool,
+}
+
+pub(super) static RESTORE_HISTORY_AWARENESS: CommandKey<HistoryAwarenessRestore> =
+    CommandKey::new("session-restore-history-awareness");
+
+pub(super) struct RestoreHistoryAwareness;
+impl Plugin for RestoreHistoryAwareness {
+    fn name(&self) -> &'static str {
+        "session-restore-history-awareness"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
+            command: CommandKind::Extension(&RESTORE_HISTORY_AWARENESS),
+            priority: CommandPriority::Critical,
+            placement: Placement::Before,
+        }];
+        &COMMANDS
+    }
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        let Command::Extension(command) = command else {
+            return Ok(Handled::No);
+        };
+        let Some(restore) = command.payload(&RESTORE_HISTORY_AWARENESS) else {
+            return Ok(Handled::No);
+        };
+        tx.add_tag(UpdateTag::Custom("collab-selection".into()));
+        tx.add_tag(UpdateTag::SkipScrollIntoView);
+        if !restore.focused {
+            tx.add_tag(UpdateTag::SkipDomSelection);
+        }
+        tx.set_selection(Some(Selection::Range(restore.range.clone())))?;
+        Ok(Handled::Yes)
+    }
+}

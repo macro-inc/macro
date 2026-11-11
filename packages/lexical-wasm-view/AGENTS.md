@@ -124,3 +124,5 @@ Pair submitted DOM selections with their acknowledged model selection when dedup
 Set HTML display at DOM creation and observe its actual owner-window selection anchors before the retained host display/class writes; preserve the approved publication order without changing other decorator paths.
 
 Apply each native Diff Remove to its named record. The subtree-root flag describes DOM detach; validate surviving children of removed parents after the full packet.
+
+Resolve root DOM boundaries in actual document selectionchange using the pinned Source descendant rule. Keep the browser root caret in place when it maps to a valid model point. Only a focused history awareness effect overrides the packet skip tag.

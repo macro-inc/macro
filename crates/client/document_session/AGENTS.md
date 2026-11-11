@@ -100,7 +100,7 @@ Portable HTML and Markdown exports are available through the typed native FFI.
 Enable the application feature to share application_editor_config and application exporters across native and WASM hosts; supply the same clock and continuing per-peer entropy streams, never server composers.
 Initialize the editor only after Seeded includes every startup WAL adoption; optimistic and socket seeds must not expose an empty model while durable rows are still being recovered.
 
-Record before/after selection cursors per Loro history group, using the model-accepted inline selection; restore transformed popped cursors after projection binding for undo/redo, headless and focused views. Use the pinned native UndoManager metadata setters to preserve each entry across Loro loop substitution. Keep history metadata local to the session, outside wire bytes.
+For non-browser history, record before/after selection cursors per Loro history group, using the model-accepted inline selection; restore transformed popped cursors after projection binding for undo/redo, headless and focused views. Use the pinned native UndoManager metadata setters to preserve each entry across Loro loop substitution. Keep history metadata local to the session, outside wire bytes.
 
 Run routed history keys through model KeyDown and command listeners first; only successful unhandled Undo/Redo routes fall through to Loro history after listener commits are projected.
 
@@ -130,3 +130,5 @@ that may survive an await.
 Pin application ROOT nested-state order against literal Source exports through both direct and fast JSON paths; keep raw fixtures intact and leave unknown-key and non-application defaults unchanged.
 
 Keep ordinary host listener registration behind the specialized EditorSurface session forwarders, and rebind from actual presence after core replacement. Associate reported typed errors with their exact view-effect push through the optional metadata observer; caught nested callback failures are not reported outer errors.
+
+For browser MarkdownSync history, clear selection in the historic content update and skip the DOM write. Restore only current resolvable awareness in a separate selection update and let actual browser selection changes settle unresolved carets.
