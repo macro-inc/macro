@@ -49,3 +49,6 @@ pub mod persistence_error;
 pub mod scheduled_drafts;
 /// Existing settings, signature image, and Gmail alias effects.
 pub mod signature_settings;
+
+/// Backfill-job persistence and initialization publication.
+pub mod backfill_jobs;

@@ -70,3 +70,7 @@ pub mod draft_transfer;
 /// Signature preparation and settings-patch policy.
 #[cfg(feature = "mailbox")]
 pub mod signature_settings;
+
+/// Backfill-job access, cancellation, and initialization publication.
+#[cfg(feature = "mailbox")]
+pub mod backfill_jobs;

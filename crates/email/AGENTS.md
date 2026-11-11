@@ -18,6 +18,8 @@ tools — hexagonal, heavily feature-gated.
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
   and settings patches.
+- `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
+  cancellation, active-job reuse, and initialization publication.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres

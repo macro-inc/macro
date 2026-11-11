@@ -16,6 +16,8 @@ the gateway `/email` prefix.
 - `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
   `calendar_disconnect.rs`, and `signature_settings.rs`: adapters for the five
   inbox-scoped use cases; handlers delegate to their email-domain services.
+- `src/outbound/backfill_jobs.rs`: the existing job queries and initialization
+  queue send behind the email domain backfill-job service.
 
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
