@@ -642,7 +642,9 @@ impl EditorBuilder {
                         .collect();
                 })
                 .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+            editor.initializing = true;
             let mut initial = editor.run_after_commit(initial);
+            editor.initializing = false;
             if let Some(failure) = initial.follow_up_error {
                 return Err(BuildError::InitialState(Box::new(
                     Error::InitialFollowUpFailed(failure.error),

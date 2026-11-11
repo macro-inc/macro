@@ -71,6 +71,11 @@ pub struct Transaction<'editor> {
     pub(crate) foreign_selections: crate::foreign::selections::SelectionIdentities,
 }
 impl<'editor> Transaction<'editor> {
+    /// Whether the editor is draining its initial after-commit hooks.
+    /// This lifecycle observation grants no mutation or admission authority.
+    pub fn is_initializing(&self) -> bool {
+        self.editor.initializing
+    }
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
         let mut pending = editor.state.pending();
         if let Some(Selection::Range(range)) = &mut pending.selection {
