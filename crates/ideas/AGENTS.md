@@ -48,8 +48,8 @@ its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## Scope
 
-- Owns: `idea`, `idea_prompt`, `idea_entity`, `idea_routine`, `idea_target`,
-  and its `suggestion_change` rows.
+- Owns: `suggestion`, `suggestion_prompt`, `suggestion_entity`,
+  `suggestion_routine`, `suggestion_target`, and its `suggestion_change` rows.
 - Also: the vocabulary every generation's tools share (`GenerationTrigger`,
   `SessionKind`, `GenerationSession`) and the `GenerationSessions` and
   `SuggestionAudience` ports, which `crates/suggestion_generation` implements;
