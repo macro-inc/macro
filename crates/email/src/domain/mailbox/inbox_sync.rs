@@ -16,7 +16,9 @@ mod upsert_message;
 pub use error_policy::handle_operation_error;
 pub use gmail_message::{ensure_recovery_backfill_job, repair_stale_cursor};
 pub use import_ports::*;
-pub use pending_labels::{PendingAroundRead, read_around as read_pending_around};
+pub use pending_labels::{
+    MessageResyncRepository, PendingAroundRead, read_around as read_pending_around, resync_snapshot,
+};
 pub use ports::*;
 pub use upsert_message::contacts::{CrmContactRecipient, enqueue_crm_contacts};
 pub use upsert_message::{process_and_insert_message, resync_around, upload_claimed_attachments};

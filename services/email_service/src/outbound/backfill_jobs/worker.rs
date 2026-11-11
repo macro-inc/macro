@@ -1,6 +1,8 @@
 //! Existing backfill clients behind worker-domain capabilities.
 
+mod database_error;
 mod effects;
+mod imports;
 mod legacy;
 mod repository;
 mod transaction;
@@ -33,6 +35,31 @@ pub(crate) struct BackfillWorkerCrm(pub crate::pubsub::context::CrmServiceType);
 pub(crate) struct LegacyBackfillOperations(pub PubSubContext);
 
 impl BackfillGmail for GmailBackfill {
+    fn list_threads<'a>(
+        &'a self,
+        link: Uuid,
+        limit: u32,
+        next: Option<&'a str>,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>
+    {
+        Box::pin(self.0.list_threads(link, limit, next, labels))
+    }
+    fn list_messages<'a>(
+        &'a self,
+        link: Uuid,
+        limit: u32,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<Vec<String>, EmailApiError>> {
+        Box::pin(self.0.list_messages(link, limit, labels))
+    }
+    fn thread<'a>(
+        &'a self,
+        link: Uuid,
+        provider: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<MessageWithCalendarParts>, EmailApiError>> {
+        Box::pin(self.0.get_thread(link, provider))
+    }
     fn message<'a>(
         &'a self,
         link: Uuid,

@@ -10,10 +10,7 @@ use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::{
-    link::{Link, UserProvider},
-    thread::ListThreadsPayload,
-};
+use models_email::service::link::{Link, UserProvider};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
@@ -26,6 +23,7 @@ pub(super) const TEAM: Uuid = Uuid::from_u128(30);
 
 pub(super) struct State {
     pub calls: Vec<&'static str>,
+    pub import: super::import_fakes::ImportState,
     pub faults: HashSet<&'static str>,
     pub job: Option<BackfillJob>,
     pub link: Option<Link>,
@@ -48,6 +46,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             calls: vec![],
+            import: Default::default(),
             faults: HashSet::new(),
             job: Some(job()),
             link: Some(link()),
@@ -82,7 +81,12 @@ impl Fake {
     pub fn call(&self, name: &'static str) -> Result<(), Error> {
         let mut s = self.0.lock().unwrap();
         s.calls.push(name);
-        if s.faults.contains(name) {
+        if s.faults.contains(name)
+            || s.import
+                .fail_at
+                .get(name)
+                .is_some_and(|nth| *nth == s.calls.iter().filter(|called| **called == name).count())
+        {
             Err(Error(name))
         } else {
             Ok(())
@@ -114,6 +118,7 @@ pub(super) fn setup() -> (BackfillService<Fake, Fake, Fake, Fake, Fake, Fake>, F
             effects: f.clone(),
             crm: f.clone(),
             legacy: f.clone(),
+            contacts_sync: true,
         },
         f,
     )
@@ -336,6 +341,66 @@ impl BackfillMetadataTransaction for Fake {
     }
 }
 impl BackfillGmail for Fake {
+    fn list_threads<'a>(
+        &'a self,
+        _: Uuid,
+        limit: u32,
+        next: Option<&'a str>,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>
+    {
+        Box::pin(async move {
+            self.call("list_threads")
+                .map_err(|e| EmailApiError::Transient {
+                    message: e.to_string(),
+                })?;
+            let mut s = self.0.lock().unwrap();
+            s.import.list_calls.push((
+                limit,
+                next.map(str::to_owned),
+                labels.iter().map(|s| s.to_string()).collect(),
+            ));
+            s.import.pages.pop_front().unwrap_or_else(|| {
+                Ok(email_api_client::domain::models::ThreadListPage {
+                    threads: vec![],
+                    next_page_token: None,
+                })
+            })
+        })
+    }
+    fn list_messages<'a>(
+        &'a self,
+        _: Uuid,
+        limit: u32,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<Vec<String>, EmailApiError>> {
+        Box::pin(async move {
+            assert_eq!(limit, 200);
+            assert_eq!(labels, ["SENT"]);
+            self.call("list_sent")
+                .map_err(|e| EmailApiError::Transient {
+                    message: e.to_string(),
+                })?;
+            Ok(self.0.lock().unwrap().import.sent_ids.clone())
+        })
+    }
+    fn thread<'a>(
+        &'a self,
+        _: Uuid,
+        _: &'a str,
+    ) -> BoxFuture<
+        'a,
+        Result<Vec<email_api_client::domain::models::MessageWithCalendarParts>, EmailApiError>,
+    > {
+        Box::pin(async move {
+            self.call("get_thread")
+                .map_err(|e| EmailApiError::Transient {
+                    message: e.to_string(),
+                })?;
+            std::mem::replace(&mut self.0.lock().unwrap().import.thread, Ok(vec![]))
+        })
+    }
+
     fn message<'a>(
         &'a self,
         link: Uuid,
@@ -497,30 +562,35 @@ impl LegacyBackfill for Fake {
         self.call("init").unwrap();
         Ok(())
     }
-    async fn list_threads(
-        &self,
-        _: &JobScopedPayload<ListThreadsPayload>,
-        _: &Link,
-        _: &BackfillJob,
-    ) -> Result<(), ProcessingError> {
-        self.call("list").unwrap();
-        Ok(())
+    async fn completed_job(&self, _: Uuid) -> Result<(), ProcessingError> {
+        self.call("completed_job").map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
+                source: e.into_original(),
+            })
+        })
     }
-    async fn backfill_thread(
-        &self,
-        _: &JobScopedPayload<BackfillThreadPayload>,
-        _: &Link,
-    ) -> Result<(), ProcessingError> {
-        self.call("thread").unwrap();
-        Ok(())
+    async fn thread_attachments(&self, _: &Link, _: Uuid, _: Uuid) -> Result<(), ProcessingError> {
+        self.call("thread_attachments").map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: models_email::service::pubsub::FailureReason::DatabaseQueryFailed,
+                source: e.into_original(),
+            })
+        })
     }
-    async fn backfill_message(
+    async fn enqueue_metadata(
         &self,
-        _: &JobScopedPayload<BackfillMessagePayload>,
         _: &Link,
+        _: Uuid,
+        _: &str,
+        _: Uuid,
     ) -> Result<(), ProcessingError> {
-        self.call("message").unwrap();
-        Ok(())
+        self.call("enqueue_metadata").map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: models_email::service::pubsub::FailureReason::SqsEnqueueFailed,
+                source: e.into_original(),
+            })
+        })
     }
     async fn finalize(&self, _: Uuid, _: Uuid) -> Result<(), ProcessingError> {
         self.call("finalize").unwrap();

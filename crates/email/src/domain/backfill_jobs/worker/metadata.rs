@@ -69,11 +69,15 @@ fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEvent)
         .inspect_err(|e| tracing::error!(error=?e, "failed to publish email macro event"));
 }
 
-pub(super) fn map_db_error(error: BackfillDatabaseError, context: &'static str) -> ProcessingError {
+/// Classify a database failure while preserving its original context chain.
+pub fn map_db_error<C: std::fmt::Display + Send + Sync + 'static>(
+    error: BackfillDatabaseError,
+    context: C,
+) -> ProcessingError {
     match error
         .sqlstates
         .iter()
-        .find(|code| code.starts_with("22") || matches!(code.as_str(), "23502" | "23514"))
+        .find(|code| is_unstorable_sqlstate(code))
     {
         Some(sqlstate) => ProcessingError::NonRetryable(DetailedError {
             reason: FailureReason::InvalidData,
@@ -86,4 +90,9 @@ pub(super) fn map_db_error(error: BackfillDatabaseError, context: &'static str) 
             source: error.source.context(context),
         }),
     }
+}
+
+/// Whether a SQLSTATE represents input that redelivery cannot store.
+pub fn is_unstorable_sqlstate(code: &str) -> bool {
+    code.starts_with("22") || matches!(code, "23502" | "23514")
 }

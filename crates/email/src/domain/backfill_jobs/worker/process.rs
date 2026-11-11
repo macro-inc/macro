@@ -36,7 +36,7 @@ where
             else {
                 return Ok(());
             };
-            ctx.legacy.list_threads(scope, &link, &backfill_job).await
+            listing::list_threads(ctx, scope, &link, &backfill_job).await
         }
         BackfillOperation::BackfillThread(scope) => {
             let Some(JobContextNoToken { link, .. }) =
@@ -44,7 +44,7 @@ where
             else {
                 return Ok(());
             };
-            ctx.legacy.backfill_thread(scope, &link).await
+            threads::backfill_thread(ctx, scope, &link).await
         }
         BackfillOperation::BackfillMessage(scope) => {
             let Some(JobContextNoToken { link, .. }) =
@@ -59,7 +59,7 @@ where
                     .await;
                 return Ok(());
             };
-            ctx.legacy.backfill_message(scope, &link).await
+            message::backfill_message(ctx, scope, &link).await
         }
         BackfillOperation::UpdateThreadMetadata(scope) => {
             // UpdateThreadMetadata is a DB-only step; skip the Gmail token

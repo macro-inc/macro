@@ -1,21 +1,8 @@
+use super::database_error::database_error;
 use super::*;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 pub(crate) struct MetadataTransaction(pub sqlx::Transaction<'static, sqlx::Postgres>);
-
-fn database_error(source: anyhow::Error) -> BackfillDatabaseError {
-    let sqlstates = source
-        .chain()
-        .filter_map(|cause| {
-            cause
-                .downcast_ref::<sqlx::Error>()?
-                .as_database_error()?
-                .code()
-                .map(|code| code.into_owned())
-        })
-        .collect();
-    BackfillDatabaseError { source, sqlstates }
-}
 
 impl BackfillMetadataTransaction for MetadataTransaction {
     async fn update_metadata(

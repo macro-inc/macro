@@ -116,6 +116,7 @@ pub(crate) fn context(
             queue: BackfillSqs(legacy.sqs_client.clone()),
             effects: BackfillWorkerEffects(legacy.clone()),
             crm: BackfillWorkerCrm(legacy.crm_service.clone()),
+            contacts_sync: cfg!(feature = "contacts_sync"),
             legacy: LegacyBackfillOperations(legacy),
         }),
     }

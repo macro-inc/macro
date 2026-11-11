@@ -6,6 +6,9 @@ use models_email::service::{
 use uuid::Uuid;
 mod events;
 mod fakes;
+mod import_fakes;
+mod imports;
+mod listing;
 mod seed_attachment;
 use fakes::*;
 
@@ -565,41 +568,14 @@ async fn terminal_finalization_republishes_while_side_seeds_skip_accounting() {
 }
 
 #[tokio::test]
-async fn legacy_operations_receive_admitted_inputs_and_finalize_needs_no_prefetch() {
-    use models_email::service::thread::ListThreadsPayload;
-    for (operation, step) in [
-        (BackfillOperation::Init(scope(InitPayload {})), "init"),
-        (
-            BackfillOperation::ListThreads(scope(ListThreadsPayload {
-                next_page_token: None,
-                priority_pass: false,
-                refresh_existing: false,
-            })),
-            "list",
-        ),
-        (
-            BackfillOperation::BackfillThread(scope(BackfillThreadPayload {
-                thread_provider_id: "thread".into(),
-                refresh_existing: false,
-            })),
-            "thread",
-        ),
-        (
-            BackfillOperation::BackfillMessage(scope(BackfillMessagePayload {
-                thread_provider_id: "thread".into(),
-                thread_db_id: Uuid::from_u128(40),
-                message_provider_id: "message".into(),
-            })),
-            "message",
-        ),
-    ] {
-        let (svc, f) = setup();
-        assert!(matches!(
-            svc.process(&input(operation)).await,
-            BackfillDisposition::DoneDelete
-        ));
-        assert_eq!(f.calls(), ["job", "link", step]);
-    }
+async fn initialization_and_finalization_still_use_legacy_accounting() {
+    let (svc, f) = setup();
+    assert!(matches!(
+        svc.process(&input(BackfillOperation::Init(scope(InitPayload {}))))
+            .await,
+        BackfillDisposition::DoneDelete
+    ));
+    assert_eq!(f.calls(), ["job", "link", "init"]);
     let (svc, f) = setup();
     f.fail("job");
     assert!(matches!(

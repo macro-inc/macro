@@ -1,16 +1,17 @@
-use crate::pubsub::backfill::db_error::map_db_error;
-use crate::pubsub::backfill::email_api_error::map_email_api_error;
-use crate::pubsub::backfill::{increment_counters, write_slot};
-use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::operations::pending_labels;
-use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
-use crate::util::process_pre_insert::process_message_pre_insert;
+use super::email_api_error::map_email_api_error;
+use super::metadata::map_db_error;
+use super::*;
+use crate::domain::mailbox::connection::ConnectionSourceError;
+use crate::domain::mailbox::inbox_sync::{
+    CrmContactRecipient, enqueue_crm_contacts as enqueue_normalized_contacts, resync_snapshot,
+};
 use email_api_client::domain::models::CalendarPart;
-use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
-use models_email::email::service::link;
-use models_email::email::service::message::Message;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-
+use models_email::service::{
+    backfill::*,
+    link,
+    message::Message,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
 /// Backfills one message of a thread whose messages were enqueued one by one.
 ///
 /// BackfillThread now writes a thread's messages itself; this step only drains
@@ -18,26 +19,31 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// the database. If the message is the last message in the thread to be
 /// processed, it sends an UpdateThreadMetadata message for the thread.
 #[tracing::instrument(skip(ctx))]
-pub async fn backfill_message(
-    ctx: &PubSubContext,
+pub(super) async fn backfill_message<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     scope: &JobScopedPayload<BackfillMessagePayload>,
     link: &link::Link,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let p = &scope.payload;
     // Sync may have stored the message since the backfill listed it; a
     // re-sync must not undo a label write made meanwhile.
-    let stored =
-        email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
-            &ctx.db,
-            &p.message_provider_id,
-            &link.id,
-        )
+    let stored = ctx
+        .repository
+        .stored_message(link.id, &p.message_provider_id)
         .await
         .map_err(|e| map_db_error(e, "Failed to look up the stored message"))?;
-    let fetch = Box::pin(ctx.email_api.get_message(link.id, &p.message_provider_id));
+    let fetch = Box::pin(ctx.gmail.message(link.id, &p.message_provider_id));
     let (fetched, resync) = match &stored {
         Some(stored) => {
-            let (fetched, snapshot) = pending_labels::resync_around(&ctx.db, stored.db_id, fetch)
+            let (fetched, snapshot) = resync_snapshot(&ctx.repository, stored.db_id, fetch)
                 .await
                 .map_err(|e| map_db_error(e, "Failed to read the stored message"))?;
             (fetched, Some(snapshot))
@@ -54,20 +60,15 @@ pub async fn backfill_message(
         })?;
     let mut message = fetched.message;
 
-    process_message_pre_insert(&mut message).await;
+    ctx.effects.prepare_message(&mut message).await;
 
     // Insert the message while holding one of the fleet's backfill write slots.
-    let slot = write_slot::acquire(ctx).await?;
+    let slot = admit_write_slot(ctx.effects.acquire_write().await)?;
     let inserted = slot
-        .hold(email_db_client::messages::insert::insert_message(
-            &ctx.db,
-            p.thread_db_id,
-            &mut message,
-            link.id,
-            // we update the thread metadata once all messages in the thread have been backfilled
-            false,
-            resync.as_ref(),
-        ))
+        .hold(
+            ctx.repository
+                .insert_message(link.id, p.thread_db_id, &mut message, resync.as_ref()),
+        )
         .await;
     inserted.map_err(|e| map_db_error(e, "Failed to insert final message into database"))?;
 
@@ -75,48 +76,59 @@ pub async fn backfill_message(
     enqueue_crm_contacts(ctx, link, &message).await?;
 
     // Handle all success-related operations
-    increment_counters::incr_completed_messages(ctx, link, scope.job_id, p).await
+    ctx.legacy.completed_message(link, scope.job_id, p).await
 }
 
 /// Saves the calendar invitations a written backfill message carries. Best
 /// effort: a failure is logged, as invitation extraction always has been.
-pub(super) async fn save_invitations(
-    ctx: &PubSubContext,
+pub(super) async fn save_invitations<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     link: &link::Link,
     message: &Message,
     calendar_parts: &[CalendarPart],
-) {
+) where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     let provider_id = message.provider_id.as_deref().unwrap_or_default();
     if !message.is_draft && !calendar_parts.is_empty() {
-        match email_db_client::messages::get::get_message_and_thread_id_by_provider_id(
-            &ctx.db,
-            link.id,
-            provider_id,
-        )
-        .await
+        match ctx
+            .repository
+            .invitation_message(link.id, provider_id)
+            .await
         {
             Ok((message_id, _)) => {
-                crate::pubsub::invitation_extraction::save_discovered(
-                    ctx,
-                    link.id,
-                    provider_id,
-                    message_id,
-                    calendar_parts,
-                )
-                .await;
+                ctx.effects
+                    .save_invitations(link.id, provider_id, message_id, calendar_parts)
+                    .await;
             }
-            Err(error) => tracing::warn!(error = ?error, "invitation extraction skipped"),
+            Err(error) => {
+                let error = error.source;
+                tracing::warn!(error = ?error, "invitation extraction skipped");
+            }
         }
     }
 }
 
 /// Enqueues the CRM contact updates a backfill message implies. Needs no
 /// database row, so it can run before the message is written.
-pub(super) async fn enqueue_crm_contacts(
-    ctx: &PubSubContext,
+pub(super) async fn enqueue_crm_contacts<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     link: &link::Link,
     message: &Message,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     // Fan out a PopulateCrmContact job per address involved in the
     // message — every non-draft message contributes, in both
     // directions. Sent: enumerate to/cc/bcc (recipients the team
@@ -158,8 +170,19 @@ pub(super) async fn enqueue_crm_contacts(
                 .collect()
         };
         if !recipients.is_empty() {
-            enqueue_populate_crm_contacts(ctx, link.id, &self_email, recipients, message.is_sent)
-                .await?;
+            enqueue_normalized_contacts(
+                link.id,
+                &self_email,
+                recipients,
+                message.is_sent,
+                |message| async {
+                    ctx.queue
+                        .enqueue(message)
+                        .await
+                        .map_err(ConnectionSourceError::into_original)
+                },
+            )
+            .await?;
         }
     }
 

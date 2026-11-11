@@ -9,17 +9,23 @@ mod crm_user_delete;
 mod deferral;
 mod email_api_error;
 mod error_policy;
+mod import_ports;
+mod listing;
+mod message;
 mod metadata;
 mod ports;
 mod process;
 mod seed;
 #[cfg(test)]
 mod test;
+mod threads;
 mod write_slot;
 
 pub use deferral::rate_limit;
 pub use email_api_error::map_email_api_error;
 pub use error_policy::handle_retryable_error;
+pub use import_ports::*;
+pub use metadata::{is_unstorable_sqlstate, map_db_error};
 pub use ports::*;
 pub use write_slot::admit_write_slot;
 
@@ -62,7 +68,9 @@ pub struct BackfillService<R, G, Q, E, C, L> {
     pub effects: E,
     /// CRM domain service capabilities.
     pub crm: C,
-    /// Operations and completion accounting moved in the next stages.
+    /// Compile-time contact-seed switch captured at composition.
+    pub contacts_sync: bool,
+    /// Initialization and completion accounting moved in the next stage.
     pub legacy: L,
 }
 

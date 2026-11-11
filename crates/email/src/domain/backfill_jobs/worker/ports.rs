@@ -1,5 +1,6 @@
-//! Capabilities needed by backfill admission and its first-stage operations.
+//! Capabilities needed by backfill admission and operation policy.
 
+use super::BackfillImportRepository;
 use crate::domain::backfill_jobs::BackfillJobRepository;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::CrmContactRecipient;
@@ -11,7 +12,6 @@ use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::thread::ListThreadsPayload;
 use models_email::service::{backfill::*, link::Link, pubsub::ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
@@ -24,6 +24,12 @@ pub struct BackfillDatabaseError {
     pub source: anyhow::Error,
     /// Codes in the order their database errors occur in that chain.
     pub sqlstates: Vec<String>,
+}
+
+impl ConnectionSourceError for BackfillDatabaseError {
+    fn into_original(self) -> anyhow::Error {
+        self.source
+    }
 }
 
 /// The metadata transaction, with commit/rollback mechanics preserved by its adapter.
@@ -48,7 +54,7 @@ pub trait BackfillMetadataTransaction: Send {
 }
 
 /// Stored facts and writes; existing job access is reused through `jobs`.
-pub trait BackfillRepository: Send + Sync + 'static {
+pub trait BackfillRepository: BackfillImportRepository + Send + Sync + 'static {
     /// Original persistence failures.
     type Err: ConnectionSourceError;
     /// Existing job repository.
@@ -93,8 +99,29 @@ pub trait BackfillRepository: Send + Sync + 'static {
     fn republish_completion(&self, job: Uuid) -> impl Future<Output = ()> + Send;
 }
 
-/// Provider reads used by the sent-contact seed.
+/// Provider reads used by listing, imports and the sent-contact seed.
 pub trait BackfillGmail: Send + Sync + 'static {
+    /// List a provider page without altering its requested size or labels.
+    fn list_threads<'a>(
+        &'a self,
+        link: Uuid,
+        limit: u32,
+        next: Option<&'a str>,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>;
+    /// List recent sent message identifiers.
+    fn list_messages<'a>(
+        &'a self,
+        link: Uuid,
+        limit: u32,
+        labels: &'a [&'a str],
+    ) -> BoxFuture<'a, Result<Vec<String>, EmailApiError>>;
+    /// Fetch all messages and calendar parts of a provider thread.
+    fn thread<'a>(
+        &'a self,
+        link: Uuid,
+        provider: &'a str,
+    ) -> BoxFuture<'a, Result<Vec<MessageWithCalendarParts>, EmailApiError>>;
     /// Fetch one message through the existing Gmail admission gate.
     fn message<'a>(
         &'a self,
@@ -144,7 +171,9 @@ pub trait BackfillWritePermit: Send {
 }
 
 /// Existing progress, upload and publication effects.
-pub trait BackfillEffects: MacroEventBroker + Send + Sync + 'static {
+pub trait BackfillEffects:
+    BackfillImportEffects + MacroEventBroker + Send + Sync + 'static
+{
     /// CRM write admission lease.
     type Permit: BackfillWritePermit;
     /// Drop job progress after a terminal job is observed.
@@ -215,24 +244,22 @@ pub trait LegacyBackfill: Send + Sync + 'static {
         link: &Link,
         job: &BackfillJob,
     ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Provider thread enumeration.
-    fn list_threads(
+    /// Finalize an empty listing through the existing completion service.
+    fn completed_job(&self, job: Uuid) -> impl Future<Output = Result<(), ProcessingError>> + Send;
+    /// Enqueue a written thread's attachment follow-ups.
+    fn thread_attachments(
         &self,
-        scope: &JobScopedPayload<ListThreadsPayload>,
         link: &Link,
-        job: &BackfillJob,
+        job: Uuid,
+        thread: Uuid,
     ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Whole-thread import.
-    fn backfill_thread(
+    /// Enqueue the written thread's final metadata operation.
+    fn enqueue_metadata(
         &self,
-        scope: &JobScopedPayload<BackfillThreadPayload>,
         link: &Link,
-    ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
-    /// Legacy per-message import.
-    fn backfill_message(
-        &self,
-        scope: &JobScopedPayload<BackfillMessagePayload>,
-        link: &Link,
+        job: Uuid,
+        provider: &str,
+        thread: Uuid,
     ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
     /// Completion-outbox delivery.
     fn finalize(
@@ -253,4 +280,23 @@ pub trait LegacyBackfill: Send + Sync + 'static {
         job: Uuid,
         payload: &BackfillMessagePayload,
     ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
+}
+
+/// Import capabilities already used by the backfill preparation and lease paths.
+pub trait BackfillImportEffects: crate::domain::mailbox::inbox_sync::InboxSyncPreparation {
+    /// Grow the priority-pass completion budget before any thread is enqueued.
+    fn add_total_threads(
+        &self,
+        job: Uuid,
+        count: i32,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Clear an empty listing's progress, exposing its best-effort failure.
+    fn delete_listing_progress(&self, job: Uuid)
+    -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// A bulk write's current lease, using the existing real-clock implementation.
+    type WritePermit: BackfillWritePermit;
+    /// Acquire a fleet-wide bulk-write lease.
+    fn acquire_write(
+        &self,
+    ) -> impl Future<Output = Result<Option<Self::WritePermit>, anyhow::Error>> + Send;
 }

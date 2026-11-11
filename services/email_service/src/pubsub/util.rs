@@ -1,5 +1,3 @@
-use crate::pubsub::context::PubSubContext;
-use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::models::messages::ContactConnection;
 use email::domain::events::EmailMacroEvent;
@@ -65,12 +63,6 @@ pub fn build_contact_connections<'a>(
         })
         .collect()
 }
-
-/// One recipient tuple `(email, name, first_at, last_at)` fed into
-/// [`enqueue_populate_crm_contacts`]. Per-message paths use the same
-/// timestamp for both endpoints; the historical seed passes the
-/// contact's pre-aggregated MIN/MAX.
-pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
 
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(
@@ -195,42 +187,4 @@ pub async fn cg_refresh_join_request(
         .inspect_err(
             |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
         );
-}
-
-/// Producer-side fan-out helper: normalizes and enqueues one
-/// `PopulateCrmContact` message per distinct, non-self contact.
-///
-/// Takes `(email, name, first_at, last_at)` tuples. `name` comes from
-/// the gmail message's recipient header on per-message paths and from
-/// `email_contacts.name` on the historical path. `first_at` /
-/// `last_at` carry the contact's known activity range — per-message
-/// paths set both to `message.internal_date_ts`; the historical seed
-/// sets them to MIN/MAX from its aggregating SQL.
-///
-/// `is_sent` flags whether the populating message was sent by the user
-/// (true) or received (false). One fan-out batch is one direction;
-/// callers that need to enqueue both (the historical seed) call this
-/// helper twice. The consumer uses the flag to gate company INSERTs
-/// and `first_interaction` LEAST-merging (received-direction never
-/// creates a new `crm_companies` row and never moves
-/// `first_interaction` backwards).
-///
-/// Trim and lowercase addresses, then skip malformed, self and duplicate
-/// addresses. Dedup is by email only, so the
-/// first name / timestamps seen for a given address in this batch win.
-pub async fn enqueue_populate_crm_contacts(
-    ctx: &PubSubContext,
-    link_id: Uuid,
-    self_email: &str,
-    contacts: impl IntoIterator<Item = CrmContactRecipient>,
-    is_sent: bool,
-) -> Result<(), ProcessingError> {
-    email::domain::mailbox::inbox_sync::enqueue_crm_contacts(
-        link_id,
-        self_email,
-        contacts,
-        is_sent,
-        |message| ctx.sqs_client.enqueue_email_backfill_message(message),
-    )
-    .await
 }

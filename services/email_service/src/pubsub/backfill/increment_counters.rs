@@ -26,7 +26,7 @@ pub async fn incr_completed_messages(
 }
 
 /// Complete an email scan and its associated calendar extraction.
-pub(super) async fn handle_job_completed(
+pub(crate) async fn handle_job_completed(
     ctx: &PubSubContext,
     job_id: Uuid,
     init_lease_token: Option<Uuid>,

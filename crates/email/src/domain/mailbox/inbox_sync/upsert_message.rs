@@ -397,22 +397,7 @@ pub async fn resync_around<R: InboxSyncImportRepository, T: Send>(
     message: Uuid,
     read: futures::future::BoxFuture<'_, T>,
 ) -> anyhow::Result<(T, InboxSyncResync)> {
-    let stored_labels = db
-        .labels(message)
+    super::pending_labels::resync_snapshot(db, message, read)
         .await
-        .map_err(ConnectionSourceError::into_original)?
-        .into_iter()
-        .map(|label| label.provider_label_id)
-        .collect();
-    let read = super::pending_labels::read_around(db, message, read)
-        .await
-        .map_err(ConnectionSourceError::into_original)?;
-    let pending_labels = read.untrusted_labels();
-    Ok((
-        read.value,
-        InboxSyncResync {
-            stored_labels,
-            pending_labels,
-        },
-    ))
+        .map_err(ConnectionSourceError::into_original)
 }

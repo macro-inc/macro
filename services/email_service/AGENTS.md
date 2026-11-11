@@ -38,12 +38,14 @@ the gateway `/email` prefix.
   Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
   `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` holds
   only its service and receiver. Backfill also has a separate `BackfillContext`: its
-  domain worker owns admission, retry/deferral, metadata, attachment and CRM policy,
-  with adapters in `outbound/backfill_jobs/worker/`. Its temporary `LegacyBackfill`
-  port retains initialization, thread/message imports and completion accounting. History and upsert orchestration also
-  live in the domain; these adapters retain the existing journal, invitation,
-  upload, notification and persistence implementations. The pending-label
-  compatibility module only re-exports the adapter used by backfill.
+  domain worker owns admission, retry/deferral, listing, thread/message import,
+  metadata, attachment and CRM policy, with adapters in
+  `outbound/backfill_jobs/worker/`. Its temporary `LegacyBackfill` port retains
+  initialization and completion accounting. Inbox sync's history and upsert
+  orchestration also live in the domain; these adapters retain the existing
+  journal, invitation, upload, notification and persistence implementations.
+  Both workers reuse the domain's pending-label snapshot and CRM normalization
+  rules; their adapters retain the existing atomic writes and savepoints.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
@@ -137,7 +139,7 @@ the gateway `/email` prefix.
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
-  stored (`db_error::is_unstorable`) is skipped and logged, and the rest of the
+  stored (`outbound/backfill_jobs/worker/database_error.rs`) is skipped and logged, and the rest of the
   thread commits. The CRM fan-out is enqueued after the write slot is taken
   and before the write: after the commit nothing in the handler may request a
   retry, because a retry would find the thread and skip it, and an operation
@@ -208,7 +210,7 @@ the gateway `/email` prefix.
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
-  instead of failing the step; see `pubsub::util::build_contact_connections`.
+  instead of failing the step; see `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.

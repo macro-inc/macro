@@ -1,8 +1,5 @@
 use super::*;
-use crate::pubsub::backfill::{
-    backfill_message, backfill_thread, increment_counters, init, list_threads,
-};
-use models_email::service::thread::ListThreadsPayload;
+use crate::pubsub::backfill::{increment_counters, init};
 use models_email::service::{backfill::*, link::Link, pubsub::ProcessingError};
 
 impl LegacyBackfill for LegacyBackfillOperations {
@@ -14,27 +11,31 @@ impl LegacyBackfill for LegacyBackfillOperations {
     ) -> Result<(), ProcessingError> {
         init::init_backfill(&self.0, scope, link, job).await
     }
-    async fn list_threads(
-        &self,
-        scope: &JobScopedPayload<ListThreadsPayload>,
-        link: &Link,
-        job: &BackfillJob,
-    ) -> Result<(), ProcessingError> {
-        list_threads::list_threads(&self.0, scope, link, job).await
+    async fn completed_job(&self, job: Uuid) -> Result<(), ProcessingError> {
+        increment_counters::handle_job_completed(&self.0, job, None).await
     }
-    async fn backfill_thread(
+    async fn thread_attachments(
         &self,
-        scope: &JobScopedPayload<BackfillThreadPayload>,
         link: &Link,
+        job: Uuid,
+        thread: Uuid,
     ) -> Result<(), ProcessingError> {
-        backfill_thread::backfill_thread(&self.0, scope, link).await
+        crate::backfill_completion_service::handle_thread_attachment_upload(
+            &self.0, link, job, thread,
+        )
+        .await
     }
-    async fn backfill_message(
+    async fn enqueue_metadata(
         &self,
-        scope: &JobScopedPayload<BackfillMessagePayload>,
         link: &Link,
+        job: Uuid,
+        provider: &str,
+        thread: Uuid,
     ) -> Result<(), ProcessingError> {
-        backfill_message::backfill_message(&self.0, scope, link).await
+        crate::backfill_completion_service::enqueue_thread_metadata_update(
+            &self.0, link, job, provider, thread,
+        )
+        .await
     }
     async fn finalize(&self, link: Uuid, job: Uuid) -> Result<(), ProcessingError> {
         increment_counters::finalize_backfill(&self.0, link, job).await

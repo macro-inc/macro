@@ -1,15 +1,14 @@
 use super::email_api_error::map_email_api_error;
-use super::increment_counters;
-use crate::pubsub::context::PubSubContext;
-use models_email::email::service::backfill::{
-    BackfillJob, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload, JobScopedPayload,
-};
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::email::service::thread::ListThreadsPayload;
+use super::*;
+use crate::domain::mailbox::connection::ConnectionSourceError;
 use models_email::gmail::labels::SystemLabelID;
+use models_email::service::thread::ListThreadsPayload;
+use models_email::service::{
+    backfill::*,
+    link,
+    pubsub::{DetailedError, FailureReason, ProcessingError},
+};
 use std::cmp::min;
-
 // the max size allowed by the gmail api
 const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 
@@ -19,7 +18,6 @@ const PRIORITY_PASS_THREAD_LIMIT: u32 = 200;
 
 // How many of the user's most recent sent messages we seed the contacts
 // service from during the priority pass (the gmail api caps this at 500).
-#[cfg(feature = "contacts_sync")]
 const SENT_CONTACT_SEED_LIMIT: u32 = 200;
 
 /// This step is invoked by Init.
@@ -31,12 +29,20 @@ const SENT_CONTACT_SEED_LIMIT: u32 = 200;
 /// The very first ListThreads (enqueued by Init) is a `priority_pass`: it lists
 /// only the user's most important threads first, then hands off to this normal
 /// most-recent-to-least sweep.
-pub async fn list_threads(
-    ctx: &PubSubContext,
+pub(super) async fn list_threads<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     if scope.payload.priority_pass {
         return list_priority_threads(ctx, scope, link, job).await;
     }
@@ -52,7 +58,7 @@ pub async fn list_threads(
 
     // get batch of thread ids
     let thread_list = ctx
-        .email_api
+        .gmail
         .list_threads(
             link.id,
             num_threads_to_list as u32,
@@ -67,18 +73,17 @@ pub async fn list_threads(
     let threads = thread_list.threads;
 
     // add the threads we just discovered to the job counter
-    email_db_client::backfill::job::update::update_job_threads_retrieved_count(
-        &ctx.db,
-        scope.job_id,
-        threads.len() as i32,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to update backfill job num_threads"),
-        })
-    })?;
+    ctx.repository
+        .retrieved_threads(scope.job_id, threads.len() as i32)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e
+                    .source
+                    .context("Failed to update backfill job num_threads"),
+            })
+        })?;
 
     // send a pubsub message for each discovered thread
     for thread in &threads {
@@ -93,15 +98,14 @@ pub async fn list_threads(
             }),
         };
 
-        ctx.sqs_client
-            .enqueue_email_backfill_message(thread_sqs_msg)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context(format!("Failed to enqueue thread {}", thread.provider_id)),
-                })
-            })?;
+        ctx.queue.enqueue(thread_sqs_msg).await.map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e
+                    .into_original()
+                    .context(format!("Failed to enqueue thread {}", thread.provider_id)),
+            })
+        })?;
     }
 
     // if we have more threads to fetch, send another pubsub message
@@ -118,25 +122,24 @@ pub async fn list_threads(
             }),
         };
 
-        ctx.sqs_client
-            .enqueue_email_backfill_message(list_thread_msg)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue list threads message".to_string()),
-                })
-            })?;
+        ctx.queue.enqueue(list_thread_msg).await.map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to enqueue list threads message".to_string()),
+            })
+        })?;
     } else if threads.is_empty() && threads_retrieved_count == 0 {
         // A truly empty mailbox is completed in init_backfill (total_threads
         // is 0 there). Reaching here means the profile reported threads but
         // the listing returned none, so no per-thread message was ever
         // enqueued and the per-thread completion path will never finalize the
         // job. Complete it here.
-        increment_counters::handle_job_completed(ctx, scope.job_id, None).await?;
+        ctx.legacy.completed_job(scope.job_id).await?;
         let _ = ctx
-            .redis_client
-            .delete_backfill_job_progress(scope.job_id)
+            .effects
+            .delete_listing_progress(scope.job_id)
             .await
             .inspect_err(|e| tracing::error!(error = ?e, "Failed to delete backfill job progress"));
     }
@@ -151,12 +154,20 @@ pub async fn list_threads(
 /// to the normal sweep. Unlike the normal pass it does not paginate and does
 /// not touch `threads_retrieved_count` (that counter drives the normal sweep's
 /// batch math and must stay equal to the real mailbox count).
-async fn list_priority_threads(
-    ctx: &PubSubContext,
+async fn list_priority_threads<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
     job: &BackfillJob,
-) -> Result<(), ProcessingError> {
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     // Never request more than the job's overall thread budget (which already
     // accounts for any requested limit set at job creation).
     let num_threads_to_list = min(PRIORITY_PASS_THREAD_LIMIT as i32, job.total_threads);
@@ -165,7 +176,7 @@ async fn list_priority_threads(
         // CATEGORY_PERSONAL is Gmail's "important to a human" bucket; seeding
         // these first means a brand-new user sees signal immediately.
         let thread_list = ctx
-            .email_api
+            .gmail
             .list_threads(
                 link.id,
                 num_threads_to_list as u32,
@@ -187,8 +198,8 @@ async fn list_priority_threads(
         // after this only non-retryable enqueues remain, so a retry can't
         // double-bump.
         if !threads.is_empty() {
-            ctx.redis_client
-                .add_to_total_threads(scope.job_id, threads.len() as i32)
+            ctx.effects
+                .add_total_threads(scope.job_id, threads.len() as i32)
                 .await
                 .map_err(|e| {
                     ProcessingError::Retryable(DetailedError {
@@ -210,18 +221,15 @@ async fn list_priority_threads(
                 }),
             };
 
-            ctx.sqs_client
-                .enqueue_email_backfill_message(thread_sqs_msg)
-                .await
-                .map_err(|e| {
-                    ProcessingError::NonRetryable(DetailedError {
-                        reason: FailureReason::SqsEnqueueFailed,
-                        source: e.context(format!(
-                            "Failed to enqueue priority thread {}",
-                            thread.provider_id
-                        )),
-                    })
-                })?;
+            ctx.queue.enqueue(thread_sqs_msg).await.map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.into_original().context(format!(
+                        "Failed to enqueue priority thread {}",
+                        thread.provider_id
+                    )),
+                })
+            })?;
         }
     }
 
@@ -229,8 +237,9 @@ async fn list_priority_threads(
     // has contacts before full backfill completes. Best-effort: this runs after
     // the priority-pass total_threads bump, so it must never return a retryable
     // error (that would re-run the pass and double-bump the counter).
-    #[cfg(feature = "contacts_sync")]
-    enqueue_sent_contact_seeds(ctx, scope, link).await;
+    if ctx.contacts_sync {
+        enqueue_sent_contact_seeds(ctx, scope, link).await;
+    }
 
     // Hand off to the normal most-recent-to-least sweep from the beginning. This
     // runs regardless of how many priority threads were found.
@@ -246,17 +255,14 @@ async fn list_priority_threads(
         }),
     };
 
-    ctx.sqs_client
-        .enqueue_email_backfill_message(list_thread_msg)
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(
-                    "Failed to enqueue normal ListThreads after priority pass".to_string(),
-                ),
-            })
-        })?;
+    ctx.queue.enqueue(list_thread_msg).await.map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::SqsEnqueueFailed,
+            source: e
+                .into_original()
+                .context("Failed to enqueue normal ListThreads after priority pass".to_string()),
+        })
+    })?;
 
     Ok(())
 }
@@ -269,16 +275,22 @@ async fn list_priority_threads(
 /// `total_threads`, so it must not propagate a retryable error (that would
 /// re-run the whole pass and double-bump). On any failure it logs and returns —
 /// `handle_contacts_sync` re-seeds the full contact set at job completion.
-#[cfg(feature = "contacts_sync")]
-async fn enqueue_sent_contact_seeds(
-    ctx: &PubSubContext,
+async fn enqueue_sent_contact_seeds<R, G, Q, E, C, L>(
+    ctx: &BackfillService<R, G, Q, E, C, L>,
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
-) {
+) where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+    L: LegacyBackfill,
+{
     use models_email::email::service::backfill::SeedSentContactPayload;
 
     let message_ids = match ctx
-        .email_api
+        .gmail
         .list_messages(
             link.id,
             SENT_CONTACT_SEED_LIMIT,
@@ -304,7 +316,7 @@ async fn enqueue_sent_contact_seeds(
             }),
         };
 
-        if let Err(e) = ctx.sqs_client.enqueue_email_backfill_message(msg).await {
+        if let Err(e) = ctx.queue.enqueue(msg).await {
             tracing::error!(error = ?e, link_id = %link.id, message_id = %message_provider_id, "Failed to enqueue sent-contact seed; skipping remaining");
             return;
         }

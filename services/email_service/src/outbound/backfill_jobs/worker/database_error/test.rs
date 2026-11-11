@@ -1,4 +1,10 @@
 use super::*;
+use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+const NOT_NULL_VIOLATION: &str = "23502";
+const CHECK_VIOLATION: &str = "23514";
+fn map_db_error(error: anyhow::Error, context: &'static str) -> ProcessingError {
+    email::domain::backfill_jobs::worker::map_db_error(database_error(error), context)
+}
 use sqlx::error::{DatabaseError, ErrorKind};
 use std::borrow::Cow;
 use std::error::Error as StdError;

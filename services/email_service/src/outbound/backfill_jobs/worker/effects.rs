@@ -139,3 +139,49 @@ impl BackfillCrm for BackfillWorkerCrm {
         self.0.depopulate_link_in_team(team, link).await
     }
 }
+
+impl email::domain::mailbox::inbox_sync::InboxSyncPreparation for BackfillWorkerEffects {
+    fn prepare_message<'a>(
+        &'a self,
+        message: &'a mut models_email::service::message::Message,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(crate::util::process_pre_insert::process_message_pre_insert(
+            message,
+        ))
+    }
+    fn prepare_threads<'a>(
+        &'a self,
+        threads: &'a mut Vec<models_email::service::thread::Thread>,
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(crate::util::process_pre_insert::process_threads_pre_insert(
+            threads,
+        ))
+    }
+    fn save_invitations<'a>(
+        &'a self,
+        link: Uuid,
+        provider: &'a str,
+        message: Uuid,
+        parts: &'a [email_api_client::domain::models::CalendarPart],
+    ) -> BoxFuture<'a, ()> {
+        Box::pin(crate::pubsub::invitation_extraction::save_discovered(
+            &self.0, link, provider, message, parts,
+        ))
+    }
+}
+impl BackfillImportEffects for BackfillWorkerEffects {
+    type WritePermit = crate::util::redis::backfill_write_slots::BackfillWriteSlot;
+    async fn add_total_threads(&self, job: Uuid, count: i32) -> anyhow::Result<()> {
+        self.0.redis_client.add_to_total_threads(job, count).await
+    }
+    async fn delete_listing_progress(&self, job: Uuid) -> anyhow::Result<()> {
+        self.0.redis_client.delete_backfill_job_progress(job).await
+    }
+    async fn acquire_write(&self) -> anyhow::Result<Option<Self::WritePermit>> {
+        self.0
+            .redis_client
+            .acquire_backfill_write_slot()
+            .await
+            .map_err(anyhow::Error::new)
+    }
+}

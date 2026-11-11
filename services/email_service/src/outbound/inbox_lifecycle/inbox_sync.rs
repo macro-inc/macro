@@ -5,7 +5,8 @@ mod import_repository;
 #[cfg(test)]
 mod integration_test;
 mod notifications;
-pub(crate) mod pending_labels;
+#[cfg(test)]
+mod pending_labels;
 mod repository;
 mod transaction;
 
