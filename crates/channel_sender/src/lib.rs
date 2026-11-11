@@ -14,7 +14,6 @@ enum InnerVal<'a> {
     Bot(BotIdStr<'a>),
     User(MacroUserIdStr<'a>),
     Guest(Cow<'a, str>),
-    Participant(Cow<'a, str>),
 }
 
 /// Actor identity for channel mutations.
@@ -66,7 +65,6 @@ impl<'a> CowLike<'a> for ChannelSender<'a> {
             InnerVal::Bot(id) => InnerVal::Bot(id.into_owned()),
             InnerVal::User(id) => InnerVal::User(id.into_owned()),
             InnerVal::Guest(id) => InnerVal::Guest(Cow::Owned(id.into_owned())),
-            InnerVal::Participant(id) => InnerVal::Participant(Cow::Owned(id.into_owned())),
         })
     }
 
@@ -75,7 +73,6 @@ impl<'a> CowLike<'a> for ChannelSender<'a> {
             InnerVal::Bot(id) => InnerVal::Bot(id.copied()),
             InnerVal::User(id) => InnerVal::User(id.copied()),
             InnerVal::Guest(id) => InnerVal::Guest(Cow::Borrowed(id)),
-            InnerVal::Participant(id) => InnerVal::Participant(Cow::Borrowed(id)),
         })
     }
 }
@@ -112,11 +109,6 @@ impl<'a> ChannelSender<'a> {
 
     /// attempt to parse a value of self from an input str
     pub fn parse_from_str(value: &'a str) -> Result<Self, ParseErr> {
-        if let Some(id) = value.strip_prefix("participant:")
-            && uuid::Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
-        {
-            return Ok(Self(InnerVal::Participant(Cow::Borrowed(value))));
-        }
         if let Some(id) = value.strip_prefix("guest|")
             && uuid::Uuid::parse_str(id).is_ok_and(|uuid| uuid.to_string() == id)
         {
@@ -140,19 +132,12 @@ impl<'a> ChannelSender<'a> {
         ChannelSender(InnerVal::Bot(bot_id.into_storage_id()))
     }
 
-    /// Author identity only; callers must separately authorize active call membership.
+    /// Guest-form identity only; callers must separately authorize active call membership.
     pub fn new_from_guest(id: uuid::Uuid) -> ChannelSender<'static> {
         ChannelSender(InnerVal::Guest(Cow::Owned(format!("guest|{id}"))))
     }
 
-    /// Display-only anonymous account identity in a call guest response.
-    pub fn new_from_participant(id: uuid::Uuid) -> ChannelSender<'static> {
-        ChannelSender(InnerVal::Participant(Cow::Owned(format!(
-            "participant:{id}"
-        ))))
-    }
-
-    /// Whether this is a non-account guest, never a user or bot principal.
+    /// Whether this has guest form, including a guest-visible account stand-in.
     pub fn is_guest(&self) -> bool {
         matches!(self.0, InnerVal::Guest(_))
     }
@@ -164,7 +149,6 @@ impl<'a> AsRef<str> for ChannelSender<'a> {
             InnerVal::Bot(id) => id.as_ref(),
             InnerVal::User(id) => id.as_ref(),
             InnerVal::Guest(id) => id.as_ref(),
-            InnerVal::Participant(id) => id.as_ref(),
         }
     }
 }

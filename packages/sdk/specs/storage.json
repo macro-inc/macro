@@ -33249,16 +33249,6 @@
             "type": "string",
             "description": "Emoji being reacted with."
           },
-          "names": {
-            "type": "object",
-            "description": "Display names for reactors whose account identity is not visible to this viewer.",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "propertyNames": {
-              "type": "string"
-            }
-          },
           "users": {
             "type": "array",
             "items": {

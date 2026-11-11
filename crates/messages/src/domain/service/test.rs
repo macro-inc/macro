@@ -765,10 +765,7 @@ async fn user_mentions_do_not_require_or_grant_parent_sharing() {
             .await,
         Err(MessageError::Invalid(_))
     ));
-    for sender in [
-        "participant:00000000-0000-0000-0000-000000000001",
-        "guest|00000000-0000-0000-0000-000000000001",
-    ] {
+    for sender in ["guest|00000000-0000-0000-0000-000000000001"] {
         assert!(matches!(
             service
                 .validate_references(

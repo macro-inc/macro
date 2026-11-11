@@ -4855,12 +4855,6 @@ export type CountedReaction = {
      */
     emoji: string;
     /**
-     * Display names for reactors whose account identity is not visible to this viewer.
-     */
-    names?: {
-        [key: string]: string;
-    };
-    /**
      * User identifiers.
      */
     users: Array<string>;

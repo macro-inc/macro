@@ -51,17 +51,19 @@ GuestChatThread {
 
 Every `Message` returned to a guest is redacted so no account identity leaves:
 
-- Account (user) senders: `sender_id` becomes `participant:<uuid v5 of call_id + sender_id>`,
-  stable within the call, and `imported_author` is `{ name }` with the display name the
-  legacy projection used. Bot senders keep their bot profile; guest senders keep their
-  guest `sender_id` and `guest_name`.
-- Reactions: account reactor ids are replaced with the same opaque ids, and their names
-  are returned in `CountedReaction.names?: Record<string, string>`, keyed by the
-  opaque reactor id, as external-chat reactions do for people outside Macro.
+- Account senders: `sender_id` becomes `guest|<uuid v5 of call_id + sender_id>`,
+  stable within the call, and `imported_author` is `{ name }` from the account
+  display name (email local part only as a fallback). `guest_name` remains empty.
+  Bot senders keep their bot profile; real guest senders keep their random guest
+  `sender_id` and `guest_name`.
+- Reactions: account reactor ids become the same stand-in ids. The guest UI finds
+  a reactor's display name from that sender's messages in the loaded thread;
+  a reactor who has not posted is counted without a name.
 - `mentions`, `attachments`, `triggered_by` and any other account or entity references
   are emptied.
 - Guest quote input must reference a message in the same call and use that
-  message's guest-visible sender ID; invalid quote targets are rejected.
+  message's guest-visible sender ID; invalid quote targets are rejected. The
+  server translates verified stand-ins back to account ids before persistence.
 
 ## Frontend seams
 

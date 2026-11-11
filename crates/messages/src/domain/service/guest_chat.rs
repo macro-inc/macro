@@ -168,11 +168,10 @@ fn project(
     }
 }
 
-fn opaque_id(call_id: Uuid, sender_id: &str) -> String {
-    format!(
-        "participant:{}",
-        Uuid::new_v5(&call_id, sender_id.as_bytes())
-    )
+pub(super) fn opaque_id(call_id: Uuid, sender_id: &str) -> String {
+    ChannelSender::new_from_guest(Uuid::new_v5(&call_id, sender_id.as_bytes()))
+        .as_ref()
+        .to_owned()
 }
 
 pub(super) fn rewrite_quote_content(
@@ -260,14 +259,13 @@ fn redact(
         message.guest_name = None;
         message.bot_profile = None;
         message.sender_id =
-            ChannelSender::new_from_participant(Uuid::new_v5(&call_id, original.as_bytes()));
+            ChannelSender::new_from_guest(Uuid::new_v5(&call_id, original.as_bytes()));
     }
     message.mentions.clear();
     message.attachments.clear();
     message.triggered_by = None;
     message.triggered_via = None;
     for reaction in &mut message.reactions {
-        let mut display_names = HashMap::new();
         for id in &mut reaction.users {
             let sender = ChannelSender::try_from(id.as_str()).ok();
             if sender
@@ -275,21 +273,9 @@ fn redact(
                 .is_none_or(|sender| sender.as_user().is_some())
             {
                 let old = id.clone();
-                let name = names
-                    .get(&old)
-                    .cloned()
-                    .or_else(|| {
-                        sender
-                            .as_ref()
-                            .and_then(|sender| sender.as_user())
-                            .map(|user| user.email_part().local_part().to_owned())
-                    })
-                    .unwrap_or_else(|| "Participant".into());
                 *id = opaque_id(call_id, &old);
-                display_names.insert(id.clone(), name);
             }
         }
-        reaction.names = (!display_names.is_empty()).then_some(display_names);
     }
     message
 }

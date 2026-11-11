@@ -3049,12 +3049,6 @@ export const guestCallChatPostMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -3242,12 +3236,6 @@ export const guestCallChatPatchMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -3429,12 +3417,6 @@ export const guestCallChatReactMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -3649,12 +3631,6 @@ export const guestCallChatReadThreadResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
-                            names: zod
-                              .record(zod.string(), zod.string())
-                              .optional()
-                              .describe(
-                                'Display names for reactors whose account identity is not visible to this viewer.'
-                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -3860,12 +3836,6 @@ export const guestCallChatReadThreadResponse = zod
                         emoji: zod
                           .string()
                           .describe('Emoji being reacted with.'),
-                        names: zod
-                          .record(zod.string(), zod.string())
-                          .optional()
-                          .describe(
-                            'Display names for reactors whose account identity is not visible to this viewer.'
-                          ),
                         users: zod
                           .array(zod.string())
                           .describe('User identifiers.'),
@@ -24463,12 +24433,6 @@ export const commentOnDocumentTextResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
-                names: zod
-                  .record(zod.string(), zod.string())
-                  .optional()
-                  .describe(
-                    'Display names for reactors whose account identity is not visible to this viewer.'
-                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -69187,12 +69151,6 @@ export const messageTimelineResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
-                    names: zod
-                      .record(zod.string(), zod.string())
-                      .optional()
-                      .describe(
-                        'Display names for reactors whose account identity is not visible to this viewer.'
-                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -69548,12 +69506,6 @@ export const messageTimelineResponse = zod
                                   emoji: zod
                                     .string()
                                     .describe('Emoji being reacted with.'),
-                                  names: zod
-                                    .record(zod.string(), zod.string())
-                                    .optional()
-                                    .describe(
-                                      'Display names for reactors whose account identity is not visible to this viewer.'
-                                    ),
                                   users: zod
                                     .array(zod.string())
                                     .describe('User identifiers.'),
@@ -69933,12 +69885,6 @@ export const entityMessageCreateResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70113,12 +70059,6 @@ export const entityMessageGetMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70297,12 +70237,6 @@ export const entityMessageDeleteMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70577,12 +70511,6 @@ export const entityMessageEditResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70765,12 +70693,6 @@ export const entityMessageReactResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -70952,12 +70874,6 @@ export const entityMessageLegacyResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
-            names: zod
-              .record(zod.string(), zod.string())
-              .optional()
-              .describe(
-                'Display names for reactors whose account identity is not visible to this viewer.'
-              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -71157,12 +71073,6 @@ export const entityMessageGetThreadResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
-                    names: zod
-                      .record(zod.string(), zod.string())
-                      .optional()
-                      .describe(
-                        'Display names for reactors whose account identity is not visible to this viewer.'
-                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -71342,12 +71252,6 @@ export const entityMessageGetThreadResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
-                names: zod
-                  .record(zod.string(), zod.string())
-                  .optional()
-                  .describe(
-                    'Display names for reactors whose account identity is not visible to this viewer.'
-                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -71952,12 +71856,6 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
-                            names: zod
-                              .record(zod.string(), zod.string())
-                              .optional()
-                              .describe(
-                                'Display names for reactors whose account identity is not visible to this viewer.'
-                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -72342,12 +72240,6 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
-                                            ),
-                                          names: zod
-                                            .record(zod.string(), zod.string())
-                                            .optional()
-                                            .describe(
-                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -72612,12 +72504,6 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
-                            names: zod
-                              .record(zod.string(), zod.string())
-                              .optional()
-                              .describe(
-                                'Display names for reactors whose account identity is not visible to this viewer.'
-                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -73002,12 +72888,6 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
-                                            ),
-                                          names: zod
-                                            .record(zod.string(), zod.string())
-                                            .optional()
-                                            .describe(
-                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())

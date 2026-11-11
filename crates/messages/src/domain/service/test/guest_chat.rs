@@ -60,6 +60,33 @@ async fn guest_read_and_post_require_current_session_for_the_same_call() {
 }
 
 #[tokio::test]
+async fn account_stand_in_cannot_act_as_a_guest() {
+    let (repo, events, service, call, _) = setup();
+    let stand_in = opaque_id(call, repo.message.sender_id.as_ref());
+    assert!(matches!(
+        service
+            .post_message(
+                call,
+                &stand_in,
+                GuestChatPost {
+                    id: Uuid::now_v7(),
+                    content: "forged".into(),
+                },
+            )
+            .await,
+        Err(MessageError::Forbidden)
+    ));
+    assert!(matches!(
+        service
+            .react_message(call, &stand_in, call, "👍".into(), true, None)
+            .await,
+        Err(MessageError::Forbidden)
+    ));
+    assert!(repo.creates.lock().unwrap().is_empty());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn guest_reads_the_member_thread_and_posts_with_server_owned_attribution() {
     let (repo, events, service, call, guest) = setup();
     let page = service.read(call, "active-session").await.unwrap();
@@ -133,6 +160,13 @@ async fn guest_posts_reject_empty_oversize_and_invalid_ids() {
     }
     assert!(repo.creates.lock().unwrap().is_empty());
     assert!(serde_json::from_value::<GuestChatPost>(serde_json::json!({"id": Uuid::now_v7(), "content": "hello", "sender_id": "macro|owner@example.com"})).is_err());
+    let stand_in = opaque_id(call, "macro|owner@example.com");
+    assert!(
+        serde_json::from_value::<GuestChatPost>(
+            serde_json::json!({"id": Uuid::now_v7(), "content": "hello", "sender_id": stand_in})
+        )
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -154,7 +188,6 @@ async fn guest_thread_is_empty_before_first_post_and_redacts_account_identity() 
     repo.message.reactions = vec![CountedReaction {
         emoji: "👍".into(),
         users: vec![repo.message.sender_id.as_ref().to_owned()],
-        names: None,
     }];
     let service = GuestChatService::new(
         Arc::new(MessageService::new(repo, events)),
@@ -163,20 +196,24 @@ async fn guest_thread_is_empty_before_first_post_and_redacts_account_identity() 
     let page = service.read_thread(call, "active-session").await.unwrap();
     let json = serde_json::to_string(&page).unwrap();
     assert!(!json.contains("author@example.com"));
+    assert!(!json.contains("\"names\""));
     let thread = page.thread.unwrap();
-    assert!(thread.root.sender_id.as_ref().starts_with("participant:"));
+    assert!(thread.root.sender_id.as_ref().starts_with("guest|"));
+    assert_ne!(thread.root.sender_id, ChannelSender::new_from_guest(guest));
+    assert!(thread.root.guest_name.is_none());
     assert_eq!(thread.root.imported_author.unwrap().name, "Author Example");
     assert_eq!(
-        thread.root.reactions[0].names.as_ref().unwrap()[&thread.root.reactions[0].users[0]],
-        "Author Example"
+        thread.root.reactions[0].users[0],
+        thread.root.sender_id.as_ref()
     );
+    assert!(!json.contains("participant:"));
 }
 
 #[tokio::test]
 async fn guest_quotes_round_trip_through_real_member_sender_ids() {
     let (mut repo, events, _, call, guest) = setup();
     let member = repo.message.sender_id.as_ref().to_owned();
-    let opaque = format!("participant:{}", Uuid::new_v5(&call, member.as_bytes()));
+    let opaque = opaque_id(call, &member);
     let quote = |sender: &str| {
         format!(
             "<m-reply-target>{{\"parent\":{{\"type\":\"call\",\"id\":\"{call}\"}},\"targetMessageId\":\"{call}\",\"targetThreadId\":\"{call}\",\"displayText\":\"root\",\"senderId\":\"{sender}\"}}</m-reply-target>\n\nreply"
@@ -276,7 +313,14 @@ fn guest_quotes_require_a_verified_target_and_sender() {
         )
     };
 
-    let opaque = format!("participant:{}", Uuid::new_v5(&call, account.as_bytes()));
+    let opaque = opaque_id(call, &account);
+    assert_ne!(opaque, guest);
+    assert_eq!(
+        Uuid::parse_str(opaque.strip_prefix("guest|").unwrap())
+            .unwrap()
+            .get_version_num(),
+        5
+    );
     let account_quote =
         rewrite_quote_content(&quote(call, account_target, &opaque), call, &senders, true).unwrap();
     assert!(account_quote.contains(&account));
@@ -293,7 +337,7 @@ fn guest_quotes_require_a_verified_target_and_sender() {
         quote(
             call,
             account_target,
-            "participant:00000000-0000-5000-8000-000000000001",
+            "guest|00000000-0000-5000-8000-000000000001",
         ),
         quote(
             call,
