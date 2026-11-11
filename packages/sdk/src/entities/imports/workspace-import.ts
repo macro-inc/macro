@@ -43,7 +43,7 @@ export interface NotionPlanOptions extends WorkspacePlanOptions {
  * The user's import of one connected workspace: plan it, present the plan as
  * an import review, and the write starts when the review is approved.
  */
-export class WorkspaceImport {
+export abstract class WorkspaceImport {
   constructor(
     protected readonly client: MacroClient,
     /** The workspace this import reads. */
@@ -59,6 +59,8 @@ export class WorkspaceImport {
    * connected comes back as a `failed` report whose `error` says so (or a 409
    * `not_connected`): offer to connect it instead of presenting a review.
    * Never call it to check progress: it replaces the plan; use `status()`.
+   * @write
+   * @openworld
    */
   async plan(
     options: WorkspacePlanOptions = {},
@@ -71,6 +73,8 @@ export class WorkspaceImport {
    * yes: approves the review, with any changes they made on its card, and
    * reports where the import stands. Refused while the plan is still being
    * made.
+   * @write
+   * @openworld
    */
   async start(review: SessionReview): Promise<WorkspaceImportReport> {
     const [item] = await review.items();
@@ -83,7 +87,10 @@ export class WorkspaceImport {
     return this.status();
   }
 
-  /** Where planning or writing stands; never call it in a loop. */
+  /**
+   * Where planning or writing stands; never call it in a loop.
+   * @readonly
+   */
   async status(): Promise<WorkspaceImportReport> {
     return unwrap(
       await this.client.cognition.workspaceReportHandler({
@@ -92,7 +99,11 @@ export class WorkspaceImport {
     );
   }
 
-  /** Stop planning or writing; what is already imported stays. */
+  /**
+   * Stop planning or writing; what is already imported stays.
+   * @destructive
+   * @idempotent
+   */
   async cancel(): Promise<WorkspaceImportReport> {
     return unwrap(
       await this.client.cognition.cancelWorkspaceHandler({
@@ -114,6 +125,16 @@ export class WorkspaceImport {
   }
 }
 
+/** An issue tracker workspace this SDK imports. */
+export type TrackerImportSource = Exclude<WorkspaceImportSource, 'notion'>;
+
+/** A Linear or Jira workspace import: issues become tasks, groups projects. */
+export class TrackerWorkspaceImport extends WorkspaceImport {
+  constructor(client: MacroClient, source: TrackerImportSource) {
+    super(client, source);
+  }
+}
+
 /** The Notion workspace import, which can be narrowed to some pages. */
 export class NotionWorkspaceImport extends WorkspaceImport {
   constructor(client: MacroClient) {
@@ -123,6 +144,8 @@ export class NotionWorkspaceImport extends WorkspaceImport {
   /**
    * Plan importing the Notion workspace, or the pages and databases in
    * `roots` with everything under them; see {@link WorkspaceImport.plan}.
+   * @write
+   * @openworld
    */
   override async plan(
     options: NotionPlanOptions = {},
@@ -140,6 +163,8 @@ export class NotionWorkspaceImport extends WorkspaceImport {
    *   'https://www.notion.so/Q3-plan-3fb607323e2e80629886fc0c028d50a7',
    * );
    * return { data: { outcome, document: await item.entity() } };
+   * @write
+   * @openworld
    */
   importPage(pageUrl: string): Promise<ImportResult> {
     return ImportItem.importNotionPage(this.client, pageUrl);

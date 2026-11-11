@@ -511,6 +511,8 @@ export {
   type ImportSharing,
   type NotionPlanOptions,
   NotionWorkspaceImport,
+  type TrackerImportSource,
+  TrackerWorkspaceImport,
   WorkspaceImport,
   type WorkspaceImportReport,
   type WorkspaceImportSource,

@@ -6,7 +6,10 @@ import {
   type ImportResult,
   type TrackedItem,
 } from './import-item';
-import { NotionWorkspaceImport, WorkspaceImport } from './workspace-import';
+import {
+  NotionWorkspaceImport,
+  TrackerWorkspaceImport,
+} from './workspace-import';
 
 /**
  * The import ledger: every external item staged, imported or declined, so
@@ -18,6 +21,7 @@ export class ImportLedger {
   /**
    * The user's ledger, newest first: staged candidates, items being
    * imported, imported items (teammates' team imports too) and declined ones.
+   * @readonly
    */
   list(filters?: ImportItemFilters): Promise<ImportItem[]> {
     return ImportItem.list(this.client, filters);
@@ -31,6 +35,7 @@ export class ImportLedger {
   /**
    * Propose an external item for import before creating anything. Check the
    * outcome: a copy may already exist, or the user may have declined it.
+   * @write
    */
   stage(item: TrackedItem): Promise<ImportResult> {
     return ImportItem.track(this.client, item);
@@ -39,6 +44,7 @@ export class ImportLedger {
   /**
    * Record a Macro item you already created from an external item, so it is
    * never imported twice.
+   * @write
    */
   async recordImported(
     item: TrackedItem,
@@ -50,6 +56,8 @@ export class ImportLedger {
   /**
    * Decline a staged candidate on the user's behalf: it is remembered and not
    * proposed again. Only the user's own staged items can be declined.
+   * @write
+   * @idempotent
    */
   decline(item: ImportItem): Promise<void> {
     return item.decline();
@@ -109,18 +117,18 @@ export class ImportsNamespace {
   readonly notion: NotionWorkspaceImport;
 
   /** The Linear workspace import: issues become tasks, their groups projects. */
-  readonly linear: WorkspaceImport;
+  readonly linear: TrackerWorkspaceImport;
 
   /** The Jira Cloud import: issues become tasks, projects and epics projects. */
-  readonly jira: WorkspaceImport;
+  readonly jira: TrackerWorkspaceImport;
 
   /** What was staged, imported or declined, across every source. */
   readonly ledger: ImportLedger;
 
   constructor(client: MacroClient) {
     this.notion = new NotionWorkspaceImport(client);
-    this.linear = new WorkspaceImport(client, 'linear');
-    this.jira = new WorkspaceImport(client, 'jira');
+    this.linear = new TrackerWorkspaceImport(client, 'linear');
+    this.jira = new TrackerWorkspaceImport(client, 'jira');
     this.ledger = new ImportLedger(client);
   }
 }

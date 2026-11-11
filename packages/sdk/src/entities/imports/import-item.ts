@@ -163,12 +163,18 @@ export class ImportItem extends MacroEntity<ImportEntity> {
   /** When the item was first staged, as an ISO timestamp. */
   readonly createdAt = this.field('created_at');
 
-  /** The user who staged or imported it: a teammate for a team import. */
+  /**
+   * The user who staged or imported it: a teammate for a team import.
+   * @readonly
+   */
   async importedBy(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).user_id);
   }
 
-  /** The Macro item it became, once imported. */
+  /**
+   * The Macro item it became, once imported.
+   * @readonly
+   */
   async entity(): Promise<ImportedEntity | undefined> {
     const { entity_id: id, entity_type: type } = await this.detail.get();
     if (!id || !type) return undefined;
@@ -188,6 +194,8 @@ export class ImportItem extends MacroEntity<ImportEntity> {
   /**
    * Decline this staged candidate on the user's behalf: it is remembered and
    * not proposed again. Only the user's own staged items can be declined.
+   * @write
+   * @idempotent
    */
   async decline(): Promise<void> {
     await this.mutate((client) =>
