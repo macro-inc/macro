@@ -48,7 +48,12 @@ import type {
   NodeViewRegistry,
   RenderContext,
 } from './registry';
-import { readSelection, sameSelection, writeSelection } from './selection';
+import {
+  readHistoryRootSelection,
+  readSelection,
+  sameSelection,
+  writeSelection,
+} from './selection';
 import { selectionMessage } from './session-port';
 import { TableObserver } from './table/observer';
 import type {
@@ -143,6 +148,7 @@ export class EditorView implements ViewSink {
   private lastOps = 0;
   private paintFrame: number | null = null;
   private revisionValue = 0;
+  private historySelectionRevision: number | undefined;
   private documentRevisionValue = 0;
   private nextReconcileSample = 0;
   get keyedDOMNodeCount(): number {
@@ -608,6 +614,11 @@ export class EditorView implements ViewSink {
                 this.selectionInfo.selection,
                 selection
               );
+              const historyBoundary =
+                this.historySelectionRevision === this.revision &&
+                previousSelection.kind === 'none'
+                  ? readHistoryRootSelection(this)
+                  : null;
               this.selectionInfo = {
                 selection,
                 format: effect.format,
@@ -629,7 +640,13 @@ export class EditorView implements ViewSink {
                 this.tables.get(previousSelection.table)?.clear();
               // Only a focused history-awareness restore may override the
               // content update's skip tag in this packet.
-              if (!skipDomSelection || effect.flag)
+              if (
+                effect.flag ||
+                (!skipDomSelection &&
+                  !(
+                    historyBoundary && sameSelection(historyBoundary, selection)
+                  ))
+              )
                 writeSelection(this, selection, previousSelection);
               break;
             }
@@ -662,14 +679,37 @@ export class EditorView implements ViewSink {
         for (const [key, mutation] of diff.mutations)
           if (mutation.after) this.updateDecorator(key, mutation.after);
       });
-      this.notify(
-        diff,
-        selectionChanged,
-        effects
-          .filter((effect) => effect.kind === 11)
-          .flatMap((effect) => effect.keys)
-      );
+      const tags = effects
+        .filter((effect) => effect.kind === 11)
+        .flatMap((effect) => effect.keys);
+      this.notify(diff, selectionChanged, tags);
       this.recovering = false;
+      if (
+        skipDomSelection &&
+        tags.includes('historic') &&
+        tags.includes('from-loro') &&
+        this.selectionInfo.selection.kind === 'none'
+      ) {
+        // Removing a selected subtree can collapse the browser caret at the
+        // root without a selectionchange. Read it after the executor unwinds.
+        const revision = this.revision;
+        this.historySelectionRevision = revision;
+        queueMicrotask(() => {
+          try {
+            if (
+              this.disposed ||
+              revision !== this.revision ||
+              this.selectionInfo.selection.kind !== 'none'
+            )
+              return;
+            const selection = readHistoryRootSelection(this);
+            if (selection) this.port.selectionFromView(selection);
+          } finally {
+            if (this.historySelectionRevision === revision)
+              this.historySelectionRevision = undefined;
+          }
+        });
+      }
     } catch (error) {
       this.options.onError(error);
       if (this.recovering) throw error;

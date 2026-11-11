@@ -127,6 +127,26 @@ export function readSelection(view: EditorView): ViewSelection {
 export function readSelectionFromChange(view: EditorView): ViewSelection {
   return read(view, true);
 }
+/** Read a browser caret left at the owned root after history reconciliation. */
+export function readHistoryRootSelection(
+  view: EditorView
+): Extract<ViewSelection, { kind: 'range' }> | null {
+  const root = view.root;
+  const doc = root.ownerDocument;
+  const dom = doc.getSelection();
+  if (
+    doc.activeElement !== root ||
+    !dom?.isCollapsed ||
+    dom.anchorNode !== root ||
+    dom.focusNode !== root
+  )
+    return null;
+  const selection = readSelectionFromChange(view);
+  return selection.kind === 'range' &&
+    selection.anchor.key !== view.keyFromDOM(root)
+    ? selection
+    : null;
+}
 export function sameSelection(
   left: ViewSelection,
   right: ViewSelection
