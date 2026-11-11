@@ -364,7 +364,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     }
 
     #[cfg(feature = "ai_tools")]
-    #[tracing::instrument(skip_all, fields(document_id), err)]
+    #[tracing::instrument(skip_all, fields(document_id, resent = false), err)]
     async fn read_markdown(
         &self,
         document_id: &str,
@@ -391,7 +391,7 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
     }
 
     #[cfg(feature = "ai_tools")]
-    #[tracing::instrument(skip_all, fields(document_id), err)]
+    #[tracing::instrument(skip_all, fields(document_id, resent = false), err)]
     async fn write_markdown(
         &self,
         document_id: &str,

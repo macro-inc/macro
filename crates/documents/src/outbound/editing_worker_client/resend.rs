@@ -46,6 +46,7 @@ impl MarkdownResend {
             return false;
         }
         tracing::warn!(error = ?error, %cause, "editing worker connection lost before a complete response; resending");
+        tracing::Span::current().record("resent", true);
         true
     }
 }
