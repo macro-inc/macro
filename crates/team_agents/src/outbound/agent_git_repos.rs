@@ -9,7 +9,7 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::models::{AgentRepo, PersonaSeed, RepoToken, TeamAgentError};
+use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError};
 use crate::domain::ports::AgentRepos;
 
 #[cfg(test)]
@@ -108,24 +108,6 @@ impl AgentRepos for AgentGitRepos {
             url,
             token: created.token,
         })
-    }
-
-    #[tracing::instrument(name = "team_agents.repo.ensure", skip_all, fields(%team_id), err)]
-    async fn ensure(
-        &self,
-        agent: &MacroUserIdStr<'_>,
-        team_id: Uuid,
-        seed: &PersonaSeed,
-        token: &RepoToken,
-    ) -> Result<String, TeamAgentError> {
-        let url = self.clone_url(agent)?;
-        self.client
-            .ensure_repo(agent.clone().into_owned(), team_id, repo_seed(seed), token)
-            .await
-            .map_err(|error| {
-                TeamAgentError::RepoUnavailable(rootcause::Report::new(error).into_dynamic())
-            })?;
-        Ok(url)
     }
 
     #[tracing::instrument(name = "team_agents.repo.delete", skip_all, err)]

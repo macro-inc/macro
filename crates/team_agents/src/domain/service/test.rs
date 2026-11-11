@@ -5,7 +5,7 @@ use feature_flags::{FlagSnapshot, FlagValue};
 use rootcause::Report;
 
 use super::*;
-use crate::domain::models::{AgentApiKey, AgentRepo, ComputerSize, ComputerState};
+use crate::domain::models::{AgentApiKey, AgentRepo, ComputerSize, ComputerState, RepoToken};
 
 const ADMIN: &str = "macro|admin@example.com";
 const TEAM: &str = "0193a1b2-0000-7000-8000-0000000000aa";
@@ -160,17 +160,6 @@ impl AgentRepos for FakeRepos {
             url: "https://git.example.com/ada.git".to_owned(),
             token: RepoToken::generate(),
         })
-    }
-
-    async fn ensure(
-        &self,
-        _: &MacroUserIdStr<'_>,
-        _: Uuid,
-        _: &PersonaSeed,
-        _: &RepoToken,
-    ) -> Result<String, TeamAgentError> {
-        self.0.record("repo.ensure");
-        Ok("https://git.example.com/ada.git".to_owned())
     }
 
     async fn delete(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
@@ -444,7 +433,10 @@ async fn an_agents_computer_enrolls_with_fresh_credentials_and_its_addresses() {
     assert!(env["MACRO_REPO_TOKEN"].len() > 20);
     assert_eq!(
         journal.entries()[4..],
-        ["api_key.mint".to_owned(), "repo.ensure".to_owned()]
+        [
+            "api_key.mint".to_owned(),
+            "repo.create Sam Rivera".to_owned()
+        ]
     );
 }
 

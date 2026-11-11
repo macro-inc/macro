@@ -12,8 +12,7 @@ use uuid::Uuid;
 
 use super::models::{
     AgentApiKey, AgentRepo, ComputerId, ComputerPurchase, ComputerState, CreateTeamAgent,
-    NewAgentAccount, PersonaSeed, RepoToken, TeamAgent, TeamAgentError, TeamAgentRecord,
-    TeamAgents,
+    NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord, TeamAgents,
 };
 
 /// Agent accounts and their `team_agents` rows.
@@ -83,23 +82,14 @@ pub trait AgentApiKeys: Send + Sync + 'static {
 
 /// The agent's workspace repository.
 pub trait AgentRepos: Send + Sync + 'static {
-    /// Create the repository from the seed.
+    /// Create the repository from the seed, or keep an existing one, and
+    /// issue a new token; the previous token stops working.
     fn create(
         &self,
         agent: &MacroUserIdStr<'_>,
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> impl Future<Output = Result<AgentRepo, TeamAgentError>> + Send;
-
-    /// Make sure the repository exists and accepts `token` from now on.
-    /// Returns its clone URL.
-    fn ensure(
-        &self,
-        agent: &MacroUserIdStr<'_>,
-        team_id: Uuid,
-        seed: &PersonaSeed,
-        token: &RepoToken,
-    ) -> impl Future<Output = Result<String, TeamAgentError>> + Send;
 
     /// Delete the repository; a missing one is success.
     fn delete(

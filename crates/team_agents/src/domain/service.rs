@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 use super::models::{
     AGENT_EMAIL_DOMAIN, ComputerId, ComputerPurchase, CreateTeamAgent, MAX_NAME_CHARS,
-    MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, RepoToken, TeamAgent, TeamAgentError,
-    TeamAgentRecord, TeamAgentStatus, TeamAgents,
+    MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord,
+    TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentRepos, Computers, EnrollmentEnvironment, TeamAgentRepository,
@@ -478,10 +478,9 @@ where
             tracing::error!(error = ?error, "could not mint the agent's API key");
             AgentEnrollmentError::IssuanceFailed
         })?;
-        let repo_token = RepoToken::generate();
-        let repo_url = self
+        let repo = self
             .repos
-            .ensure(&agent, record.team_id, &record.persona_seed, &repo_token)
+            .create(&agent, record.team_id, &record.persona_seed)
             .await
             .map_err(|error| {
                 tracing::error!(error = ?error, "could not prepare the agent's repository");
@@ -513,11 +512,11 @@ where
         )?;
         env_entry(&mut values, env_keys::TEAM_ID, record.team_id.to_string())?;
         env_entry(&mut values, env_keys::COMPUTER_ID, computer_id.to_string())?;
-        env_entry(&mut values, env_keys::REPO_URL, repo_url)?;
+        env_entry(&mut values, env_keys::REPO_URL, repo.url)?;
         env_entry(
             &mut values,
             env_keys::REPO_TOKEN,
-            repo_token.expose().to_owned(),
+            repo.token.expose().to_owned(),
         )?;
         let env = AgentEnv::new(values).map_err(|_| AgentEnrollmentError::IssuanceFailed)?;
         tracing::info!(generation = generation.get(), "issued agent enrollment");
