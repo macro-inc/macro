@@ -32,6 +32,7 @@ export function createTasksViewSearch(options: {
   });
   let entry = captureEntryControls();
 
+  let wasSavedViewActive = false;
   createEffect(
     on(
       () =>
@@ -68,10 +69,15 @@ export function createTasksViewSearch(options: {
         // URL navigation and sidebar navigation share the same tab snapshots.
         // Freeze each arrival's controls so removing a URL override restores
         // that arrival, rather than another tab's controls or a later edit.
-        if (!savedViewActive && options.restoreTab && entry.tab !== tab) {
+        if (
+          !savedViewActive &&
+          options.restoreTab &&
+          (entry.tab !== tab || wasSavedViewActive)
+        ) {
           if (state.tab !== tab) options.restoreTab(tab);
           entry = captureEntryControls();
         }
+        wasSavedViewActive = savedViewActive;
         const requestedLayout =
           layout ?? (savedViewActive ? state.layout : entry.layout);
 

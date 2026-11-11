@@ -1,4 +1,4 @@
-import { type Accessor, createRoot, createSignal } from 'solid-js';
+import { type Accessor, batch, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
@@ -34,6 +34,7 @@ function setup(
     enabled?: boolean;
     nonListLayoutsEnabled?: Accessor<boolean>;
     restoreTab?: (tab: TasksTab) => Partial<TasksViewState>;
+    savedViewActive?: Accessor<boolean>;
   } = {}
 ) {
   return createRoot((dispose) => {
@@ -69,6 +70,7 @@ function setup(
       tab: () => options.scopedTab ?? search.tab,
       enabled: options.enabled ?? true,
       nonListLayoutsEnabled: options.nonListLayoutsEnabled,
+      savedViewActive: options.savedViewActive,
       restoreTab: restoreTab
         ? (tab) => setState({ ...restoreTab(tab), tab })
         : undefined,
@@ -394,6 +396,30 @@ it('restores URL tab changes from each tab snapshot before applying URL override
   });
   view.setSearch({ sort: 'priority', sortReversed: 'false' });
   expect(view.state.sort).toEqual([{ id: 'priority' }, { id: 'updated_at' }]);
+});
+
+it('keeps the restored built-in controls when leaving a saved view for the same tab', () => {
+  const [savedViewActive, setSavedViewActive] = createSignal(false);
+  const view = setup({ savedViewActive, restoreTab: () => ({}) });
+  setSavedViewActive(true);
+  view.setState({ layout: 'gantt', groupBy: 'assignee' });
+  batch(() => {
+    // The host restores its built-in snapshot before releasing the saved view.
+    view.setState({
+      layout: 'board',
+      groupBy: 'status',
+      dueDate: { type: 'today' },
+      sort: [{ id: 'priority', reversed: true }],
+    });
+    setSavedViewActive(false);
+  });
+  expect(view.state).toMatchObject({
+    tab: 'my-tasks',
+    layout: 'board',
+    groupBy: 'status',
+    dueDate: { type: 'today' },
+    sort: [{ id: 'priority', reversed: true }],
+  });
 });
 
 it('keeps saved scope and draft filters when changing presentation', () => {
