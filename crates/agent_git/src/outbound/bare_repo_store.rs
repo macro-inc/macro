@@ -1,6 +1,7 @@
 //! Bare repos under a storage root, managed with the `git` CLI.
 
 use std::path::{Path, PathBuf};
+use std::os::unix::fs::PermissionsExt;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -93,6 +94,9 @@ async fn run_git(
     Ok(())
 }
 
+/// Mode of a template file git records as executable.
+const EXECUTABLE_MODE: u32 = 0o755;
+
 /// Write `files` into `work_tree` and commit them into `git_dir`.
 async fn commit_template(
     git_dir: &Path,
@@ -111,6 +115,11 @@ async fn commit_template(
         tokio::fs::write(&path, &file.contents)
             .await
             .map_err(io_error("write template file", &path))?;
+        if file.executable {
+            tokio::fs::set_permissions(&path, std::fs::Permissions::from_mode(EXECUTABLE_MODE))
+                .await
+                .map_err(io_error("mark template file executable", &path))?;
+        }
     }
 
     run_git("add", |git| {

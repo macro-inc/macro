@@ -6,7 +6,7 @@
         "services/agent_git_service/**",
         "crates/agent_git/**",
         "crates/agent_credentials/**",
-        "packages/brain/template/**"
+        "packages/starter-agent/**"
       ],
       "stack_path": "infra/stacks/agent-git-service/**",
       "deploy_binaries": [

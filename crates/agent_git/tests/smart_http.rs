@@ -155,9 +155,9 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
     )
     .await;
     assert!(first.status.success(), "{first:?}");
-    // A fresh HTTP clone must contain every file required before the brain
-    // can start; the first turn cannot repair an incomplete seed.
-    for file in WORKSPACE_TEMPLATE.render(&seed()).unwrap() {
+    // A fresh HTTP clone must contain every file required before the agent
+    // can start; its first wake cannot repair an incomplete seed.
+    for file in WORKSPACE_TEMPLATE.render(&agent_a, &seed()).unwrap() {
         assert_eq!(
             std::fs::read_to_string(work.path().join("first").join(file.path)).unwrap(),
             file.contents,
@@ -165,9 +165,16 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
             file.path
         );
     }
-    let charter = std::fs::read_to_string(work.path().join("first/OPERATING.md")).unwrap();
-    assert!(charter.contains("macro|admin@example.com"));
-    assert!(!charter.contains("{{"));
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(work.path().join("first/bin/agent"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_ne!(mode & 0o111, 0, "bin/agent is executable");
+    }
+    let settings = std::fs::read_to_string(work.path().join("first/agent.json")).unwrap();
+    assert!(settings.contains("\"owner\": \"macro|admin@example.com\""));
 
     std::fs::write(work.path().join("first/memory.md"), "remembered\n").unwrap();
     let added = git(&work.path().join("first"), &["add", "memory.md"]).await;
@@ -310,7 +317,7 @@ async fn agents_push_their_own_repo_and_admins_read_it(pool: PgPool) {
     )
     .await;
     assert!(recreated.status.success(), "{recreated:?}");
-    assert!(work.path().join("recreated/OPERATING.md").exists());
+    assert!(work.path().join("recreated/agent.json").exists());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

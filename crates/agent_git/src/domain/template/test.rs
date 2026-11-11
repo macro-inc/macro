@@ -1,16 +1,25 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use super::{PersonaSeed, WORKSPACE_TEMPLATE};
+use super::WORKSPACE_TEMPLATE;
 
+/// Every file git tracks in `packages/starter-agent`, minus the workspace's
+/// Biome config, is embedded with its contents.
 #[test]
-fn every_canonical_file_is_seeded_with_its_contents() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/brain/template");
+fn every_starter_file_is_embedded_with_its_contents() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packages/starter-agent");
     let mut pending = vec![root.clone()];
     let mut expected = BTreeMap::new();
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(directory).unwrap() {
-            let path = entry.unwrap().path();
+            let entry = entry.unwrap();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if matches!(name.as_str(), "node_modules" | "biome.jsonc" | ".worktrees")
+                || name.starts_with(".scripts")
+            {
+                continue;
+            }
+            let path = entry.path();
             if path.is_dir() {
                 pending.push(path);
             } else {
@@ -33,24 +42,31 @@ fn every_canonical_file_is_seeded_with_its_contents() {
         "no duplicate paths"
     );
     assert_eq!(embedded, expected);
+}
 
-    let rendered = WORKSPACE_TEMPLATE
-        .render(&PersonaSeed {
-            name: "Example".into(),
-            job_description: "Help with operations".into(),
-            personality: "Thoughtful".into(),
-            creator_id: None,
-        })
-        .unwrap();
-    assert_eq!(rendered.len(), expected.len());
-    for file in rendered {
-        if file.path != "OPERATING.md" && file.path != "config/jev.json" {
-            assert_eq!(
-                Some(&file.contents),
-                expected.get(file.path),
-                "{}",
-                file.path
-            );
-        }
+/// What the agent's process reads before it starts is in the template.
+#[test]
+fn the_runtime_entry_points_are_embedded() {
+    for path in [
+        "AGENT.md",
+        "CLAUDE.md",
+        "cli.ts",
+        "index.ts",
+        "package.json",
+        "bun.lock",
+        "tsconfig.json",
+        ".gitignore",
+        "behavior/index.ts",
+    ] {
+        assert!(
+            WORKSPACE_TEMPLATE.files.iter().any(|file| file.path == path),
+            "{path}"
+        );
     }
+    assert!(
+        !WORKSPACE_TEMPLATE
+            .files
+            .iter()
+            .any(|file| file.path.contains("node_modules") || file.path == "biome.jsonc")
+    );
 }

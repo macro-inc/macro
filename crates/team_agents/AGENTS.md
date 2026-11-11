@@ -36,7 +36,7 @@ An agent's status comes from its computer (`provisioning`, `running`,
 - Owns: agent accounts, the `team_agents` table, enrollment issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
   membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
-  the brain → `packages/brain`.
+  the agent runtime → `packages/muppet` and its template `packages/starter-agent`.
 
 ## Checks
 

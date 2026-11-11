@@ -36,6 +36,7 @@ async fn target(root: &std::path::Path) -> (RepoDirectories, MacroUserIdStr<'sta
             &[RenderedFile {
                 path: "hello.txt",
                 contents: "hello\n".to_owned(),
+                executable: false,
             }],
         )
         .await

@@ -10,6 +10,8 @@ pub struct TemplateFile {
     pub path: &'static str,
     /// File contents.
     pub contents: &'static str,
+    /// Whether git records it as executable (`bin/agent`).
+    pub executable: bool,
 }
 
 /// The files of a new repo's initial commit.
@@ -19,17 +21,18 @@ pub struct WorkspaceTemplate {
     pub files: &'static [TemplateFile],
 }
 
-/// The canonical brain workspace, embedded from `packages/brain/template/`.
+/// The starter agent, embedded from `packages/starter-agent/`.
 pub const WORKSPACE_TEMPLATE: WorkspaceTemplate = WorkspaceTemplate {
     files: include!(concat!(env!("OUT_DIR"), "/workspace_template.rs")),
 };
 
-/// Who the agent is, written into its charter when the repo is created.
+/// Who the agent is, written into its settings and identity when the repo is
+/// created.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PersonaSeed {
-    /// Creating admin's Macro user ID; the charter names the team owner
-    /// when it is absent.
+    /// Creating admin's Macro user ID: the agent's owner, the only account
+    /// that gives it orders.
     #[serde(default)]
     pub creator_id: Option<MacroUserIdStr<'static>>,
     /// Display name.
@@ -47,89 +50,98 @@ pub struct RenderedFile {
     pub path: &'static str,
     /// File contents.
     pub contents: String,
+    /// Whether git records it as executable.
+    pub executable: bool,
 }
 
-/// The charter containing the persona placeholders.
-const CHARTER_PATH: &str = "OPERATING.md";
+/// Why a template could not be rendered for an agent.
+#[derive(Debug, thiserror::Error)]
+pub enum RenderError {
+    /// The seed names no owner, and an agent without one obeys nobody.
+    #[error("the persona seed has no creator to own the agent")]
+    MissingCreator,
+    /// The template has no settings example to render `agent.json` from.
+    #[error("the template has no {SETTINGS_EXAMPLE_PATH}")]
+    MissingSettingsExample,
+    /// The settings example is not a JSON object.
+    #[error("the template's settings example is invalid: {0}")]
+    InvalidSettingsExample(#[from] serde_json::Error),
+}
+
+/// The example settings the template ships; rendered into `agent.json`.
+const SETTINGS_EXAMPLE_PATH: &str = "agent.example.json";
+/// The agent's settings: who it is in Macro, its owner, its git identity.
+const SETTINGS_PATH: &str = "agent.json";
+/// Who the agent is, in its committed memory (`behavior/capabilities/identity`).
+const IDENTITY_PATH: &str = "state/memory/identity/identity.md";
+/// The zone wall-clock times mean until the agent learns its owner's.
+const DEFAULT_TIME_ZONE: &str = "UTC";
 
 impl WorkspaceTemplate {
-    /// The template's files with the persona substituted into the charter.
-    pub fn render(&self, seed: &PersonaSeed) -> Result<Vec<RenderedFile>, serde_json::Error> {
-        self.files
+    /// The template's files for one agent: its settings in `agent.json` and,
+    /// when the invite described it, its identity. An invite with no job and
+    /// no personality leaves the identity empty, so the agent asks its owner.
+    pub fn render(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        seed: &PersonaSeed,
+    ) -> Result<Vec<RenderedFile>, RenderError> {
+        let owner = seed.creator_id.as_ref().ok_or(RenderError::MissingCreator)?;
+        let example = self
+            .files
             .iter()
-            .map(|file| {
-                let contents = if file.path == CHARTER_PATH {
-                    file.contents
-                        .replace("{{name}}", &seed.name)
-                        .replace("{{job_description}}", &seed.job_description)
-                        .replace("{{personality}}", &seed.personality)
-                        .replace(
-                            "{{creator}}",
-                            seed.creator_id
-                                .as_ref()
-                                .map(|creator| creator.as_ref())
-                                .unwrap_or("the team owner"),
-                        )
-                } else if file.path == "config/jev.json" {
-                    let mut config = serde_json::from_str(file.contents)?;
-                    render_jev(&mut config, seed);
-                    format!("{}\n", serde_json::to_string_pretty(&config)?)
-                } else {
-                    file.contents.to_string()
-                };
+            .find(|file| file.path == SETTINGS_EXAMPLE_PATH)
+            .ok_or(RenderError::MissingSettingsExample)?;
+        let mut settings: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(example.contents)?;
+        settings.insert("owner".into(), owner.as_ref().into());
+        settings.insert("me".into(), agent.as_ref().into());
+        settings.insert("name".into(), seed.name.clone().into());
+        settings.insert("email".into(), agent.email_str().into());
+        settings.insert("timeZone".into(), DEFAULT_TIME_ZONE.into());
 
-                Ok(RenderedFile {
-                    path: file.path,
-                    contents,
-                })
+        let mut files: Vec<RenderedFile> = self
+            .files
+            .iter()
+            .filter(|file| file.path != SETTINGS_EXAMPLE_PATH)
+            .map(|file| RenderedFile {
+                path: file.path,
+                contents: file.contents.to_owned(),
+                executable: file.executable,
             })
-            .collect()
+            .collect();
+        files.push(RenderedFile {
+            path: SETTINGS_PATH,
+            contents: format!("{}\n", serde_json::to_string_pretty(&settings)?),
+            executable: false,
+        });
+        if let Some(identity) = identity(seed) {
+            files.push(RenderedFile {
+                path: IDENTITY_PATH,
+                contents: identity,
+                executable: false,
+            });
+        }
+        Ok(files)
     }
 }
 
-// Match the brain and relevance endpoint's 500 UTF-16-unit question limit.
-// Bound substitutions, preserving the question around the persona context.
-fn render_jev(config: &mut serde_json::Value, seed: &PersonaSeed) {
-    match config {
-        serde_json::Value::String(question) => {
-            let fixed = question
-                .replace("{{name}}", "")
-                .replace("{{job_description}}", "");
-            let room = 500_usize.saturating_sub(fixed.encode_utf16().count());
-            let name_limit = room / question.matches("{{name}}").count().max(1);
-            let named = question.replace("{{name}}", &truncate_utf16(&seed.name, name_limit));
-            let job_count = named.matches("{{job_description}}").count();
-            let fixed = named.replace("{{job_description}}", "");
-            let job_limit =
-                500_usize.saturating_sub(fixed.encode_utf16().count()) / job_count.max(1);
-            *question = named.replace(
-                "{{job_description}}",
-                &truncate_utf16(&seed.job_description, job_limit),
-            );
-        }
-        serde_json::Value::Array(values) => {
-            for value in values {
-                render_jev(value, seed);
-            }
-        }
-        serde_json::Value::Object(values) => {
-            for value in values.values_mut() {
-                render_jev(value, seed);
-            }
-        }
-        _ => {}
+/// The identity the invite gave, in the agent's own voice, or none when the
+/// invite only named it.
+fn identity(seed: &PersonaSeed) -> Option<String> {
+    let job = seed.job_description.trim();
+    let personality = seed.personality.trim();
+    if job.is_empty() && personality.is_empty() {
+        return None;
     }
-}
-
-fn truncate_utf16(value: &str, limit: usize) -> String {
-    let mut used = 0;
-    value
-        .chars()
-        .take_while(|character| {
-            used += character.len_utf16();
-            used <= limit
-        })
-        .collect()
+    let mut text = format!("# {}\n\nMy owner described me when they invited me.\n", seed.name.trim());
+    if !job.is_empty() {
+        text.push_str(&format!("\n## What I do\n\n{job}\n"));
+    }
+    if !personality.is_empty() {
+        text.push_str(&format!("\n## How I work and talk\n\n{personality}\n"));
+    }
+    Some(text)
 }
 
 #[cfg(test)]
