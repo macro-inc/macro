@@ -6,6 +6,7 @@ import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDr
 import { ChannelThread } from '@channel/Thread/ChannelThread';
 import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -44,6 +45,18 @@ export function threadListItem(thread: ThreadData): MessageListItem {
       latest_reply_at: thread.replies.at(-1)?.created_at ?? null,
     },
   };
+}
+
+async function reportGuestMutation(
+  work: Promise<void>,
+  failure: string
+): Promise<void> {
+  try {
+    await work;
+  } catch (error) {
+    toast.failure(failure);
+    throw error;
+  }
 }
 
 type ThreadOptions = {
@@ -90,7 +103,10 @@ export function MessageThread(
   const confirm = createDeleteMessageConfirmation((input) => {
     if (transport) {
       fireAndForget(
-        transport.remove({ parent: input.parent, id: input.messageID }),
+        reportGuestMutation(
+          transport.remove({ parent: input.parent, id: input.messageID }),
+          'Failed to delete message'
+        ),
         'message-thread'
       );
       return;
@@ -105,11 +121,14 @@ export function MessageThread(
     patchMessage: (input) => {
       if (transport) {
         fireAndForget(
-          transport.patch({
-            parent: input.parent,
-            id: input.messageID,
-            content: input.content,
-          }),
+          reportGuestMutation(
+            transport.patch({
+              parent: input.parent,
+              id: input.messageID,
+              content: input.content,
+            }),
+            'Failed to update message'
+          ),
           'message-thread'
         );
         return;
@@ -143,12 +162,15 @@ export function MessageThread(
     addReaction: (input) => {
       if (transport) {
         fireAndForget(
-          transport.react({
-            parent: input.parent,
-            id: input.messageId,
-            emoji: input.emoji,
-            add: true,
-          }),
+          reportGuestMutation(
+            transport.react({
+              parent: input.parent,
+              id: input.messageId,
+              emoji: input.emoji,
+              add: true,
+            }),
+            'Failed to add reaction'
+          ),
           'message-thread'
         );
         return;
@@ -158,12 +180,15 @@ export function MessageThread(
     removeReaction: (input) => {
       if (transport) {
         fireAndForget(
-          transport.react({
-            parent: input.parent,
-            id: input.messageId,
-            emoji: input.emoji,
-            add: false,
-          }),
+          reportGuestMutation(
+            transport.react({
+              parent: input.parent,
+              id: input.messageId,
+              emoji: input.emoji,
+              add: false,
+            }),
+            'Failed to remove reaction'
+          ),
           'message-thread'
         );
         return;

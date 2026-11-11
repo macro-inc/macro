@@ -4,7 +4,7 @@ import type {
   MessageListItem,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageThread, threadListItem } from './MessageThread';
@@ -19,12 +19,13 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   clipboard: vi.fn().mockResolvedValue(undefined),
   confirmDelete: vi.fn(),
+  toastFailure: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: vi.fn(), failure: vi.fn() },
+  toast: { success: vi.fn(), failure: mocks.toastFailure },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
@@ -288,6 +289,56 @@ it('uses a guest viewer and transport for own actions', () => {
   openActions(otherView);
   expect(otherView.queryByRole('button', { name: 'Edit' })).toBeNull();
   expect(otherView.queryByRole('button', { name: 'Delete' })).toBeNull();
+});
+
+it('shows member-equivalent failures for guest edit, delete, and reactions', async () => {
+  const error = new Error('Guest request failed');
+  const transport = {
+    patch: vi.fn().mockRejectedValue(error),
+    remove: vi.fn().mockRejectedValue(error),
+    react: vi.fn().mockRejectedValue(error),
+  };
+  const guestMessage = {
+    ...message,
+    parent: { type: 'call' as const, id: 'call-id' },
+    sender_id: 'guest:viewer',
+  };
+  const renderGuest = (data: MessageListItem) =>
+    render(() => (
+      <MessageViewerProvider viewerId={() => 'guest:viewer'}>
+        <MessageTransportProvider value={transport}>
+          <MessageThread data={data} canWrite />
+        </MessageTransportProvider>
+      </MessageViewerProvider>
+    ));
+  const view = renderGuest(guestMessage);
+  openActions(view);
+  const deleteMessage = mocks.confirmDelete.mock.calls[0]?.[0];
+  deleteMessage({ parent: guestMessage.parent, messageID: 'root' });
+  const editorOptions = mocks.editor.mock.calls[0]?.[0];
+  editorOptions.patchMessage({
+    parent: guestMessage.parent,
+    messageID: 'root',
+    content: 'Updated',
+  });
+  fireEvent.click(view.getByRole('button', { name: 'React' }));
+  await waitFor(() => {
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Failed to delete message');
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Failed to update message');
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Failed to add reaction');
+  });
+
+  cleanup();
+  const reactedMessage = {
+    ...guestMessage,
+    reactions: [{ emoji: '👍', users: ['guest:viewer'] }],
+  };
+  const reactedView = renderGuest(reactedMessage);
+  openActions(reactedView);
+  fireEvent.click(reactedView.getByRole('button', { name: 'React' }));
+  await waitFor(() =>
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Failed to remove reaction')
+  );
 });
 
 describe('document discussion controls', () => {
