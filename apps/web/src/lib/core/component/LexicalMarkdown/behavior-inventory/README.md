@@ -216,6 +216,9 @@ for keyboard choice and enclosed-shortcode resolution using the actual loaded
 emoji catalog. `OVERLAY_EMOJI_CAPTURE` writes per-project files for exact host
 comparison alongside the seven existing emoji interaction cases. These controls
 do not establish a native shortcode transform or native picker installation.
+The maintained browser build includes `index.html`, `mentions.html` and
+`snippets.html`. Its Playwright web server sets the existing snippets flag for
+these Source controls only; product defaults and native installation do not change.
 The separate `snippets.html` fixture uses supplied Quick Access snippet rows
 and a fresh real query-cache result. With `VITE_ENABLE_SNIPPETS=true`, the real
 Source menu, command, fetch helper and extraction/parse/replacement pipeline

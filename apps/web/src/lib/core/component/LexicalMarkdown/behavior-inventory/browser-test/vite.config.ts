@@ -44,6 +44,13 @@ export default defineConfig({
     emptyOutDir: true,
     minify: false,
     sourcemap: false,
+    rollupOptions: {
+      input: {
+        index: `${DIRECTORY}/index.html`,
+        mentions: `${DIRECTORY}/mentions.html`,
+        snippets: `${DIRECTORY}/snippets.html`,
+      },
+    },
   },
   preview: { host: '127.0.0.1', port: PORT, strictPort: true },
 });

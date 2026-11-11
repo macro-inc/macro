@@ -46,6 +46,7 @@ export default defineConfig({
     },
   ],
   webServer: {
+    env: { VITE_ENABLE_SNIPPETS: 'true' },
     cwd: DIRECTORY,
     command:
       'bunx vite build --config vite.config.ts && bunx vite preview --config vite.config.ts',
