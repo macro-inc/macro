@@ -1,3 +1,4 @@
+import INTER_LATIN from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?inline';
 import type { PreviewFrame } from './frame-helper';
 import { MACRO_STYLESHEET } from './macro-stylesheet';
 
@@ -5,6 +6,13 @@ import { MACRO_STYLESHEET } from './macro-stylesheet';
 export const MACRO_STYLES_HREF = 'macro:styles';
 
 const STYLES_LINK = `link[rel~="stylesheet" i][href="${MACRO_STYLES_HREF}"]`;
+
+/**
+ * The app's Inter, which `--font-sans` names after the Apple system font. The
+ * page's policy loads fonts only from `data:` URLs, so it is inlined; only
+ * the Latin subset, to keep each page small.
+ */
+const INTER_FACE = `@font-face{font-family:"Inter Variable";font-style:normal;font-display:swap;font-weight:100 900;src:url(${INTER_LATIN}) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}`;
 
 /** Host → frame: the app's theme changed; replace the page's theme rule. */
 export type ThemeMessage = { type: 'macro:theme'; rule: string };
@@ -37,7 +45,7 @@ export function installMacroStyles(parsed: Document, themeRule: string) {
   theme.dataset.macroTheme = '';
   theme.textContent = themeRule;
   const sheet = parsed.createElement('style');
-  sheet.textContent = MACRO_STYLESHEET;
+  sheet.textContent = `${INTER_FACE}${MACRO_STYLESHEET}`;
   const listener = parsed.createElement('script');
   listener.textContent = THEME_LISTENER;
 

@@ -20,6 +20,8 @@ describe('composePlainDocument', () => {
       THEME
     );
     expect(document.querySelector('meta[http-equiv]')).toBeNull();
+    // The frame's policy loads fonts only from data: URLs.
+    expect(composed).toMatch(/src:url\(data:font\/woff2;base64,/);
     expect(composed).not.toContain("'macro'");
     expect(composed.startsWith('<!doctype html>')).toBe(true);
   });

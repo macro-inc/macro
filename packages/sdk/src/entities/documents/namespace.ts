@@ -207,15 +207,21 @@ export class DocumentNamespace {
    * Macro's sizes; pill `button`s (`.primary` for the main action, `.ghost`,
    * `.danger`, `.sm`, `.icon`), `input`, `select` and `textarea`; layout
    * (`.page`, `.bar` for the top bar with `.actions` on the right,
-   * `.content`, `.stack`, `.cluster`, `.spread`, `.grid`, `.split`); `.card`,
+   * `.content`, `.stack`, `.cluster`, `.spread`, `.grid`, `.split`); `.card`
+   * (clickable as a `button` or `.interactive`, `aria-selected`),
    * `.section-title`, `.list` of `.row`s (`.meta` on the right,
    * `aria-selected`), `.tabs` of buttons with `aria-selected`, `.chip`,
-   * `.badge` (`.accent`, `.success`, `.warning`, `.failure`), `.dot`,
-   * `.status-*`, `.avatar`, `.metric` (`.label`, `.value`), `table`,
-   * `.progress`, `.empty`, `.notice`, `.skeleton`, `.toast`, and text helpers
-   * (`.muted`, `.subtle`, `.label`, `.num`, `.truncate`). Styles after the
-   * link override it; keep your own to layout and charts, and color charts
-   * from the variables so they follow the theme.
+   * `.badge` (`.accent`, `.success`, `.warning`, `.failure`, or `.tone` with
+   * `style="--tone: var(--color-orange)"`), `.dot`, `.status-*`, `.avatar`,
+   * `.metric` (`.label`, `.value`, `.caption`), `table`, `.progress`,
+   * `.empty`, `.notice`, `.skeleton`, `.toast`; charts: `.chart` on an `svg`
+   * themes its text and d3 axes, with `.gridline`, `.track`, `.mark`,
+   * `.line`, `.area` and `.today`, `.legend`, and `.series-1` … `.series-8`
+   * setting `--series` to the nth categorical color (use
+   * `fill: var(--series)`); and text helpers (`.muted`, `.subtle`, `.label`,
+   * `.num`, `.truncate`). Styles after the link override it; keep your own to
+   * layout and the visualization, and take every color from the variables so
+   * the page follows the theme.
    *
    * When you build `html` as a JavaScript template literal, the page's own
    * `${…}` and backticks must be escaped (`\${`, `` \` ``) or avoided.

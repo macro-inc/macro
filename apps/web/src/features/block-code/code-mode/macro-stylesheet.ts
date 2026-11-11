@@ -100,6 +100,7 @@ hr { border: 0; border-top: 1px solid var(--color-edge-muted); margin: var(--spa
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-wrap: wrap;
   min-height: 48px;
   padding: var(--space-2) var(--space-4);
   background: var(--color-surface, var(--color-page));
@@ -118,6 +119,9 @@ hr { border: 0; border-top: 1px solid var(--color-edge-muted); margin: var(--spa
   background: var(--color-panel);
 }
 .card.flush { padding: 0; overflow: hidden; }
+.card:where(button, a, [tabindex], .interactive) { cursor: pointer; text-align: left; font: inherit; color: inherit; transition: border-color 120ms; }
+.card:where(button, a, [tabindex], .interactive):hover { border-color: var(--color-edge); }
+.card[aria-selected="true"], .card.selected { border-color: var(--color-ink-subtle); box-shadow: 0 0 0 1px var(--color-ink-subtle); }
 .card > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
 .inset {
   padding: var(--space-3);
@@ -128,7 +132,7 @@ hr { border: 0; border-top: 1px solid var(--color-edge-muted); margin: var(--spa
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: 0 0 var(--space-2);
+  margin: 0;
   color: var(--color-ink-subtle);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -276,6 +280,9 @@ label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-fle
 .badge.success { background: color-mix(in oklch, var(--color-success) 12%, transparent); color: var(--color-success); }
 .badge.warning { background: color-mix(in oklch, var(--color-warning) 14%, transparent); color: var(--color-warning); }
 .badge.failure { background: color-mix(in oklch, var(--color-failure) 12%, transparent); color: var(--color-failure); }
+/* Any color: style="--tone: var(--color-orange)". */
+.badge.tone { background: color-mix(in oklch, var(--tone) 14%, transparent); color: var(--tone); }
+.chip.tone { border-color: color-mix(in oklch, var(--tone) 40%, transparent); color: var(--tone); }
 .dot { display: inline-block; flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status-not-started { color: var(--color-task-status-not-started); }
 .status-in-progress { color: var(--color-task-status-in-progress); }
@@ -304,6 +311,7 @@ label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-fle
 .metric { display: flex; flex-direction: column; gap: 2px; }
 .metric .value { font-size: 24px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .metric .label { order: -1; }
+.metric .caption { color: var(--color-ink-subtle); font-size: var(--text-xs); }
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th { padding: 6px var(--space-3); border-bottom: 1px solid var(--color-edge-muted); color: var(--color-ink-subtle); font-size: var(--text-xs); font-weight: 500; text-align: left; white-space: nowrap; }
 td { padding: 8px var(--space-3); border-bottom: 1px solid var(--color-edge-muted); vertical-align: middle; }
@@ -356,6 +364,28 @@ tbody tr:hover td { background: var(--color-hover); }
   box-shadow: var(--shadow-menu);
   color: var(--color-ink);
 }
+
+/* Charts: put .chart on an svg (or its container) for themed text, axes, grid
+   and marks; d3 axes' .domain and .tick lines pick it up as they are. */
+.chart text { fill: var(--color-ink-subtle); font: 11px var(--font-sans); font-variant-numeric: tabular-nums; }
+.chart .domain, .chart .tick line, .chart .axis { stroke: var(--color-edge-muted); }
+.chart .gridline { stroke: var(--color-edge-muted); stroke-dasharray: 2 3; }
+.chart .track { fill: color-mix(in oklch, var(--color-ink) 6%, transparent); }
+.chart .mark { fill: var(--color-accent); }
+.chart .line { fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .area { fill: color-mix(in oklch, var(--color-accent) 14%, transparent); }
+.chart .today { stroke: var(--color-accent); stroke-width: 1.5; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--color-ink-muted); font-size: var(--text-xs); }
+.legend > * { display: inline-flex; align-items: center; gap: 6px; }
+/* Categorical series in order, so the nth series has the same color everywhere. */
+.series-1 { --series: var(--color-blue); }
+.series-2 { --series: var(--color-orange); }
+.series-3 { --series: var(--color-teal); }
+.series-4 { --series: var(--color-pink); }
+.series-5 { --series: var(--color-violet); }
+.series-6 { --series: var(--color-lime); }
+.series-7 { --series: var(--color-amber); }
+.series-8 { --series: var(--color-cyan); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
