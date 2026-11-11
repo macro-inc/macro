@@ -44,6 +44,10 @@ startup loudly.
   `crates/outlook_emulator`): the provider's host in every environment, with
   the override as the only way to point elsewhere. They are not part of the
   hand-copied table below.
+- A third-party host a browser also opens gets two types, because a container
+  and a browser reach a local double at different addresses:
+  `MicrosoftLoginUrl` for the calls a service makes and
+  `MicrosoftLoginPageUrl` for the pages.
 - The only override is `OVERRIDE_<SNAKE_NAME>`, read from the process
   environment, not from Doppler. Local in-network overrides live in
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not

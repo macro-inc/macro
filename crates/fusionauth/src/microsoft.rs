@@ -1,5 +1,7 @@
 use std::fmt;
 
+use macro_service_urls::{MicrosoftGraphUrl, MicrosoftLoginPageUrl, MicrosoftLoginUrl};
+
 use crate::{
     FusionAuthClient, Result,
     error::{FusionAuthClientError, GenericErrorResponse},
@@ -18,6 +20,13 @@ pub(crate) struct MicrosoftOAuthCredentials {
     client_id: String,
     client_secret: String,
     tenant_id: String,
+    /// Microsoft's login host as this service reaches it: code exchange,
+    /// refresh, discovery and signing keys.
+    login_url: String,
+    /// Microsoft's login host as a browser reaches it: the consent pages.
+    login_page_url: String,
+    /// The Microsoft Graph API root.
+    graph_url: String,
 }
 
 impl fmt::Debug for MicrosoftOAuthCredentials {
@@ -33,6 +42,8 @@ impl fmt::Debug for MicrosoftOAuthCredentials {
 
 impl FusionAuthClient {
     /// Configures the Microsoft OAuth application used for secondary account linking.
+    /// Microsoft is reached where `MicrosoftLoginUrl`, `MicrosoftLoginPageUrl`
+    /// and `MicrosoftGraphUrl` say.
     pub fn with_microsoft_credentials(
         mut self,
         client_id: String,
@@ -43,7 +54,29 @@ impl FusionAuthClient {
             client_id,
             client_secret,
             tenant_id,
+            login_url: MicrosoftLoginUrl::unwrap_new().to_string(),
+            login_page_url: MicrosoftLoginPageUrl::unwrap_new().to_string(),
+            graph_url: MicrosoftGraphUrl::unwrap_new().to_string(),
         });
+        self
+    }
+
+    /// Sets where Microsoft is reached, in place of the typed service URLs:
+    /// the login host for this service's calls, the login host for the
+    /// browser's pages, and the Graph API root. For tests that run against
+    /// `crates/outlook_emulator`. Call it after
+    /// [`Self::with_microsoft_credentials`].
+    pub fn with_microsoft_urls(
+        mut self,
+        login_url: String,
+        login_page_url: String,
+        graph_url: String,
+    ) -> Self {
+        if let Some(credentials) = &mut self.microsoft_credentials {
+            credentials.login_url = login_url;
+            credentials.login_page_url = login_page_url;
+            credentials.graph_url = graph_url;
+        }
         self
     }
 
@@ -57,6 +90,7 @@ impl FusionAuthClient {
     ) -> Result<String> {
         let credentials = self.microsoft_credentials()?;
         oauth::construct_authorize_url(
+            &credentials.login_page_url,
             &credentials.client_id,
             &credentials.tenant_id,
             redirect_uri,
@@ -113,6 +147,7 @@ impl FusionAuthClient {
     ) -> Result<String> {
         let credentials = self.microsoft_credentials()?;
         oauth::construct_admin_consent_url(
+            &credentials.login_page_url,
             &credentials.client_id,
             &credentials.tenant_id,
             redirect_uri,
@@ -132,6 +167,7 @@ impl FusionAuthClient {
         let credentials = self.microsoft_credentials()?;
         oauth::exchange_code_for_tokens(
             &self.unauth_client,
+            &credentials.login_url,
             &credentials.client_id,
             &credentials.client_secret,
             &credentials.tenant_id,
@@ -152,6 +188,7 @@ impl FusionAuthClient {
         let credentials = self.microsoft_credentials()?;
         oauth::exchange_code_for_tokens(
             &self.unauth_client,
+            &credentials.login_url,
             &credentials.client_id,
             &credentials.client_secret,
             &credentials.tenant_id,
@@ -171,7 +208,7 @@ impl FusionAuthClient {
         let credentials = self.microsoft_credentials()?;
         let keys = oauth::fetch_microsoft_signing_keys(
             &self.unauth_client,
-            oauth::MICROSOFT_LOGIN_BASE_URL,
+            &credentials.login_url,
             &credentials.tenant_id,
         )
         .await
@@ -197,7 +234,7 @@ impl FusionAuthClient {
         let credentials = self.microsoft_credentials()?;
         let signing_keys = oauth::fetch_microsoft_signing_keys(
             &self.unauth_client,
-            oauth::MICROSOFT_LOGIN_BASE_URL,
+            &credentials.login_url,
             &credentials.tenant_id,
         )
         .await

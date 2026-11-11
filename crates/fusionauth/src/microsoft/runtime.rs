@@ -64,7 +64,8 @@ impl FusionAuthClient {
         let credentials = self
             .microsoft_credentials()
             .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
-        let endpoint = super::oauth::endpoint_url(&credentials.tenant_id, "token")
+        let endpoint =
+            super::oauth::endpoint_url(&credentials.login_url, &credentials.tenant_id, "token")
             .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
         refresh(
             &client()?,
@@ -82,8 +83,18 @@ impl FusionAuthClient {
         &self,
         access_token: &str,
     ) -> Result<MicrosoftMailboxIdentity, MicrosoftRuntimeError> {
+        let credentials = self
+            .microsoft_credentials()
+            .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
+        let mut endpoint = reqwest::Url::parse(&credentials.graph_url)
+            .map_err(|_| MicrosoftRuntimeError::InvalidResponse)?;
+        endpoint
+            .path_segments_mut()
+            .map_err(|()| MicrosoftRuntimeError::InvalidResponse)?
+            .pop_if_empty()
+            .push("me");
         let response = client()?
-            .get("https://graph.microsoft.com/v1.0/me")
+            .get(endpoint)
             .query(&[("$select", "id,mail,userPrincipalName")])
             .bearer_auth(access_token)
             .send()
