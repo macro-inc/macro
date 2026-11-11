@@ -1,0 +1,10 @@
+{
+  "url": "http://localhost:19040/cognition/stream/chat/message",
+  "body": {
+    "chat_id": "00978733-a672-4293-9b7a-dc5158e89c5d",
+    "content": "One more milestone, please.",
+    "model": "google/gemini-3.8-flash"
+  },
+  "status": 410,
+  "response": "{\"error\":\"AI chats are read-only. Start an agent session instead.\",\"code\":\"chat_read_only\"}"
+}

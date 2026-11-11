@@ -1,0 +1,10 @@
+{
+  "url": "http://localhost:19010/cognition/stream/chat/message",
+  "body": {
+    "chat_id": "00978733-a672-4293-9b7a-dc5158e89c5d",
+    "content": "One more milestone, please.",
+    "model": "google/gemini-3.8-flash"
+  },
+  "status": 200,
+  "response": "{\"stream_id\":\"345bf7c2-9fcb-406c-bec2-a11f17739ce7\",\"message_id\":\"345bf7c2-9fcb-406c-bec2-a11f17739ce7\",\"chat_id\":\"00978733-a672-4293-9b7a-dc5158e89c5d\"}"
+}
