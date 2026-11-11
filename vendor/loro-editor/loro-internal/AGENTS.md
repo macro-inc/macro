@@ -15,6 +15,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Never refresh encoder or corpus bytes to accommodate a runtime change.
 - Suppress local event materialization only with empty recorder queues and explicit undo checkpoint ownership; retain remote, excluded and history event delivery.
 - Check for a nonempty remote diff before scanning an undo group's touched containers; an empty remote row cannot conflict.
+- Keep the optional undo clock defaulting to the system timestamp; invoke it and drop replaced callbacks outside history borrows, preserving the original interval/group rule and timestamp update sites.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
 
 - Share the full-replay operation index only within one immutable diff; preserve causal/sliced visitor parity and reuse DAG contexts instead of retaining one mutable VV per change.

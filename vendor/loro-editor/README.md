@@ -63,3 +63,13 @@ and retain ordinary checkout for ineligible or unreadable seeds. Compare exact
 snapshot bytes with the existing replay path, including rich/deleted containers,
 multiple peers and detached documents; validate retained snapshot/WAL controls
 through a production-mode decoder as well as the library tests.
+
+The editor undo manager accepts an optional millisecond time source for hosts
+that supply their own clock. An unset source retains the upstream system
+timestamp. The source is sampled at the existing checkpoint timestamp site;
+only a non-merged checkpoint advances the previous timestamp. Group boundaries,
+clear, navigation, peer changes and stack eviction retain their upstream rules.
+Callbacks run without a history borrow, and replacing a callback releases the
+previous capture outside both the history borrow and lock. The document session
+uses its host wall clock and the application merge interval; the server copy and
+wire formats are unchanged.
