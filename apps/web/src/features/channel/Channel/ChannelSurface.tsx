@@ -249,6 +249,10 @@ export function ChannelSurface(props: ParentProps<ChannelSurfaceProps>) {
 export type ChannelMessagesProps = {
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
+  /** Focus the composer each time this changes after mount. */
+  composerFocusRequest?: number;
+  /** See {@link ChannelProps.onEscapeToList}. */
+  onEscapeToList?: () => boolean;
 };
 
 /**
@@ -301,6 +305,19 @@ function MountedChannelMessages(props: ChannelMessagesProps) {
     }
   });
 
+  // Compared by value: a host's prop getter can track more than the request
+  // (Home's reads the arrival, which follows every hotkey).
+  const composerFocusRequest = createMemo(() => props.composerFocusRequest);
+  createEffect(
+    on(
+      composerFocusRequest,
+      (request) => {
+        if (request) handle()?.focusInput();
+      },
+      { defer: true }
+    )
+  );
+
   onCleanup(() => surface.bindMessagesHandle(undefined));
 
   return (
@@ -311,6 +328,7 @@ function MountedChannelMessages(props: ChannelMessagesProps) {
         surface.bindMessagesHandle(channelHandle);
       }}
       autofocus={props.autofocus}
+      onEscapeToList={props.onEscapeToList}
       // A mount that load-arounds a target must not also restore old timeline
       // state — the same rule as the block host's hydration gate.
       initialMessagesStateSnapshot={

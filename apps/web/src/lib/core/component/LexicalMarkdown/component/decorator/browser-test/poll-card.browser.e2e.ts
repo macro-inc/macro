@@ -7,12 +7,8 @@ for (const viewport of [
   { name: 'desktop', width: 1280, height: 800 },
   { name: 'phone', width: 390, height: 844 },
 ]) {
-  for (const { poll, wraps } of [
-    { poll: 'Two options', wraps: false },
-    { poll: 'Long question', wraps: true },
-    { poll: 'Many options', wraps: false },
-  ]) {
-    test(`${poll} poll card fits its content without moving on load on ${viewport.name}`, async ({
+  for (const poll of ['Two options', 'Long question', 'Many options']) {
+    test(`${poll} poll card keeps its reserved height through loading on ${viewport.name}`, async ({
       page,
     }) => {
       await page.route('https://**', (route) => route.abort());
@@ -21,14 +17,20 @@ for (const viewport of [
       const section = page.getByRole('region', { name: poll, exact: true });
       const card = section.locator('[data-slot="card"]').first();
       await expect(card).toBeVisible({ timeout: 30_000 });
-      const reserved = (await card.boundingBox())!.height;
+      const height = async () => (await card.boundingBox())!.height;
+      // Before the preview loads, the reservation already holds the
+      // question at its wrapped height.
+      const reserved = await height();
 
-      await section.getByRole('button', { name: `Load ${poll}` }).click();
+      await section
+        .getByRole('button', { name: `Load ${poll} preview` })
+        .click();
+      await expect(section.getByText('owner@example.com')).toBeVisible();
+      expect(await height()).toBe(reserved);
+
+      await section.getByRole('button', { name: `Load ${poll} form` }).click();
       await expect(section.getByText('Responses')).toBeVisible();
-      const loaded = (await card.boundingBox())!.height;
-      // One-line polls get exactly their space up front; wrapped text grows them.
-      if (wraps) expect(loaded).toBeGreaterThan(reserved);
-      else expect(loaded).toBe(reserved);
+      expect(await height()).toBe(reserved);
 
       // Nothing inside the card scrolls or is clipped: the "Poll" row and the
       // votes footer both sit within the card.

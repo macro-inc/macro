@@ -27,7 +27,7 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// sent message landing in the microseconds between the check and the
 /// cascade could see a transient deleted state; the populate path on
 /// that new message re-creates the rows on its next run.
-#[tracing::instrument(skip(ctx), err, fields(contact_email = %p.contact_email, link_id = %link.id))]
+#[tracing::instrument(skip(ctx, link, p), err, fields(link_id = %link.id))]
 pub async fn depopulate_crm_contact(
     ctx: &PubSubContext,
     link: &link::Link,

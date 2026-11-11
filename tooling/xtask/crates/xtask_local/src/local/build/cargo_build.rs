@@ -38,13 +38,21 @@ const JS_DEPENDENCY_DIRS: &[&str] = &[".", "packages/sdk"];
 /// dependencies aren't cached yet saves them there afterwards. Cache failures
 /// are reported and skipped: they only cost time, since cargo still decides
 /// what is fresh.
-pub fn run(stage: &Stage, target: Target) -> Result<()> {
+///
+/// `only` limits the build to those services' binaries. Cargo unifies features
+/// over the smaller graph, so the first narrow build of a set compiles the few
+/// shared crates whose feature set differs there (28 registry crates for
+/// `contacts_service`); they are kept beside the full build's, so later narrow
+/// builds and the next full build reuse both. It never saves to the dependency
+/// cache, whose entries hold a full build's dependencies.
+pub fn run(stage: &Stage, target: Target, only: Option<&[&RustService]>) -> Result<()> {
     ensure_js_dependencies(stage, &repo_root())?;
 
     let ws = workspace_root();
     let target_debug = ws.join(target.debug_dir());
-    let args = build_args();
-    let entry = cache_entry(&ws, &args).inspect_err(|err| {
+    let full = build_args(None);
+    let args = build_args(only);
+    let entry = cache_entry(&ws, &full).inspect_err(|err| {
         stage.note(&format!("Dependency cache skipped: {err:#}"));
     });
     let entry = entry.ok();
@@ -83,6 +91,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
     stage.run("Building service binaries", &mut cmd)?;
 
     if let Some(entry) = &entry
+        && only.is_none()
         && !dep_cache::is_complete(entry)
     {
         let saved = stage.run_step("Saving dependencies to the machine cache", || {
@@ -182,11 +191,12 @@ fn built_services() -> impl Iterator<Item = &'static RustService> {
     RUST_SERVICES.iter().filter(|s| !s.is_opt_in())
 }
 
-/// `--bin` per service plus one `--features` carrying every service's local
-/// features, package-qualified so a feature only reaches the package that
-/// declares it.
-fn build_args() -> Vec<String> {
+/// `--bin` per service (every built service, or `only`) plus one `--features`
+/// carrying every service's local features, package-qualified so a feature only
+/// reaches the package that declares it.
+fn build_args(only: Option<&[&RustService]>) -> Vec<String> {
     let mut args: Vec<String> = built_services()
+        .filter(|svc| only.is_none_or(|only| only.iter().any(|o| o.cargo_bin == svc.cargo_bin)))
         .flat_map(|svc| ["--bin".to_owned(), svc.cargo_bin.to_owned()])
         .collect();
     let features: Vec<String> = built_services()

@@ -2275,3 +2275,16 @@ async fn canvas_ai_edit_refuses_when_the_editor_applied_nothing_and_asked_back()
         json!({ "action": "edit", "instructions": "Line the boxes up." })
     );
 }
+
+#[tokio::test]
+async fn missing_email_attachment_is_a_coded_not_found() {
+    let response =
+        axum::response::IntoResponse::into_response(DocumentError::EmailAttachmentNotFound);
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        body["code"],
+        model::document::response::EMAIL_ATTACHMENT_NOT_FOUND_CODE
+    );
+}

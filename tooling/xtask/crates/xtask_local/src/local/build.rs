@@ -9,8 +9,6 @@ mod binaries_dir;
 mod cargo_build;
 mod dep_cache;
 mod runtime_image;
-#[cfg(test)]
-mod test_support;
 
 pub use binaries_dir::{Adoption, BinariesDir};
 pub use runtime_image::{RUNTIME_IMAGE_TAG, ensure_runtime_image};
@@ -18,6 +16,7 @@ pub use runtime_image::{RUNTIME_IMAGE_TAG, ensure_runtime_image};
 use anyhow::Result;
 
 use super::arch::Target;
+use super::inventory::RustService;
 use super::stage::Stage;
 
 /// How the caller wants binaries sourced.
@@ -26,6 +25,8 @@ pub struct BuildOptions {
     pub no_build: bool,
     /// Use this directory as the `/app/out` source instead of building.
     pub binaries_dir: Option<std::path::PathBuf>,
+    /// Build only these services' binaries; `None` builds them all.
+    pub only: Option<Vec<&'static RustService>>,
 }
 
 /// Resolve a [`BinariesDir`] for the run: from `--binaries-dir`, from the
@@ -39,7 +40,7 @@ pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<Bin
         }
         None => {
             super::arch::ensure_linux_host()?;
-            cargo_build::run(stage, target)?;
+            cargo_build::run(stage, target, opts.only.as_deref())?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
     };
