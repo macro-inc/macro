@@ -833,3 +833,83 @@ fn resync_restored_undo_manager_observes_the_same_host_clock() {
         .expect("undo second entry");
     assert_eq!(&*surface.state().root_text_content(), "a");
 }
+
+#[test]
+fn deleting_a_table_row_undoes_the_open_document_edit_boundary()
+-> Result<(), Box<dyn std::error::Error>> {
+    use macro_document_model::EditorType;
+
+    for reopen in [false, true] {
+        let config = crate::application::application_editor_config(
+            EditorConfig::default(),
+            Arc::new(AtomicI64::new(0)),
+            EditorType::MarkdownSync,
+        );
+        let mut doc = lexical_loro::new_doc(7)?;
+        let mut surface = EditorSurface::new(config.clone(), 7, now(0))?;
+        let mut view = Vec::new();
+        surface.init(&doc, now(0), Access::Edit, &mut view)?;
+        surface.apply(
+            &doc,
+            Input::SetState {
+                state: serde_json::from_str(include_str!(
+                    "../../../lexical/macro_document_model/src/plugins_group_b/table/actions/fixtures/before.json"
+                ))?,
+                tags: TagSet::default(),
+            },
+            now(1),
+            Access::Edit,
+            &mut view,
+        )?;
+
+        if reopen {
+            let snapshot = doc.export(loro::ExportMode::Snapshot)?;
+            doc = lexical_loro::new_doc(8)?;
+            doc.import(&snapshot)?;
+            surface = EditorSurface::new(config, 8, now(20))?;
+            surface.init(&doc, now(20), Access::Edit, &mut view)?;
+        }
+        let state = surface.state().view();
+        let table = state.first_child(NodeKey::ROOT).expect("loaded table");
+        let rows = state.children_keys(table)?;
+        let cell = state.first_child(rows[1]).expect("second-row cell");
+        let command = macro_document_model::surface::decode_command(
+            "group-b.table",
+            &json!({"action":"delete","cell":cell.index(),"axis":"row"}).to_string(),
+            cell.generation(),
+            None,
+        )?
+        .expect("registered delete-row action");
+        let before = surface.state().to_json()?;
+        surface.apply(
+            &doc,
+            Input::Command {
+                command,
+                selection: ViewSelection::KeepModel,
+            },
+            now(76),
+            Access::Edit,
+            &mut view,
+        )?;
+        assert_eq!(surface.state().view().children_keys(table)?.len(), 2);
+
+        surface.apply(&doc, Input::Undo, now(80), Access::Edit, &mut view)?;
+        if reopen {
+            // Pristine app reloads the persisted table before deletion. Its first
+            // Undo restores all nine cells and the second has no earlier edit.
+            assert_eq!(surface.state().to_json()?, before);
+            surface.apply(&doc, Input::Undo, now(81), Access::Edit, &mut view)?;
+            assert_eq!(surface.state().to_json()?, before);
+        } else {
+            // The full app merges a row deletion 75 ms after the table insert.
+            assert!(
+                !surface
+                    .state()
+                    .view()
+                    .children(NodeKey::ROOT)
+                    .any(|key| { surface.state().view().type_name(key).ok() == Some("table") })
+            );
+        }
+    }
+    Ok(())
+}
