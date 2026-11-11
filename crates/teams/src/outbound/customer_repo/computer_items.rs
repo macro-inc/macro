@@ -101,7 +101,12 @@ impl CustomerRepositoryImpl {
         }
         let adds = changes.iter().any(|change| change.delta > 0);
         let billable = match subscription.status {
-            stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing => true,
+            stripe::SubscriptionStatus::Active => true,
+            // Computers are for paying teams; removing a trial's item is fine.
+            stripe::SubscriptionStatus::Trialing if adds && computer_item.is_some() => {
+                return Err(CustomerError::SubscriptionTrialing);
+            }
+            stripe::SubscriptionStatus::Trialing => true,
             // Removing items from a subscription behind on payment still
             // stops what it bills; adding to one is refused.
             stripe::SubscriptionStatus::PastDue | stripe::SubscriptionStatus::Unpaid => !adds,

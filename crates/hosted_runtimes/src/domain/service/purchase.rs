@@ -70,13 +70,17 @@ impl<
         let name = computer_name(request.name.as_deref())?;
         let entry = self.size_spec(request.size)?;
         let funding = match &request.billing {
-            PurchaseBilling::Stripe => Funding::Stripe {
-                price_id: self
-                    .billing
-                    .quote(request.team_id, request.size)
-                    .await?
-                    .price_id,
-            },
+            PurchaseBilling::Stripe => {
+                // Computers are for paying teams: refused before anything is reserved.
+                self.billing.require_paid_plan(request.team_id).await?;
+                Funding::Stripe {
+                    price_id: self
+                        .billing
+                        .quote(request.team_id, request.size)
+                        .await?
+                        .price_id,
+                }
+            }
             PurchaseBilling::Comped { reason } => Funding::Comped {
                 reason: reason.clone(),
             },

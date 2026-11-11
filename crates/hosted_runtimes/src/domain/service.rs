@@ -277,6 +277,9 @@ impl<
     ) -> Result<Quote, ComputerError> {
         self.require_attached().await?;
         self.size_spec(size)?;
+        if let PurchaseBilling::Stripe = billing {
+            self.billing.require_paid_plan(team_id).await?;
+        }
         let quote = self.billing.quote(team_id, size).await;
         match billing {
             PurchaseBilling::Stripe => Ok(quote?),

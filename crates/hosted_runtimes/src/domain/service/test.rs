@@ -237,6 +237,10 @@ impl Billing for FakeBilling {
         Ok(())
     }
 
+    async fn require_paid_plan(&self, _team_id: Uuid) -> Result<(), BillingError> {
+        Ok(())
+    }
+
     async fn period_end(&self, _team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
         self.calls.lock().unwrap().push("period_end");
         Ok(now() + chrono::Duration::days(20))

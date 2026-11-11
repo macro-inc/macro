@@ -2,9 +2,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -21,7 +22,11 @@ import {
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
 import { useIsTeamAdmin, useIsTeamOwner } from '@queries/team/teams';
-import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
+import {
+  type ComputerStatus,
+  type SizeOffer,
+  TEAM_ON_TRIAL,
+} from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
@@ -50,6 +55,31 @@ import { ComputerBuyFlow } from './computer-buy-flow';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
+}
+
+/** Opens Billing, where a trialing team ends its trial and subscribes. */
+function TrialBillingButton() {
+  const settings = useSettingsState();
+  return (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      onClick={() => settings.openSettings('Billing')}
+    >
+      {t('computers.trialBillingAction')}
+    </Button>
+  );
+}
+
+/** Whether the offers failed because the team's subscription is trialing. */
+export function offersBlockedByTrial(offers: {
+  isError: boolean;
+  error: unknown;
+}): boolean {
+  return (
+    offers.isError && thrownResultErrorHasCode(offers.error, TEAM_ON_TRIAL)
+  );
 }
 
 /** The cheapest size on sale, for "From $20/month". */
@@ -374,6 +404,7 @@ export function MacroComputers(props: {
   const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const release = useReleaseComputerMutation();
   const agents = useAgentsQuery();
+  const onTrial = () => offersBlockedByTrial(offers);
 
   const [buying, setBuying] = createSignal(false);
   const [settingUp, setSettingUp] = createSignal<string>();
@@ -468,18 +499,24 @@ export function MacroComputers(props: {
               <MachineRow
                 name={t('computers.getComputer')}
                 dot={<PlusIcon class="size-3 text-ink-muted" />}
-                meta={[t('computers.getComputerLine'), fromPriceLine()]
-                  .filter(Boolean)
-                  .join(' · ')}
+                meta={
+                  onTrial()
+                    ? t('computers.trialBlocked')
+                    : [t('computers.getComputerLine'), fromPriceLine()]
+                        .filter(Boolean)
+                        .join(' · ')
+                }
                 actions={
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setBuying(true)}
-                  >
-                    {t('computers.getComputerAction')}
-                  </Button>
+                  <Show when={!onTrial()} fallback={<TrialBillingButton />}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setBuying(true)}
+                    >
+                      {t('computers.getComputerAction')}
+                    </Button>
+                  </Show>
                 }
               />
             </Show>

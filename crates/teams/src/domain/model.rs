@@ -339,6 +339,8 @@ pub struct SubscriptionTerms {
     pub interval: BillingCadence,
     /// ISO currency code, lowercase.
     pub currency: String,
+    /// The subscription is in a trial.
+    pub trialing: bool,
 }
 
 /// What a Stripe price charges.
@@ -889,6 +891,14 @@ pub enum CustomerError {
     /// never sent again.
     #[error("The item change was abandoned")]
     ItemChangeAbandoned,
+    /// Another change to this subscription was sent moments ago and may
+    /// still be in flight at the provider; try again shortly.
+    #[error("another subscription change is still in flight")]
+    ItemChangeInFlight,
+    /// A computer item cannot be added while the subscription is trialing:
+    /// computers are for paying teams.
+    #[error("the subscription is trialing")]
+    SubscriptionTrialing,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

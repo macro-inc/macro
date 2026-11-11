@@ -224,6 +224,20 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn require_paid_plan(&self, team_id: Uuid) -> Result<(), BillingError> {
+        if self
+            .teams
+            .team_subscription_terms(&team_id)
+            .await
+            .map_err(billing_error)?
+            .trialing
+        {
+            return Err(BillingError::TeamOnTrial);
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn period_end(&self, team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
         Ok(self
             .teams
@@ -239,6 +253,9 @@ fn billing_error(error: TeamSubscriptionItemsError) -> BillingError {
         TeamSubscriptionItemsError::NoSubscription
         | TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionNotActive) => {
             BillingError::NoSubscription
+        }
+        TeamSubscriptionItemsError::Customer(CustomerError::SubscriptionTrialing) => {
+            BillingError::TeamOnTrial
         }
         // An abandoned change is never sent again: nothing was charged.
         TeamSubscriptionItemsError::Customer(

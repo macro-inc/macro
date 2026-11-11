@@ -13,6 +13,7 @@ import {
   computersClient,
   type PurchaseComputerRequest,
   type SizeOffer,
+  TEAM_ON_TRIAL,
 } from '@service-auth/computers';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { createEffect, on } from 'solid-js';
@@ -106,6 +107,9 @@ function computerOffersQueryOptions(enabled: boolean) {
     queryKey: computerKeys.offers.queryKey,
     enabled,
     queryFn: () => throwOnErr(computersClient.offers),
+    // A trial doesn't end by retrying; show why at once.
+    retry: (failures, error) =>
+      !thrownResultErrorHasCode(error, TEAM_ON_TRIAL) && failures < 3,
   });
 }
 

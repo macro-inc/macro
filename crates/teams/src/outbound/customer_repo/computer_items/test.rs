@@ -322,3 +322,31 @@ async fn settling_an_unknown_change_abandons_it_unless_its_marker_landed(pool: s
     let requests = server.received_requests().await.unwrap();
     assert!(subscription_update(&requests).is_empty());
 }
+
+/// Computers are for paying teams: a trialing subscription never gains a
+/// computer item, so nothing is sent to Stripe.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trialing_subscription_refuses_a_computer_item(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+
+    let result = repo(&server, pool)
+        .add_computer_item(
+            &sub.id,
+            &stripe::PriceId::from_str("price_c1").unwrap(),
+            "computer-1",
+            vec![],
+            ItemProration::InvoiceNow,
+            "computer-add:trial",
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(CustomerError::SubscriptionTrialing)),
+        "{result:?}"
+    );
+    let requests = server.received_requests().await.unwrap();
+    assert!(subscription_update(&requests).is_empty());
+}

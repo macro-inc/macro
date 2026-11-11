@@ -25,6 +25,7 @@ struct FakeTeams {
     subscribed: bool,
     decline: bool,
     abandoned: bool,
+    trialing: bool,
     items: Arc<Mutex<Vec<SubscriptionItemView>>>,
     prices: Arc<Mutex<Vec<(stripe::PriceId, String, String)>>>,
     adds: Arc<Mutex<Vec<Add>>>,
@@ -38,6 +39,7 @@ impl FakeTeams {
             subscribed: true,
             decline: false,
             abandoned: false,
+            trialing: false,
             items: Arc::default(),
             prices: Arc::default(),
             adds: Arc::default(),
@@ -186,6 +188,7 @@ impl TeamSubscriptionItems for FakeTeams {
             current_period_end: DateTime::from_timestamp(1_802_678_400, 0).unwrap(),
             interval: self.interval,
             currency: "usd".into(),
+            trialing: self.trialing,
         })
     }
 
@@ -467,4 +470,25 @@ async fn no_prices_rejects_sales_before_contacting_the_subscription_provider() {
             Err(BillingError::NotAvailable)
         ));
     }
+}
+
+#[tokio::test]
+async fn a_trialing_team_is_refused_computers() {
+    let billing = TeamComputerBilling::new(
+        FakeTeams {
+            trialing: true,
+            ..FakeTeams::new(BillingCadence::Month)
+        },
+        prices(),
+    );
+    assert!(matches!(
+        billing.require_paid_plan(Uuid::nil()).await,
+        Err(BillingError::TeamOnTrial)
+    ));
+    assert!(
+        TeamComputerBilling::new(FakeTeams::new(BillingCadence::Month), prices())
+            .require_paid_plan(Uuid::nil())
+            .await
+            .is_ok()
+    );
 }

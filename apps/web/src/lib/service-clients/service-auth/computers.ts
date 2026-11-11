@@ -29,25 +29,61 @@ export type {
   SizeOffer,
 } from './generated/schemas';
 
+/** The team's subscription is trialing: computers are for paying teams. */
+export const TEAM_ON_TRIAL = 'TEAM_ON_TRIAL';
+type TeamOnTrialErrorCode = typeof TEAM_ON_TRIAL;
+
 type PurchaseComputerErrorCode =
   | 'PURCHASE_CONFLICT'
   | 'PAYMENT_FAILED'
   | 'NOT_PURCHASABLE'
-  | 'SALES_UNAVAILABLE';
+  | 'SALES_UNAVAILABLE'
+  | TeamOnTrialErrorCode;
 
 type ReleaseComputerErrorCode = 'NAME_MISMATCH';
 
-type RestoreComputerErrorCode = 'PAYMENT_FAILED' | 'NOT_RESTORABLE';
+type RestoreComputerErrorCode =
+  | 'PAYMENT_FAILED'
+  | 'NOT_RESTORABLE'
+  | TeamOnTrialErrorCode;
 
 const base = `${SERVER_HOSTS['auth-service']}/team/computers`;
 
 const computerUrl = (id: string, action: string) =>
   `${base}/${encodeURIComponent(id)}/${action}`;
 
+/** A 403 whose body carries the server's `team_on_trial` code. */
+async function teamOnTrial(
+  response: Response
+): Promise<ResultError<TeamOnTrialErrorCode> | undefined> {
+  if (response.status !== 403) return undefined;
+  const body: unknown = await response.json().catch(() => undefined);
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('code' in body) ||
+    body.code !== 'team_on_trial'
+  ) {
+    return undefined;
+  }
+  return {
+    code: TEAM_ON_TRIAL,
+    message: 'Computers are available on paid plans. Your team is on a trial.',
+  };
+}
+
+async function offersError(
+  response: Response
+): Promise<ResultError<BaseFetchErrorCode | TeamOnTrialErrorCode>> {
+  return (await teamOnTrial(response)) ?? statusError(response.status);
+}
+
 /** 409 is a sold-out size, or a purchase key that belongs to another purchase. */
 async function purchaseError(
   response: Response
 ): Promise<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>> {
+  const trial = await teamOnTrial(response);
+  if (trial) return trial;
   return match(response.status)
     .returnType<ResultError<BaseFetchErrorCode | PurchaseComputerErrorCode>>()
     .with(409, () => ({
@@ -74,6 +110,8 @@ async function purchaseError(
 async function restoreError(
   response: Response
 ): Promise<ResultError<BaseFetchErrorCode | RestoreComputerErrorCode>> {
+  const trial = await teamOnTrial(response);
+  if (trial) return trial;
   return match(response.status)
     .returnType<ResultError<BaseFetchErrorCode | RestoreComputerErrorCode>>()
     .with(402, () => ({
@@ -103,7 +141,10 @@ async function releaseError(
 /** The caller's current team's Macro computers. Writes need team admin. */
 export const computersClient = {
   list: () => fetchWithToken<ComputerStatus[]>(base),
-  offers: () => fetchWithToken<SizeOffer[]>(`${base}/offers`),
+  offers: () =>
+    fetchWithToken<SizeOffer[], TeamOnTrialErrorCode>(`${base}/offers`, {
+      errorResponseHandler: offersError,
+    }),
   purchase: (request: PurchaseBody) =>
     fetchWithToken<Purchased, PurchaseComputerErrorCode>(base, {
       method: 'POST',
@@ -120,9 +161,10 @@ export const computersClient = {
       method: 'POST',
     }),
   undoCancel: (id: string) =>
-    fetchWithToken<ComputerStatus>(computerUrl(id, 'cancel'), {
-      method: 'DELETE',
-    }),
+    fetchWithToken<ComputerStatus, TeamOnTrialErrorCode>(
+      computerUrl(id, 'cancel'),
+      { method: 'DELETE', errorResponseHandler: offersError }
+    ),
   release: (id: string, confirmName: string) =>
     fetchWithToken<ComputerStatus, ReleaseComputerErrorCode>(
       computerUrl(id, 'release'),

@@ -370,6 +370,10 @@ pub enum BillingError {
     /// The payment was refused; nothing was charged.
     #[error("the payment did not go through")]
     PaymentFailed,
+    /// The team's subscription is in a trial: computers are for paying
+    /// teams only, so nothing is charged or provisioned.
+    #[error("Computers are available on paid plans. Your team is on a trial.")]
+    TeamOnTrial,
     /// The billing provider failed; the change's outcome is unknown.
     #[error("billing provider error: {0:?}")]
     Provider(rootcause::Report),
@@ -382,7 +386,8 @@ impl BillingError {
             Self::NotAvailable
             | Self::NoSubscription
             | Self::IntervalNotSold(_)
-            | Self::PaymentFailed => true,
+            | Self::PaymentFailed
+            | Self::TeamOnTrial => true,
             Self::Provider(_) => false,
         }
     }
@@ -465,6 +470,14 @@ pub trait Billing: Send + Sync + 'static {
         team_id: Uuid,
         subscription_item: &SubscriptionItemId,
         idempotency_key: &str,
+    ) -> impl Future<Output = Result<(), BillingError>> + Send;
+
+    /// Refuse a team whose subscription is trialing with
+    /// [`BillingError::TeamOnTrial`]: every computer item (purchase, undo,
+    /// restore) is for paying teams only.
+    fn require_paid_plan(
+        &self,
+        team_id: Uuid,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 
     /// When the team's current billing period ends.

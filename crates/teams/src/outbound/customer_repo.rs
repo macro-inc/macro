@@ -451,6 +451,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             current_period_end,
             interval,
             currency: subscription.currency.to_string(),
+            trialing: subscription.status == stripe::SubscriptionStatus::Trialing,
         })
     }
 
