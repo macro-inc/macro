@@ -29,9 +29,17 @@ event contract (schema, sanitization, delivery semantics).
   sender or `team_invite_link.created_by`). Billing implements it in
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
-  deletion side effects (owned-entity transfer, seat release).
+  deletion side effects (owned-entity transfer, seat release). Team deletion
+  calls `OwnedEntityCleanup::release_computers` after the purge and before
+  cancelling the subscription, so computers leave through their own lifecycle.
 - `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
-  (Macro computers) on the team subscription by price. One Stripe update per
+  (Macro computers) on the team subscription. Each computer bills ONE item at
+  a price of its own (`create_computer_price` copies the catalog price; Stripe
+  refuses two items of one price) carrying `computer_id` in item and price
+  metadata, so items are matched by computer, never by price or count.
+  `remove_team_subscription_item` treats an item or subscription already gone
+  as `ItemRemoval::AlreadyGone`; `settle_subscription_item_change` ends an
+  unknown outcome for good (`abandoned` receipts are never sent again). One Stripe update per
   change set, under the team billing lock, invoiced now with
   `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
   idempotent by key (`subscription_item_change` durable requests/receipts plus

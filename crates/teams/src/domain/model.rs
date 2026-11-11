@@ -263,6 +263,38 @@ pub struct ItemQuantityChange {
     pub delta: i64,
 }
 
+/// One subscription item, as the billing provider reports it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscriptionItemView {
+    /// The item.
+    pub id: stripe::SubscriptionItemId,
+    /// The price it bills.
+    pub price_id: stripe::PriceId,
+    /// How many of the price it bills.
+    pub quantity: u64,
+    /// The `computer_id` metadata on the item, or else on its price.
+    pub computer_id: Option<String>,
+}
+
+/// What removing one subscription item did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemRemoval {
+    /// The item was removed.
+    Removed,
+    /// The item (or its subscription) was already gone.
+    AlreadyGone,
+}
+
+/// How an item change whose outcome was never learned ended for good.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemChangeSettlement {
+    /// The change reached the subscription.
+    Applied,
+    /// The change never reached the subscription and never will: its
+    /// receipt is abandoned, so no replay can send it.
+    NotApplied,
+}
+
 /// How an item change bills the part of the period already paid for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ItemProration {
@@ -842,6 +874,10 @@ pub enum CustomerError {
     /// An item change would leave a price with a negative quantity.
     #[error("Price {0} has fewer items than the change removes")]
     QuantityBelowZero(String),
+    /// The item change was given up after its outcome stayed unknown; it is
+    /// never sent again.
+    #[error("The item change was abandoned")]
+    ItemChangeAbandoned,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

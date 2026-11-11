@@ -6,11 +6,16 @@ use super::*;
 mod test;
 
 #[derive(Clone, Copy, PartialEq, Eq, sqlx::Type)]
-#[sqlx(type_name = "text", rename_all = "snake_case")]
+#[sqlx(
+    type_name = "subscription_item_change_outcome",
+    rename_all = "snake_case"
+)]
 enum ItemChangeOutcome {
     Pending,
     Succeeded,
     PaymentFailed,
+    /// Given up while its outcome was unknown; never sent again.
+    Abandoned,
 }
 
 pub(super) struct ItemChange {
@@ -51,6 +56,7 @@ impl CustomerRepositoryImpl {
         match change.outcome {
             ItemChangeOutcome::Succeeded => return Ok(()),
             ItemChangeOutcome::PaymentFailed => return Err(CustomerError::PaymentFailed),
+            ItemChangeOutcome::Abandoned => return Err(CustomerError::ItemChangeAbandoned),
             ItemChangeOutcome::Pending => {}
         }
         let client = self
@@ -135,6 +141,52 @@ impl CustomerRepositoryImpl {
         .await
     }
 
+    /// End an item change whose outcome stayed unknown. Under the
+    /// subscription guard, a pending change is applied iff the provider
+    /// object carries its marker; otherwise it is abandoned for good.
+    #[tracing::instrument(skip(self), err)]
+    pub(super) async fn settle_item_change(
+        &self,
+        key: &str,
+    ) -> Result<ItemChangeSettlement, CustomerError> {
+        let Some(change) = self.item_change(key).await? else {
+            // The receipt is written before the first attempt: none was made.
+            return Ok(ItemChangeSettlement::NotApplied);
+        };
+        if change.outcome == ItemChangeOutcome::Pending {
+            let subscription = change
+                .subscription_id
+                .parse()
+                .map_err(|error| CustomerError::StorageLayerError(anyhow::Error::from(error)))?;
+            let _billing = self.subscription_guard(&subscription, Some(key)).await?;
+            let change = self
+                .item_change(key)
+                .await?
+                .context("item change receipt disappeared")?;
+            if change.outcome == ItemChangeOutcome::Pending {
+                let current = self
+                    .client
+                    .get::<serde_json::Value>(&change.path)
+                    .await
+                    .map_err(storage)?;
+                let applied = current
+                    .get("metadata")
+                    .and_then(|metadata| metadata.get(ITEM_CHANGE_KEY))
+                    .and_then(serde_json::Value::as_str)
+                    == Some(key);
+                let outcome = if applied {
+                    ItemChangeOutcome::Succeeded
+                } else {
+                    ItemChangeOutcome::Abandoned
+                };
+                self.finish_item_change(key, outcome).await?;
+                return Ok(settlement(outcome));
+            }
+            return Ok(settlement(change.outcome));
+        }
+        Ok(settlement(change.outcome))
+    }
+
     #[tracing::instrument(skip(self), err)]
     pub(super) async fn replay_item_change(&self, key: &str) -> Result<bool, CustomerError> {
         let Some(change) = self.item_change(key).await? else {
@@ -156,5 +208,14 @@ impl CustomerRepositoryImpl {
             .context("item change receipt disappeared")?;
         self.replay_item_change_locked(key, change).await?;
         Ok(true)
+    }
+}
+
+fn settlement(outcome: ItemChangeOutcome) -> ItemChangeSettlement {
+    match outcome {
+        ItemChangeOutcome::Succeeded => ItemChangeSettlement::Applied,
+        ItemChangeOutcome::Pending
+        | ItemChangeOutcome::PaymentFailed
+        | ItemChangeOutcome::Abandoned => ItemChangeSettlement::NotApplied,
     }
 }

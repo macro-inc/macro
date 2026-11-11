@@ -88,6 +88,15 @@ pub trait OwnedEntityCleanup: Clone + Send + Sync + 'static {
     /// cleanup is enqueued. An entity its owning service records under another
     /// owner is an error, and nothing is deleted.
     fn purge(&self, entity: &OwnedEntityRef) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Release every Macro computer the team has, through the computers'
+    /// own lifecycle (billing item removal, destroy, harness revocation), and
+    /// drop its purchases in flight, before its subscription and row go.
+    /// Safe to repeat.
+    fn release_computers(
+        &self,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The cleanup of a team service that was never given one.
@@ -114,6 +123,10 @@ impl OwnedEntityCleanup for UnwiredOwnedEntityCleanup {
     }
 
     async fn purge(&self, _entity: &OwnedEntityRef) -> Result<(), Self::Err> {
+        Err(OwnedEntityCleanupUnwired)
+    }
+
+    async fn release_computers(&self, _team_id: Uuid) -> Result<(), Self::Err> {
         Err(OwnedEntityCleanupUnwired)
     }
 }
@@ -199,6 +212,13 @@ pub enum OwnedEntityCleanupError {
         remaining: usize,
         /// How many discovery passes ran.
         passes: u8,
+    },
+    /// The team's computers could not be released.
+    #[error("unable to release the team's computers")]
+    ReleaseComputers {
+        /// The port's error.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
     },
     /// A listing for one owner returned an entity recorded under another.
     #[error("listing the entities owned by {requested} returned {id}, which it does not own")]

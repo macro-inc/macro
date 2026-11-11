@@ -11,7 +11,10 @@ use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
-    model::{ItemProration, ItemQuantityChange, PriceInfo, SubscriptionTerms},
+    model::{
+        ItemChangeSettlement, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
+        SubscriptionItemView, SubscriptionTerms,
+    },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
@@ -87,6 +90,82 @@ where
         Ok(self
             .customer_repository
             .change_item_quantities(&subscription, changes, proration, idempotency_key)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn create_computer_price(
+        &self,
+        base: &stripe::PriceId,
+        computer_id: &str,
+        idempotency_key: &str,
+    ) -> Result<stripe::PriceId, TeamSubscriptionItemsError> {
+        Ok(self
+            .customer_repository
+            .create_computer_price(base, computer_id, idempotency_key)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self, extra), fields(extra = extra.len()), err)]
+    async fn add_team_computer_item(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_price: &stripe::PriceId,
+        computer_id: &str,
+        extra: Vec<ItemQuantityChange>,
+        proration: ItemProration,
+        idempotency_key: &str,
+    ) -> Result<(), TeamSubscriptionItemsError> {
+        let _billing = self.customer_repository.lock_team_billing(team_id).await?;
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .add_computer_item(
+                &subscription,
+                computer_price,
+                computer_id,
+                extra,
+                proration,
+                idempotency_key,
+            )
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_team_subscription_item(
+        &self,
+        team_id: &uuid::Uuid,
+        item_id: &stripe::SubscriptionItemId,
+        idempotency_key: &str,
+    ) -> Result<ItemRemoval, TeamSubscriptionItemsError> {
+        let _billing = self.customer_repository.lock_team_billing(team_id).await?;
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .remove_subscription_item(&subscription, item_id, idempotency_key)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn team_subscription_items(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<Vec<SubscriptionItemView>, TeamSubscriptionItemsError> {
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .subscription_items(&subscription)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn settle_subscription_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> Result<ItemChangeSettlement, TeamSubscriptionItemsError> {
+        Ok(self
+            .customer_repository
+            .settle_item_change(idempotency_key)
             .await?)
     }
 

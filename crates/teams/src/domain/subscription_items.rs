@@ -1,7 +1,9 @@
-//! Non-seat items (Macro computers) on a team's subscription, keyed by price.
+//! Non-seat items (Macro computers) on a team's subscription: one item, at a
+//! price of its own, per computer.
 
 use crate::domain::model::{
-    CustomerError, ItemProration, ItemQuantityChange, PriceInfo, SubscriptionTerms, TeamError,
+    CustomerError, ItemChangeSettlement, ItemProration, ItemQuantityChange, ItemRemoval, PriceInfo,
+    SubscriptionItemView, SubscriptionTerms, TeamError,
 };
 
 /// Errors from changing or reading a team subscription's items.
@@ -39,6 +41,47 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         proration: ItemProration,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), TeamSubscriptionItemsError>> + Send;
+
+    /// A price of its own for one computer, copied from `base`. See
+    /// [`crate::domain::customer_repo::CustomerRepository::create_computer_price`].
+    fn create_computer_price(
+        &self,
+        base: &stripe::PriceId,
+        computer_id: &str,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<stripe::PriceId, TeamSubscriptionItemsError>> + Send;
+
+    /// Add one computer's own item plus `extra` changes in one update,
+    /// serialized with the team's seat changes.
+    fn add_team_computer_item(
+        &self,
+        team_id: &uuid::Uuid,
+        computer_price: &stripe::PriceId,
+        computer_id: &str,
+        extra: Vec<ItemQuantityChange>,
+        proration: ItemProration,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<(), TeamSubscriptionItemsError>> + Send;
+
+    /// Remove one item from the team subscription without proration.
+    fn remove_team_subscription_item(
+        &self,
+        team_id: &uuid::Uuid,
+        item_id: &stripe::SubscriptionItemId,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<ItemRemoval, TeamSubscriptionItemsError>> + Send;
+
+    /// Every item on the team subscription.
+    fn team_subscription_items(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<SubscriptionItemView>, TeamSubscriptionItemsError>> + Send;
+
+    /// End an item change whose outcome stayed unknown, for good.
+    fn settle_subscription_item_change(
+        &self,
+        idempotency_key: &str,
+    ) -> impl Future<Output = Result<ItemChangeSettlement, TeamSubscriptionItemsError>> + Send;
 
     /// The team subscription's period end, interval and currency.
     fn team_subscription_terms(
