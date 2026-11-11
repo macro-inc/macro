@@ -144,3 +144,5 @@ Preserve filtered importer state in the initial stored comparison while keeping 
 Observe checklist candidates from actual accepted/error commit arrays and derive plans only at the sealed final-output epilogue; acknowledge exact receipts only after native host output transfer succeeds.
 
 Forward the default-off `dev-probes` feature only to `lexical_loro/dev-probes`; production native profiles must reject it.
+
+Read the preview/test stored comparison from the current surface core and configured sync policy; do not substitute ordinary JSON queries or a pending read scope.

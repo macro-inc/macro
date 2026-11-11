@@ -8,6 +8,7 @@ mod mention_user;
 mod paste_intent;
 mod search;
 mod session_bop;
+mod stored_comparison;
 #[cfg(test)]
 mod table_selection_actions;
 use super::*;

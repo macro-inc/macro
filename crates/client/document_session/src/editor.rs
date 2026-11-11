@@ -182,6 +182,14 @@ impl EditorSurface {
     pub fn state(&self) -> &EditorState {
         self.core.state()
     }
+    /// Preview/test-only stored comparison for this surface's current state and policy.
+    #[cfg(feature = "dev-probes")]
+    pub fn stored_comparison(&self) -> Result<SerializedEditorState, SessionError> {
+        Ok(lexical_loro::stored_comparison(
+            self.core.state(),
+            self.config.policy,
+        )?)
+    }
     /// Immutable registered type metadata for bulk host queries.
     pub fn registry(&self) -> &std::sync::Arc<Registry> {
         self.core.editor().registry()

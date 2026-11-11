@@ -75,6 +75,15 @@ pub struct LocalProjected {
 }
 mod comparison;
 pub use comparison::ComparisonKind;
+/// Preview/test-only stored comparison using the same policy path as strict projection checks.
+#[cfg(feature = "dev-probes")]
+pub fn stored_comparison(
+    state: &EditorState,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedEditorState> {
+    comparison::model(state, policy)
+}
+
 mod policy;
 pub use policy::*;
 mod index;

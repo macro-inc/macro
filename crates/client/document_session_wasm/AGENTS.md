@@ -304,3 +304,5 @@ Replace checklist packet receipt metadata at successful direct-buffer encode bef
 Use a registered render-signature test decorator for observer failure controls so actual model mutations produce the observation under test.
 
 Keep the default-off `dev-probes` feature restricted to preview/test builds; forward it to `document_session/dev-probes` and reject it in production native feature graphs.
+
+Reserve query kind 10 for the `dev-probes` stored comparison text reply with key 0, empty text and flags 0; ordinary builds reject it through the existing unknown-kind arm.

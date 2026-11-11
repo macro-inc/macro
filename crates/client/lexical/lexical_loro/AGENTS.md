@@ -75,3 +75,5 @@ Resolve transformed undo cursors through the current text/children container own
 For opt-in root search text, bind authored expectations to the actual stored container after successful local projection. Derive from the last direct root element for each durable ID, apply to matching serialized root children, and retire on actual remote field import or container retirement. History and fixup consume existing storage without deriving.
 
 Keep `dev-probes` default-off and restricted to preview/test inspection; production native feature graphs must reject it.
+
+Use feature-gated `stored_comparison` only for the exact projection comparison policy; it forwards `comparison::model` and is neither ordinary public export nor raw Loro JSON.

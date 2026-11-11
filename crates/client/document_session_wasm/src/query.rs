@@ -309,6 +309,13 @@ pub(crate) fn query(
                 .ok_or(BoundaryError::Invalid("application query"))?;
             reply.text = serde_json::to_string(&value)?;
         }
+        #[cfg(feature = "dev-probes")]
+        10 => {
+            if msg.key != 0 || !msg.text.is_empty() || msg.flags != 0 {
+                return Err(BoundaryError::Invalid("stored comparison query fields"));
+            }
+            reply.text = serde_json::to_string(&surface.stored_comparison()?)?;
+        }
         _ => return Err(BoundaryError::Invalid("query kind")),
     }
     Ok(reply)
