@@ -66,14 +66,33 @@ pub enum ConnectAppTarget {
     Harness,
 }
 /// Diff text operation.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum DiffStatus {
     /// Inserted text.
     #[default]
     Insert,
     /// Deleted text.
     Delete,
+    /// Any other stored string, which Source keeps verbatim and renders as `diff-<value>`.
+    Unknown(String),
+}
+impl Serialize for DiffStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(match self {
+            Self::Insert => "insert",
+            Self::Delete => "delete",
+            Self::Unknown(value) => value,
+        })
+    }
+}
+impl<'de> Deserialize<'de> for DiffStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match String::deserialize(deserializer)?.as_str() {
+            "insert" => Self::Insert,
+            "delete" => Self::Delete,
+            other => Self::Unknown(other.to_owned()),
+        })
+    }
 }
 /// Owner of a tag option.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

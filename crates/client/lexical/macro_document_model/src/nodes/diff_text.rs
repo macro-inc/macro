@@ -36,3 +36,22 @@ impl TextNode for DiffTextNode {
     }
 }
 impl SearchText for DiffTextNode {}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn status_outside_the_typed_pair_round_trips_like_source() -> crate::Result<()> {
+        // Source stores the raw string and renders `diff-<status>`; it never refuses it.
+        let input: SerializedNode = serde_json::from_str(
+            r#"{"type":"diff-text","version":1,"text":"x","diffStatus":"inserted","author":"probe-user"}"#,
+        )?;
+        let node = DiffTextNode::import_json(&input)?;
+        assert_eq!(
+            serde_json::to_string(&node)?,
+            r#"{"diffStatus":"inserted","author":"probe-user"}"#
+        );
+        Ok(())
+    }
+}
