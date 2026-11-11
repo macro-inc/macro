@@ -48,6 +48,12 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
   email: 'viewer@example.com',
   permissions: [],
 });
+interface KeyAdmission {
+  key: string;
+  cached: string;
+  submitted: string;
+}
+
 interface Capture {
   model: string;
   dom: string;
@@ -59,6 +65,7 @@ declare global {
     imageProofClose?: () => Promise<void>;
     imageProofFixture?: {
       snapshot(): Capture;
+      keyAdmissions(): readonly KeyAdmission[];
       setUrl(url: string, rerender: boolean): Promise<void>;
       close(): Promise<void>;
     };
@@ -106,6 +113,7 @@ function Fixture() {
   onMount(async () => {
     if (!root) throw new Error('Missing Image proof root');
     const element = root;
+    const keyAdmissions: KeyAdmission[] = [];
     let model: () => string;
     let setUrl: (url: string, rerender: boolean) => Promise<void>;
     if (engine === 'native') {
@@ -157,6 +165,18 @@ function Fixture() {
       if (element.querySelector('[data-lexical-decorator]'))
         throw new Error('Observed native decorator before import');
       surface.port.setState(window.imageProofInput);
+      const keyDown = surface.port.keyDown.bind(surface.port);
+      surface.port.keyDown = (...args) => {
+        const [, , , key, selection] = args;
+        if (key === 'Backspace' || key === 'Delete') {
+          keyAdmissions.push({
+            key,
+            cached: surface.view.selection().selection.kind,
+            submitted: selection.kind,
+          });
+        }
+        return keyDown(...args);
+      };
       model = () => surface.executor.session.serializedState();
       setUrl = async (url, rerender) => {
         const image = [...surface.view.mirror.values()].find(
@@ -229,6 +249,7 @@ function Fixture() {
       };
     }
     window.imageProofFixture = {
+      keyAdmissions: () => keyAdmissions,
       setUrl,
       snapshot() {
         return {

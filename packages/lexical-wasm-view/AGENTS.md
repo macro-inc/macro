@@ -68,6 +68,8 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - Drain exact failure-ordinal output and I/O before rethrowing the original callback value; detach immediately on callback close, retain current snapshot functions through the enclosing native return, and defer ordinary cleanup to its post-call fence.
 - Await `SessionPort.inputSettled` only outside native dispatcher callbacks; distinguish completed-unhandled, opaque error and closed cancellation, preserve synchronous admission/outer errors, and use only synchronous issued operations inside callbacks.
 
+Keep the model NodeSelection when submitting unmodified Backspace or Delete. The DOM range cannot represent it.
+
 ## Checks
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.

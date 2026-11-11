@@ -173,3 +173,80 @@ test('native image selection, cached setters and removal match Source', async ({
     }
   }
 });
+
+for (const key of ['Backspace', 'Delete']) {
+  test(`native ${key} deletes the selected decorator like Source`, async ({
+    context,
+  }, info) => {
+    await routeFixtures(context);
+    const factory = await context.newPage();
+    const source = await context.newPage();
+    const native = await context.newPage();
+    const pages = [factory, source, native];
+    const proofs = pages.map(watchCompiledSourceDeps);
+    const errors: string[] = [];
+    for (const page of pages)
+      page.on('pageerror', (error) => errors.push(error.message));
+    const records = [];
+    let cleanup: PromiseSettledResult<void>[] = [];
+    try {
+      await factory.goto(`${path}?engine=factory`);
+      await expect(
+        factory.getByRole('textbox', { name: 'Image proof' }).getByRole('img')
+      ).toBeVisible();
+      const input = (await capture(factory)).model;
+      for (const [engine, page] of [
+        ['lexical', source],
+        ['native', native],
+      ] as const) {
+        await page.addInitScript((model) => {
+          window.imageProofInput = model;
+        }, input);
+        await page.bringToFront();
+        await page.goto(`${path}?engine=${engine}`);
+        const root = page.getByRole('textbox', { name: 'Image proof' });
+        const image = root.getByRole('img');
+        await expect(image).toBeVisible();
+        await image.click();
+        await expect(root.locator('.ring-3')).toHaveCount(1);
+        await expect(root).toBeFocused();
+        await page.keyboard.press(key);
+        const after = await capture(page);
+        const submitted = await page.evaluate(() =>
+          window.imageProofFixture?.keyAdmissions()
+        );
+        records.push({ engine, after, submitted });
+        await expect.soft(image).toHaveCount(0);
+      }
+      const sourceRecord = records.find((row) => row.engine === 'lexical');
+      const nativeRecord = records.find((row) => row.engine === 'native');
+      expect
+        .soft(nativeRecord?.submitted)
+        .toEqual([{ key, cached: 'node', submitted: 'keep' }]);
+      expect.soft(nativeRecord?.after).toEqual(sourceRecord?.after);
+      expect(errors).toEqual([]);
+    } finally {
+      try {
+        await info.attach('decorator-keydown-raw.json', {
+          contentType: 'application/json',
+          body: JSON.stringify({
+            records,
+            errors,
+            compiledProofs: await Promise.all(proofs.map((finish) => finish())),
+          }),
+        });
+      } finally {
+        cleanup = await Promise.allSettled(
+          pages.map(async (page) => {
+            try {
+              await page.evaluate(() => window.imageProofClose?.());
+            } finally {
+              await page.close();
+            }
+          })
+        );
+      }
+    }
+    expect(cleanup.every((result) => result.status === 'fulfilled')).toBe(true);
+  });
+}

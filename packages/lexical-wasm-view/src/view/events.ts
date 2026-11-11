@@ -481,10 +481,21 @@ export function registerEvents(view: EditorView): {
     }
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
-    let selection =
-      routed === CommandCode.Undo || routed === CommandCode.Redo
-        ? readSelectionFromChange(view)
-        : readSelection(view);
+    let selection: ViewSelection;
+    if (
+      (event.key === 'Backspace' || event.key === 'Delete') &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey &&
+      view.selection().selection.kind === 'node'
+    ) {
+      selection = { kind: 'keep' };
+    } else if (routed === CommandCode.Undo || routed === CommandCode.Redo) {
+      selection = readSelectionFromChange(view);
+    } else {
+      selection = readSelection(view);
+    }
     if (/^(Alt|AltGraph|Control|Meta|Shift)$/.test(event.key)) {
       // A modifier leaves the browser caret in place. Keep a root boundary
       // already admitted as a descendant point, including between Undo and Redo.
