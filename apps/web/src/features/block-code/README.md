@@ -58,5 +58,14 @@ A block for editing code files with syntax highlighting and formatting.
   the frame, but the request, and whatever the page put in its URL, has
   already left. Programs run with the viewer's full access with no consent
   prompt (see the design doc). The plain frame runs no programs
-  and gets no policy. See the agent
+  and gets no policy.
+- A page that links `<link rel="stylesheet" href="macro:styles">` gets
+  Macro's look in either frame (`code-mode/macro-styles.ts`): the link is
+  replaced by the viewer's theme tokens (`features/theme/utils/frame-theme.ts`,
+  the list canvas artifacts share, read at the iframe so `--color-surface`
+  is its layer's), the stylesheet in `macro-stylesheet.ts`, and a listener.
+  On every frame load and app theme change the host posts `macro:theme` with
+  the new rule, so the page restyles without reloading. A plain page without
+  the link is returned exactly as stored. The stylesheet's class names are a
+  contract with stored pages: add, don't rename. See the agent
   guide's "Program blocks in HTML previews" for the authoring contract.

@@ -3228,6 +3228,18 @@ dispatches on a link outside the document) is closed, and the preview shows
 already gone out by then, carrying whatever the page put in its URL: closing
 the frame stops only what the page would do next.
 
+A page that links `<link rel="stylesheet" href="macro:styles">`, with or
+without programs, and in any HTML preview, looks like Macro: the preview
+replaces the link with the viewer's theme as Macro's own variables
+(`--color-surface`, `--color-ink`, `--color-accent`, … read where the frame
+sits, so the surface matches the pane) and a stylesheet of Macro-shaped parts
+(`.bar`, `.card`, `.list`/`.row`, pill `button`s and inputs, `.tabs`,
+`.badge`, `.metric`, `table`, `.empty`; the full list is in `publishPage`'s
+TSDoc, the source in `block-code/code-mode/macro-stylesheet.ts`). Changing
+the theme or switching light and dark restyles the page in place without
+reloading it. A page without the link is untouched. Canvas artifacts get the
+same variables.
+
 A stored page over 2 MiB isn't built: one with programs says it is too large
 to run, and a page without programs renders as it is. When the page changes
 in another tab, the next call fails with "this page changed", the preview

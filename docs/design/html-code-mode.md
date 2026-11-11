@@ -143,6 +143,16 @@ program up and get the outcome back.
   preview chrome instead of the page, and a failed run shows its message in
   a dismissible notice above the page.
 
+- **Look.** Pages opt into Macro's look with `<link rel="stylesheet"
+  href="macro:styles">`. The web host, not the build, replaces it: the
+  viewer's resolved theme tokens (Macro's own `--color-*` names, the list
+  canvas artifacts share) and a stylesheet mirroring Macro's controls,
+  inlined because the policy loads nothing; theme changes arrive as a
+  message, so the page never reloads. The host owns it because the tokens
+  are the viewer's and change at runtime, and the stylesheet then ships with
+  the app it imitates; the cost is that a stored page restyles when the
+  stylesheet changes, so its classes only grow.
+
 ## Flow
 
 ```

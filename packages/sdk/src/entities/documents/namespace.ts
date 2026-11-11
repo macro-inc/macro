@@ -194,6 +194,29 @@ export class DocumentNamespace {
    * data into the page with `textContent` or `createElement`, never
    * `innerHTML`, so a task named `<img onerror=…>` stays text.
    *
+   * Make the page look like Macro: put `<link rel="stylesheet" href="macro:styles">`
+   * first in `<head>` and build from its parts instead of inventing a palette.
+   * It brings the viewer's theme, light or dark, kept current as it changes,
+   * as Macro's own variables: `--color-surface` (the page), `--color-panel`
+   * (cards), `--color-ink`, `--color-ink-muted`, `--color-ink-subtle`,
+   * `--color-edge-muted` (borders), `--color-accent`, `--color-hover`,
+   * `--color-selected`, `--color-success`, `--color-warning`,
+   * `--color-failure`, `--color-red` … `--color-pink`,
+   * `--color-task-status-{not-started,in-progress,in-review,completed,canceled}`,
+   * `--font-sans` and `--font-mono`; and styles: `body` and headings at
+   * Macro's sizes; pill `button`s (`.primary` for the main action, `.ghost`,
+   * `.danger`, `.sm`, `.icon`), `input`, `select` and `textarea`; layout
+   * (`.page`, `.bar` for the top bar with `.actions` on the right,
+   * `.content`, `.stack`, `.cluster`, `.spread`, `.grid`, `.split`); `.card`,
+   * `.section-title`, `.list` of `.row`s (`.meta` on the right,
+   * `aria-selected`), `.tabs` of buttons with `aria-selected`, `.chip`,
+   * `.badge` (`.accent`, `.success`, `.warning`, `.failure`), `.dot`,
+   * `.status-*`, `.avatar`, `.metric` (`.label`, `.value`), `table`,
+   * `.progress`, `.empty`, `.notice`, `.skeleton`, `.toast`, and text helpers
+   * (`.muted`, `.subtle`, `.label`, `.num`, `.truncate`). Styles after the
+   * link override it; keep your own to layout and charts, and color charts
+   * from the variables so they follow the theme.
+   *
    * When you build `html` as a JavaScript template literal, the page's own
    * `${…}` and backticks must be escaped (`\${`, `` \` ``) or avoided.
    *
