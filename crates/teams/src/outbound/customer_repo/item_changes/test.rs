@@ -234,6 +234,13 @@ async fn the_next_mutation_settles_a_pending_change_instead_of_refusing(pool: sq
             .await
             .is_err()
         );
+        // Old enough that its sender can no longer be in flight.
+        sqlx::query!(
+            "UPDATE subscription_item_change SET created_at = now() - interval '10 minutes'"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
         server.reset().await;
         let mut current = sub.clone();
         if landed {
@@ -290,4 +297,37 @@ async fn settling_an_unsent_change_fences_a_later_send(pool: sqlx::PgPool) {
             .iter()
             .all(|request| request.method.as_str() != "POST")
     );
+}
+
+/// Review 2, NS3: a change sent moments ago may still be in flight at
+/// Stripe even though its sender gave up the guard (a dropped request), so it
+/// is not abandoned yet: the next mutation waits instead of settling it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_still_in_flight_is_not_settled(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let sub = subscription();
+    sqlx::query!(
+        "INSERT INTO subscription_item_change (idempotency_key, subscription_id, path, request) VALUES ('computer-add:in-flight', 'sub_team', '/subscriptions/sub_team', '{}')"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = repo(&server, pool.clone());
+
+    let result = repo
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-add:next",
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(CustomerError::ItemChangeInFlight)),
+        "{result:?}"
+    );
+    let outcome = sqlx::query_scalar!(r#"SELECT outcome::text AS "outcome!" FROM subscription_item_change WHERE idempotency_key = 'computer-add:in-flight'"#).fetch_one(&pool).await.unwrap();
+    assert_eq!(outcome, "pending");
+    assert!(server.received_requests().await.unwrap().is_empty());
 }

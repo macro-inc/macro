@@ -81,27 +81,18 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     let corrupt = ComputerId::new_from_uuid(bad_id);
     assert!(repo.apply(corrupt, Event::ReleaseNow, now()).await.is_err());
     let due = now() + Duration::minutes(2);
-    let before = sqlx::query_scalar!(
-        "SELECT run_after FROM hosted_runtime_effect WHERE computer_id = $1",
-        bad_id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    // Quarantine stops fleet work, but billing item removals still run:
+    // they only stop a charge, and the item is in the effect.
     let effects = repo
         .lease_effects(EffectWorker::Billing, 10, due, due + Duration::minutes(10))
         .await
         .unwrap();
-    assert_eq!(effects.len(), 1);
-    assert_eq!(effects[0].computer_id.as_uuid(), Uuid::from_u128(101));
-    let after = sqlx::query_scalar!(
-        "SELECT run_after FROM hosted_runtime_effect WHERE computer_id = $1",
-        bad_id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(before, after);
+    let mut owners: Vec<Uuid> = effects
+        .iter()
+        .map(|effect| effect.computer_id.as_uuid())
+        .collect();
+    owners.sort();
+    assert_eq!(owners, vec![Uuid::from_u128(101), bad_id]);
 
     for id in [bad_id, Uuid::from_u128(101)] {
         let fire_at = if id == bad_id {

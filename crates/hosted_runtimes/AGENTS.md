@@ -213,7 +213,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Items a computer is not billed on (duplicates, or items naming a canceled,
   released or unknown computer; never one naming a reservation) are removed;
   every computer is tried and the first error returned, so the webhook fails
-  and Stripe redelivers. A purchase whose charge succeeded but whose
+  and Stripe redelivers. An undo or restore whose charge applied but whose
+  event never did (a dropped request) is finished by reconcile from its item
+  (`readd_charge`); a pending one is left for a later snapshot. The billing
+  worker handles each effect on its own: a failure to read the computer is
+  retried with backoff and counts toward the abandonment alert, and a
+  quarantined computer's removal still runs. A purchase whose charge succeeded but whose
   conversion failed answers `Confirming`, never an error.
   Items naming no known computer are logged, never mapped.
 - **Team deletion**: `TeamComputerRelease::release_team` deletes the team's
@@ -231,10 +236,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   authentication_service wires `MacroStaffCompPolicy`. Team purchase calls
   `purchase_for_team(PurchaseRequest)` and overwrites billing from policy; its
   JSON body only accepts `purchaseKey`, `size` and `name`. Team quotes and
-  offers also use policy (`quote_for_team`). Internal-key-only
-  `POST /internal/computers` requires explicit `billing: { "kind": "stripe" }`
-  or `{ "kind": "comped", "reason": "..." }` and a `purchaseKey`. Comped
-  purchases reject nonempty `extraItems` (`CompedExtraItems`), never call the
+  offers also use policy (`quote_for_team`). Computers are for paying teams:
+  `Billing::require_paid_plan` refuses a trialing subscription with
+  `BillingError::TeamOnTrial` (403, body `code: "team_on_trial"`) before a
+  Stripe quote, offer, purchase reservation, undo or restore; comped
+  purchases skip it. There is no internal purchase
+  route: funding always comes from `CompPolicy`. Comped purchases reject nonempty `extraItems` (`CompedExtraItems`), never call the
   Billing port, and convert at once with `Billing::Comped{reason}`. A comped
   cancel stops at once and starts retention; restore comps it again. A comped
   quote reads the Stripe quote and sets amount to zero.
@@ -382,7 +389,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   host and a static field-and-rule reason; never include parser errors or stored
   values in quarantine logs. Keep their ids in expected instances and treat
   quarantine as present in orphan checks. Only validated computers receive
-  lifecycle events or have effects/timers selected; repair resumes pending work.
+  lifecycle events or have fleet effects/timers selected (billing item removals
+  still run, since they only stop a charge); repair resumes pending work.
   Retain raw purchase metadata for display only; quarantine reports null payment.
 
 - DockerFleet enforces recorded vCPU and memory limits through cgroups without

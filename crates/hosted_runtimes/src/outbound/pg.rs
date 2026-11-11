@@ -1050,7 +1050,20 @@ impl ComputerRepo for PgComputerRepo {
         lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, PgComputerError> {
         let worker = OutboxWorker::try_from(worker)?;
-        let healthy_ids = self.healthy_effect_owners(worker, now).await?;
+        // Quarantine stops fleet work, but a billing item removal still runs:
+        // it only ever stops a charge, and its item is in the effect.
+        let healthy_ids = match worker {
+            OutboxWorker::Billing => {
+                sqlx::query_scalar!(
+                    "SELECT DISTINCT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2",
+                    worker as OutboxWorker,
+                    now,
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            OutboxWorker::Fleet => self.healthy_effect_owners(worker, now).await?,
+        };
         // Only each computer's oldest pending effect is due: a computer's
         // effects run in the order its transitions produced them.
         let rows = sqlx::query!(

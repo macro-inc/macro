@@ -44,6 +44,17 @@ impl Readd {
     }
 }
 
+/// The add key of one undo or restore attempt: stable for the cancellation
+/// (the billing state it re-adds from), so a retry of the same intent replays
+/// the same change.
+fn readd_key(computer: &crate::domain::models::Computer, purpose: &str, attempt: u32) -> String {
+    format!(
+        "{purpose}:{}:{}:{attempt}",
+        computer.id,
+        computer.state.billing_changed_at.timestamp_micros()
+    )
+}
+
 /// One removal per stray item and snapshot: a later snapshot tries again.
 fn stray_key(item: &SubscriptionItemId, observed_at: DateTime<Utc>) -> String {
     format!("computer-stray:{item}:{}", observed_at.timestamp_micros())
@@ -183,6 +194,9 @@ impl<
                 return Err(Rejected::InvalidRestore.into());
             }
             (Funding::Stripe { price_id }, intent) => {
+                // Even reusing an item still on the subscription keeps a
+                // computer, which trialing teams may not.
+                self.billing.require_paid_plan(team_id).await?;
                 let charge = match intent {
                     Readd::UndoCancel => ItemCharge::NoProration,
                     Readd::Restore => ItemCharge::Prorated,
@@ -265,13 +279,8 @@ impl<
         {
             return Ok(item);
         }
-        let intent = format!(
-            "{purpose}:{}:{}",
-            computer.id,
-            computer.state.billing_changed_at.timestamp_micros()
-        );
         for attempt in 0..MAX_READD_ATTEMPTS {
-            let key = format!("{intent}:{attempt}");
+            let key = readd_key(computer, purpose, attempt);
             match self.billing.charge_status(&key).await? {
                 // Spent: refused, given up, or applied and since removed.
                 Some(ChargeStatus::NotApplied | ChargeStatus::Applied) => continue,
@@ -438,8 +447,45 @@ impl<
         if computer.state.billing_changed_at > observed_at {
             return Ok(());
         }
+        let mut strays = strays.to_vec();
+        // An undo or restore whose charge went through but whose event never
+        // applied (the request was dropped) left its item here: finish that
+        // request instead of stripping what the team just paid for.
+        if computer.subscription_item().is_none()
+            && let Some(item) = strays.first().copied()
+        {
+            match self.readd_charge(computer).await? {
+                Some((_, ChargeStatus::Pending)) => {
+                    // Its outcome isn't known yet; a later snapshot decides.
+                    return Ok(());
+                }
+                Some((intent, ChargeStatus::Applied)) => {
+                    let event = match intent {
+                        Readd::UndoCancel => Event::UndoCancel {
+                            subscription_item: item.clone(),
+                        },
+                        Readd::Restore => Event::Restore {
+                            billing: ComputerBilling::Active {
+                                subscription_item: item.clone(),
+                            },
+                        },
+                    };
+                    if let Some(Applied::Changed(_)) = self
+                        .repo
+                        .apply(computer_id, event, self.clock.now())
+                        .await
+                        .map_err(internal)?
+                    {
+                        tracing::info!(computer_id = %computer_id, subscription_item = %item,
+                            ?intent, "finished a paid undo or restore from its subscription item");
+                        strays.retain(|stray| *stray != item);
+                    }
+                }
+                Some((_, ChargeStatus::NotApplied)) | None => {}
+            }
+        }
         for item in strays {
-            if computer.subscription_item() == Some(*item) {
+            if computer.subscription_item() == Some(item) {
                 continue;
             }
             tracing::warn!(computer_id = %computer_id, subscription_item = %item,
@@ -449,6 +495,28 @@ impl<
                 .await?;
         }
         Ok(())
+    }
+
+    /// The current cancellation's latest undo or restore charge that may have
+    /// reached the subscription, and where it stands.
+    async fn readd_charge(
+        &self,
+        computer: &crate::domain::models::Computer,
+    ) -> Result<Option<(Readd, ChargeStatus)>, ComputerError> {
+        for intent in [Readd::UndoCancel, Readd::Restore] {
+            for attempt in 0..MAX_READD_ATTEMPTS {
+                match self
+                    .billing
+                    .charge_status(&readd_key(computer, intent.purpose(), attempt))
+                    .await?
+                {
+                    None => break,
+                    Some(ChargeStatus::NotApplied) => {}
+                    Some(status) => return Ok(Some((intent, status))),
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Carry out due billing effects and settle purchases being confirmed.
@@ -467,7 +535,12 @@ impl<
             .map_err(internal)?;
         let count = effects.len();
         for pending in effects {
-            self.run_billing_effect(pending, now).await?;
+            let effect_id = pending.id;
+            // One effect's storage failure never stops the batch or the
+            // purchase confirmation below; its lease expires and it runs again.
+            if let Err(error) = self.run_billing_effect(pending, now).await {
+                tracing::error!(effect_id, error = ?error, "billing effect could not be recorded");
+            }
         }
         Ok(count + self.confirm_reservations().await?)
     }
@@ -479,64 +552,10 @@ impl<
     ) -> Result<(), ComputerError> {
         use tracing::Instrument;
         let span = tracing::info_span!("computer.billing.effect", computer_id = %pending.computer_id, effect_id = pending.id, attempts = i64::from(pending.attempts), otel.status_code = tracing::field::Empty);
-        // Decide against the billing as it is now: an undo or restore may
-        // have taken this item back since the removal was queued.
-        let _billing = self
-            .repo
-            .lock_billing(pending.computer_id)
-            .await
-            .map_err(internal)?;
-        let computer = self
-            .repo
-            .get(pending.computer_id)
-            .await
-            .map_err(internal)?
-            .ok_or(ComputerError::NotFound)?
-            .into_healthy()
-            .map_err(|_| ComputerError::NeedsAttention)?;
-        super::super::telemetry::adopt(&span, &computer.state);
         async {
-            let outcome = match &pending.effect {
-                Effect::RemoveBillingItem { subscription_item }
-                    if computer.subscription_item() == Some(subscription_item) =>
-                {
-                    tracing::info!(subscription_item = %subscription_item,
-                        "the computer is billed on this item again; not removing it");
-                    Ok(())
-                }
-                Effect::RemoveBillingItem { subscription_item } => {
-                    // A key per attempt: the subscription guard settles an
-                    // earlier attempt left pending, and an item already gone
-                    // counts as removed, so a retry never removes twice.
-                    match self
-                        .billing
-                        .remove_computer(
-                            computer.team_id,
-                            subscription_item,
-                            &format!("computer-remove:{}:{}", pending.id, pending.attempts),
-                        )
-                        .await
-                    {
-                        // A subscription that is gone took the item with it.
-                        Ok(()) | Err(BillingError::NoSubscription) => Ok(()),
-                        Err(error) => Err(error),
-                    }
-                }
-                Effect::Create { .. }
-                | Effect::Start { .. }
-                | Effect::Stop { .. }
-                | Effect::Restart { .. }
-                | Effect::RestartMacrod { .. }
-                | Effect::Destroy { .. }
-                | Effect::RevokeHarness
-                | Effect::ScheduleTimer { .. }
-                | Effect::PageOperator { .. } => {
-                    return Err(ComputerError::Internal(rootcause::report!(
-                        "a fleet effect reached the billing worker"
-                    )));
-                }
-            };
-            match outcome {
+            // Every failure, reading the computer included, is retried with
+            // backoff and counts toward the abandonment alert.
+            match self.remove_billing_item(&pending).await {
                 Ok(()) => self
                     .repo
                     .complete_effect(pending.id)
@@ -571,5 +590,53 @@ impl<
         }
         .instrument(span)
         .await
+    }
+
+    /// Remove the effect's item, deciding under the computer's billing guard
+    /// against its billing as it is now: an undo or restore may have taken
+    /// the item back since the removal was queued. A quarantined computer's
+    /// removal still runs, since the effect names the item and a removal
+    /// never bills anyone.
+    async fn remove_billing_item(&self, pending: &PendingEffect) -> Result<(), ComputerError> {
+        let Effect::RemoveBillingItem { subscription_item } = &pending.effect else {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "a fleet effect reached the billing worker"
+            )));
+        };
+        let _billing = self
+            .repo
+            .lock_billing(pending.computer_id)
+            .await
+            .map_err(internal)?;
+        let record = self
+            .repo
+            .get(pending.computer_id)
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
+        if let Some(computer) = record.healthy() {
+            super::super::telemetry::adopt(&tracing::Span::current(), &computer.state);
+            if computer.subscription_item() == Some(subscription_item) {
+                tracing::info!(subscription_item = %subscription_item,
+                    "the computer is billed on this item again; not removing it");
+                return Ok(());
+            }
+        }
+        // A key per attempt: the subscription guard settles an earlier
+        // attempt left pending, and an item already gone counts as removed,
+        // so a retry never removes twice.
+        match self
+            .billing
+            .remove_computer(
+                record.team_id(),
+                subscription_item,
+                &format!("computer-remove:{}:{}", pending.id, pending.attempts),
+            )
+            .await
+        {
+            // A subscription that is gone took the item with it.
+            Ok(()) | Err(BillingError::NoSubscription) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 }

@@ -47,7 +47,10 @@ event contract (schema, sanitization, delivery semantics).
   Replay the receipt before resolving current subscription/prices. A change
   left pending is settled by the next holder of the subscription guard (applied
   iff its provider marker landed, else `abandoned`), so it never wedges seat,
-  plan or computer changes; its own replay sends the stored endpoint and exact
+  plan or computer changes. One younger than `PENDING_SETTLE_AFTER` (5 min)
+  may still be in flight at Stripe, so the guard refuses with
+  `ItemChangeInFlight` instead of settling it. A trialing subscription never
+  gains a computer item (`SubscriptionTrialing`); its own replay sends the stored endpoint and exact
   request, including scheduled updates. Settling a key with no receipt writes
   an `abandoned` one on the team's subscription, fencing a send still on its
   way. Removing a computer's item archives its own price. Retain

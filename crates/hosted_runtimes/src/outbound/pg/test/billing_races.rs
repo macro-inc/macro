@@ -15,7 +15,7 @@ use crate::domain::models::{Purchase, PurchaseBilling, PurchaseRequest, Quote, S
 use crate::domain::ports::{
     Billing as _, BillingError, ChargeStatus, ItemCharge, StaticFleetAttachment,
 };
-use crate::domain::service::{Clock, ComputerService, TeamComputerRelease};
+use crate::domain::service::{Clock, ComputerError, ComputerService, TeamComputerRelease};
 
 /// How the next add goes wrong.
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +53,11 @@ struct Stripe {
     gate: Mutex<Option<Arc<Semaphore>>>,
     /// Signalled when an add reaches the gate.
     entered: Notify,
+    /// The team's subscription is in a trial.
+    trialing: std::sync::atomic::AtomicBool,
+    /// Stripe applies the next add, then its caller never hears back (the
+    /// request future is dropped).
+    hang_after_add: std::sync::atomic::AtomicBool,
 }
 
 impl Stripe {
@@ -149,7 +154,8 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
             self.entered.notify_one();
             gate.acquire().await.unwrap().forget();
         }
-        match self.fail_next_add.lock().unwrap().take() {
+        let fail = self.fail_next_add.lock().unwrap().take();
+        match fail {
             Some(Fail::LostAnswer { landed }) => {
                 if landed {
                     Stripe::add_item(&mut subscription, computer_id);
@@ -164,6 +170,14 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
                 subscription
                     .receipts
                     .insert(idempotency_key.to_owned(), Receipt::Applied);
+                if self
+                    .hang_after_add
+                    .swap(false, std::sync::atomic::Ordering::SeqCst)
+                {
+                    drop(subscription);
+                    self.entered.notify_one();
+                    std::future::pending::<()>().await;
+                }
                 Ok(item)
             }
         }
@@ -234,6 +248,13 @@ impl crate::domain::ports::Billing for Arc<Stripe> {
         subscription
             .receipts
             .insert(idempotency_key.to_owned(), Receipt::Applied);
+        Ok(())
+    }
+
+    async fn require_paid_plan(&self, _team_id: Uuid) -> Result<(), BillingError> {
+        if self.trialing.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(BillingError::TeamOnTrial);
+        }
         Ok(())
     }
 
@@ -534,4 +555,163 @@ async fn reconcile_removes_items_no_computer_is_billed_on(pool: PgPool) {
             subscription_item: kept
         }
     );
+}
+
+/// Wolf's rule: computers are for paying teams. A trialing team's purchase
+/// is refused before anything is reserved or charged, and so are undo and
+/// restore, even when an item is still on the subscription to reuse.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_trialing_team_cannot_buy_undo_or_restore(pool: PgPool) {
+    use std::sync::atomic::Ordering;
+    let stripe = Arc::new(Stripe::default());
+    let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let undone = buy(&service, "buy-1").await;
+    let restored = buy(&service, "buy-2").await;
+    service.cancel(TEAM, undone).await.unwrap();
+    service.cancel(TEAM, restored).await.unwrap();
+    service.run_billing_effects().await.unwrap();
+    clock.advance(Duration::days(21));
+    changed(&repo, restored, Event::BillingEnds, clock.now()).await;
+    // Undo would reuse this item; the trial still refuses it.
+    let leftover = {
+        let mut subscription = stripe.subscription.lock().await;
+        Stripe::add_item(&mut subscription, undone)
+    };
+    clock.advance(Duration::days(-20));
+    let keys_before = stripe.keys().len();
+    stripe.trialing.store(true, Ordering::SeqCst);
+
+    let purchase = service.purchase(purchase_request("buy-3")).await;
+    assert!(
+        matches!(
+            purchase,
+            Err(ComputerError::Billing(BillingError::TeamOnTrial))
+        ),
+        "{purchase:?}"
+    );
+    assert!(repo.team_reservations(TEAM).await.unwrap().is_empty());
+    assert!(matches!(
+        service.undo_cancel(TEAM, undone).await,
+        Err(ComputerError::Billing(BillingError::TeamOnTrial))
+    ));
+    clock.advance(Duration::days(20));
+    assert!(matches!(
+        service.restore(TEAM, restored).await,
+        Err(ComputerError::Billing(BillingError::TeamOnTrial))
+    ));
+
+    assert_eq!(
+        stripe.keys().len(),
+        keys_before,
+        "nothing was sent to Stripe"
+    );
+    assert_eq!(stripe.items_for(undone).await, [leftover]);
+    assert!(stripe.items_for(restored).await.is_empty());
+    assert_eq!(repo.list_for_team(TEAM).await.unwrap().len(), 2);
+    assert!(matches!(
+        billing_of(&repo, undone).await,
+        Billing::EndsAt { .. }
+    ));
+    assert!(matches!(
+        billing_of(&repo, restored).await,
+        Billing::EndsAt { .. }
+    ));
+}
+
+/// Review 2, NS2: a computer whose row no longer decodes (quarantined) still
+/// has its queued item removal run, and it never stops the rest of the pass.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_quarantined_computer_neither_keeps_billing_nor_blocks_the_pass(pool: PgPool) {
+    let stripe = Arc::new(Stripe::default());
+    let (service, repo, _clock) = service(pool.clone(), stripe.clone()).await;
+    let quarantined = buy(&service, "buy-1").await;
+    let healthy = buy(&service, "buy-2").await;
+    // The quarantined computer's removal is queued first.
+    service.cancel(TEAM, quarantined).await.unwrap();
+    service.cancel(TEAM, healthy).await.unwrap();
+    sqlx::query!(
+        "UPDATE hosted_runtime SET state = '{}'::jsonb WHERE id = $1",
+        quarantined.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(
+        repo.get(quarantined)
+            .await
+            .unwrap()
+            .unwrap()
+            .healthy()
+            .is_none()
+    );
+
+    service.run_billing_effects().await.unwrap();
+
+    assert!(stripe.items_for(quarantined).await.is_empty());
+    assert!(stripe.items_for(healthy).await.is_empty());
+}
+
+/// Review 2, NS1: a Restore whose charge went through but whose request was
+/// dropped before the event applied. The webhook finishes the restore from
+/// the paid item instead of stripping it, so a retry never charges again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_dropped_restore_is_finished_by_reconcile_not_charged_twice(pool: PgPool) {
+    let stripe = Arc::new(Stripe::default());
+    let (service, repo, clock) = service(pool, stripe.clone()).await;
+    let id = buy(&service, "buy-1").await;
+    service.cancel(TEAM, id).await.unwrap();
+    service.run_billing_effects().await.unwrap();
+    clock.advance(Duration::days(21));
+    changed(&repo, id, Event::BillingEnds, clock.now()).await;
+
+    stripe
+        .hang_after_add
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let service = Arc::new(service);
+    let restore = tokio::spawn({
+        let service = service.clone();
+        async move { service.restore(TEAM, id).await }
+    });
+    stripe.entered.notified().await;
+    restore.abort();
+    let _ = restore.await;
+    let [item] = stripe.items_for(id).await.try_into().unwrap();
+    assert!(matches!(
+        billing_of(&repo, id).await,
+        Billing::EndsAt { .. }
+    ));
+
+    clock.advance(Duration::seconds(1));
+    let observed = {
+        let subscription = stripe.subscription.lock().await;
+        crate::domain::service::SubscriptionObserved {
+            status: crate::domain::service::SubscriptionStatus::Active,
+            items: subscription
+                .items
+                .iter()
+                .map(|(item, id)| crate::domain::service::ObservedItem {
+                    subscription_item: item.clone(),
+                    computer_id: Some(*id),
+                })
+                .collect(),
+            current_period_end: now() + Duration::days(20),
+            observed_at: clock.now(),
+        }
+    };
+    service.observe_subscription(TEAM, observed).await.unwrap();
+
+    assert_eq!(stripe.items_for(id).await, std::slice::from_ref(&item));
+    assert_eq!(
+        billing_of(&repo, id).await,
+        Billing::Active {
+            subscription_item: item
+        }
+    );
+    assert!(service.restore(TEAM, id).await.is_err(), "already restored");
+    let restores = stripe
+        .keys()
+        .into_iter()
+        .filter(|key| key.starts_with("computer-restore:"))
+        .count();
+    assert_eq!(restores, 1, "one charge for one restore");
 }

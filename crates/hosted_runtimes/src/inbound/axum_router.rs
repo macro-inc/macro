@@ -161,10 +161,6 @@ where
 {
     Router::new()
         .route(
-            "/computers",
-            post(internal_purchase::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
-        )
-        .route(
             "/computers/quote",
             get(internal_quote::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
         )
@@ -704,72 +700,6 @@ pub async fn notify_me<
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Body of an internal purchase.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct InternalPurchaseBody {
-    /// Purchase funding or billing state.
-    pub billing: PurchaseBilling,
-    /// The caller's key for this purchase, sent again on retry.
-    #[schema(value_type = String)]
-    pub purchase_key: PurchaseKey,
-    /// Team that owns the computer.
-    pub team_id: Uuid,
-    /// The team admin or owner the caller authorized.
-    pub created_by: String,
-    /// Purchased catalog size.
-    pub size: ComputerSize,
-    /// Display name.
-    pub name: Option<String>,
-    /// Joined into the same subscription update, e.g. an agent seat.
-    #[serde(default)]
-    pub extra_items: Vec<SubscriptionItem>,
-}
-
-/// Buy a computer for a team; one subscription update covers the computer
-/// and `extraItems`.
-#[utoipa::path(
-    post,
-    path = "/internal/computers",
-    operation_id = "internal_purchase_computer",
-    request_body = InternalPurchaseBody,
-    responses(
-        (status = 200, body = Purchased),
-        (status = 202, body = Purchased),
-        (status = 503, body = ErrorResponse),
-    ),
-)]
-#[tracing::instrument(skip_all, fields(team_id = %body.team_id), err)]
-pub async fn internal_purchase<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
->(
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
-    Json(body): Json<InternalPurchaseBody>,
-) -> Result<Purchased, ComputersHttpError> {
-    let purchase = state
-        .service
-        .purchase(PurchaseRequest {
-            billing: body.billing,
-            purchase_key: body.purchase_key,
-            team_id: body.team_id,
-            created_by: MacroUserIdStr::try_from(body.created_by).map_err(|error| {
-                ComputersHttpError(ComputerError::BadRequest(error.to_string()))
-            })?,
-            size: body.size,
-            name: body.name,
-            extra_items: body.extra_items,
-        })
-        .await?;
-    Ok(purchase.into())
-}
-
 /// Query naming a team and size.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
@@ -884,6 +814,7 @@ impl IntoResponse for ComputersHttpError {
             | ComputerError::Billing(BillingError::IntervalNotSold(_)) => {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
+            ComputerError::Billing(BillingError::TeamOnTrial) => StatusCode::FORBIDDEN,
             ComputerError::Billing(BillingError::Provider(_)) => StatusCode::BAD_GATEWAY,
             ComputerError::Internal(report) => {
                 tracing::error!(error = ?report, "computer request failed");
@@ -894,14 +825,38 @@ impl IntoResponse for ComputersHttpError {
             ComputerError::Internal(_) => "internal error".to_owned(),
             other => other.to_string(),
         };
+        let code = match &self.0 {
+            ComputerError::Billing(BillingError::TeamOnTrial) => {
+                Some(ComputersErrorCode::TeamOnTrial)
+            }
+            _ => None,
+        };
         (
             status,
-            Json(ErrorResponse {
+            Json(ComputersErrorBody {
                 message: message.into(),
+                code,
             }),
         )
             .into_response()
     }
+}
+
+/// [`ErrorResponse`] plus a stable code for errors the web app shows its
+/// own way rather than as a message.
+#[derive(serde::Serialize)]
+struct ComputersErrorBody {
+    message: std::borrow::Cow<'static, str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    code: Option<ComputersErrorCode>,
+}
+
+/// Machine-readable computer error codes.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ComputersErrorCode {
+    /// The team's subscription is trialing; computers are for paying teams.
+    TeamOnTrial,
 }
 
 #[cfg(test)]
