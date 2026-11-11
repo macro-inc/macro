@@ -12,11 +12,17 @@ the internal producer must not subsequently mutate or reuse those arrays. The
 queue does not clone opaque values or repeatedly encode every individual write.
 
 The backend supplies the actual session transport, clocks and acknowledgement
-consumer. It enqueues constructor/field operations and calls `send(false, leases)`
-at semantic barriers and the end of each public update. Microtask or discrete
-admission uses `send(true, leases)`. Both requests use owned encoded bytes because
+consumer. It enqueues constructor/field operations and calls
+`send(CompatBatchPhase.Operations, leases)` at semantic barriers, without running
+normalization or typing policy. After the entire public update body returns it
+uses `UpdateFlush`; microtask or discrete admission uses `Admission`. Callback
+batches use only `Operations` in their existing scope. Every request uses owned encoded bytes because
 the Bebop writer can be reused by a nested host callback. The scheduler decides
 when to call each phase; this class does not combine normalization and admission.
+Unknown phases reject before transport. Only Admission may publish or retire;
+the driver never infers a phase from operation content or an empty queue. A
+native Enter proxy occupies the original listener's exact registration slot,
+so its operation cannot normalize before later listeners have run.
 
 The consumer applies every acknowledged delta and selection sidecar before
 surfacing an encoded failure. A typed failure consumes its successful prefix,

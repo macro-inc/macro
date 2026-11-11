@@ -1,5 +1,6 @@
 import {
   CompatBatchOutcome,
+  CompatBatchPhase,
   CompatBatchReply,
   CompatBatchRequest,
   CompatFailureLocation,
@@ -80,7 +81,7 @@ test('logical begin is cold; flush and admission continue one issued native scop
   expect(requests).toHaveLength(0);
   expect(batch.hasNativeScope).toBe(false);
   batch.enqueue(operation);
-  const flush = batch.send(false, leases);
+  const flush = batch.send(CompatBatchPhase.UpdateFlush, leases);
   expect(acknowledgements[0]).toBe(flush);
   expect(batch.hasNativeScope).toBe(true);
   expect(batch.hasOperations).toBe(false);
@@ -90,15 +91,39 @@ test('logical begin is cold; flush and admission continue one issued native scop
   expect(first.value.expectedVersion).toBe(6n);
   expect(first.value.begin.tags).toEqual(['typing']);
   expect(requests[0].operations).toHaveLength(1);
-  const admission = batch.send(true, leases);
+  expect(requests[0].phase).toBe(CompatBatchPhase.UpdateFlush);
+  const admission = batch.send(CompatBatchPhase.Admission, leases);
   expect(admission.published).toBe(true);
   const next = requests[1].scope.data;
   expect(next.discriminator).toBe(2);
   if (next.discriminator !== 2) throw new Error('Expected continuation');
   expect(next.value).toMatchObject({ updateId: 4, expectedEpoch: 2n });
   expect(requests[1].operations).toHaveLength(0);
+  expect(requests[1].phase).toBe(CompatBatchPhase.Admission);
   batch.retire();
   expect(batch.hasNativeScope).toBe(false);
+});
+
+test('semantic barriers have an explicit operations phase and unknown phases do not cross', () => {
+  const requests: ReturnType<typeof CompatBatchRequest.decode>[] = [];
+  const batch = new NativeBatch({
+    call(bytes) {
+      requests.push(CompatBatchRequest.decode(bytes));
+      return receipt();
+    },
+    now: () => 10,
+    wall: () => 20,
+    acknowledge: () => {},
+  });
+  batch.begin(6n, begin);
+  expect(() => batch.send(CompatBatchPhase.Unknown, leases)).toThrow(
+    'explicit execution phase'
+  );
+  expect(requests).toHaveLength(0);
+  batch.send(CompatBatchPhase.Operations, leases);
+  expect(requests[0].phase).toBe(CompatBatchPhase.Operations);
+  expect(requests[0].operations).toHaveLength(0);
+  expect(batch.hasNativeScope).toBe(true);
 });
 
 test('typed partial failure acknowledges effects and never retries its skipped suffix', () => {
@@ -126,11 +151,11 @@ test('typed partial failure acknowledges effects and never retries its skipped s
   batch.enqueue(operation);
   batch.enqueue(operation);
   batch.enqueue(operation);
-  const failed = batch.send(false, leases);
+  const failed = batch.send(CompatBatchPhase.Operations, leases);
   expect(failed.outcome.data.discriminator).toBe(2);
   expect(acknowledged).toBe(true);
   response = receipt();
-  batch.send(false, leases);
+  batch.send(CompatBatchPhase.Operations, leases);
   expect(request?.operations).toHaveLength(0);
 });
 
@@ -148,12 +173,34 @@ test('invalid admission during flush cannot be retried before native discard', (
     },
   });
   batch.begin(6n, begin);
-  expect(() => batch.send(false, leases)).toThrow('cannot admit');
-  expect(() => batch.send(false, leases)).toThrow('Discard');
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    'cannot admit'
+  );
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    'Discard'
+  );
   expect(calls).toBe(1);
   batch.retire();
   batch.begin(6n, begin);
   expect(batch.hasNativeScope).toBe(false);
+});
+
+test('operations and update flush cannot retire a scope as a no-op', () => {
+  for (const phase of [
+    CompatBatchPhase.Operations,
+    CompatBatchPhase.UpdateFlush,
+  ]) {
+    const batch = new NativeBatch({
+      call: () => receipt({ noop: true, version: 6n }),
+      now: () => 0,
+      wall: () => 0,
+      acknowledge() {
+        throw new Error('Invalid retirement must not be acknowledged');
+      },
+    });
+    batch.begin(6n, begin);
+    expect(() => batch.send(phase, leases)).toThrow('cannot admit or retire');
+  }
 });
 
 test('malformed failure prefix rejects before applying any reply', () => {
@@ -175,7 +222,9 @@ test('malformed failure prefix rejects before applying any reply', () => {
   });
   batch.begin(6n, begin);
   batch.enqueue(operation);
-  expect(() => batch.send(false, leases)).toThrow('invalid prefix');
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    'invalid prefix'
+  );
 });
 
 test('acknowledgement failure preserves the original error and requires discard', () => {
@@ -191,7 +240,7 @@ test('acknowledgement failure preserves the original error and requires discard'
   batch.begin(6n, begin);
   let observed: unknown;
   try {
-    batch.send(false, leases);
+    batch.send(CompatBatchPhase.Operations, leases);
   } catch (caught) {
     observed = caught;
   }
@@ -204,7 +253,9 @@ test('scoped callbacks cannot recursively enter or mutate the session batch', ()
   const batch = new NativeBatch({
     call() {
       calls++;
-      expect(() => batch.send(false, leases)).toThrow('scoped callback');
+      expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+        'scoped callback'
+      );
       expect(() => batch.enqueue(operation)).toThrow('scoped callback');
       expect(() => batch.retire()).toThrow('during its call');
       return receipt();
@@ -214,7 +265,7 @@ test('scoped callbacks cannot recursively enter or mutate the session batch', ()
     acknowledge() {},
   });
   batch.begin(6n, begin);
-  batch.send(false, leases);
+  batch.send(CompatBatchPhase.Operations, leases);
   expect(calls).toBe(1);
   expect(batch.hasOperations).toBe(false);
 });
@@ -228,11 +279,15 @@ test('terminal success requires exactly publication or explicit no-op retirement
     acknowledge() {},
   });
   batch.begin(6n, begin);
-  expect(() => batch.send(true, leases)).toThrow('both publish');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'both publish'
+  );
   batch.retire();
   batch.begin(6n, begin);
   response = receipt();
-  expect(() => batch.send(true, leases)).toThrow('did not publish or retire');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'did not publish or retire'
+  );
 });
 
 test('actual publication is acknowledged before returning a finalization failure', () => {
@@ -259,11 +314,13 @@ test('actual publication is acknowledged before returning a finalization failure
   });
   batch.begin(6n, begin);
   batch.enqueue(operation);
-  const reply = batch.send(true, leases);
+  const reply = batch.send(CompatBatchPhase.Admission, leases);
   expect(acknowledged).toBe(reply);
   expect(reply.published).toBe(true);
   expect(reply.outcome.data.discriminator).toBe(2);
-  expect(() => batch.send(true, leases)).toThrow('already retired');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'already retired'
+  );
   expect(() => batch.enqueue(operation)).toThrow('already retired');
   expect(calls).toBe(1);
   batch.retire();
@@ -288,12 +345,14 @@ test('no-op retires the issued scope onto the actual committed version including
     },
   });
   batch.begin(0n, begin);
-  batch.send(false, leases);
-  const reply = batch.send(true, leases);
+  batch.send(CompatBatchPhase.Operations, leases);
+  const reply = batch.send(CompatBatchPhase.Admission, leases);
   expect(reply.version).toBe(0n);
   expect(reply.updateId).toBe(4);
   expect(acknowledged).toBe(reply);
-  expect(() => batch.send(false, leases)).toThrow('already retired');
+  expect(() => batch.send(CompatBatchPhase.Operations, leases)).toThrow(
+    'already retired'
+  );
   batch.retire();
   batch.begin(0n, begin);
   expect(batch.hasNativeScope).toBe(false);
@@ -317,18 +376,27 @@ test('publication cannot disguise an operation failure or a different no-op grap
   });
   batch.begin(6n, begin);
   batch.enqueue(operation);
-  expect(() => batch.send(true, leases)).toThrow('Only finalization failure');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'Only finalization failure'
+  );
   batch.retire();
   batch.begin(6n, begin);
   response = receipt({ noop: true, version: 5n });
-  expect(() => batch.send(true, leases)).toThrow('committed graph version');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'committed graph version'
+  );
 });
 
 test('first normalization and publication receipts must issue a newer pending version', () => {
   for (const version of [5n, 6n]) {
-    for (const finalize of [false, true]) {
+    for (const phase of [
+      CompatBatchPhase.Operations,
+      CompatBatchPhase.UpdateFlush,
+      CompatBatchPhase.Admission,
+    ]) {
       const batch = new NativeBatch({
-        call: () => receipt({ version, published: finalize }),
+        call: () =>
+          receipt({ version, published: phase === CompatBatchPhase.Admission }),
         now: () => 0,
         wall: () => 0,
         acknowledge() {
@@ -336,9 +404,7 @@ test('first normalization and publication receipts must issue a newer pending ve
         },
       });
       batch.begin(6n, begin);
-      expect(() => batch.send(finalize, leases)).toThrow(
-        'newer pending version'
-      );
+      expect(() => batch.send(phase, leases)).toThrow('newer pending version');
     }
   }
 });
@@ -356,12 +422,14 @@ test('failed publication acknowledgement cannot be recovered by pretending to di
   batch.begin(6n, begin);
   let observed: unknown;
   try {
-    batch.send(true, leases);
+    batch.send(CompatBatchPhase.Admission, leases);
   } catch (error) {
     observed = error;
   }
   expect(observed).toBe(failure);
-  expect(() => batch.send(true, leases)).toThrow('dispose the editor');
+  expect(() => batch.send(CompatBatchPhase.Admission, leases)).toThrow(
+    'dispose the editor'
+  );
   expect(() => batch.retire()).toThrow('dispose the editor');
   expect(() => batch.begin(7n, begin)).toThrow('dispose the editor');
 });

@@ -1,4 +1,5 @@
 import {
+  CompatBatchPhase,
   CompatBatchReply,
   CompatBatchRequest,
   CompatBatchScope,
@@ -70,7 +71,16 @@ export class NativeBatch {
   }
 
   /** A semantic barrier, synchronous normalization flush, or later admission. */
-  send(finalize: boolean, leases: ICompatCaptureLeases): ICompatBatchReply {
+  send(
+    phase: CompatBatchPhase,
+    leases: ICompatCaptureLeases
+  ): ICompatBatchReply {
+    if (
+      phase !== CompatBatchPhase.Operations &&
+      phase !== CompatBatchPhase.UpdateFlush &&
+      phase !== CompatBatchPhase.Admission
+    )
+      throw new Error('A native batch requires an explicit execution phase');
     const pending = this.writable();
     const acknowledged = pending.acknowledged;
     const scope = acknowledged
@@ -87,7 +97,7 @@ export class NativeBatch {
       scope,
       leases,
       operations,
-      finalize,
+      phase,
       now: this.transport.now(),
       wall: this.transport.wall(),
     }).slice();
@@ -97,7 +107,7 @@ export class NativeBatch {
       this.validate(
         reply,
         operations.length,
-        finalize,
+        phase,
         acknowledged,
         pending.expectedVersion
       );
@@ -160,12 +170,12 @@ export class NativeBatch {
   private validate(
     reply: ICompatBatchReply,
     operations: number,
-    finalize: boolean,
+    phase: CompatBatchPhase,
     previous: PendingBatch['acknowledged'],
     expectedVersion: bigint
   ): void {
     this.validateScope(reply, previous, expectedVersion);
-    this.validateResults(reply, operations, finalize);
+    this.validateResults(reply, operations, phase);
   }
 
   private validateScope(
@@ -195,13 +205,17 @@ export class NativeBatch {
   private validateResults(
     reply: ICompatBatchReply,
     operations: number,
-    finalize: boolean
+    phase: CompatBatchPhase
   ): void {
     const outcome = reply.outcome.data;
     if (outcome.discriminator === 1) {
       if (reply.results.length !== operations)
         throw new Error('Native batch omitted operation results');
-      if (finalize && !reply.published && !reply.noop)
+      if (
+        phase === CompatBatchPhase.Admission &&
+        !reply.published &&
+        !reply.noop
+      )
         throw new Error('Native admission did not publish or retire its scope');
     } else {
       const location = outcome.value.location.data;
@@ -217,7 +231,9 @@ export class NativeBatch {
         throw new Error('Native finalization omitted prefix results');
       }
     }
-    if (reply.published && !finalize)
-      throw new Error('A normalization flush cannot admit editor state');
+    if ((reply.published || reply.noop) && phase !== CompatBatchPhase.Admission)
+      throw new Error(
+        'A non-admission batch cannot admit or retire editor state'
+      );
   }
 }

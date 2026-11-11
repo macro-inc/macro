@@ -195,9 +195,14 @@ union CompatBatchScope {
   1 -> struct CompatBatchBegin { uint64 expectedVersion; CompatBeginRequest begin; }
   2 -> struct CompatBatchContinue { uint32 updateId; uint64 expectedEpoch; }
 }
+// Semantic barriers preserve the caller's command/update phase. Only the public
+// update boundary normalizes; only admission may reconcile and publish.
+enum CompatBatchPhase : byte {
+  Unknown = 0; Operations = 1; UpdateFlush = 2; Admission = 3;
+}
 struct CompatBatchRequest {
   CompatBatchScope scope; CompatCaptureLeases leases;
-  CompatBatchOperation[] operations; bool finalize;
+  CompatBatchOperation[] operations; CompatBatchPhase phase;
   float64 now; float64 wall;
 }
 struct CompatBatchResult { ForeignCallbackValue value; CompatRecordDelta delta; }

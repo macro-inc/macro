@@ -76,6 +76,8 @@ Compact compatibility replies carry mutation epochs and sparse record deltas; re
 
 Batch creation binds the already-constructed JS instance; COW uses clone acknowledgements. Preserve successful-prefix results and partial failure deltas, report an explicit operation or finalization failure, and never admit a failed batch.
 
+Send explicit CompatBatchPhase values: Operations preserves semantic and callback ordering without normalization, UpdateFlush normalizes only after the public body, and Admission may reconcile and publish. Reject Unknown and non-Operations callback batches; never infer phases from opcodes or empty operation lists.
+
 Derive exact native prototype IDs and ancestry from the checksum-pinned class AST with generate-compatibility-prototypes.ts before generating the compatibility schema; run both generators with --check. Hosted constructors use global weak JS function tokens independently of editor-local class IDs. Keep scoped callback dispatch, constructor staging and public versus serialized export acknowledgements typed; SourceRead never admits graph writes and NativeSuper targets the exact named prototype.
 
 Apply exact host dirty sets, pinned dirtyType (0/1/2) and composition metadata before invoking callbacks; sparse render records cannot reconstruct intentional dirty-element flags or pending editor state.
