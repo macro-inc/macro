@@ -180,6 +180,10 @@ export class EditorSession {
      */
     registerViewEnter(callback: bigint, priority: number): bigint;
     /**
+     * Register Escape after existing listeners at the same native priority.
+     */
+    registerViewEscape(callback: bigint, priority: number): bigint;
+    /**
      * Retire the detached synchronous view's component observation baseline.
      * Queued output and durable session state remain owned by the executor.
      */
@@ -258,9 +262,17 @@ export class EditorSession {
      */
     unregisterViewEnter(handle: bigint): void;
     /**
+     * Remove a stable Escape registration; repeated cleanup is harmless.
+     */
+    unregisterViewEscape(handle: bigint): void;
+    /**
      * Admit a genuine programmatic Enter with an explicit null JS event payload.
      */
     viewCommandEnter(now: number, wall: number): number;
+    /**
+     * Admit a programmatic Escape with an explicit null JS event payload.
+     */
+    viewCommandEscape(now: number, wall: number): number;
     /**
      * Return this session's checked ordinary view-command owner identity.
      */
@@ -392,6 +404,11 @@ export function viewCommandScopeDispatch(scope: bigint, encoded: Uint8Array): bo
 export function viewCommandScopeEnter(scope: bigint): boolean;
 
 /**
+ * Dispatch a nested programmatic Escape with an explicit null JS payload.
+ */
+export function viewCommandScopeEscape(scope: bigint): boolean;
+
+/**
  * Export one pending node's own JSON through its actual configured hook.
  */
 export function viewCommandScopeOwnJSON(scope: bigint, key: number): string;
@@ -400,6 +417,11 @@ export function viewCommandScopeOwnJSON(scope: bigint, key: number): string;
  * Append or deduplicate an Enter listener in the actual current transaction.
  */
 export function viewCommandScopeRegisterEnter(scope: bigint, callback: bigint, priority: number): bigint;
+
+/**
+ * Append or deduplicate an Escape listener in the current transaction.
+ */
+export function viewCommandScopeRegisterEscape(scope: bigint, callback: bigint, priority: number): bigint;
 
 /**
  * Read the actual pending selection using the existing SelectionMsg encoding.
@@ -420,6 +442,11 @@ export function viewCommandScopeText(scope: bigint, key: number): string;
  * Remove an actual listener while preserving current native bucket snapshots.
  */
 export function viewCommandScopeUnregisterEnter(scope: bigint, handle: bigint): void;
+
+/**
+ * Remove an Escape registration while retaining current bucket snapshots.
+ */
+export function viewCommandScopeUnregisterEscape(scope: bigint, handle: bigint): void;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -469,6 +496,7 @@ export interface InitOutput {
     readonly editorsession_nodeText: (a: number, b: number) => [number, number];
     readonly editorsession_query: (a: number, b: number, c: number) => [number, number, number, number];
     readonly editorsession_registerViewEnter: (a: number, b: bigint, c: number) => [bigint, number, number];
+    readonly editorsession_registerViewEscape: (a: number, b: bigint, c: number) => [bigint, number, number];
     readonly editorsession_retireViewObservation: (a: number) => void;
     readonly editorsession_savedState: (a: number) => [number, number, number, number];
     readonly editorsession_selectionFromView: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
@@ -489,6 +517,7 @@ export interface InitOutput {
     readonly editorsession_typeTable: (a: number) => [number, number, number, number];
     readonly editorsession_unregisterViewEnter: (a: number, b: bigint) => [number, number];
     readonly editorsession_viewCommandEnter: (a: number, b: number, c: number) => [number, number, number];
+    readonly editorsession_viewCommandEscape: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_viewCommandOwner: (a: number) => [bigint, number, number];
     readonly installViewCommandHost: (a: any, b: any) => [number, number];
     readonly prepareMacroPaste: () => [number, number];
@@ -509,8 +538,10 @@ export interface InitOutput {
     readonly syncrouter_wakeAt: (a: number) => number;
     readonly viewCommandScopeDispatch: (a: bigint, b: number, c: number) => [number, number, number];
     readonly viewCommandScopeEnter: (a: bigint) => [number, number, number];
+    readonly viewCommandScopeEscape: (a: bigint) => [number, number, number];
     readonly viewCommandScopeOwnJSON: (a: bigint, b: number) => [number, number, number, number];
     readonly viewCommandScopeRegisterEnter: (a: bigint, b: bigint, c: number) => [bigint, number, number];
+    readonly viewCommandScopeRegisterEscape: (a: bigint, b: bigint, c: number) => [bigint, number, number];
     readonly viewCommandScopeSelection: (a: bigint) => [number, number, number, number];
     readonly viewCommandScopeSetSelection: (a: bigint, b: number, c: number) => [number, number];
     readonly viewCommandScopeText: (a: bigint, b: number) => [number, number, number, number];
@@ -519,6 +550,8 @@ export interface InitOutput {
     readonly viewcommandfailure_effectOrdinals: (a: number) => [number, number];
     readonly viewcommandfailure_invocation: (a: number) => bigint;
     readonly viewcommandfailure_scope: (a: number) => bigint;
+    readonly editorsession_unregisterViewEscape: (a: number, b: bigint) => [number, number];
+    readonly viewCommandScopeUnregisterEscape: (a: bigint, b: bigint) => [number, number];
     readonly editorsession_wakeAt: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
