@@ -2,11 +2,20 @@
 
 ## What it is
 
-Ideas: each person's feed of proactive suggestions (a prompt to run, a note
-about specific items, or a routine suggestion), written and managed by hidden
-generation sessions through `macro.ideas.*` tools, and read and acted on by the
-person. Served by the harness under the scheduler's gateway prefix
-(`/scheduled-action/ideas`); its OpenAPI is merged into the scheduler's spec.
+Suggestions: each person's feed of proactive suggestions (a prompt to run, a
+note about specific items, or a routine suggestion), written and managed by
+hidden generation sessions through `macro.suggestions.*` tools, and read and
+acted on by the person. Served by the harness under the scheduler's gateway
+prefix (`/scheduled-action/suggestions`); its OpenAPI is merged into the
+scheduler's spec.
+
+Naming: the feature was first called Ideas. Everything outside this crate's
+code says suggestion: the tables (`suggestion`, `suggestion_prompt`,
+`suggestion_entity`, `suggestion_routine` pointing at `routine_suggestion`,
+`suggestion_target`), the routes and their schemas, the SDK
+(`macro.suggestions`, `Suggestion`) and the `enable-suggestions` flag. The
+crate and its Rust types keep the `idea` name; a routine suggestion is still
+its own `routine_suggestion` row, which a `routine` suggestion points to.
 
 ## How it works
 
@@ -65,7 +74,7 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - `cargo test -p ideas` (live DB, `SQLX_OFFLINE` unset).
 - After an API change: regenerate the scheduler's spec and clients (see the
-  `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/ideas`.
+  `add-sdk-endpoint` skill); SDK methods live in `packages/sdk/src/entities/suggestions`.
 
 - Routine ideas: every drafted ("smart") routine suggestion has exactly one,
   written with it by `macro.routines.suggest` through `crates/ideas_db_utils`
@@ -108,7 +117,7 @@ person. Served by the harness under the scheduler's gateway prefix
 
 ## Gotchas
 
-- Gate every entry point on `enable-ideas` (`IDEAS_FLAG`). Event resolution
+- Gate every entry point on `enable-suggestions` (`IDEAS_FLAG`). Event resolution
   isn't gated: it only closes ideas that already exist.
 - Deleting a kind's row (for instance a routine suggestion cascading into
   `idea_routine`) deletes its idea by trigger; reads skip and log a row that

@@ -46,7 +46,7 @@ pub struct IdeaChange<'a> {
 /// limits hold under concurrent writes.
 pub async fn lock_user(conn: &mut PgConnection, user: &str) -> Result<(), sqlx::Error> {
     sqlx::query!(
-        "SELECT pg_advisory_xact_lock(hashtextextended('idea:' || $1, 0))",
+        "SELECT pg_advisory_xact_lock(hashtextextended('suggestion:' || $1, 0))",
         user,
     )
     .fetch_one(conn)
@@ -65,10 +65,10 @@ pub async fn room(
 ) -> Result<Room, sqlx::Error> {
     let counts = sqlx::query!(
         r#"SELECT
-             (SELECT count(*) FROM idea
+             (SELECT count(*) FROM suggestion
               WHERE user_id = $1 AND state IN ('proposed', 'accepted')) AS "open!",
              (SELECT count(*) FROM suggestion_change
-              WHERE generation_id = $2 AND subject = 'idea'
+              WHERE generation_id = $2 AND subject = 'suggestion'
                 AND action IN ('created', 'restored')) AS "added!""#,
         user,
         generation,
@@ -95,7 +95,7 @@ pub async fn log_change(
         r#"INSERT INTO suggestion_change
              (id, user_id, generation_id, session_id, subject, subject_id, action,
               old_value, new_value, reason, created_at)
-           VALUES ($1, $2, $3, $4, 'idea', $5, $6, $7, $8, $9, $10)"#,
+           VALUES ($1, $2, $3, $4, 'suggestion', $5, $6, $7, $8, $9, $10)"#,
         Uuid::now_v7(),
         user,
         change.generation,
@@ -150,7 +150,7 @@ pub async fn add_routine_idea(
     }
     let id = Uuid::now_v7();
     sqlx::query!(
-        r#"INSERT INTO idea
+        r#"INSERT INTO suggestion
              (id, user_id, kind, dedup_key, title, summary, importance, categories,
               session_id, created_at, updated_at, state_changed_at)
            VALUES ($1, $2, 'routine', $3, $4, $5, $6, $7, $8, $9, $9, $9)"#,
@@ -167,7 +167,7 @@ pub async fn add_routine_idea(
     .execute(&mut *conn)
     .await?;
     sqlx::query!(
-        "INSERT INTO idea_routine (idea_id, routine_suggestion_id) VALUES ($1, $2)",
+        "INSERT INTO suggestion_routine (suggestion_id, routine_suggestion_id) VALUES ($1, $2)",
         id,
         idea.suggestion,
     )
@@ -202,8 +202,8 @@ pub async fn close_routine_idea(
     at: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
     let closed = sqlx::query!(
-        r#"UPDATE idea SET state = $2, state_reason = NULL, updated_at = $3, state_changed_at = $3
-           WHERE id = (SELECT idea_id FROM idea_routine WHERE routine_suggestion_id = $1)
+        r#"UPDATE suggestion SET state = $2, state_reason = NULL, updated_at = $3, state_changed_at = $3
+           WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)
              AND state IN ('proposed', 'accepted')
            RETURNING id, user_id"#,
         suggestion,
@@ -229,8 +229,8 @@ pub async fn complete_routine_idea(
     at: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
     let done = sqlx::query_scalar!(
-        r#"UPDATE idea SET state = 'done', state_reason = NULL, updated_at = $2, state_changed_at = $2
-           WHERE id = (SELECT idea_id FROM idea_routine WHERE routine_suggestion_id = $1)
+        r#"UPDATE suggestion SET state = 'done', state_reason = NULL, updated_at = $2, state_changed_at = $2
+           WHERE id = (SELECT suggestion_id FROM suggestion_routine WHERE routine_suggestion_id = $1)
              AND user_id = $3
              AND state IN ('proposed', 'accepted')
            RETURNING id"#,
@@ -244,9 +244,9 @@ pub async fn complete_routine_idea(
         return Ok(false);
     };
     sqlx::query!(
-        r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id)
+        r#"INSERT INTO suggestion_target (suggestion_id, role, position, entity_type, entity_id)
            VALUES ($1, 'produced',
-                   (SELECT count(*) FROM idea_target WHERE idea_id = $1 AND role = 'produced')::smallint,
+                   (SELECT count(*) FROM suggestion_target WHERE suggestion_id = $1 AND role = 'produced')::smallint,
                    'scheduled_action', $2)"#,
         idea,
         routine.to_string(),

@@ -8,10 +8,10 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
     for (method, path) in [
         ("GET", "/email/threads/abc"),
         ("HEAD", "/documents/abc"),
-        ("POST", "/scheduled-action/ideas"),
-        ("PATCH", "/scheduled-action/ideas/01a1"),
+        ("POST", "/scheduled-action/suggestions"),
+        ("PATCH", "/scheduled-action/suggestions/01a1"),
         ("POST", "/dss/search"),
-        ("POST", "/ideas/01a1/retire"),
+        ("POST", "/suggestions/01a1/retire"),
         ("POST", "/scheduled-actions/suggestions"),
         ("POST", "/scheduled-actions/suggestions/01a1/retire"),
         ("POST", "/email/drafts"),
@@ -25,13 +25,13 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("POST", "/email/messages"),
         ("POST", "/email/drafts/01a1/transfer"),
         ("DELETE", "/email/drafts/01a1"),
-        ("POST", "/ideas/01a1/accept"),
-        ("POST", "/ideas/01a1/dismiss"),
+        ("POST", "/suggestions/01a1/accept"),
+        ("POST", "/suggestions/01a1/dismiss"),
         ("POST", "/scheduled-actions/suggestions/01a1/dismiss"),
         ("POST", "/scheduled-actions"),
         ("POST", "/channels/01a1/messages"),
         ("PATCH", "/documents/01a1"),
-        ("PUT", "/ideas/01a1"),
+        ("PUT", "/suggestions/01a1"),
         ("POST", "/notes/search-and-delete"),
         ("POST", "/ideasx"),
         ("POST", "/web/search"),
@@ -43,17 +43,17 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
 #[test]
 fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(matches(
-        "/scheduled-action/ideas/1/retire",
-        "/ideas/{id}/retire"
+        "/scheduled-action/suggestions/1/retire",
+        "/suggestions/{id}/retire"
     ));
-    assert!(matches("/ideas/", "/ideas"));
+    assert!(matches("/suggestions/", "/suggestions"));
     assert!(matches("/dss/search", "/search"));
     assert!(!matches("/web/search", "/search"));
     assert!(!matches("/cognition/web/search", "/search"));
-    assert!(!matches("/ideas//retire", "/ideas/{id}/retire"));
-    assert!(!matches("/myideas", "/ideas"));
-    assert!(!matches("/a/b/ideas", "/ideas"));
-    assert!(!matches("/scheduled-actionx/ideas", "/ideas"));
+    assert!(!matches("/suggestions//retire", "/suggestions/{id}/retire"));
+    assert!(!matches("/myideas", "/suggestions"));
+    assert!(!matches("/a/b/ideas", "/suggestions"));
+    assert!(!matches("/scheduled-actionx/ideas", "/suggestions"));
 }
 
 #[test]

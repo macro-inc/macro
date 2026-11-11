@@ -7,7 +7,7 @@
  */
 
 /**
- * A filter on the feed. Not kinds: an idea may have several.
+ * A filter on the feed. Not kinds: a suggestion may have several.
  */
 export type Category = (typeof Category)[keyof typeof Category];
 

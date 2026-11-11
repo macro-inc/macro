@@ -208,7 +208,7 @@ impl IdeaApi for FakeIdeas {
     }
 
     fn brief(&self, trigger: GenerationTrigger, _: Tz) -> String {
-        format!("ideas {}", trigger.as_ref())
+        format!("suggestions {}", trigger.as_ref())
     }
 
     async fn kept(&self, _: Uuid, session: Uuid) -> Result<u32, IdeaError> {
@@ -561,7 +561,7 @@ async fn onboarding_runs_one_ideas_session_and_a_routines_session_per_group_once
     );
     // Each routines session was told its surfaces, by wire name.
     let prompts = h.sessions.prompts.lock().unwrap().clone();
-    assert!(prompts.contains(&"ideas onboarding".to_owned()));
+    assert!(prompts.contains(&"suggestions onboarding".to_owned()));
     assert!(
         prompts
             .iter()
@@ -641,7 +641,7 @@ async fn an_onboarding_routines_session_that_kept_nothing_is_retried_once_a_nigh
                 && surfaces.len() == ALL_SURFACES.len())
     );
     let prompts = h.sessions.prompts.lock().unwrap().clone();
-    assert!(prompts.contains(&"ideas nightly".to_owned()));
+    assert!(prompts.contains(&"suggestions nightly".to_owned()));
     // A nightly run never counts the person in; reading their feed does.
     assert!(h.repo.seen.lock().unwrap().is_empty());
 }

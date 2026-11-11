@@ -120,9 +120,9 @@ impl IntoResponse for GenerationApiError {
     operation_id = "start_suggestion_generation",
     params(GenerateQuery),
     responses(
-        (status = 200, body = GenerationStarted, description = "The caller's onboarding generation started in the background: their ideas and routine suggestions, as each is on for them. Later calls start nothing"),
+        (status = 200, body = GenerationStarted, description = "The caller's onboarding generation started in the background: their suggestions and routine suggestions, as each is on for them. Later calls start nothing"),
         (status = 401, body = String),
-        (status = 404, body = String, description = "Neither ideas nor routine suggestions are on for the caller"),
+        (status = 404, body = String, description = "Neither suggestions nor routine suggestions are on for the caller"),
         (status = 500, body = String),
     )
 )]
@@ -185,7 +185,7 @@ where
     operation_id = "record_suggestions_seen",
     params(GenerateQuery),
     responses(
-        (status = 204, description = "Recorded: with ideas on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"),
+        (status = 204, description = "Recorded: with suggestions on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"),
         (status = 401, body = String),
         (status = 500, body = String),
     )
